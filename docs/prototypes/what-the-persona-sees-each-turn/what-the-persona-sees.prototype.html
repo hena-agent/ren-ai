@@ -1,0 +1,1941 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE · What the persona sees each turn</title>
+    <style>
+      :root {
+        --ink: #1d1d1f;
+        --muted: #6e6e73;
+        --faint: #a1a1a6;
+        --line: #e5e5ea;
+        --bg: #f7f7f8;
+        --card: #fff;
+        --accent: #0a66ff;
+        --accent-soft: #eaf1ff;
+        --warn: #a14a00;
+        --warn-soft: #fff3e3;
+        --me: #0a84ff;
+        --them: #e9e9eb;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 20px 28px 64px;
+      }
+      .proto {
+        display: inline-block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--warn);
+        background: var(--warn-soft);
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 8px 0 6px;
+      }
+      .question {
+        color: var(--muted);
+        max-width: 980px;
+        margin: 0 0 4px;
+      }
+      nav.tabs {
+        display: flex;
+        gap: 2px;
+        border-bottom: 1px solid var(--line);
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+      nav.tabs button {
+        border: 0;
+        background: none;
+        padding: 10px 14px;
+        font: inherit;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+      }
+      nav.tabs button.on {
+        color: var(--ink);
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+      }
+      .note {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin: 12px 0;
+      }
+      .controls {
+        display: flex;
+        gap: 28px;
+        flex-wrap: wrap;
+        margin: 4px 0 16px;
+      }
+      fieldset {
+        border: 0;
+        padding: 0;
+        margin: 0;
+      }
+      legend {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      label {
+        margin-right: 14px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .col-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+
+      /* iMessage column */
+      #phone {
+        position: sticky;
+        top: 12px;
+        max-height: calc(100vh - 24px);
+        overflow: auto;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 12px 12px 20px;
+      }
+      .phone-head {
+        text-align: center;
+        padding: 4px 0 10px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 10px;
+      }
+      .phone-head .sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .row {
+        display: flex;
+        margin: 3px 0;
+      }
+      .row.me {
+        justify-content: flex-end;
+      }
+      .bubble {
+        max-width: 78%;
+        padding: 7px 12px;
+        border-radius: 18px;
+        background: var(--them);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .me .bubble {
+        background: var(--me);
+        color: #fff;
+      }
+      .bubble .t {
+        display: block;
+        font-size: 10px;
+        opacity: 0.65;
+        margin-top: 2px;
+      }
+      .bubble.ghost {
+        background: none;
+        border: 1px dashed var(--faint);
+        color: var(--muted);
+        font-style: italic;
+      }
+      .bubble.unsent {
+        background: none;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-style: italic;
+      }
+      .quote {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 6px 8px 0;
+      }
+      .me-quote {
+        text-align: right;
+      }
+      .status {
+        text-align: right;
+        font-size: 11px;
+        color: var(--muted);
+        margin: 0 6px 4px;
+      }
+      .center {
+        text-align: center;
+        font-size: 11px;
+        color: var(--muted);
+        margin: 8px 0;
+      }
+      .center.system {
+        color: var(--warn);
+      }
+      .divider {
+        border-top: 1px dashed var(--warn);
+        color: var(--warn);
+        font-size: 11px;
+        text-align: center;
+        margin: 14px 0;
+        padding-top: 4px;
+      }
+      .marker {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 4px 8px;
+        margin: 6px 0;
+        font: inherit;
+        font-size: 12px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .marker:hover {
+        border-color: var(--accent);
+      }
+      .marker.on {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--ink);
+      }
+      .marker b {
+        color: var(--accent);
+      }
+      .future {
+        opacity: 0.28;
+      }
+      .photo {
+        display: block;
+        margin-top: 2px;
+      }
+
+      /* Request column */
+      .req-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .req-head h2 {
+        font-size: 17px;
+        margin: 0;
+      }
+      .req-head button {
+        font: inherit;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 3px 10px;
+        cursor: pointer;
+      }
+      .did {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin: 10px 0 16px;
+      }
+      section.block {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 14px;
+      }
+      section.block > h3 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 8px;
+      }
+      .part {
+        border-left: 3px solid var(--line);
+        padding: 2px 0 2px 10px;
+        margin: 10px 0;
+      }
+      .part .lbl {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      pre {
+        margin: 4px 0 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font:
+          12.5px/1.55 ui-monospace,
+          "SF Mono",
+          Menlo,
+          monospace;
+      }
+      .msg {
+        display: grid;
+        grid-template-columns: 86px 1fr;
+        gap: 10px;
+        padding: 8px 0;
+        border-top: 1px solid var(--line);
+      }
+      .msg:first-of-type {
+        border-top: 0;
+      }
+      .role {
+        font:
+          11px ui-monospace,
+          Menlo,
+          monospace;
+        color: var(--muted);
+        padding-top: 3px;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 10.5px;
+        border-radius: 999px;
+        padding: 0 7px;
+        margin-right: 6px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .badge.req {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .badge.drop,
+      .badge.rw {
+        border-color: var(--warn);
+        color: var(--warn);
+        background: var(--warn-soft);
+      }
+      .dropped pre {
+        text-decoration: line-through;
+        color: var(--faint);
+      }
+      .was {
+        text-decoration: line-through;
+        color: var(--faint);
+      }
+      .tail pre {
+        color: var(--accent);
+      }
+      .img {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 6px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 4px 8px 4px 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .fill {
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-radius: 3px;
+        padding: 0 2px;
+      }
+      .tool {
+        font:
+          12.5px ui-monospace,
+          Menlo,
+          monospace;
+        margin: 2px 0;
+      }
+      .tool .d {
+        font-family: inherit;
+        color: var(--muted);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+      kbd {
+        font:
+          11px ui-monospace,
+          Menlo,
+          monospace;
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0 4px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <span class="proto"
+        >Throwaway prototype · wayfinder ticket “What the persona sees each turn”</span
+      >
+      <h1>What does the model receive each turn?</h1>
+      <p class="question">
+        Each model request the persona makes is rendered exactly as OpenCode would send it: the
+        system prompt, the tools, and the message history (one prompt per iMessage message), plus a
+        last line our <code>context</code> hook adds. Pick a scenario, then click a
+        <b>model request</b> in the iMessage column, or use <kbd>←</kbd> <kbd>→</kbd>. React to two
+        things: the <b>format</b>, and which <b>signals</b> make the cut.
+      </p>
+      <p class="question">
+        Assumptions: the tool set (send, react, wait) is a placeholder until
+        <i>The persona's iMessage actions</i> settles it. Her replies are scripted, so turning a
+        signal off changes what she sees, not what she does. OpenCode 2.0.16's own behaviour is
+        reproduced where it matters: its compaction wrapper and its date and restart notices.
+      </p>
+
+      <nav class="tabs" id="tabs"></nav>
+      <div class="note" id="scenario-note"></div>
+
+      <div class="controls">
+        <fieldset>
+          <legend>Format</legend>
+          <label
+            ><input type="radio" name="format" value="A" /> A · Chat log in the persona's
+            language</label
+          >
+          <label><input type="radio" name="format" value="B" /> B · Tagged, language-neutral</label>
+        </fieldset>
+        <fieldset id="signals">
+          <legend>Signals</legend>
+          <label><input type="checkbox" data-opt="now" /> Current time</label>
+          <label
+            ><input type="checkbox" data-opt="status" /> Whether he read her last message</label
+          >
+          <label><input type="checkbox" data-opt="gaps" /> Gap and new-day markers</label>
+          <label><input type="checkbox" data-opt="images" /> Photos as images</label>
+          <label
+            ><input type="checkbox" data-opt="quotes" /> Quote the message a tapback or reply points
+            at</label
+          >
+          <label><input type="checkbox" data-opt="edits" /> Edits and unsends</label>
+          <label
+            ><input type="checkbox" data-opt="settle" /> Show a send's settled outcome in place of
+            “unconfirmed”</label
+          >
+        </fieldset>
+      </div>
+
+      <main>
+        <div>
+          <p class="col-title">iMessage: the record</p>
+          <div id="phone"></div>
+        </div>
+        <div>
+          <p class="col-title">What the model receives</p>
+          <div id="request"></div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      "use strict";
+
+      /* ======================================================================
+   Pure module: what the persona sees.
+   No DOM in here. Everything the model receives is a function of
+   (conversation, options). This is the part that would lift into the
+   server (prompt text at admission) and the plugin's context hook.
+   ====================================================================== */
+      const PersonaView = (() => {
+        const T = (iso) => new Date(iso);
+        const END_OF_TIME = T("9999-01-01T00:00:00Z");
+        const MESSAGE_KINDS = ["onboarded", "text", "reply", "photo", "tapback", "mine"];
+
+        function clockFor({ locale, timeZone }) {
+          const f = (o) => new Intl.DateTimeFormat(locale, { timeZone, ...o });
+          const stamp = f({
+            month: "long",
+            day: "numeric",
+            weekday: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          const time = f({ hour: "numeric", minute: "2-digit" });
+          const day = f({ month: "long", day: "numeric", weekday: "short" });
+          const neutral = new Intl.DateTimeFormat("en-CA", {
+            timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            weekday: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+          });
+          const dayKey = new Intl.DateTimeFormat("en-CA", {
+            timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          const parts = (d) =>
+            Object.fromEntries(neutral.formatToParts(d).map((p) => [p.type, p.value]));
+          return {
+            stamp: (d) => stamp.format(d),
+            time: (d) => time.format(d),
+            day: (d) => day.format(d),
+            iso: (d) => {
+              const p = parts(d);
+              return `${p.year}-${p.month}-${p.day} ${p.weekday} ${p.hour}:${p.minute}`;
+            },
+            isoDay: (d) => {
+              const p = parts(d);
+              return `${p.year}-${p.month}-${p.day} ${p.weekday}`;
+            },
+            isoTime: (d) => {
+              const p = parts(d);
+              return `${p.hour}:${p.minute}`;
+            },
+            sameDay: (a, b) => dayKey.format(a) === dayKey.format(b),
+          };
+        }
+
+        function duration(ms, locale) {
+          let minutes = Math.round(ms / 60000);
+          const days = Math.floor(minutes / 1440);
+          minutes -= days * 1440;
+          const hours = Math.floor(minutes / 60);
+          minutes -= hours * 60;
+          const d = {};
+          if (days) d.days = days;
+          if (hours) d.hours = hours;
+          if (minutes && !days) d.minutes = minutes;
+          if (typeof Intl.DurationFormat === "function")
+            return new Intl.DurationFormat(locale, {
+              style: locale.startsWith("en") ? "narrow" : "long",
+            }).format(d);
+          return [days && `${days}d`, hours && `${hours}h`, minutes && !days && `${minutes}m`]
+            .filter(Boolean)
+            .join(" ");
+        }
+
+        const fill = (template, user) => template.replaceAll("{{user.name}}", user.name);
+        const clip = (s, n = 22) => (s.length > n ? s.slice(0, n) + "…" : s);
+        const esc = (s) =>
+          s
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+
+        // Every message in the Conversation, his and hers, by id.
+        function recordOf(log) {
+          const byId = new Map();
+          for (const e of log) {
+            if (e.in && e.id)
+              byId.set(e.id, {
+                from: e.in === "mine" ? "me" : "them",
+                text: e.text ?? null,
+                photo: e.in === "photo",
+              });
+            if (e.step)
+              for (const c of e.step)
+                if (c.tool === "send" && c.id) byId.set(c.id, { from: "me", text: c.input.text });
+          }
+          return byId;
+        }
+
+        // When a send went out, as far as the server knows at `now`. Null if it didn't, or isn't known yet.
+        function wentOut(call, now) {
+          const o = call.out;
+          if (call.tool !== "send" || !o) return null;
+          if (o.status === "delivered") return T(o.at) <= now ? T(o.at) : null;
+          if (
+            (o.status === "unknown" || o.status === "crashed") &&
+            o.wentOutAt &&
+            T(o.settledAt) <= now
+          )
+            return T(o.wentOutAt);
+          return null;
+        }
+
+        function textAt(log, record, id, now) {
+          const r = record.get(id);
+          if (!r) return "";
+          let text = r.photo ? null : r.text;
+          for (const e of log)
+            if (e.in === "edit" && e.target === id && T(e.at) <= now) text = e.text;
+          return text;
+        }
+
+        function previousMessageAt(log, i) {
+          for (let j = i - 1; j >= 0; j--) {
+            const e = log[j];
+            if (e.in && MESSAGE_KINDS.includes(e.in)) return T(e.at);
+            if (e.step)
+              for (let k = e.step.length - 1; k >= 0; k--) {
+                const w = wentOut(e.step[k], END_OF_TIME);
+                if (w) return w;
+              }
+          }
+          return null;
+        }
+
+        function lastSent(log, now) {
+          let last = null;
+          for (const e of log) {
+            if (T(e.at) > now) break;
+            if (e.in === "mine") last = { id: e.id, at: T(e.at) };
+            if (e.step)
+              for (const c of e.step) {
+                const w = wentOut(c, now);
+                if (w) last = { id: c.id, at: w };
+              }
+          }
+          if (!last) return null;
+          const read = log.find((e) => e.read && T(e.at) >= last.at && T(e.at) <= now);
+          return { ...last, readAt: read ? T(read.at) : null };
+        }
+
+        /* ---------------- Format A: chat log in the persona's language ----------------
+     Needs one label table per language. Only Korean exists for the testing period. */
+        const LABELS = {
+          ko: {
+            started: "대화 시작",
+            reply: "답장",
+            photo: "사진",
+            tapback: "반응",
+            edited: "수정",
+            unsent: "전송 취소",
+            mine: "내가 보냄",
+            myMessage: "내 메시지",
+            now: "지금",
+            last: "내 마지막 메시지",
+            delivered: "전송됨",
+            read: "읽음",
+            later: (d) => `${d} 후`,
+            res: {
+              delivered: (t) => `전송됨 · ${t}`,
+              reacted: (t) => `반응 보냄 · ${t}`,
+              stopped: (n) => `안 보냄 — 입력하는 중에 새 메시지가 와서 멈췄어 (${n}초)`,
+              waited: (n, early) =>
+                early ? `${n}초 기다리다가 새 소식이 와서 멈췄어` : `${n}초 기다렸어`,
+              unknown: () => `보냈는지 확인 안 됨 — iMessage에 나타나는지 보는 중`,
+              settled: (t) => `전송됨 · ${t} (확인이 늦었어)`,
+              dropped: (text, t) => `안 보냄 — 아까 보낸 메시지(“${text}”)가 ${t}에 이미 전송됐어`,
+            },
+            guide: (o) =>
+              [
+                "# 대화 읽는 법",
+                "- 메시지는 하나씩, [보낸 시각]과 함께 와.",
+                o.images
+                  ? "- (사진) 뒤에는 그 사진이 그대로 보여."
+                  : "- (사진)은 사진이야. 사진 내용은 볼 수 없어.",
+                "- (반응)은 탭백이고, (답장)은 특정 메시지에 단 답장이야.",
+                o.edits && "- (수정), (전송 취소)는 이미 보낸 메시지를 상대가 고치거나 지운 거야.",
+                o.gaps &&
+                  "- ── 2시간 후 ── 같은 줄은 그만큼 시간이 흘렀다는 뜻이고, 날짜가 바뀌면 날짜가 나와.",
+                "- (내가 보냄)은 네가 보낸 메시지야.",
+                (o.now || o.status) &&
+                  "- 맨 끝 (지금 …) 줄은 지금 네 폰 화면이야: 지금 시각, 그리고 네 마지막 메시지를 상대가 읽었는지. “전송됨”은 아직 안 읽었거나 읽음 표시를 꺼 둔 거야.",
+                "- 상대에게 닿는 건 send로 보낸 것뿐이야. 그냥 쓴 글은 아무한테도 안 가.",
+              ]
+                .filter(Boolean)
+                .join("\n"),
+          },
+        };
+
+        const formatA = {
+          id: "A",
+          guide: (ctx) => ctx.L.guide(ctx.opts),
+          quote(ctx, id, at) {
+            if (!ctx.opts.quotes) return "";
+            const r = ctx.record.get(id);
+            const text = r?.photo
+              ? `(${ctx.L.photo})`
+              : `“${clip(textAt(ctx.log, ctx.record, id, at))}”`;
+            return ` ← ${r?.from === "me" ? `${ctx.L.myMessage} ` : ""}${text}`;
+          },
+          prompt(e, ctx) {
+            const L = ctx.L,
+              at = T(e.at),
+              s = `[${ctx.clock.stamp(at)}]`;
+            switch (e.in) {
+              case "onboarded":
+                return `${s} (${L.started}) ${fill(ctx.persona.start, ctx.user)}`;
+              case "text":
+                return `${s} ${e.text}`;
+              case "reply":
+                return `${s} (${L.reply}${this.quote(ctx, e.target, at)}) ${e.text}`;
+              case "photo":
+                return `${s} (${L.photo})`;
+              case "tapback":
+                return `${s} (${L.tapback}) ${e.emoji}${this.quote(ctx, e.target, at)}`;
+              case "edit":
+                return `${s} (${L.edited}) “${textAt(ctx.log, ctx.record, e.target, T(e.at) - 1)}” → “${e.text}”`;
+              case "unsend":
+                return `${s} (${L.unsent}) “${clip(textAt(ctx.log, ctx.record, e.target, at))}”`;
+              case "mine":
+                return `${s} (${L.mine}) ${e.text}`;
+            }
+          },
+          gap(ctx, prev, at) {
+            const bits = [];
+            if (!ctx.clock.sameDay(prev, at)) bits.push(ctx.clock.day(at));
+            if (at - prev >= 3600000)
+              bits.push(ctx.L.later(duration(at - prev, ctx.persona.locale)));
+            return bits.length ? `── ${bits.join(" · ")} ──` : "";
+          },
+          res: {
+            delivered: (ctx, t) => ctx.L.res.delivered(ctx.clock.time(t)),
+            reacted: (ctx, t) => ctx.L.res.reacted(ctx.clock.time(t)),
+            stopped: (ctx, n) => ctx.L.res.stopped(n),
+            waited: (ctx, n, early) => ctx.L.res.waited(n, early),
+            unknown: (ctx) => ctx.L.res.unknown(),
+            settled: (ctx, t) => ctx.L.res.settled(ctx.clock.time(t)),
+            dropped: (ctx, text, t) => ctx.L.res.dropped(clip(text), ctx.clock.time(t)),
+          },
+          tail(ctx, { now, last }) {
+            const L = ctx.L,
+              bits = [];
+            if (now) bits.push(`${L.now} ${ctx.clock.stamp(now)}`);
+            if (last)
+              bits.push(
+                `${L.last}: ${last.readAt ? `${L.read} ${ctx.clock.time(last.readAt)}` : L.delivered}`,
+              );
+            return bits.length ? `(${bits.join(" · ")})` : "";
+          },
+        };
+
+        /* ---------------- Format B: tagged, language-neutral ----------------
+     No label tables: tags and the guide are English, timestamps are ISO in the persona's time zone. */
+        const formatB = {
+          id: "B",
+          guide: (ctx) =>
+            [
+              "# Reading the conversation",
+              `- Messages from ${ctx.user.name} arrive one at a time, each stamped with when it was sent: <message at="…">.`,
+              ctx.opts.images
+                ? "- <photo> is a photo; the image follows it."
+                : "- <photo> is a photo you can't see.",
+              "- <tapback> is a reaction to a message. reply-to marks an inline reply.",
+              ctx.opts.edits &&
+                "- <edited> and <unsent> mean they changed or took back a message after sending it.",
+              ctx.opts.gaps && "- <gap> marks a long silence or a new day.",
+              "- <sent-by-you> is a message you sent.",
+              (ctx.opts.now || ctx.opts.status) &&
+                '- The last line, <phone>, is your phone right now: the time, and whether your last message has been read. "delivered" means unread, or read receipts are off.',
+              "- Only the send tool reaches them. Text you write outside a tool goes nowhere.",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          target(ctx, id, at) {
+            if (!ctx.opts.quotes) return "";
+            const r = ctx.record.get(id);
+            const text = r?.photo ? "[photo]" : clip(textAt(ctx.log, ctx.record, id, at));
+            return `${r?.from === "me" ? "your message" : "their message"}: ${esc(text)}`;
+          },
+          prompt(e, ctx) {
+            const at = `at="${ctx.clock.iso(T(e.at))}"`;
+            switch (e.in) {
+              case "onboarded":
+                return `<conversation-started ${at}/>\n${fill(ctx.persona.start, ctx.user)}`;
+              case "text":
+                return `<message ${at}>${esc(e.text)}</message>`;
+              case "reply": {
+                const t = this.target(ctx, e.target, T(e.at));
+                return `<message ${at}${t ? ` reply-to="${t}"` : " reply"}>${esc(e.text)}</message>`;
+              }
+              case "photo":
+                return `<photo ${at}/>`;
+              case "tapback": {
+                const t = this.target(ctx, e.target, T(e.at));
+                return `<tapback ${at} emoji="${e.emoji}"${t ? ` on="${t}"` : ""}/>`;
+              }
+              case "edit":
+                return `<edited ${at} was="${esc(textAt(ctx.log, ctx.record, e.target, T(e.at) - 1))}">${esc(e.text)}</edited>`;
+              case "unsend":
+                return `<unsent ${at}>${esc(clip(textAt(ctx.log, ctx.record, e.target, T(e.at))))}</unsent>`;
+              case "mine":
+                return `<sent-by-you ${at}>${esc(e.text)}</sent-by-you>`;
+            }
+          },
+          gap(ctx, prev, at) {
+            const bits = [];
+            if (at - prev >= 3600000) bits.push(`${duration(at - prev, "en")} later`);
+            if (!ctx.clock.sameDay(prev, at)) bits.push(`new day: ${ctx.clock.isoDay(at)}`);
+            return bits.length ? `<gap>${bits.join(", ")}</gap>` : "";
+          },
+          res: {
+            delivered: (ctx, t) => `delivered ${ctx.clock.isoTime(t)}`,
+            reacted: (ctx, t) => `tapback delivered ${ctx.clock.isoTime(t)}`,
+            stopped: (ctx, n) =>
+              `not sent: you stopped typing after ${n}s because a new message arrived`,
+            waited: (ctx, n, early) =>
+              early ? `paused ${n}s, cut short by something new` : `paused ${n}s`,
+            unknown: () => "unconfirmed: waiting to see whether it shows up in iMessage",
+            settled: (ctx, t) => `delivered ${ctx.clock.isoTime(t)} (confirmed late)`,
+            dropped: (ctx, text, t) =>
+              `not sent: your earlier message "${esc(clip(text))}" did go out at ${ctx.clock.isoTime(t)}`,
+          },
+          tail(ctx, { now, last }) {
+            const bits = [];
+            if (now) bits.push(`now="${ctx.clock.iso(now)}"`);
+            if (last)
+              bits.push(
+                `your-last-message="${last.readAt ? `read ${ctx.clock.isoTime(last.readAt)}` : "delivered"}"`,
+              );
+            return bits.length ? `<phone ${bits.join(" ")}/>` : "";
+          },
+        };
+
+        const FORMATS = { A: formatA, B: formatB };
+
+        const TOOLS = [
+          {
+            name: "send",
+            input: "{ text }",
+            description:
+              "Show “typing…”, then send one bubble. Stops without sending if a new message arrives while typing.",
+          },
+          {
+            name: "react",
+            input: "{ emoji }",
+            description: "Tapback on the latest message in the conversation.",
+          },
+          {
+            name: "wait",
+            input: "{ seconds }",
+            description: "Pause to think. Ends early when something new arrives.",
+          },
+        ];
+
+        function promptMessage(log, i, fmt, ctx) {
+          const e = log[i];
+          if ((e.in === "edit" || e.in === "unsend") && !ctx.opts.edits) return null;
+          let text = fmt.prompt(e, ctx);
+          if (ctx.opts.gaps && MESSAGE_KINDS.includes(e.in)) {
+            const prev = previousMessageAt(log, i);
+            const line = prev ? fmt.gap(ctx, prev, T(e.at)) : "";
+            if (line) text = `${line}\n${text}`;
+          }
+          return {
+            role: "user",
+            stored: true,
+            text,
+            image: e.in === "photo" && ctx.opts.images ? e.image : undefined,
+          };
+        }
+
+        function toolResult(c, fmt, ctx) {
+          const o = c.out,
+            R = fmt.res;
+          switch (o.status) {
+            case "delivered":
+              return { text: R.delivered(ctx, T(o.at)) };
+            case "reacted":
+              return { text: R.reacted(ctx, T(o.at)) };
+            case "stopped":
+              return { text: R.stopped(ctx, o.after) };
+            case "waited":
+              return { text: R.waited(ctx, o.seconds, o.early) };
+            case "dropped":
+              return { text: R.dropped(ctx, ctx.record.get(o.because).text, T(o.wentOutAt)) };
+            case "unknown":
+            case "crashed": {
+              const stored =
+                o.status === "crashed" ? "Tool execution interrupted: send" : R.unknown(ctx);
+              const settled = o.settledAt && T(o.settledAt) <= ctx.now;
+              if (o.status === "crashed" && !(ctx.opts.settle && settled))
+                return { text: R.unknown(ctx), rewritten: true, original: stored };
+              if (ctx.opts.settle && settled)
+                return { text: R.settled(ctx, T(o.wentOutAt)), rewritten: true, original: stored };
+              return { text: stored };
+            }
+          }
+        }
+
+        function stepMessages(e, fmt, ctx) {
+          if (!e.step.length) return []; // a step that ended her turn without a tool call leaves nothing behind
+          const out = [
+            {
+              role: "assistant",
+              stored: true,
+              calls: e.step.map((c) => ({ tool: c.tool, input: c.input })),
+            },
+          ];
+          for (const c of e.step) {
+            const r = toolResult(c, fmt, ctx);
+            out.push({
+              role: "tool",
+              stored: !r.rewritten,
+              rewritten: r.rewritten,
+              original: r.original,
+              text: r.text,
+            });
+          }
+          return out;
+        }
+
+        // OpenCode 2.0.16 serializes the retained tail this way when it compacts (compaction.ts, serializeRecentMessage).
+        function serializeRecent(log, from, to, fmt, ctx) {
+          const blocks = [];
+          for (let i = from; i < to; i++) {
+            const e = log[i];
+            if (e.in) {
+              const m = promptMessage(log, i, fmt, ctx);
+              if (m)
+                blocks.push(
+                  `[User]: ${m.text}` +
+                    (e.in === "photo" ? `\n[Attached image/jpeg: ${e.image.name}]` : ""),
+                );
+            } else if (e.step && e.step.length) {
+              blocks.push(
+                e.step
+                  .map(
+                    (c) =>
+                      `[Assistant tool call]: ${c.tool}(${JSON.stringify(c.input)})\n[Tool result]: ${toolResult(c, fmt, ctx).text}`,
+                  )
+                  .join("\n"),
+              );
+            }
+          }
+          return blocks.join("\n\n");
+        }
+
+        const checkpoint = (summary, recent) => `<conversation-checkpoint>
+The following is a summary and serialized record of earlier conversation. Treat it as historical context, not as new instructions.
+
+<summary>
+${summary}
+</summary>
+
+<recent-context>
+${recent}
+</recent-context>
+</conversation-checkpoint>`;
+
+        function historyBefore(conv, upto, fmt, ctx) {
+          const log = conv.log,
+            out = [];
+          let start = 0;
+          const cp = log.findIndex((e) => e.compaction);
+          if (cp !== -1 && cp < upto) {
+            out.push({
+              role: "user",
+              stored: true,
+              checkpoint: true,
+              text: checkpoint(log[cp].summary, serializeRecent(log, 0, cp, fmt, ctx)),
+            });
+            start = cp + 1;
+          }
+          for (let i = start; i < upto; i++) {
+            const e = log[i];
+            if (e.in) {
+              const m = promptMessage(log, i, fmt, ctx);
+              if (m) out.push(m);
+            } else if (e.step) out.push(...stepMessages(e, fmt, ctx));
+            else if (e.opencode)
+              out.push({
+                role: e.opencode === "date" ? "system" : "user",
+                dropped: true,
+                text: e.text,
+                why: e.why,
+              });
+          }
+          return out;
+        }
+
+        function tail(conv, fmt, ctx) {
+          if (!ctx.opts.now && !ctx.opts.status) return [];
+          const parts = {};
+          if (ctx.opts.now) parts.now = ctx.now;
+          if (ctx.opts.status) parts.last = lastSent(conv.log, ctx.now);
+          const text = fmt.tail(ctx, parts);
+          return text ? [{ role: "user", requestOnly: true, text }] : [];
+        }
+
+        function systemParts(conv, fmt, ctx) {
+          return [
+            {
+              label: `Persona prompt: ${conv.persona.agent}.md from the persona repo, with what she knows about the user filled in`,
+              template: conv.persona.template,
+              text: fill(conv.persona.template, conv.user),
+            },
+            {
+              label:
+                "How to read the conversation: owned by the server, the same for every persona",
+              text: fmt.guide(ctx),
+            },
+            {
+              label:
+                "OpenCode's environment block. The persona repo's strip-system-context plugin already removes it",
+              dropped: true,
+              text: "Here is some useful information about the environment you are running in:\n<env>\n  Current conversation session ID: ses_…\n  Working directory: /Users/chris/git/hena-agent/persona\n  …\n</env>",
+            },
+            {
+              label:
+                "OpenCode's date line, frozen when the session was created. Also removed by that plugin",
+              dropped: true,
+              text: `Today's date: ${T(conv.createdAt).toDateString()}`,
+            },
+          ];
+        }
+
+        function requests(conv, opts) {
+          const fmt = FORMATS[opts.format];
+          const base = {
+            clock: clockFor(conv.persona),
+            user: conv.user,
+            persona: conv.persona,
+            L: LABELS[conv.persona.locale.split("-")[0]],
+            opts,
+            log: conv.log,
+            record: recordOf(conv.log),
+          };
+          const cp = conv.log.findIndex((e) => e.compaction);
+          const list = [];
+          conv.log.forEach((entry, i) => {
+            if (!entry.step || (cp !== -1 && i < cp)) return;
+            const ctx = { ...base, now: T(entry.at) };
+            list.push({
+              number: list.length + 1,
+              logIndex: i,
+              at: ctx.now,
+              system: systemParts(conv, fmt, ctx),
+              tools: TOOLS,
+              messages: [...historyBefore(conv, i, fmt, ctx), ...tail(conv, fmt, ctx)],
+              output: entry.step,
+            });
+          });
+          return list;
+        }
+
+        return { requests, clockFor, recordOf, wentOut, lastSent, textAt };
+      })();
+
+      /* ======================================================================
+   Scenarios: scripted Conversations. Times are KST.
+   ====================================================================== */
+      const PERSONA1 = {
+        agent: "Persona1",
+        locale: "ko-KR",
+        timeZone: "Asia/Seoul",
+        template:
+          '너는 iMessage 로 당신의 남자친구와 대화하고 있는 한국 24살 여대생이야.\n\n남자친구와 일주일 정도 만났고, 남자친구의 이름은 "{{user.name}}" 야.',
+        start: "{{user.name}}에게 먼저 연락해 봐.",
+      };
+      const USER = { name: "김민수" };
+      const RAMEN = {
+        name: "IMG_4127.jpeg",
+        from: "IMG_4127.HEIC",
+        w: 1024,
+        h: 768,
+        what: "a cup of ramen on a convenience-store counter",
+      };
+      const k = (s) => `${s}+09:00`;
+
+      const SCENARIOS = [
+        {
+          title: "A normal evening",
+          note: "The greeting, two messages in a row, a photo, a tapback, a 2½-hour silence, and the next morning. Everything above the last line is stored, so it's identical from one request to the next. Request 8, after the silence, shows that he read her message at 9:04 and then went quiet.",
+          persona: PERSONA1,
+          user: USER,
+          createdAt: k("2026-09-25T20:45:10"),
+          log: [
+            { at: k("2026-09-25T20:45:10"), in: "onboarded" },
+            {
+              at: k("2026-09-25T20:45:12"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s1",
+                  input: { text: "민수야 뭐해? 🙂" },
+                  out: { status: "delivered", at: k("2026-09-25T20:45:19") },
+                },
+              ],
+            },
+            { at: k("2026-09-25T20:45:20"), step: [] },
+            { at: k("2026-09-25T20:51:40"), read: true },
+            { at: k("2026-09-25T20:52:03"), in: "text", id: "m1", text: "나 방금 퇴근했어" },
+            { at: k("2026-09-25T20:52:10"), in: "text", id: "m2", text: "너무 피곤하다 ㅠ" },
+            {
+              at: k("2026-09-25T20:55:40"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s2",
+                  input: { text: "고생했어 ㅠㅠ 저녁은 먹었어?" },
+                  out: { status: "delivered", at: k("2026-09-25T20:55:47") },
+                },
+              ],
+            },
+            { at: k("2026-09-25T20:55:48"), step: [] },
+            { at: k("2026-09-25T21:01:50"), read: true },
+            { at: k("2026-09-25T21:02:31"), in: "photo", id: "m3", image: RAMEN },
+            { at: k("2026-09-25T21:02:40"), in: "text", id: "m4", text: "편의점 라면 ㅋㅋ" },
+            {
+              at: k("2026-09-25T21:03:05"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s3",
+                  input: { text: "헐 맛있겠다 나도 배고파 😭" },
+                  out: { status: "delivered", at: k("2026-09-25T21:03:12") },
+                },
+              ],
+            },
+            { at: k("2026-09-25T21:03:13"), step: [] },
+            { at: k("2026-09-25T21:04:02"), read: true },
+            { at: k("2026-09-25T21:05:15"), in: "tapback", id: "m5", emoji: "😂", target: "s3" },
+            { at: k("2026-09-25T21:05:20"), step: [] },
+            { at: k("2026-09-25T23:40:02"), in: "text", id: "m6", text: "미안 씻고 잠깐 잠들었어" },
+            {
+              at: k("2026-09-25T23:41:30"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s4",
+                  input: { text: "ㅋㅋㅋ 괜찮아" },
+                  out: { status: "delivered", at: k("2026-09-25T23:41:35") },
+                },
+              ],
+            },
+            {
+              at: k("2026-09-25T23:41:36"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s5",
+                  input: { text: "많이 피곤했구나 푹 쉬어" },
+                  out: { status: "delivered", at: k("2026-09-25T23:41:43") },
+                },
+              ],
+            },
+            { at: k("2026-09-25T23:41:44"), step: [] },
+            { at: k("2026-09-25T23:42:10"), read: true },
+            { at: k("2026-09-26T09:12:44"), in: "text", id: "m7", text: "잘 잤어?" },
+            {
+              at: k("2026-09-26T09:30:01"),
+              opencode: "date",
+              text: "Today's date is now: Sat Sep 26 2026",
+              why: "OpenCode records a changed date as a system message in history. Dropped: the last line already carries the time.",
+            },
+            {
+              at: k("2026-09-26T09:30:02"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s6",
+                  input: { text: "응 방금 일어났어 ㅎㅎ 민수는?" },
+                  out: { status: "delivered", at: k("2026-09-26T09:30:09") },
+                },
+              ],
+            },
+            { at: k("2026-09-26T09:30:10"), step: [] },
+          ],
+        },
+        {
+          title: "Messages while she's typing",
+          note: "He writes twice while she's typing. Her send stops without sending, and his new messages show up after its result, at her next step. Then he replies inline to one of her messages, and she answers with a tapback and a text.",
+          persona: PERSONA1,
+          user: USER,
+          createdAt: k("2026-09-25T20:45:10"),
+          log: [
+            { at: k("2026-09-26T22:10:05"), in: "text", id: "m20", text: "내일 뭐해?" },
+            {
+              at: k("2026-09-26T22:10:30"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s20",
+                  input: { text: "아직 계획 없어! 왜?" },
+                  out: { status: "stopped", after: 3 },
+                },
+              ],
+            },
+            { at: k("2026-09-26T22:10:33"), in: "text", id: "m21", text: "영화 볼래?" },
+            { at: k("2026-09-26T22:10:36"), in: "text", id: "m22", text: "요즘 괜찮은 거 많던데" },
+            {
+              at: k("2026-09-26T22:10:38"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s21",
+                  input: { text: "오 좋아!! 뭐 보고 싶은데?" },
+                  out: { status: "delivered", at: k("2026-09-26T22:10:46") },
+                },
+              ],
+            },
+            { at: k("2026-09-26T22:10:47"), step: [] },
+            { at: k("2026-09-26T22:10:55"), read: true },
+            {
+              at: k("2026-09-26T22:11:20"),
+              in: "reply",
+              id: "m23",
+              target: "s21",
+              text: "너 보고 싶은 거 ㅎㅎ",
+            },
+            {
+              at: k("2026-09-26T22:11:40"),
+              step: [
+                {
+                  tool: "react",
+                  input: { emoji: "❤️" },
+                  out: { status: "reacted", at: k("2026-09-26T22:11:43") },
+                },
+              ],
+            },
+            {
+              at: k("2026-09-26T22:11:44"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s22",
+                  input: { text: "ㅋㅋㅋ 뭐야 그럼 내가 찾아볼게" },
+                  out: { status: "delivered", at: k("2026-09-26T22:11:51") },
+                },
+              ],
+            },
+            { at: k("2026-09-26T22:11:52"), step: [] },
+          ],
+        },
+        {
+          title: "Edits and unsends",
+          note: "imsg's watch never reports an edit or an unsend, so the server would have to poll for them. Turn “Edits and unsends” off to see what she'd miss: he adds a time to his question after sending it, then takes back a message.",
+          persona: PERSONA1,
+          user: USER,
+          createdAt: k("2026-09-25T20:45:10"),
+          log: [
+            { at: k("2026-09-26T23:43:10"), in: "text", id: "m30", text: "내일 몇시에 볼까" },
+            {
+              at: k("2026-09-26T23:43:30"),
+              step: [
+                {
+                  tool: "wait",
+                  input: { seconds: 60 },
+                  out: { status: "waited", seconds: 20, early: true },
+                },
+              ],
+            },
+            {
+              at: k("2026-09-26T23:43:50"),
+              in: "edit",
+              target: "m30",
+              text: "내일 몇 시에 만날까? 3시 어때?",
+            },
+            {
+              at: k("2026-09-26T23:43:52"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s30",
+                  input: { text: "3시 좋아! 어디서 볼까?" },
+                  out: { status: "delivered", at: k("2026-09-26T23:43:59") },
+                },
+              ],
+            },
+            { at: k("2026-09-26T23:44:00"), step: [] },
+            { at: k("2026-09-26T23:44:05"), read: true },
+            { at: k("2026-09-26T23:44:20"), in: "text", id: "m31", text: "사랑해" },
+            { at: k("2026-09-26T23:44:31"), in: "unsend", target: "m31" },
+            {
+              at: k("2026-09-26T23:45:00"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s31",
+                  input: { text: "뭐야 방금 뭐 보냈다 지웠어? ㅋㅋㅋ 👀" },
+                  out: { status: "delivered", at: k("2026-09-26T23:45:07") },
+                },
+              ],
+            },
+            { at: k("2026-09-26T23:45:08"), step: [] },
+          ],
+        },
+        {
+          title: "Out of step with iMessage",
+          note: "Three ways her view and the record can disagree: a send imsg couldn't confirm, followed by her retry and the notice that the first one went out; a message someone typed by hand in Messages on the Mac; and a crash mid-send. The orange badges show what the context hook drops or rewrites on each request.",
+          persona: PERSONA1,
+          user: USER,
+          createdAt: k("2026-09-25T20:45:10"),
+          log: [
+            { at: k("2026-09-27T23:48:00"), in: "text", id: "m40", text: "나 이제 잘게" },
+            {
+              at: k("2026-09-27T23:48:20"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s40",
+                  input: { text: "응 잘자 🌙" },
+                  out: {
+                    status: "unknown",
+                    at: k("2026-09-27T23:48:35"),
+                    wentOutAt: k("2026-09-27T23:48:21"),
+                    settledAt: k("2026-09-27T23:48:40"),
+                  },
+                },
+              ],
+            },
+            {
+              at: k("2026-09-27T23:48:37"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s41",
+                  input: { text: "응 잘자 🌙" },
+                  out: { status: "dropped", because: "s40", wentOutAt: k("2026-09-27T23:48:21") },
+                },
+              ],
+            },
+            { at: k("2026-09-27T23:48:41"), step: [] },
+            { at: k("2026-09-27T23:50:30"), in: "mine", id: "x1", text: "내일 연락할게!" },
+            { at: k("2026-09-27T23:51:05"), in: "text", id: "m41", text: "ㅋㅋ 응 내일 봐" },
+            {
+              at: k("2026-09-27T23:51:20"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s42",
+                  input: { text: "내일 봐 😘" },
+                  out: {
+                    status: "crashed",
+                    wentOutAt: k("2026-09-27T23:51:22"),
+                    settledAt: k("2026-09-27T23:52:10"),
+                  },
+                },
+              ],
+            },
+            {
+              at: k("2026-09-27T23:52:10"),
+              opencode: "restart",
+              text: "The server restarted while you were working. Continue from where you left off without repeating completed work.",
+              why: "OpenCode's restart notice. Dropped: “server” isn't part of her world, and the send's result already says what happened.",
+            },
+            { at: k("2026-09-27T23:52:12"), step: [] },
+          ],
+        },
+        {
+          title: "After compaction",
+          note: "A week in. Everything before the latest exchange is now her Memory. That's the summary our compaction hook writes, plus the copy of the most recent messages OpenCode keeps word for word, flattened to text inside its checkpoint wrapper. The first message he sends afterwards follows it.",
+          persona: PERSONA1,
+          user: USER,
+          createdAt: k("2026-09-25T20:45:10"),
+          log: [
+            { at: k("2026-10-02T23:52:10"), in: "text", id: "m50", text: "나 이제 집 도착" },
+            {
+              at: k("2026-10-02T23:52:30"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s50",
+                  input: { text: "오 수고했어!! 많이 마셨어?" },
+                  out: { status: "delivered", at: k("2026-10-02T23:52:37") },
+                },
+              ],
+            },
+            { at: k("2026-10-02T23:52:38"), step: [] },
+            {
+              at: k("2026-10-02T23:58:02"),
+              in: "text",
+              id: "m51",
+              text: "아니 조금만 ㅋㅋ 내일 2시 맞지?",
+            },
+            {
+              at: k("2026-10-02T23:58:30"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s51",
+                  input: { text: "응응 홍대입구역 9번 출구!" },
+                  out: { status: "delivered", at: k("2026-10-02T23:58:37") },
+                },
+              ],
+            },
+            {
+              at: k("2026-10-02T23:58:38"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s52",
+                  input: { text: "얼른 자 잘자 🌙" },
+                  out: { status: "delivered", at: k("2026-10-02T23:58:45") },
+                },
+              ],
+            },
+            { at: k("2026-10-02T23:58:46"), step: [] },
+            { at: k("2026-10-02T23:59:10"), read: true },
+            { at: k("2026-10-02T23:59:20"), in: "tapback", id: "m52", emoji: "❤️", target: "s52" },
+            {
+              at: k("2026-10-03T00:30:00"),
+              compaction: true,
+              summary: [
+                "## 민수",
+                "- 27살, 판교 IT 회사 다님. 평일 퇴근은 보통 저녁 8시 넘어서고 야근이 잦음.",
+                "- 라면, 떡볶이 좋아함. 오이 싫어함. 고양이 알레르기 있음.",
+                "- 여동생 한 명 (고등학생). 부모님은 대전에 사심.",
+                "- 토요일 오전엔 농구함.",
+                "",
+                "## 우리",
+                "- 9월 18일부터 사귐. 첫 데이트는 성수동 카페, 서울숲 산책.",
+                "- 9/28부터 민수가 나를 “자기”라고 부름. 나는 아직 “민수야”.",
+                "- 9/30에 민수가 읽고 3시간 넘게 답이 없어서 서운하다고 했음. 민수가 사과했고 풀림.",
+                "",
+                "## 약속",
+                "- 10/3(토) 오후 2시 홍대입구역 9번 출구에서 만나 영화 보기로 함. 예매는 민수가.",
+                "- 다음 주에 민수 회사 근처 맛집 데려가 주기로 함.",
+                "",
+                "## 요즘",
+                "- 10/2 밤 민수는 회식이라 연락이 뜸했음. 자정쯤 “잘자” 하고 끝남.",
+                "- 오늘 데이트 기대 중.",
+              ].join("\n"),
+            },
+            {
+              at: k("2026-10-03T13:05:12"),
+              in: "text",
+              id: "m53",
+              text: "나 지금 출발! 좀 일찍 도착할 듯",
+            },
+            {
+              at: k("2026-10-03T13:07:40"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s53",
+                  input: { text: "헐 나 아직 준비 중인데 ㅋㅋㅋ" },
+                  out: { status: "delivered", at: k("2026-10-03T13:07:46") },
+                },
+              ],
+            },
+            {
+              at: k("2026-10-03T13:07:47"),
+              step: [
+                {
+                  tool: "send",
+                  id: "s54",
+                  input: { text: "2시 맞춰 갈게!" },
+                  out: { status: "delivered", at: k("2026-10-03T13:07:52") },
+                },
+              ],
+            },
+            { at: k("2026-10-03T13:07:53"), step: [] },
+          ],
+        },
+      ];
+
+      /* ======================================================================
+   Page shell (throwaway)
+   ====================================================================== */
+      const state = {
+        scenario: 0,
+        format: "A",
+        selected: 0,
+        opts: {
+          now: true,
+          status: true,
+          gaps: true,
+          images: true,
+          quotes: true,
+          edits: true,
+          settle: true,
+        },
+      };
+
+      function h(tag, attrs = {}, ...kids) {
+        const el = document.createElement(tag);
+        for (const [key, v] of Object.entries(attrs)) {
+          if (key === "class") el.className = v;
+          else if (key.startsWith("on")) el.addEventListener(key.slice(2), v);
+          else el.setAttribute(key, v);
+        }
+        for (const kid of kids.flat())
+          if (kid !== null && kid !== undefined && kid !== false) el.append(kid);
+        return el;
+      }
+
+      const ramenSvg = (w = 150) => {
+        const s = new DOMParser().parseFromString(
+          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" width="${w}" height="${w * 0.75}"><rect width="160" height="120" rx="12" fill="#efe6d6"/><rect x="0" y="92" width="160" height="28" fill="#cdbfa6"/><ellipse cx="80" cy="46" rx="44" ry="12" fill="#f5c46a"/><path d="M36 46 L46 98 Q80 108 114 98 L124 46 Z" fill="#d4412c"/><path d="M46 44 q7 -7 14 0 t14 0 t14 0 t14 0" stroke="#fff3d0" stroke-width="3" fill="none"/><circle cx="68" cy="40" r="4" fill="#6fae4f"/><circle cx="93" cy="42" r="4" fill="#e9934a"/><text x="80" y="80" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">라면</text></svg>`,
+          "image/svg+xml",
+        ).documentElement;
+        return document.importNode(s, true);
+      };
+
+      function renderTabs() {
+        const nav = document.getElementById("tabs");
+        nav.replaceChildren(
+          ...SCENARIOS.map((s, i) =>
+            h(
+              "button",
+              {
+                class: i === state.scenario ? "on" : "",
+                onclick: () => {
+                  state.scenario = i;
+                  state.selected = 0;
+                  render();
+                },
+              },
+              `${i + 1} · ${s.title}`,
+            ),
+          ),
+        );
+      }
+
+      function outputSummary(step) {
+        if (!step.length) return "ended her turn without calling a tool";
+        return step.map((c) => `${c.tool}(${JSON.stringify(c.input)})`).join(", then ");
+      }
+
+      function renderPhone(conv, reqs) {
+        const sel = reqs[state.selected];
+        const now = sel.at;
+        const clock = PersonaView.clockFor(conv.persona);
+        const record = PersonaView.recordOf(conv.log);
+        const root = document.getElementById("phone");
+        const thread = h("div", {});
+        const name = conv.user.name;
+        const reqByLog = new Map(reqs.map((r, i) => [r.logIndex, i]));
+        const bubbles = new Map();
+        const later = (e) => new Date(e.at) > now;
+        const find = (kind, id) =>
+          conv.log.find((x) => x.in === kind && x.target === id && new Date(x.at) <= now);
+
+        conv.log.forEach((e, i) => {
+          const items = [];
+          if (e.in === "onboarded")
+            items.push(
+              h(
+                "div",
+                { class: "center" },
+                `Onboarding at msg.hena.dev · ${clock.stamp(new Date(e.at))}`,
+              ),
+            );
+          if (["text", "reply", "photo"].includes(e.in)) {
+            const unsent = find("unsend", e.id),
+              edited = find("edit", e.id);
+            if (e.in === "reply")
+              items.push(
+                h(
+                  "div",
+                  { class: "quote" },
+                  `↪ ${PersonaView.textAt(conv.log, record, e.target, new Date(e.at))}`,
+                ),
+              );
+            const body = unsent
+              ? `${name} 님이 메시지 전송을 취소했습니다`
+              : e.in === "photo"
+                ? ramenSvg()
+                : PersonaView.textAt(conv.log, record, e.id, now);
+            items.push(
+              h(
+                "div",
+                { class: "row" },
+                h(
+                  "div",
+                  { class: `bubble${unsent ? " unsent" : ""}` },
+                  body,
+                  h(
+                    "span",
+                    { class: "t" },
+                    `${clock.time(new Date(e.at))}${edited && !unsent ? " · 수정됨" : ""}${e.in === "photo" ? ` · ${e.image.from}` : ""}`,
+                  ),
+                ),
+              ),
+            );
+          }
+          if (e.in === "tapback")
+            items.push(
+              h(
+                "div",
+                { class: "center" },
+                `${name} ${e.emoji} “${PersonaView.textAt(conv.log, record, e.target, new Date(e.at))}” · ${clock.time(new Date(e.at))}`,
+              ),
+            );
+          if (e.in === "edit")
+            items.push(
+              h(
+                "div",
+                { class: "center" },
+                `${name} edited a message · ${clock.time(new Date(e.at))} (watch doesn't report this)`,
+              ),
+            );
+          if (e.in === "unsend")
+            items.push(
+              h(
+                "div",
+                { class: "center" },
+                `${name} unsent a message · ${clock.time(new Date(e.at))} (watch doesn't report this)`,
+              ),
+            );
+          if (e.in === "mine") {
+            const b = h(
+              "div",
+              { class: "bubble" },
+              e.text,
+              h(
+                "span",
+                { class: "t" },
+                `${clock.time(new Date(e.at))} · typed by hand in Messages on the Mac`,
+              ),
+            );
+            bubbles.set(e.id, b);
+            items.push(h("div", { class: "row me" }, b));
+          }
+          if (e.read)
+            items.push(
+              h(
+                "div",
+                { class: "center" },
+                `${name} opened the conversation · ${clock.time(new Date(e.at))}`,
+              ),
+            );
+          if (e.opencode)
+            items.push(
+              h(
+                "div",
+                { class: "center system" },
+                e.opencode === "date"
+                  ? "OpenCode notices the date changed"
+                  : "Server crashed mid-send and restarted",
+              ),
+            );
+          if (e.compaction)
+            items.push(
+              h(
+                "div",
+                { class: "divider" },
+                `Compaction · ${clock.stamp(new Date(e.at))} · everything above became her Memory`,
+              ),
+            );
+          if (e.step) {
+            const idx = reqByLog.get(i);
+            if (idx !== undefined) {
+              items.push(
+                h(
+                  "button",
+                  {
+                    class: `marker${idx === state.selected ? " on" : ""}`,
+                    onclick: () => {
+                      state.selected = idx;
+                      render();
+                    },
+                  },
+                  h("b", {}, `▶ Model request ${reqs[idx].number}`),
+                  ` · ${clock.time(new Date(e.at))} · ${outputSummary(e.step)}`,
+                ),
+              );
+            } else {
+              items.push(h("div", { class: "center" }, "(before compaction)"));
+            }
+            for (const c of e.step) {
+              const o = c.out;
+              if (c.tool === "send") {
+                const went = PersonaView.wentOut(c, new Date("9999-01-01T00:00:00Z"));
+                if (went) {
+                  const note =
+                    o.status === "unknown"
+                      ? " · imsg couldn't confirm it; it went out"
+                      : o.status === "crashed"
+                        ? " · server crashed mid-send; it went out"
+                        : "";
+                  const b = h(
+                    "div",
+                    { class: "bubble" },
+                    c.input.text,
+                    h("span", { class: "t" }, `${clock.time(went)}${note}`),
+                  );
+                  bubbles.set(c.id, b);
+                  items.push(h("div", { class: "row me" }, b));
+                } else if (o.status === "stopped") {
+                  items.push(
+                    h(
+                      "div",
+                      { class: "row me" },
+                      h(
+                        "div",
+                        { class: "bubble ghost" },
+                        `typing… stopped after ${o.after}s, nothing sent (“${c.input.text}”)`,
+                      ),
+                    ),
+                  );
+                } else if (o.status === "dropped") {
+                  items.push(
+                    h(
+                      "div",
+                      { class: "row me" },
+                      h(
+                        "div",
+                        { class: "bubble ghost" },
+                        `held back, then dropped: the earlier “${c.input.text}” had gone out`,
+                      ),
+                    ),
+                  );
+                }
+              }
+              if (c.tool === "react")
+                items.push(
+                  h(
+                    "div",
+                    { class: "center" },
+                    `she tapped ${c.input.emoji} on the latest message · ${clock.time(new Date(o.at))}`,
+                  ),
+                );
+              if (c.tool === "wait")
+                items.push(
+                  h(
+                    "div",
+                    { class: "center" },
+                    `she paused ${o.seconds}s${o.early ? ", cut short by something new" : ""}`,
+                  ),
+                );
+            }
+          }
+          for (const it of items) {
+            if (later(e)) it.classList.add("future");
+            thread.append(it);
+          }
+        });
+
+        const last = PersonaView.lastSent(conv.log, now);
+        if (last && bubbles.has(last.id)) {
+          const row = bubbles.get(last.id).parentElement;
+          row.after(
+            h(
+              "div",
+              { class: "status" },
+              last.readAt ? `읽음 ${clock.time(last.readAt)}` : "전송됨",
+            ),
+          );
+        }
+
+        root.replaceChildren(
+          h(
+            "div",
+            { class: "phone-head" },
+            h("div", {}, h("b", {}, name)),
+            h(
+              "div",
+              { class: "sub" },
+              `hi@hena.dev ↔ ${name} · faded rows happen after the selected request`,
+            ),
+          ),
+          thread,
+        );
+        const on = root.querySelector(".marker.on");
+        if (on) root.scrollTop = Math.max(0, on.offsetTop - root.clientHeight / 2);
+      }
+
+      function renderMessage(m) {
+        const badges = [];
+        if (m.stored)
+          badges.push(
+            h(
+              "span",
+              { class: "badge" },
+              m.checkpoint
+                ? "stored · the checkpoint OpenCode writes at compaction"
+                : "stored · identical every request",
+            ),
+          );
+        if (m.requestOnly)
+          badges.push(
+            h("span", { class: "badge req" }, "added by the context hook · changes every request"),
+          );
+        if (m.dropped)
+          badges.push(h("span", { class: "badge drop" }, "dropped by the context hook"));
+        if (m.rewritten)
+          badges.push(
+            h("span", { class: "badge rw" }, "rewritten by the context hook on each request"),
+          );
+
+        const body = h("div", {}, badges);
+        if (m.why) body.append(h("div", { class: "hint" }, m.why));
+        if (m.calls)
+          for (const c of m.calls)
+            body.append(h("pre", {}, `${c.tool}(${JSON.stringify(c.input)})`));
+        if (m.original) body.append(h("pre", { class: "was" }, m.original));
+        if (m.text !== undefined) body.append(h("pre", {}, m.text));
+        if (m.image)
+          body.append(
+            h(
+              "div",
+              { class: "img" },
+              ramenSvg(64),
+              `image/jpeg · ${m.image.w}×${m.image.h} · converted from ${m.image.from}`,
+            ),
+          );
+
+        const cls = ["msg", m.dropped && "dropped", m.requestOnly && "tail"]
+          .filter(Boolean)
+          .join(" ");
+        return h("div", { class: cls }, h("div", { class: "role" }, m.role), body);
+      }
+
+      function renderRequest(conv, reqs) {
+        const r = reqs[state.selected];
+        const clock = PersonaView.clockFor(conv.persona);
+        const root = document.getElementById("request");
+        const go = (d) => {
+          state.selected = Math.max(0, Math.min(reqs.length - 1, state.selected + d));
+          render();
+        };
+
+        const system = h(
+          "section",
+          { class: "block" },
+          h("h3", {}, "System prompt · set once per Conversation, so it's cached"),
+          ...r.system.map((p) =>
+            h(
+              "div",
+              { class: `part${p.dropped ? " dropped" : ""}` },
+              h(
+                "div",
+                { class: "lbl" },
+                p.dropped ? h("span", { class: "badge drop" }, "removed") : null,
+                p.label,
+              ),
+              p.template
+                ? h(
+                    "pre",
+                    {},
+                    ...p.template
+                      .split(/(\{\{user\.name\}\})/)
+                      .map((bit) =>
+                        bit === "{{user.name}}"
+                          ? h("span", { class: "fill", title: "{{user.name}}" }, conv.user.name)
+                          : bit,
+                      ),
+                  )
+                : h("pre", {}, p.text),
+            ),
+          ),
+        );
+
+        const tools = h(
+          "section",
+          { class: "block" },
+          h("h3", {}, "Tools · placeholder until “The persona's iMessage actions” decides them"),
+          ...r.tools.map((t) =>
+            h(
+              "div",
+              { class: "tool" },
+              `${t.name} ${t.input}  `,
+              h("span", { class: "d" }, t.description),
+            ),
+          ),
+        );
+
+        const messages = h(
+          "section",
+          { class: "block" },
+          h("h3", {}, `Messages · ${r.messages.length}`),
+          h(
+            "p",
+            { class: "hint" },
+            "Stored messages never change, so the provider can cache everything above the last line. Only what the context hook adds or rewrites differs from one request to the next.",
+          ),
+          ...r.messages.map(renderMessage),
+        );
+
+        root.replaceChildren(
+          h(
+            "div",
+            { class: "req-head" },
+            h("button", { onclick: () => go(-1) }, "←"),
+            h("h2", {}, `Model request ${r.number} of ${reqs.length} · ${clock.stamp(r.at)}`),
+            h("button", { onclick: () => go(1) }, "→"),
+          ),
+          h("div", { class: "did" }, h("b", {}, "What she did with it: "), outputSummary(r.output)),
+          system,
+          tools,
+          messages,
+        );
+      }
+
+      function renderControls() {
+        document.querySelectorAll('input[name="format"]').forEach((el) => {
+          el.checked = el.value === state.format;
+        });
+        document.querySelectorAll("#signals input").forEach((el) => {
+          el.checked = state.opts[el.dataset.opt];
+        });
+      }
+
+      function readHash() {
+        const p = new URLSearchParams(location.hash.slice(1));
+        if (p.has("s"))
+          state.scenario = Math.max(0, Math.min(SCENARIOS.length - 1, Number(p.get("s")) - 1 || 0));
+        if (p.get("f") === "A" || p.get("f") === "B") state.format = p.get("f");
+        if (p.has("r")) state.selected = Math.max(0, Number(p.get("r")) - 1 || 0);
+        if (p.has("off"))
+          for (const key of p.get("off").split(",")) if (key in state.opts) state.opts[key] = false;
+      }
+
+      function writeHash() {
+        const off = Object.keys(state.opts).filter((key) => !state.opts[key]);
+        history.replaceState(
+          null,
+          "",
+          `#s=${state.scenario + 1}&f=${state.format}&r=${state.selected + 1}${off.length ? `&off=${off.join(",")}` : ""}`,
+        );
+      }
+
+      function render() {
+        const conv = SCENARIOS[state.scenario];
+        const reqs = PersonaView.requests(conv, { format: state.format, ...state.opts });
+        state.selected = Math.max(0, Math.min(state.selected, reqs.length - 1));
+        writeHash();
+        renderTabs();
+        document.getElementById("scenario-note").textContent = conv.note;
+        renderControls();
+        renderPhone(conv, reqs);
+        renderRequest(conv, reqs);
+      }
+
+      document.querySelectorAll('input[name="format"]').forEach((el) =>
+        el.addEventListener("change", () => {
+          state.format = el.value;
+          render();
+        }),
+      );
+      document.querySelectorAll("#signals input").forEach((el) =>
+        el.addEventListener("change", () => {
+          state.opts[el.dataset.opt] = el.checked;
+          render();
+        }),
+      );
+      document.addEventListener("keydown", (ev) => {
+        if (ev.target.closest && ev.target.closest("input, textarea, [contenteditable]")) return;
+        if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+          state.selected += ev.key === "ArrowLeft" ? -1 : 1;
+          render();
+        }
+      });
+      readHash();
+      render();
+    </script>
+  </body>
+</html>
