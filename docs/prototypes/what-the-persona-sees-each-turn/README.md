@@ -10,4 +10,11 @@ Open `what-the-persona-sees.prototype.html` in a browser. It needs no server and
 
 Everything that decides what the model sees lives in the `PersonaView` module at the top of the script, a pure function over the Conversation. The page around it is disposable.
 
-Verdict: see the resolution comment on the ticket.
+## Verdict
+
+Settled on the ticket and recorded as ADR-0003:
+
+- **Format B:** tagged and language-neutral, with every message stamped in the persona's time zone.
+- **One last line:** the `context` hook adds it to each request and never stores it. It carries the current time and whether he read her last message.
+- **Signals:** every toggle in the prototype stays on, edits and unsends included.
+- **No `{{user.name}}` placeholder.** The prototype shows one, but it was rejected: onboarding asks only for a handle, and she learns his name in conversation, so the system prompt says nothing about the user.
