@@ -1,0 +1,10 @@
+node_modules/
+coverage/
+dist/
+.turbo/
+.vitest/
+.stryker-tmp/
+reports/
+.gates-check/
+stryker.log
+lefthook-local.yml

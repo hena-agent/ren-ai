@@ -1,0 +1,50 @@
+{
+  "name": "ts-template",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run knip && bun run dup && bun run exceptions && bun run verify-gates && bun run mutate",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint --type-aware --report-unused-disable-directives",
+    "typecheck": "turbo run typecheck && tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "knip": "knip && knip --production",
+    "dup": "jscpd",
+    "mutate": "stryker run",
+    "exceptions": "bun run scripts/exceptions.ts",
+    "verify-gates": "bun run scripts/verify-gates.ts",
+    "prepare": "lefthook install",
+    "init": "bun run scripts/init.ts"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@types/node": "26.6.2",
+    "@vitest/coverage-v8": "5.0.1",
+    "jscpd": "5.3.2",
+    "knip": "6.38.0",
+    "lefthook": "2.1.14",
+    "oxfmt": "0.70.0",
+    "oxlint": "1.85.0",
+    "oxlint-plugin-complexity": "3.0.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "turbo": "2.11.4",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.4.2",
+      "onFail": "error"
+    }
+  },
+  "patchedDependencies": {
+    "@stryker-mutator/vitest-runner@10.0.0": "patches/@stryker-mutator%2Fvitest-runner@10.0.0.patch"
+  }
+}
