@@ -8,3 +8,4 @@ reports/
 .gates-check/
 stryker.log
 lefthook-local.yml
+.opencode/
