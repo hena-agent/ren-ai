@@ -30,6 +30,10 @@ _Avoid_: signup, registration
 The first message a persona sends a new user, triggered by onboarding.
 _Avoid_: welcome message, intro
 
+**Notice**:
+A fixed message the service sends from the service handle in its own voice, not a persona's. The first one reaches a new user just before the greeting, saying they are talking to an AI and how to stop.
+_Avoid_: disclaimer, system message
+
 **Conversation**:
 The 1:1 iMessage thread between one user and one persona.
 _Avoid_: chat, thread, session (a session is OpenCode's)
@@ -41,6 +45,10 @@ _Avoid_: context, history, session
 **Waitlist**:
 The emails of people whose handle can't receive iMessage.
 _Avoid_: queue, signup list
+
+**Operator**:
+The person who runs the service: watches conversations as they happen and fixes what breaks.
+_Avoid_: admin, moderator
 
 ### Enforcement
 
