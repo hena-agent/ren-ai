@@ -544,12 +544,11 @@
 
         const fill = (template, user) => template.replaceAll("{{user.name}}", user.name);
         const clip = (s, n = 22) => (s.length > n ? s.slice(0, n) + "…" : s);
-        const esc = (s) =>
-          s
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;");
+        // His text goes in as written, so ">_<" stays ">_<". Only the opening of one of our own tags is
+        // neutralised, and a straight quote becomes a curly one so it can't close an attribute.
+        const OUR_TAGS =
+          /<(\/?)(message|photo|tapback|edited|unsent|sent-by-you|gap|phone|conversation-started)\b/gi;
+        const esc = (s) => s.replace(OUR_TAGS, "‹$1$2").replaceAll('"', "”");
 
         // Every message in the Conversation, his and hers, by id.
         function recordOf(log) {
@@ -1260,7 +1259,7 @@ ${recent}
             },
             { at: k("2026-09-26T23:44:00"), step: [] },
             { at: k("2026-09-26T23:44:05"), read: true },
-            { at: k("2026-09-26T23:44:20"), in: "text", id: "m31", text: "사랑해" },
+            { at: k("2026-09-26T23:44:20"), in: "text", id: "m31", text: "사랑해 >_<" },
             { at: k("2026-09-26T23:44:31"), in: "unsend", target: "m31" },
             {
               at: k("2026-09-26T23:45:00"),
