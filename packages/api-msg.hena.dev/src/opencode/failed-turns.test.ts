@@ -15,7 +15,7 @@ import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { failedTurns } from "./failed-turns.ts";
-import { scriptedOverrides } from "./scripted-overrides.test-helper.ts";
+import { scriptedOverrides, silentAlerts } from "./scripted-overrides.test-helper.ts";
 
 const advanceUntil = <E, R>(done: () => Effect.Effect<boolean, E, R>) =>
   Effect.gen(function* () {
@@ -45,6 +45,8 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
+          expect(yield* silentAlerts.raise("test")).toBeUndefined();
+          expect(yield* silentAlerts.clear("test")).toBeUndefined();
           const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()));
           let mode: "quota" | "auth" | "ok" = "quota";
           let secondStillCapped = false;
