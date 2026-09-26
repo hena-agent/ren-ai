@@ -1,4 +1,7 @@
 import { Effect, Layer } from "effect";
+import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
+import { Session } from "@opencode/schema/session";
+import { SessionMessage } from "@opencode/schema/session-message";
 import { loadPersonas } from "./personas/personas.ts";
 import { isolatedHost } from "./opencode/isolate.ts";
 import type { HostOptions } from "./opencode/host.ts";
@@ -6,18 +9,23 @@ export { serveViewer, viewerFront } from "./opencode/viewer.ts";
 
 export { makeHealth } from "./health/health.ts";
 export { makeBackup } from "./backup/backup.ts";
+export { onboardingApi, noticeCopy } from "./onboarding/onboarding.ts";
 import { migrate } from "./database.ts";
 import { conversations } from "./conversations/conversations.ts";
 import { outbox } from "./outbox/outbox.ts";
 import type { Messages } from "./messages/messages.ts";
 import type { Gestures } from "./gestures/gestures.ts";
 import { intake } from "./intake/intake.ts";
-import { Session } from "@opencode/schema/session";
-import { SessionMessage } from "@opencode/schema/session-message";
+import { onboarding } from "./onboarding/onboarding.ts";
+
+interface OnboardingConfig {
+  readonly turnstileSecret: string;
+  readonly notice: Readonly<Record<"ko", string>>;
+}
 
 export const startPersonaHost = (root: string, options: Omit<HostOptions, "personas">) =>
   Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
-    isolatedHost(root, { ...options, personas }),
+    Effect.map(isolatedHost(root, { ...options, personas }), (host) => ({ ...host, personas })),
   );
 
 export const startMessagingHost = (
@@ -25,6 +33,7 @@ export const startMessagingHost = (
   options: Omit<HostOptions, "personas" | "send" | "handleForSession">,
   messages: Messages,
   gestures: Gestures,
+  onboardingConfig: OnboardingConfig,
 ) =>
   Effect.gen(function* () {
     yield* migrate;
@@ -53,7 +62,35 @@ export const startMessagingHost = (
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
     );
-    return { ...host, conversations: directory, intake: incoming };
+    const persona = host.personas.values().next().value!;
+    const api = yield* onboarding(
+      messages,
+      onboardingConfig.notice,
+      persona,
+      (id) => host.createSession(id),
+      (sessionID, text) =>
+        host.sessions
+          .prompt({
+            sessionID: Session.ID.make(sessionID),
+            id: SessionMessage.ID.make(`msg_onboarding_${sessionID}`),
+            text,
+          })
+          .pipe(Effect.asVoid),
+      (handle, text) => sends.notice(handle, text),
+      onboardingConfig.turnstileSecret,
+    );
+    yield* api.resume;
+    const { handler: onboardingWeb, dispose: disposeOnboarding } = HttpRouter.toWebHandler(
+      api.routes.pipe(Layer.provide(FetchHttpClient.layer)),
+    );
+    return {
+      ...host,
+      conversations: directory,
+      intake: incoming,
+      onboard: api.submit,
+      onboardingWeb,
+      disposeOnboarding,
+    };
   });
 
 /** Production opens the server's own file, never OpenCode's database. */
@@ -63,13 +100,14 @@ export const startMessagingServer = (
   databaseFile: string,
   messages: Messages,
   gestures: Gestures,
+  onboardingConfig: OnboardingConfig,
 ) =>
   Effect.gen(function* () {
     const { SqliteClient } = yield* Effect.promise(() => import("@effect/sql-sqlite-bun"));
     const database = yield* Layer.build(
       SqliteClient.layer({ filename: databaseFile, busyTimeout: "5 seconds" }),
     );
-    return yield* startMessagingHost(root, options, messages, gestures).pipe(
+    return yield* startMessagingHost(root, options, messages, gestures, onboardingConfig).pipe(
       Effect.provide(database),
     );
   });

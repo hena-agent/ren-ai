@@ -11,6 +11,11 @@ export interface Messages {
     rowID: number,
     receive: (row: IncomingMessage) => Effect.Effect<void, Error>,
   ): Effect.Effect<() => void, Error>;
+  /** The latest outcome of a Notice attempted at or after since, even when imsg returned no GUID. */
+  textStatus(
+    handle: string,
+    since: number,
+  ): Effect.Effect<"sent" | "no_imessage" | "unknown", Error>;
 }
 
 export interface IncomingMessage {

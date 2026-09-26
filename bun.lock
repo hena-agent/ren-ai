@@ -31,6 +31,7 @@
         "@opencode/plugin": "2.0.16",
         "@opencode/schema": "2.0.16",
         "@opencode/server": "2.0.16",
+        "@repo/onboarding": "workspace:*",
         "effect": "4.0.0-rc.112",
         "yaml": "2.8.2",
       },

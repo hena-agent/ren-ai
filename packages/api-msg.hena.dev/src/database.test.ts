@@ -6,6 +6,7 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test, vi } from "vitest";
 import { fakeGestures } from "./gestures/gestures.fake.ts";
+import { noticeCopy } from "./onboarding/onboarding.ts";
 import { startMessagingServer } from "./main.ts";
 import { fakeMessages } from "./messages/messages.fake.ts";
 
@@ -41,6 +42,7 @@ test("the production entry keeps a separate server database open for its host li
             join(root, "server.sqlite"),
             messages.messages,
             ui.gestures,
+            { turnstileSecret: "test-secret", notice: noticeCopy },
           );
           const session = yield* host.createSession("persona1");
           const conversation = yield* host.conversations.create({

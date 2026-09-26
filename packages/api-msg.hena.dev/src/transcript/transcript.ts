@@ -39,3 +39,10 @@ export const edited = (old: string, text: string, date: number, timeZone: string
 
 export const unsent = (date: number, timeZone: string) =>
   `<unsent at="${timestamp(date, timeZone)}"/>`;
+export const conversationStarted = (
+  at: number,
+  openingLine: string,
+  notice: string,
+  timeZone: string,
+) =>
+  `<conversation-started at="${timestamp(at, timeZone)}"/>\n${openingLine}\n<notice>${words(notice)}</notice>`;

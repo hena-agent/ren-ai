@@ -7,15 +7,18 @@ import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
 import { llmClient } from "@opencode/core/effect/app-node-platform";
 import { SessionRunnerModel } from "@opencode/core/session/runner/model";
+import { Session } from "@opencode/core/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Agent, AbsolutePath, Location } from "@opencode/schema";
 import { Plugin } from "@opencode/plugin/effect";
 import { Effect, Layer, Schema } from "effect";
+import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { afterAll, expect, test, vi } from "vitest";
 import { startMessagingHost, startPersonaHost } from "../main.ts";
-import { viewerFront } from "./viewer.ts";
+import { expectedViewerResults, verifyViewer } from "./viewer-check.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { noticeCopy } from "../onboarding/onboarding.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
 
@@ -53,47 +56,6 @@ memory: Remember his name.
 ---
 You are Persona1. Speak Korean.
 `;
-
-const verifyViewer = (
-  web: (request: Request) => Promise<Response>,
-  directory: string,
-  sessionID: string,
-  messageID: string,
-) =>
-  Effect.gen(function* () {
-    const viewer = viewerFront(web, "only-the-operator-knows");
-    const authorization = `Basic ${Buffer.from("opencode:only-the-operator-knows").toString("base64")}`;
-    const viewed = (path: string, method = "GET", authenticated = true) =>
-      viewer(
-        new Request(`http://host.local${path}`, {
-          method,
-          headers: {
-            ...(authenticated ? { authorization } : {}),
-            "x-opencode-directory": directory,
-          },
-        }),
-      );
-    for (const path of [
-      "/api/info",
-      "/api/project",
-      "/api/location",
-      "/api/session",
-      `/api/session/${sessionID}`,
-      `/api/session/${sessionID}/message`,
-      `/api/session/${sessionID}/inbox`,
-      `/api/session/${sessionID}/message/${messageID}`,
-    ]) {
-      expect((yield* Effect.promise(() => viewed(path))).status).toBe(200);
-      expect((yield* Effect.promise(() => viewed(path, "GET", false))).status).toBe(401);
-    }
-    for (const path of ["/api/config", "/api/plugin", "/openapi.json", "/api/session/active"]) {
-      expect((yield* Effect.promise(() => viewed(path))).status).toBe(403);
-    }
-    expect((yield* Effect.promise(() => viewed("/api/session", "POST"))).status).toBe(403);
-    const events = yield* Effect.promise(() => viewed("/api/event"));
-    expect(events.status).toBe(200);
-    yield* Effect.promise(() => events.body!.cancel());
-  });
 
 const model = SessionRunnerModel.resolved(
   LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
@@ -274,7 +236,9 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             '"private-test":{"name":"Private Test","settings":{"apiKey":"passed-in-code"}}',
           );
           expect(config).toContain('"persona1":{"mode":"primary"}');
-          yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id);
+          expect(
+            yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id),
+          ).toEqual(expectedViewerResults(session.id, messages[0]!.id));
           for (const id of [
             "opencode.config.instruction",
             "opencode.config.compatibility",
@@ -383,6 +347,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
                 }),
             },
             ui.gestures,
+            { turnstileSecret: "test-secret", notice: noticeCopy },
           );
           let toolDescription = "";
           yield* Effect.tryPromise(() =>
@@ -477,14 +442,50 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(JSON.stringify(yield* host.sessions.messages({ sessionID: orphan.id }))).toContain(
             "No Conversation for session",
           );
-          const foreignKeys = yield* sql<{ foreign_keys: number }>`PRAGMA foreign_keys`;
-          expect(foreignKeys[0]?.foreign_keys).toBe(1);
+          expect((yield* sql<{ foreign_keys: number }>`PRAGMA foreign_keys`)[0]?.foreign_keys).toBe(
+            1,
+          );
           const tables = yield* sql<{
             name: string;
           }>`SELECT name FROM sqlite_master WHERE type = 'table'`;
           expect(tables.map((row) => row.name)).toEqual(
             expect.arrayContaining(["user", "conversation", "send"]),
           );
+          const turnstile = HttpClient.make((request) =>
+            Effect.sync(() => {
+              if (
+                !(request.body instanceof HttpBody.Uint8Array) ||
+                !new TextDecoder().decode(request.body.body).includes("secret=test-secret")
+              ) {
+                throw new Error("Turnstile secret was not passed from startup");
+              }
+              return HttpClientResponse.fromWeb(
+                request,
+                new Response('{"success":true}', {
+                  status: 200,
+                  headers: { "content-type": "application/json" },
+                }),
+              );
+            }),
+          );
+          step = 0;
+          expect(
+            yield* host
+              .onboard({
+                handle: "+821033333333",
+                locale: "ko",
+                privacyNoticeVersion: "v1",
+                turnstileToken: "human",
+              })
+              .pipe(Effect.provide(Layer.succeed(HttpClient.HttpClient, turnstile))),
+          ).toBe("sent");
+          expect(imessage.bubbles[2]?.text).toContain("그만 받고 싶으면");
+          const joined = yield* host.conversations.byHandle("+821033333333");
+          yield* host.sessions
+            .wait(Session.ID.make(joined!.sessionID))
+            .pipe(Effect.timeout("20 seconds"));
+          expect(imessage.bubbles[3]).toEqual({ handle: joined!.handle, text: "bubble 1" });
+          yield* Effect.promise(host.disposeOnboarding);
         }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
       ),
     );

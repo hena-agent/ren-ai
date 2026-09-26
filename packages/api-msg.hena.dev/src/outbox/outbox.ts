@@ -14,6 +14,23 @@ export const outbox = (messages: Messages, gestures: Gestures) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     return {
+      notice: (handle: string, text: string) =>
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis;
+          yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
+            VALUES (${handle}, 'notice', ${text}, 'recorded', ${now}, ${now})`;
+          const [record] = yield* sql<{ id: number }>`SELECT id FROM send
+            WHERE handle = ${handle} AND kind = 'notice' ORDER BY id DESC LIMIT 1`;
+          const id = record!.id;
+          const outcome = yield* Effect.result(messages.sendText(handle, text));
+          if (Result.isFailure(outcome)) {
+            yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${yield* Clock.currentTimeMillis}
+              WHERE id = ${id}`;
+          } else {
+            yield* sql`UPDATE send SET state = 'uncertain', guid = ${outcome.success.guid}, updated_at = ${yield* Clock.currentTimeMillis}
+              WHERE id = ${id}`;
+          }
+        }),
       send: (conversation: Conversation, text: string, callID: string) =>
         Effect.gen(function* () {
           const existing =
