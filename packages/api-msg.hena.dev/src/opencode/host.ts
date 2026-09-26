@@ -34,6 +34,12 @@ interface HostConfig {
   readonly personas: ReadonlyMap<string, Persona>;
   readonly providers: Readonly<Record<string, object>>;
   readonly model: string;
+  /** The model's context limit, our compaction threshold, and the verbatim tail. */
+  readonly memory?: {
+    readonly contextTokens: number;
+    readonly budgetTokens: number;
+    readonly recentTokens: number;
+  };
   /** Resolve the Handle from the durable Conversation→session binding. */
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined>;
   readonly overrides?: Parameters<typeof createEmbeddedRoutes>[1];
@@ -66,6 +72,20 @@ export type PersonaHostOptions = Omit<HostConfig, "personas"> & HostTools;
 
 export const createHost = (options: HostOptions) =>
   Effect.gen(function* () {
+    const memory = options.memory ?? {
+      contextTokens: 100_000,
+      budgetTokens: 60_000,
+      recentTokens: 12_000,
+    };
+    if (
+      !Number.isInteger(memory.contextTokens) ||
+      !Number.isInteger(memory.budgetTokens) ||
+      !Number.isInteger(memory.recentTokens) ||
+      memory.budgetTokens >= memory.contextTokens ||
+      memory.recentTokens <= 0 ||
+      memory.recentTokens >= memory.budgetTokens
+    )
+      return yield* Effect.fail(new Error("Invalid Memory budget"));
     const runtime = yield* Effect.acquireRelease(
       Effect.sync(() =>
         ManagedRuntime.make(
@@ -81,6 +101,10 @@ export const createHost = (options: HostOptions) =>
                   agents: Object.fromEntries(
                     [...options.personas.keys()].map((id) => [id, { mode: "primary" }]),
                   ),
+                  compaction: {
+                    buffer: memory.contextTokens - memory.budgetTokens,
+                    keep: { tokens: memory.recentTokens },
+                  },
                 }),
               },
               models: { fetch: false },
@@ -179,6 +203,17 @@ export const createHost = (options: HostOptions) =>
                   `OpenCode offered disallowed tool: ${name}`,
                 ),
               );
+            }).pipe(Effect.orDie),
+          );
+          yield* ctx.session.hook("compaction", (event) =>
+            Effect.gen(function* () {
+              const persona = options.personas.get(event.agent)!;
+              const { text: summary } = yield* ctx.session.generate({
+                sessionID: event.sessionID,
+                prompt: `${persona.memory}\nWrite her Memory in ${persona.language}, from her point of view. Use four parts: about him, the two of them, plans and promises, and lately. Preserve his name once learned, even through later summaries. Describe photos worth remembering. Update any previous Memory with what happened since; never discard lasting facts just because they are old. Return only the four-part Memory, not a conversation checkpoint wrapper. Do not call tools.`,
+              });
+              if (!summary.trim()) yield* Effect.fail(new Error());
+              event.result = { summary };
             }).pipe(Effect.orDie),
           );
           yield* ctx.session.hook("title", (event) =>
