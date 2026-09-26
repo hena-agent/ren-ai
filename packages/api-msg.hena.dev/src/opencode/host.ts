@@ -16,7 +16,14 @@ const disabled = [
   "opencode.provider.vllm",
 ];
 
-export interface HostOptions {
+function toolResult(action: Effect.Effect<string, Error>) {
+  return action.pipe(
+    Effect.map((output) => ({ output, content: output })),
+    Effect.mapError((error) => new Tool.Error({ message: error.message })),
+  );
+}
+
+interface HostConfig {
   readonly configDirectory: string;
   readonly databasePath: string;
   readonly personaDirectory: string;
@@ -26,8 +33,21 @@ export interface HostOptions {
   /** Resolve the Handle from the durable Conversation→session binding. */
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined>;
   readonly overrides?: Parameters<typeof createEmbeddedRoutes>[1];
-  readonly send?: (sessionID: string, text: string, callID: string) => Effect.Effect<string, Error>;
 }
+
+type HostTools =
+  | {
+      readonly send: (
+        sessionID: string,
+        text: string,
+        callID: string,
+      ) => Effect.Effect<string, Error>;
+      readonly wait: (sessionID: string, minutes: number) => Effect.Effect<string, Error>;
+    }
+  | { readonly send?: undefined; readonly wait?: undefined };
+
+export type HostOptions = HostConfig & HostTools;
+export type PersonaHostOptions = Omit<HostConfig, "personas"> & HostTools;
 
 export const createHost = (options: HostOptions) =>
   Effect.gen(function* () {
@@ -73,6 +93,7 @@ export const createHost = (options: HostOptions) =>
           });
           if (options.send) {
             const send = options.send;
+            const wait = options.wait;
             yield* ctx.tool.transform((editor) => {
               editor.add({
                 name: "send",
@@ -81,10 +102,15 @@ export const createHost = (options: HostOptions) =>
                 output: Schema.String,
                 options: { codemode: false },
                 execute: ({ text }, context) =>
-                  send(context.sessionID, text, context.id).pipe(
-                    Effect.map((output) => ({ output, content: output })),
-                    Effect.mapError((error) => new Tool.Error({ message: error.message })),
-                  ),
+                  toolResult(send(context.sessionID, text, context.id)),
+              });
+              editor.add({
+                name: "wait",
+                description: "Pause for up to 12 hours, or until something new arrives",
+                input: Schema.Struct({ minutes: Schema.Number.check(Schema.isGreaterThan(0)) }),
+                output: Schema.String,
+                options: { codemode: false },
+                execute: ({ minutes }, context) => toolResult(wait(context.sessionID, minutes)),
               });
             });
           }
@@ -93,7 +119,8 @@ export const createHost = (options: HostOptions) =>
               const persona = options.personas.get(event.agent)!;
               event.system.splice(0, event.system.length, { type: "text", text: persona.prompt });
               for (const name of Object.keys(event.tools)) {
-                if (name !== "send" || !options.send) delete event.tools[name];
+                if ((name !== "send" || !options.send) && (name !== "wait" || !options.wait))
+                  delete event.tools[name];
               }
             }),
           );
@@ -131,6 +158,7 @@ export const createHost = (options: HostOptions) =>
           permissions: [
             { action: "*", resource: "*", effect: "deny" },
             ...(options.send ? [{ action: "send", resource: "*", effect: "allow" } as const] : []),
+            ...(options.wait ? [{ action: "wait", resource: "*", effect: "allow" } as const] : []),
           ],
         });
       },

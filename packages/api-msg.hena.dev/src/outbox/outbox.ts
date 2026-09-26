@@ -4,13 +4,14 @@ import type { Conversation } from "../conversations/conversations.ts";
 import type { Gestures } from "../gestures/gestures.ts";
 import type { Messages } from "../messages/messages.ts";
 import { notSent, sent } from "../transcript/transcript.ts";
+import type { timing } from "../timing/timing.ts";
 
 interface SendRow {
   readonly id: number;
   readonly state: string;
 }
 
-export const outbox = (messages: Messages, gestures: Gestures) =>
+export const outbox = (messages: Messages, gestures: Gestures, pace?: ReturnType<typeof timing>) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     return {
@@ -25,10 +26,18 @@ export const outbox = (messages: Messages, gestures: Gestures) =>
           const extra = yield* Random.nextBetween(1000, 2000);
           const duration = Math.min(15000, text.length * 250 + extra);
           // UI failures do not stop imsg sends; a new inbound message does.
-          const ready = yield* gestures
-            .typing(conversation.handle, duration)
-            .pipe(Effect.catch(() => Effect.succeed(true)));
-          if (!ready) return notSent("a new message arrived");
+          const type = gestures.typing(conversation.handle, duration).pipe(
+            Effect.catch(() =>
+              Effect.gen(function* () {
+                const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
+                yield* Effect.sleep(Math.max(0, duration - elapsed));
+                return true;
+              }),
+            ),
+          );
+          const typingStarted = yield* Clock.currentTimeMillis;
+          const ready = pace ? yield* pace.during(conversation.id, type) : yield* type;
+          if (ready !== true) return notSent("a new message arrived");
           const now = yield* Clock.currentTimeMillis;
           yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
             VALUES (${conversation.handle}, ${conversation.id}, 'text', ${text}, ${callID}, 'recorded', ${now}, ${now})`;

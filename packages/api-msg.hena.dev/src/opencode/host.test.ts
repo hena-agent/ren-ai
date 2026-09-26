@@ -183,6 +183,11 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
                   effect: (ctx) =>
                     Effect.map(ctx.tool.list(), (tools) => {
                       registeredTools = tools.map((tool) => tool.name);
+                      expect(
+                        tools
+                          .filter((tool) => tool.name === "wait")
+                          .map((tool) => tool.description),
+                      ).not.toContain("Pause for up to 12 hours, or until something new arrives");
                     }),
                 }),
               ),
@@ -275,24 +280,19 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           );
           expect(config).toContain('"persona1":{"mode":"primary"}');
           yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id);
-          for (const id of [
+          const disabledIDs = [
             "opencode.config.instruction",
             "opencode.config.compatibility",
             "opencode.provider.ollama",
             "opencode.provider.lmstudio",
             "opencode.provider.vllm",
-          ]) {
+          ];
+          for (const id of disabledIDs) {
             expect(config).toContain(`-${id}`);
           }
           const plugins = yield* Effect.promise(() => get("plugin"));
           expect(plugins).toContain('"id":"personas"');
-          for (const id of [
-            "opencode.config.instruction",
-            "opencode.config.compatibility",
-            "opencode.provider.ollama",
-            "opencode.provider.lmstudio",
-            "opencode.provider.vllm",
-          ]) {
+          for (const id of disabledIDs) {
             expect(plugins).not.toContain(`"id":"${id}"`);
           }
           expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
@@ -357,6 +357,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               return TestLLM.text("title", "title");
             step++;
             if (step <= 2) return TestLLM.tool(`call-${step}`, "send", { text: `bubble ${step}` });
+            if (step === 3) return TestLLM.tool("pause", "wait", { minutes: 0.001 });
             return TestLLM.text("done", "answer");
           });
           const host = yield* startMessagingHost(
@@ -424,6 +425,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(session.permissions).toEqual([
             { action: "*", resource: "*", effect: "deny" },
             { action: "send", resource: "*", effect: "allow" },
+            { action: "wait", resource: "*", effect: "allow" },
           ]);
           const signals: number[] = [];
           host.intake.onNew((conversation) => signals.push(conversation.id));
@@ -436,7 +438,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
           expect(
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
-          ).toEqual([["send"], ["send"], ["send"]]);
+          ).toEqual(Array.from({ length: 4 }, () => ["send", "wait"]));
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
           expect((yield* host.sessions.get(session.id)).title).toBe("Persona1 · +821011111111");
           expect(imessage.bubbles).toEqual([
@@ -460,12 +462,15 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           ]);
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
-          ).toContain("sent");
+          ).toContain("paused");
           step = 3;
           const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
-          expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual(["send"]);
+          expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual([
+            "send",
+            "wait",
+          ]);
           step = 0;
           const orphan = yield* host.createSession("persona1");
           yield* host.sessions.prompt({
