@@ -6,7 +6,7 @@
   ],
   "type": "module",
   "scripts": {
-    "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run knip && bun run dup && bun run exceptions && bun run verify-gates && bun run mutate",
+    "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run knip && bun run dup && bun run exceptions && bun run verify-gates && bun run mutate && bun run --cwd packages/msg.hena.dev build",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "bun run scripts/run-quality-gate.ts lint",
@@ -34,6 +34,7 @@
     "oxlint-tsgolint": "7.0.2003",
     "turbo": "2.11.4",
     "typescript": "7.0.2",
+    "vite": "7.3.6",
     "vitest": "5.0.1"
   },
   "devEngines": {
