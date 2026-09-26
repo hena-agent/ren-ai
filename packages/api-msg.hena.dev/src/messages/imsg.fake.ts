@@ -1,5 +1,6 @@
 import { Effect, Layer, Queue, Sink, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import type { IncomingMessage } from "./messages.ts";
 
 export const handle = "<iphone>";
 export const at = "2026-09-25T12:02:07.447Z";
@@ -244,7 +245,12 @@ export const fixture = () => {
     stuck: () => {
       stuckPage = true;
     },
-    inbound: (recipient: string, content: string, date: number) =>
+    inbound: (
+      recipient: string,
+      content: string,
+      date: number,
+      extra: Pick<IncomingMessage, "attachments" | "tapback" | "replyToGuid" | "payload"> = {},
+    ) =>
       Effect.sync(() => {
         const row = {
           id: (rows.at(-1)?.id ?? 0) + 1,
@@ -254,6 +260,33 @@ export const fixture = () => {
           created_at: new Date(date).toISOString(),
           text: content,
           is_from_me: false,
+          ...(extra.attachments
+            ? {
+                attachments: extra.attachments.map((item) => ({
+                  original_path: item.path,
+                  mime_type: item.mimeType,
+                  uti: item.uti,
+                  missing: item.missing,
+                })),
+              }
+            : {}),
+          ...(extra.tapback
+            ? {
+                is_reaction: true,
+                reaction_type: extra.tapback.emoji,
+                is_reaction_add: extra.tapback.added,
+                reacted_to_guid: extra.tapback.targetGuid,
+              }
+            : {}),
+          ...(extra.replyToGuid ? { thread_originator_guid: extra.replyToGuid } : {}),
+          ...(extra.payload
+            ? {
+                balloon_bundle_id:
+                  extra.payload === "location"
+                    ? "com.apple.findmy.Location"
+                    : "com.example.MessagesExtension",
+              }
+            : {}),
         };
         rows.push(row);
         connections.at(-1)?.notify("message", { subscription: 1, message: row });
@@ -264,6 +297,7 @@ export const fixture = () => {
           createdAt: date,
           text: content,
           fromMe: false,
+          ...extra,
         };
       }),
   };

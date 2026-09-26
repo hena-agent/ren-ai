@@ -276,11 +276,18 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
         yield* sql`UPDATE follow_up SET unanswered = 1, wake_pending = 1 WHERE conversation_id = ${conversation.id}`;
         yield* TestClock.adjust("1 hour");
         const replyAt = yield* Clock.currentTimeMillis;
-        yield* fake.text(conversation.handle, "tapback", replyAt);
+        yield* fake.text(conversation.handle, "", replyAt, {
+          tapback: { emoji: "😂", targetGuid: first.guid, added: true },
+        });
         expect(yield* state(sql, conversation.id)).toMatchObject({
           lastSentAt: replyAt,
           unanswered: 0,
         });
+        yield* TestClock.adjust("1 hour");
+        yield* fake.text(conversation.handle, "", yield* Clock.currentTimeMillis, {
+          tapback: { emoji: "😂", targetGuid: first.guid, added: false },
+        });
+        expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(replyAt);
       }).pipe(
         Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
         Effect.provide(TestClock.layer()),

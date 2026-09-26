@@ -14,6 +14,7 @@ const contract = (
         handle: string,
         content: string,
         date: number,
+        extra?: Pick<IncomingMessage, "attachments" | "tapback" | "replyToGuid" | "payload">,
       ) => Effect.Effect<IncomingMessage, Error>,
       settle: (guid: string) => Effect.Effect<void, Error>,
     ) => Effect.Effect<void, Error>,
@@ -53,6 +54,54 @@ const contract = (
         for (let i = 0; i < 30 && !incoming.some((item) => item.guid === row.guid); i++)
           yield* Effect.yieldNow;
         expect(incoming.some((item) => item.guid === row.guid)).toBe(true);
+        stop();
+      }),
+    );
+  });
+  test(`${name}: images, tapbacks, inline replies and placeholders survive after/recent/follow`, async () => {
+    await run((messages, text) =>
+      Effect.gen(function* () {
+        const seen: IncomingMessage[] = [];
+        const previous = (yield* messages.after(0)).at(-1)?.id ?? 0;
+        const stop = yield* messages.follow(previous, (row) =>
+          Effect.sync(() => {
+            seen.push(row);
+          }),
+        );
+        const events: Array<
+          Pick<IncomingMessage, "attachments" | "tapback" | "replyToGuid" | "payload">
+        > = [
+          {
+            attachments: [
+              {
+                path: "/Messages/photo.heic",
+                mimeType: "image/heic",
+                uti: "public.heic",
+                missing: false,
+              },
+            ],
+          },
+          { tapback: { emoji: "😂", targetGuid: raw[0]!.guid, added: true } },
+          { tapback: { emoji: "😂", targetGuid: raw[0]!.guid, added: false } },
+          { replyToGuid: raw[0]!.guid },
+          { payload: "location" },
+          { payload: "app" },
+        ];
+        const rows: IncomingMessage[] = [];
+        for (const [index, extra] of events.entries())
+          rows.push(yield* text(handle, "", Date.parse(at) + index * 1000, extra));
+        for (let i = 0; i < 100 && seen.length < rows.length; i++) yield* Effect.yieldNow;
+        expect(seen.map((row) => row.guid)).toEqual(rows.map((row) => row.guid));
+        for (const [index, row] of rows.entries()) {
+          const expected = events[index]!;
+          expect(
+            (yield* messages.after(previous)).find((item) => item.guid === row.guid),
+          ).toMatchObject(expected);
+          expect(
+            (yield* messages.recent(handle, Date.parse(at))).find((item) => item.guid === row.guid),
+          ).toMatchObject(expected);
+          expect(seen[index]).toMatchObject(expected);
+        }
         stop();
       }),
     );

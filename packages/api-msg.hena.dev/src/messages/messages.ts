@@ -42,4 +42,21 @@ export interface IncomingMessage {
   readonly createdAt: number;
   readonly text: string;
   readonly fromMe: boolean;
+  /** imsg attachments: original_path, mime_type, uti, missing. */
+  readonly attachments?: ReadonlyArray<{
+    readonly path: string;
+    readonly mimeType: string | null;
+    readonly uti: string | null;
+    readonly missing: boolean;
+  }>;
+  /** imsg is_reaction, reaction_emoji, is_reaction_add and reacted_to_guid. */
+  readonly tapback?: {
+    readonly emoji: string;
+    readonly targetGuid: string;
+    readonly added: boolean;
+  };
+  /** imsg thread_originator_guid (NOT reply_to_guid, which is set on ordinary messages). */
+  readonly replyToGuid?: string;
+  /** Non-attachment iMessage payloads identified by the adapter. */
+  readonly payload?: "location" | "app";
 }
