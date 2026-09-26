@@ -16,6 +16,8 @@ export const intake = (
   byHandle: (handle: string) => Effect.Effect<Conversation | undefined, Error>,
   prompt: (sessionID: string, id: string, text: string) => Effect.Effect<void, Error>,
   timeZone: (personaID: string) => string,
+  received: (conversation: Conversation, date: number) => Effect.Effect<void, Error> = () =>
+    Effect.void,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -76,6 +78,7 @@ export const intake = (
                 ON CONFLICT(conversation_id) DO UPDATE SET date = excluded.date`;
               yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
+              yield* received(conversation, row.createdAt);
               yield* save({ rowID: row.id, date: row.createdAt });
             }).pipe(sql.withTransaction);
             last = { rowID: row.id, date: row.createdAt };

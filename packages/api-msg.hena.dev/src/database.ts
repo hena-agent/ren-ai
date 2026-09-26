@@ -61,6 +61,14 @@ export const migrate = Effect.gen(function* () {
         handle TEXT PRIMARY KEY,
         session_id TEXT NOT NULL
       )`,
+      "009_follow_up": sql`CREATE TABLE follow_up (
+        conversation_id INTEGER PRIMARY KEY REFERENCES conversation(id) ON DELETE CASCADE,
+        last_sent_at INTEGER NOT NULL,
+        next_wake_at INTEGER,
+        unanswered INTEGER NOT NULL DEFAULT 0,
+        wake_pending INTEGER NOT NULL DEFAULT 0,
+        followed_up INTEGER NOT NULL DEFAULT 0
+      )`,
     }),
   });
 });

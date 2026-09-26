@@ -22,7 +22,13 @@ export const outbox = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const sentListeners = new Set<(conversation: Conversation) => Effect.Effect<void, Error>>();
+    const notifySent = (conversation: Conversation) =>
+      Effect.forEach(sentListeners, (listener) => listener(conversation), { discard: true });
     return {
+      onSent: (listener: (conversation: Conversation) => Effect.Effect<void, Error>) => {
+        sentListeners.add(listener);
+      },
       notice: (handle: string, text: string) =>
         Effect.gen(function* () {
           const blocked = yield* sql`SELECT 1 FROM blocked WHERE handle = ${handle}`;
@@ -71,6 +77,7 @@ export const outbox = (
           yield* sql`UPDATE send SET state = ${state}, updated_at = ${yield* Clock.currentTimeMillis}
             WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
           if (Result.isFailure(outcome)) return notReacted(outcome.failure.message);
+          yield* notifySent(conversation);
           return `reacted ${tapback}`;
         }),
       send: (conversation: Conversation, text: string, callID: string) =>
@@ -110,6 +117,7 @@ export const outbox = (
             return notSent("send in doubt");
           }
           yield* sql`UPDATE send SET state = 'sent', guid = ${outcome.success.guid}, updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id}`;
+          yield* notifySent(conversation);
           return sent();
         }),
     };
