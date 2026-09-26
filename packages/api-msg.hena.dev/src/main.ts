@@ -29,9 +29,11 @@ export const startMessagingHost = (
   Effect.gen(function* () {
     yield* migrate;
     const directory = yield* conversations;
-    const sends = yield* outbox(messages, gestures);
-    const host = yield* startPersonaHost(root, {
+    const personas = yield* loadPersonas(options.personaDirectory);
+    const sends = yield* outbox(messages, gestures, personas);
+    const host = yield* isolatedHost(root, {
       ...options,
+      personas,
       handleForSession: (sessionID) =>
         directory.bySession(sessionID).pipe(
           Effect.map((conversation) => (conversation ? conversation.handle : undefined)),
@@ -43,6 +45,7 @@ export const startMessagingHost = (
           if (!conversation) return yield* Effect.fail(new Error("No Conversation for session"));
           return yield* sends.send(conversation, text, callID);
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
+      settledSends: (sessionID) => sends.results(sessionID),
     });
     const incoming = yield* intake(
       messages,
@@ -52,6 +55,7 @@ export const startMessagingHost = (
           .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
+      sends.reconcile,
     );
     return { ...host, conversations: directory, intake: incoming };
   });

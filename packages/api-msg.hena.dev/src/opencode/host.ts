@@ -1,4 +1,5 @@
 import { SdkPlugins } from "@opencode/core/plugin/sdk";
+import { Message, ToolResultPart } from "@opencode/ai";
 import { Session } from "@opencode/core/session";
 import { createEmbeddedRoutes } from "@opencode/server/routes";
 import { AbsolutePath, Agent, Location, Model } from "@opencode/schema";
@@ -27,6 +28,14 @@ export interface HostOptions {
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined>;
   readonly overrides?: Parameters<typeof createEmbeddedRoutes>[1];
   readonly send?: (sessionID: string, text: string, callID: string) => Effect.Effect<string, Error>;
+  readonly settledSends?: (sessionID: string) => Effect.Effect<
+    ReadonlyArray<{
+      readonly toolCallID: string | null;
+      readonly state: string;
+      readonly updatedAt: number;
+    }>,
+    Error
+  >;
 }
 
 export const createHost = (options: HostOptions) =>
@@ -89,11 +98,47 @@ export const createHost = (options: HostOptions) =>
             });
           }
           yield* ctx.session.hook("context", (event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               const persona = options.personas.get(event.agent)!;
               event.system.splice(0, event.system.length, { type: "text", text: persona.prompt });
               for (const name of Object.keys(event.tools)) {
                 if (name !== "send" || !options.send) delete event.tools[name];
+              }
+              if (!options.settledSends) return;
+              const sends = yield* options.settledSends(event.sessionID).pipe(Effect.orDie);
+              for (const [index, entry] of event.messages.entries()) {
+                const content = entry.content.map((part) => {
+                  if (part.type !== "tool-result") return part;
+                  const send = sends.find((row) => row.toolCallID === part.id);
+                  if (!send) return part;
+                  const at = new Intl.DateTimeFormat("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: persona.timeZone,
+                  }).format(send.updatedAt);
+                  return ToolResultPart.make({
+                    id: part.id,
+                    name: part.name,
+                    namespace: part.namespace,
+                    providerExecuted: part.providerExecuted,
+                    cache: part.cache,
+                    metadata: part.metadata,
+                    providerMetadata: part.providerMetadata,
+                    result:
+                      send.state === "failed"
+                        ? "not sent: earlier send did not go out"
+                        : `${send.state} ${at} (confirmed late)`,
+                    resultType: "text",
+                  });
+                });
+                event.messages[index] = Message.make({
+                  id: entry.id,
+                  role: entry.role,
+                  content,
+                  metadata: entry.metadata,
+                  providerMetadata: entry.providerMetadata,
+                  native: entry.native,
+                });
               }
             }),
           );

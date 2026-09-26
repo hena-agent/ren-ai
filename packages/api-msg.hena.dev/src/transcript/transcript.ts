@@ -39,3 +39,6 @@ export const edited = (old: string, text: string, date: number, timeZone: string
 
 export const unsent = (date: number, timeZone: string) =>
   `<unsent at="${timestamp(date, timeZone)}"/>`;
+
+export const sentByYou = (text: string, date: number, timeZone: string) =>
+  `<sent-by-you at="${timestamp(date, timeZone)}">${words(text)}</sent-by-you>`;

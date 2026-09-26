@@ -18,7 +18,6 @@ import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
-
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
   const { tmpdir: temporaryDirectory } = await import("node:os");
@@ -44,7 +43,6 @@ afterAll(() => {
   vi.unstubAllGlobals();
   rmSync(xdg.root, { recursive: true, force: true });
 });
-
 const valid = `---
 time-zone: Asia/Seoul
 language: ko
@@ -53,7 +51,6 @@ memory: Remember his name.
 ---
 You are Persona1. Speak Korean.
 `;
-
 const verifyViewer = (
   web: (request: Request) => Promise<Response>,
   directory: string,
@@ -94,7 +91,6 @@ const verifyViewer = (
     expect(events.status).toBe(200);
     yield* Effect.promise(() => events.body!.cancel());
   });
-
 const model = SessionRunnerModel.resolved(
   LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
   {
@@ -103,14 +99,12 @@ const model = SessionRunnerModel.resolved(
     limit: { context: 100_000, output: 1_000 },
   },
 );
-
 const scriptedOverrides = (llm: TestLLM.TestInterface) => [
   llmClient.replace(Layer.succeed(LLMClient.Service, llm)),
   SessionRunnerModel.node.replace(
     Layer.succeed(SessionRunnerModel.Service, { resolve: () => Effect.succeed(model) }),
   ),
 ];
-
 const intruder = Plugin.define({
   id: "untrusted-tool",
   effect: (ctx) =>
@@ -127,14 +121,12 @@ const intruder = Plugin.define({
       )
       .pipe(Effect.asVoid),
 });
-
 const unrestricted = (directory: string) => ({
   agent: Agent.ID.make("persona1"),
   model: model.ref,
   location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
   permissions: [{ action: "*", resource: "*", effect: "allow" as const }],
 });
-
 test("the sealed host creates a deny-all persona session and admits a scripted reply", async () => {
   const root = await mkdtemp(join(tmpdir(), "sealed-host-"));
   const personaDirectory = join(root, "content");
@@ -308,7 +300,6 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
     await rm(root, { recursive: true, force: true });
   }
 }, 60000);
-
 test("a host cannot silently fall back to the Mac database", async () => {
   const root = await mkdtemp(join(tmpdir(), "invalid-host-db-"));
   const personaDirectory = join(root, "content");
@@ -333,7 +324,6 @@ test("a host cannot silently fall back to the Mac database", async () => {
     await rm(root, { recursive: true, force: true });
   }
 }, 60000);
-
 test("a scripted persona sends several ordered bubbles only to her Conversation", async () => {
   const root = await mkdtemp(join(tmpdir(), "messaging-host-"));
   const personaDirectory = join(root, "content");
@@ -461,6 +451,21 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).toContain("sent");
+          yield* sql`UPDATE send SET state = CASE WHEN tool_call_id = 'call-1' THEN 'delivered' ELSE 'failed' END,
+            late = 1, updated_at = ${Date.parse("2026-09-25T11:48:00Z")} WHERE tool_call_id IN ('call-1', 'call-2')`;
+          yield* imessage.text(first.handle, "again", Date.parse("2026-09-25T11:53:00Z"));
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          const lastRequest = (yield* llm.requests()).at(-1)!;
+          const rewritten = JSON.stringify(lastRequest);
+          expect(rewritten).toContain("delivered 01:48 (confirmed late)");
+          expect(rewritten).toContain("not sent: earlier send did not go out");
+          expect(rewritten.indexOf("delivered")).toBeLessThan(rewritten.indexOf("not sent"));
+          const returned = lastRequest.messages.flatMap((entry) => entry.content);
+          expect(
+            returned.filter((part) => part.type === "tool-call").map((part) => part.id),
+          ).toEqual(["call-1", "call-2"]);
+          const saved = yield* host.sessions.messages({ sessionID: session.id });
+          expect(JSON.stringify(saved)).not.toContain("confirmed late");
           step = 3;
           const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
