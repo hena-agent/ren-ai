@@ -9,6 +9,7 @@ import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { startMessagingServer } from "./main.ts";
 import { fakeMessages } from "./messages/messages.fake.ts";
+import { silentAlerts } from "./opencode/scripted-overrides.test-helper.ts";
 
 vi.mock("@effect/sql-sqlite-bun", async () => ({
   SqliteClient: { layer: (await import("@effect/sql-sqlite-node")).SqliteClient.layer },
@@ -43,6 +44,7 @@ test("the production entry keeps a separate server database open for its host li
             messages.messages,
             ui.gestures,
             { turnstileSecret: "test-secret", notice: noticeCopy },
+            silentAlerts,
           );
           const session = yield* host.createSession("persona1");
           const conversation = yield* host.conversations.create({

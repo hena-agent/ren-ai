@@ -2,10 +2,9 @@ import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LanguageModel, LLMClient } from "@opencode/ai";
+import { LanguageModel } from "@opencode/ai";
 import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
-import { llmClient } from "@opencode/core/effect/app-node-platform";
 import { SessionRunnerModel } from "@opencode/core/session/runner/model";
 import { Session } from "@opencode/core/session";
 import { SessionMessage } from "@opencode/schema/session-message";
@@ -21,6 +20,7 @@ import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
+import { scriptedOverrides, silentAlerts } from "./scripted-overrides.test-helper.ts";
 
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
@@ -65,13 +65,6 @@ const model = SessionRunnerModel.resolved(
     limit: { context: 100_000, output: 1_000 },
   },
 );
-
-const scriptedOverrides = (llm: TestLLM.TestInterface) => [
-  llmClient.replace(Layer.succeed(LLMClient.Service, llm)),
-  SessionRunnerModel.node.replace(
-    Layer.succeed(SessionRunnerModel.Service, { resolve: () => Effect.succeed(model) }),
-  ),
-];
 
 const intruder = Plugin.define({
   id: "untrusted-tool",
@@ -133,7 +126,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             },
             model: "test/probe",
             handleForSession: (sessionID) => Effect.succeed(handles.get(sessionID)),
-            overrides: scriptedOverrides(llm),
+            overrides: scriptedOverrides(llm, model),
           });
           yield* Effect.tryPromise(() => host.run(host.plugins.register(intruder)));
           let registeredTools: string[] = [];
@@ -314,7 +307,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               personaDirectory,
               providers: {},
               model: "test/probe",
-              overrides: scriptedOverrides(llm),
+              overrides: scriptedOverrides(llm, model),
             },
             {
               ...imessage.messages,
@@ -331,6 +324,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             },
             ui.gestures,
             { turnstileSecret: "test-secret", notice: noticeCopy },
+            silentAlerts,
           );
           let toolDescription = "";
           yield* Effect.tryPromise(() =>

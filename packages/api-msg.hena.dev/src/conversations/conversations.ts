@@ -20,6 +20,10 @@ export const conversations = Effect.gen(function* () {
       (rows) => rows[0],
     );
   return {
+    all: () => sql<Conversation>`SELECT conversation.id, user.handle,
+      conversation.persona_id AS personaID, conversation.session_id AS sessionID
+      FROM conversation JOIN user ON user.id = conversation.user_id
+      WHERE NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
     byHandle: (handle: string) => lookup("handle", handle),
     bySession: (sessionID: string) => lookup("session_id", sessionID),
     block: (handle: string) =>

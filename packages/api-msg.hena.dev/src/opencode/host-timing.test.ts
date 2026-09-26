@@ -13,6 +13,7 @@ import { startMessagingHost } from "../main.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
+import { silentAlerts } from "./scripted-overrides.test-helper.ts";
 
 test("a text admitted during wait wakes the real OpenCode tool for only its Conversation", async () => {
   const root = await mkdtemp(join(tmpdir(), "host-timing-"));
@@ -63,6 +64,7 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
             fake.messages,
             fakeGestures().gestures,
             { turnstileSecret: "test-secret", notice: noticeCopy },
+            silentAlerts,
           );
           const session = yield* host.createSession("persona1");
           yield* host.conversations.create({

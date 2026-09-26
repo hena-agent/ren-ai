@@ -1,5 +1,6 @@
 import { SdkPlugins } from "@opencode/core/plugin/sdk";
 import { Session } from "@opencode/core/session";
+import { Bus } from "@opencode/core/bus";
 import { createEmbeddedRoutes } from "@opencode/server/routes";
 import { AbsolutePath, Agent, Location, Model } from "@opencode/schema";
 import { Plugin } from "@opencode/plugin/effect";
@@ -185,6 +186,7 @@ export const createHost = (options: HostOptions) =>
     return {
       personas: options.personas,
       sessions,
+      events: Context.get(services, Bus.Service),
       plugins,
       run: runtime.runPromise.bind(runtime),
       web,
