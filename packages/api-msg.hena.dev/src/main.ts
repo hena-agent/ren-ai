@@ -3,6 +3,8 @@ import { loadPersonas } from "./personas/personas.ts";
 import { isolatedHost } from "./opencode/isolate.ts";
 import type { HostOptions } from "./opencode/host.ts";
 
+export { makeHealth } from "./health/health.ts";
+
 export const startPersonaHost = (root: string, options: Omit<HostOptions, "personas">) =>
   Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
     isolatedHost(root, { ...options, personas }),
