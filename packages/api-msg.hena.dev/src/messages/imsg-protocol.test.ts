@@ -147,6 +147,138 @@ test("redacted probe rows stay identical to the recorded output", () => {
   ]);
 });
 
+test("replayed imsg media, reaction and reply fields survive decoding without treating previews as apps", () => {
+  const row = raw[2]!;
+  expect(
+    messageRow({
+      ...row,
+      attachments: [
+        {
+          original_path: "/Messages/picture.heic",
+          mime_type: "image/heic",
+          uti: "public.heic",
+          missing: false,
+        },
+        {
+          original_path: "/Messages/sticker.png",
+          mime_type: "image/png",
+          uti: "public.png",
+          missing: false,
+          is_sticker: true,
+        },
+        {
+          original_path: "/Messages/clip.gif",
+          mime_type: "image/gif",
+          uti: "com.compuserve.gif",
+          missing: false,
+        },
+        { mime_type: "audio/x-caf", uti: null, missing: true },
+        { original_path: "/Messages/gone.heic", mime_type: null, missing: true },
+        {},
+      ],
+    }).attachments,
+  ).toEqual([
+    { path: "/Messages/picture.heic", mimeType: "image/heic", uti: "public.heic", missing: false },
+    { path: "/Messages/sticker.png", mimeType: "image/png", uti: "public.png", missing: false },
+    {
+      path: "/Messages/clip.gif",
+      mimeType: "image/gif",
+      uti: "com.compuserve.gif",
+      missing: false,
+    },
+    { path: "", mimeType: "audio/x-caf", uti: null, missing: true },
+    { path: "/Messages/gone.heic", mimeType: null, uti: null, missing: true },
+    { path: "", mimeType: null, uti: null, missing: true },
+  ]);
+  for (const [type, emoji] of Object.entries({
+    love: "❤️",
+    like: "👍",
+    dislike: "👎",
+    laugh: "😂",
+    emphasis: "‼️",
+    question: "❓",
+  })) {
+    expect(
+      messageRow({
+        ...row,
+        is_reaction: true,
+        reaction_type: type,
+        reacted_to_guid: raw[0]!.guid,
+        is_reaction_add: true,
+      }).tapback,
+    ).toEqual({ emoji, targetGuid: raw[0]!.guid, added: true });
+  }
+  expect(
+    messageRow({
+      ...row,
+      is_reaction: true,
+      reaction_type: "custom",
+      reaction_emoji: "🥲",
+      reacted_to_guid: row.guid,
+      is_reaction_add: false,
+    }).tapback,
+  ).toEqual({ emoji: "🥲", targetGuid: row.guid, added: false });
+  expect(
+    messageRow({
+      ...row,
+      is_reaction: true,
+      reaction_type: "😮",
+      reacted_to_guid: row.guid,
+      is_reaction_add: true,
+    }).tapback?.emoji,
+  ).toBe("😮");
+  expect(messageRow({ ...row, is_reaction: false }).tapback).toBeUndefined();
+  expect(
+    messageRow({ ...row, reply_to_guid: "ordinary-neighbor", thread_originator_guid: raw[0]!.guid })
+      .replyToGuid,
+  ).toBe(raw[0]!.guid);
+  expect(
+    messageRow({ ...row, reply_to_guid: "ordinary-neighbor", thread_originator_guid: null })
+      .replyToGuid,
+  ).toBeUndefined();
+  expect(messageRow({ ...row, balloon_bundle_id: "com.apple.findmy.Location" }).payload).toBe(
+    "location",
+  );
+  expect(messageRow({ ...row, balloon_bundle_id: "com.example.MessagesExtension" }).payload).toBe(
+    "app",
+  );
+  expect(messageRow({ ...row, poll: { kind: "created" } }).payload).toBe("app");
+  expect(
+    messageRow({
+      ...row,
+      balloon_bundle_id: "com.apple.messages.URLBalloonProvider",
+      text: "https://example.com",
+    }),
+  ).toMatchObject({ text: "https://example.com" });
+  expect(
+    messageRow({ ...row, balloon_bundle_id: "com.apple.messages.URLBalloonProvider" }).payload,
+  ).toBeUndefined();
+  expect(messageRow({ ...row, balloon_bundle_id: "" }).payload).toBeUndefined();
+  expect(messageRow({ ...row, balloon_bundle_id: null }).payload).toBeUndefined();
+  for (const invalid of [
+    { attachments: null },
+    { attachments: [false] },
+    { attachments: [{ original_path: 12 }] },
+    { attachments: [{ mime_type: 5 }] },
+    { attachments: [{ uti: 5 }] },
+    { attachments: [{ missing: 1 }] },
+    { is_reaction: true },
+    { is_reaction: true, reaction_type: 1, reacted_to_guid: row.guid, is_reaction_add: true },
+    {
+      is_reaction: true,
+      reaction_type: "like",
+      reaction_emoji: 1,
+      reacted_to_guid: row.guid,
+      is_reaction_add: true,
+    },
+    { is_reaction: true, reaction_type: "like", reacted_to_guid: 1, is_reaction_add: true },
+    { is_reaction: true, reaction_type: "like", reacted_to_guid: row.guid, is_reaction_add: 1 },
+    { thread_originator_guid: 1 },
+    { balloon_bundle_id: 1 },
+  ])
+    expect(() => messageRow({ ...row, ...invalid })).toThrow("Invalid imsg");
+});
+
 test("the in-memory status checks each sent GUID, not the entire send history", async () => {
   const fake = fakeMessages();
   const first = await Effect.runPromise(fake.messages.sendText("first@example.com", "one"));

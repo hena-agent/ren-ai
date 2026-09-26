@@ -31,6 +31,62 @@ const safeInteger = (value: JsonValue): value is number => Number.isSafeInteger(
 const record = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const attachment = (value: JsonValue) => {
+  if (!record(value)) throw new Error("Invalid imsg attachment");
+  const path = value["original_path"];
+  const mime = value["mime_type"];
+  const uti = value["uti"];
+  const missing = value["missing"];
+  if (
+    (path !== undefined && typeof path !== "string") ||
+    (mime !== undefined && mime !== null && typeof mime !== "string") ||
+    (uti !== undefined && uti !== null && typeof uti !== "string") ||
+    (missing !== undefined && typeof missing !== "boolean")
+  )
+    throw new Error("Invalid imsg attachment");
+  return {
+    path: path ?? "",
+    mimeType: mime ?? null,
+    uti: uti ?? null,
+    missing: missing === true || !path,
+  };
+};
+
+const emoji: Readonly<Record<string, string>> = {
+  love: "❤️",
+  like: "👍",
+  dislike: "👎",
+  laugh: "😂",
+  emphasis: "‼️",
+  question: "❓",
+};
+
+const reaction = (value: JsonRecord) => {
+  if (value["is_reaction"] !== true) return undefined;
+  const type = value["reaction_type"];
+  const icon = value["reaction_emoji"];
+  const target = value["reacted_to_guid"];
+  const added = value["is_reaction_add"];
+  if (
+    typeof type !== "string" ||
+    (icon !== undefined && typeof icon !== "string") ||
+    typeof target !== "string" ||
+    typeof added !== "boolean"
+  )
+    throw new Error("Invalid imsg reaction");
+  return { emoji: icon ?? emoji[type] ?? type, targetGuid: target, added };
+};
+
+const payload = (value: JsonRecord) => {
+  const balloon = value["balloon_bundle_id"];
+  if (balloon !== undefined && balloon !== null && typeof balloon !== "string")
+    throw new Error("Invalid imsg balloon");
+  if (balloon === "com.apple.messages.URLBalloonProvider") return undefined;
+  if (balloon && /location|findmy/i.test(balloon)) return "location";
+  if (balloon || value["poll"] !== undefined) return "app";
+  return undefined;
+};
+
 /** The only entry point for bytes received from imsg. */
 export const parseRpc = (line: string): RpcReply | RpcNotice => {
   // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: parse untrusted imsg RPC line
@@ -62,6 +118,14 @@ export const messageRow = (value: unknown): IncomingMessage & { chatID: number }
     throw new Error("Invalid imsg message");
   const createdAt = Date.parse(value["created_at"]);
   if (!Number.isFinite(createdAt)) throw new Error("Invalid imsg message date");
+  const attachments = value["attachments"];
+  if (attachments !== undefined && !Array.isArray(attachments))
+    throw new Error("Invalid imsg attachments");
+  const reply = value["thread_originator_guid"];
+  if (reply !== undefined && reply !== null && typeof reply !== "string")
+    throw new Error("Invalid imsg reply target");
+  const tapback = reaction(value);
+  const kind = payload(value);
   return {
     id: value["id"],
     guid: value["guid"],
@@ -70,6 +134,10 @@ export const messageRow = (value: unknown): IncomingMessage & { chatID: number }
     createdAt,
     text: value["text"] ?? "",
     fromMe: value["is_from_me"],
+    ...(attachments === undefined ? {} : { attachments: attachments.map(attachment) }),
+    ...(tapback ? { tapback } : {}),
+    ...(reply ? { replyToGuid: reply } : {}),
+    ...(kind ? { payload: kind } : {}),
   };
 };
 
