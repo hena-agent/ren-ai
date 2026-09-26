@@ -8,16 +8,15 @@ on:
     # Proves the template is still green when nobody has touched it.
     - cron: "0 6 * * 1"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions: {}
 
 jobs:
   gates:
     name: Quality gates
     runs-on: ubuntu-latest
+    concurrency:
+      group: gates-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,3 +34,26 @@ jobs:
       # Includes mutation testing, which runs in ~2s today. If it stops being cheap,
       # split it into its own job: incremental on PRs, full on main and nightly.
       - run: bun run ci
+
+  deploy:
+    name: Deploy msg.hena.dev
+    needs: gates
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd packages/msg.hena.dev build
+      - run: bun run --cwd packages/msg.hena.dev deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
