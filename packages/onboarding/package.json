@@ -1,5 +1,5 @@
 {
-  "name": "@repo/duration",
+  "name": "@repo/onboarding",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,6 +8,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
     "typescript": "7.0.2",

@@ -1,6 +1,6 @@
-# ts-template
+# ren-ai
 
-A TypeScript monorepo template built for agent-generated code: bun, Turborepo, TypeScript 7, and eight quality gates that block CI.
+A TypeScript monorepo for a service where people text fictional personas over iMessage, with eight quality gates that block CI.
 
 The premise is that when agents write most of the code, review does not scale but gates do.
 
@@ -14,8 +14,7 @@ bun run ci
 ## Layout
 
 ```
-apps/cli/              Example application. Zero dependencies, no build step.
-packages/duration/     Example library. Demonstrates narrowing `unknown` at a trust boundary.
+packages/onboarding/   Shared browser-safe Handle rules and Onboarding/Waitlist shapes.
 scripts/               Repo tooling: exceptions report, gate verification, init.
 quality-exceptions.json  The only place file-level gate exceptions may live.
 ```

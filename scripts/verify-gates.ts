@@ -78,7 +78,7 @@ const CHECKS: readonly Check[] = [
   {
     gate: "100% coverage",
     files: {
-      "packages/duration/src/gate-check.ts":
+      "packages/onboarding/src/gate-check.ts":
         "export const untested = (n: number): number => (n > 0 ? n : 0);\n",
     },
     command: ["vitest", "run", "--coverage", "--silent"],
@@ -88,7 +88,7 @@ const CHECKS: readonly Check[] = [
   {
     gate: "dead code",
     files: {
-      "packages/duration/src/gate-check.ts": "export const orphan = 1;\n",
+      "packages/onboarding/src/gate-check.ts": "export const orphan = 1;\n",
     },
     command: ["knip"],
     expect: "Unused files",
@@ -97,8 +97,8 @@ const CHECKS: readonly Check[] = [
   {
     gate: "duplicated code",
     files: {
-      "packages/duration/src/gate-check-a.ts": duplicatedModule("a"),
-      "packages/duration/src/gate-check-b.ts": duplicatedModule("b"),
+      "packages/onboarding/src/gate-check-a.ts": duplicatedModule("a"),
+      "packages/onboarding/src/gate-check-b.ts": duplicatedModule("b"),
     },
     command: ["jscpd"],
     expect: "Clone found",
