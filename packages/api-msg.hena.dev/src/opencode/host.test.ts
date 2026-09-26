@@ -203,6 +203,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             '"private-test":{"name":"Private Test","settings":{"apiKey":"passed-in-code"}}',
           );
           expect(config).toContain('"persona1":{"mode":"primary"}');
+          expect(config).toContain('"compaction":{"keep":{"tokens":12000},"buffer":40000}');
           expect(
             yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id),
           ).toEqual(expectedViewerResults(session.id, messages[0]!.id));
