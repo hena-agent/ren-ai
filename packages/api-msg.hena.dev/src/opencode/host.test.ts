@@ -106,11 +106,9 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
                           /this Conversation|standard tapback/.test(tool.description),
                         )
                         .map((tool) => tool.name);
-                      expect(
-                        tools
-                          .filter((tool) => tool.name === "wait")
-                          .map((tool) => tool.description),
-                      ).not.toContain("Pause for up to 12 hours, or until something new arrives");
+                      expect(tools.find((tool) => tool.name === "wait")?.description).not.toBe(
+                        "Pause for up to 12 hours, or until something new arrives",
+                      );
                     }),
                 }),
               ),
