@@ -1,10 +1,11 @@
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 import type { IncomingMessage, Messages, OutgoingStatus } from "./messages.ts";
 
 export const fakeMessages = (events: string[] = []) => {
   const bubbles: { handle: string; text: string }[] = [];
-  const outgoing = new Map<string, OutgoingStatus>();
+  const lastStatuses = new Map<string, OutgoingStatus>();
   let rows = Array.of<IncomingMessage>();
+  const sendStatuses = new Map<string, "sent" | "delivered" | "failed" | "unknown">();
   const watchers = new Set<(row: IncomingMessage) => Effect.Effect<void, Error>>();
   const statuses = new Map<string, "sent" | "no_imessage" | "unknown">();
   const rejected = new Set<string>();
@@ -15,11 +16,18 @@ export const fakeMessages = (events: string[] = []) => {
       Effect.suspend(() =>
         rejected.has(handle)
           ? Effect.fail(new Error("imsg send timed out"))
-          : Effect.sync(() => {
+          : Effect.gen(function* () {
               events.push("send");
               bubbles.push({ handle, text });
-              outgoing.set(handle, { delivered: false, readAt: null });
-              return { guid: `fake-${bubbles.length}` };
+              lastStatuses.set(handle, { delivered: false, readAt: null });
+              const row = yield* outgoing(
+                handle,
+                text,
+                yield* Clock.currentTimeMillis,
+                "sent",
+                `fake-${bubbles.length}`,
+              );
+              return { guid: row.guid };
             }),
       ),
     textStatus: (handle) =>
@@ -33,10 +41,11 @@ export const fakeMessages = (events: string[] = []) => {
                 (bubbles.some((bubble) => bubble.handle === handle) ? "sent" : "unknown"),
             );
       }),
-    lastOutgoingStatus: (handle) => Effect.sync(() => outgoing.get(handle)),
+    lastOutgoingStatus: (handle) => Effect.sync(() => lastStatuses.get(handle)),
     after: (rowID) => Effect.sync(() => rows.filter((row) => row.id > rowID)),
     recent: (handle, since) =>
       Effect.sync(() => rows.filter((row) => row.handle === handle && row.createdAt >= since)),
+    sendStatus: (guid) => Effect.sync(() => sendStatuses.get(guid) ?? "unknown"),
     follow: (rowID, receive) =>
       Effect.gen(function* () {
         watchers.add(receive);
@@ -61,6 +70,27 @@ export const fakeMessages = (events: string[] = []) => {
       yield* Effect.forEach(watchers, (receive) => receive(row));
       return row;
     });
+  const outgoing = (
+    handle: string,
+    content: string,
+    createdAt: number,
+    status: "sent" | "delivered" | "failed" | "unknown" = "sent",
+    guid = `outgoing-${crypto.randomUUID()}`,
+  ) =>
+    Effect.gen(function* () {
+      const row: IncomingMessage = {
+        id: (rows.at(-1)?.id ?? 0) + 1,
+        guid,
+        handle,
+        createdAt,
+        text: content,
+        fromMe: true,
+      };
+      rows.push(row);
+      sendStatuses.set(guid, status);
+      yield* Effect.forEach(watchers, (receive) => receive(row));
+      return row;
+    });
   return {
     messages,
     bubbles,
@@ -69,8 +99,11 @@ export const fakeMessages = (events: string[] = []) => {
     rejected,
     statusFailures,
     statusChecks,
-    status: (handle: string, status: OutgoingStatus) => outgoing.set(handle, status),
+    status: (handle: string, status: OutgoingStatus) => lastStatuses.set(handle, status),
     text,
+    outgoing,
+    settle: (guid: string, status: "sent" | "delivered" | "failed" | "unknown") =>
+      Effect.sync(() => sendStatuses.set(guid, status)),
     redeliver: (row: IncomingMessage) => Effect.forEach(watchers, (receive) => receive(row)),
     edit: (guid: string, content: string) =>
       Effect.sync(() => {

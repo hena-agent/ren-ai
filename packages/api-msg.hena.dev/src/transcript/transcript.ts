@@ -50,3 +50,6 @@ export const conversationStarted = (
   timeZone: string,
 ) =>
   `<conversation-started at="${timestamp(at, timeZone)}"/>\n${openingLine}\n<notice>${words(notice)}</notice>`;
+
+export const sentByYou = (text: string, date: number, timeZone: string) =>
+  `<sent-by-you at="${timestamp(date, timeZone)}">${words(text)}</sent-by-you>`;

@@ -38,7 +38,7 @@ test("blocking silences Intake, Outbox and session lookup but preserves User row
         const conversation = yield* directory.create(input);
         const sql = yield* SqlClient.SqlClient;
         const gestures = fakeGestures();
-        const sends = yield* outbox(fake.messages, gestures.gestures, directory.active);
+        const sends = yield* outbox(fake.messages, gestures.gestures, new Map(), directory.active);
         const prompts: string[] = [];
         yield* intake(
           fake.messages,
@@ -80,6 +80,7 @@ test("blocking silences Intake, Outbox and session lookup but preserves User row
             ...gestures.gestures,
             typing: () => directory.block(late.handle).pipe(Effect.as(true)),
           },
+          new Map(),
           directory.active,
         );
         expect(yield* duringTyping.send(late, "no", "call-2")).toBe(
@@ -98,6 +99,7 @@ test("blocking silences Intake, Outbox and session lookup but preserves User row
               fake.messages.after(id).pipe(Effect.tap(() => directory.block(reacting.handle))),
           },
           gestures.gestures,
+          new Map(),
           directory.active,
         );
         expect(yield* duringRead.react(reacting, "love", "call-3", target.guid)).toBe(

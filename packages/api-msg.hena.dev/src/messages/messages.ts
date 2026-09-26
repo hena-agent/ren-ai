@@ -9,6 +9,8 @@ export interface Messages {
   after(rowID: number): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
   /** All rows in this Handle's chat since the timestamp, including empty (unsent) texts. */
   recent(handle: string, since: number): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
+  /** The final status of an outgoing Messages row; error 22 is failed, not sent. */
+  sendStatus(guid: string): Effect.Effect<"sent" | "delivered" | "failed" | "unknown", Error>;
   follow(
     rowID: number,
     receive: (row: IncomingMessage) => Effect.Effect<void, Error>,

@@ -9,6 +9,8 @@ import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { outbox } from "../outbox/outbox.ts";
 import { intake } from "./intake.ts";
 
 const input = {
@@ -174,4 +176,60 @@ test("restart replays only messages missed while stopped from the same SQLite fi
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a manual Service-handle bubble reaches Memory once, but a recorded send does not", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* migrate;
+        const directory = yield* conversations;
+        const conversation = yield* directory.create(input);
+        const fake = fakeMessages();
+        expect(yield* fake.messages.sendStatus("missing")).toBe("unknown");
+        const sends = yield* outbox(
+          fake.messages,
+          fakeGestures().gestures,
+          new Map([["persona1", { timeZone: "Asia/Seoul" }]]),
+        );
+        const prompts: { id: string; text: string }[] = [];
+        const incoming = yield* intake(
+          fake.messages,
+          (handle) => directory.byHandle(handle),
+          (_session, id, text) =>
+            Effect.sync(() => {
+              prompts.push({ id, text });
+            }),
+          () => "Asia/Seoul",
+          sends.reconcile,
+        );
+        const signals: number[] = [];
+        incoming.onNew((item) => signals.push(item.id));
+        const manual = yield* fake.outgoing(input.handle, "by hand <message", 0);
+        const pending = yield* fake.outgoing(input.handle, "still sending", 1, "unknown");
+        expect([manual.id, pending.id, yield* fake.messages.sendStatus(manual.guid)]).toEqual([
+          1,
+          2,
+          "sent",
+        ]);
+        yield* fake.redeliver(manual);
+        yield* fake.outgoing("stranger@example.com", "not ours", 0);
+        yield* fake.outgoing(input.handle, "failed", 0, "failed");
+        expect(prompts).toEqual([
+          {
+            id: `msg_${createHash("sha256").update(`${input.sessionID}\0${manual.guid}`).digest("hex")}`,
+            text: '<sent-by-you at="1970-01-01 Thu 09:00">by hand ‹message</sent-by-you>',
+          },
+          {
+            id: `msg_${createHash("sha256").update(`${input.sessionID}\0${pending.guid}`).digest("hex")}`,
+            text: '<sent-by-you at="1970-01-01 Thu 09:00">still sending</sent-by-you>',
+          },
+        ]);
+        expect(signals).toEqual([conversation.id, conversation.id]);
+        expect(yield* sends.send(conversation, "hers", "sent-tool")).toBe("sent");
+        expect(prompts).toHaveLength(2);
+        expect(yield* sends.results(input.sessionID)).toEqual([]);
+      }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+    ),
+  );
 });

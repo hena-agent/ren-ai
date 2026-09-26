@@ -1,4 +1,5 @@
 import { SdkPlugins } from "@opencode/core/plugin/sdk";
+import { Message, ToolResultPart } from "@opencode/ai";
 import { Session } from "@opencode/core/session";
 import { createEmbeddedRoutes } from "@opencode/server/routes";
 import { AbsolutePath, Agent, Location, Model } from "@opencode/schema";
@@ -48,6 +49,14 @@ interface HostConfig {
     sessionID: string,
   ) => Effect.Effect<OutgoingStatus | undefined, Error>;
   readonly health: { readonly raise: (name: string, detail?: string) => Effect.Effect<void> };
+  readonly settledSends?: (sessionID: string) => Effect.Effect<
+    ReadonlyArray<{
+      readonly toolCallID: string | null;
+      readonly state: string;
+      readonly updatedAt: number;
+    }>,
+    Error
+  >;
 }
 
 type HostTools =
@@ -172,6 +181,46 @@ export const createHost = (options: HostOptions) =>
                   (["send", "read", "react", "wait"] as const).filter((name) => options[name]),
                 ),
               );
+              if (options.settledSends) {
+                const sends = yield* options.settledSends(event.sessionID);
+                for (const [index, entry] of event.messages.entries()) {
+                  const content = entry.content.map((part) => {
+                    if (part.type === "tool-result") {
+                      const send = sends.find((row) => row.toolCallID === part.id);
+                      if (send) {
+                        const at = new Intl.DateTimeFormat("en-GB", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: persona.timeZone,
+                        }).format(send.updatedAt);
+                        return ToolResultPart.make({
+                          id: part.id,
+                          name: part.name,
+                          namespace: part.namespace,
+                          providerExecuted: part.providerExecuted,
+                          cache: part.cache,
+                          metadata: part.metadata,
+                          providerMetadata: part.providerMetadata,
+                          result:
+                            send.state === "failed"
+                              ? "not sent: earlier send did not go out"
+                              : `${send.state} ${at} (confirmed late)`,
+                          resultType: "text",
+                        });
+                      }
+                    }
+                    return part;
+                  });
+                  event.messages[index] = Message.make({
+                    id: entry.id,
+                    role: entry.role,
+                    content,
+                    metadata: entry.metadata,
+                    providerMetadata: entry.providerMetadata,
+                    native: entry.native,
+                  });
+                }
+              }
               if (options.onContext) yield* options.onContext(event.sessionID);
               yield* Effect.forEach(removed, (name) =>
                 options.health.raise(

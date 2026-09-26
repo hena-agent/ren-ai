@@ -61,6 +61,8 @@ export const migrate = Effect.gen(function* () {
         handle TEXT PRIMARY KEY,
         session_id TEXT NOT NULL
       )`,
+      "009_send_reconciliation": sql`ALTER TABLE send ADD COLUMN late INTEGER NOT NULL DEFAULT 0`,
+      "010_send_notice": sql`ALTER TABLE send ADD COLUMN notification_pending INTEGER NOT NULL DEFAULT 0`,
     }),
   });
 });

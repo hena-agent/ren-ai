@@ -52,7 +52,8 @@ export const startMessagingHost = (
     const sql = yield* SqlClient.SqlClient;
     const directory = yield* conversations;
     const pace = timing();
-    const sends = yield* outbox(messages, gestures, directory.active, pace);
+    const personas = yield* loadPersonas(options.personaDirectory);
+    const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
     const seenAtRequest = new Map<string, string | undefined>();
     const inConversation = (
       sessionID: string,
@@ -66,8 +67,9 @@ export const startMessagingHost = (
         ),
         Effect.mapError((error) => new Error(String(error))),
       );
-    const host = yield* startPersonaHost(root, {
+    const host = yield* isolatedHost(root, {
       ...options,
+      personas,
       handleForSession: (sessionID) =>
         directory.bySession(sessionID).pipe(
           Effect.map((conversation) => (conversation ? conversation.handle : undefined)),
@@ -109,6 +111,7 @@ export const startMessagingHost = (
                 : Effect.succeed(undefined),
             ),
           ),
+      settledSends: (sessionID) => sends.results(sessionID),
     });
     const incoming = yield* intake(
       messages,
@@ -118,6 +121,7 @@ export const startMessagingHost = (
           .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
+      sends.reconcile,
     );
     incoming.onNew((conversation) => pace.onNew(conversation.id));
     const persona = host.personas.values().next().value!;

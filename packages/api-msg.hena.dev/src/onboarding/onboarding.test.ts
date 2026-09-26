@@ -60,7 +60,12 @@ const setup = (failSend = false, deadlineMillis = 30) =>
     const sql = yield* SqlClient.SqlClient;
     const fake = fakeMessages();
     const directory = yield* conversations;
-    const sends = yield* outbox(fake.messages, fakeGestures().gestures, directory.active);
+    const sends = yield* outbox(
+      fake.messages,
+      fakeGestures().gestures,
+      new Map(),
+      directory.active,
+    );
     const prompts: string[] = [];
     const sessions: string[] = [];
     const api = yield* onboarding(

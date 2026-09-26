@@ -1,4 +1,4 @@
-import { LanguageModel, LLMClient } from "@opencode/ai";
+import { LanguageModel, LLMClient, type Message } from "@opencode/ai";
 import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
 import { llmClient } from "@opencode/core/effect/app-node-platform";
@@ -6,6 +6,23 @@ import { SessionRunnerModel } from "@opencode/core/session/runner/model";
 import { Agent, AbsolutePath, Location } from "@opencode/schema";
 import { Plugin } from "@opencode/plugin/effect";
 import { Effect, Layer, Schema } from "effect";
+import { expect } from "vitest";
+
+export const expectLateResults = (messages: ReadonlyArray<Message>) => {
+  const parts = messages.flatMap((entry) => entry.content);
+  const results = parts.filter((part) => part.type === "tool-result");
+  expect(results.filter((part) => part.id === "call-1").map((part) => part.result)).toEqual([
+    { type: "text", value: "delivered 01:48 (confirmed late)" },
+  ]);
+  expect(results.filter((part) => part.id === "call-2").map((part) => part.result)).toEqual([
+    { type: "text", value: "not sent: earlier send did not go out" },
+  ]);
+  expect(parts.filter((part) => part.type === "tool-call").map((part) => part.id)).toEqual([
+    "call-1",
+    "call-2",
+    "pause",
+  ]);
+};
 
 export const valid = `---
 time-zone: Asia/Seoul

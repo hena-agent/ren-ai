@@ -24,6 +24,7 @@ import {
   scriptedOverrides,
   unrestricted,
   valid,
+  expectLateResults,
 } from "../../test/host.test-helper.ts";
 
 const xdg = await vi.hoisted(async () => {
@@ -409,6 +410,14 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).not.toContain("<phone now=");
+          yield* sql`UPDATE send SET state = CASE WHEN tool_call_id = 'call-1' THEN 'delivered' ELSE 'failed' END,
+            late = 1, updated_at = ${Date.parse("2026-09-25T11:48:00Z")} WHERE tool_call_id IN ('call-1', 'call-2')`;
+          yield* imessage.text(first.handle, "again", Date.parse("2026-09-25T11:53:00Z"));
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expectLateResults((yield* llm.requests()).at(-1)!.messages);
+          expect(
+            JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
+          ).not.toContain("confirmed late");
           step = 3;
           const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
