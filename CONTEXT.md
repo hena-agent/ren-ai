@@ -75,7 +75,7 @@ One of the two roles a workspace package takes. A **library** is consumed by oth
 _Avoid_: kind, category, template (overloaded here), project
 
 **Just-in-Time package**:
-A workspace package whose `exports` points at TypeScript source, with no build step and no emitted `dist/`. The only package shape this repo supports.
+A workspace package whose `exports` points at TypeScript source, with no build step and no emitted `dist/`. Every library takes this shape; only the site, msg.hena.dev, is built, by Vite, because browsers can't run TypeScript.
 _Avoid_: source package, unbuilt package, internal package
 
 **Trust boundary**:
