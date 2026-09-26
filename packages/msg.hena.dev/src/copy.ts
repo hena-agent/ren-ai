@@ -1,0 +1,27 @@
+import ko from "./locales/ko.json";
+
+export type Copy = {
+  market: { country: string; dialCode: string };
+  privacyNoticeVersion: string;
+  home: { title: string; description: string; status: string; privacyLink: string };
+  form: {
+    handleLabel: string;
+    countryLabel: string;
+    submit: string;
+    invalidHandle: string;
+    consent: string;
+    inProgress: string;
+  };
+  privacy: { title: string; placeholder: string; homeLink: string };
+  answers: {
+    sent: string;
+    no_imessage: string;
+    unknown: string;
+    full: string;
+    try_later: string;
+  };
+  waitlist: { title: string; emailLabel: string; submit: string; success: string };
+  notice: string;
+};
+
+export const copy: Copy = ko;

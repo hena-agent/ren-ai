@@ -44,4 +44,6 @@ A sudden burst of `no-unsafe-*` errors means the TypeScript program is misconfig
 
 ### Package shape
 
-Packages are Just-in-Time: `exports` points at `./src/index.ts`, there is no build step, and relative imports use explicit `.ts` extensions. Do not add a `build` script or emit `dist/` — an unbuilt compiled package makes type-aware lint and knip exit 0 while enforcing nothing.
+Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no build step, and relative imports use explicit `.ts` extensions. Do not add a `build` script or emit `dist/` in a library — an unbuilt compiled package makes type-aware lint and knip exit 0 while enforcing nothing. The site (`packages/msg.hena.dev`) is the one package with a build: browsers need JavaScript, nothing imports its output, and every gate runs on its source.
+
+Changes to the shapes in `packages/onboarding` must keep the new site working with the API still running: new fields stay optional until the API deploys, and the site continues handling every answer the old API can give.
