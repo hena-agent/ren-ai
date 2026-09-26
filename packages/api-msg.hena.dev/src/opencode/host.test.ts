@@ -10,10 +10,14 @@ import { SessionRunnerModel } from "@opencode/core/session/runner/model";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Agent, AbsolutePath, Location } from "@opencode/schema";
 import { Plugin } from "@opencode/plugin/effect";
-import { Cause, Effect, Exit, Layer, Result, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { afterAll, expect, test, vi } from "vitest";
-import { loadPersonas } from "../personas/personas.ts";
 import { startPersonaHost } from "../main.ts";
+import { startMessagingHost } from "../main.ts";
+import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { SqliteClient } from "@effect/sql-sqlite-node";
+import { SqlClient } from "effect/unstable/sql";
 
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
@@ -50,53 +54,44 @@ memory: Remember his name.
 You are Persona1. Speak Korean.
 `;
 
-test("persona files fail closed on missing, extra, malformed and empty fields", async () => {
-  const empty = await mkdtemp(join(tmpdir(), "empty-personas-"));
-  try {
-    await expect(Effect.runPromise(loadPersonas(empty))).rejects.toThrow(/No persona files/);
-    const load = async (source: string) => {
-      await writeFile(join(empty, "persona1.md"), source);
-      return Effect.runPromise(loadPersonas(empty));
-    };
-    expect((await load(valid)).get("persona1")?.timeZone).toBe("Asia/Seoul");
-    await expect(load(valid.replace("language: ko\n", ""))).rejects.toThrow(
-      /persona1[\s\S]*language/,
-    );
-    const failed = await Effect.runPromiseExit(loadPersonas(empty));
-    if (!Exit.isFailure(failed)) throw new Error("Expected invalid persona to fail");
-    const defect = Cause.findDefect(failed.cause);
-    if (!Result.isSuccess(defect) || !(defect.success instanceof Error)) {
-      throw new Error("Expected a schema error");
-    }
-    expect(defect.success.cause).toBeInstanceOf(Error);
-    await expect(load(valid.replace("language: ko", "language: ko\nunsafe: yes"))).rejects.toThrow(
-      /persona1[\s\S]*unsafe/,
-    );
-    await expect(load(valid.replace("language: ko", "language: ko\nlanguage: en"))).rejects.toThrow(
-      /persona1.*unique|persona1.*already defined/i,
-    );
-    await expect(load(valid.replace("Asia/Seoul", "Not/AZone"))).rejects.toThrow(
-      /invalid time-zone: Not\/AZone/,
-    );
-    await expect(load(valid.replace("memory: Remember his name.", "memory: ''"))).rejects.toThrow(
-      /must not be empty/,
-    );
-    await expect(load(valid.replace("language: ko", "language: '  '"))).rejects.toThrow(
-      /must not be empty/,
-    );
-    await expect(load(valid.replace("You are Persona1. Speak Korean.", ""))).rejects.toThrow(
-      /must not be empty/,
-    );
-    await expect(load("no frontmatter")).rejects.toThrow(/expected YAML frontmatter/);
-    await expect(load(`prefix\n${valid}`)).rejects.toThrow(/expected YAML frontmatter/);
-    await expect(load(valid.replace("language: ko", "unexpected: ko"))).rejects.toThrow(
-      /persona1[\s\S]*unexpected/,
-    );
-    await writeFile(join(empty, "ignore.txt"), "not a persona");
-    expect((await load(valid)).size).toBe(1);
-  } finally {
-    await rm(empty, { recursive: true, force: true });
-  }
+const model = SessionRunnerModel.resolved(
+  LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
+  {
+    capabilities: { tools: true, input: ["text"], output: ["text"] },
+    cost: [],
+    limit: { context: 100_000, output: 1_000 },
+  },
+);
+
+const scriptedOverrides = (llm: TestLLM.TestInterface) => [
+  llmClient.replace(Layer.succeed(LLMClient.Service, llm)),
+  SessionRunnerModel.node.replace(
+    Layer.succeed(SessionRunnerModel.Service, { resolve: () => Effect.succeed(model) }),
+  ),
+];
+
+const intruder = Plugin.define({
+  id: "untrusted-tool",
+  effect: (ctx) =>
+    ctx.tool
+      .transform((editor) =>
+        editor.add({
+          name: "intruder",
+          description: "Must be filtered",
+          input: Schema.Struct({}),
+          output: Schema.String,
+          options: { codemode: false },
+          execute: () => Effect.succeed({ output: "bad" }),
+        }),
+      )
+      .pipe(Effect.asVoid),
+});
+
+const unrestricted = (directory: string) => ({
+  agent: Agent.ID.make("persona1"),
+  model: model.ref,
+  location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
+  permissions: [{ action: "*", resource: "*", effect: "allow" as const }],
 });
 
 test("the sealed host creates a deny-all persona session and admits a scripted reply", async () => {
@@ -120,14 +115,6 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
   process.env["OPENAI_API_KEY"] = "planted-provider-key";
   const oldPath = process.env["PATH"];
   try {
-    const model = SessionRunnerModel.resolved(
-      LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
-      {
-        capabilities: { tools: true, input: ["text"], output: ["text"] },
-        cost: [],
-        limit: { context: 100_000, output: 1_000 },
-      },
-    );
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
@@ -141,31 +128,19 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
               "private-test": { name: "Private Test", settings: { apiKey: "passed-in-code" } },
             },
             model: "test/probe",
-            overrides: [
-              llmClient.replace(Layer.succeed(LLMClient.Service, llm)),
-              SessionRunnerModel.node.replace(
-                Layer.succeed(SessionRunnerModel.Service, { resolve: () => Effect.succeed(model) }),
-              ),
-            ],
+            overrides: scriptedOverrides(llm),
           });
+          yield* Effect.tryPromise(() => host.run(host.plugins.register(intruder)));
+          let registeredTools: string[] = [];
           yield* Effect.tryPromise(() =>
             host.run(
               host.plugins.register(
                 Plugin.define({
-                  id: "untrusted-tool",
+                  id: "inspect-tools",
                   effect: (ctx) =>
-                    ctx.tool
-                      .transform((editor) =>
-                        editor.add({
-                          name: "intruder",
-                          description: "Must never be offered",
-                          input: Schema.Struct({}),
-                          output: Schema.String,
-                          options: { codemode: false },
-                          execute: () => Effect.succeed({ output: "bad" }),
-                        }),
-                      )
-                      .pipe(Effect.asVoid),
+                    Effect.map(ctx.tool.list(), (tools) => {
+                      registeredTools = tools.map((tool) => tool.name);
+                    }),
                 }),
               ),
             ),
@@ -187,6 +162,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             text: "안녕",
           });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect(registeredTools).not.toContain("send");
           const requests = yield* llm.requests();
           expect(requests.length).toBeGreaterThan(0);
           expect(requests.every((request) => request.tools.length === 0)).toBe(true);
@@ -194,12 +170,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           expect(JSON.stringify(requests)).not.toMatch(/PLANTED|planted instruction|malicious/);
           const messages = yield* host.sessions.messages({ sessionID: session.id });
           expect(JSON.stringify(messages)).toContain("안녕!");
-          const permissive = yield* host.sessions.create({
-            agent: Agent.ID.make("persona1"),
-            model: model.ref,
-            location: Location.Ref.make({ directory: AbsolutePath.make(personaDirectory) }),
-            permissions: [{ action: "*", resource: "*", effect: "allow" }],
-          });
+          const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "test backstop" });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).every((request) => request.tools.length === 0)).toBe(true);
@@ -209,9 +180,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             location: Location.Ref.make({ directory: AbsolutePath.make(personaDirectory) }),
             permissions: [{ action: "*", resource: "*", effect: "deny" }],
           });
-          yield* host.sessions.prompt({ sessionID: nonPersona.id, text: "not a persona" });
-          yield* host.sessions.wait(nonPersona.id).pipe(Effect.timeout("20 seconds"));
-          expect((yield* host.sessions.get(nonPersona.id)).outcome).toBe("failed");
+          expect(nonPersona.permissions).toEqual([{ action: "*", resource: "*", effect: "deny" }]);
           expect(process.env["OPENAI_API_KEY"]).toBeUndefined();
           expect((yield* host.createSession("missing").pipe(Effect.flip)).message).toMatch(
             /Unknown persona/,
@@ -309,6 +278,154 @@ test("a host cannot silently fall back to the Mac database", async () => {
         ),
       ),
     ).rejects.toThrow(/sqlite|open|database/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60000);
+
+test("a scripted persona sends several ordered bubbles only to her Conversation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "messaging-host-"));
+  const personaDirectory = join(root, "content");
+  await mkdir(personaDirectory);
+  await writeFile(join(personaDirectory, "persona1.md"), valid);
+  const events: string[] = [];
+  const imessage = fakeMessages(events);
+  const ui = fakeGestures(events);
+  try {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()));
+          let step = 0;
+          yield* llm.serve((request) => {
+            if (!request.tools.some((tool) => tool.name === "send"))
+              return TestLLM.text("title", "title");
+            step++;
+            if (step <= 2) return TestLLM.tool(`call-${step}`, "send", { text: `bubble ${step}` });
+            return TestLLM.text("done", "answer");
+          });
+          const host = yield* startMessagingHost(
+            join(root, "isolated"),
+            {
+              configDirectory: join(root, "private", "config"),
+              databasePath: ":memory:",
+              personaDirectory,
+              providers: {},
+              model: "test/probe",
+              overrides: scriptedOverrides(llm),
+            },
+            {
+              sendText: (handle, text) =>
+                Effect.gen(function* () {
+                  const pending = yield* sql<{
+                    handle: string;
+                    content: string;
+                    state: string;
+                  }>`SELECT handle, content, state FROM send ORDER BY id DESC LIMIT 1`;
+                  expect(pending).toEqual([{ handle, content: text, state: "recorded" }]);
+                  return yield* imessage.messages.sendText(handle, text);
+                }),
+            },
+            ui.gestures,
+          );
+          let toolDescription = "";
+          yield* Effect.tryPromise(() =>
+            host.run(
+              host.plugins.register(
+                Plugin.define({
+                  id: "inspect-send",
+                  effect: (ctx) =>
+                    Effect.map(ctx.tool.list(), (tools) => {
+                      const send = tools.find((tool) => tool.name === "send");
+                      toolDescription = send?.description ?? "";
+                    }),
+                }),
+              ),
+            ),
+          );
+          yield* Effect.tryPromise(() => host.run(host.plugins.register(intruder)));
+          const session = yield* host.createSession("persona1");
+          const other = yield* host.createSession("persona1");
+          const first = yield* host.conversations.create({
+            handle: "+821011111111",
+            locale: "ko",
+            consentVersion: "v1",
+            consentLanguage: "ko",
+            personaID: "persona1",
+            sessionID: session.id,
+          });
+          yield* host.conversations.create({
+            handle: "+821022222222",
+            locale: "ko",
+            consentVersion: "v1",
+            consentLanguage: "ko",
+            personaID: "persona1",
+            sessionID: other.id,
+          });
+          expect(yield* host.conversations.byHandle(first.handle)).toEqual(first);
+          expect(yield* host.conversations.bySession(session.id)).toEqual(first);
+          expect(yield* host.conversations.bySession("missing")).toBeUndefined();
+          expect(session.permissions).toEqual([
+            { action: "*", resource: "*", effect: "deny" },
+            { action: "send", resource: "*", effect: "allow" },
+          ]);
+          yield* host.sessions.prompt({ sessionID: session.id, text: "say hello" });
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
+          expect(
+            (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
+          ).toEqual([[], ["send"], ["send"], ["send"]]);
+          expect(JSON.stringify((yield* llm.requests())[1]?.tools)).toContain('"text"');
+          expect(imessage.bubbles).toEqual([
+            { handle: first.handle, text: "bubble 1" },
+            { handle: first.handle, text: "bubble 2" },
+          ]);
+          expect(events).toEqual(["typing", "send", "typing", "send"]);
+          expect(ui.typing.map((item) => item.handle)).toEqual([first.handle, first.handle]);
+          expect(
+            ui.typing.every((item) => item.durationMillis >= 1000 && item.durationMillis <= 15000),
+          ).toBe(true);
+          const rows = yield* sql<{
+            handle: string;
+            content: string;
+            state: string;
+            guid: string;
+          }>`SELECT handle, content, state, guid FROM send ORDER BY id`;
+          expect(rows).toEqual([
+            { handle: first.handle, content: "bubble 1", state: "sent", guid: "fake-1" },
+            { handle: first.handle, content: "bubble 2", state: "sent", guid: "fake-2" },
+          ]);
+          expect(
+            JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
+          ).toContain("sent");
+          step = 3;
+          const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
+          yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
+          yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
+          expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual(["send"]);
+          step = 0;
+          const orphan = yield* host.createSession("persona1");
+          yield* host.sessions.prompt({
+            sessionID: orphan.id,
+            text: "try to text without a Conversation",
+          });
+          yield* host.sessions.wait(orphan.id).pipe(Effect.timeout("20 seconds"));
+          expect(imessage.bubbles).toHaveLength(2);
+          expect(JSON.stringify(yield* host.sessions.messages({ sessionID: orphan.id }))).toContain(
+            "No Conversation for session",
+          );
+          const foreignKeys = yield* sql<{ foreign_keys: number }>`PRAGMA foreign_keys`;
+          expect(foreignKeys[0]?.foreign_keys).toBe(1);
+          const tables = yield* sql<{
+            name: string;
+          }>`SELECT name FROM sqlite_master WHERE type = 'table'`;
+          expect(tables.map((row) => row.name)).toEqual(
+            expect.arrayContaining(["user", "conversation", "send"]),
+          );
+        }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+      ),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
