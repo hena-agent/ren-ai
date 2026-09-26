@@ -21,7 +21,14 @@ export type Copy = {
     full: string;
     try_later: string;
   };
-  waitlist: { title: string; emailLabel: string; submit: string; success: string };
+  waitlist: {
+    title: string;
+    emailLabel: string;
+    invalidEmail: string;
+    submit: string;
+    success: string;
+    failure: string;
+  };
   notice: string;
 };
 
