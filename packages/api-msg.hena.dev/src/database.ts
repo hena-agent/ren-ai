@@ -1,0 +1,43 @@
+import { Effect } from "effect";
+import { Migrator, SqlClient } from "effect/unstable/sql";
+
+export const migrate = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`PRAGMA foreign_keys = ON`;
+  yield* Migrator.make({})({
+    loader: Migrator.fromRecord({
+      "001_conversations": Effect.gen(function* () {
+        yield* sql`CREATE TABLE user (
+          id INTEGER PRIMARY KEY,
+          handle TEXT NOT NULL UNIQUE,
+          locale TEXT NOT NULL,
+          consent_version TEXT NOT NULL,
+          consent_language TEXT NOT NULL,
+          consent_at INTEGER NOT NULL,
+          joined_at INTEGER,
+          replied_at INTEGER
+        )`;
+        yield* sql`CREATE TABLE conversation (
+          id INTEGER PRIMARY KEY,
+          user_id INTEGER NOT NULL UNIQUE REFERENCES user(id) ON DELETE CASCADE,
+          persona_id TEXT NOT NULL,
+          session_id TEXT NOT NULL UNIQUE,
+          started_at INTEGER NOT NULL
+        )`;
+      }),
+      "002_outbox": sql`CREATE TABLE send (
+        id INTEGER PRIMARY KEY,
+        handle TEXT NOT NULL,
+        conversation_id INTEGER REFERENCES conversation(id) ON DELETE SET NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('notice', 'text', 'tapback')),
+        content TEXT NOT NULL,
+        tool_call_id TEXT,
+        state TEXT NOT NULL CHECK (state IN ('recorded', 'uncertain', 'sent', 'delivered', 'failed', 'not_sent')),
+        guid TEXT,
+        recorded_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (conversation_id, tool_call_id)
+      )`,
+    }),
+  });
+});

@@ -3,7 +3,8 @@ import { Session } from "@opencode/core/session";
 import { createEmbeddedRoutes } from "@opencode/server/routes";
 import { AbsolutePath, Agent, Location, Model } from "@opencode/schema";
 import { Plugin } from "@opencode/plugin/effect";
-import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect";
+import { Tool } from "@opencode/schema/tool";
+import { Context, Effect, Layer, ManagedRuntime, Schema, Scope } from "effect";
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
 import type { Persona } from "../personas/personas.ts";
 
@@ -25,6 +26,7 @@ export interface HostOptions {
   /** Resolve the Handle from the durable Conversation→session binding. */
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined>;
   readonly overrides?: Parameters<typeof createEmbeddedRoutes>[1];
+  readonly send?: (sessionID: string, text: string, callID: string) => Effect.Effect<string, Error>;
 }
 
 export const createHost = (options: HostOptions) =>
@@ -69,11 +71,30 @@ export const createHost = (options: HostOptions) =>
               });
             }
           });
+          if (options.send) {
+            const send = options.send;
+            yield* ctx.tool.transform((editor) => {
+              editor.add({
+                name: "send",
+                description: "Send one iMessage bubble to this Conversation's User",
+                input: Schema.Struct({ text: Schema.String }),
+                output: Schema.String,
+                options: { codemode: false },
+                execute: ({ text }, context) =>
+                  send(context.sessionID, text, context.id).pipe(
+                    Effect.map((output) => ({ output, content: output })),
+                    Effect.mapError((error) => new Tool.Error({ message: error.message })),
+                  ),
+              });
+            });
+          }
           yield* ctx.session.hook("context", (event) =>
             Effect.sync(() => {
               const persona = options.personas.get(event.agent)!;
               event.system.splice(0, event.system.length, { type: "text", text: persona.prompt });
-              for (const name of Object.keys(event.tools)) delete event.tools[name];
+              for (const name of Object.keys(event.tools)) {
+                if (name !== "send" || !options.send) delete event.tools[name];
+              }
             }),
           );
           yield* ctx.session.hook("title", (event) =>
@@ -106,7 +127,10 @@ export const createHost = (options: HostOptions) =>
           agent: Agent.ID.make(personaID),
           model: Model.Ref.parse(options.model),
           location: Location.Ref.make({ directory: AbsolutePath.make(options.personaDirectory) }),
-          permissions: [{ action: "*", resource: "*", effect: "deny" }],
+          permissions: [
+            { action: "*", resource: "*", effect: "deny" },
+            ...(options.send ? [{ action: "send", resource: "*", effect: "allow" } as const] : []),
+          ],
         });
       },
     };
