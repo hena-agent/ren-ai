@@ -22,6 +22,8 @@ export interface HostOptions {
   readonly personas: ReadonlyMap<string, Persona>;
   readonly providers: Readonly<Record<string, object>>;
   readonly model: string;
+  /** Resolve the Handle from the durable Conversation→session binding. */
+  readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined>;
   readonly overrides?: Parameters<typeof createEmbeddedRoutes>[1];
 }
 
@@ -72,6 +74,15 @@ export const createHost = (options: HostOptions) =>
               const persona = options.personas.get(event.agent)!;
               event.system.splice(0, event.system.length, { type: "text", text: persona.prompt });
               for (const name of Object.keys(event.tools)) delete event.tools[name];
+            }),
+          );
+          yield* ctx.session.hook("title", (event) =>
+            Effect.gen(function* () {
+              const handle = yield* options.handleForSession(event.sessionID);
+              if (!handle) return;
+              const session = yield* sessions.get(event.sessionID).pipe(Effect.orDie);
+              const persona = session.agent!;
+              event.result = `${persona[0]!.toUpperCase()}${persona.slice(1)} · ${handle}`;
             }),
           );
         }),
