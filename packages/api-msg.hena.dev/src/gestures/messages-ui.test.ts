@@ -97,6 +97,7 @@ const expectTypingDuration = (typing: Effect.Effect<boolean, Error>, duration: n
   Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
+        yield* TestClock.setTime(100_000);
         const fiber = yield* Effect.forkScoped(typing);
         if (spent) yield* TestClock.adjust(spent);
         yield* TestClock.adjust(duration - spent - 1);
