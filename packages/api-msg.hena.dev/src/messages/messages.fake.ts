@@ -56,7 +56,12 @@ export const fakeMessages = (events: string[] = []) => {
         return () => watchers.delete(receive);
       }),
   };
-  const text = (handle: string, content: string, createdAt: number) =>
+  const text = (
+    handle: string,
+    content: string,
+    createdAt: number,
+    extra: Pick<IncomingMessage, "attachments" | "tapback" | "replyToGuid" | "payload"> = {},
+  ) =>
     Effect.gen(function* () {
       const row: IncomingMessage = {
         id: (rows.at(-1)?.id ?? 0) + 1,
@@ -65,6 +70,7 @@ export const fakeMessages = (events: string[] = []) => {
         createdAt,
         text: content,
         fromMe: false,
+        ...extra,
       };
       rows.push(row);
       yield* Effect.forEach(watchers, (receive) => receive(row));

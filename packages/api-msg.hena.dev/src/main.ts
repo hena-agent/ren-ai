@@ -118,9 +118,14 @@ export const startMessagingHost = (
     const incoming = yield* intake(
       messages,
       (handle) => directory.byHandle(handle),
-      (sessionID, id, text) =>
+      (sessionID, id, text, files) =>
         host.sessions
-          .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
+          .prompt({
+            sessionID: Session.ID.make(sessionID),
+            id: SessionMessage.ID.make(id),
+            text,
+            files,
+          })
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
       sends.reconcile,

@@ -3,8 +3,21 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
-import { message, sentByYou } from "../transcript/transcript.ts";
+import {
+  gap,
+  message,
+  photo,
+  placeholder,
+  reply,
+  sentByYou,
+  tapback,
+} from "../transcript/transcript.ts";
 import { watchEdits } from "./edits.ts";
+import { imageData, imageMime } from "./images.ts";
+
+export interface PromptImage {
+  readonly uri: string;
+}
 
 interface Bookmark {
   readonly rowID: number;
@@ -17,7 +30,12 @@ const promptID = (sessionID: string, guid: string) =>
 export const intake = (
   messages: Messages,
   byHandle: (handle: string) => Effect.Effect<Conversation | undefined, Error>,
-  prompt: (sessionID: string, id: string, text: string) => Effect.Effect<void, Error>,
+  prompt: (
+    sessionID: string,
+    id: string,
+    text: string,
+    files?: ReadonlyArray<PromptImage>,
+  ) => Effect.Effect<void, Error>,
   timeZone: (personaID: string) => string,
   reconcile?: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,
 ) =>
@@ -65,10 +83,54 @@ export const intake = (
         yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${conversation.sessionID}, ${row.guid})`;
         signal(conversation);
       });
+    const target = (row: IncomingMessage, guid: string) =>
+      Effect.map(messages.recent(row.handle, 0), (rows) => {
+        const found = rows.find((item) => item.guid === guid);
+        if (!found) return "message unavailable";
+        const content = found.text || (found.attachments?.length ? "photo" : "message unavailable");
+        return `${found.fromMe ? "your" : "his"} message: ${content}`;
+      });
+    const content = (row: IncomingMessage, previous: number | null, zone: string) =>
+      Effect.gen(function* () {
+        if (row.tapback) {
+          return {
+            text: `${gap(row.createdAt, previous, zone)}${tapback(row.tapback.emoji, yield* target(row, row.tapback.targetGuid), row.createdAt, zone)}`,
+            files: Array.of<PromptImage>(),
+          };
+        }
+        const lines: string[] = [];
+        const files: PromptImage[] = [];
+        if (row.replyToGuid)
+          lines.push(reply(row.text, yield* target(row, row.replyToGuid), row.createdAt, zone));
+        else if (row.text) lines.push(message(row.text, row.createdAt, null, zone));
+        for (const attachment of row.attachments ?? []) {
+          const mime = imageMime(attachment);
+          if (mime && !attachment.missing) {
+            const image = yield* imageData(attachment);
+            lines.push(photo(row.createdAt, zone));
+            files.push(image);
+          } else {
+            const kind = attachment.mimeType?.startsWith("audio/")
+              ? "voice-memo"
+              : attachment.mimeType?.startsWith("video/")
+                ? "video"
+                : "file";
+            lines.push(placeholder(kind, row.createdAt, zone));
+          }
+        }
+        if (row.payload) lines.push(placeholder(row.payload, row.createdAt, zone));
+        if (!lines.length) lines.push(placeholder("app", row.createdAt, zone));
+        return { text: `${gap(row.createdAt, previous, zone)}${lines.join("\n")}`, files };
+      });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!replaced && row.id <= last.rowID) return;
         if (replaced && row.createdAt < current.date) return;
+        if (row.tapback && !row.tapback.added) {
+          last = { rowID: row.id, date: row.createdAt };
+          yield* save(last);
+          return;
+        }
         if (row.fromMe) {
           yield* outgoing(row);
           last = { rowID: row.id, date: row.createdAt };
@@ -87,15 +149,16 @@ export const intake = (
           const earlier = yield* sql<{
             date: number;
           }>`SELECT date FROM intake_last WHERE conversation_id = ${conversation.id}`;
+          const rendered = yield* content(
+            row,
+            earlier[0]?.date ?? null,
+            timeZone(conversation.personaID),
+          );
           yield* prompt(
             conversation.sessionID,
             promptID(conversation.sessionID, row.guid),
-            message(
-              row.text,
-              row.createdAt,
-              earlier[0]?.date ?? null,
-              timeZone(conversation.personaID),
-            ),
+            rendered.text,
+            rendered.files,
           );
           yield* Effect.gen(function* () {
             yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${conversation.sessionID}, ${row.guid})`;
