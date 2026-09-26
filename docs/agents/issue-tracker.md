@@ -4,6 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Conventions
 
+- **Account**: every GitHub action runs as hena-dev. `gh` and `git push` take their account from `GH_CONFIG_DIR`, which a `chpwd` hook in `~/.zshenv` resets on every `cd`. Run them from the repo, or put `GH_CONFIG_DIR=/Users/chris/.config/gh-hena` in front of each command. Before any write, check that `gh api user --jq .login` prints `hena-dev`. Commit only in this clone or its worktrees, which use the hena-dev git identity.
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
 - **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
