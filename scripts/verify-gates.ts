@@ -191,12 +191,22 @@ const verifyStrykerPatch = (): readonly string[] => {
     "node_modules/@stryker-mutator/vitest-runner/dist/src/test-helpers.js",
     "node_modules/@stryker-mutator/vitest-runner/dist/src/stryker-setup.js",
   ];
-  return patched
+  const nameFailures = patched
     .filter((path) => !existsSync(path) || !readFileSync(path, "utf8").includes("join(' > ')"))
     .map(
       (path) =>
         `mutation runner patch: ${path} is missing the " > " test-name separator; mutation results cannot be trusted`,
     );
+  const runner = "node_modules/@stryker-mutator/vitest-runner/dist/src/vitest-test-runner.js";
+  const forked =
+    existsSync(runner) &&
+    readFileSync(runner, "utf8").includes("pool: 'forks',\n            maxWorkers: 1");
+  return forked
+    ? nameFailures
+    : [
+        ...nameFailures,
+        "mutation runner patch: Vitest 5 must use one forked worker (ffi-rs segfaults in Linux threads)",
+      ];
 };
 
 rmSync(SCRATCH, { recursive: true, force: true });

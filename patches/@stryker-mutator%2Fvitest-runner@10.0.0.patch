@@ -24,3 +24,15 @@ index 56cc786f30c524ae18ce87eef1a67fdf26b703c5..2cd9786a153a6b3090b84e30e02750d1
  }
  export function toRawTestId(test) {
      return `${test.file?.filepath ?? 'unknown.js'}#${collectTestName(test)}`;
+diff --git a/dist/src/vitest-test-runner.js b/dist/src/vitest-test-runner.js
+--- a/dist/src/vitest-test-runner.js
++++ b/dist/src/vitest-test-runner.js
+@@ -48,7 +48,7 @@ export class VitestTestRunner {
+             };
+         }
+         return {
+-            pool: 'threads',
++            pool: 'forks',
+             maxWorkers: 1,
+         };
+     }

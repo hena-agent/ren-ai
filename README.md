@@ -58,4 +58,6 @@ Rewrites the package scope, updates the README, and removes itself.
 
 Vitest 5 changed `testNamePattern` to match against a `" > "`-joined test name; the Stryker runner still joins with a single space, so every test nested in a `describe` is skipped and every mutant is reported as survived. Upstream: [stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210).
 
-The patch is pinned to exactly `10.0.0`. If Renovate bumps the runner, `patchedDependencies` stops matching and bun applies nothing — but it **fails closed**: unpatched, the score collapses to 3.33% and `thresholds.break: 100` reds the build. Remove the patch when the fix ships upstream.
+The runner also forces Vitest's thread pool. OpenCode loads `ffi-rs`, whose native addon segfaults on Linux when imported in a worker thread (reproduced with a bare Node worker thread). The patch uses Vitest's fork pool instead, as plain Vitest does, retaining one worker per Stryker runner and all mutation gates.
+
+The patch is pinned to exactly `10.0.0`. If Renovate bumps the runner, `patchedDependencies` stops matching and bun applies nothing — but it **fails closed**: `verify-gates` checks both changes, and without the test-name fix the score collapses to 3.33% and `thresholds.break: 100` reds the build. Remove each hunk when its upstream fix ships.
