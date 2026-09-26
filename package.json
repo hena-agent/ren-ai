@@ -1,8 +1,7 @@
 {
-  "name": "ts-template",
+  "name": "ren-ai",
   "private": true,
   "workspaces": [
-    "apps/*",
     "packages/*"
   ],
   "type": "module",

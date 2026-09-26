@@ -37,7 +37,7 @@ export default {
   tsconfigFile: "tsconfig.stryker-disabled.json",
 
   coverageAnalysis: "perTest",
-  mutate: ["{apps,packages}/*/src/**/*.ts", "!**/*.test.ts", ...excluded],
+  mutate: ["packages/*/src/**/*.ts", "!**/*.test.ts", ...excluded],
   thresholds: { high: 100, low: 100, break: 100 },
   reporters: ["progress", "clear-text"],
 };
