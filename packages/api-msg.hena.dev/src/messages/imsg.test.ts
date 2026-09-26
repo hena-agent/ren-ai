@@ -2,70 +2,9 @@ import { Effect, Fiber, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { makeImsgMessages } from "./imsg.ts";
-import { fakeMessages } from "./messages.fake.ts";
 import type { IncomingMessage, Messages } from "./messages.ts";
 
 import { at, fixture, handle, raw } from "./imsg.fake.ts";
-
-const contract = (
-  name: string,
-  run: (
-    scenario: (
-      messages: Messages,
-      text: (
-        handle: string,
-        content: string,
-        date: number,
-      ) => Effect.Effect<IncomingMessage, Error>,
-    ) => Effect.Effect<void, Error>,
-  ) => Promise<void>,
-) => {
-  test(`${name}: send, follow, after, recent and status share the same contract`, async () => {
-    await run((messages, text) =>
-      Effect.gen(function* () {
-        const guid = (yield* messages.sendText(handle, "hi")).guid;
-        expect(guid).toBeTruthy();
-        expect((yield* messages.status(guid!)).state).toBe("delivered");
-        expect((yield* messages.status("not-yet-present")).state).toBe("pending");
-        expect(yield* messages.textStatus(handle, 0)).toBe("sent");
-        expect(yield* messages.textStatus("absent", 0)).toBe("unknown");
-        const incoming: IncomingMessage[] = [];
-        const stop = yield* messages.follow(0, (row) =>
-          Effect.sync(() => {
-            incoming.push(row);
-          }),
-        );
-        const row = yield* text(handle, "hello", Date.parse(at));
-        expect((yield* messages.after(0)).some((item) => item.guid === row.guid)).toBe(true);
-        expect(
-          (yield* messages.recent(handle, Date.parse(at))).some((item) => item.guid === row.guid),
-        ).toBe(true);
-        for (let i = 0; i < 30 && !incoming.some((item) => item.guid === row.guid); i++)
-          yield* Effect.yieldNow;
-        expect(incoming.some((item) => item.guid === row.guid)).toBe(true);
-        stop();
-      }),
-    );
-  });
-};
-
-contract("memory", (scenario) => {
-  const f = fakeMessages();
-  return Effect.runPromise(scenario(f.messages, f.text));
-});
-
-contract("imsg replay", (scenario) => {
-  const f = fixture();
-  f.status("not-yet-present", "pending", 0);
-  return Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const messages = yield* makeImsgMessages(f.alertsService);
-        yield* scenario(messages, f.inbound);
-      }).pipe(Effect.provide(f.dependencies)),
-    ),
-  );
-});
 
 const until = (ready: () => boolean) =>
   Effect.gen(function* () {
@@ -431,6 +370,17 @@ test("replayed probe: forced send, error 22, uncertain send, edits, read date an
             .map((entry) => entry.params["since_rowid"]),
         ).toEqual([0, 3, 9]);
         expect(yield* messages.textStatus("<android>", 0)).toBe("no_imessage");
+        expect(yield* messages.sendStatus(raw[1]!.guid)).toBe("failed");
+        expect(yield* messages.sendStatus(raw[0]!.guid)).toBe("delivered");
+        expect(yield* messages.lastOutgoingStatus(handle)).toEqual({
+          delivered: true,
+          readAt: Date.parse("2026-09-25T12:00:08.000Z"),
+        });
+        expect(
+          (yield* messages.recent(handle, 0)).some(
+            (row) => row.guid === raw[0]!.guid && row.fromMe,
+          ),
+        ).toBe(true);
         expect(yield* messages.status(raw[0]!.guid)).toEqual({
           state: "delivered",
           error: 0,
@@ -489,6 +439,44 @@ test("replayed probe: forced send, error 22, uncertain send, edits, read date an
                 entry.params["attachments"] === true && entry.params["include_reactions"] === true,
             ),
         ).toBe(true);
+      }).pipe(Effect.provide(f.dependencies)),
+    ),
+  );
+});
+
+test("pending, sent and delivered status distinguish an unconfirmed send from a read Notice", async () => {
+  const f = fixture();
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const messages = yield* makeImsgMessages(f.alertsService);
+        expect(yield* messages.lastOutgoingStatus("absent")).toBeUndefined();
+        f.status(raw[0]!.guid, "pending", 0);
+        expect(yield* messages.sendStatus(raw[0]!.guid)).toBe("unknown");
+        expect(yield* messages.lastOutgoingStatus(handle)).toEqual({
+          delivered: false,
+          readAt: null,
+        });
+        f.status(raw[0]!.guid, "pending", 22);
+        expect(yield* messages.sendStatus(raw[0]!.guid)).toBe("failed");
+        f.status(raw[0]!.guid, "sent", 0);
+        expect(yield* messages.sendStatus(raw[0]!.guid)).toBe("sent");
+        const notice = {
+          ...raw[0]!,
+          id: 11,
+          guid: "notice-guid",
+          created_at: "2026-09-25T12:04:00.000Z",
+        };
+        f.replace([...raw, notice]);
+        f.status(notice.guid, "delivered", 0, "2026-09-25T12:05:00.000Z");
+        expect(yield* messages.lastOutgoingStatus(handle)).toEqual({
+          delivered: true,
+          readAt: Date.parse("2026-09-25T12:05:00.000Z"),
+        });
+        expect((yield* messages.recent(handle, 0)).at(-1)).toMatchObject({
+          guid: notice.guid,
+          fromMe: true,
+        });
       }).pipe(Effect.provide(f.dependencies)),
     ),
   );

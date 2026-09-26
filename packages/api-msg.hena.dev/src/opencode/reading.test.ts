@@ -69,6 +69,7 @@ You are Persona1.
               personaDirectory,
               providers: {},
               model: "test/reading",
+              health: { raise: () => Effect.void },
               overrides: [
                 replaceClient.replace(Layer.succeed(ai.LLMClient.Service, llm)),
                 SessionRunnerModel.node.replace(

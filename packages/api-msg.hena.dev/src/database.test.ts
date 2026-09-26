@@ -38,6 +38,7 @@ test("the production entry keeps a separate server database open for its host li
               personaDirectory,
               providers: {},
               model: "test/probe",
+              health: { raise: () => Effect.void },
             },
             join(root, "server.sqlite"),
             messages.messages,

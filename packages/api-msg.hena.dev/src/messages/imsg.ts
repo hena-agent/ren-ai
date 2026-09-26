@@ -71,6 +71,19 @@ export const makeImsgMessages = (alerts: Alerts) =>
     const messages: Messages = {
       after,
       status,
+      sendStatus: (guid) =>
+        Effect.map(status(guid), (result) =>
+          result.error === 22 ? "failed" : result.state === "pending" ? "unknown" : result.state,
+        ),
+      lastOutgoingStatus: (handle) =>
+        Effect.gen(function* () {
+          const outgoing = (yield* after(0))
+            .filter((row) => row.fromMe && row.handle === handle)
+            .at(-1);
+          if (!outgoing) return undefined;
+          const result = yield* status(outgoing.guid);
+          return { delivered: result.state === "delivered", readAt: result.dateRead };
+        }),
       sendText: (handle, text) =>
         Effect.gen(function* () {
           const outcome = yield* rpc

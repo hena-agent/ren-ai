@@ -24,6 +24,7 @@ test("a host cannot silently fall back to the Mac database", async () => {
             providers: {},
             model: "test/probe",
             handleForSession: () => Effect.succeed(undefined),
+            health: { raise: () => Effect.void },
           }),
         ),
       ),

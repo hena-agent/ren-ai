@@ -2,11 +2,7 @@ import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LanguageModel, LLMClient } from "@opencode/ai";
-import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
-import { llmClient } from "@opencode/core/effect/app-node-platform";
-import { SessionRunnerModel } from "@opencode/core/session/runner/model";
 import { Session } from "@opencode/core/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Agent, AbsolutePath, Location } from "@opencode/schema";
@@ -21,6 +17,15 @@ import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
+import {
+  disabledIDs,
+  intruder,
+  model,
+  scriptedOverrides,
+  unrestricted,
+  valid,
+  expectLateResults,
+} from "../../test/host.test-helper.ts";
 
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
@@ -46,55 +51,6 @@ afterAll(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   rmSync(xdg.root, { recursive: true, force: true });
-});
-
-const valid = `---
-time-zone: Asia/Seoul
-language: ko
-opening-line: 번호 받았으니까 먼저 연락해 봐
-memory: Remember his name.
----
-You are Persona1. Speak Korean.
-`;
-
-const model = SessionRunnerModel.resolved(
-  LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
-  {
-    capabilities: { tools: true, input: ["text"], output: ["text"] },
-    cost: [],
-    limit: { context: 100_000, output: 1_000 },
-  },
-);
-
-const scriptedOverrides = (llm: TestLLM.TestInterface) => [
-  llmClient.replace(Layer.succeed(LLMClient.Service, llm)),
-  SessionRunnerModel.node.replace(
-    Layer.succeed(SessionRunnerModel.Service, { resolve: () => Effect.succeed(model) }),
-  ),
-];
-
-const intruder = Plugin.define({
-  id: "untrusted-tool",
-  effect: (ctx) =>
-    ctx.tool
-      .transform((editor) =>
-        editor.add({
-          name: "intruder",
-          description: "Must be filtered",
-          input: Schema.Struct({}),
-          output: Schema.String,
-          options: { codemode: false },
-          execute: () => Effect.succeed({ output: "bad" }),
-        }),
-      )
-      .pipe(Effect.asVoid),
-});
-
-const unrestricted = (directory: string) => ({
-  agent: Agent.ID.make("persona1"),
-  model: model.ref,
-  location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
-  permissions: [{ action: "*", resource: "*", effect: "allow" as const }],
 });
 
 test("the sealed host creates a deny-all persona session and admits a scripted reply", async () => {
@@ -133,6 +89,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             },
             model: "test/probe",
             handleForSession: (sessionID) => Effect.succeed(handles.get(sessionID)),
+            health: { raise: () => Effect.void },
             overrides: scriptedOverrides(llm),
           });
           yield* Effect.tryPromise(() => host.run(host.plugins.register(intruder)));
@@ -251,13 +208,6 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           expect(
             yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id),
           ).toEqual(expectedViewerResults(session.id, messages[0]!.id));
-          const disabledIDs = [
-            "opencode.config.instruction",
-            "opencode.config.compatibility",
-            "opencode.provider.ollama",
-            "opencode.provider.lmstudio",
-            "opencode.provider.vllm",
-          ];
           for (const id of disabledIDs) {
             expect(config).toContain(`-${id}`);
           }
@@ -289,7 +239,9 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
     valid.replace("Asia/Seoul", "Pacific/Honolulu"),
   );
   const events: string[] = [];
+  const alerts: string[] = [];
   const imessage = fakeMessages(events);
+  let statusFails = false;
   const ui = fakeGestures(events);
   try {
     await Effect.runPromise(
@@ -315,9 +267,19 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               providers: {},
               model: "test/probe",
               overrides: scriptedOverrides(llm),
+              health: {
+                raise: (name, detail) =>
+                  Effect.sync(() => {
+                    alerts.push(`${name}: ${detail}`);
+                  }),
+              },
             },
             {
               ...imessage.messages,
+              lastOutgoingStatus: (handle) =>
+                statusFails
+                  ? Effect.fail(new Error("status unavailable"))
+                  : imessage.messages.lastOutgoingStatus(handle),
               sendText: (handle, text) =>
                 Effect.gen(function* () {
                   const pending = yield* sql<{
@@ -389,6 +351,16 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
           ).toEqual(Array.from({ length: 4 }, () => ["react", "read", "send", "wait"]));
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
+          const initialRequests = yield* llm.requests();
+          expect(JSON.stringify(initialRequests[0]?.messages)).toContain(
+            'your-last-message=\\"sent\\"',
+          );
+          expect(JSON.stringify(initialRequests[1]?.messages)).toContain(
+            'your-last-message=\\"sent\\"',
+          );
+          expect(JSON.stringify(initialRequests[0]?.system)).toContain(
+            "Read the English tags as events on your phone.",
+          );
           expect((yield* host.sessions.get(session.id)).title).toBe("Persona1 · +821011111111");
           expect(imessage.bubbles).toEqual([
             { handle: first.handle, text: "bubble 1" },
@@ -413,6 +385,40 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).toContain("paused");
           step = 3;
+          imessage.status(first.handle, { delivered: true, readAt: null });
+          yield* host.sessions.prompt({ sessionID: session.id, text: "check delivery" });
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect(JSON.stringify((yield* llm.requests()).at(-1)?.messages)).toContain(
+            'your-last-message=\\"delivered\\"',
+          );
+          imessage.status(first.handle, {
+            delivered: true,
+            readAt: Date.parse("2026-09-25T12:04:00Z"),
+          });
+          yield* host.sessions.prompt({ sessionID: session.id, text: "check read" });
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect(JSON.stringify((yield* llm.requests()).at(-1)?.messages)).toContain(
+            'your-last-message=\\"read 02:04\\"',
+          );
+          statusFails = true;
+          const beforeFailure = (yield* llm.requests()).length;
+          yield* host.sessions.prompt({ sessionID: session.id, text: "status unavailable" });
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect((yield* host.sessions.get(session.id)).outcome).toBe("failed");
+          expect(yield* llm.requests()).toHaveLength(beforeFailure);
+          statusFails = false;
+          expect(
+            JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
+          ).not.toContain("<phone now=");
+          yield* sql`UPDATE send SET state = CASE WHEN tool_call_id = 'call-1' THEN 'delivered' ELSE 'failed' END,
+            late = 1, updated_at = ${Date.parse("2026-09-25T11:48:00Z")} WHERE tool_call_id IN ('call-1', 'call-2')`;
+          yield* imessage.text(first.handle, "again", Date.parse("2026-09-25T11:53:00Z"));
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expectLateResults((yield* llm.requests()).at(-1)!.messages);
+          expect(
+            JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
+          ).not.toContain("confirmed late");
+          step = 3;
           const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
@@ -422,6 +428,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             "send",
             "wait",
           ]);
+          expect(alerts).toContain("unexpected-tool: OpenCode offered disallowed tool: intruder");
           step = 0;
           const orphan = yield* host.createSession("persona1");
           yield* host.sessions.prompt({
@@ -477,6 +484,11 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             .pipe(Effect.timeout("20 seconds"));
           expect(imessage.bubbles[3]).toEqual({ handle: joined!.handle, text: "bubble 1" });
           yield* Effect.promise(host.disposeOnboarding);
+          expect(yield* host.operator.remove(first.handle)).toBe("removed");
+          expect(yield* host.conversations.byHandle(first.handle)).toBeUndefined();
+          expect(yield* host.sessions.get(session.id).pipe(Effect.flip)).toBeDefined();
+          yield* host.sessions.remove(other.id);
+          expect(yield* host.operator.remove("+821022222222")).toBe("removed");
         }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
       ),
     );

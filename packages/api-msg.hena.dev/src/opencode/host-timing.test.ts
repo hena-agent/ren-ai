@@ -51,6 +51,7 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
               personaDirectory,
               providers: {},
               model: "test/probe",
+              health: { raise: () => Effect.void },
               overrides: [
                 llmClient.replace(Layer.succeed(LLMClient.Service, llm)),
                 SessionRunnerModel.node.replace(

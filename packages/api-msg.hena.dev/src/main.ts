@@ -23,6 +23,10 @@ import { SqlClient } from "effect/unstable/sql";
 import { notReacted } from "./transcript/transcript.ts";
 import type { Tapback } from "./outbox/outbox.ts";
 import { timing } from "./timing/timing.ts";
+import { makeOperator } from "./operator/operator.ts";
+export { operatorHandler, operatorApi } from "./operator/api.ts";
+export { serveOperatorSocket, operatorClient } from "./operator/socket.ts";
+export { runOperatorCli } from "./operator/cli.ts";
 
 interface OnboardingConfig {
   readonly turnstileSecret: string;
@@ -49,7 +53,8 @@ export const startMessagingHost = (
     const sql = yield* SqlClient.SqlClient;
     const directory = yield* conversations;
     const pace = timing();
-    const sends = yield* outbox(messages, gestures, pace);
+    const personas = yield* loadPersonas(options.personaDirectory);
+    const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
     const seenAtRequest = new Map<string, string | undefined>();
     const inConversation = (
       sessionID: string,
@@ -63,8 +68,9 @@ export const startMessagingHost = (
         ),
         Effect.mapError((error) => new Error(String(error))),
       );
-    const host = yield* startPersonaHost(root, {
+    const host = yield* isolatedHost(root, {
       ...options,
+      personas,
       handleForSession: (sessionID) =>
         directory.bySession(sessionID).pipe(
           Effect.map((conversation) => (conversation ? conversation.handle : undefined)),
@@ -96,6 +102,17 @@ export const startMessagingHost = (
           if (!conversation) return notReacted("no Conversation for session");
           return yield* sends.react(conversation, tapback, callID, seenAtRequest.get(sessionID));
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
+      lastMessageStatus: (sessionID) =>
+        directory
+          .bySession(sessionID)
+          .pipe(
+            Effect.flatMap((conversation) =>
+              conversation
+                ? messages.lastOutgoingStatus(conversation.handle)
+                : Effect.succeed(undefined),
+            ),
+          ),
+      settledSends: (sessionID) => sends.results(sessionID),
     });
     const incoming = yield* intake(
       messages,
@@ -105,6 +122,7 @@ export const startMessagingHost = (
           .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
+      sends.reconcile,
     );
     incoming.onNew((conversation) => pace.onNew(conversation.id));
     const persona = host.personas.values().next().value!;
@@ -128,10 +146,16 @@ export const startMessagingHost = (
     const { handler: onboardingWeb, dispose: disposeOnboarding } = HttpRouter.toWebHandler(
       api.routes.pipe(Layer.provide(FetchHttpClient.layer)),
     );
+    const operator = yield* makeOperator(directory, (sessionID) =>
+      host.sessions
+        .remove(Session.ID.make(sessionID))
+        .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
+    );
     return {
       ...host,
       conversations: directory,
       intake: incoming,
+      operator,
       onboard: api.submit,
       onboardingWeb,
       disposeOnboarding,
