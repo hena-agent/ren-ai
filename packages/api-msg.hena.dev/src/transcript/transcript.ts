@@ -61,6 +61,8 @@ export const edited = (old: string, text: string, date: number, timeZone: string
 
 export const unsent = (date: number, timeZone: string) =>
   `<unsent at="${timestamp(date, timeZone)}"/>`;
+export const checkedPhone = (date: number, timeZone: string) =>
+  `<checked-phone at="${timestamp(date, timeZone)}"/>`;
 export const conversationStarted = (
   at: number,
   openingLine: string,

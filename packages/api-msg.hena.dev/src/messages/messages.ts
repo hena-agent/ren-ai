@@ -20,6 +20,14 @@ export interface Messages {
     handle: string,
     since: number,
   ): Effect.Effect<"sent" | "no_imessage" | "unknown", Error>;
+  /** Status of a particular outgoing row; an absent row is still pending. */
+  status(guid: string): Effect.Effect<MessageStatus, Error>;
+}
+
+interface MessageStatus {
+  readonly state: "pending" | "sent" | "delivered" | "failed";
+  readonly error: number;
+  readonly dateRead: number | null;
 }
 
 export interface OutgoingStatus {

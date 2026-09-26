@@ -9,6 +9,7 @@ export { serveViewer, viewerFront } from "./opencode/viewer.ts";
 
 export { makeHealth } from "./health/health.ts";
 export { makeMessagesUi } from "./gestures/messages-ui.ts";
+export { makeImsgMessages } from "./messages/imsg.ts";
 export { makeBackup } from "./backup/backup.ts";
 export { onboardingApi, noticeCopy } from "./onboarding/onboarding.ts";
 import { migrate } from "./database.ts";
@@ -23,6 +24,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { notReacted } from "./transcript/transcript.ts";
 import type { Tapback } from "./outbox/outbox.ts";
 import { timing } from "./timing/timing.ts";
+import { followUps } from "./follow-ups/follow-ups.ts";
 import { makeOperator } from "./operator/operator.ts";
 export { operatorHandler, operatorApi } from "./operator/api.ts";
 export { serveOperatorSocket, operatorClient } from "./operator/socket.ts";
@@ -115,6 +117,15 @@ export const startMessagingHost = (
           ),
       settledSends: (sessionID) => sends.results(sessionID),
     });
+    const follow = yield* followUps(
+      directory.active,
+      (personaID) => host.personas.get(personaID)!.timeZone,
+      (sessionID, id, text) =>
+        host.sessions
+          .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
+          .pipe(Effect.asVoid),
+    );
+    sends.onSent(follow.sent);
     const incoming = yield* intake(
       messages,
       (handle) => directory.byHandle(handle),
@@ -129,7 +140,9 @@ export const startMessagingHost = (
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
       sends.reconcile,
+      follow.received,
     );
+    yield* Effect.forkScoped(follow.monitor);
     incoming.onNew((conversation) => pace.onNew(conversation.id));
     const persona = host.personas.values().next().value!;
     const api = yield* onboarding(

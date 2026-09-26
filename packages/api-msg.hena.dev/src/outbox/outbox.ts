@@ -36,6 +36,9 @@ export const outbox = (
     const sql = yield* SqlClient.SqlClient;
     const locks = yield* PartitionedSemaphore.make<number>({ permits: 1 });
     const inFlight = new Set<number>();
+    const sentListeners = new Set<(conversation: Conversation) => Effect.Effect<void, Error>>();
+    const notifySent = (conversation: Conversation) =>
+      Effect.forEach(sentListeners, (listener) => listener(conversation)).pipe(Effect.asVoid);
     const reconcile = (conversation: Conversation, row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!row.fromMe || row.handle !== conversation.handle) return false;
@@ -52,9 +55,11 @@ export const outbox = (
           .pipe(Effect.catch(() => Effect.succeed("unknown" as const)));
         if (status !== "unknown") {
           const late = inFlight.has(match.id) ? match.late : 1;
-          yield* sql`UPDATE send SET state = ${status}, guid = ${row.guid}, updated_at = ${row.createdAt},
+          const updated =
+            yield* sql`UPDATE send SET state = ${status}, guid = ${row.guid}, updated_at = ${row.createdAt},
             late = ${late}, notification_pending = CASE WHEN ${late} = 1 THEN 1 ELSE notification_pending END
-            WHERE id = ${match.id} AND state IN ('recorded', 'uncertain')`;
+            WHERE id = ${match.id} AND state IN ('recorded', 'uncertain') RETURNING id`;
+          if (updated.length && status !== "failed") yield* notifySent(conversation);
         }
         return true;
       });
@@ -133,6 +138,9 @@ export const outbox = (
       });
     return {
       reconcile,
+      onSent: (listener: (conversation: Conversation) => Effect.Effect<void, Error>) => {
+        sentListeners.add(listener);
+      },
       results: (sessionID: string) =>
         sql<SendRow>`SELECT send.id, send.state, send.content, send.guid,
           send.recorded_at AS recordedAt, send.updated_at AS updatedAt, send.late,
@@ -187,6 +195,7 @@ export const outbox = (
             yield* sql`UPDATE send SET state = ${state}, updated_at = ${yield* Clock.currentTimeMillis}
             WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
             if (Result.isFailure(outcome)) return notReacted("send in doubt");
+            yield* notifySent(conversation);
             return `reacted ${tapback}`;
           }),
         ),

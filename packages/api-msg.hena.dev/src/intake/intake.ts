@@ -38,6 +38,8 @@ export const intake = (
   ) => Effect.Effect<void, Error>,
   timeZone: (personaID: string) => string,
   reconcile?: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,
+  received: (conversation: Conversation, date: number) => Effect.Effect<void, Error> = () =>
+    Effect.void,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -72,6 +74,8 @@ export const intake = (
         const matched = yield* reconcile(conversation, row);
         const status = yield* messages.sendStatus(row.guid);
         if (matched || status === "failed") return;
+        if (status === "sent" || status === "delivered")
+          yield* received(conversation, row.createdAt);
         const seen =
           yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
         if (seen.length) return;
@@ -124,7 +128,7 @@ export const intake = (
       });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
-        if (!replaced && row.id <= last.rowID) return;
+        if (!replaced && row.id <= last.rowID && row.createdAt <= last.date) return;
         if (replaced && row.createdAt < current.date) return;
         if (row.tapback && !row.tapback.added) {
           last = { rowID: row.id, date: row.createdAt };
@@ -166,6 +170,7 @@ export const intake = (
                 ON CONFLICT(conversation_id) DO UPDATE SET date = excluded.date`;
             yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
+            yield* received(conversation, row.createdAt);
             yield* save({ rowID: row.id, date: row.createdAt });
           }).pipe(sql.withTransaction);
           last = { rowID: row.id, date: row.createdAt };
