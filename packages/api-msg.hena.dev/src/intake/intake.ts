@@ -71,7 +71,7 @@ export const intake = (
       });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
-        if (!replaced && row.id <= last.rowID) return;
+        if (!replaced && row.id <= last.rowID && row.createdAt <= last.date) return;
         if (replaced && row.createdAt < current.date) return;
         if (row.fromMe) {
           yield* outgoing(row);

@@ -42,6 +42,15 @@ export const fakeMessages = (events: string[] = []) => {
             );
       }),
     lastOutgoingStatus: (handle) => Effect.sync(() => lastStatuses.get(handle)),
+    status: (guid) =>
+      Effect.sync(() => {
+        const state = sendStatuses.get(guid);
+        return {
+          state: state && state !== "unknown" ? state : "pending",
+          error: 0,
+          dateRead: null,
+        };
+      }),
     after: (rowID) => Effect.sync(() => rows.filter((row) => row.id > rowID)),
     recent: (handle, since) =>
       Effect.sync(() => rows.filter((row) => row.handle === handle && row.createdAt >= since)),

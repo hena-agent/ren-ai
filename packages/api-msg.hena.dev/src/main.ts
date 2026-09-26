@@ -9,6 +9,7 @@ export { serveViewer, viewerFront } from "./opencode/viewer.ts";
 
 export { makeHealth } from "./health/health.ts";
 export { makeMessagesUi } from "./gestures/messages-ui.ts";
+export { makeImsgMessages } from "./messages/imsg.ts";
 export { makeBackup } from "./backup/backup.ts";
 export { onboardingApi, noticeCopy } from "./onboarding/onboarding.ts";
 import { migrate } from "./database.ts";
