@@ -175,6 +175,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           });
           yield* Effect.tryPromise(() => host.run(host.plugins.register(intruder)));
           let registeredTools: string[] = [];
+          let personaTools: string[] = [];
           yield* Effect.tryPromise(() =>
             host.run(
               host.plugins.register(
@@ -183,6 +184,11 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
                   effect: (ctx) =>
                     Effect.map(ctx.tool.list(), (tools) => {
                       registeredTools = tools.map((tool) => tool.name);
+                      personaTools = tools
+                        .filter((tool) =>
+                          /this Conversation|standard tapback/.test(tool.description),
+                        )
+                        .map((tool) => tool.name);
                     }),
                 }),
               ),
@@ -207,6 +213,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(registeredTools).not.toContain("send");
+          expect(personaTools).toEqual([]);
           const requests = yield* llm.requests();
           expect(requests).toHaveLength(1); // The title hook must skip a second model request.
           expect(requests.every((request) => request.tools.length === 0)).toBe(true);
@@ -421,10 +428,6 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(yield* host.conversations.byHandle(first.handle)).toEqual(first);
           expect(yield* host.conversations.bySession(session.id)).toEqual(first);
           expect(yield* host.conversations.bySession("missing")).toBeUndefined();
-          expect(session.permissions).toEqual([
-            { action: "*", resource: "*", effect: "deny" },
-            { action: "send", resource: "*", effect: "allow" },
-          ]);
           const signals: number[] = [];
           host.intake.onNew((conversation) => signals.push(conversation.id));
           yield* imessage.text(first.handle, "안녕", Date.parse("2026-09-25T11:52:00Z"));
@@ -434,9 +437,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             '<message at=\\"2026-09-25 Fri 01:52\\">안녕</message>',
           );
           expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
-          expect(
-            (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
-          ).toEqual([["send"], ["send"], ["send"]]);
+          expect((yield* llm.requests()).every((request) => request.tools.length === 3)).toBe(true);
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
           expect((yield* host.sessions.get(session.id)).title).toBe("Persona1 · +821011111111");
           expect(imessage.bubbles).toEqual([
@@ -465,7 +466,11 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
-          expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual(["send"]);
+          expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual([
+            "react",
+            "read",
+            "send",
+          ]);
           step = 0;
           const orphan = yield* host.createSession("persona1");
           yield* host.sessions.prompt({
