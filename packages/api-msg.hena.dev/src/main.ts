@@ -17,13 +17,13 @@ import type { Conversation } from "./conversations/conversations.ts";
 import { outbox } from "./outbox/outbox.ts";
 import type { Messages } from "./messages/messages.ts";
 import type { Gestures } from "./gestures/gestures.ts";
-import { intake } from "./intake/intake.ts";
 import { onboarding } from "./onboarding/onboarding.ts";
 import { SqlClient } from "effect/unstable/sql";
 import { notReacted } from "./transcript/transcript.ts";
 import type { Tapback } from "./outbox/outbox.ts";
 import { timing } from "./timing/timing.ts";
 import { makeOperator } from "./operator/operator.ts";
+import { setupRebuilding } from "./conversations/rebuild.ts";
 export { operatorHandler, operatorApi } from "./operator/api.ts";
 export { serveOperatorSocket, operatorClient } from "./operator/socket.ts";
 export { runOperatorCli } from "./operator/cli.ts";
@@ -114,14 +114,11 @@ export const startMessagingHost = (
           ),
       settledSends: (sessionID) => sends.results(sessionID),
     });
-    const incoming = yield* intake(
+    const { incoming, recovery } = yield* setupRebuilding(
+      directory,
+      host,
       messages,
-      (handle) => directory.byHandle(handle),
-      (sessionID, id, text) =>
-        host.sessions
-          .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
-          .pipe(Effect.asVoid),
-      (personaID) => host.personas.get(personaID)!.timeZone,
+      onboardingConfig.notice,
       sends.reconcile,
     );
     incoming.onNew((conversation) => pace.onNew(conversation.id));
@@ -146,10 +143,13 @@ export const startMessagingHost = (
     const { handler: onboardingWeb, dispose: disposeOnboarding } = HttpRouter.toWebHandler(
       api.routes.pipe(Layer.provide(FetchHttpClient.layer)),
     );
-    const operator = yield* makeOperator(directory, (sessionID) =>
-      host.sessions
-        .remove(Session.ID.make(sessionID))
-        .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
+    const operator = yield* makeOperator(
+      directory,
+      (sessionID) =>
+        host.sessions
+          .remove(Session.ID.make(sessionID))
+          .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
+      (handle) => recovery.rebuild(handle, true),
     );
     return {
       ...host,

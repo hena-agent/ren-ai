@@ -131,6 +131,7 @@ test("removal of a pending Notice also deletes its User without a session", asyn
           removed.push(sessionID);
         }),
       );
+      expect(yield* operator.rebuild(input.handle)).toBe("not_found");
       expect(yield* operator.remove(input.handle)).toBe("removed");
       expect(removed).toEqual([]);
       expect(yield* sql`SELECT * FROM user`).toEqual([]);
@@ -191,8 +192,33 @@ test("the operator HTTP API documents its typed request, result and error contra
   expect(operatorApi.identifier).toBe("operator");
   expect(spec.paths).toHaveProperty("/remove");
   expect(spec.paths).toHaveProperty("/block");
+  expect(spec.paths).toHaveProperty("/rebuild");
+  expect(JSON.stringify(spec.paths["/remove"])).toContain('"required":["result"]');
+  const rebuild = JSON.stringify(spec.paths["/rebuild"]);
+  expect(rebuild).toContain('"required":["result"]');
+  expect(rebuild).toContain('"present"');
   for (const field of ["handle", "reason", "result", "blocked"]) {
     expect(contract).toContain(`"required":["${field}"]`);
+  }
+});
+
+test("the rebuild route handles an unavailable operation", async () => {
+  const api = operatorHandler({
+    block: () => Effect.void,
+    remove: () => Effect.succeed("not_found"),
+  });
+  try {
+    const answer = await api.handler(
+      new Request("http://operator/rebuild", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ handle: input.handle }),
+      }),
+    );
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual({ result: "not_found" });
+  } finally {
+    await api.dispose();
   }
 });
 
@@ -208,14 +234,20 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
           yield* directory.create(input);
           const removed: string[] = [];
           let attempts = 0;
-          const operations = yield* makeOperator(directory, (sessionID) =>
-            Effect.gen(function* () {
-              attempts++;
-              if (attempts === 1)
-                return yield* Effect.fail(new Error("OpenCode temporarily unavailable"));
-              removed.push(sessionID);
-              return undefined;
-            }),
+          const operations = yield* makeOperator(
+            directory,
+            (sessionID) =>
+              Effect.gen(function* () {
+                attempts++;
+                if (attempts === 1)
+                  return yield* Effect.fail(new Error("OpenCode temporarily unavailable"));
+                removed.push(sessionID);
+                return undefined;
+              }),
+            (handle) =>
+              Effect.succeed(
+                handle === input.handle ? ("rebuilt" as const) : ("not_found" as const),
+              ),
           );
           const { handler, dispose } = operatorHandler(operations);
           yield* Effect.addFinalizer(() => Effect.promise(dispose));
@@ -236,6 +268,12 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
             responseMode: "decoded-and-response",
           });
           expect(answer).toEqual({ blocked: true });
+          expect(yield* runOperatorCli(["rebuild", "USER@EXAMPLE.COM"], path)).toBe(
+            "Rebuilt USER@EXAMPLE.COM",
+          );
+          expect(yield* runOperatorCli(["rebuild", "other@example.com"], path)).toBe(
+            "No User for other@example.com",
+          );
           expect(wire.headers["x-operator"]).toBe("local-only");
           expect(yield* directory.byHandle(input.handle)).toBeUndefined();
           expect(yield* runOperatorCli(["remove", "USER@EXAMPLE.COM"], path)).toBe(
@@ -254,7 +292,7 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
             ["remove", input.handle, "extra"],
           ]) {
             expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
-              new Error("Usage: operator remove|block HANDLE"),
+              new Error("Usage: operator remove|block|rebuild HANDLE"),
             );
           }
           expect(yield* runOperatorCli(["block", "other@example.com"], path)).toBe(
@@ -277,6 +315,20 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
                 failedCalls++;
                 return yield* Effect.fail(new Error("OpenCode offline"));
               }),
+            rebuild: () => Effect.fail(new Error("rebuild offline")),
+          });
+          const rebuildFailure = yield* Effect.promise(() =>
+            failed.handler(
+              new Request("http://operator/rebuild", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ handle: input.handle }),
+              }),
+            ),
+          );
+          expect(rebuildFailure.status).toBe(503);
+          expect(yield* Effect.promise(() => rebuildFailure.json())).toEqual({
+            reason: "Error: rebuild offline",
           });
           const failedResponse = yield* Effect.promise(() =>
             failed.handler(

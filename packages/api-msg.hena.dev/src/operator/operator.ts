@@ -10,11 +10,16 @@ interface PendingRemoval {
 export const makeOperator = (
   directory: Pick<Effect.Success<typeof conversations>, "block">,
   removeSession: (sessionID: string) => Effect.Effect<void, Error>,
+  rebuildSession: (
+    handle: string,
+  ) => Effect.Effect<"rebuilt" | "not_found" | "present", Error> = () =>
+    Effect.succeed("not_found"),
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     return {
       block: directory.block,
+      rebuild: rebuildSession,
       remove: (handle: string) =>
         Effect.gen(function* () {
           // The first phase is atomic: no live User can rebuild a session awaiting removal.
