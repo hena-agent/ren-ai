@@ -1,7 +1,10 @@
-import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
+import type { OnboardingClient } from "../onboarding-client.ts";
 import "../styles.css";
 
-export const Route = createRootRoute({ component: Root });
+export const Route = createRootRouteWithContext<{ onboarding: OnboardingClient }>()({
+  component: Root,
+});
 
 function Root() {
   return (

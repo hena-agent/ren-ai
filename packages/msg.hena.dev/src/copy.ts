@@ -3,7 +3,7 @@ import ko from "./locales/ko.json";
 export type Copy = {
   market: { country: string; dialCode: string };
   privacyNoticeVersion: string;
-  home: { title: string; description: string; status: string; privacyLink: string };
+  home: { title: string; description: string; privacyLink: string };
   form: {
     handleLabel: string;
     countryLabel: string;
@@ -11,6 +11,7 @@ export type Copy = {
     invalidHandle: string;
     consent: string;
     inProgress: string;
+    waitlistLink: string;
   };
   privacy: { title: string; placeholder: string; homeLink: string };
   answers: {
