@@ -12,7 +12,7 @@ export default {
   // `" > "`. The runner still builds its per-mutant filter by joining with a single space, so every
   // test nested in a `describe` is skipped, zero tests run per mutant and everything is reported
   // Survived (score 3.33% here). The patch changes both copies of `collectTestName` to join with
-  // `" > "`. Upstream: https://github.com/stryker-mutator/stryker-js/issues/6210 — drop the patch
+  // `" > "`. Upstream: https://github.com/stryker-mutator/stryker-js/issues/6210 — drop those hunks
   // once that ships. If a version bump makes the patch stop applying, this gate fails closed: the
   // score collapses and `thresholds.break` fails the build rather than passing vacuously.
 
