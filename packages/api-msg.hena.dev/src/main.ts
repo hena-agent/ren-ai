@@ -8,6 +8,7 @@ import type { HostOptions, PersonaHostOptions } from "./opencode/host.ts";
 export { serveViewer, viewerFront } from "./opencode/viewer.ts";
 
 export { makeHealth } from "./health/health.ts";
+export { makeImsgMessages } from "./messages/imsg.ts";
 export { makeBackup } from "./backup/backup.ts";
 export { onboardingApi, noticeCopy } from "./onboarding/onboarding.ts";
 import { migrate } from "./database.ts";

@@ -20,6 +20,21 @@ const input = {
   sessionID: "session-1",
 };
 
+const admit = (
+  fake: ReturnType<typeof fakeMessages>,
+  directory: Effect.Success<typeof conversations>,
+  delivered: string[],
+) =>
+  intake(
+    fake.messages,
+    (handle) => directory.byHandle(handle),
+    (_session, _id, text) =>
+      Effect.sync(() => {
+        delivered.push(text);
+      }),
+    () => "Asia/Seoul",
+  );
+
 test("bookmark, redelivery, strangers, replacement, per-conversation gaps and first reply", async () => {
   await Effect.runPromise(
     Effect.scoped(
@@ -133,6 +148,15 @@ test("bookmark, redelivery, strangers, replacement, per-conversation gaps and fi
         expect(prompts.at(-1)?.text).toContain("newer database");
         expect(prompts.at(-2)?.text).toContain("boundary");
         expect(prompts).toHaveLength(6);
+        // The database can be replaced while following, before Intake is restarted.
+        yield* fake.replace([
+          { ...b, id: 1, guid: "before-live-reset", createdAt: baseline + 4_500_000 },
+        ]);
+        yield* fake.text(input.handle, "live replacement", baseline + 5_000_000);
+        expect(prompts.at(-1)?.text).toContain("live replacement");
+        expect(
+          (yield* sql<{ rowID: number }>`SELECT row_id AS rowID FROM bookmark`)[0]?.rowID,
+        ).toBe(2);
         yield* fake.text(input.handle, "after unsubscribe", baseline + 4_000_000);
         expect(replayed).toEqual([4, 5]);
       }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
@@ -150,15 +174,7 @@ test("restart replays only messages missed while stopped from the same SQLite fi
         yield* migrate;
         const directory = yield* conversations;
         if (create) yield* directory.create(input);
-        yield* intake(
-          fake.messages,
-          (handle) => directory.byHandle(handle),
-          (_session, _id, text) =>
-            Effect.sync(() => {
-              delivered.push(text);
-            }),
-          () => "Asia/Seoul",
-        );
+        yield* admit(fake, directory, delivered);
         if (create) yield* fake.text(input.handle, "first", 1000);
       }).pipe(Effect.provide(SqliteClient.layer({ filename: join(root, "server.sqlite") }))),
     );
@@ -174,4 +190,34 @@ test("restart replays only messages missed while stopped from the same SQLite fi
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("an active Intake accepts a newer dated row after Messages replaces its database", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* migrate;
+        const directory = yield* conversations;
+        yield* directory.create(input);
+        const fake = fakeMessages();
+        for (let id = 1; id <= 3; id++) yield* fake.text(input.handle, `old ${id}`, id * 1_000);
+        const delivered: string[] = [];
+        yield* admit(fake, directory, delivered);
+        yield* fake.replace([
+          {
+            id: 1,
+            guid: "replacement",
+            handle: input.handle,
+            createdAt: 4_000,
+            text: "old",
+            fromMe: false,
+          },
+        ]);
+        yield* fake.text(input.handle, "new after replacement", 5_000);
+        expect(delivered).toEqual([
+          '<message at="1970-01-01 Thu 09:00">new after replacement</message>',
+        ]);
+      }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+    ),
+  );
 });

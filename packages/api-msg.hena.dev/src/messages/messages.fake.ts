@@ -31,6 +31,14 @@ export const fakeMessages = (events: string[] = []) => {
                 (bubbles.some((bubble) => bubble.handle === handle) ? "sent" : "unknown"),
             );
       }),
+    status: (guid) =>
+      Effect.sync(() => ({
+        state: bubbles.some((_, index) => `fake-${index + 1}` === guid)
+          ? ("delivered" as const)
+          : ("pending" as const),
+        error: 0,
+        dateRead: null,
+      })),
     after: (rowID) => Effect.sync(() => rows.filter((row) => row.id > rowID)),
     recent: (handle, since) =>
       Effect.sync(() => rows.filter((row) => row.handle === handle && row.createdAt >= since)),
