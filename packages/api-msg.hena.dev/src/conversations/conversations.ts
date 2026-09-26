@@ -15,12 +15,25 @@ export const conversations = Effect.gen(function* () {
       sql<Conversation>`SELECT conversation.id, user.handle, conversation.persona_id AS personaID,
         conversation.session_id AS sessionID FROM conversation
         JOIN user ON user.id = conversation.user_id
-        WHERE ${sql(column)} = ${value}`,
+        WHERE ${sql(column)} = ${value}
+          AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
       (rows) => rows[0],
     );
   return {
     byHandle: (handle: string) => lookup("handle", handle),
     bySession: (sessionID: string) => lookup("session_id", sessionID),
+    block: (handle: string) =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        yield* sql`INSERT OR IGNORE INTO blocked (handle, blocked_at) VALUES (${handle}, ${now})`;
+      }),
+    active: (conversation: Conversation) =>
+      Effect.map(
+        sql`SELECT 1 FROM conversation JOIN user ON user.id = conversation.user_id
+          WHERE conversation.id = ${conversation.id} AND user.handle = ${conversation.handle}
+          AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
+        (rows) => rows.length > 0,
+      ),
     create: (input: {
       handle: string;
       locale: string;

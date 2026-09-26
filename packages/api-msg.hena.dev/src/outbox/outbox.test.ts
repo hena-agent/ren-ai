@@ -65,7 +65,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
       const events: string[] = [];
       const ui = fakeGestures(events);
       const fake = fakeMessages(events);
-      const sends = yield* outbox(fake.messages, ui.gestures);
+      const sends = yield* outbox(fake.messages, ui.gestures, directory.active);
       ui.interrupt();
       expect(yield* sends.send(conversation, "interrupted", "call-1")).toBe(
         "not sent: a new message arrived",
@@ -80,6 +80,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
           ...ui.gestures,
           typing: () => Effect.fail(new Error("UI unavailable")),
         },
+        directory.active,
       );
       expect(yield* failed.send(conversation, "in doubt", "call-2")).toBe(
         "not sent: send in doubt",
@@ -117,7 +118,7 @@ test("typing time scales with text and is capped before each recorded send", asy
       });
       const ui = fakeGestures();
       const fake = fakeMessages();
-      const sends = yield* outbox(fake.messages, ui.gestures);
+      const sends = yield* outbox(fake.messages, ui.gestures, directory.active);
       expect(yield* sends.send(conversation, "hello", "short")).toBe("sent");
       expect(yield* sends.send(conversation, "x".repeat(100), "long")).toBe("sent");
       expect(ui.typing[0]?.durationMillis).toBeGreaterThanOrEqual(2250);

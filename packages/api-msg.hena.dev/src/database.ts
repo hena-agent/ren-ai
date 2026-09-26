@@ -52,6 +52,14 @@ export const migrate = Effect.gen(function* () {
         guid TEXT NOT NULL,
         PRIMARY KEY (session_id, guid)
       )`,
+      "006_blocked": sql`CREATE TABLE blocked (
+        handle TEXT PRIMARY KEY,
+        blocked_at INTEGER NOT NULL
+      )`,
+      "007_removal": sql`CREATE TABLE removal (
+        handle TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL
+      )`,
     }),
   });
 });

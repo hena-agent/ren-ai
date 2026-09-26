@@ -10,12 +10,17 @@ interface SendRow {
   readonly state: string;
 }
 
-export const outbox = (messages: Messages, gestures: Gestures) =>
+export const outbox = (
+  messages: Messages,
+  gestures: Gestures,
+  active: (conversation: Conversation) => Effect.Effect<boolean, Error>,
+) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     return {
       send: (conversation: Conversation, text: string, callID: string) =>
         Effect.gen(function* () {
+          if (!(yield* active(conversation))) return notSent("this Conversation is unavailable");
           const existing =
             yield* sql<SendRow>`SELECT id, state FROM send WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
           if (existing.length) return notSent("this call was already recorded");
@@ -29,6 +34,7 @@ export const outbox = (messages: Messages, gestures: Gestures) =>
             .typing(conversation.handle, duration)
             .pipe(Effect.catch(() => Effect.succeed(true)));
           if (!ready) return notSent("a new message arrived");
+          if (!(yield* active(conversation))) return notSent("this Conversation is unavailable");
           const now = yield* Clock.currentTimeMillis;
           yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
             VALUES (${conversation.handle}, ${conversation.id}, 'text', ${text}, ${callID}, 'recorded', ${now}, ${now})`;

@@ -14,6 +14,10 @@ import type { Gestures } from "./gestures/gestures.ts";
 import { intake } from "./intake/intake.ts";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
+import { makeOperator } from "./operator/operator.ts";
+export { operatorHandler, operatorApi } from "./operator/api.ts";
+export { serveOperatorSocket, operatorClient } from "./operator/socket.ts";
+export { runOperatorCli } from "./operator/cli.ts";
 
 export const startPersonaHost = (root: string, options: Omit<HostOptions, "personas">) =>
   Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
@@ -29,7 +33,7 @@ export const startMessagingHost = (
   Effect.gen(function* () {
     yield* migrate;
     const directory = yield* conversations;
-    const sends = yield* outbox(messages, gestures);
+    const sends = yield* outbox(messages, gestures, directory.active);
     const host = yield* startPersonaHost(root, {
       ...options,
       handleForSession: (sessionID) =>
@@ -53,7 +57,12 @@ export const startMessagingHost = (
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
     );
-    return { ...host, conversations: directory, intake: incoming };
+    const operator = yield* makeOperator(directory, (sessionID) =>
+      host.sessions
+        .remove(Session.ID.make(sessionID))
+        .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
+    );
+    return { ...host, conversations: directory, intake: incoming, operator };
   });
 
 /** Production opens the server's own file, never OpenCode's database. */
