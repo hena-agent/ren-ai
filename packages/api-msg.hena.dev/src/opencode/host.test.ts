@@ -289,7 +289,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
                 }),
             },
             ui.gestures,
-            { turnstileSecret: "test-secret", notice: noticeCopy },
+            { turnstileSecret: "test-secret", notice: noticeCopy, noticeVersion: "v1" },
             silentAlerts,
           );
           let toolDescription = "";

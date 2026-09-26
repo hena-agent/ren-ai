@@ -35,9 +35,9 @@ export const followUps = (
             next_wake_at = excluded.next_wake_at, unanswered = 0, wake_pending = 0, followed_up = 0`;
         yield* signal;
       });
-    const sent = (conversation: Conversation) =>
+    const sent = (conversation: Conversation, at?: number) =>
       Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis;
+        const now = at ?? (yield* Clock.currentTimeMillis);
         const [row] = yield* sql<{ wakePending: number; followedUp: number; unanswered: number }>`
           SELECT wake_pending AS wakePending, followed_up AS followedUp, unanswered
           FROM follow_up WHERE conversation_id = ${conversation.id}`;

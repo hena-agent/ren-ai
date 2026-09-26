@@ -134,6 +134,7 @@ test("a deleted session heals on the next message and an operator rebuild replac
           noticeCopy,
           () => Effect.succeed(false),
           () => Effect.void,
+          () => Effect.void,
         );
         expect(restarted.recovery).toBeDefined();
         const resumed = (yield* host.conversations.byHandle("restore@example.com"))!;

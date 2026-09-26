@@ -14,6 +14,7 @@ export const setupRebuilding = (
   notice: Readonly<Record<"ko", string>>,
   reconcile: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,
   received: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
+  sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
 ) =>
   Effect.gen(function* () {
     let restore: (handle: string) => Effect.Effect<void, Error>;
@@ -34,6 +35,7 @@ export const setupRebuilding = (
       received,
       (handle) => restore(handle),
       false,
+      sent,
     );
     const recovery = yield* rebuilder(
       directory,

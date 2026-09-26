@@ -11,5 +11,6 @@ Each message from the user reaches the persona as its own prompt in English tags
 ## Consequences
 
 - The system prompt says nothing about the user, so it's the same for every conversation with a persona.
+- Only a send in doubt may change stored tool history once its outcome settles. That rare change resets the prompt cache from that point onward; ordinary requests still change only the final phone line.
 - Stored prompts keep their format for the session's life. Changing the format later means rebuilding sessions from the record, or a memory written in two formats.
 - The persona supplies its time zone, the line that opens a conversation, and the instructions for its memory summary.

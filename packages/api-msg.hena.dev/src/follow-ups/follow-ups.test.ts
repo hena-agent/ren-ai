@@ -232,14 +232,19 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
           () => "Asia/Seoul",
           sends.reconcile,
           follow.received,
+          undefined,
+          true,
+          follow.sent,
         );
         const at = yield* Clock.currentTimeMillis;
         const first = yield* fake.text(conversation.handle, "hi", at);
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(at);
+        yield* sql`UPDATE follow_up SET unanswered = 1 WHERE conversation_id = ${conversation.id}`;
         yield* TestClock.adjust("1 hour");
         const manualAt = yield* Clock.currentTimeMillis;
         yield* fake.outgoing(conversation.handle, "by hand", manualAt);
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(manualAt);
+        expect((yield* state(sql, conversation.id))?.unanswered).toBe(1);
         yield* TestClock.adjust("1 hour");
         yield* fake.outgoing(
           conversation.handle,

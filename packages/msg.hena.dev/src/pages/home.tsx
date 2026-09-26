@@ -15,7 +15,7 @@ export function Home({ onboarding }: { onboarding: OnboardingClient }) {
 
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || !handle || !consent || !token) return;
+    if (copy.privacyNoticeVersion === "pending" || pending || !handle || !consent || !token) return;
     setPending(true);
     setAnswer(undefined);
     try {
@@ -41,51 +41,55 @@ export function Home({ onboarding }: { onboarding: OnboardingClient }) {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 px-6 py-12 text-slate-900">
       <h1 className="text-4xl font-bold tracking-tight">{copy.home.title}</h1>
       <p className="text-lg leading-relaxed">{copy.home.description}</p>
-      <form className="flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
-        <label className="flex flex-col gap-2">
-          {copy.form.countryLabel}
-          <select defaultValue={copy.market.country}>
-            <option value={copy.market.country}>
-              {copy.market.country} ({copy.market.dialCode})
-            </option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-2">
-          {copy.form.handleLabel}
-          <input
-            className="rounded border p-2"
-            autoComplete="username"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            aria-invalid={invalid}
-            aria-describedby={invalid ? "handle-error" : undefined}
-          />
-        </label>
-        {invalid && (
-          <p id="handle-error" role="alert">
-            {copy.form.invalidHandle}
-          </p>
-        )}
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(event) => setConsent(event.target.checked)}
-          />
-          {copy.form.consent}
-        </label>
-        <a className="w-fit underline underline-offset-4" href="/privacy">
-          {copy.home.privacyLink}
-        </a>
-        <Turnstile onToken={setToken} />
-        <button
-          className="rounded bg-slate-900 p-3 text-white disabled:opacity-50"
-          disabled={pending || !handle || !consent || !token}
-          type="submit"
-        >
-          {copy.form.submit}
-        </button>
-      </form>
+      {copy.privacyNoticeVersion !== "pending" ? (
+        <form className="flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
+          <label className="flex flex-col gap-2">
+            {copy.form.countryLabel}
+            <select defaultValue={copy.market.country}>
+              <option value={copy.market.country}>
+                {copy.market.country} ({copy.market.dialCode})
+              </option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-2">
+            {copy.form.handleLabel}
+            <input
+              className="rounded border p-2"
+              autoComplete="username"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              aria-invalid={invalid}
+              aria-describedby={invalid ? "handle-error" : undefined}
+            />
+          </label>
+          {invalid && (
+            <p id="handle-error" role="alert">
+              {copy.form.invalidHandle}
+            </p>
+          )}
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(event) => setConsent(event.target.checked)}
+            />
+            {copy.form.consent}
+          </label>
+          <a className="w-fit underline underline-offset-4" href="/privacy">
+            {copy.home.privacyLink}
+          </a>
+          <Turnstile onToken={setToken} />
+          <button
+            className="rounded bg-slate-900 p-3 text-white disabled:opacity-50"
+            disabled={pending || !handle || !consent || !token}
+            type="submit"
+          >
+            {copy.form.submit}
+          </button>
+        </form>
+      ) : (
+        <p>{copy.privacy.placeholder}</p>
+      )}
       {pending && <output>{copy.form.inProgress}</output>}
       {answer && <output>{copy.answers[answer]}</output>}
       {showWaitlist && <Waitlist onboarding={onboarding} answer={answer} />}

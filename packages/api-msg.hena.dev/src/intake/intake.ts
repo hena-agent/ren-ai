@@ -42,6 +42,8 @@ export const intake = (
     Effect.void,
   ensure?: (handle: string) => Effect.Effect<void, Error>,
   startImmediately = true,
+  sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error> = () =>
+    Effect.void,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -76,8 +78,7 @@ export const intake = (
         const matched = yield* reconcile(conversation, row);
         const status = yield* messages.sendStatus(row.guid);
         if (matched || status === "failed") return;
-        if (status === "sent" || status === "delivered")
-          yield* received(conversation, row.createdAt);
+        if (status === "sent" || status === "delivered") yield* sent(conversation, row.createdAt);
         const seen =
           yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
         if (seen.length) return;
@@ -160,7 +161,9 @@ export const intake = (
           .toSorted((a, b) => a.id - b.id);
         let previous: number | null = null;
         let firstReply: number | null = null;
-        let latest = followUp?.lastSentAt ?? 0;
+        const lastSentAt = followUp?.lastSentAt ?? 0;
+        let latestReply = lastSentAt;
+        let latestSend = lastSentAt;
         for (const row of rows) {
           if (
             (yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID ||
@@ -172,23 +175,21 @@ export const intake = (
               AND guid = ${row.guid}`;
           if (row.fromMe) {
             if (!(yield* replayOutgoing(conversation, row, seen.length > 0))) continue;
+            latestSend = Math.max(latestSend, row.createdAt);
           } else {
             firstReply ??= row.createdAt;
-            if (seen.length) {
-              previous = row.createdAt;
-              latest = Math.max(latest, row.createdAt);
-              continue;
+            if (!seen.length) {
+              const rendered = yield* content(row, previous, timeZone(conversation.personaID));
+              yield* prompt(
+                conversation.sessionID,
+                promptID(conversation.sessionID, row.guid),
+                rendered.text,
+                rendered.files,
+              );
             }
-            const rendered = yield* content(row, previous, timeZone(conversation.personaID));
-            yield* prompt(
-              conversation.sessionID,
-              promptID(conversation.sessionID, row.guid),
-              rendered.text,
-              rendered.files,
-            );
             previous = row.createdAt;
+            latestReply = Math.max(latestReply, row.createdAt);
           }
-          latest = Math.max(latest, row.createdAt);
           yield* sql`INSERT OR IGNORE INTO intake_seen (session_id, guid)
             VALUES (${conversation.sessionID}, ${row.guid})`;
         }
@@ -198,7 +199,8 @@ export const intake = (
             ON CONFLICT(conversation_id) DO UPDATE SET date = excluded.date`;
           yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${firstReply}) WHERE handle = ${conversation.handle}`;
         }
-        if (latest > (followUp?.lastSentAt ?? 0)) yield* received(conversation, latest);
+        if (latestReply > lastSentAt) yield* received(conversation, latestReply);
+        if (latestSend > Math.max(latestReply, lastSentAt)) yield* sent(conversation, latestSend);
       });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {

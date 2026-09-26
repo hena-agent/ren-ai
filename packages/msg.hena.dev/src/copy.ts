@@ -1,4 +1,4 @@
-import ko from "./locales/ko.json";
+import { locales } from "@repo/onboarding";
 
 export type Copy = {
   market: { country: string; dialCode: string };
@@ -32,4 +32,4 @@ export type Copy = {
   notice: string;
 };
 
-export const copy: Copy = ko;
+export const copy: Copy = locales.ko;

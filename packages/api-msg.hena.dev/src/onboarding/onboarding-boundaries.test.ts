@@ -28,7 +28,7 @@ const database = SqliteClient.layer({ filename: ":memory:" });
 const runWithDatabase = <A, E>(
   effect: Effect.Effect<A, E, SqlClient.SqlClient | HttpClient.HttpClient>,
 ) => Effect.runPromise(Effect.provide(Effect.provide(effect, dependencies), database));
-const setup = (deadline = 30) =>
+const setup = (deadline = 30, noticeVersion = "v1") =>
   Effect.gen(function* () {
     yield* migrate;
     const fake = fakeMessages();
@@ -47,16 +47,17 @@ const setup = (deadline = 30) =>
       new Map([[persona.id, persona]]),
     );
     let sessions = 0;
-    const api = yield* onboarding(
-      fake.messages,
-      noticeCopy,
+    const api = yield* onboarding({
+      messages: fake.messages,
+      notice: noticeCopy,
       persona,
-      () => Effect.sync(() => ({ id: `session-${++sessions}` })),
-      () => Effect.void,
-      (handle, text) => sends.notice(handle, text),
-      "secret",
-      deadline,
-    );
+      createSession: () => Effect.sync(() => ({ id: `session-${++sessions}` })),
+      prompt: () => Effect.void,
+      sendNotice: (handle, text) => sends.notice(handle, text),
+      turnstileSecret: "secret",
+      deadlineMillis: deadline,
+      noticeVersion,
+    });
     return { sql, fake, api };
   });
 
@@ -207,6 +208,37 @@ test("requests without a CF IP share the same in-memory limit", async () => {
       } finally {
         yield* Effect.promise(dispose);
       }
+    }),
+  );
+});
+
+test("an unapproved or pending notice cannot be consented to or sent", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { api, fake, sql } = yield* setup(30);
+      for (const privacyNoticeVersion of ["pending", "other"]) {
+        expect(yield* api.submit({ ...input, privacyNoticeVersion }).pipe(Effect.flip)).toBe(
+          "Privacy notice unavailable",
+        );
+      }
+      expect(fake.bubbles).toEqual([]);
+      expect(yield* sql`SELECT id FROM user`).toEqual([]);
+      const pending = yield* setup(30, "pending");
+      expect(
+        yield* pending.api.submit({ ...input, privacyNoticeVersion: "pending" }).pipe(Effect.flip),
+      ).toBe("Privacy notice unavailable");
+      expect(pending.fake.bubbles).toEqual([]);
+    }),
+  );
+});
+
+test("an ignored User insert never sends a Notice", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, api } = yield* setup();
+      yield* sql`CREATE TRIGGER ignore_admission BEFORE INSERT ON user BEGIN SELECT RAISE(IGNORE); END`;
+      expect(yield* api.submit(input)).toBe("unknown");
+      expect(yield* sql`SELECT id FROM send`).toEqual([]);
     }),
   );
 });

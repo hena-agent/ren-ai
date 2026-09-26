@@ -35,6 +35,7 @@ interface OnboardingConfig {
   readonly turnstileSecret: string;
   readonly notice: Readonly<Record<"ko", string>>;
   readonly userCap?: number;
+  readonly noticeVersion?: string;
 }
 
 export const startPersonaHost = (root: string, options: PersonaHostOptions) =>
@@ -136,16 +137,17 @@ export const startMessagingHost = (
       onboardingConfig.notice,
       sends.reconcile,
       follow.received,
+      follow.sent,
     );
     yield* Effect.forkScoped(follow.monitor);
     incoming.onNew((conversation) => pace.onNew(conversation.id));
     const persona = host.personas.values().next().value!;
-    const api = yield* onboarding(
+    const api = yield* onboarding({
       messages,
-      onboardingConfig.notice,
+      notice: onboardingConfig.notice,
       persona,
-      (id) => host.createSession(id),
-      (sessionID, text) =>
+      createSession: (id) => host.createSession(id),
+      prompt: (sessionID, text) =>
         host.sessions
           .prompt({
             sessionID: Session.ID.make(sessionID),
@@ -153,11 +155,11 @@ export const startMessagingHost = (
             text,
           })
           .pipe(Effect.asVoid),
-      (handle, text) => sends.notice(handle, text),
-      onboardingConfig.turnstileSecret,
-      10_000,
-      onboardingConfig.userCap,
-    );
+      sendNotice: (handle, text) => sends.notice(handle, text),
+      turnstileSecret: onboardingConfig.turnstileSecret,
+      userCap: onboardingConfig.userCap,
+      noticeVersion: onboardingConfig.noticeVersion,
+    });
     yield* api.resume;
     const { handler: onboardingWeb, dispose: disposeOnboarding } = HttpRouter.toWebHandler(
       api.routes.pipe(Layer.provide(FetchHttpClient.layer)),

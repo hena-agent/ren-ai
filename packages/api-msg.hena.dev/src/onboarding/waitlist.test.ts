@@ -16,10 +16,10 @@ test("the site's Waitlist form stores its email, locale, answer and time over HT
     Effect.gen(function* () {
       yield* migrate;
       const sql = yield* SqlClient.SqlClient;
-      const api = yield* onboarding(
-        fakeMessages().messages,
-        noticeCopy,
-        {
+      const api = yield* onboarding({
+        messages: fakeMessages().messages,
+        notice: noticeCopy,
+        persona: {
           id: "persona1",
           timeZone: "Asia/Seoul",
           language: "ko",
@@ -27,11 +27,21 @@ test("the site's Waitlist form stores its email, locale, answer and time over HT
           memory: "remember",
           prompt: "persona",
         },
-        () => Effect.succeed({ id: "session" }),
-        () => Effect.void,
-        () => Effect.void,
-        "secret",
-      );
+        createSession: () => Effect.succeed({ id: "session" }),
+        prompt: () => Effect.void,
+        sendNotice: () => Effect.void,
+        turnstileSecret: "secret",
+      });
+      expect(
+        yield* api
+          .submit({
+            handle: "person@example.com",
+            locale: "ko",
+            privacyNoticeVersion: "pending",
+            turnstileToken: "human",
+          })
+          .pipe(Effect.flip),
+      ).toBe("Privacy notice unavailable");
       const { handler, dispose } = HttpRouter.toWebHandler(
         api.routes.pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, client))),
       );

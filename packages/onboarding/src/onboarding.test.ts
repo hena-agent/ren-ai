@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
+import { locales, notice } from "./notice.ts";
 import {
   Handle,
   OnboardingAnswer,
@@ -113,5 +114,11 @@ describe("Onboarding contract", () => {
     { email: "user@example.com", locale: "ko", answer: "sent" },
   ])("rejects invalid Waitlist request %#", (invalid) => {
     expect(() => Schema.decodeUnknownSync(WaitlistRequest)(invalid)).toThrow("Expected");
+  });
+});
+it("shares the site's locale copy and the Notice's version and text", () => {
+  expect(notice.ko).toEqual({
+    version: locales.ko.privacyNoticeVersion,
+    text: locales.ko.notice,
   });
 });

@@ -13,7 +13,7 @@ export type Tapback = (typeof tapbacks)[number];
 interface SendRow {
   readonly id: number;
   readonly kind: "text" | "tapback";
-  readonly state: string;
+  readonly state: "recorded" | "uncertain" | "sent" | "delivered" | "failed" | "not_sent";
   readonly content: string;
   readonly guid: string | null;
   readonly recordedAt: number;

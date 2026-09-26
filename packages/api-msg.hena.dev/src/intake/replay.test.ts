@@ -33,9 +33,10 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         const failed = yield* fake.outgoing(first.handle, "failed bubble", at + 30, "failed");
         const sent = yield* fake.outgoing(outgoing.handle, "already hers", at + 10, "sent");
         const older = yield* fake.text(seen.handle, "already admitted", at + 15);
+        const between = yield* fake.outgoing(seen.handle, "earlier than his reply", at + 17);
         const newer = yield* fake.text(seen.handle, "also admitted", at + 20);
         yield* fake.text(race.handle, "before the block", at + 25);
-        for (const row of [sent, older, newer]) {
+        for (const row of [sent, older, between, newer]) {
           const sessionID = row.handle === outgoing.handle ? outgoing.sessionID : seen.sessionID;
           yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${sessionID}, ${row.guid})`;
         }
@@ -44,6 +45,7 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
             VALUES (${conversation.id}, ${at + 5})`;
         }
         const received: { id: number; date: number }[] = [];
+        const sentByHer: { id: number; date: number }[] = [];
         const prompts: string[] = [];
         let historyReads = 0;
         const incoming = yield* intake(
@@ -72,14 +74,21 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
             }),
           undefined,
           false,
+          (conversation, date) =>
+            Effect.sync(() => {
+              sentByHer.push({ id: conversation.id, date });
+            }),
         );
         for (const conversation of [first, outgoing, seen, race])
           yield* incoming.replay(conversation);
         expect(received).toEqual([
           { id: first.id, date: reply.createdAt },
-          { id: outgoing.id, date: sent.createdAt },
           { id: seen.id, date: newer.createdAt },
         ]);
+        expect(sentByHer).toEqual([{ id: outgoing.id, date: sent.createdAt }]);
+        yield* sql`UPDATE follow_up SET last_sent_at = ${sent.createdAt} WHERE conversation_id = ${outgoing.id}`;
+        yield* incoming.replay(outgoing);
+        expect(sentByHer).toEqual([{ id: outgoing.id, date: sent.createdAt }]);
         expect(prompts).toHaveLength(2);
         expect(prompts[0]).toContain("his first reply");
         expect(prompts[1]).toContain("before the block");

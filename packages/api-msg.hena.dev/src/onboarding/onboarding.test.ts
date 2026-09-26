@@ -47,7 +47,7 @@ const runWithDatabase = <A, E>(
     ),
   );
 
-const setup = (failSend = false, deadlineMillis = 30, userCap = 10) =>
+const setup = (failSend = false, deadlineMillis = 30, userCap = 10, noticeVersion = "v1") =>
   Effect.gen(function* () {
     yield* migrate;
     const sql = yield* SqlClient.SqlClient;
@@ -61,10 +61,10 @@ const setup = (failSend = false, deadlineMillis = 30, userCap = 10) =>
     );
     const prompts: string[] = [];
     const sessions: string[] = [];
-    const api = yield* onboarding(
-      fake.messages,
-      noticeCopy,
-      {
+    const api = yield* onboarding({
+      messages: fake.messages,
+      notice: noticeCopy,
+      persona: {
         id: "persona1",
         timeZone: "Asia/Seoul",
         language: "ko",
@@ -72,22 +72,23 @@ const setup = (failSend = false, deadlineMillis = 30, userCap = 10) =>
         memory: "Remember",
         prompt: "Persona1",
       },
-      () =>
+      createSession: () =>
         Effect.sync(() => {
           const id = `session-${sessions.length + 1}`;
           sessions.push(id);
           return { id };
         }),
-      (_, text) =>
+      prompt: (_, text) =>
         Effect.sync(() => {
           prompts.push(text);
         }),
-      (handle, text) =>
+      sendNotice: (handle, text) =>
         failSend ? Effect.fail(new Error("record failed")) : sends.notice(handle, text),
-      "test-secret",
+      turnstileSecret: "test-secret",
       deadlineMillis,
       userCap,
-    );
+      noticeVersion,
+    });
     return { sql, fake, api, prompts, sessions };
   });
 
@@ -162,6 +163,22 @@ test("an uncertain Notice answers unknown; after it settles the Conversation sta
       fake.statuses.set(input.handle, "sent");
       yield* Effect.sleep("300 millis");
       expect(prompts).toHaveLength(1);
+      expect(yield* sql`SELECT id FROM conversation`).toHaveLength(1);
+    }),
+  );
+});
+
+test("a stranded pending User can retry a Notice after seven days", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup(false, 2000);
+      fake.statuses.set(input.handle, "unknown");
+      expect(yield* api.submit(input)).toBe("unknown");
+      const now = yield* Clock.currentTimeMillis;
+      yield* sql`UPDATE send SET recorded_at = ${now - 7 * 86_400_000}`;
+      fake.statuses.set(input.handle, "sent");
+      expect(yield* api.submit(input)).toBe("sent");
+      expect(fake.bubbles).toHaveLength(2);
       expect(yield* sql`SELECT id FROM conversation`).toHaveLength(1);
     }),
   );
@@ -455,7 +472,7 @@ test("30 Notice attempts per hour block new and existing Handles, including conc
   );
 });
 
-test("the User cap counts replies, not Notices, and applies before a Handle lookup", async () => {
+test("the User cap counts replies, not Notices, and applies only to new Handles", async () => {
   await runWithDatabase(
     Effect.gen(function* () {
       const { sql, fake, api } = yield* setup(false, 2000, 1);
@@ -466,7 +483,9 @@ test("the User cap counts replies, not Notices, and applies before a Handle look
         { replied_at: null },
       ]);
       yield* sql`UPDATE user SET replied_at = ${yield* Clock.currentTimeMillis} WHERE handle = ${input.handle}`;
-      expect(yield* api.submit(input, "c")).toBe("full");
+      expect(yield* api.submit(input, "c")).toBe("sent");
+      yield* sql`UPDATE send SET recorded_at = 1 WHERE handle = ${input.handle}`;
+      expect(yield* api.submit(input, "old-notice")).toBe("sent");
       expect(yield* api.submit({ ...input, handle: "new@example.com" }, "d")).toBe("full");
       expect(fake.bubbles).toHaveLength(2);
     }),

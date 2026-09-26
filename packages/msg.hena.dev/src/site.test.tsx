@@ -24,6 +24,7 @@ function scriptFrom(node: string | Node | undefined): HTMLScriptElement {
 }
 
 beforeEach(() => {
+  copy.privacyNoticeVersion = "v1";
   submit.mockReset();
   joinWaitlist.mockReset();
   remove.mockReset();
@@ -37,9 +38,28 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  copy.privacyNoticeVersion = "pending";
   cleanup();
   delete window.turnstile;
   vi.unstubAllGlobals();
+});
+
+it("offers no onboarding form and sends nothing while the privacy notice is pending", () => {
+  copy.privacyNoticeVersion = "pending";
+  render(<Home onboarding={fake} />);
+  expect(screen.getByText(copy.privacy.placeholder)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: copy.form.submit })).toBeNull();
+  expect(screen.queryByRole("checkbox", { name: copy.form.consent })).toBeNull();
+  expect(submit).not.toHaveBeenCalled();
+});
+
+it("refuses submission if the privacy notice becomes pending after the form renders", () => {
+  render(<Home onboarding={fake} />);
+  fillForm();
+  const form = screen.getByRole("button", { name: copy.form.submit }).closest("form")!;
+  copy.privacyNoticeVersion = "pending";
+  fireEvent.submit(form);
+  expect(submit).not.toHaveBeenCalled();
 });
 
 function fillForm(input = "010-1234-5678") {
