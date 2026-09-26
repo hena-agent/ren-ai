@@ -1,4 +1,4 @@
-import { normalizeHandle } from "@repo/onboarding";
+import { normalizeHandle, normalizeWaitlistEmail } from "@repo/onboarding";
 import { useState } from "react";
 import { copy } from "../copy.ts";
 import type { OnboardingClient } from "../onboarding-client.ts";
@@ -88,7 +88,72 @@ export function Home({ onboarding }: { onboarding: OnboardingClient }) {
       </form>
       {pending && <output>{copy.form.inProgress}</output>}
       {answer && <output>{copy.answers[answer]}</output>}
-      {showWaitlist && <p>{copy.form.waitlistLink}</p>}
+      {showWaitlist && <Waitlist onboarding={onboarding} answer={answer} />}
     </main>
+  );
+}
+
+function Waitlist({
+  onboarding,
+  answer,
+}: {
+  onboarding: OnboardingClient;
+  answer: "no_imessage" | "unknown" | "full";
+}) {
+  const [input, setInput] = useState("");
+  const [pending, setPending] = useState(false);
+  const [result, setResult] = useState<"success" | "failure">();
+  const email = normalizeWaitlistEmail(input);
+  const invalid = input.length > 0 && !email;
+
+  async function submit(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending || !email) return;
+    setPending(true);
+    setResult(undefined);
+    try {
+      await onboarding.joinWaitlist({ email, locale: "ko", answer });
+      setResult("success");
+    } catch {
+      setResult("failure");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="text-2xl font-semibold">{copy.waitlist.title}</h2>
+      <p>{copy.form.waitlistLink}</p>
+      {result !== "success" && (
+        <form className="flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
+          <label className="flex flex-col gap-2">
+            {copy.waitlist.emailLabel}
+            <input
+              className="rounded border p-2"
+              type="email"
+              autoComplete="email"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              aria-invalid={invalid}
+              aria-describedby={invalid ? "waitlist-email-error" : undefined}
+            />
+          </label>
+          {invalid && (
+            <p id="waitlist-email-error" role="alert">
+              {copy.waitlist.invalidEmail}
+            </p>
+          )}
+          <button
+            className="rounded bg-slate-900 p-3 text-white disabled:opacity-50"
+            disabled={pending || !email}
+            type="submit"
+          >
+            {copy.waitlist.submit}
+          </button>
+        </form>
+      )}
+      {result && <output>{copy.waitlist[result]}</output>}
+    </section>
   );
 }

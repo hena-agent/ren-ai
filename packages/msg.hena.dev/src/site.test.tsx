@@ -12,7 +12,8 @@ import { getRouter } from "./router.tsx";
 import { Turnstile } from "./turnstile.tsx";
 
 const submit = vi.fn<OnboardingClient["submit"]>();
-const fake: OnboardingClient = { submit };
+const joinWaitlist = vi.fn<OnboardingClient["joinWaitlist"]>();
+const fake: OnboardingClient = { submit, joinWaitlist };
 type Widget = NonNullable<Window["turnstile"]>;
 let widgetOptions: Parameters<Widget["render"]>[1];
 const remove = vi.fn<Widget["remove"]>();
@@ -24,6 +25,7 @@ function scriptFrom(node: string | Node | undefined): HTMLScriptElement {
 
 beforeEach(() => {
   submit.mockReset();
+  joinWaitlist.mockReset();
   remove.mockReset();
   window.turnstile = {
     render: vi.fn<Widget["render"]>((_element, options) => {
@@ -51,6 +53,17 @@ function fillForm(input = "010-1234-5678") {
 function sendForm() {
   fillForm();
   fireEvent.click(screen.getByRole("button", { name: copy.form.submit }));
+}
+
+function expectPost(path: string, request: object) {
+  expect(fetch).toHaveBeenCalledWith(
+    `https://api-msg.hena.dev/${path}`,
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify(request),
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
 }
 
 function mountBeforeScript() {
@@ -152,6 +165,7 @@ it.each([
   fireEvent.click(screen.getByRole("button", { name: copy.form.submit }));
   expect(await screen.findByText(copy.answers[answer])).toBeTruthy();
   expect(screen.queryByText(copy.form.waitlistLink) !== null).toBe(offer);
+  expect(screen.queryByRole("textbox", { name: copy.waitlist.emailLabel }) !== null).toBe(offer);
   expect(submit).toHaveBeenCalledWith({
     handle: "+821012345678",
     locale: "ko",
@@ -159,6 +173,71 @@ it.each([
     turnstileToken: "passed",
   });
   expect(screen.getByRole("button", { name: copy.form.submit })).toHaveProperty("disabled", true);
+});
+
+it.each(["no_imessage", "unknown", "full"] as const)(
+  "submits a normalized Waitlist email after %s",
+  async (answer) => {
+    submit.mockResolvedValue(answer);
+    render(<Home onboarding={fake} />);
+    sendForm();
+    await screen.findByText(copy.answers[answer]);
+    const email = screen.getByRole("textbox", { name: copy.waitlist.emailLabel });
+    const button = screen.getByRole("button", { name: copy.waitlist.submit });
+    expect(email).toHaveProperty("value", "");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(button).toHaveProperty("disabled", true);
+    fireEvent.change(email, { target: { value: "bad" } });
+    expect(screen.getByRole("alert").textContent).toBe(copy.waitlist.invalidEmail);
+    expect(email.getAttribute("aria-describedby")).toBe("waitlist-email-error");
+    const form = button.closest("form")!;
+    const event = new Event("submit", { bubbles: true, cancelable: true });
+    fireEvent(form, event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(joinWaitlist).not.toHaveBeenCalled();
+    fireEvent.change(email, { target: { value: " Example@Email.COM " } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(email.getAttribute("aria-describedby")).toBeNull();
+    fireEvent.submit(form);
+    expect(await screen.findByText(copy.waitlist.success)).toBeTruthy();
+    expect(joinWaitlist).toHaveBeenCalledWith({
+      email: "example@email.com",
+      locale: "ko",
+      answer,
+    });
+    expect(screen.queryByRole("button", { name: copy.waitlist.submit })).toBeNull();
+  },
+);
+
+it("keeps the Waitlist form pending until it settles and lets a failed request retry", async () => {
+  submit.mockResolvedValue("full");
+  let fail: ((reason: Error) => void) | undefined;
+  joinWaitlist.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  render(<Home onboarding={fake} />);
+  sendForm();
+  await screen.findByText(copy.answers.full);
+  fireEvent.change(screen.getByRole("textbox", { name: copy.waitlist.emailLabel }), {
+    target: { value: "me@example.com" },
+  });
+  const button = screen.getByRole("button", { name: copy.waitlist.submit });
+  const form = button.closest("form")!;
+  fireEvent.submit(form);
+  expect(button).toHaveProperty("disabled", true);
+  expect(screen.queryByText(copy.waitlist.failure)).toBeNull();
+  fireEvent.submit(form);
+  expect(joinWaitlist).toHaveBeenCalledTimes(1);
+  await act(async () => fail?.(new Error("offline")));
+  expect(screen.getByText(copy.waitlist.failure)).toBeTruthy();
+  expect(button).toHaveProperty("disabled", false);
+  fireEvent.submit(form);
+  expect(screen.queryByText(copy.waitlist.failure)).toBeNull();
+  expect(await screen.findByText(copy.waitlist.success)).toBeTruthy();
+  expect(joinWaitlist).toHaveBeenCalledTimes(2);
 });
 
 it("normalizes an Apple ID email", async () => {
@@ -299,18 +378,21 @@ it("posts the shared request and validates the API answer", async () => {
     turnstileToken: "token",
   } as const;
   expect(await onboardingClient.submit(request)).toBe("sent");
-  expect(fetcher).toHaveBeenCalledWith(
-    "https://api-msg.hena.dev/onboarding",
-    expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify(request),
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
+  expectPost("onboarding", request);
   fetcher.mockResolvedValueOnce(new Response(null, { status: 503 }));
   await expect(onboardingClient.submit(request)).rejects.toThrow("Onboarding request failed");
   fetcher.mockResolvedValueOnce(new Response(JSON.stringify("unexpected")));
   await expect(onboardingClient.submit(request)).rejects.toThrow("Expected");
+});
+
+it("posts the shared Waitlist request through the API client", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", fetcher);
+  const request = { email: "me@example.com", locale: "ko", answer: "unknown" } as const;
+  await onboardingClient.joinWaitlist(request);
+  expectPost("waitlist", request);
+  fetcher.mockResolvedValueOnce(new Response(null, { status: 503 }));
+  await expect(onboardingClient.joinWaitlist(request)).rejects.toThrow("Waitlist request failed");
 });
 
 it("shows try_later for an unexpected API answer", async () => {
