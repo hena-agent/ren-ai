@@ -63,6 +63,13 @@ export const migrate = Effect.gen(function* () {
       )`,
       "009_send_reconciliation": sql`ALTER TABLE send ADD COLUMN late INTEGER NOT NULL DEFAULT 0`,
       "010_send_notice": sql`ALTER TABLE send ADD COLUMN notification_pending INTEGER NOT NULL DEFAULT 0`,
+      "011_waitlist": sql`CREATE TABLE waitlist (
+        id INTEGER PRIMARY KEY,
+        email TEXT NOT NULL,
+        locale TEXT NOT NULL,
+        answer TEXT NOT NULL CHECK (answer IN ('no_imessage', 'unknown', 'full')),
+        created_at INTEGER NOT NULL
+      )`,
     }),
   });
 });
