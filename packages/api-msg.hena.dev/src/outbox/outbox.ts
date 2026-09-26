@@ -75,7 +75,7 @@ export const outbox = (messages: Messages, gestures: Gestures, pace?: ReturnType
           const extra = yield* Random.nextBetween(1000, 2000);
           const duration = Math.min(15000, text.length * 250 + extra);
           // UI failures do not stop imsg sends; a new inbound message does.
-          const type = gestures.typing(conversation.handle, duration).pipe(
+          const type = gestures.typing(conversation.handle, text, duration).pipe(
             Effect.catch(() =>
               Effect.gen(function* () {
                 const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
