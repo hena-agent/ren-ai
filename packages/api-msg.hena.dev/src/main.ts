@@ -26,6 +26,7 @@ import type { Tapback } from "./outbox/outbox.ts";
 import { timing } from "./timing/timing.ts";
 import { followUps } from "./follow-ups/follow-ups.ts";
 import { makeOperator } from "./operator/operator.ts";
+import { failedTurns, type FailureAlerts } from "./opencode/failed-turns.ts";
 export { operatorHandler, operatorApi } from "./operator/api.ts";
 export { serveOperatorSocket, operatorClient } from "./operator/socket.ts";
 export { runOperatorCli } from "./operator/cli.ts";
@@ -50,6 +51,7 @@ export const startMessagingHost = (
   messages: Messages,
   gestures: Gestures,
   onboardingConfig: OnboardingConfig,
+  alerts: FailureAlerts,
 ) =>
   Effect.gen(function* () {
     yield* migrate;
@@ -126,6 +128,7 @@ export const startMessagingHost = (
           .pipe(Effect.asVoid),
     );
     sends.onSent(follow.sent);
+    yield* failedTurns(host, directory, alerts);
     const incoming = yield* intake(
       messages,
       (handle) => directory.byHandle(handle),
@@ -189,13 +192,19 @@ export const startMessagingServer = (
   messages: Messages,
   gestures: Gestures,
   onboardingConfig: OnboardingConfig,
+  alerts: FailureAlerts,
 ) =>
   Effect.gen(function* () {
     const { SqliteClient } = yield* Effect.promise(() => import("@effect/sql-sqlite-bun"));
     const database = yield* Layer.build(
       SqliteClient.layer({ filename: databaseFile, busyTimeout: "5 seconds" }),
     );
-    return yield* startMessagingHost(root, options, messages, gestures, onboardingConfig).pipe(
-      Effect.provide(database),
-    );
+    return yield* startMessagingHost(
+      root,
+      options,
+      messages,
+      gestures,
+      onboardingConfig,
+      alerts,
+    ).pipe(Effect.provide(database));
   });

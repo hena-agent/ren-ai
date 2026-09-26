@@ -26,6 +26,7 @@ import {
   valid,
   expectLateResults,
 } from "../../test/host.test-helper.ts";
+import { silentAlerts } from "./scripted-overrides.test-helper.ts";
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
   const { tmpdir: temporaryDirectory } = await import("node:os");
@@ -226,7 +227,6 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
     await rm(root, { recursive: true, force: true });
   }
 }, 60000);
-
 test("a scripted persona sends several ordered bubbles only to her Conversation", async () => {
   const root = await mkdtemp(join(tmpdir(), "messaging-host-"));
   const personaDirectory = join(root, "content");
@@ -290,6 +290,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             },
             ui.gestures,
             { turnstileSecret: "test-secret", notice: noticeCopy },
+            silentAlerts,
           );
           let toolDescription = "";
           yield* Effect.tryPromise(() =>

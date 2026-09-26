@@ -12,6 +12,7 @@ import { Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { startMessagingHost } from "../main.ts";
+import { silentAlerts } from "./scripted-overrides.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
@@ -98,6 +99,7 @@ You are Persona1.
                 ),
             },
             { turnstileSecret: "test-secret", notice: noticeCopy },
+            silentAlerts,
           );
           const session = yield* host.createSession("persona1");
           const conversation = yield* host.conversations.create({
