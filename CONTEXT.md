@@ -43,7 +43,7 @@ What a persona remembers of one conversation: the latest messages word for word 
 _Avoid_: context, history, session
 
 **Waitlist**:
-The emails of people whose handle can't receive iMessage.
+The emails of people who can't be let in yet: their handle can't receive iMessage, or the service is full.
 _Avoid_: queue, signup list
 
 **Operator**:
