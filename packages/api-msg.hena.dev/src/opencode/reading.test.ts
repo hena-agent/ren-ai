@@ -110,6 +110,7 @@ You are Persona1.
           expect(session.permissions?.map((rule) => rule.action)).toEqual([
             "*",
             "send",
+            "wait",
             "read",
             "react",
           ]);
@@ -140,7 +141,7 @@ You are Persona1.
           ).toContain("imsg unavailable");
           expect(
             (yield* llm.requests()).every((request) =>
-              request.tools.every((tool) => ["send", "read", "react"].includes(tool.name)),
+              request.tools.every((tool) => ["send", "wait", "read", "react"].includes(tool.name)),
             ),
           ).toBe(true);
           const tools = (yield* llm.requests())[0]!.tools;

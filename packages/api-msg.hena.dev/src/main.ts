@@ -4,7 +4,7 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { loadPersonas } from "./personas/personas.ts";
 import { isolatedHost } from "./opencode/isolate.ts";
-import type { HostOptions } from "./opencode/host.ts";
+import type { HostOptions, PersonaHostOptions } from "./opencode/host.ts";
 export { serveViewer, viewerFront } from "./opencode/viewer.ts";
 
 export { makeHealth } from "./health/health.ts";
@@ -12,6 +12,7 @@ export { makeBackup } from "./backup/backup.ts";
 export { onboardingApi, noticeCopy } from "./onboarding/onboarding.ts";
 import { migrate } from "./database.ts";
 import { conversations } from "./conversations/conversations.ts";
+import type { Conversation } from "./conversations/conversations.ts";
 import { outbox } from "./outbox/outbox.ts";
 import type { Messages } from "./messages/messages.ts";
 import type { Gestures } from "./gestures/gestures.ts";
@@ -20,13 +21,14 @@ import { onboarding } from "./onboarding/onboarding.ts";
 import { SqlClient } from "effect/unstable/sql";
 import { notReacted } from "./transcript/transcript.ts";
 import type { Tapback } from "./outbox/outbox.ts";
+import { timing } from "./timing/timing.ts";
 
 interface OnboardingConfig {
   readonly turnstileSecret: string;
   readonly notice: Readonly<Record<"ko", string>>;
 }
 
-export const startPersonaHost = (root: string, options: Omit<HostOptions, "personas">) =>
+export const startPersonaHost = (root: string, options: PersonaHostOptions) =>
   Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
     Effect.map(isolatedHost(root, { ...options, personas }), (host) => ({ ...host, personas })),
   );
@@ -35,7 +37,7 @@ export const startMessagingHost = (
   root: string,
   options: Omit<
     HostOptions,
-    "personas" | "send" | "read" | "react" | "onContext" | "handleForSession"
+    "personas" | "send" | "wait" | "read" | "react" | "onContext" | "handleForSession"
   >,
   messages: Messages,
   gestures: Gestures,
@@ -45,8 +47,21 @@ export const startMessagingHost = (
     yield* migrate;
     const sql = yield* SqlClient.SqlClient;
     const directory = yield* conversations;
-    const sends = yield* outbox(messages, gestures);
+    const pace = timing();
+    const sends = yield* outbox(messages, gestures, pace);
     const seenAtRequest = new Map<string, string | undefined>();
+    const inConversation = (
+      sessionID: string,
+      action: (conversation: Conversation) => Effect.Effect<string, Error>,
+    ) =>
+      directory.bySession(sessionID).pipe(
+        Effect.flatMap((conversation) =>
+          conversation
+            ? action(conversation)
+            : Effect.fail(new Error("No Conversation for session")),
+        ),
+        Effect.mapError((error) => new Error(String(error))),
+      );
     const host = yield* startPersonaHost(root, {
       ...options,
       handleForSession: (sessionID) =>
@@ -55,11 +70,9 @@ export const startMessagingHost = (
           Effect.orDie,
         ),
       send: (sessionID, text, callID) =>
-        Effect.gen(function* () {
-          const conversation = yield* directory.bySession(sessionID);
-          if (!conversation) return yield* Effect.fail(new Error("No Conversation for session"));
-          return yield* sends.send(conversation, text, callID);
-        }).pipe(Effect.mapError((error) => new Error(String(error)))),
+        inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
+      wait: (sessionID, minutes) =>
+        inConversation(sessionID, (conversation) => pace.wait(conversation.id, minutes)),
       onContext: (sessionID) =>
         Effect.gen(function* () {
           const seen = yield* sql<{
@@ -92,6 +105,7 @@ export const startMessagingHost = (
           .pipe(Effect.asVoid),
       (personaID) => host.personas.get(personaID)!.timeZone,
     );
+    incoming.onNew((conversation) => pace.onNew(conversation.id));
     const persona = host.personas.values().next().value!;
     const api = yield* onboarding(
       messages,
@@ -128,7 +142,7 @@ export const startMessagingServer = (
   root: string,
   options: Omit<
     HostOptions,
-    "personas" | "send" | "read" | "react" | "onContext" | "handleForSession"
+    "personas" | "send" | "wait" | "read" | "react" | "onContext" | "handleForSession"
   >,
   databaseFile: string,
   messages: Messages,

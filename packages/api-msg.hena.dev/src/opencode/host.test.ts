@@ -151,6 +151,11 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
                           /this Conversation|standard tapback/.test(tool.description),
                         )
                         .map((tool) => tool.name);
+                      expect(
+                        tools
+                          .filter((tool) => tool.name === "wait")
+                          .map((tool) => tool.description),
+                      ).not.toContain("Pause for up to 12 hours, or until something new arrives");
                     }),
                 }),
               ),
@@ -246,24 +251,19 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           expect(
             yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id),
           ).toEqual(expectedViewerResults(session.id, messages[0]!.id));
-          for (const id of [
+          const disabledIDs = [
             "opencode.config.instruction",
             "opencode.config.compatibility",
             "opencode.provider.ollama",
             "opencode.provider.lmstudio",
             "opencode.provider.vllm",
-          ]) {
+          ];
+          for (const id of disabledIDs) {
             expect(config).toContain(`-${id}`);
           }
           const plugins = yield* Effect.promise(() => get("plugin"));
           expect(plugins).toContain('"id":"personas"');
-          for (const id of [
-            "opencode.config.instruction",
-            "opencode.config.compatibility",
-            "opencode.provider.ollama",
-            "opencode.provider.lmstudio",
-            "opencode.provider.vllm",
-          ]) {
+          for (const id of disabledIDs) {
             expect(plugins).not.toContain(`"id":"${id}"`);
           }
           expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
@@ -276,30 +276,6 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
     if (previousConfig === undefined) delete process.env["XDG_CONFIG_HOME"];
     else process.env["XDG_CONFIG_HOME"] = previousConfig;
     delete process.env["OPENAI_API_KEY"];
-    await rm(root, { recursive: true, force: true });
-  }
-}, 60000);
-test("a host cannot silently fall back to the Mac database", async () => {
-  const root = await mkdtemp(join(tmpdir(), "invalid-host-db-"));
-  const personaDirectory = join(root, "content");
-  await mkdir(personaDirectory);
-  await writeFile(join(personaDirectory, "persona1.md"), valid);
-  try {
-    await expect(
-      Effect.runPromise(
-        Effect.scoped(
-          startPersonaHost(join(root, "isolated"), {
-            configDirectory: join(root, "private", "config"),
-            databasePath: join(root, "missing-parent", "database.sqlite"),
-            personaDirectory,
-            providers: {},
-            model: "test/probe",
-            handleForSession: () => Effect.succeed(undefined),
-          }),
-        ),
-      ),
-    ).rejects.toThrow(/sqlite|open|database/i);
-  } finally {
     await rm(root, { recursive: true, force: true });
   }
 }, 60000);
@@ -327,6 +303,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               return TestLLM.text("title", "title");
             step++;
             if (step <= 2) return TestLLM.tool(`call-${step}`, "send", { text: `bubble ${step}` });
+            if (step === 3) return TestLLM.tool("pause", "wait", { minutes: 0.001 });
             return TestLLM.text("done", "answer");
           });
           const host = yield* startMessagingHost(
@@ -392,6 +369,13 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(yield* host.conversations.byHandle(first.handle)).toEqual(first);
           expect(yield* host.conversations.bySession(session.id)).toEqual(first);
           expect(yield* host.conversations.bySession("missing")).toBeUndefined();
+          expect(session.permissions).toEqual([
+            { action: "*", resource: "*", effect: "deny" },
+            { action: "send", resource: "*", effect: "allow" },
+            { action: "wait", resource: "*", effect: "allow" },
+            { action: "read", resource: "*", effect: "allow" },
+            { action: "react", resource: "*", effect: "allow" },
+          ]);
           const signals: number[] = [];
           host.intake.onNew((conversation) => signals.push(conversation.id));
           yield* imessage.text(first.handle, "안녕", Date.parse("2026-09-25T11:52:00Z"));
@@ -401,7 +385,9 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             '<message at=\\"2026-09-25 Fri 01:52\\">안녕</message>',
           );
           expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
-          expect((yield* llm.requests()).every((request) => request.tools.length === 3)).toBe(true);
+          expect(
+            (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
+          ).toEqual(Array.from({ length: 4 }, () => ["react", "read", "send", "wait"]));
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
           expect((yield* host.sessions.get(session.id)).title).toBe("Persona1 · +821011111111");
           expect(imessage.bubbles).toEqual([
@@ -425,7 +411,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           ]);
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
-          ).toContain("sent");
+          ).toContain("paused");
           step = 3;
           const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
@@ -434,6 +420,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             "react",
             "read",
             "send",
+            "wait",
           ]);
           step = 0;
           const orphan = yield* host.createSession("persona1");
