@@ -13,6 +13,7 @@ import { startMessagingHost } from "../main.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
+import { checkedPhone } from "../transcript/transcript.ts";
 
 test("a text admitted during wait wakes the real OpenCode tool for only its Conversation", async () => {
   const root = await mkdtemp(join(tmpdir(), "host-timing-"));
@@ -20,7 +21,7 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
   await mkdir(personaDirectory);
   await writeFile(
     join(personaDirectory, "persona1.md"),
-    "---\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: 안녕\nmemory: Remember.\n---\nYou are Persona1.\n",
+    "---\ntime-zone: Pacific/Honolulu\nlanguage: ko\nopening-line: 안녕\nmemory: Remember.\n---\nYou are Persona1.\n",
   );
   const probe = LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route });
   const model = SessionRunnerModel.resolved(probe, {
@@ -66,7 +67,7 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
             { turnstileSecret: "test-secret", notice: noticeCopy },
           );
           const session = yield* host.createSession("persona1");
-          yield* host.conversations.create({
+          const conversation = yield* host.conversations.create({
             handle: "wait@example.com",
             locale: "ko",
             consentVersion: "v1",
@@ -93,6 +94,12 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
           const turns = JSON.stringify(yield* host.sessions.messages({ sessionID: session.id }));
           expect(turns).toContain("cut short by something new");
           expect(turns).toContain("second");
+          expect(turns).toMatch(new RegExp(`msg_checked_${conversation.id}_\\d+`));
+          expect(
+            [Date.now(), Date.now() - 60_000].some((at) =>
+              turns.includes(JSON.stringify(checkedPhone(at, "Pacific/Honolulu")).slice(1, -1)),
+            ),
+          ).toBe(true);
           const firstRequest = (yield* llm.requests())[0]!;
           expect(JSON.stringify(firstRequest.tools)).toContain("minutes");
           expect(JSON.stringify(firstRequest.tools)).toContain(

@@ -26,7 +26,6 @@ import {
   valid,
   expectLateResults,
 } from "../../test/host.test-helper.ts";
-
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
   const { tmpdir: temporaryDirectory } = await import("node:os");
@@ -52,7 +51,6 @@ afterAll(() => {
   vi.unstubAllGlobals();
   rmSync(xdg.root, { recursive: true, force: true });
 });
-
 test("the sealed host creates a deny-all persona session and admits a scripted reply", async () => {
   const root = await mkdtemp(join(tmpdir(), "sealed-host-"));
   const personaDirectory = join(root, "content");
@@ -366,6 +364,9 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             { handle: first.handle, text: "bubble 1" },
             { handle: first.handle, text: "bubble 2" },
           ]);
+          expect(
+            yield* sql`SELECT 1 FROM follow_up WHERE last_sent_at >= (SELECT MAX(recorded_at) FROM send)`,
+          ).toHaveLength(1);
           expect(events).toEqual(["typing", "send", "typing", "send"]);
           expect(ui.typing.map((item) => item.handle)).toEqual([first.handle, first.handle]);
           expect(
