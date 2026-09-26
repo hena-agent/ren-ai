@@ -5,6 +5,7 @@ import type { HostOptions } from "./opencode/host.ts";
 export { serveViewer, viewerFront } from "./opencode/viewer.ts";
 
 export { makeHealth } from "./health/health.ts";
+export { makeBackup } from "./backup/backup.ts";
 import { migrate } from "./database.ts";
 import { conversations } from "./conversations/conversations.ts";
 import { outbox } from "./outbox/outbox.ts";
