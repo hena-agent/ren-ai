@@ -79,7 +79,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
         const events: string[] = [];
         const ui = fakeGestures(events);
         const fake = fakeMessages(events);
-        const sends = yield* outbox(fake.messages, ui.gestures);
+        const sends = yield* outbox(fake.messages, ui.gestures, directory.active);
         ui.interrupt();
         expect(yield* sends.send(conversation, "interrupted", "call-1")).toBe(
           "not sent: a new message arrived",
@@ -94,6 +94,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
             ...ui.gestures,
             typing: () => Effect.fail(new Error("UI unavailable")),
           },
+          directory.active,
         );
         const failedSend = yield* Effect.forkScoped(
           failed.send(conversation, "in doubt", "call-2"),
@@ -139,7 +140,7 @@ test("typing time scales with text and is capped before each recorded send", asy
       });
       const ui = fakeGestures();
       const fake = fakeMessages();
-      const sends = yield* outbox(fake.messages, ui.gestures);
+      const sends = yield* outbox(fake.messages, ui.gestures, directory.active);
       expect(yield* sends.send(conversation, "hello", "short")).toBe("sent");
       expect(yield* sends.send(conversation, "x".repeat(100), "long")).toBe("sent");
       expect(ui.typing[0]?.durationMillis).toBeGreaterThanOrEqual(2250);
@@ -164,22 +165,26 @@ test("each tapback is recorded before the UI acts, never replayed, and stale or 
       const ui = fakeGestures();
       const checked: string[] = [];
       let expectedGUID = "";
-      const sends = yield* outbox(fake.messages, {
-        ...ui.gestures,
-        react: (handle, tapback) =>
-          Effect.gen(function* () {
-            const rows = yield* sql<{
-              kind: string;
-              state: string;
-              target_guid: string;
-            }>`SELECT kind, state, target_guid FROM send ORDER BY id DESC LIMIT 1`;
-            expect(rows).toEqual([
-              { kind: "tapback", state: "recorded", target_guid: expectedGUID },
-            ]);
-            checked.push(tapback);
-            return yield* ui.gestures.react(handle, tapback);
-          }),
-      });
+      const sends = yield* outbox(
+        fake.messages,
+        {
+          ...ui.gestures,
+          react: (handle, tapback) =>
+            Effect.gen(function* () {
+              const rows = yield* sql<{
+                kind: string;
+                state: string;
+                target_guid: string;
+              }>`SELECT kind, state, target_guid FROM send ORDER BY id DESC LIMIT 1`;
+              expect(rows).toEqual([
+                { kind: "tapback", state: "recorded", target_guid: expectedGUID },
+              ]);
+              checked.push(tapback);
+              return yield* ui.gestures.react(handle, tapback);
+            }),
+        },
+        (yield* conversations).active,
+      );
       expect(yield* sends.react(conversation, "like", "empty")).toMatch(/^not reacted:/);
       expect(yield* sends.react(conversation, "like", "absent", "missing-guid")).toMatch(
         /no message/,
@@ -212,10 +217,14 @@ test("each tapback is recorded before the UI acts, never replayed, and stale or 
         /newer message/,
       );
       expect(yield* sends.react(conversation, "love", "current", newer.guid)).toBe("reacted love");
-      const failed = yield* outbox(fake.messages, {
-        ...ui.gestures,
-        react: () => Effect.fail(new Error("Messages unavailable")),
-      });
+      const failed = yield* outbox(
+        fake.messages,
+        {
+          ...ui.gestures,
+          react: () => Effect.fail(new Error("Messages unavailable")),
+        },
+        (yield* conversations).active,
+      );
       expect(yield* failed.react(conversation, "question", "failure", newer.guid)).toBe(
         "not reacted: Messages unavailable",
       );
@@ -264,7 +273,7 @@ test("an inbound signal while typing cancels the draft before recording or sendi
           ...fakeGestures().gestures,
           typing: (_handle: string, millis: number) => Effect.as(Effect.sleep(millis), true),
         };
-        const sends = yield* outbox(fake.messages, ui, pace);
+        const sends = yield* outbox(fake.messages, ui, directory.active, pace);
         const interrupted = yield* Effect.forkScoped(sends.send(conversation, "hello", "first"));
         yield* TestClock.adjust("1 second");
         pace.onNew(conversation.id + 1);
@@ -311,7 +320,7 @@ test("a failed UI gesture still waits out the remaining typing time", async () =
             return Effect.sleep(1000).pipe(Effect.andThen(Effect.fail(new Error("UI offline"))));
           },
         };
-        const sends = yield* outbox(fake.messages, ui);
+        const sends = yield* outbox(fake.messages, ui, directory.active);
         const send = yield* Effect.forkScoped(sends.send(conversation, "hello", "ui-call"));
         yield* TestClock.adjust("1 second");
         expect(send.pollUnsafe()).toBeUndefined();

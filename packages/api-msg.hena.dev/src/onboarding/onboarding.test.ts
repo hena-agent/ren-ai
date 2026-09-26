@@ -4,6 +4,7 @@ import { HttpBody, HttpClient, HttpClientResponse, HttpRouter } from "effect/uns
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { migrate } from "../database.ts";
+import { conversations } from "../conversations/conversations.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { outbox } from "../outbox/outbox.ts";
@@ -58,7 +59,8 @@ const setup = (failSend = false, deadlineMillis = 30) =>
     yield* migrate;
     const sql = yield* SqlClient.SqlClient;
     const fake = fakeMessages();
-    const sends = yield* outbox(fake.messages, fakeGestures().gestures);
+    const directory = yield* conversations;
+    const sends = yield* outbox(fake.messages, fakeGestures().gestures, directory.active);
     const prompts: string[] = [];
     const sessions: string[] = [];
     const api = yield* onboarding(
@@ -157,6 +159,30 @@ test("an uncertain Notice answers unknown; after it settles the Conversation sta
       yield* Effect.sleep("300 millis");
       expect(prompts).toHaveLength(1);
       expect(yield* sql`SELECT id FROM conversation`).toHaveLength(1);
+    }),
+  );
+});
+
+test("blocked and removing Handles receive no Notice or new session", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api, sessions } = yield* setup();
+      yield* sql`INSERT INTO blocked (handle, blocked_at) VALUES (${input.handle}, 1)`;
+      expect(yield* api.submit(input).pipe(Effect.flip)).toBe("Handle unavailable");
+      expect(fake.bubbles).toEqual([]);
+      expect(yield* sql`SELECT id FROM user`).toEqual([]);
+      yield* sql`DELETE FROM blocked WHERE handle = ${input.handle}`;
+      yield* sql`INSERT INTO removal (handle, session_id) VALUES (${input.handle}, 'old-session')`;
+      expect(yield* api.submit(input).pipe(Effect.flip)).toBe("Handle unavailable");
+      expect(sessions).toEqual([]);
+      yield* sql`DELETE FROM removal WHERE handle = ${input.handle}`;
+      fake.statuses.set(input.handle, "unknown");
+      expect(yield* api.submit(input)).toBe("unknown");
+      yield* sql`INSERT INTO blocked (handle, blocked_at) VALUES (${input.handle}, 2)`;
+      fake.statuses.set(input.handle, "sent");
+      yield* Effect.sleep("300 millis");
+      expect(sessions).toEqual([]);
+      expect(yield* sql`SELECT id FROM conversation`).toEqual([]);
     }),
   );
 });

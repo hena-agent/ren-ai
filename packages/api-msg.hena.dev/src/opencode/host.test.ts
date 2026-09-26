@@ -477,6 +477,11 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             .pipe(Effect.timeout("20 seconds"));
           expect(imessage.bubbles[3]).toEqual({ handle: joined!.handle, text: "bubble 1" });
           yield* Effect.promise(host.disposeOnboarding);
+          expect(yield* host.operator.remove(first.handle)).toBe("removed");
+          expect(yield* host.conversations.byHandle(first.handle)).toBeUndefined();
+          expect(yield* host.sessions.get(session.id).pipe(Effect.flip)).toBeDefined();
+          yield* host.sessions.remove(other.id);
+          expect(yield* host.operator.remove("+821022222222")).toBe("removed");
         }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
       ),
     );

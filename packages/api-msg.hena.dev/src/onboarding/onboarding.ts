@@ -65,6 +65,12 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
 
     const user = (handle: string) =>
       sql<UserRow>`SELECT joined_at FROM user WHERE handle = ${handle}`;
+    const unavailable = (handle: string) =>
+      Effect.map(
+        sql`SELECT handle FROM blocked WHERE handle = ${handle}
+          UNION SELECT handle FROM removal WHERE handle = ${handle}`,
+        (rows) => rows.length > 0,
+      );
     const latest = (handle: string) => sql<NoticeRow>`SELECT id, recorded_at, state FROM send
     WHERE handle = ${handle} AND kind = 'notice' ORDER BY id DESC LIMIT 1`;
 
@@ -77,6 +83,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
           yield* sql`DELETE FROM user WHERE handle = ${handle} AND joined_at IS NULL`;
           return;
         }
+        if (yield* unavailable(handle)) return;
         const started = yield* Clock.currentTimeMillis;
         const session = yield* createSession(persona.id);
         yield* sql.withTransaction(
@@ -99,7 +106,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
           const [row] = yield* latest(handle);
           yield* settle(handle, row!).pipe(Effect.catch(() => Effect.void));
           const [pending] = yield* user(handle);
-          if (!pending || pending.joined_at !== null) return;
+          if (!pending || pending.joined_at !== null || (yield* unavailable(handle))) return;
           yield* Effect.sleep("250 millis");
         }
       });
@@ -119,6 +126,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
           return yield* Effect.fail("Invalid Handle");
         if (!(yield* verify(input.turnstileToken, turnstileSecret)))
           return yield* Effect.fail("Turnstile failed");
+        if (yield* unavailable(input.handle)) return yield* Effect.fail("Handle unavailable");
         const now = yield* Clock.currentTimeMillis;
         const inserted =
           yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at)
