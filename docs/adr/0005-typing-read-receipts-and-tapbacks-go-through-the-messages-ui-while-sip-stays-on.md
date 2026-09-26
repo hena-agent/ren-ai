@@ -20,3 +20,4 @@ These run one at a time across all conversations, and after each one the server 
 - The Mac must stay awake and unlocked with Messages' window open, because display sleep locks it at once.
 - Messages' "Send read receipts" is on, so anything that uncovers a conversation can mark it read. Parking the UI after each action keeps that from happening before the persona chooses.
 - Whether another account's iPhone shows the typing indicator is still unverified, because the probe that would check it is on hold.
+- No gate can check the scripts that drive Messages, because CI runs on Linux. They live in `.applescript` files, which the gates don't read. The adapter's TypeScript is tested against a fake script runner, and after any change a smoke script, run by hand on the Mac, checks the scripts.

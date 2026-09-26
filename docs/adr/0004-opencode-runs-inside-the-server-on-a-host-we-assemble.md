@@ -1,6 +1,6 @@
 # OpenCode runs inside the server, on a host we assemble, cut off from the Mac's own OpenCode
 
-The api-msg server hosts OpenCode in its own process. It assembles the host from OpenCode's published modules, the way `@opencode/sdk` does internally, because the SDK keeps its web handler to itself and the operator needs to watch conversations live in OpenCode's web UI. From that one host the server gets a client for its own calls, a plugin store for the imsg plugin it builds from its own parts, and the web handler, which it serves on localhost behind a password and a read-only allowlist. The host reads nothing from the Mac's own OpenCode setup or from the directories above the persona repo, and all state, OpenCode's and ours, lives in one SQLite file.
+The api-msg server hosts OpenCode in its own process. It assembles the host from OpenCode's published modules, the way `@opencode/sdk` does internally, because the SDK keeps its web handler to itself and the operator needs to watch conversations live in OpenCode's web UI. From that one host the server gets a client for its own calls, a plugin store for the imsg plugin it builds from its own parts, and the web handler, which it serves on localhost behind a password and a read-only allowlist. The host reads nothing from the Mac's own OpenCode setup or from the directories above the persona repo. It keeps its own database file, and the server's state lives in a second file beside it (ADR-0006, which replaced the single shared file first chosen here).
 
 ## Considered Options
 
