@@ -99,6 +99,16 @@ export const startMessagingHost = (
           if (!conversation) return notReacted("no Conversation for session");
           return yield* sends.react(conversation, tapback, callID, seenAtRequest.get(sessionID));
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
+      lastMessageStatus: (sessionID) =>
+        directory
+          .bySession(sessionID)
+          .pipe(
+            Effect.flatMap((conversation) =>
+              conversation
+                ? messages.lastOutgoingStatus(conversation.handle)
+                : Effect.succeed(undefined),
+            ),
+          ),
     });
     const incoming = yield* intake(
       messages,

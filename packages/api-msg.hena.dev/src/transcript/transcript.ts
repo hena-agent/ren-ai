@@ -23,6 +23,9 @@ const timestamp = (date: number, timeZone: string) => {
   return `${part("year")}-${part("month")}-${part("day")} ${part("weekday")} ${part("hour")}:${part("minute")}`;
 };
 
+export const phone = (now: number, timeZone: string, status: "sent" | "delivered" | number) =>
+  `<phone now="${timestamp(now, timeZone)}" your-last-message="${typeof status === "number" ? `read ${timestamp(status, timeZone).slice(-5)}` : status}"/>`;
+
 export const message = (text: string, date: number, previous: number | null, timeZone: string) => {
   const at = timestamp(date, timeZone);
   if (previous === null) return `<message at="${at}">${words(text)}</message>`;
