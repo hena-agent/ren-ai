@@ -14,6 +14,7 @@ import { Cause, Effect, Exit, Layer, Result, Schema } from "effect";
 import { afterAll, expect, test, vi } from "vitest";
 import { loadPersonas } from "../personas/personas.ts";
 import { startPersonaHost } from "../main.ts";
+import { viewerFront } from "./viewer.ts";
 
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
@@ -49,6 +50,47 @@ memory: Remember his name.
 ---
 You are Persona1. Speak Korean.
 `;
+
+const verifyViewer = (
+  web: (request: Request) => Promise<Response>,
+  directory: string,
+  sessionID: string,
+  messageID: string,
+) =>
+  Effect.gen(function* () {
+    const viewer = viewerFront(web, "only-the-operator-knows");
+    const authorization = `Basic ${Buffer.from("opencode:only-the-operator-knows").toString("base64")}`;
+    const viewed = (path: string, method = "GET", authenticated = true) =>
+      viewer(
+        new Request(`http://host.local${path}`, {
+          method,
+          headers: {
+            ...(authenticated ? { authorization } : {}),
+            "x-opencode-directory": directory,
+          },
+        }),
+      );
+    for (const path of [
+      "/api/info",
+      "/api/project",
+      "/api/location",
+      "/api/session",
+      `/api/session/${sessionID}`,
+      `/api/session/${sessionID}/message`,
+      `/api/session/${sessionID}/inbox`,
+      `/api/session/${sessionID}/message/${messageID}`,
+    ]) {
+      expect((yield* Effect.promise(() => viewed(path))).status).toBe(200);
+      expect((yield* Effect.promise(() => viewed(path, "GET", false))).status).toBe(401);
+    }
+    for (const path of ["/api/config", "/api/plugin", "/openapi.json", "/api/session/active"]) {
+      expect((yield* Effect.promise(() => viewed(path))).status).toBe(403);
+    }
+    expect((yield* Effect.promise(() => viewed("/api/session", "POST"))).status).toBe(403);
+    const events = yield* Effect.promise(() => viewed("/api/event"));
+    expect(events.status).toBe(200);
+    yield* Effect.promise(() => events.body!.cancel());
+  });
 
 test("persona files fail closed on missing, extra, malformed and empty fields", async () => {
   const empty = await mkdtemp(join(tmpdir(), "empty-personas-"));
@@ -128,6 +170,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
         limit: { context: 100_000, output: 1_000 },
       },
     );
+    const handles = new Map<string, string>();
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
@@ -141,6 +184,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
               "private-test": { name: "Private Test", settings: { apiKey: "passed-in-code" } },
             },
             model: "test/probe",
+            handleForSession: (sessionID) => Effect.succeed(handles.get(sessionID)),
             overrides: [
               llmClient.replace(Layer.succeed(LLMClient.Service, llm)),
               SessionRunnerModel.node.replace(
@@ -171,6 +215,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             ),
           );
           const session = yield* host.createSession("persona1");
+          handles.set(session.id, "+821012345678");
           expect(process.env["HOME"]).toBe(join(root, "isolated"));
           expect(process.env["PATH"]).toBe(oldPath);
           for (const name of ["CONFIG", "DATA", "STATE", "CACHE"]) {
@@ -188,12 +233,13 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           const requests = yield* llm.requests();
-          expect(requests.length).toBeGreaterThan(0);
+          expect(requests).toHaveLength(1); // The title hook must skip a second model request.
           expect(requests.every((request) => request.tools.length === 0)).toBe(true);
           expect(JSON.stringify(requests)).toContain("You are Persona1. Speak Korean.");
           expect(JSON.stringify(requests)).not.toMatch(/PLANTED|planted instruction|malicious/);
           const messages = yield* host.sessions.messages({ sessionID: session.id });
           expect(JSON.stringify(messages)).toContain("안녕!");
+          expect((yield* host.sessions.get(session.id)).title).toBe("Persona1 · +821012345678");
           const permissive = yield* host.sessions.create({
             agent: Agent.ID.make("persona1"),
             model: model.ref,
@@ -203,6 +249,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "test backstop" });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).every((request) => request.tools.length === 0)).toBe(true);
+          expect((yield* host.sessions.get(permissive.id)).title).not.toContain("undefined");
           const nonPersona = yield* host.sessions.create({
             agent: Agent.ID.make("build"),
             model: model.ref,
@@ -256,6 +303,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             '"private-test":{"name":"Private Test","settings":{"apiKey":"passed-in-code"}}',
           );
           expect(config).toContain('"persona1":{"mode":"primary"}');
+          yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id);
           for (const id of [
             "opencode.config.instruction",
             "opencode.config.compatibility",
@@ -305,6 +353,7 @@ test("a host cannot silently fall back to the Mac database", async () => {
             personaDirectory,
             providers: {},
             model: "test/probe",
+            handleForSession: () => Effect.succeed(undefined),
           }),
         ),
       ),
