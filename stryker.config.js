@@ -21,6 +21,10 @@ export default {
   // Plain Vitest uses forks, but Stryker overrides its pool to threads.
   // Forks preserve the same tests, coverage analysis and mutation threshold.
 
+  // Each Stryker process now starts a Vitest fork. The CPU-based default starts seven runners
+  // in an 8 GB Linux container and exhausts its memory; cap processes without skipping mutants.
+  concurrency: 2,
+
   // Stryker discovers plugins by globbing `node_modules/@stryker-mutator/*`. Bun's isolated
   // linker leaves only symlinks behind, so the glob finds nothing and the runner fails with
   // `Cannot find TestRunner plugin "vitest"`.
