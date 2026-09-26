@@ -1,6 +1,17 @@
-import { normalizeHandle, OnboardingAnswer, OnboardingRequest } from "@repo/onboarding";
-import { Clock, Effect, Layer, Option, Schema } from "effect";
-import { HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/unstable/http";
+import {
+  normalizeHandle,
+  OnboardingAnswer,
+  OnboardingRequest,
+  WaitlistRequest,
+} from "@repo/onboarding";
+import { Clock, Effect, Layer, Option, Schema, Semaphore } from "effect";
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpRouter,
+  HttpServer,
+  HttpServerRequest,
+} from "effect/unstable/http";
 import {
   HttpApi,
   HttpApiBuilder,
@@ -14,13 +25,21 @@ import type { Persona } from "../personas/personas.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
 
 export const onboardingApi = HttpApi.make("onboarding").add(
-  HttpApiGroup.make("public").add(
-    HttpApiEndpoint.post("submit", "/onboarding", {
-      payload: OnboardingRequest,
-      success: OnboardingAnswer,
-      error: Schema.String.pipe(HttpApiSchema.status(400)),
-    }),
-  ),
+  HttpApiGroup.make("public")
+    .add(
+      HttpApiEndpoint.post("submit", "/onboarding", {
+        payload: OnboardingRequest,
+        success: OnboardingAnswer,
+        error: Schema.String.pipe(HttpApiSchema.status(400)),
+      }),
+    )
+    .add(
+      HttpApiEndpoint.post("waitlist", "/waitlist", {
+        payload: WaitlistRequest,
+        success: Schema.Void,
+        error: Schema.String.pipe(HttpApiSchema.status(400)),
+      }),
+    ),
 );
 
 export const noticeCopy = {
@@ -35,6 +54,10 @@ interface NoticeRow {
   readonly id: number;
   readonly recorded_at: number;
   readonly state: string;
+}
+
+interface CountRow {
+  readonly count: number;
 }
 
 const verify = (token: string, secret: string) =>
@@ -59,9 +82,31 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
   sendNotice: (handle: string, text: string) => Effect.Effect<void, NoticeError>,
   turnstileSecret: string,
   deadlineMillis = 10_000,
+  userCap = 10,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const admission = Semaphore.makeUnsafe(1);
+    const submissions = new Map<string, number[]>();
+
+    const limitIP = (ip: string, now: number) => {
+      const recent = submissions.get(ip);
+      if (!recent) {
+        submissions.set(ip, [now]);
+        return false;
+      }
+      const active = recent.filter((date) => date > now - 3_600_000);
+      active.push(now);
+      submissions.set(ip, active);
+      return active.length > 5;
+    };
+
+    const waitlist = (input: typeof WaitlistRequest.Type) =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        yield* sql`INSERT INTO waitlist (email, locale, answer, created_at)
+          VALUES (${input.email}, ${input.locale}, ${input.answer}, ${now})`;
+      });
 
     const user = (handle: string) =>
       sql<UserRow>`SELECT joined_at FROM user WHERE handle = ${handle}`;
@@ -113,24 +158,39 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
         return "unknown" as const;
       });
 
-    const submit = (input: typeof OnboardingRequest.Type) =>
+    const submit = (input: typeof OnboardingRequest.Type, ip = "missing") =>
       Effect.gen(function* () {
         if (normalizeHandle(input.handle) !== input.handle)
           return yield* Effect.fail("Invalid Handle");
         if (!(yield* verify(input.turnstileToken, turnstileSecret)))
           return yield* Effect.fail("Turnstile failed");
         const now = yield* Clock.currentTimeMillis;
-        const inserted =
-          yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at)
+        if (limitIP(ip, now)) return "try_later" as const;
+        const admitted = yield* admission.withPermits(1)(
+          Effect.gen(function* () {
+            const [hourly] = yield* sql<CountRow>`SELECT COUNT(*) AS count FROM send
+          WHERE kind = 'notice' AND recorded_at > ${now - 3_600_000}`;
+            if (hourly!.count >= 30) return "try_later" as const;
+            const [active] = yield* sql<CountRow>`SELECT COUNT(*) AS count FROM user
+          WHERE replied_at IS NOT NULL`;
+            if (active!.count >= userCap) return "full" as const;
+            const [previous] = yield* latest(input.handle);
+            if (previous && previous.recorded_at > now - 7 * 86_400_000) {
+              return yield* result(input.handle);
+            }
+            const inserted =
+              yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at)
       VALUES (${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${input.locale}, ${now}) RETURNING id`;
-        if (inserted.length) {
-          yield* Effect.forkDetach(
-            sendNotice(input.handle, notice[input.locale]).pipe(
-              Effect.andThen(watch(input.handle)),
-              Effect.catchCause(Effect.logError),
-            ),
-          );
-        }
+            if (inserted.length) {
+              yield* sendNotice(input.handle, notice[input.locale]).pipe(
+                Effect.catchCause(Effect.logError),
+              );
+              yield* Effect.forkDetach(watch(input.handle));
+            }
+            return undefined;
+          }),
+        );
+        if (admitted !== undefined) return admitted;
         const wait = Effect.gen(function* () {
           while (true) {
             const answer = yield* result(input.handle);
@@ -152,9 +212,15 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
     });
 
     const handlers = HttpApiBuilder.group(onboardingApi, "public", (group) =>
-      group.handle("submit", ({ payload }) =>
-        submit(payload).pipe(Effect.mapError((error) => String(error))),
-      ),
+      group
+        .handle("submit", ({ payload }) =>
+          Effect.flatMap(HttpServerRequest.HttpServerRequest, (request) =>
+            submit(payload, request.headers["cf-connecting-ip"] ?? "missing"),
+          ).pipe(Effect.mapError((error) => String(error))),
+        )
+        .handle("waitlist", ({ payload }) =>
+          waitlist(payload).pipe(Effect.mapError((error) => String(error))),
+        ),
     );
     const routes = HttpApiBuilder.layer(onboardingApi).pipe(
       Layer.provide(handlers),
@@ -162,5 +228,5 @@ export const onboarding = <SessionError, PromptError, NoticeError>(
       Layer.provideMerge(HttpRouter.cors({ allowedOrigins: ["https://msg.hena.dev"] })),
       Layer.provide(HttpServer.layerServices),
     );
-    return { submit, resume, routes };
+    return { submit, waitlist, resume, routes };
   });

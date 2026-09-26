@@ -53,6 +53,13 @@ export const migrate = Effect.gen(function* () {
         PRIMARY KEY (session_id, guid)
       )`,
       "006_tapback_target": sql`ALTER TABLE send ADD COLUMN target_guid TEXT`,
+      "007_waitlist": sql`CREATE TABLE waitlist (
+        id INTEGER PRIMARY KEY,
+        email TEXT NOT NULL,
+        locale TEXT NOT NULL,
+        answer TEXT NOT NULL CHECK (answer IN ('no_imessage', 'unknown', 'full')),
+        created_at INTEGER NOT NULL
+      )`,
     }),
   });
 });

@@ -26,6 +26,7 @@ import { timing } from "./timing/timing.ts";
 interface OnboardingConfig {
   readonly turnstileSecret: string;
   readonly notice: Readonly<Record<"ko", string>>;
+  readonly userCap?: number;
 }
 
 export const startPersonaHost = (root: string, options: PersonaHostOptions) =>
@@ -122,6 +123,8 @@ export const startMessagingHost = (
           .pipe(Effect.asVoid),
       (handle, text) => sends.notice(handle, text),
       onboardingConfig.turnstileSecret,
+      10_000,
+      onboardingConfig.userCap,
     );
     yield* api.resume;
     const { handler: onboardingWeb, dispose: disposeOnboarding } = HttpRouter.toWebHandler(
