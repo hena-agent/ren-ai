@@ -32,6 +32,9 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         const reply = yield* fake.text(first.handle, "his first reply", at);
         const failed = yield* fake.outgoing(first.handle, "failed bubble", at + 30, "failed");
         const sent = yield* fake.outgoing(outgoing.handle, "already hers", at + 10, "sent");
+        const notice = yield* fake.outgoing(outgoing.handle, "service notice", at + 12, "sent");
+        yield* sql`INSERT INTO send (handle, kind, content, state, guid, recorded_at, updated_at)
+          VALUES (${outgoing.handle}, 'notice', 'service notice', 'sent', ${notice.guid}, ${at + 12}, ${at + 12})`;
         const older = yield* fake.text(seen.handle, "already admitted", at + 15);
         const between = yield* fake.outgoing(seen.handle, "earlier than his reply", at + 17);
         const newer = yield* fake.text(seen.handle, "also admitted", at + 20);
@@ -93,6 +96,7 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         expect(prompts[0]).toContain("his first reply");
         expect(prompts[1]).toContain("before the block");
         expect(yield* sql`SELECT 1 FROM intake_seen WHERE guid = ${failed.guid}`).toEqual([]);
+        expect(yield* sql`SELECT 1 FROM intake_seen WHERE guid = ${notice.guid}`).toEqual([]);
         expect(
           yield* sql<{ repliedAt: number | null }>`SELECT replied_at AS repliedAt FROM user
           WHERE handle = ${first.handle}`,
