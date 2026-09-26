@@ -1,13 +1,12 @@
 import { Schema } from "effect";
+import { isPhoneHandle } from "./countries.ts";
 
 export const WaitlistEmail = Schema.String.pipe(
   Schema.check(Schema.isPattern(/^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/)),
   Schema.check(Schema.isLowercased(), Schema.isTrimmed()),
 );
 
-const Phone = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^\+82(?:10\d{8}|2\d{7,8}|[3-6][1-5]\d{7,8}|70\d{8})$/)),
-);
+const Phone = Schema.String.pipe(Schema.refine((value): value is string => isPhoneHandle(value)));
 
 export const Handle = Schema.Union([Phone, WaitlistEmail]);
 

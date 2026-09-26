@@ -1,11 +1,7 @@
 import { Schema } from "effect";
+import { countries } from "./countries.ts";
+import type { Country } from "./countries.ts";
 import { WaitlistEmail } from "./shapes.ts";
-
-const countries = {
-  KR: { dialCode: "82", local: /^(?:010\d{8}|02\d{7,8}|0[3-6][1-5]\d{7,8}|070\d{8})$/ },
-} as const;
-
-type Country = keyof typeof countries;
 
 const isWaitlistEmail = Schema.is(WaitlistEmail);
 

@@ -89,7 +89,7 @@ describe("Onboarding contract", () => {
     expect(() => Schema.decodeUnknownSync(OnboardingAnswer)("failed")).toThrow("Expected");
   });
 
-  it.each(["+8210123456780", "x+821012345678", "+8231123456", "+8231abcdefg"])(
+  it.each(["+8210123456780", "x+821012345678", "x821012345678", "+8231123456", "+8231abcdefg"])(
     "rejects invalid canonical phone %s",
     (invalid) => {
       expect(() => Schema.decodeUnknownSync(Handle)(invalid)).toThrow("Expected");
