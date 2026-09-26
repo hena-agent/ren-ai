@@ -201,7 +201,7 @@ export const outbox = (
             const extra = yield* Random.nextBetween(1000, 2000);
             const duration = Math.min(15000, text.length * 250 + extra);
             const typingStarted = yield* Clock.currentTimeMillis;
-            const type = gestures.typing(conversation.handle, duration).pipe(
+            const type = gestures.typing(conversation.handle, text, duration).pipe(
               Effect.catch(() =>
                 Effect.gen(function* () {
                   const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;

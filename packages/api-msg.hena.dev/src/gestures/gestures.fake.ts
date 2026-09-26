@@ -7,7 +7,7 @@ export const fakeGestures = (events: string[] = []) => {
   const reactions: { handle: string; tapback: string }[] = [];
   let interrupted = false;
   const gestures: Gestures = {
-    typing: (handle, durationMillis) =>
+    typing: (handle, _text, durationMillis) =>
       Effect.sync(() => {
         events.push("typing");
         typing.push({ handle, durationMillis });

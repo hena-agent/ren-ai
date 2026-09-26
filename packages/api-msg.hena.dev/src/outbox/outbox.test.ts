@@ -306,7 +306,8 @@ test("an inbound signal while typing cancels the draft before recording or sendi
         const pace = timing();
         const ui = {
           ...fakeGestures().gestures,
-          typing: (_handle: string, millis: number) => Effect.as(Effect.sleep(millis), true),
+          typing: (_handle: string, _text: string, millis: number) =>
+            Effect.as(Effect.sleep(millis), true),
         };
         const sends = yield* outbox(fake.messages, ui, personas, directory.active, pace);
         const interrupted = yield* Effect.forkScoped(sends.send(conversation, "hello", "first"));
@@ -350,7 +351,7 @@ test("a failed UI gesture still waits out the remaining typing time", async () =
         let duration = 0;
         const ui = {
           ...fakeGestures().gestures,
-          typing: (_handle: string, millis: number) => {
+          typing: (_handle: string, _text: string, millis: number) => {
             duration = millis;
             return Effect.sleep(1000).pipe(Effect.andThen(Effect.fail(new Error("UI offline"))));
           },
