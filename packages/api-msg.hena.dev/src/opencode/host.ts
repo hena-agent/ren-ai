@@ -7,6 +7,7 @@ import { Tool } from "@opencode/schema/tool";
 import { Context, Effect, Layer, ManagedRuntime, Schema, Scope } from "effect";
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
 import type { Persona } from "../personas/personas.ts";
+import { tapbacks, type Tapback } from "../outbox/outbox.ts";
 
 const disabled = [
   "opencode.config.instruction",
@@ -27,7 +28,20 @@ export interface HostOptions {
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined>;
   readonly overrides?: Parameters<typeof createEmbeddedRoutes>[1];
   readonly send?: (sessionID: string, text: string, callID: string) => Effect.Effect<string, Error>;
+  readonly read?: (sessionID: string) => Effect.Effect<string, Error>;
+  readonly react?: (
+    sessionID: string,
+    tapback: Tapback,
+    callID: string,
+  ) => Effect.Effect<string, Error>;
+  readonly onContext?: (sessionID: string) => Effect.Effect<void, Error>;
 }
+
+const toolResult = (effect: Effect.Effect<string, Error>) =>
+  effect.pipe(
+    Effect.map((output) => ({ output, content: output })),
+    Effect.mapError((error) => new Tool.Error({ message: error.message })),
+  );
 
 export const createHost = (options: HostOptions) =>
   Effect.gen(function* () {
@@ -81,21 +95,51 @@ export const createHost = (options: HostOptions) =>
                 output: Schema.String,
                 options: { codemode: false },
                 execute: ({ text }, context) =>
-                  send(context.sessionID, text, context.id).pipe(
-                    Effect.map((output) => ({ output, content: output })),
-                    Effect.mapError((error) => new Tool.Error({ message: error.message })),
-                  ),
+                  toolResult(send(context.sessionID, text, context.id)),
+              });
+            });
+          }
+          if (options.read) {
+            const read = options.read;
+            yield* ctx.tool.transform((editor) => {
+              editor.add({
+                name: "read",
+                description: "Mark this Conversation's messages read now",
+                input: Schema.Struct({}),
+                output: Schema.String,
+                options: { codemode: false },
+                execute: (_, context) => toolResult(read(context.sessionID)),
+              });
+            });
+          }
+          if (options.react) {
+            const react = options.react;
+            yield* ctx.tool.transform((editor) => {
+              editor.add({
+                name: "react",
+                description: "React to his latest message with a standard tapback",
+                input: Schema.Struct({ tapback: Schema.Literals(tapbacks) }),
+                output: Schema.String,
+                options: { codemode: false },
+                execute: ({ tapback }, context) =>
+                  toolResult(react(context.sessionID, tapback, context.id)),
               });
             });
           }
           yield* ctx.session.hook("context", (event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               const persona = options.personas.get(event.agent)!;
               event.system.splice(0, event.system.length, { type: "text", text: persona.prompt });
               for (const name of Object.keys(event.tools)) {
-                if (name !== "send" || !options.send) delete event.tools[name];
+                if (
+                  (name !== "send" || !options.send) &&
+                  (name !== "read" || !options.read) &&
+                  (name !== "react" || !options.react)
+                )
+                  delete event.tools[name];
               }
-            }),
+              if (options.onContext) yield* options.onContext(event.sessionID);
+            }).pipe(Effect.orDie),
           );
           yield* ctx.session.hook("title", (event) =>
             Effect.gen(function* () {
@@ -131,6 +175,10 @@ export const createHost = (options: HostOptions) =>
           permissions: [
             { action: "*", resource: "*", effect: "deny" },
             ...(options.send ? [{ action: "send", resource: "*", effect: "allow" } as const] : []),
+            ...(options.read ? [{ action: "read", resource: "*", effect: "allow" } as const] : []),
+            ...(options.react
+              ? [{ action: "react", resource: "*", effect: "allow" } as const]
+              : []),
           ],
         });
       },

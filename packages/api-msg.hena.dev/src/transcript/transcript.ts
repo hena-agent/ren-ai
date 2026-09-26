@@ -1,5 +1,6 @@
 export const sent = () => "sent";
 export const notSent = (reason: string) => `not sent: ${reason}`;
+export const notReacted = (reason: string) => `not reacted: ${reason}`;
 
 const tags =
   /<(?=\/?(?:message|gap|photo|tapback|edited|unsent|notice|sent-by-you|phone|checked-phone|conversation-started)\b)/gi;

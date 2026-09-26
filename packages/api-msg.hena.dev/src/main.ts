@@ -17,6 +17,9 @@ import type { Messages } from "./messages/messages.ts";
 import type { Gestures } from "./gestures/gestures.ts";
 import { intake } from "./intake/intake.ts";
 import { onboarding } from "./onboarding/onboarding.ts";
+import { SqlClient } from "effect/unstable/sql";
+import { notReacted } from "./transcript/transcript.ts";
+import type { Tapback } from "./outbox/outbox.ts";
 
 interface OnboardingConfig {
   readonly turnstileSecret: string;
@@ -30,15 +33,20 @@ export const startPersonaHost = (root: string, options: Omit<HostOptions, "perso
 
 export const startMessagingHost = (
   root: string,
-  options: Omit<HostOptions, "personas" | "send" | "handleForSession">,
+  options: Omit<
+    HostOptions,
+    "personas" | "send" | "read" | "react" | "onContext" | "handleForSession"
+  >,
   messages: Messages,
   gestures: Gestures,
   onboardingConfig: OnboardingConfig,
 ) =>
   Effect.gen(function* () {
     yield* migrate;
+    const sql = yield* SqlClient.SqlClient;
     const directory = yield* conversations;
     const sends = yield* outbox(messages, gestures);
+    const seenAtRequest = new Map<string, string | undefined>();
     const host = yield* startPersonaHost(root, {
       ...options,
       handleForSession: (sessionID) =>
@@ -51,6 +59,28 @@ export const startMessagingHost = (
           const conversation = yield* directory.bySession(sessionID);
           if (!conversation) return yield* Effect.fail(new Error("No Conversation for session"));
           return yield* sends.send(conversation, text, callID);
+        }).pipe(Effect.mapError((error) => new Error(String(error)))),
+      onContext: (sessionID) =>
+        Effect.gen(function* () {
+          const seen = yield* sql<{
+            guid: string;
+          }>`SELECT guid FROM intake_seen WHERE session_id = ${sessionID} ORDER BY rowid DESC LIMIT 1`;
+          seenAtRequest.set(sessionID, seen[0]?.guid);
+        }),
+      read: (sessionID) =>
+        Effect.gen(function* () {
+          const conversation = yield* directory.bySession(sessionID);
+          if (!conversation) return yield* Effect.fail(new Error("No Conversation for session"));
+          return yield* gestures.read(conversation.handle).pipe(
+            Effect.as("read"),
+            Effect.catch((error) => Effect.succeed(`not read: ${error.message}`)),
+          );
+        }).pipe(Effect.mapError((error) => new Error(String(error)))),
+      react: (sessionID, tapback: Tapback, callID) =>
+        Effect.gen(function* () {
+          const conversation = yield* directory.bySession(sessionID);
+          if (!conversation) return notReacted("no Conversation for session");
+          return yield* sends.react(conversation, tapback, callID, seenAtRequest.get(sessionID));
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
     });
     const incoming = yield* intake(
@@ -96,7 +126,10 @@ export const startMessagingHost = (
 /** Production opens the server's own file, never OpenCode's database. */
 export const startMessagingServer = (
   root: string,
-  options: Omit<HostOptions, "personas" | "send" | "handleForSession">,
+  options: Omit<
+    HostOptions,
+    "personas" | "send" | "read" | "react" | "onContext" | "handleForSession"
+  >,
   databaseFile: string,
   messages: Messages,
   gestures: Gestures,

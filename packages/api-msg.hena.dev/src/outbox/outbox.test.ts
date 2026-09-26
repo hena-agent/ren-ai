@@ -7,7 +7,19 @@ import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
-import { outbox } from "./outbox.ts";
+import { outbox, tapbacks } from "./outbox.ts";
+
+const createConversation = (handle: string, sessionID: string) =>
+  Effect.flatMap(conversations, (directory) =>
+    directory.create({
+      handle,
+      locale: "ko",
+      consentVersion: "v1",
+      consentLanguage: "ko",
+      personaID: "persona1",
+      sessionID,
+    }),
+  );
 
 test("SQLite migrates once and links each User, Conversation, session and send", async () => {
   await Effect.runPromise(
@@ -53,15 +65,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
     Effect.gen(function* () {
       yield* migrate;
       const sql = yield* SqlClient.SqlClient;
-      const directory = yield* conversations;
-      const conversation = yield* directory.create({
-        handle: "+821000000000",
-        locale: "ko",
-        consentVersion: "v1",
-        consentLanguage: "ko",
-        personaID: "persona1",
-        sessionID: "s1",
-      });
+      const conversation = yield* createConversation("+821000000000", "s1");
       const events: string[] = [];
       const ui = fakeGestures(events);
       const fake = fakeMessages(events);
@@ -129,5 +133,95 @@ test("typing time scales with text and is capped before each recorded send", asy
       Effect.provide(TestClock.layer()),
       Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
     ),
+  );
+});
+
+test("each tapback is recorded before the UI acts, never replayed, and stale or failed reactions are reported", async () => {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      yield* migrate;
+      const sql = yield* SqlClient.SqlClient;
+      const conversation = yield* createConversation("react@example.com", "react-session");
+      const fake = fakeMessages();
+      const ui = fakeGestures();
+      const checked: string[] = [];
+      let expectedGUID = "";
+      const sends = yield* outbox(fake.messages, {
+        ...ui.gestures,
+        react: (handle, tapback) =>
+          Effect.gen(function* () {
+            const rows = yield* sql<{
+              kind: string;
+              state: string;
+              target_guid: string;
+            }>`SELECT kind, state, target_guid FROM send ORDER BY id DESC LIMIT 1`;
+            expect(rows).toEqual([
+              { kind: "tapback", state: "recorded", target_guid: expectedGUID },
+            ]);
+            checked.push(tapback);
+            return yield* ui.gestures.react(handle, tapback);
+          }),
+      });
+      expect(yield* sends.react(conversation, "like", "empty")).toMatch(/^not reacted:/);
+      expect(yield* sends.react(conversation, "like", "absent", "missing-guid")).toMatch(
+        /no message/,
+      );
+      const target = yield* fake.text(conversation.handle, "hello", 100);
+      expectedGUID = target.guid;
+      expect(yield* sends.react(conversation, "like", "unseen")).toMatch(/^not reacted:/);
+      yield* fake.text("other@example.com", "unrelated", 101);
+      const history = yield* fake.messages.after(0);
+      yield* fake.replace([
+        ...history,
+        { ...target, id: history.at(-1)!.id + 1, guid: "outgoing", fromMe: true },
+      ]);
+      for (const [index, tapback] of tapbacks.entries()) {
+        const callID = `reaction-${index}`;
+        expect(yield* sends.react(conversation, tapback, callID, target.guid)).toBe(
+          `reacted ${tapback}`,
+        );
+        expect(yield* sends.react(conversation, tapback, callID, target.guid)).toBe(
+          "not reacted: this call was already recorded",
+        );
+      }
+      expect(checked).toEqual(tapbacks);
+      expect(ui.reactions).toEqual(
+        tapbacks.map((tapback) => ({ handle: conversation.handle, tapback })),
+      );
+      const newer = yield* fake.text(conversation.handle, "new", 101);
+      expectedGUID = newer.guid;
+      expect(yield* sends.react(conversation, "love", "stale", target.guid)).toMatch(
+        /newer message/,
+      );
+      expect(yield* sends.react(conversation, "love", "current", newer.guid)).toBe("reacted love");
+      const failed = yield* outbox(fake.messages, {
+        ...ui.gestures,
+        react: () => Effect.fail(new Error("Messages unavailable")),
+      });
+      expect(yield* failed.react(conversation, "question", "failure", newer.guid)).toBe(
+        "not reacted: Messages unavailable",
+      );
+      expect(yield* failed.react(conversation, "question", "failure", newer.guid)).toBe(
+        "not reacted: this call was already recorded",
+      );
+      expect(yield* failed.react(conversation, "question", "new-call", newer.guid)).toBe(
+        "not reacted: this tapback was already attempted on that message",
+      );
+      const pending =
+        yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
+        VALUES (${conversation.handle}, ${conversation.id}, 'text', 'pending', 'pending', 'uncertain', 0, 0)`;
+      expect(pending).toBeDefined();
+      expect(yield* sends.react(conversation, "love", "blocked", newer.guid)).toMatch(
+        /still in doubt/,
+      );
+      expect((yield* sql`SELECT id FROM send`).length).toBe(9);
+      const states = yield* sql<{ state: string }>`SELECT state FROM send ORDER BY id`;
+      expect(states.map((row) => row.state)).toEqual([
+        ...tapbacks.map(() => "sent"),
+        "sent",
+        "failed",
+        "uncertain",
+      ]);
+    }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
   );
 });

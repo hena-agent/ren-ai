@@ -52,6 +52,7 @@ export const migrate = Effect.gen(function* () {
         guid TEXT NOT NULL,
         PRIMARY KEY (session_id, guid)
       )`,
+      "006_tapback_target": sql`ALTER TABLE send ADD COLUMN target_guid TEXT`,
     }),
   });
 });
