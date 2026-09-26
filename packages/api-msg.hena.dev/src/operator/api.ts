@@ -33,12 +33,20 @@ export const operatorApi = HttpApi.make("operator").add(
         success: Schema.Struct({ blocked: Schema.Boolean }),
         error,
       }),
+    )
+    .add(
+      HttpApiEndpoint.post("rebuild", "/rebuild", {
+        payload: handlePayload,
+        success: Schema.Struct({ result: Schema.Literals(["rebuilt", "not_found", "present"]) }),
+        error,
+      }),
     ),
 );
 
 type Operations = {
   readonly block: (handle: string) => Effect.Effect<void, Error>;
   readonly remove: (handle: string) => Effect.Effect<"removed" | "not_found", Error>;
+  readonly rebuild?: (handle: string) => Effect.Effect<"rebuilt" | "not_found" | "present", Error>;
 };
 
 export const operatorHandler = (operations: Operations) => {
@@ -55,6 +63,15 @@ export const operatorHandler = (operations: Operations) => {
         normalized(payload.handle).pipe(
           Effect.flatMap((handle) => operations.block(handle)),
           Effect.as({ blocked: true }),
+          Effect.mapError((failure) => ({ reason: String(failure) })),
+        ),
+      )
+      .handle("rebuild", ({ payload }) =>
+        normalized(payload.handle).pipe(
+          Effect.flatMap(
+            (handle) => operations.rebuild?.(handle) ?? Effect.succeed("not_found" as const),
+          ),
+          Effect.map((result) => ({ result })),
           Effect.mapError((failure) => ({ reason: String(failure) })),
         ),
       ),

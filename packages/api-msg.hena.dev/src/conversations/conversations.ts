@@ -20,12 +20,26 @@ export const conversations = Effect.gen(function* () {
       (rows) => rows[0],
     );
   return {
-    all: () => sql<Conversation>`SELECT conversation.id, user.handle,
-      conversation.persona_id AS personaID, conversation.session_id AS sessionID
-      FROM conversation JOIN user ON user.id = conversation.user_id
-      WHERE NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
     byHandle: (handle: string) => lookup("handle", handle),
     bySession: (sessionID: string) => lookup("session_id", sessionID),
+    all: () => sql<Conversation>`SELECT conversation.id, user.handle, conversation.persona_id AS personaID,
+      conversation.session_id AS sessionID FROM conversation
+      JOIN user ON user.id = conversation.user_id
+      WHERE NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
+    replaceSession: (conversation: Conversation, sessionID: string) =>
+      sql`UPDATE conversation SET session_id = ${sessionID}, rebuilding = 1 WHERE id = ${conversation.id}
+        AND session_id = ${conversation.sessionID} AND NOT EXISTS
+        (SELECT 1 FROM blocked WHERE blocked.handle = ${conversation.handle}) RETURNING id`,
+    rebuilt: (conversation: Conversation) =>
+      sql`UPDATE conversation SET rebuilding = 0 WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID}`,
+    rebuilding: (conversation: Conversation) =>
+      Effect.map(
+        sql<{
+          rebuilding: number;
+        }>`SELECT rebuilding FROM conversation WHERE id = ${conversation.id}
+        AND session_id = ${conversation.sessionID}`,
+        (rows) => rows[0]?.rebuilding === 1,
+      ),
     block: (handle: string) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
@@ -35,6 +49,8 @@ export const conversations = Effect.gen(function* () {
       Effect.map(
         sql`SELECT 1 FROM conversation JOIN user ON user.id = conversation.user_id
           WHERE conversation.id = ${conversation.id} AND user.handle = ${conversation.handle}
+          AND conversation.session_id = ${conversation.sessionID}
+          AND conversation.rebuilding = 0
           AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
         (rows) => rows.length > 0,
       ),

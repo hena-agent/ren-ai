@@ -92,6 +92,7 @@ export const followUps = (
           personaID: due.personaID,
         };
         if (!(yield* active(conversation))) {
+          yield* Effect.sleep("1 second");
           return;
         }
         // The ID is stable if prompt admission fails and the server restarts.

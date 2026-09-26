@@ -78,6 +78,7 @@ export const migrate = Effect.gen(function* () {
         wake_pending INTEGER NOT NULL DEFAULT 0,
         followed_up INTEGER NOT NULL DEFAULT 0
       )`,
+      "013_rebuilding": sql`ALTER TABLE conversation ADD COLUMN rebuilding INTEGER NOT NULL DEFAULT 0`,
     }),
   });
 });

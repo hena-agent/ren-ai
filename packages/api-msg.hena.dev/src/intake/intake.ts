@@ -22,6 +22,8 @@ export const intake = (
   reconcile?: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,
   received: (conversation: Conversation, date: number) => Effect.Effect<void, Error> = () =>
     Effect.void,
+  ensure?: (handle: string) => Effect.Effect<void, Error>,
+  startImmediately = true,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -69,10 +71,78 @@ export const intake = (
         yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${conversation.sessionID}, ${row.guid})`;
         signal(conversation);
       });
+    const replayOutgoing = (conversation: Conversation, row: IncomingMessage, seen: boolean) =>
+      Effect.gen(function* () {
+        if ((yield* messages.sendStatus(row.guid)) === "failed") return false;
+        if (seen) return true;
+        yield* prompt(
+          conversation.sessionID,
+          promptID(conversation.sessionID, row.guid),
+          sentByYou(row.text, row.createdAt, timeZone(conversation.personaID)),
+        );
+        return true;
+      });
+    const replay = (conversation: Conversation) =>
+      Effect.gen(function* () {
+        const active = yield* byHandle(conversation.handle);
+        if (active?.sessionID !== conversation.sessionID) return;
+        const notices = yield* sql<{ guid: string | null }>`SELECT guid FROM send
+          WHERE handle = ${conversation.handle} AND kind = 'notice'`;
+        const noticeGUIDs = new Set(notices.map((row) => row.guid));
+        const started = yield* sql<{ startedAt: number }>`SELECT started_at AS startedAt
+          FROM conversation WHERE id = ${conversation.id}`;
+        const [followUp] = yield* sql<{ lastSentAt: number }>`SELECT last_sent_at AS lastSentAt
+          FROM follow_up WHERE conversation_id = ${conversation.id}`;
+        const rows = (yield* messages.after(0))
+          .filter(
+            (row) => row.handle === conversation.handle && row.createdAt >= started[0]!.startedAt,
+          )
+          .toSorted((a, b) => a.id - b.id);
+        let previous: number | null = null;
+        let firstReply: number | null = null;
+        let latest = followUp?.lastSentAt ?? 0;
+        for (const row of rows) {
+          if (
+            (yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID ||
+            noticeGUIDs.has(row.guid)
+          )
+            continue;
+          const seen =
+            yield* sql`SELECT 1 FROM intake_seen WHERE session_id = ${conversation.sessionID}
+              AND guid = ${row.guid}`;
+          if (row.fromMe) {
+            if (!(yield* replayOutgoing(conversation, row, seen.length > 0))) continue;
+          } else {
+            firstReply ??= row.createdAt;
+            if (seen.length) {
+              previous = row.createdAt;
+              latest = Math.max(latest, row.createdAt);
+              continue;
+            }
+            yield* prompt(
+              conversation.sessionID,
+              promptID(conversation.sessionID, row.guid),
+              message(row.text, row.createdAt, previous, timeZone(conversation.personaID)),
+            );
+            previous = row.createdAt;
+          }
+          latest = Math.max(latest, row.createdAt);
+          yield* sql`INSERT OR IGNORE INTO intake_seen (session_id, guid)
+            VALUES (${conversation.sessionID}, ${row.guid})`;
+        }
+        if ((yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID) return;
+        if (previous !== null) {
+          yield* sql`INSERT INTO intake_last (conversation_id, date) VALUES (${conversation.id}, ${previous})
+            ON CONFLICT(conversation_id) DO UPDATE SET date = excluded.date`;
+          yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${firstReply}) WHERE handle = ${conversation.handle}`;
+        }
+        if (latest > (followUp?.lastSentAt ?? 0)) yield* received(conversation, latest);
+      });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!replaced && row.id <= last.rowID && row.createdAt <= last.date) return;
         if (replaced && row.createdAt < current.date) return;
+        if (ensure) yield* ensure(row.handle);
         if (row.fromMe) {
           yield* outgoing(row);
           last = { rowID: row.id, date: row.createdAt };
@@ -118,10 +188,14 @@ export const intake = (
         last = { rowID: row.id, date: row.createdAt };
         yield* save(last);
       });
-    const stop = yield* messages.follow(cursor, receive);
-    yield* Effect.addFinalizer(() => Effect.sync(stop));
+    const start = messages
+      .follow(cursor, receive)
+      .pipe(Effect.flatMap((stop) => Effect.addFinalizer(() => Effect.sync(stop))));
+    if (startImmediately) yield* start;
     yield* Effect.forkScoped(changes.monitor);
     return {
+      replay,
+      start,
       onNew: (listener: (conversation: Conversation) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);

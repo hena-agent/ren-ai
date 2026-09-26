@@ -187,7 +187,7 @@ test("restores existing replied Conversations and their persisted wake on restar
         yield* Effect.forkScoped(restarted.monitor);
         yield* TestClock.setTime(row!.due);
         expect(checked).toBe(true);
-        yield* Effect.yieldNow;
+        yield* TestClock.adjust("1 second");
         expect(prompts).toEqual([`msg_checked_${existing.id}_${row!.due}`]);
         expect(allowedAtPrompt).toEqual([true]);
         expect(original).toBeDefined();
