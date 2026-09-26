@@ -1,8 +1,9 @@
 import { Effect } from "effect";
-import type { IncomingMessage, Messages } from "./messages.ts";
+import type { IncomingMessage, Messages, OutgoingStatus } from "./messages.ts";
 
 export const fakeMessages = (events: string[] = []) => {
   const bubbles: { handle: string; text: string }[] = [];
+  const outgoing = new Map<string, OutgoingStatus>();
   let rows = Array.of<IncomingMessage>();
   const watchers = new Set<(row: IncomingMessage) => Effect.Effect<void, Error>>();
   const messages: Messages = {
@@ -10,8 +11,10 @@ export const fakeMessages = (events: string[] = []) => {
       Effect.sync(() => {
         events.push("send");
         bubbles.push({ handle, text });
+        outgoing.set(handle, { delivered: false, readAt: null });
         return { guid: `fake-${bubbles.length}` };
       }),
+    lastOutgoingStatus: (handle) => Effect.sync(() => outgoing.get(handle)),
     after: (rowID) => Effect.sync(() => rows.filter((row) => row.id > rowID)),
     recent: (handle, since) =>
       Effect.sync(() => rows.filter((row) => row.handle === handle && row.createdAt >= since)),
@@ -43,6 +46,7 @@ export const fakeMessages = (events: string[] = []) => {
     messages,
     bubbles,
     events,
+    status: (handle: string, status: OutgoingStatus) => outgoing.set(handle, status),
     text,
     redeliver: (row: IncomingMessage) => Effect.forEach(watchers, (receive) => receive(row)),
     edit: (guid: string, content: string) =>

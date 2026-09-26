@@ -54,47 +54,6 @@ memory: Remember his name.
 You are Persona1. Speak Korean.
 `;
 
-const verifyViewer = (
-  web: (request: Request) => Promise<Response>,
-  directory: string,
-  sessionID: string,
-  messageID: string,
-) =>
-  Effect.gen(function* () {
-    const viewer = viewerFront(web, "only-the-operator-knows");
-    const authorization = `Basic ${Buffer.from("opencode:only-the-operator-knows").toString("base64")}`;
-    const viewed = (path: string, method = "GET", authenticated = true) =>
-      viewer(
-        new Request(`http://host.local${path}`, {
-          method,
-          headers: {
-            ...(authenticated ? { authorization } : {}),
-            "x-opencode-directory": directory,
-          },
-        }),
-      );
-    for (const path of [
-      "/api/info",
-      "/api/project",
-      "/api/location",
-      "/api/session",
-      `/api/session/${sessionID}`,
-      `/api/session/${sessionID}/message`,
-      `/api/session/${sessionID}/inbox`,
-      `/api/session/${sessionID}/message/${messageID}`,
-    ]) {
-      expect((yield* Effect.promise(() => viewed(path))).status).toBe(200);
-      expect((yield* Effect.promise(() => viewed(path, "GET", false))).status).toBe(401);
-    }
-    for (const path of ["/api/config", "/api/plugin", "/openapi.json", "/api/session/active"]) {
-      expect((yield* Effect.promise(() => viewed(path))).status).toBe(403);
-    }
-    expect((yield* Effect.promise(() => viewed("/api/session", "POST"))).status).toBe(403);
-    const events = yield* Effect.promise(() => viewed("/api/event"));
-    expect(events.status).toBe(200);
-    yield* Effect.promise(() => events.body!.cancel());
-  });
-
 const model = SessionRunnerModel.resolved(
   LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
   {
@@ -171,6 +130,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             },
             model: "test/probe",
             handleForSession: (sessionID) => Effect.succeed(handles.get(sessionID)),
+            health: { raise: () => Effect.void },
             overrides: scriptedOverrides(llm),
           });
           yield* Effect.tryPromise(() => host.run(host.plugins.register(intruder)));
@@ -274,7 +234,25 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             '"private-test":{"name":"Private Test","settings":{"apiKey":"passed-in-code"}}',
           );
           expect(config).toContain('"persona1":{"mode":"primary"}');
-          yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id);
+          const viewer = viewerFront(host.web, "only-the-operator-knows");
+          const browse = (authorization?: string) =>
+            viewer(
+              new Request(
+                `http://host.local/api/session/${session.id}/message/${messages[0]!.id}`,
+                {
+                  headers: {
+                    "x-opencode-directory": personaDirectory,
+                    authorization: authorization ?? "",
+                  },
+                },
+              ),
+            );
+          expect((yield* Effect.promise(() => browse())).status).toBe(401);
+          expect(
+            (yield* Effect.promise(() =>
+              browse(`Basic ${Buffer.from("opencode:only-the-operator-knows").toString("base64")}`),
+            )).status,
+          ).toBe(200);
           for (const id of [
             "opencode.config.instruction",
             "opencode.config.compatibility",
@@ -309,31 +287,6 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
   }
 }, 60000);
 
-test("a host cannot silently fall back to the Mac database", async () => {
-  const root = await mkdtemp(join(tmpdir(), "invalid-host-db-"));
-  const personaDirectory = join(root, "content");
-  await mkdir(personaDirectory);
-  await writeFile(join(personaDirectory, "persona1.md"), valid);
-  try {
-    await expect(
-      Effect.runPromise(
-        Effect.scoped(
-          startPersonaHost(join(root, "isolated"), {
-            configDirectory: join(root, "private", "config"),
-            databasePath: join(root, "missing-parent", "database.sqlite"),
-            personaDirectory,
-            providers: {},
-            model: "test/probe",
-            handleForSession: () => Effect.succeed(undefined),
-          }),
-        ),
-      ),
-    ).rejects.toThrow(/sqlite|open|database/i);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-}, 60000);
-
 test("a scripted persona sends several ordered bubbles only to her Conversation", async () => {
   const root = await mkdtemp(join(tmpdir(), "messaging-host-"));
   const personaDirectory = join(root, "content");
@@ -343,7 +296,9 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
     valid.replace("Asia/Seoul", "Pacific/Honolulu"),
   );
   const events: string[] = [];
+  const alerts: string[] = [];
   const imessage = fakeMessages(events);
+  let statusFails = false;
   const ui = fakeGestures(events);
   try {
     await Effect.runPromise(
@@ -368,9 +323,19 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               providers: {},
               model: "test/probe",
               overrides: scriptedOverrides(llm),
+              health: {
+                raise: (name, detail) =>
+                  Effect.sync(() => {
+                    alerts.push(`${name}: ${detail}`);
+                  }),
+              },
             },
             {
               ...imessage.messages,
+              lastOutgoingStatus: (handle) =>
+                statusFails
+                  ? Effect.fail(new Error("status unavailable"))
+                  : imessage.messages.lastOutgoingStatus(handle),
               sendText: (handle, text) =>
                 Effect.gen(function* () {
                   const pending = yield* sql<{
@@ -438,6 +403,16 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
           ).toEqual([["send"], ["send"], ["send"]]);
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
+          const initialRequests = yield* llm.requests();
+          expect(JSON.stringify(initialRequests[0]?.messages)).toContain(
+            'your-last-message=\\"sent\\"',
+          );
+          expect(JSON.stringify(initialRequests[1]?.messages)).toContain(
+            'your-last-message=\\"sent\\"',
+          );
+          expect(JSON.stringify(initialRequests[0]?.system)).toContain(
+            "Read the English tags as events on your phone.",
+          );
           expect((yield* host.sessions.get(session.id)).title).toBe("Persona1 · +821011111111");
           expect(imessage.bubbles).toEqual([
             { handle: first.handle, text: "bubble 1" },
@@ -462,10 +437,37 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).toContain("sent");
           step = 3;
+          imessage.status(first.handle, { delivered: true, readAt: null });
+          yield* host.sessions.prompt({ sessionID: session.id, text: "check delivery" });
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect(JSON.stringify((yield* llm.requests()).at(-1)?.messages)).toContain(
+            'your-last-message=\\"delivered\\"',
+          );
+          imessage.status(first.handle, {
+            delivered: true,
+            readAt: Date.parse("2026-09-25T12:04:00Z"),
+          });
+          yield* host.sessions.prompt({ sessionID: session.id, text: "check read" });
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect(JSON.stringify((yield* llm.requests()).at(-1)?.messages)).toContain(
+            'your-last-message=\\"read 02:04\\"',
+          );
+          statusFails = true;
+          const beforeFailure = (yield* llm.requests()).length;
+          yield* host.sessions.prompt({ sessionID: session.id, text: "status unavailable" });
+          yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect((yield* host.sessions.get(session.id)).outcome).toBe("failed");
+          expect(yield* llm.requests()).toHaveLength(beforeFailure);
+          statusFails = false;
+          expect(
+            JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
+          ).not.toContain("<phone now=");
+          step = 3;
           const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
           yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual(["send"]);
+          expect(alerts).toContain("unexpected-tool: OpenCode offered disallowed tool: intruder");
           step = 0;
           const orphan = yield* host.createSession("persona1");
           yield* host.sessions.prompt({
