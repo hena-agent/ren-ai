@@ -1,4 +1,5 @@
 import { Deferred, Effect, Fiber, Layer, PlatformError, Sink, Stream } from "effect";
+import { TestClock } from "effect/testing";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { expect, test } from "vitest";
 import { makeMessagesUi } from "./messages-ui.ts";
@@ -92,21 +93,34 @@ test("typing checks the chat, guards each character, clears and parks", async ()
   ]);
 });
 
+const expectTypingDuration = (typing: Effect.Effect<boolean, Error>, duration: number, spent = 0) =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkScoped(typing);
+        if (spent) yield* TestClock.adjust(spent);
+        yield* TestClock.adjust(duration - spent - 1);
+        const pending = fiber.pollUnsafe() === undefined;
+        yield* TestClock.adjust(1);
+        return { pending, result: yield* Fiber.join(fiber) };
+      }).pipe(Effect.provide(TestClock.layer())),
+    ),
+  );
+
 test("typing spends its allotted time even without UI contention", async () => {
   const { gestures } = await setup();
-  const started = Date.now();
-  expect(await Effect.runPromise(gestures.typing("alice@example.com", "x", 60))).toBe(true);
-  expect(Date.now() - started).toBeGreaterThanOrEqual(50);
-  expect(Date.now() - started).toBeLessThan(105);
+  expect(await expectTypingDuration(gestures.typing("alice@example.com", "x", 60), 60)).toEqual({
+    pending: true,
+    result: true,
+  });
 });
 
 test("time spent typing characters counts toward the typing duration", async () => {
   const fixture = await setup();
   fixture.pauseKey(Effect.sleep(40));
-  const started = Date.now();
-  await Effect.runPromise(fixture.gestures.typing("alice@example.com", "x", 120));
-  expect(Date.now() - started).toBeGreaterThanOrEqual(110);
-  expect(Date.now() - started).toBeLessThan(185);
+  expect(
+    await expectTypingDuration(fixture.gestures.typing("alice@example.com", "x", 120), 120, 40),
+  ).toEqual({ pending: true, result: true });
 });
 
 test("typing stops on a failed guard and still parks", async () => {
