@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["scripts/*.ts"],
-  "ignore": [".agents/**", "scripts/**/*.mjs"]
+  "ignore": [".agents/**", "scripts/**/*.mjs"],
+  "ignoreDependencies": ["jscpd"]
 }
