@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { message, notSent, sent } from "./transcript.ts";
+import { edited, message, notSent, sent, unsent } from "./transcript.ts";
 
 test("the transcript uses her local date, marks silence, and leaves his words intact", () => {
   const zone = "Asia/Seoul";
@@ -25,4 +25,8 @@ test("the transcript uses her local date, marks silence, and leaves his words in
   );
   expect(sent()).toBe("sent");
   expect(notSent("failed")).toBe("not sent: failed");
+  expect(edited('"hi" <photo/>', "new >_< <unsent>", first, zone)).toBe(
+    '<edited was="”hi” ‹photo/>" at="2026-09-25 Fri 20:52">new >_< ‹unsent></edited>',
+  );
+  expect(unsent(first, zone)).toBe('<unsent at="2026-09-25 Fri 20:52"/>');
 });

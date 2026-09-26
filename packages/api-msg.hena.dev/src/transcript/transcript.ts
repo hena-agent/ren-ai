@@ -5,6 +5,7 @@ const tags =
   /<(?=\/?(?:message|gap|photo|tapback|edited|unsent|notice|sent-by-you|phone|checked-phone|conversation-started)\b)/gi;
 
 const words = (text: string) => text.replace(tags, "‹");
+const attribute = (text: string) => words(text).replaceAll('"', "”");
 
 const timestamp = (date: number, timeZone: string) => {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -32,3 +33,9 @@ export const message = (text: string, date: number, previous: number | null, tim
       : "";
   return `${gap}<message at="${at}">${words(text)}</message>`;
 };
+
+export const edited = (old: string, text: string, date: number, timeZone: string) =>
+  `<edited was="${attribute(old)}" at="${timestamp(date, timeZone)}">${words(text)}</edited>`;
+
+export const unsent = (date: number, timeZone: string) =>
+  `<unsent at="${timestamp(date, timeZone)}"/>`;

@@ -13,6 +13,8 @@ export const fakeMessages = (events: string[] = []) => {
         return { guid: `fake-${bubbles.length}` };
       }),
     after: (rowID) => Effect.sync(() => rows.filter((row) => row.id > rowID)),
+    recent: (handle, since) =>
+      Effect.sync(() => rows.filter((row) => row.handle === handle && row.createdAt >= since)),
     follow: (rowID, receive) =>
       Effect.gen(function* () {
         watchers.add(receive);
@@ -43,6 +45,14 @@ export const fakeMessages = (events: string[] = []) => {
     events,
     text,
     redeliver: (row: IncomingMessage) => Effect.forEach(watchers, (receive) => receive(row)),
+    edit: (guid: string, content: string) =>
+      Effect.sync(() => {
+        rows = rows.map((row) => (row.guid === guid ? { ...row, text: content } : row));
+      }),
+    unsend: (guid: string) =>
+      Effect.sync(() => {
+        rows = rows.map((row) => (row.guid === guid ? { ...row, text: "" } : row));
+      }),
     replace: (replacement: ReadonlyArray<IncomingMessage>) =>
       Effect.sync(() => (rows = [...replacement])),
   };

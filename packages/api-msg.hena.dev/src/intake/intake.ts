@@ -4,6 +4,7 @@ import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
 import { message } from "../transcript/transcript.ts";
+import { watchEdits } from "./edits.ts";
 
 interface Bookmark {
   readonly rowID: number;
@@ -19,6 +20,10 @@ export const intake = (
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const listeners = new Set<(conversation: Conversation) => void>();
+    const signal = (conversation: Conversation) => {
+      for (const listener of listeners) listener(conversation);
+    };
+    const changes = yield* watchEdits(messages, prompt, timeZone, signal);
     const bookmark = () =>
       Effect.map(
         sql<Bookmark>`SELECT row_id AS rowID, date FROM bookmark WHERE id = 1`,
@@ -74,7 +79,8 @@ export const intake = (
               yield* save({ rowID: row.id, date: row.createdAt });
             }).pipe(sql.withTransaction);
             last = { rowID: row.id, date: row.createdAt };
-            for (const listener of listeners) listener(conversation);
+            changes.remember(conversation, row);
+            signal(conversation);
             return;
           }
         }
@@ -83,6 +89,7 @@ export const intake = (
       });
     const stop = yield* messages.follow(cursor, receive);
     yield* Effect.addFinalizer(() => Effect.sync(stop));
+    yield* Effect.forkScoped(changes.monitor);
     return {
       onNew: (listener: (conversation: Conversation) => void) => {
         listeners.add(listener);
