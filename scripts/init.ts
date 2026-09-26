@@ -15,8 +15,8 @@ const TARGETS = [
   "package.json",
   "README.md",
   "AGENTS.md",
-  "{apps,packages}/*/package.json",
-  "{apps,packages}/*/src/**/*.ts",
+  "packages/*/package.json",
+  "packages/*/src/**/*.ts",
 ];
 
 const rescope = (scope: string): number => {

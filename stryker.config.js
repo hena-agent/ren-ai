@@ -16,6 +16,11 @@ export default {
   // once that ships. If a version bump makes the patch stop applying, this gate fails closed: the
   // score collapses and `thresholds.break` fails the build rather than passing vacuously.
 
+  // The same patch switches Vitest 5's pool to forks (still one worker per runner). OpenCode
+  // loads ffi-rs; importing that addon in a Linux worker thread segfaults the Node process.
+  // Plain Vitest uses forks, but Stryker overrides its pool to threads.
+  // Forks preserve the same tests, coverage analysis and mutation threshold.
+
   // Stryker discovers plugins by globbing `node_modules/@stryker-mutator/*`. Bun's isolated
   // linker leaves only symlinks behind, so the glob finds nothing and the runner fails with
   // `Cannot find TestRunner plugin "vitest"`.
@@ -37,7 +42,7 @@ export default {
   tsconfigFile: "tsconfig.stryker-disabled.json",
 
   coverageAnalysis: "perTest",
-  mutate: ["{apps,packages}/*/src/**/*.ts", "!**/*.test.ts", ...excluded],
+  mutate: ["packages/*/src/**/*.{ts,tsx}", "!**/*.test.{ts,tsx}", ...excluded],
   thresholds: { high: 100, low: 100, break: 100 },
   reporters: ["progress", "clear-text"],
 };

@@ -6,9 +6,10 @@ type Entry = { readonly path: string; readonly reason: string; readonly added: s
 
 const GATES = ["coverage", "mutation", "duplication", "lint"] as const;
 
-const SUPPRESSION = /(oxlint-disable\S*|Stryker disable\S*|v8 ignore\S*)(?<rest>[^\n]*)/gu;
+const SUPPRESSION =
+  /(oxlint-disable\S*|eslint-disable\S*|@ts-nocheck|Stryker disable\S*|v8 ignore\S*)(?<rest>[^\n]*)/gu;
 
-const SOURCE_GLOB = "{apps,packages}/*/src/**/*.ts";
+const SOURCE_GLOB = "packages/*/src/**/*.{ts,tsx}";
 
 const fileEntries = (): readonly (readonly [string, Entry])[] =>
   GATES.flatMap((gate) =>
@@ -22,7 +23,7 @@ const inlineSuppressions = (): readonly (readonly [string, string])[] =>
         (match) => [file, match.groups?.["rest"] ?? ""] as const,
       ),
     )
-    .map(([file, rest]) => [file, rest.trim()] as const);
+    .map(([file, rest]) => [file, rest.replace(/\*\/.*$/u, "").trim()] as const);
 
 const failures: string[] = [];
 
@@ -38,7 +39,7 @@ for (const [gate, entry] of entries) {
 
 const inline = inlineSuppressions();
 for (const [file, rest] of inline) {
-  if (!rest.includes("--")) {
+  if (!/--\s+\S/u.test(rest)) {
     failures.push(`${file}: inline suppression has no "-- reason"`);
   }
 }

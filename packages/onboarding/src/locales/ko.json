@@ -1,0 +1,39 @@
+{
+  "market": { "country": "KR", "dialCode": "+82" },
+  "privacyNoticeVersion": "pending",
+  "home": {
+    "title": "메시지로 만나는 새로운 대화",
+    "description": "iMessage에서 AI 페르소나와 자연스럽게 이야기를 나눠 보세요.",
+    "privacyLink": "개인정보 처리방침"
+  },
+  "form": {
+    "handleLabel": "전화번호 또는 Apple ID 이메일",
+    "countryLabel": "국가",
+    "submit": "iMessage로 시작하기",
+    "invalidHandle": "전화번호 또는 이메일을 확인해 주세요.",
+    "consent": "개인정보 처리방침을 읽고 동의합니다.",
+    "inProgress": "iMessage를 확인하고 있어요.",
+    "waitlistLink": "대기 명단에 등록하기"
+  },
+  "privacy": {
+    "title": "개인정보 처리방침",
+    "placeholder": "개인정보 처리방침은 준비 중입니다. 신청은 아직 받지 않습니다.",
+    "homeLink": "홈으로 돌아가기"
+  },
+  "answers": {
+    "sent": "iMessage를 확인해 주세요.",
+    "no_imessage": "현재 iPhone만 지원해요. 대기 명단에 등록해 주세요.",
+    "unknown": "메시지를 보냈어요. 받지 못하셨다면 이 번호는 iMessage를 사용하지 않을 수 있어요. 대기 명단에 등록해 주세요.",
+    "full": "현재 이용 인원이 다 찼어요. 대기 명단에 등록해 주세요.",
+    "try_later": "잠시 후 다시 시도해 주세요."
+  },
+  "waitlist": {
+    "title": "대기 명단",
+    "emailLabel": "이메일",
+    "invalidEmail": "올바른 이메일을 입력해 주세요.",
+    "submit": "등록하기",
+    "success": "등록되었습니다.",
+    "failure": "등록하지 못했어요. 잠시 후 다시 시도해 주세요."
+  },
+  "notice": "안녕하세요, hena예요. 이제 AI 캐릭터가 메시지를 보낼 거예요. 그만 받고 싶으면 이 대화를 차단해 주세요."
+}
