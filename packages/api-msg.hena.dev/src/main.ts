@@ -10,6 +10,9 @@ import { conversations } from "./conversations/conversations.ts";
 import { outbox } from "./outbox/outbox.ts";
 import type { Messages } from "./messages/messages.ts";
 import type { Gestures } from "./gestures/gestures.ts";
+import { intake } from "./intake/intake.ts";
+import { Session } from "@opencode/schema/session";
+import { SessionMessage } from "@opencode/schema/session-message";
 
 export const startPersonaHost = (root: string, options: Omit<HostOptions, "personas">) =>
   Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
@@ -40,7 +43,16 @@ export const startMessagingHost = (
           return yield* sends.send(conversation, text, callID);
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
     });
-    return { ...host, conversations: directory };
+    const incoming = yield* intake(
+      messages,
+      (handle) => directory.byHandle(handle),
+      (sessionID, id, text) =>
+        host.sessions
+          .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
+          .pipe(Effect.asVoid),
+      (personaID) => host.personas.get(personaID)!.timeZone,
+    );
+    return { ...host, conversations: directory, intake: incoming };
   });
 
 /** Production opens the server's own file, never OpenCode's database. */

@@ -115,6 +115,7 @@ export const createHost = (options: HostOptions) =>
       Scope.Scope | HttpServerRequest.HttpServerRequest
     >(services)(Context.get(services, HttpRouter.HttpRouter).asHttpEffect());
     return {
+      personas: options.personas,
       sessions,
       plugins,
       run: runtime.runPromise.bind(runtime),
