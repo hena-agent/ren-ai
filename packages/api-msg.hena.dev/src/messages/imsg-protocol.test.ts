@@ -153,6 +153,10 @@ test("the in-memory status checks each sent GUID, not the entire send history", 
   const second = await Effect.runPromise(fake.messages.sendText("second@example.com", "two"));
   expect((await Effect.runPromise(fake.messages.status(first.guid!))).state).toBe("sent");
   expect((await Effect.runPromise(fake.messages.status(second.guid!))).state).toBe("sent");
+  const pending = await Effect.runPromise(
+    fake.outgoing("third@example.com", "pending", 0, "unknown"),
+  );
+  expect((await Effect.runPromise(fake.messages.status(pending.guid))).state).toBe("pending");
 });
 
 test("a non-advancing scan fails instead of looping; history limit grows beyond 50 rows", async () => {
