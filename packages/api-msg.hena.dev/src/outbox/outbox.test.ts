@@ -75,7 +75,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
       expect(yield* ui.gestures.read(conversation.handle)).toBeUndefined();
       expect(yield* ui.gestures.react(conversation.handle, "like")).toBeUndefined();
       const failed = yield* outbox(
-        { sendText: () => Effect.fail(new Error("imsg timed out")) },
+        { ...fake.messages, sendText: () => Effect.fail(new Error("imsg timed out")) },
         {
           ...ui.gestures,
           typing: () => Effect.fail(new Error("UI unavailable")),

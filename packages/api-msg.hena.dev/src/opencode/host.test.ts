@@ -338,7 +338,10 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
   const root = await mkdtemp(join(tmpdir(), "messaging-host-"));
   const personaDirectory = join(root, "content");
   await mkdir(personaDirectory);
-  await writeFile(join(personaDirectory, "persona1.md"), valid);
+  await writeFile(
+    join(personaDirectory, "persona1.md"),
+    valid.replace("Asia/Seoul", "Pacific/Honolulu"),
+  );
   const events: string[] = [];
   const imessage = fakeMessages(events);
   const ui = fakeGestures(events);
@@ -367,6 +370,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               overrides: scriptedOverrides(llm),
             },
             {
+              ...imessage.messages,
               sendText: (handle, text) =>
                 Effect.gen(function* () {
                   const pending = yield* sql<{
@@ -421,8 +425,14 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             { action: "*", resource: "*", effect: "deny" },
             { action: "send", resource: "*", effect: "allow" },
           ]);
-          yield* host.sessions.prompt({ sessionID: session.id, text: "say hello" });
+          const signals: number[] = [];
+          host.intake.onNew((conversation) => signals.push(conversation.id));
+          yield* imessage.text(first.handle, "안녕", Date.parse("2026-09-25T11:52:00Z"));
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
+          expect(signals).toEqual([first.id]);
+          expect(JSON.stringify(yield* llm.requests())).toContain(
+            '<message at=\\"2026-09-25 Fri 01:52\\">안녕</message>',
+          );
           expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
           expect(
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),

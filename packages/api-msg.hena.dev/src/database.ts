@@ -38,6 +38,20 @@ export const migrate = Effect.gen(function* () {
         updated_at INTEGER NOT NULL,
         UNIQUE (conversation_id, tool_call_id)
       )`,
+      "003_intake": sql`CREATE TABLE bookmark (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        row_id INTEGER NOT NULL,
+        date INTEGER NOT NULL
+      )`,
+      "004_intake_last": sql`CREATE TABLE intake_last (
+        conversation_id INTEGER PRIMARY KEY REFERENCES conversation(id) ON DELETE CASCADE,
+        date INTEGER NOT NULL
+      )`,
+      "005_intake_seen": sql`CREATE TABLE intake_seen (
+        session_id TEXT NOT NULL,
+        guid TEXT NOT NULL,
+        PRIMARY KEY (session_id, guid)
+      )`,
     }),
   });
 });
