@@ -7,3 +7,5 @@ dist/
 reports/
 .gates-check/
 stryker.log
+.env
+apps/persona-lab/data/

@@ -1,0 +1,23 @@
+{
+  "name": "@repo/persona-lab",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "persona-lab": "./src/run.mjs"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "bun src/run.mjs",
+    "start": "bun src/run.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@repo/persona-engine": "workspace:*",
+    "ai": "7.0.113"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  }
+}
