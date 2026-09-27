@@ -193,9 +193,16 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           );
           expect(config).toContain('"persona1":{"mode":"primary"}');
           expect(config).toContain('"compaction":{"keep":{"tokens":12000},"buffer":40000}');
-          expect(
-            yield* verifyViewer(host.web, personaDirectory, session.id, messages[0]!.id),
-          ).toEqual(expectedViewerResults(session.id, messages[0]!.id));
+          const { publicBodies, ...viewerResults } = yield* verifyViewer(
+            host.web,
+            personaDirectory,
+            session.id,
+            messages[0]!.id,
+          );
+          expect(viewerResults).toEqual(expectedViewerResults(session.id, messages[0]!.id));
+          expect(publicBodies["/api/session"]).toContain(session.id);
+          expect(publicBodies[`/api/session/${session.id}`]).toContain(session.id);
+          expect(publicBodies[`/api/session/${session.id}/message`]).toContain(messages[0]!.id);
           for (const id of disabledIDs) {
             expect(config).toContain(`-${id}`);
           }

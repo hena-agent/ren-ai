@@ -202,3 +202,20 @@ test("replay preserves a follow-up's wake until a newer iMessage row arrives", a
     ),
   );
 });
+
+test("a removed Conversation is not rebuilding", async () => {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      yield* migrate;
+      const directory = yield* conversations;
+      const conversation = yield* directory.create({ ...conversationInput, sessionID: "removed" });
+      expect(yield* directory.rebuilding(conversation)).toBe(false);
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
+      expect(yield* directory.rebuilding(conversation)).toBe(true);
+      yield* sql`DELETE FROM user WHERE handle = ${handle}`;
+      expect(yield* directory.byHandle(handle)).toBeUndefined();
+      expect(yield* directory.rebuilding(conversation)).toBe(false);
+    }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+  );
+});

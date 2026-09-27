@@ -5,6 +5,7 @@ import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test, vi } from "vitest";
+import { migrate } from "./database.ts";
 import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { startMessagingServer } from "./main.ts";
@@ -14,6 +15,35 @@ import { silentAlerts } from "./opencode/scripted-overrides.test-helper.ts";
 vi.mock("@effect/sql-sqlite-bun", async () => ({
   SqliteClient: { layer: (await import("@effect/sql-sqlite-node")).SqliteClient.layer },
 }));
+
+test("forward migration leaves exactly the PRD app tables", async () => {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      yield* migrate;
+      const sql = yield* SqlClient.SqlClient;
+      const rows = yield* sql<{ name: string }>`SELECT name FROM sqlite_master
+        WHERE type = 'table' ORDER BY name`;
+      const names = rows.map((row) => row.name);
+      expect(names.filter((name) => name.startsWith("sqlite_"))).toEqual([]);
+      expect(names.filter((name) => name === "effect_sql_migrations")).toEqual([
+        "effect_sql_migrations",
+      ]);
+      const appTables = names.filter((name) => name !== "effect_sql_migrations");
+      expect(appTables).toEqual([
+        "blocked",
+        "bookmark",
+        "conversation",
+        "follow_up",
+        "intake_seen",
+        "removal",
+        "send",
+        "user",
+        "waitlist",
+      ]);
+      expect(appTables).not.toContain("intake_last");
+    }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+  );
+});
 
 test("the production entry keeps a separate server database open for its host lifetime", async () => {
   const root = await mkdtemp(join(tmpdir(), "server-db-"));
