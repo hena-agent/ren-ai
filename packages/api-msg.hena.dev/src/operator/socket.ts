@@ -1,5 +1,8 @@
-import { chmod, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { chmod, lstat, mkdir, unlink } from "node:fs/promises";
+import { once } from "node:events";
 import { createServer, request as httpRequest } from "node:http";
+import { createConnection } from "node:net";
 import { dirname } from "node:path";
 import { buffer } from "node:stream/consumers";
 import { Effect } from "effect";
@@ -19,6 +22,25 @@ export const serveOperatorSocket = async (
 ) => {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await chmod(dirname(path), 0o700);
+  if (existsSync(path)) {
+    const previous = await lstat(path);
+    if (!previous.isSocket() || previous.uid !== process.getuid!()) {
+      throw new Error("Refusing to replace non-owned or non-socket operator path");
+    }
+    const active = await new Promise<boolean>((resolve, reject) => {
+      const connection = createConnection(path);
+      connection.once("connect", () => {
+        connection.destroy();
+        resolve(true);
+      });
+      connection.once("error", (error: NodeJS.ErrnoException) => {
+        if (error.code === "ECONNREFUSED") resolve(false);
+        else reject(error);
+      });
+    });
+    if (active) throw new Error("Operator socket already in use");
+    await unlink(path);
+  }
   const server = createServer((incoming, outgoing) => {
     void (async () => {
       try {
@@ -40,10 +62,8 @@ export const serveOperatorSocket = async (
       }
     })();
   });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(path, resolve);
-  });
+  server.listen(path);
+  await once(server, "listening");
   await chmod(path, 0o600);
   return () =>
     new Promise<void>((resolve, reject) =>
