@@ -1,4 +1,5 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { request as httpRequest } from "node:http";
@@ -7,7 +8,7 @@ import { Effect, Random, Result } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { HttpClientError } from "effect/unstable/http";
 import { OpenApi } from "effect/unstable/httpapi";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
@@ -391,7 +392,7 @@ test("the socket translates HTTP failures and refuses a second listener on the s
     try {
       await expect(
         serveOperatorSocket(path, async () => new Response("unreachable")),
-      ).rejects.toThrow("EADDRINUSE");
+      ).rejects.toThrow("Operator socket already in use");
       const status = await new Promise<number>((resolve, reject) => {
         const request = httpRequest({ socketPath: path, path: "/", method: "GET" }, (response) => {
           response.resume();
@@ -405,6 +406,51 @@ test("the socket translates HTTP failures and refuses a second listener on the s
       await close();
       await expect(close()).rejects.toThrow("Server is not running");
     }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+const staleHandler = async () => new Response("ok");
+
+test("operator socket only reclaims a stale, owner-owned socket, never a file or live listener", async () => {
+  const root = await mkdtemp(join(tmpdir(), "operator-stale-"));
+  try {
+    const file = join(root, "file.sock");
+    await writeFile(file, "do not unlink");
+    await expect(serveOperatorSocket(file, staleHandler)).rejects.toThrow(
+      "non-owned or non-socket",
+    );
+    const link = join(root, "link.sock");
+    await symlink(file, link);
+    await expect(serveOperatorSocket(link, staleHandler)).rejects.toThrow(
+      "non-owned or non-socket",
+    );
+    await expect(
+      serveOperatorSocket(join(root, "x".repeat(260)), staleHandler),
+    ).rejects.toBeInstanceOf(Error);
+    const stale = join(root, "stale.sock");
+    const child = spawnSync(process.execPath, [
+      "-e",
+      "require('node:net').createServer().listen(process.argv[1],()=>process.exit(0))",
+      stale,
+    ]);
+    expect(child.status).toBe(0);
+    expect((await stat(stale)).isSocket()).toBe(true);
+    const uid = vi.spyOn(process, "getuid").mockReturnValue(process.getuid!() + 1);
+    try {
+      await expect(serveOperatorSocket(stale, staleHandler)).rejects.toThrow(
+        "non-owned or non-socket",
+      );
+    } finally {
+      uid.mockRestore();
+    }
+    await chmod(stale, 0);
+    await expect(serveOperatorSocket(stale, staleHandler)).rejects.toBeInstanceOf(Error);
+    await chmod(stale, 0o600);
+    const stop = await serveOperatorSocket(stale, staleHandler);
+    await expect(serveOperatorSocket(stale, staleHandler)).rejects.toThrow("already in use");
+    await stop();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
