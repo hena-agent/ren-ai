@@ -1,4 +1,4 @@
-import { normalizeHandle } from "@repo/onboarding";
+import { normalizeHandle, normalizeWaitlistEmail } from "@repo/onboarding";
 import { Effect, Layer, Schema } from "effect";
 import { HttpRouter, HttpServer } from "effect/unstable/http";
 import {
@@ -35,6 +35,13 @@ export const operatorApi = HttpApi.make("operator").add(
       }),
     )
     .add(
+      HttpApiEndpoint.post("removeWaitlist", "/remove-waitlist", {
+        payload: Schema.Struct({ email: Schema.String }),
+        success: Schema.Struct({ result: Schema.Literals(["removed", "not_found"]) }),
+        error,
+      }),
+    )
+    .add(
       HttpApiEndpoint.post("rebuild", "/rebuild", {
         payload: handlePayload,
         success: Schema.Struct({ result: Schema.Literals(["rebuilt", "not_found", "present"]) }),
@@ -46,6 +53,7 @@ export const operatorApi = HttpApi.make("operator").add(
 type Operations = {
   readonly block: (handle: string) => Effect.Effect<void, Error>;
   readonly remove: (handle: string) => Effect.Effect<"removed" | "not_found", Error>;
+  readonly removeWaitlist: (email: string) => Effect.Effect<"removed" | "not_found", Error>;
   readonly rebuild?: (handle: string) => Effect.Effect<"rebuilt" | "not_found" | "present", Error>;
 };
 
@@ -65,6 +73,14 @@ export const operatorHandler = (operations: Operations) => {
           Effect.as({ blocked: true }),
           Effect.mapError((failure) => ({ reason: String(failure) })),
         ),
+      )
+      .handle("removeWaitlist", ({ payload }) =>
+        Effect.gen(function* () {
+          const email = normalizeWaitlistEmail(payload.email);
+          if (!email || email !== payload.email)
+            return yield* Effect.fail(new Error("Invalid email"));
+          return { result: yield* operations.removeWaitlist(email) };
+        }).pipe(Effect.mapError((failure) => ({ reason: String(failure) }))),
       )
       .handle("rebuild", ({ payload }) =>
         normalized(payload.handle).pipe(

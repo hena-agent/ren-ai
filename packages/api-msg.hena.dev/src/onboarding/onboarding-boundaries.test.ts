@@ -8,6 +8,7 @@ import { migrate } from "../database.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { outbox } from "../outbox/outbox.ts";
+import { conversationStarted } from "../transcript/transcript.ts";
 
 const input = {
   handle: "+821012345678",
@@ -47,18 +48,22 @@ const setup = (deadline = 30, noticeVersion = "v1") =>
       new Map([[persona.id, persona]]),
     );
     let sessions = 0;
+    const prompts: string[] = [];
     const api = yield* onboarding({
       messages: fake.messages,
       notice: noticeCopy,
       persona,
       createSession: () => Effect.sync(() => ({ id: `session-${++sessions}` })),
-      prompt: () => Effect.void,
+      prompt: (_, text) =>
+        Effect.sync(() => {
+          prompts.push(text);
+        }),
       sendNotice: (handle, text) => sends.notice(handle, text),
       turnstileSecret: "secret",
       deadlineMillis: deadline,
       noticeVersion,
     });
-    return { sql, fake, api };
+    return { sql, fake, api, prompts };
   });
 
 const shiftedClock = (clock: Clock.Clock, time: () => number): Clock.Clock => ({
@@ -98,11 +103,11 @@ test("the 7-day boundary permits a failed Notice to be tried again", async () =>
       const now = yield* Clock.currentTimeMillis;
       yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
       VALUES (${input.handle}, 'notice', 'notice', 'failed', ${now - 7 * 86_400_000}, ${now})`;
-      fake.statuses.set(input.handle, "sent");
+      fake.statuses.set(input.handle, "no_imessage");
       const clock = yield* Clock.Clock;
       const shifted = shiftedClock(clock, () => now);
       expect(yield* api.submit(input, "ip").pipe(Effect.provideService(Clock.Clock, shifted))).toBe(
-        "sent",
+        "no_imessage",
       );
       expect(fake.bubbles).toHaveLength(1);
     }),
@@ -113,15 +118,141 @@ test("a prior Notice without a User does not cause another send", async () => {
   await runWithDatabase(
     Effect.gen(function* () {
       const { sql, api, fake } = yield* setup();
-      const now = yield* Clock.currentTimeMillis;
       yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
-      VALUES (${input.handle}, 'notice', 'notice', 'sent', ${now}, ${now})`;
-      expect(yield* api.submit(input, "ip")).toBe("unknown");
+      VALUES (${input.handle}, 'notice', 'notice', 'sent', 1, 1)`;
+      expect(yield* api.submit(input, "ip")).toBe("sent");
       expect(fake.bubbles).toEqual([]);
       yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at)
-      VALUES (${input.handle}, 'ko', 'v1', 'ko', ${now})`;
-      expect(yield* api.submit(input, "ip2")).toBe("unknown");
+      VALUES (${input.handle}, 'ko', 'v1', 'ko', 1)`;
+      expect(yield* api.submit(input, "ip2")).toBe("sent");
       expect(fake.bubbles).toEqual([]);
+    }),
+  );
+});
+
+test("a delivered Notice returns sent for a pending User without another send", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup();
+      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at)
+      VALUES (${input.handle}, 'ko', 'v1', 'ko', 1)`;
+      yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
+      VALUES (${input.handle}, 'notice', 'old', 'delivered', 1, 1)`;
+      expect(yield* api.submit(input)).toBe("sent");
+      expect(fake.bubbles).toEqual([]);
+    }),
+  );
+});
+
+test("startup recovers the committed Conversation's first prompt after a crash", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api, prompts } = yield* setup();
+      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, joined_at)
+      VALUES (${input.handle}, 'ko', 'v1', 'ko', 1, 1234)`;
+      yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
+      VALUES ((SELECT id FROM user WHERE handle = ${input.handle}), 'persona1', 'session-1', 1234)`;
+      yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
+      VALUES (${input.handle}, 'notice', 'notice', 'sent', 1, 1)`;
+      yield* api.resume;
+      yield* Effect.sleep("40 millis");
+      expect(prompts).toEqual([conversationStarted(1234, "hi", noticeCopy.ko, "Asia/Seoul")]);
+      expect(fake.bubbles).toEqual([]);
+    }),
+  );
+});
+
+test("an old uncertain Notice that landed is settled without another send", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup(2000);
+      fake.statuses.set(input.handle, "unknown");
+      expect(yield* api.submit(input)).toBe("unknown");
+      const now = yield* Clock.currentTimeMillis;
+      yield* sql`UPDATE send SET recorded_at = ${now - 7 * 86_400_000}`;
+      fake.statuses.set(input.handle, "sent");
+      expect(yield* api.submit(input)).toBe("sent");
+      expect(fake.bubbles).toHaveLength(1);
+      expect(yield* sql`SELECT id FROM conversation`).toHaveLength(1);
+      expect(yield* sql`SELECT id FROM send`).toHaveLength(1);
+    }),
+  );
+});
+
+test("a previously failed Notice that later shows sent is never repeated", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup(2000);
+      const now = yield* Clock.currentTimeMillis;
+      yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
+      VALUES (${input.handle}, 'notice', 'old', 'failed', ${now - 7 * 86_400_001}, ${now})`;
+      fake.statuses.set(input.handle, "sent");
+      expect(yield* api.submit(input)).toBe("sent");
+      expect(fake.bubbles).toEqual([]);
+      expect(yield* sql`SELECT id FROM send`).toHaveLength(1);
+    }),
+  );
+});
+
+test("the per-Handle window includes failed Notices, but an older failed Notice can be retried", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup(2000);
+      fake.statuses.set(input.handle, "no_imessage");
+      expect(yield* api.submit(input, "a")).toBe("no_imessage");
+      expect(yield* api.submit(input, "b")).toBe("no_imessage");
+      expect(fake.bubbles).toHaveLength(1);
+      const now = yield* Clock.currentTimeMillis;
+      yield* sql`UPDATE send SET recorded_at = ${now - 7 * 86_400_000 - 1}`;
+      expect(yield* api.submit(input, "c")).toBe("no_imessage");
+      expect(fake.bubbles).toHaveLength(2);
+    }),
+  );
+});
+
+test("an old uncertain Notice that failed can be retried", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup(2000);
+      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at)
+        VALUES (${input.handle}, 'ko', 'v1', 'ko', 1)`;
+      yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
+        VALUES (${input.handle}, 'notice', 'old', 'uncertain', 1, 1)`;
+      fake.statuses.set(input.handle, "no_imessage");
+      expect(yield* api.submit(input)).toBe("no_imessage");
+      expect(fake.bubbles).toHaveLength(1);
+    }),
+  );
+});
+
+test("an old uncertain Notice with unknown status never triggers a second Notice", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup();
+      yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
+        VALUES (${input.handle}, 'notice', 'old', 'uncertain', 1, 1)`;
+      fake.statuses.set(input.handle, "unknown");
+      expect(yield* api.submit(input)).toBe("unknown");
+      expect(fake.bubbles).toEqual([]);
+      expect(yield* sql`SELECT id FROM send`).toHaveLength(1);
+    }),
+  );
+});
+
+test("a phone number and an email become separate Users", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup(2000);
+      expect(yield* api.submit(input, "phone-ip")).toBe("sent");
+      expect(yield* api.submit({ ...input, handle: "person@example.com" }, "email-ip")).toBe(
+        "sent",
+      );
+      expect(yield* sql`SELECT handle FROM user ORDER BY handle`).toEqual([
+        { handle: input.handle },
+        { handle: "person@example.com" },
+      ]);
+      expect(yield* sql`SELECT session_id FROM conversation`).toHaveLength(2);
+      expect(fake.bubbles).toHaveLength(2);
     }),
   );
 });
@@ -134,6 +265,20 @@ test("an existing User with no Notice row does not get sent another one", async 
       yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, joined_at)
       VALUES (${input.handle}, 'ko', 'v1', 'ko', ${now}, ${now})`;
       expect(yield* api.submit(input, "ip")).toBe("sent");
+      expect(fake.bubbles).toEqual([]);
+    }),
+  );
+});
+
+test("a blocked existing User and a blocked new Handle receive the same answer", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup();
+      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, joined_at)
+      VALUES (${input.handle}, 'ko', 'v1', 'ko', 1, 1)`;
+      yield* sql`INSERT INTO blocked (handle, blocked_at) VALUES (${input.handle}, 1), ('new@example.com', 1)`;
+      expect(yield* api.submit(input, "a")).toBe("unknown");
+      expect(yield* api.submit({ ...input, handle: "new@example.com" }, "b")).toBe("unknown");
       expect(fake.bubbles).toEqual([]);
     }),
   );

@@ -1,16 +1,20 @@
-import { normalizeHandle, normalizeWaitlistEmail } from "@repo/onboarding";
+import { countries, normalizeHandle, normalizeWaitlistEmail } from "@repo/onboarding";
+import type { Country } from "@repo/onboarding";
 import { useState } from "react";
 import { copy } from "../copy.ts";
 import type { OnboardingClient } from "../onboarding-client.ts";
 import { Turnstile } from "../turnstile.tsx";
 
+const isCountry = (value: string): value is Country => Object.hasOwn(countries, value);
+
 export function Home({ onboarding }: { onboarding: OnboardingClient }) {
   const [input, setInput] = useState("");
+  const [country, setCountry] = useState<Country>("KR");
   const [consent, setConsent] = useState(false);
   const [token, setToken] = useState("");
   const [pending, setPending] = useState(false);
   const [answer, setAnswer] = useState<keyof typeof copy.answers>();
-  const handle = normalizeHandle(input);
+  const handle = normalizeHandle(input, country);
   const invalid = input.length > 0 && !handle;
 
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
@@ -45,10 +49,17 @@ export function Home({ onboarding }: { onboarding: OnboardingClient }) {
         <form className="flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
           <label className="flex flex-col gap-2">
             {copy.form.countryLabel}
-            <select defaultValue={copy.market.country}>
-              <option value={copy.market.country}>
-                {copy.market.country} ({copy.market.dialCode})
-              </option>
+            <select
+              value={country}
+              onChange={(event) => {
+                if (isCountry(event.target.value)) setCountry(event.target.value);
+              }}
+            >
+              {Object.entries(countries).map(([code, rule]) => (
+                <option key={code} value={code}>
+                  {code} (+{rule.dialCode})
+                </option>
+              ))}
             </select>
           </label>
           <label className="flex flex-col gap-2">

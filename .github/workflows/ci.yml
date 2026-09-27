@@ -53,6 +53,8 @@ jobs:
           node-version: lts/*
       - run: bun install --frozen-lockfile
       - run: bun run --cwd packages/msg.hena.dev build
+        env:
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
       - run: bun run --cwd packages/msg.hena.dev deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

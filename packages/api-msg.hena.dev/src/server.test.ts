@@ -173,6 +173,11 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
           yield* server.host.sessions
             .wait(Session.ID.make(conversation!.sessionID))
             .pipe(Effect.timeout("20 seconds"));
+          expect(
+            (yield* server.host.sessions.messages({
+              sessionID: Session.ID.make(conversation!.sessionID),
+            })).some((message) => message.id === `msg_onboarding_${conversation!.sessionID}`),
+          ).toBe(true);
           expect(fake.bubbles).toEqual([
             { handle: conversation!.handle, text: noticeCopy.ko },
             { handle: conversation!.handle, text: "안녕 🙂" },
@@ -279,7 +284,6 @@ test("production settings are isolated and the model is configured without conta
               viewerPort: 0,
               bucket: "test",
               secrets,
-              noticeVersion: "pending",
             },
             {
               messages: () => Effect.succeed(fake.messages),

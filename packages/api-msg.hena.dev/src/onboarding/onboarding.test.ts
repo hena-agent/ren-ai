@@ -47,7 +47,13 @@ const runWithDatabase = <A, E>(
     ),
   );
 
-const setup = (failSend = false, deadlineMillis = 30, userCap = 10, noticeVersion = "v1") =>
+const setup = (
+  failSend = false,
+  deadlineMillis = 30,
+  userCap = 10,
+  noticeVersion = "v1",
+  failPrompt = false,
+) =>
   Effect.gen(function* () {
     yield* migrate;
     const sql = yield* SqlClient.SqlClient;
@@ -79,8 +85,13 @@ const setup = (failSend = false, deadlineMillis = 30, userCap = 10, noticeVersio
           return { id };
         }),
       prompt: (_, text) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          if (failPrompt) {
+            failPrompt = false;
+            return yield* Effect.fail(new Error("prompt unavailable"));
+          }
           prompts.push(text);
+          return undefined;
         }),
       sendNotice: (handle, text) =>
         failSend ? Effect.fail(new Error("record failed")) : sends.notice(handle, text),
@@ -168,18 +179,26 @@ test("an uncertain Notice answers unknown; after it settles the Conversation sta
   );
 });
 
-test("a stranded pending User can retry a Notice after seven days", async () => {
+test("a failed prompt after the Conversation commits is retried without a second Notice", async () => {
   await runWithDatabase(
     Effect.gen(function* () {
-      const { sql, fake, api } = yield* setup(false, 2000);
-      fake.statuses.set(input.handle, "unknown");
-      expect(yield* api.submit(input)).toBe("unknown");
-      const now = yield* Clock.currentTimeMillis;
-      yield* sql`UPDATE send SET recorded_at = ${now - 7 * 86_400_000}`;
-      fake.statuses.set(input.handle, "sent");
+      const { sql, fake, api, prompts, sessions } = yield* setup(false, 2000, 10, "v1", true);
       expect(yield* api.submit(input)).toBe("sent");
-      expect(fake.bubbles).toHaveLength(2);
-      expect(yield* sql`SELECT id FROM conversation`).toHaveLength(1);
+      const [conversation] = yield* sql<{
+        started_at: number;
+      }>`SELECT started_at FROM conversation`;
+      yield* Effect.sleep("300 millis");
+      expect(prompts).toEqual([
+        conversationStarted(
+          conversation!.started_at,
+          "번호 받았으니까 먼저 연락해 봐",
+          noticeCopy.ko,
+          "Asia/Seoul",
+        ),
+      ]);
+      expect(fake.bubbles).toHaveLength(1);
+      expect(sessions).toHaveLength(1);
+      expect(yield* sql`SELECT session_id FROM conversation`).toHaveLength(1);
     }),
   );
 });
@@ -433,23 +452,6 @@ test("a sixth submission from one IP is refused before looking at its Handle", a
   );
 });
 
-test("the per-Handle window includes failed Notices, but an older failed Notice can be retried", async () => {
-  await runWithDatabase(
-    Effect.gen(function* () {
-      const { sql, fake, api } = yield* setup(false, 2000);
-      fake.statuses.set(input.handle, "no_imessage");
-      expect(yield* api.submit(input, "a")).toBe("no_imessage");
-      expect(yield* api.submit(input, "b")).toBe("no_imessage");
-      expect(fake.bubbles).toHaveLength(1);
-      const now = yield* Clock.currentTimeMillis;
-      yield* sql`UPDATE send SET recorded_at = ${now - 7 * 86_400_000 - 1}`;
-      fake.statuses.set(input.handle, "sent");
-      expect(yield* api.submit(input, "c")).toBe("sent");
-      expect(fake.bubbles).toHaveLength(2);
-    }),
-  );
-});
-
 test("30 Notice attempts per hour block new and existing Handles, including concurrent requests", async () => {
   await runWithDatabase(
     Effect.gen(function* () {
@@ -472,7 +474,7 @@ test("30 Notice attempts per hour block new and existing Handles, including conc
   );
 });
 
-test("the User cap counts replies, not Notices, and applies only to new Handles", async () => {
+test("the User cap counts replies, not Notices, and returns full for existing and new Handles", async () => {
   await runWithDatabase(
     Effect.gen(function* () {
       const { sql, fake, api } = yield* setup(false, 2000, 1);
@@ -483,9 +485,9 @@ test("the User cap counts replies, not Notices, and applies only to new Handles"
         { replied_at: null },
       ]);
       yield* sql`UPDATE user SET replied_at = ${yield* Clock.currentTimeMillis} WHERE handle = ${input.handle}`;
-      expect(yield* api.submit(input, "c")).toBe("sent");
+      expect(yield* api.submit(input, "c")).toBe("full");
       yield* sql`UPDATE send SET recorded_at = 1 WHERE handle = ${input.handle}`;
-      expect(yield* api.submit(input, "old-notice")).toBe("sent");
+      expect(yield* api.submit(input, "old-notice")).toBe("full");
       expect(yield* api.submit({ ...input, handle: "new@example.com" }, "d")).toBe("full");
       expect(fake.bubbles).toHaveLength(2);
     }),

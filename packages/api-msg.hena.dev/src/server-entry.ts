@@ -41,7 +41,6 @@ await Effect.runPromise(
         publicPort: 4700,
         viewerPort: 4701,
         bucket: "ren-ai",
-        noticeVersion: "pending",
         secrets,
       },
       { messages: makeImsgMessages, gestures: makeMessagesUi },
