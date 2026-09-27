@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { expect } from "vitest";
 import { viewerFront } from "./viewer.ts";
 
 export const expectedViewerResults = (sessionID: string, messageID: string) => ({
@@ -53,6 +54,12 @@ export const verifyViewer = (
       `/api/session/${sessionID}/message/${messageID}`,
     ]) {
       const allowed = yield* Effect.promise(() => viewed(path));
+      if (path === "/api/session" || path === `/api/session/${sessionID}`) {
+        expect(yield* Effect.promise(() => allowed.text())).toContain(sessionID);
+      }
+      if (path === `/api/session/${sessionID}/message`) {
+        expect(yield* Effect.promise(() => allowed.text())).toContain(messageID);
+      }
       const refused = yield* Effect.promise(() => viewed(path, "GET", false));
       publicRoutes.push(`${path}:${allowed.status}:${refused.status}`);
     }

@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import * as onboarding from "@repo/onboarding";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -133,6 +134,40 @@ it("renders the form and privacy entries on their own", () => {
   expect(screen.getByRole("heading", { name: copy.privacy.title })).toBeTruthy();
   expect(screen.getByText(copy.privacy.placeholder)).toBeTruthy();
   expect(screen.getByRole("link", { name: copy.privacy.homeLink })).toHaveProperty("pathname", "/");
+});
+
+it("uses the deployed Turnstile key when the build variable is set", async () => {
+  vi.stubEnv("VITE_TURNSTILE_SITE_KEY", "deployed-widget-key");
+  vi.resetModules();
+  expect((await import("./config.ts")).turnstileSiteKey).toBe("deployed-widget-key");
+  vi.unstubAllEnvs();
+  vi.resetModules();
+});
+
+it("normalizes the Handle using the country selected from the shared rules", () => {
+  const normalize = vi.spyOn(onboarding, "normalizeHandle");
+  Reflect.set(onboarding.countries, "TEST", { dialCode: "1", local: /^01012345678$/ });
+  try {
+    render(<Home onboarding={fake} />);
+    const select = screen.getByRole("combobox", { name: copy.form.countryLabel });
+    expect(Array.from(select.querySelectorAll("option"), (option) => option.value)).toEqual(
+      Object.keys(onboarding.countries),
+    );
+    fireEvent.change(select, { target: { value: "TEST" } });
+    fireEvent.change(screen.getByRole("textbox", { name: copy.form.handleLabel }), {
+      target: { value: "01012345678" },
+    });
+    expect(select).toHaveProperty("value", "TEST");
+    expect(normalize).toHaveBeenCalledWith("01012345678", "TEST");
+    fireEvent.change(select, { target: { value: "invalid" } });
+    fireEvent.change(screen.getByRole("textbox", { name: copy.form.handleLabel }), {
+      target: { value: "0101234567" },
+    });
+    expect(select).toHaveProperty("value", "TEST");
+  } finally {
+    Reflect.deleteProperty(onboarding.countries, "TEST");
+    normalize.mockRestore();
+  }
 });
 
 it("does not submit without a valid Handle, consent and a live token", () => {

@@ -5,7 +5,7 @@ import {
   WaitlistRequest,
   notice as localeNotice,
 } from "@repo/onboarding";
-import { Clock, Effect, Layer, Option, Schema, Semaphore } from "effect";
+import { Clock, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
@@ -59,6 +59,11 @@ interface CountRow {
   readonly count: number;
 }
 
+interface GreetingRow {
+  readonly session_id: string;
+  readonly started_at: number;
+}
+
 const verify = (token: string, secret: string) =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
@@ -94,8 +99,13 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
   deadlineMillis?: number;
   userCap?: number | undefined;
   noticeVersion?: string | undefined;
-}) =>
-  Effect.gen(function* () {
+}) => {
+  const greet = (sessionID: string, started: number) =>
+    prompt(
+      sessionID,
+      conversationStarted(started, persona.openingLine, notice.ko, persona.timeZone),
+    ).pipe(Effect.retry(Schedule.spaced("250 millis")));
+  return Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const admission = Semaphore.makeUnsafe(1);
     const submissions = new Map<string, number[]>();
@@ -150,10 +160,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
             yield* sql`UPDATE send SET state = 'sent', updated_at = ${started} WHERE id = ${row.id}`;
           }),
         );
-        yield* prompt(
-          session.id,
-          conversationStarted(started, persona.openingLine, notice.ko, persona.timeZone),
-        );
+        yield* greet(session.id, started);
       });
 
     const watch = (handle: string) =>
@@ -169,11 +176,28 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
 
     const result = (handle: string) =>
       Effect.gen(function* () {
-        const [record] = yield* user(handle);
-        if (record?.joined_at !== null && record !== undefined) return "sent" as const;
         const [row] = yield* latest(handle);
+        if (row?.state === "sent") return "sent" as const;
         if (row?.state === "failed") return "no_imessage" as const;
         return "unknown" as const;
+      });
+
+    const oldNotice = (
+      handle: string,
+      existing: UserRow | undefined,
+      previous: NoticeRow,
+      now: number,
+    ) =>
+      Effect.gen(function* () {
+        if (previous.state === "sent" || previous.state === "delivered") return "sent" as const;
+        if (previous.recorded_at > now - 7 * 86_400_000) return yield* result(handle);
+        const status = yield* messages.textStatus(handle, previous.recorded_at);
+        if (status === "sent") {
+          if (existing) yield* settle(handle, previous);
+          return "sent" as const;
+        }
+        if (status === "unknown") return "unknown" as const;
+        return undefined;
       });
 
     const submit = (input: typeof OnboardingRequest.Type, ip = "missing") =>
@@ -191,16 +215,17 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
             const [hourly] = yield* sql<CountRow>`SELECT COUNT(*) AS count FROM send
           WHERE kind = 'notice' AND recorded_at > ${now - 3_600_000}`;
             if (hourly!.count >= 30) return "try_later" as const;
-            if (yield* unavailable(input.handle)) return yield* result(input.handle);
-            const [existing] = yield* user(input.handle);
-            if (existing?.joined_at != null) return "sent" as const;
-            const [previous] = yield* latest(input.handle);
-            if (previous && previous.recorded_at > now - 7 * 86_400_000) {
-              return yield* result(input.handle);
-            }
             const [active] = yield* sql<CountRow>`SELECT COUNT(*) AS count FROM user
           WHERE replied_at IS NOT NULL`;
             if (active!.count >= userCap) return "full" as const;
+            if (yield* unavailable(input.handle)) return "unknown" as const;
+            const [existing] = yield* user(input.handle);
+            if (existing?.joined_at != null) return "sent" as const;
+            const [previous] = yield* latest(input.handle);
+            if (previous) {
+              const answer = yield* oldNotice(input.handle, existing, previous, now);
+              if (answer) return answer;
+            }
             yield* sql`DELETE FROM user WHERE handle = ${input.handle} AND joined_at IS NULL`;
             const inserted =
               yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at)
@@ -227,6 +252,11 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
       });
 
     const resume = Effect.gen(function* () {
+      const greetings =
+        yield* sql<GreetingRow>`SELECT conversation.session_id, conversation.started_at
+      FROM conversation JOIN user ON user.id = conversation.user_id
+      JOIN send ON send.handle = user.handle AND send.kind = 'notice' AND send.state IN ('sent', 'delivered')`;
+      for (const row of greetings) yield* Effect.forkDetach(greet(row.session_id, row.started_at));
       const pending = yield* sql<{ handle: string }>`SELECT user.handle FROM user
       JOIN send ON send.handle = user.handle AND send.kind = 'notice'
       WHERE user.joined_at IS NULL AND send.state IN ('recorded', 'uncertain')`;
@@ -254,3 +284,4 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
     );
     return { submit, waitlist, resume, routes };
   });
+};

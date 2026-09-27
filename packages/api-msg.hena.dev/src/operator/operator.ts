@@ -32,6 +32,7 @@ export const makeOperator = (
               (SELECT session_id FROM removal WHERE handle = ${handle})`;
             yield* sql`DELETE FROM send WHERE handle = ${handle}`;
             yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
+            yield* sql`DELETE FROM waitlist WHERE email = ${handle}`;
             yield* sql`DELETE FROM user WHERE handle = ${handle}`;
             const pending =
               (yield* sql<PendingRemoval>`SELECT session_id AS sessionID FROM removal WHERE handle = ${handle}`)[0];
@@ -40,6 +41,13 @@ export const makeOperator = (
           if (!state.pending && !state.existed) return "not_found" as const;
           if (state.pending) yield* removeSession(state.pending.sessionID);
           yield* sql`DELETE FROM removal WHERE handle = ${handle}`;
+          yield* sql`VACUUM`;
+          return "removed" as const;
+        }),
+      removeWaitlist: (email: string) =>
+        Effect.gen(function* () {
+          const rows = yield* sql`DELETE FROM waitlist WHERE email = ${email} RETURNING id`;
+          if (!rows.length) return "not_found" as const;
           yield* sql`VACUUM`;
           return "removed" as const;
         }),

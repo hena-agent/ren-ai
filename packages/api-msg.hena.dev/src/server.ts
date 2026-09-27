@@ -19,7 +19,7 @@ export interface ServerConfig {
   readonly publicPort: number;
   readonly viewerPort: number;
   readonly bucket: string;
-  readonly noticeVersion: string;
+  readonly noticeVersion?: string;
   readonly secrets: Readonly<
     Record<
       | "OPENCODE_GO_KEY"
@@ -88,7 +88,7 @@ export const composeServer = (
       {
         turnstileSecret: secrets.TURNSTILE_SECRET,
         notice: noticeCopy,
-        noticeVersion: config.noticeVersion,
+        ...(config.noticeVersion ? { noticeVersion: config.noticeVersion } : {}),
       },
       health,
     );

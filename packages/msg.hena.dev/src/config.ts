@@ -1,2 +1,9 @@
-// Cloudflare's always-passes test key; replace with the widget key from #50 before launch.
-export const turnstileSiteKey = "1x00000000000000000000AA";
+// Cloudflare's always-pass key is for dev and tests; deployment supplies the real widget key.
+declare global {
+  interface ImportMetaEnv {
+    readonly VITE_TURNSTILE_SITE_KEY?: string;
+  }
+}
+
+const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+export const turnstileSiteKey = siteKey || "1x00000000000000000000AA";
