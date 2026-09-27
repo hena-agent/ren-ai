@@ -11,8 +11,6 @@ const fixture = () => {
   const commands: string[] = [];
   const logs: string[] = [];
   let discordStatus = 204;
-  let heartbeatStatus = 200;
-  let networkFails = false;
   let discordNetworkFails = false;
   let disk =
     "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk 100 50 50 50% /\n";
@@ -20,19 +18,14 @@ const fixture = () => {
   let processFails = false;
   const client = HttpClient.make((request, url) =>
     Effect.sync(() => {
-      if (networkFails && url.pathname === "/heartbeat") throw Error("Network unavailable");
       if (discordNetworkFails && url.pathname === "/discord") throw Error("Network unavailable");
       requests.push(url.toString());
-      if (url.pathname === "/discord" && request.body instanceof HttpBody.Uint8Array) {
+      if (request.body instanceof HttpBody.Uint8Array) {
         messages.push(new TextDecoder().decode(request.body.body));
       }
       return HttpClientResponse.fromWeb(
         request,
-        (url.pathname === "/discord" ? discordStatus : heartbeatStatus) === 0
-          ? Response.error()
-          : new Response(null, {
-              status: url.pathname === "/discord" ? discordStatus : heartbeatStatus,
-            }),
+        discordStatus === 0 ? Response.error() : new Response(null, { status: discordStatus }),
       );
     }),
   );
@@ -53,7 +46,6 @@ const fixture = () => {
     ConfigProvider.layer(
       ConfigProvider.fromUnknown({
         DISCORD_WEBHOOK_URL: "https://test/discord",
-        HEARTBEAT_URL: "https://test/heartbeat",
       }),
     ),
   );
@@ -68,12 +60,6 @@ const fixture = () => {
     dependencies,
     setDiscordStatus: (status: number) => {
       discordStatus = status;
-    },
-    setHeartbeatStatus: (status: number) => {
-      heartbeatStatus = status;
-    },
-    setNetworkFails: (fails: boolean) => {
-      networkFails = fails;
     },
     setDiscordNetworkFails: (fails: boolean) => {
       discordNetworkFails = fails;
@@ -132,27 +118,7 @@ test("Discord accepts only successful HTTP statuses", async () => {
   expect(f.logs).toEqual(["Discord returned 0", "Discord returned 300"]);
 });
 
-test("the heartbeat rejects redirects and unavailable responses, then clears on recovery", async () => {
-  const f = fixture();
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      const health = yield* makeHealth;
-      f.setHeartbeatStatus(300);
-      yield* health.tick;
-      f.setHeartbeatStatus(200);
-      yield* health.tick;
-      f.setHeartbeatStatus(0);
-      yield* health.tick;
-      expect(f.messages.filter((message) => message.includes("Alert: Heartbeat"))).toHaveLength(2);
-      expect(f.messages).toContain('{"content":"Cleared: heartbeat"}');
-      expect(f.messages.some((message) => message.includes("Alert: Heartbeat returned 0"))).toBe(
-        true,
-      );
-    }).pipe(Effect.withLogger(f.logger), Effect.provide(f.dependencies)),
-  );
-});
-
-test("heartbeat and Mac checks raise and clear on scheduled ticks", async () => {
+test("Mac checks raise and clear on scheduled ticks without external requests", async () => {
   const f = fixture();
   await Effect.runPromise(
     Effect.scoped(
@@ -160,32 +126,28 @@ test("heartbeat and Mac checks raise and clear on scheduled ticks", async () => 
         const health = yield* makeHealth;
         yield* Effect.forkScoped(health.monitor);
         yield* TestClock.adjust("1 millis");
-        expect(f.requests).toEqual(["https://test/heartbeat"]);
+        expect(f.requests).toEqual([]);
         f.setDisk(
           "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk 100 90 10 90% /\n",
         );
         f.setScreen('"IOConsoleUsers" = ({"CGSSessionScreenIsLocked"=Yes})');
-        f.setHeartbeatStatus(503);
         yield* TestClock.adjust("1 minute");
         expect(f.messages).toEqual([
-          '{"content":"Alert: Heartbeat returned 503"}',
           '{"content":"Alert: disk-nearly-full"}',
           '{"content":"Alert: screen-locked"}',
         ]);
         yield* TestClock.adjust("1 minute");
-        expect(f.messages).toHaveLength(3);
+        expect(f.messages).toHaveLength(2);
         f.setDisk(
           "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk 100 40 60 40% /\n",
         );
         f.setScreen('"IOConsoleUsers" = ({"CGSSessionScreenIsLocked"=No})');
-        f.setHeartbeatStatus(200);
         yield* TestClock.adjust("1 minute");
-        expect(f.messages.slice(3)).toEqual([
-          '{"content":"Cleared: heartbeat"}',
+        expect(f.messages.slice(2)).toEqual([
           '{"content":"Cleared: disk-nearly-full"}',
           '{"content":"Cleared: screen-locked"}',
         ]);
-        expect(f.requests.filter((url) => url === "https://test/heartbeat")).toHaveLength(4);
+        expect(f.requests).toEqual(Array(4).fill("https://test/discord"));
         expect(f.commands.slice(0, 2)).toEqual(["/bin/df -Pk /", "/usr/sbin/ioreg -n Root -d1"]);
       }),
     ).pipe(
@@ -206,17 +168,13 @@ test("failed Mac checks report their failure without stopping future ticks", asy
       expect(f.messages).toHaveLength(2);
       f.setProcessFails(false);
       f.setDisk("invalid");
-      f.setNetworkFails(true);
       yield* health.tick;
       expect(f.messages).toContain('{"content":"Cleared: screen-locked-check"}');
       expect(f.messages).toContain('{"content":"Cleared: disk-nearly-full-check"}');
       expect(f.messages.some((message) => message.includes("disk-nearly-full check failed"))).toBe(
         true,
       );
-      expect(f.messages).toContain('{"content":"Alert: Heartbeat ping failed"}');
-      f.setNetworkFails(false);
       yield* health.tick;
-      expect(f.messages).toContain('{"content":"Cleared: heartbeat"}');
       expect(f.messages).toContain('{"content":"Alert: disk-nearly-full"}');
     }).pipe(Effect.withLogger(f.logger), Effect.provide(f.dependencies)),
   );

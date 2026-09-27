@@ -22,7 +22,6 @@ const secrets = {
   TURNSTILE_SECRET: keychain("turnstile"),
   VIEWER_PASSWORD: keychain("viewer"),
   DISCORD_WEBHOOK_URL: keychain("discord"),
-  HEARTBEAT_URL: keychain("heartbeat"),
   R2_ACCESS_KEY_ID: keychain("r2-access-key-id"),
   R2_SECRET_ACCESS_KEY: keychain("r2-secret-access-key"),
   R2_ENDPOINT: keychain("r2-endpoint"),

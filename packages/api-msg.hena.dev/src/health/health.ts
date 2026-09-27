@@ -6,7 +6,6 @@ const interval = "1 minute";
 
 export const makeHealth = Effect.gen(function* () {
   const webhook = yield* Config.string("DISCORD_WEBHOOK_URL");
-  const heartbeat = yield* Config.string("HEARTBEAT_URL");
   const client = yield* HttpClient.HttpClient;
   const processes = yield* ChildProcessSpawner.ChildProcessSpawner;
   const open = yield* Ref.make(new Set<string>());
@@ -51,14 +50,6 @@ export const makeHealth = Effect.gen(function* () {
     );
 
   const tick = Effect.gen(function* () {
-    yield* client.get(heartbeat).pipe(
-      Effect.flatMap((response) =>
-        response.status >= 200 && response.status < 300
-          ? clear("heartbeat")
-          : raise("heartbeat", `Heartbeat returned ${response.status}`),
-      ),
-      Effect.catchCause(() => raise("heartbeat", "Heartbeat ping failed")),
-    );
     yield* check("disk-nearly-full", ChildProcess.make("/bin/df", ["-Pk", "/"]), (output) => {
       const usage = /\s(\d+)%\s/.exec(output);
       return usage === null || Number(usage[1]) >= 90;
