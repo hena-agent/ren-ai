@@ -1,0 +1,21 @@
+# Fast feedback only. An agent that hits a slow pre-commit hook learns to pass
+# --no-verify, which is worse than having no hook. CI is the real gate.
+pre-commit:
+  jobs:
+    # Sequential on purpose: both jobs edit .ts files, and the formatter must
+    # have the last word on any lint auto-fix.
+    - name: lint
+      glob: "*.{ts,tsx}"
+      run: bunx --no-install oxlint --fix {staged_files}
+      stage_fixed: true
+    - name: format
+      run: bunx --no-install oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: typecheck
+      run: bun run typecheck
+    - name: test
+      run: bun run test

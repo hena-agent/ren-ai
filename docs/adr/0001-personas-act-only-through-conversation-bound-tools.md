@@ -1,0 +1,3 @@
+# Personas act only through conversation-bound tools, never the shell
+
+Anyone can text a persona, so every inbound message is untrusted input to a model running on the Mac mini. A shell, even one allowlisted to `imsg`, would let a crafted message run commands with the Mac user's authority or text other people, and OpenCode's shell permission patterns are not a verified sandbox. So the persona's OpenCode agent denies the shell and reaches iMessage only through tools registered by a local Bun TypeScript plugin, which the server binds to the persona's own conversation: the model never chooses the recipient.

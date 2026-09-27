@@ -18,7 +18,7 @@
     "mutate": "stryker run",
     "exceptions": "bun run scripts/exceptions.ts",
     "verify-gates": "bun run scripts/verify-gates.ts",
-    "prepare": "husky",
+    "prepare": "lefthook install",
     "init": "bun run scripts/init.ts"
   },
   "devDependencies": {
@@ -26,21 +26,16 @@
     "@stryker-mutator/vitest-runner": "10.0.0",
     "@types/node": "26.6.2",
     "@vitest/coverage-v8": "5.0.1",
-    "husky": "9.1.7",
-    "jscpd": "5.3.0",
-    "knip": "6.37.0",
-    "lint-staged": "16.2.7",
-    "oxfmt": "0.68.0",
-    "oxlint": "1.83.0",
+    "jscpd": "5.3.2",
+    "knip": "6.38.0",
+    "lefthook": "2.1.14",
+    "oxfmt": "0.70.0",
+    "oxlint": "1.85.0",
     "oxlint-plugin-complexity": "3.0.0",
-    "oxlint-tsgolint": "7.0.2002",
-    "turbo": "2.11.2",
+    "oxlint-tsgolint": "7.0.2003",
+    "turbo": "2.11.4",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
-  },
-  "lint-staged": {
-    "*": "oxfmt --no-error-on-unmatched-pattern",
-    "*.{ts,tsx}": "oxlint --fix"
   },
   "devEngines": {
     "packageManager": {
