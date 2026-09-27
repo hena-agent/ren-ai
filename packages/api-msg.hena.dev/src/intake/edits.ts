@@ -73,11 +73,11 @@ export const watchEdits = (
             ),
           )
           .digest("hex")}`;
+        signal(group.conversation);
         yield* prompt(group.conversation.sessionID, promptID, text);
         entry.text = currentText;
         entry.revision = revision;
         if (!currentText) group.rows.delete(guid);
-        signal(group.conversation);
       });
     const poll = Effect.gen(function* () {
       const time = yield* Clock.currentTimeMillis;

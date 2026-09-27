@@ -1,13 +1,13 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
 import { Effect, FileSystem, Layer } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { imageData, imageMime } from "./images.ts";
 import { intake, type PromptImage } from "./intake.ts";
+import { mediaFixtures } from "../../test/media.test-helper.ts";
 
 const handle = "him@example.com";
 const at = Date.parse("2026-09-25T12:00:00Z");
@@ -24,30 +24,8 @@ const capture =
       prompts.push({ text, images });
     });
 
-const fixtures = () => {
-  const commands: string[][] = [];
-  const files = FileSystem.layerNoop({
-    readFile: (path) =>
-      Effect.succeed(new TextEncoder().encode(path.endsWith("photo.jpeg") ? "jpeg" : "raw")),
-    makeTempDirectoryScoped: () => Effect.succeed("/test-temp"),
-  });
-  const process = ChildProcessSpawner.ChildProcessSpawner.of({
-    ...ChildProcessSpawner.make(() => Effect.die("unexpected spawn")),
-    string: (command) =>
-      Effect.sync(() => {
-        if (!ChildProcess.isStandardCommand(command)) throw new Error("Unexpected pipeline");
-        commands.push([command.command, ...command.args]);
-        return "ok";
-      }),
-  });
-  return {
-    commands,
-    layer: Layer.merge(files, Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, process)),
-  };
-};
-
 test("converts HEIC via sips, and sends only inline data URLs", async () => {
-  const fixture = fixtures();
+  const fixture = mediaFixtures();
   const result = await Effect.runPromise(
     imageData(attachment("image/heic")).pipe(Effect.provide(fixture.layer)),
   );
@@ -92,7 +70,7 @@ test("converts HEIC via sips, and sends only inline data URLs", async () => {
 });
 
 test("Intake quotes targets, admits media and placeholders, ignores removed tapbacks", async () => {
-  const fixture = fixtures();
+  const fixture = mediaFixtures();
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -213,7 +191,7 @@ test("Intake quotes targets, admits media and placeholders, ignores removed tapb
 });
 
 test("rebuilding replays photos, replies, tapbacks and placeholders like live Intake", () => {
-  const fixture = fixtures();
+  const fixture = mediaFixtures();
   return Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {

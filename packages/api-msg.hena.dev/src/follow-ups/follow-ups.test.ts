@@ -274,7 +274,12 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
         yield* sends.reconcile(conversation, alreadySent!);
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(toolAt);
         const tapAt = yield* Clock.currentTimeMillis;
-        expect(yield* sends.react(conversation, "like", "tool-react", first.guid)).toBe(
+        expect(yield* sends.react(conversation, "like", "stale-react", first.guid)).toBe(
+          "not reacted: the latest message is not the one of his you saw",
+        );
+        expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(toolAt);
+        const latest = yield* fake.text(conversation.handle, "hi again", toolAt);
+        expect(yield* sends.react(conversation, "like", "tool-react", latest.guid)).toBe(
           "reacted like",
         );
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(tapAt);

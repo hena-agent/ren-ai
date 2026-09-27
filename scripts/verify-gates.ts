@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import process from "node:process";
+import exceptions from "../quality-exceptions.json" with { type: "json" };
+import { qualityCommand } from "./quality-commands.ts";
 
 /**
  * Proves each gate actually rejects the thing it claims to reject.
@@ -209,15 +211,39 @@ const verifyStrykerPatch = (): readonly string[] => {
       ];
 };
 
+const verifyGateInputs = (): readonly string[] => {
+  const failures: string[] = [];
+  const config = readFileSync("stryker.config.js", "utf8");
+  if (!/mutate:\s*\[[^\n]*\{ts,tsx\}/.test(config)) {
+    failures.push("mutation: mutate patterns must include .tsx files");
+  }
+  const lint = qualityCommand("lint") ?? [];
+  const duplication = qualityCommand("duplication") ?? [];
+  for (const { path } of exceptions.lint) {
+    if (!lint.some((arg, index) => arg === path && lint[index - 1] === "--ignore-pattern"))
+      failures.push(`lint exception missing from command: ${path}`);
+  }
+  for (const { path } of exceptions.duplication) {
+    if (
+      !duplication.some(
+        (arg, index) => duplication[index - 1] === "--ignore" && arg.split(",").includes(path),
+      )
+    )
+      failures.push(`duplication exception missing from command: ${path}`);
+  }
+  return failures;
+};
+
 rmSync(SCRATCH, { recursive: true, force: true });
 mkdirSync(SCRATCH, { recursive: true });
 
-const failures = [...CHECKS.flatMap(verify), ...verifyStrykerPatch()];
+const failures = [...CHECKS.flatMap(verify), ...verifyStrykerPatch(), ...verifyGateInputs()];
 
 for (const check of CHECKS) {
   process.stdout.write(`  ${check.gate}\n`);
 }
 process.stdout.write("  mutation runner patch\n");
+process.stdout.write("  mutation TSX and lint/duplication exceptions\n");
 
 rmSync(SCRATCH, { recursive: true, force: true });
 

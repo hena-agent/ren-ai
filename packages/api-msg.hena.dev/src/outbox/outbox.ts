@@ -175,11 +175,9 @@ export const outbox = (
             const stopped = yield* before(conversation, "tapback", tapback, callID);
             if (stopped) return stopped;
             const rows = yield* messages.after(0);
-            const latest = rows
-              .filter((row) => row.handle === conversation.handle && !row.fromMe)
-              .at(-1);
-            if (!seenGUID || latest?.guid !== seenGUID)
-              return notReacted("a newer message arrived, or there is no message to react to");
+            const latest = rows.filter((row) => row.handle === conversation.handle).at(-1);
+            if (!seenGUID || latest?.fromMe !== false || latest.tapback || latest.guid !== seenGUID)
+              return notReacted("the latest message is not the one of his you saw");
             const attempted =
               yield* sql`SELECT id FROM send WHERE conversation_id = ${conversation.id}
             AND kind = 'tapback' AND content = ${tapback} AND target_guid = ${seenGUID} LIMIT 1`;
