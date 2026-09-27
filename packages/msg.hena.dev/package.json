@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && bun run ../../scripts/check-site-build.ts",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

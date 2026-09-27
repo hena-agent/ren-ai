@@ -219,7 +219,7 @@ test("each tapback is recorded before the UI acts, never replayed, and stale or 
       );
       expect(yield* sends.react(conversation, "like", "empty")).toMatch(/^not reacted:/);
       expect(yield* sends.react(conversation, "like", "absent", "missing-guid")).toMatch(
-        /no message/,
+        /latest message/,
       );
       const target = yield* fake.text(conversation.handle, "hello", 100);
       expectedGUID = target.guid;
@@ -230,6 +230,14 @@ test("each tapback is recorded before the UI acts, never replayed, and stale or 
         ...history,
         { ...target, id: history.at(-1)!.id + 1, guid: "outgoing", fromMe: true },
       ]);
+      expect(yield* sends.react(conversation, "like", "hers-is-newer", target.guid)).toBe(
+        "not reacted: the latest message is not the one of his you saw",
+      );
+      expect(yield* sends.react(conversation, "like", "hers-seen", "outgoing")).toBe(
+        "not reacted: the latest message is not the one of his you saw",
+      );
+      expect(ui.reactions).toEqual([]);
+      yield* fake.replace(history);
       for (const [index, tapback] of tapbacks.entries()) {
         const callID = `reaction-${index}`;
         expect(yield* sends.react(conversation, tapback, callID, target.guid)).toBe(
@@ -246,7 +254,7 @@ test("each tapback is recorded before the UI acts, never replayed, and stale or 
       const newer = yield* fake.text(conversation.handle, "new", 101);
       expectedGUID = newer.guid;
       expect(yield* sends.react(conversation, "love", "stale", target.guid)).toMatch(
-        /newer message/,
+        /latest message/,
       );
       expect(yield* sends.react(conversation, "love", "current", newer.guid)).toBe("reacted love");
       const failed = yield* outbox(
@@ -264,10 +272,22 @@ test("each tapback is recorded before the UI acts, never replayed, and stale or 
       expect(yield* failed.react(conversation, "question", "failure", newer.guid)).toBe(
         "not reacted: this call was already recorded",
       );
-      yield* fake.outgoing(conversation.handle, "question", Date.now(), "failed");
+      const failedRow = yield* fake.outgoing(conversation.handle, "question", Date.now(), "failed");
       expect(yield* failed.react(conversation, "question", "new-call", newer.guid)).toBe(
+        "not reacted: the latest message is not the one of his you saw",
+      );
+      yield* fake.replace(
+        (yield* fake.messages.after(0)).filter((row) => row.guid !== failedRow.guid),
+      );
+      expect(yield* failed.react(conversation, "question", "duplicate", newer.guid)).toBe(
         "not reacted: this tapback was already attempted on that message",
       );
+      const reaction = yield* fake.text(conversation.handle, "", Date.now(), {
+        tapback: { emoji: "👍", targetGuid: newer.guid, added: true },
+      });
+      expect(
+        yield* sends.react(conversation, "like", "reaction-is-not-a-message", reaction.guid),
+      ).toBe("not reacted: the latest message is not the one of his you saw");
       const pending =
         yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
         VALUES (${conversation.handle}, ${conversation.id}, 'text', 'pending', 'pending', 'uncertain', 0, 0)`;

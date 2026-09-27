@@ -1,31 +1,9 @@
 import { spawnSync } from "node:child_process";
 import process from "node:process";
-import exceptions from "../quality-exceptions.json" with { type: "json" };
-import duplicationConfig from "../.jscpd.json" with { type: "json" };
+import { qualityCommand } from "./quality-commands.ts";
 
 const [gate] = process.argv.slice(2);
-const command =
-  gate === "lint"
-    ? [
-        "oxlint",
-        "--type-aware",
-        "--report-unused-disable-directives",
-        ...exceptions.lint.flatMap(({ path }) => ["--ignore-pattern", path]),
-      ]
-    : gate === "duplication"
-      ? [
-          "jscpd",
-          ...(exceptions.duplication.length > 0
-            ? [
-                "--ignore",
-                [
-                  ...duplicationConfig.ignore,
-                  ...exceptions.duplication.map(({ path }) => path),
-                ].join(","),
-              ]
-            : []),
-        ]
-      : null;
+const command = qualityCommand(gate ?? "");
 
 if (command === null) {
   throw new Error(`Unknown quality gate: ${gate}`);
