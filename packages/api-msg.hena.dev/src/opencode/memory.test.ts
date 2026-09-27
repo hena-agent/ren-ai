@@ -4,26 +4,10 @@ import { join } from "node:path";
 import { TestLLM } from "@opencode/ai/testing";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Effect } from "effect";
-import { afterAll, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { startPersonaHost } from "../main.ts";
 import { scriptedOverrides, valid } from "../../test/host.test-helper.ts";
 import { createHost } from "./host.ts";
-
-const offline = await vi.hoisted(async () => {
-  const { Socket } = await import("node:net");
-  const sockets = vi.spyOn(Socket.prototype, "connect").mockImplementation(() => {
-    throw new Error("Offline test");
-  });
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(() => Promise.reject(new Error("Offline test"))),
-  );
-  return sockets;
-});
-afterAll(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
 
 test("the host rejects impossible Memory limits before starting", async () => {
   for (const memory of [
@@ -143,6 +127,5 @@ test("automatic compaction writes persona Memory and keeps his name through two 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-  expect(offline).not.toHaveBeenCalled();
   expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
 }, 60000);

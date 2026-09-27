@@ -1,26 +1,19 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { SqliteClient } from "@effect/sql-sqlite-node";
-import { TestLLM } from "@opencode/ai/testing";
+import { rm } from "node:fs/promises";
+import {
+  messagingFixture,
+  quietTestHost,
+  registration,
+  runMessagingTest,
+} from "../../test/messaging-host.test-helper.ts";
 import { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
-import { scriptedOverrides } from "../../test/host.test-helper.ts";
-import { startMessagingHost } from "../main.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { setupRebuilding } from "./rebuild.ts";
 
 test("a deleted session heals on the next message and an operator rebuild replaces its Memory", async () => {
-  const root = await mkdtemp(join(tmpdir(), "rebuild-host-"));
-  const personaDirectory = join(root, "persona");
-  await mkdir(personaDirectory);
-  await writeFile(
-    join(personaDirectory, "persona1.md"),
-    "---\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: 안녕\nmemory: Remember.\n---\nYou are Persona1.\n",
-  );
+  const { root, personaDirectory } = await messagingFixture("rebuild-host-", "안녕");
   const fake = fakeMessages();
   let failReplay = false;
   let beforeReplay: (() => Effect.Effect<void, Error>) | undefined;
@@ -40,35 +33,13 @@ test("a deleted session heals on the next message and an operator rebuild replac
       }),
   };
   try {
-    await Effect.runPromise(
+    await runMessagingTest(
       Effect.gen(function* () {
-        const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()));
-        yield* llm.serve(() => TestLLM.text("quiet", "answer"));
-        const host = yield* startMessagingHost(
-          join(root, "isolated"),
-          {
-            configDirectory: join(root, "config"),
-            databasePath: ":memory:",
-            personaDirectory,
-            providers: {},
-            model: "test/probe",
-            overrides: scriptedOverrides(llm),
-            health: { raise: () => Effect.void },
-          },
-          messages,
-          fakeGestures().gestures,
-          { turnstileSecret: "test-secret", notice: noticeCopy },
-          { raise: () => Effect.void, clear: () => Effect.void },
-        );
+        const host = yield* quietTestHost(root, personaDirectory, messages);
         const old = yield* host.createSession("persona1");
-        const conversation = yield* host.conversations.create({
-          handle: "user@example.com",
-          locale: "ko",
-          consentVersion: "v1",
-          consentLanguage: "ko",
-          personaID: "persona1",
-          sessionID: old.id,
-        });
+        const conversation = yield* host.conversations.create(
+          registration("user@example.com", old.id),
+        );
         yield* host.sessions.remove(old.id);
         failReplay = true;
         const failed = yield* fake
@@ -106,14 +77,7 @@ test("a deleted session heals on the next message and an operator rebuild replac
         yield* host.conversations.block(conversation.handle);
         expect(yield* host.operator.rebuild(conversation.handle)).toBe("not_found");
         const missing = yield* host.createSession("persona1");
-        yield* host.conversations.create({
-          handle: "restore@example.com",
-          locale: "ko",
-          consentVersion: "v1",
-          consentLanguage: "ko",
-          personaID: "persona1",
-          sessionID: missing.id,
-        });
+        yield* host.conversations.create(registration("restore@example.com", missing.id));
         yield* host.sessions.remove(missing.id);
         const existing = yield* fake.messages.after(0);
         yield* fake.replace([
@@ -148,7 +112,7 @@ test("a deleted session heals on the next message and an operator rebuild replac
           ),
         ).toContain("missed during downtime");
         yield* Effect.promise(host.disposeOnboarding);
-      }).pipe(Effect.scoped, Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+      }),
     );
   } finally {
     await rm(root, { recursive: true, force: true });

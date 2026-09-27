@@ -154,7 +154,7 @@ test("removal deletes all User data atomically, keeps a retry marker on failure 
       yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
       VALUES (${input.handle}, 'notice', 'private', 'sent', 1, 1)`;
       yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${input.sessionID}, 'guid')`;
-      yield* sql`INSERT INTO intake_last (conversation_id, date) VALUES (${conversation.id}, 1)`;
+      yield* sql`UPDATE conversation SET last_received_at = 1 WHERE id = ${conversation.id}`;
       yield* directory.block(input.handle);
       let attempts = 0;
       const removed: string[] = [];
@@ -167,14 +167,7 @@ test("removal deletes all User data atomically, keeps a retry marker on failure 
         }),
       );
       expect(Result.isFailure(yield* Effect.result(operator.remove(input.handle)))).toBe(true);
-      for (const table of [
-        "user",
-        "conversation",
-        "send",
-        "intake_seen",
-        "intake_last",
-        "blocked",
-      ]) {
+      for (const table of ["user", "conversation", "send", "intake_seen", "blocked"]) {
         expect((yield* sql`SELECT * FROM ${sql(table)}`).length).toBe(0);
       }
       expect(yield* sql`SELECT session_id FROM removal`).toEqual([{ session_id: input.sessionID }]);

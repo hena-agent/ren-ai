@@ -79,6 +79,12 @@ export const migrate = Effect.gen(function* () {
         followed_up INTEGER NOT NULL DEFAULT 0
       )`,
       "013_rebuilding": sql`ALTER TABLE conversation ADD COLUMN rebuilding INTEGER NOT NULL DEFAULT 0`,
+      "014_fold_intake_last": Effect.gen(function* () {
+        yield* sql`ALTER TABLE conversation ADD COLUMN last_received_at INTEGER`;
+        yield* sql`UPDATE conversation SET last_received_at =
+          (SELECT date FROM intake_last WHERE conversation_id = conversation.id)`;
+        yield* sql`DROP TABLE intake_last`;
+      }),
     }),
   });
 });

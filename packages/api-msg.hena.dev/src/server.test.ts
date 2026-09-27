@@ -93,6 +93,7 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
   const ui = fakeGestures();
   let greeted = false;
   let replied = false;
+  const offlineFetch = globalThis.fetch;
   vi.stubGlobal(
     "fetch",
     vi.fn(
@@ -207,7 +208,7 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
       ),
     );
   } finally {
-    vi.unstubAllGlobals();
+    vi.stubGlobal("fetch", offlineFetch);
     await rm(root, { recursive: true, force: true });
   }
 }, 60000);

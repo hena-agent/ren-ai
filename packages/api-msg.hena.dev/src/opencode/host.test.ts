@@ -31,25 +31,15 @@ const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
   const { tmpdir: temporaryDirectory } = await import("node:os");
   const { join: joinPath } = await import("node:path");
-  const { Socket } = await import("node:net");
-  const sockets = vi.spyOn(Socket.prototype, "connect").mockImplementation(() => {
-    throw new Error("Offline test: sockets disabled");
-  });
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(() => Promise.reject(new Error("Offline test: fetch disabled"))),
-  );
   const root = mkdtempSync(joinPath(temporaryDirectory(), "personas-xdg-"));
   for (const name of ["CONFIG", "DATA", "STATE", "CACHE"]) {
     const directory = joinPath(root, name.toLowerCase());
     mkdirSync(directory);
     process.env[`XDG_${name}_HOME`] = directory;
   }
-  return { root, sockets };
+  return { root };
 });
 afterAll(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
   rmSync(xdg.root, { recursive: true, force: true });
 });
 test("the sealed host creates a deny-all persona session and admits a scripted reply", async () => {
@@ -215,7 +205,6 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             expect(plugins).not.toContain(`"id":"${id}"`);
           }
           expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
-          expect(xdg.sockets).not.toHaveBeenCalled();
         }),
       ),
     );

@@ -37,30 +37,7 @@ export const setupRebuilding = (
       false,
       sent,
     );
-    const recovery = yield* rebuilder(
-      directory,
-      host.personas,
-      notice,
-      host.createSession,
-      (id) =>
-        host.sessions.get(Session.ID.make(id)).pipe(
-          Effect.as(true),
-          Effect.catchTag("Session.NotFoundError", () => Effect.succeed(false)),
-        ),
-      (id) =>
-        host.sessions
-          .remove(Session.ID.make(id))
-          .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
-      (id, messageID, text) =>
-        host.sessions
-          .prompt({
-            sessionID: Session.ID.make(id),
-            id: SessionMessage.ID.make(messageID),
-            text,
-          })
-          .pipe(Effect.asVoid),
-      incoming.replay,
-    );
+    const recovery = yield* rebuilder(directory, host, notice, incoming.replay);
     restore = (handle) =>
       recovery.rebuild(handle).pipe(
         Effect.asVoid,
