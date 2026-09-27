@@ -42,7 +42,6 @@ const secrets = {
   TURNSTILE_SECRET: "turnstile-test",
   VIEWER_PASSWORD: "viewer-test",
   DISCORD_WEBHOOK_URL: "https://discord.invalid/hook",
-  HEARTBEAT_URL: "https://heartbeat.invalid/ping",
   R2_ACCESS_KEY_ID: "access",
   R2_SECRET_ACCESS_KEY: "secret",
   R2_ENDPOINT: "https://r2.invalid",

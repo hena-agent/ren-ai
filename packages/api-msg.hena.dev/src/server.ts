@@ -26,7 +26,6 @@ export interface ServerConfig {
       | "TURNSTILE_SECRET"
       | "VIEWER_PASSWORD"
       | "DISCORD_WEBHOOK_URL"
-      | "HEARTBEAT_URL"
       | "R2_ACCESS_KEY_ID"
       | "R2_SECRET_ACCESS_KEY"
       | "R2_ENDPOINT"
