@@ -42,10 +42,6 @@ const secrets = {
   TURNSTILE_SECRET: "turnstile-test",
   VIEWER_PASSWORD: "viewer-test",
   DISCORD_WEBHOOK_URL: "https://discord.invalid/hook",
-  R2_ACCESS_KEY_ID: "access",
-  R2_SECRET_ACCESS_KEY: "secret",
-  R2_ENDPOINT: "https://r2.invalid",
-  BACKUP_KEY: "backup",
 };
 
 const http = HttpClient.make((request) =>
@@ -128,7 +124,6 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
               personaDirectory,
               publicPort: 0,
               viewerPort: 0,
-              bucket: "test",
               noticeVersion: "v1",
               secrets,
               host: {
@@ -282,7 +277,6 @@ test("production settings are isolated and the model is configured without conta
               personaDirectory,
               publicPort: 0,
               viewerPort: 0,
-              bucket: "test",
               secrets,
             },
             {

@@ -18,18 +18,10 @@ export interface ServerConfig {
   readonly personaDirectory: string;
   readonly publicPort: number;
   readonly viewerPort: number;
-  readonly bucket: string;
   readonly noticeVersion?: string;
   readonly secrets: Readonly<
     Record<
-      | "OPENCODE_GO_KEY"
-      | "TURNSTILE_SECRET"
-      | "VIEWER_PASSWORD"
-      | "DISCORD_WEBHOOK_URL"
-      | "R2_ACCESS_KEY_ID"
-      | "R2_SECRET_ACCESS_KEY"
-      | "R2_ENDPOINT"
-      | "BACKUP_KEY",
+      "OPENCODE_GO_KEY" | "TURNSTILE_SECRET" | "VIEWER_PASSWORD" | "DISCORD_WEBHOOK_URL",
       string
     >
   >;
@@ -97,10 +89,9 @@ export const composeServer = (
       {
         directory: join(state, "backups"),
         openCodeDatabase: join(state, "opencode.sqlite"),
-        bucket: config.bucket,
       },
       health,
-    ).pipe(Effect.provide(ConfigProvider.layer(provider)));
+    );
     yield* Effect.forkScoped(backup.monitor);
     const operator = operatorHandler(host.operator);
     yield* Effect.addFinalizer(() => Effect.promise(operator.dispose));
