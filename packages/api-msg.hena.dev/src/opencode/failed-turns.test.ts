@@ -1,5 +1,12 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
+import {
+  messagingFixture,
+  registration,
+  runMessagingTest,
+  scriptedPersona,
+  startTestHost,
+  providerUnavailable,
+} from "../../test/messaging-host.test-helper.ts";
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { AIError, AuthenticationError, QuotaExceededError } from "@opencode/ai/schema/errors";
@@ -7,7 +14,8 @@ import { LanguageModel } from "@opencode/ai";
 import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
 import { SessionRunnerModel } from "@opencode/core/session/runner/model";
-import { Effect, Option } from "effect";
+import { Session } from "@opencode/schema/session";
+import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { startMessagingHost } from "../main.ts";
@@ -25,22 +33,17 @@ const advanceUntil = <E, R>(done: () => Effect.Effect<boolean, E, R>) =>
     }
   });
 
+const model = SessionRunnerModel.resolved(
+  LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
+  {
+    capabilities: { input: ["text"], output: ["text"], tools: true },
+    cost: [],
+    limit: { context: 100_000, output: 1_000 },
+  },
+);
+
 test("quota holds Conversations and probes one every 15 minutes before releasing the rest", async () => {
-  const root = await mkdtemp(join(tmpdir(), "failed-turns-"));
-  const personaDirectory = join(root, "content");
-  await mkdir(personaDirectory);
-  await writeFile(
-    join(personaDirectory, "persona1.md"),
-    "---\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: Hi\nmemory: Remember.\n---\nYou are Persona1.\n",
-  );
-  const model = SessionRunnerModel.resolved(
-    LanguageModel.make({ id: "probe", provider: "test", route: OpenAIChat.route }),
-    {
-      capabilities: { input: ["text"], output: ["text"], tools: true },
-      cost: [],
-      limit: { context: 100_000, output: 1_000 },
-    },
-  );
+  const { root, personaDirectory } = await messagingFixture("failed-turns-");
   try {
     await Effect.runPromise(
       Effect.scoped(
@@ -324,3 +327,59 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
     await rm(root, { recursive: true, force: true });
   }
 }, 20000);
+
+test("provider failures back off independently per Conversation, doubling through the 15-minute ceiling", async () => {
+  const { root, personaDirectory } = await messagingFixture("failed-schedules-");
+  try {
+    await runMessagingTest(
+      Effect.gen(function* () {
+        const llm = yield* scriptedPersona();
+        yield* llm.serve(() => providerUnavailable("Provider unavailable"));
+        const host = yield* startTestHost(root, personaDirectory, llm, fakeMessages().messages);
+        const prompt = (handle: string) =>
+          Effect.gen(function* () {
+            const session = yield* host.createSession("persona1");
+            yield* host.conversations.create(registration(handle, session.id));
+            yield* host.sessions.prompt({ sessionID: session.id, text: handle });
+            yield* host.sessions.wait(session.id);
+            yield* TestClock.adjust("20 millis");
+          });
+        const requests = (handle: string) =>
+          Effect.map(
+            llm.requests(),
+            (rows) => rows.filter((row) => JSON.stringify(row).includes(handle)).length,
+          );
+        yield* prompt("one@example.com");
+        let firstAt = yield* Clock.currentTimeMillis;
+        yield* TestClock.adjust("500 millis");
+        yield* prompt("two@example.com");
+        let secondAt = yield* Clock.currentTimeMillis;
+        const firstID = Session.ID.make(
+          (yield* host.conversations.byHandle("one@example.com"))!.sessionID,
+        );
+        const secondID = Session.ID.make(
+          (yield* host.conversations.byHandle("two@example.com"))!.sessionID,
+        );
+        for (const [index, delay] of [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 900, 900].entries()) {
+          yield* TestClock.adjust(firstAt + delay * 1000 - 30 - (yield* Clock.currentTimeMillis));
+          expect(yield* requests("one@example.com")).toBe(index + 1);
+          expect(yield* requests("two@example.com")).toBe(index + 1);
+          yield* TestClock.adjust("50 millis");
+          yield* host.sessions.wait(firstID);
+          yield* TestClock.adjust("20 millis");
+          firstAt = yield* Clock.currentTimeMillis;
+          expect(yield* requests("one@example.com")).toBe(index + 2);
+          expect(yield* requests("two@example.com")).toBe(index + 1);
+          yield* TestClock.adjust(secondAt + delay * 1000 + 20 - (yield* Clock.currentTimeMillis));
+          yield* host.sessions.wait(secondID);
+          yield* TestClock.adjust("20 millis");
+          secondAt = yield* Clock.currentTimeMillis;
+          expect(yield* requests("two@example.com")).toBe(index + 2);
+        }
+        yield* Effect.promise(host.disposeOnboarding);
+      }).pipe(Effect.provide(TestClock.layer())),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60000);

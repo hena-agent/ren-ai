@@ -41,8 +41,8 @@ export const watchEdits = (
     const now = yield* Clock.currentTimeMillis;
     const active = yield* sql<Conversation>`SELECT conversation.id, user.handle,
       conversation.persona_id AS personaID, conversation.session_id AS sessionID
-      FROM intake_last JOIN conversation ON conversation.id = intake_last.conversation_id
-      JOIN user ON user.id = conversation.user_id WHERE intake_last.date >= ${now - editWindow}`;
+      FROM conversation JOIN user ON user.id = conversation.user_id
+      WHERE conversation.last_received_at >= ${now - editWindow}`;
     for (const conversation of active) {
       const seen = yield* sql<{
         guid: string;

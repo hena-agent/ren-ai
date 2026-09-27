@@ -2,40 +2,38 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation, conversations } from "./conversations.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
-import type { Persona } from "../personas/personas.ts";
+import { Session } from "@opencode/schema/session";
+import { SessionMessage } from "@opencode/schema/session-message";
+import type { isolatedHost } from "../opencode/isolate.ts";
 
 interface Origin {
   readonly locale: "ko";
   readonly joinedAt: number;
 }
 
-type Directory = Omit<Effect.Success<typeof conversations>, "replaceSession"> & {
-  readonly replaceSession: (
-    conversation: Conversation,
-    sessionID: string,
-  ) => Effect.Effect<ReadonlyArray<object>, Error>;
-};
-
-export const rebuilder = <CreateError, SessionError, PromptError, ReplayError>(
-  directory: Directory,
-  personas: ReadonlyMap<string, Persona>,
+export const rebuilder = (
+  directory: Effect.Success<typeof conversations>,
+  host: Effect.Success<ReturnType<typeof isolatedHost>>,
   notice: Readonly<Record<"ko", string>>,
-  create: (personaID: string) => Effect.Effect<{ readonly id: string }, CreateError>,
-  exists: (sessionID: string) => Effect.Effect<boolean, SessionError>,
-  remove: (sessionID: string) => Effect.Effect<void, SessionError>,
-  prompt: (sessionID: string, id: string, text: string) => Effect.Effect<void, PromptError>,
-  replay: (conversation: Conversation) => Effect.Effect<void, ReplayError>,
-) =>
-  Effect.gen(function* () {
+  replay: (conversation: Conversation) => Effect.Effect<void, Error>,
+) => {
+  const remove = (id: string) =>
+    host.sessions
+      .remove(Session.ID.make(id))
+      .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void));
+  return Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const rebuild = (handle: string, force = false) =>
       Effect.gen(function* () {
         let conversation = yield* directory.byHandle(handle);
         if (!conversation) return "not_found" as const;
         const oldID = conversation.sessionID;
-        const missing = !(yield* exists(oldID));
+        const missing = !(yield* host.sessions.get(Session.ID.make(oldID)).pipe(
+          Effect.as(true),
+          Effect.catchTag("Session.NotFoundError", () => Effect.succeed(false)),
+        ));
         if (force || missing) {
-          const session = yield* create(conversation.personaID);
+          const session = yield* host.createSession(conversation.personaID);
           yield* directory.replaceSession(conversation, session.id);
           conversation = { ...conversation, sessionID: session.id };
         } else if (!(yield* directory.rebuilding(conversation))) {
@@ -48,19 +46,19 @@ export const rebuilder = <CreateError, SessionError, PromptError, ReplayError>(
           yield* remove(conversation.sessionID);
           return "not_found" as const;
         }
-        const persona = personas.get(conversation.personaID);
+        const persona = host.personas.get(conversation.personaID);
         if (!persona)
           return yield* Effect.fail(new Error(`Unknown persona: ${conversation.personaID}`));
-        yield* prompt(
-          conversation.sessionID,
-          `msg_onboarding_${conversation.sessionID}`,
-          conversationStarted(
+        yield* host.sessions.prompt({
+          sessionID: Session.ID.make(conversation.sessionID),
+          id: SessionMessage.ID.make(`msg_onboarding_${conversation.sessionID}`),
+          text: conversationStarted(
             origin.joinedAt,
             persona.openingLine,
             notice[origin.locale],
             persona.timeZone,
           ),
-        );
+        });
         yield* replay(conversation);
         yield* directory.rebuilt(conversation);
         if (oldID !== conversation.sessionID && !missing) yield* remove(oldID);
@@ -71,3 +69,4 @@ export const rebuilder = <CreateError, SessionError, PromptError, ReplayError>(
     });
     return { rebuild, missing };
   });
+};

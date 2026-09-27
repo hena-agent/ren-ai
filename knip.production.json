@@ -2,6 +2,10 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["scripts/*.ts"],
   "ignore": [".agents/**", "scripts/**/*.mjs"],
-  "ignoreFiles": ["**/*.fake.ts", "**/*.test-helper.ts"],
+  "ignoreFiles": [
+    "**/*.fake.ts",
+    "**/*.test-helper.ts",
+    "packages/api-msg.hena.dev/test/offline.setup.ts"
+  ],
   "ignoreDependencies": ["jscpd"]
 }

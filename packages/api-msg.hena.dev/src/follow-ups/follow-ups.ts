@@ -53,11 +53,10 @@ export const followUps = (
     // Upgrade existing Conversations without requiring him to text again.
     yield* Effect.gen(function* () {
       const missing = yield* sql<{ id: number; at: number }>`
-        SELECT conversation.id, MAX(user.replied_at, COALESCE(intake_last.date, 0),
+        SELECT conversation.id, MAX(user.replied_at, COALESCE(conversation.last_received_at, 0),
           COALESCE((SELECT MAX(recorded_at) FROM send WHERE conversation_id = conversation.id
             AND state IN ('sent', 'delivered')), 0)) AS at
         FROM conversation JOIN user ON user.id = conversation.user_id
-        LEFT JOIN intake_last ON intake_last.conversation_id = conversation.id
         LEFT JOIN follow_up ON follow_up.conversation_id = conversation.id
         WHERE user.replied_at IS NOT NULL AND follow_up.conversation_id IS NULL`;
       for (const row of missing) {

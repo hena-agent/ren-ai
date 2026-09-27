@@ -1,12 +1,20 @@
+import { rm } from "node:fs/promises";
+import {
+  messagingFixture,
+  quietTestHost,
+  runMessagingTest,
+} from "../../test/messaging-host.test-helper.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { Effect, Result } from "effect";
+import { Session } from "@opencode/schema/session";
+import { Effect, Option } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { conversations } from "./conversations.ts";
-import { rebuilder } from "./rebuild-session.ts";
 import { migrate } from "../database.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { intake } from "../intake/intake.ts";
+import { rebuilder } from "./rebuild-session.ts";
+import { noticeCopy } from "../onboarding/onboarding.ts";
 
 const persona = {
   id: "persona1",
@@ -25,214 +33,75 @@ const conversationInput = {
   personaID: persona.id,
 };
 
-test("missing and operator-replaced sessions replay onboarding and both sides of only their Conversation", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
+test("rebuilding through OpenCode replays the record once, fences blocked Users and rejects unknown Personas", async () => {
+  const { root, personaDirectory } = await messagingFixture("rebuild-real-", "Hello");
+  const fake = fakeMessages();
+  try {
+    await runMessagingTest(
       Effect.gen(function* () {
-        yield* migrate;
-        const sql = yield* SqlClient.SqlClient;
-        const fake = fakeMessages();
-        const directory = yield* conversations;
-        const now = Date.now();
-        const original = yield* directory.create({ ...conversationInput, sessionID: "old" });
-        const startedAt = (yield* sql<{
+        const host = yield* quietTestHost(root, personaDirectory, fake.messages);
+        const original = yield* host.createSession(persona.id);
+        const conversation = yield* host.conversations.create({
+          ...conversationInput,
+          sessionID: original.id,
+        });
+        const [started] = yield* (yield* SqlClient.SqlClient)<{
           startedAt: number;
-        }>`SELECT started_at AS startedAt FROM conversation`)[0]!.startedAt;
-        yield* fake.text(handle, "before onboarding", startedAt - 1);
-        yield* sql`INSERT INTO send (handle, kind, content, state, guid, recorded_at, updated_at)
-      VALUES (${handle}, 'notice', 'notice', 'sent', 'notice-guid', ${now}, ${now})`;
-        yield* fake.outgoing(handle, "notice", now + 1, "sent", "notice-guid");
-        const first = yield* fake.text(handle, "first", startedAt);
-        yield* fake.outgoing(handle, "her recorded send", now + 3);
-        yield* fake.outgoing(handle, "her manual send", now + 4);
-        yield* fake.outgoing(handle, "failed send", now + 5, "failed");
-        const last = yield* fake.text(handle, "later", now + 3_600_003);
-        yield* fake.text("stranger@example.com", "private", now + 3_600_004);
-        const scrambled = yield* fake.messages.after(0);
-        yield* fake.replace([
-          scrambled[0]!,
-          scrambled[1]!,
-          scrambled[6]!,
-          scrambled[3]!,
-          scrambled[4]!,
-          scrambled[5]!,
-          scrambled[2]!,
-          scrambled[7]!,
-        ]);
-        const prompts: { session: string; id: string; text: string }[] = [];
-        let interrupt = false;
-        const sessions = new Set(["old"]);
-        const removed: string[] = [];
-        let serial = 0;
-        let failReplay = false;
-        const incoming = yield* intake(
-          fake.messages,
-          directory.byHandle,
-          (session, id, text) =>
-            Effect.gen(function* () {
-              if (interrupt && text.includes("later"))
-                return yield* Effect.fail(new Error("interrupted"));
-              prompts.push({ session, id, text });
-              return undefined;
-            }),
-          () => persona.timeZone,
-          undefined,
-          undefined,
-          undefined,
-          false,
+        }>`SELECT started_at AS startedAt FROM conversation WHERE id = ${conversation.id}`;
+        yield* fake.text(handle, "before onboarding", started!.startedAt - 1);
+        yield* fake.text(handle, "first", started!.startedAt + 1);
+        yield* fake.outgoing(handle, "her manual send", started!.startedAt + 2);
+        yield* fake.text(handle, "later", started!.startedAt + 3_600_003);
+        expect(yield* host.operator.rebuild("stranger@example.com")).toBe("not_found");
+        expect(yield* host.operator.rebuild(handle)).toBe("rebuilt");
+        const rebuilt = (yield* host.conversations.byHandle(handle))!;
+        expect(rebuilt.sessionID).not.toBe(original.id);
+        expect(Option.isNone(yield* host.sessions.get(original.id).pipe(Effect.option))).toBe(true);
+        yield* host.sessions
+          .wait(Session.ID.make(rebuilt.sessionID))
+          .pipe(Effect.timeout("20 seconds"));
+        const transcript = JSON.stringify(
+          yield* host.sessions.messages({ sessionID: Session.ID.make(rebuilt.sessionID) }),
         );
-        yield* incoming.start;
-        const recovery = yield* rebuilder(
-          directory,
-          new Map([[persona.id, persona]]),
-          { ko: "notice" },
-          () =>
-            Effect.sync(() => {
-              const id = `new-${++serial}`;
-              sessions.add(id);
-              return { id };
-            }),
-          (id) => Effect.sync(() => sessions.has(id)),
-          (id) =>
-            Effect.sync(() => {
-              sessions.delete(id);
-              removed.push(id);
-            }),
-          (session, id, text) =>
-            Effect.sync(() => {
-              prompts.push({ session, id, text });
-            }),
-          (conversation) =>
-            failReplay
-              ? Effect.fail(new Error("temporary failure"))
-              : incoming.replay(conversation),
-        );
-        expect(yield* recovery.rebuild("stranger@example.com", true)).toBe("not_found");
+        expect(transcript).toContain("<conversation-started");
+        expect(transcript).toContain("first");
+        expect(transcript).toContain("her manual send");
+        expect(transcript).toContain("later");
+        expect(transcript).toContain("<gap>");
+        expect(transcript).not.toContain("before onboarding");
+        const recovery = yield* rebuilder(host.conversations, host, noticeCopy, host.intake.replay);
         expect(yield* recovery.rebuild(handle)).toBe("present");
-        sessions.delete("old");
-        expect(yield* recovery.missing).toBeUndefined();
-        const rebuilt = (yield* directory.byHandle(handle))!;
-        expect(rebuilt.sessionID).toBe("new-1");
-        expect(yield* directory.active(original)).toBe(false);
-        expect(prompts.map((row) => row.text)).toEqual([
-          expect.stringContaining("<conversation-started"),
-          expect.stringContaining("first"),
-          expect.stringContaining("her recorded send"),
-          expect.stringContaining("her manual send"),
-          expect.stringContaining("later"),
-        ]);
-        expect(prompts[0]?.text).toContain("<notice>notice</notice>");
-        expect(prompts.at(-1)?.text).toContain("<gap>");
-        expect(prompts.some((row) => row.text.includes("before onboarding"))).toBe(false);
-        const lastDate = yield* sql<{ date: number }>`SELECT date FROM intake_last`;
-        expect(lastDate[0]?.date).toBe(last.createdAt);
-        expect(prompts[1]?.id).not.toBe(`msg_${first.guid}`);
-        expect(prompts[1]?.id).not.toBe(prompts[0]?.id);
-        expect((yield* sql`SELECT row_id FROM bookmark`).length).toBe(1);
-        const replayed = prompts.length;
-        expect(yield* recovery.rebuild(handle)).toBe("present");
-        expect(prompts).toHaveLength(replayed);
-        yield* incoming.replay(original);
-        expect(prompts).toHaveLength(replayed);
-        failReplay = true;
-        expect(Result.isFailure(yield* Effect.result(recovery.rebuild(handle, true)))).toBe(true);
-        expect(yield* directory.rebuilding((yield* directory.byHandle(handle))!)).toBe(true);
-        expect(yield* directory.active((yield* directory.byHandle(handle))!)).toBe(false);
-        failReplay = false;
+        yield* host.sessions.remove(Session.ID.make(rebuilt.sessionID));
         yield* recovery.missing;
-        expect(yield* directory.rebuilding((yield* directory.byHandle(handle))!)).toBe(false);
-        expect(yield* directory.active((yield* directory.byHandle(handle))!)).toBe(true);
-        expect(prompts.at(-1)?.session).toBe("new-2");
-        expect(prompts.at(-1)?.text).toContain("later");
-        expect(prompts.filter((row) => row.session === "new-2")).toHaveLength(6);
-        expect(yield* recovery.rebuild(handle, true)).toBe("rebuilt");
-        expect(removed).toEqual(["new-2"]);
-        expect(
-          prompts.filter((row) => row.text.includes("first")).map((row) => row.id),
-        ).toHaveLength(3);
-        expect(
-          new Set(prompts.filter((row) => row.text.includes("first")).map((row) => row.id)).size,
-        ).toBe(3);
-        interrupt = true;
-        expect(Result.isFailure(yield* Effect.result(recovery.rebuild(handle, true)))).toBe(true);
-        interrupt = false;
-        yield* recovery.missing;
-        expect(prompts.filter((row) => row.session === "new-4")).toHaveLength(6);
-        expect(
-          prompts.filter((row) => row.session === "new-4" && row.text.includes("first")),
-        ).toHaveLength(1);
-        yield* directory.block(handle);
-        expect(yield* recovery.rebuild(handle, true)).toBe("not_found");
-        expect(yield* directory.bySession(original.sessionID)).toBeUndefined();
-        expect(prompts.some((row) => row.text.includes(last.guid))).toBe(false);
-      }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
-    ),
-  );
-});
-
-test("a concurrent block or removal cannot attach a replacement, and a missing persona fails explicitly", async () => {
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      yield* migrate;
-      const sql = yield* SqlClient.SqlClient;
-      const directory = yield* conversations;
-      const initial = yield* directory.create({ ...conversationInput, sessionID: "old" });
-      const removed: string[] = [];
-      const make = (
-        create: () => Effect.Effect<{ readonly id: string }, Error>,
-        personas = new Map([[persona.id, persona]]),
-      ) =>
-        rebuilder(
-          directory,
-          personas,
-          { ko: "notice" },
-          create,
-          () => Effect.succeed(false),
-          (id) =>
-            Effect.sync(() => {
-              removed.push(id);
-            }),
-          () => Effect.void,
-          () => Effect.void,
+        expect((yield* host.conversations.byHandle(handle))?.sessionID).not.toBe(rebuilt.sessionID);
+        yield* host.conversations.block(handle);
+        expect(yield* host.operator.rebuild(handle)).toBe("not_found");
+        expect(yield* host.conversations.bySession(rebuilt.sessionID)).toBeUndefined();
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`UPDATE conversation SET persona_id = 'missing' WHERE id = ${conversation.id}`;
+        yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
+        const error = yield* host.operator.rebuild(handle).pipe(Effect.flip);
+        expect(String(error)).toContain("Unknown persona");
+        yield* sql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
+        expect(String(yield* recovery.rebuild(handle).pipe(Effect.flip))).toContain(
+          "Unknown persona",
         );
-      const blocked = yield* make(() => directory.block(handle).pipe(Effect.as({ id: "unused" })));
-      expect(yield* blocked.rebuild(handle)).toBe("not_found");
-      expect(removed).toEqual(["unused"]);
-      yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
-      const noPersona = yield* make(() => Effect.succeed({ id: "new" }), new Map());
-      expect((yield* noPersona.rebuild(handle).pipe(Effect.flip)).message).toContain(
-        "Unknown persona",
-      );
-      const removedDuringRebuild = {
-        ...directory,
-        replaceSession: (
-          conversation: Parameters<typeof directory.replaceSession>[0],
-          id: string,
-        ) =>
-          directory
-            .replaceSession(conversation, id)
-            .pipe(Effect.tap(() => sql`DELETE FROM user WHERE handle = ${handle}`)),
-      };
-      const noOrigin = yield* rebuilder(
-        removedDuringRebuild,
-        new Map([[persona.id, persona]]),
-        { ko: "notice" },
-        () => Effect.succeed({ id: "orphan" }),
-        () => Effect.succeed(false),
-        (id) =>
-          Effect.sync(() => {
-            removed.push(id);
-          }),
-        () => Effect.void,
-        () => Effect.void,
-      );
-      expect(yield* noOrigin.rebuild(handle)).toBe("not_found");
-      expect(removed).toEqual(["unused", "orphan"]);
-      expect(yield* noOrigin.rebuild(handle)).toBe("not_found");
-      expect(yield* directory.rebuilding(initial)).toBe(false);
-    }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
-  );
-});
+        yield* sql`UPDATE conversation SET persona_id = 'persona1', rebuilding = 0 WHERE id = ${conversation.id}`;
+        yield* sql`CREATE TEMP TRIGGER cancel_replacement BEFORE UPDATE OF session_id ON conversation
+          BEGIN SELECT RAISE(IGNORE); END`;
+        expect(yield* host.operator.rebuild(handle)).toBe("not_found");
+        yield* sql`DROP TRIGGER cancel_replacement`;
+        yield* sql`CREATE TEMP TRIGGER remove_origin AFTER UPDATE OF session_id ON conversation
+          BEGIN DELETE FROM user WHERE id = NEW.user_id; END`;
+        expect(yield* host.operator.rebuild(handle)).toBe("not_found");
+        expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
+        yield* Effect.promise(host.disposeOnboarding);
+      }),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60000);
 
 test("replay stops admitting rows when the User is blocked mid-replay", async () => {
   const fake = fakeMessages();

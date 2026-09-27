@@ -195,8 +195,7 @@ export const intake = (
         }
         if ((yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID) return;
         if (previous !== null) {
-          yield* sql`INSERT INTO intake_last (conversation_id, date) VALUES (${conversation.id}, ${previous})
-            ON CONFLICT(conversation_id) DO UPDATE SET date = excluded.date`;
+          yield* sql`UPDATE conversation SET last_received_at = ${previous} WHERE id = ${conversation.id}`;
           yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${firstReply}) WHERE handle = ${conversation.handle}`;
         }
         if (latestReply > lastSentAt) yield* received(conversation, latestReply);
@@ -228,13 +227,9 @@ export const intake = (
             return;
           }
           const earlier = yield* sql<{
-            date: number;
-          }>`SELECT date FROM intake_last WHERE conversation_id = ${conversation.id}`;
-          const rendered = yield* content(
-            row,
-            earlier[0]?.date ?? null,
-            timeZone(conversation.personaID),
-          );
+            date: number | null;
+          }>`SELECT last_received_at AS date FROM conversation WHERE id = ${conversation.id}`;
+          const rendered = yield* content(row, earlier[0]!.date, timeZone(conversation.personaID));
           yield* prompt(
             conversation.sessionID,
             promptID(conversation.sessionID, row.guid),
@@ -243,8 +238,7 @@ export const intake = (
           );
           yield* Effect.gen(function* () {
             yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${conversation.sessionID}, ${row.guid})`;
-            yield* sql`INSERT INTO intake_last (conversation_id, date) VALUES (${conversation.id}, ${row.createdAt})
-                ON CONFLICT(conversation_id) DO UPDATE SET date = excluded.date`;
+            yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt} WHERE id = ${conversation.id}`;
             yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
             yield* received(conversation, row.createdAt);
