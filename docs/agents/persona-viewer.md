@@ -1,0 +1,16 @@
+# Viewing a Persona session in OpenCode V2
+
+`https://chris-mini.pug-mohs.ts.net:8447/` serves the official V2 browser UI at the same origin as the Persona viewer's password-protected, GET-only API. The UI assets come from a separately isolated OpenCode 2.0.16 process on `127.0.0.1:47987`. See [the Mac mini runbook](../../packages/api-msg.hena.dev/ops/README.md) for its install and startup. Never expose 47987 through Tailscale or Funnel, use the Mac owner's OpenCode service, or run `opencode pair` on the Persona host.
+
+1. Open `https://chris-mini.pug-mohs.ts.net:8447/connect`. Enter the same `https://chris-mini.pug-mohs.ts.net:8447` as **Server address** and the `dev.hena.ren-ai.viewer` / `api-msg` password from Keychain as **Password**. Do not use the isolated asset process's password. The form checks `GET /api/info`; it sends no messages.
+2. Obtain the session ID for the Conversation from the authenticated `GET /api/session` response (the array is under `data`). The operator can retrieve IDs and Persona names without putting a password in argv or printing message content:
+
+   ```sh
+   { printf 'header = "Authorization: Basic %s"\n' "$(printf 'opencode:%s' "$(/usr/bin/security find-generic-password -w -s dev.hena.ren-ai.viewer -a api-msg)" | base64 | tr -d '\n')"; } |
+     curl --silent --show-error --fail --config - 'https://chris-mini.pug-mohs.ts.net:8447/api/session' |
+     jq -r '.data[] | [.agent, .id] | @tsv'
+   ```
+
+3. Open `https://chris-mini.pug-mohs.ts.net:8447/server/aHR0cHM6Ly9jaHJpcy1taW5pLnB1Zy1tb2hzLnRzLm5ldDo4NDQ3/session/<session-id>` with the chosen ID. The encoded server segment is base64url of the viewer URL; it is not a credential. A fresh browser needs step 1 first.
+
+The app may ask for `/api/config`, models, or worktree refresh in the background. These are intentionally denied, as are all API mutations. `/api/config` can expose provider credentials. An empty home page is not evidence the session is missing; use its direct session URL. The viewer rejects sends even if the app shows a Send button.
