@@ -13,7 +13,14 @@ export type Copy = {
     inProgress: string;
     waitlistLink: string;
   };
-  privacy: { title: string; placeholder: string; homeLink: string };
+  privacy: {
+    title: string;
+    placeholder: string;
+    intro: string[];
+    sections: { title: string; paragraphs: string[] }[];
+    contact: { title: string; email: string };
+    homeLink: string;
+  };
   answers: {
     sent: string;
     no_imessage: string;

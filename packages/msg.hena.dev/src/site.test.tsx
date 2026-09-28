@@ -18,6 +18,7 @@ const fake: OnboardingClient = { submit, joinWaitlist };
 type Widget = NonNullable<Window["turnstile"]>;
 let widgetOptions: Parameters<Widget["render"]>[1];
 const remove = vi.fn<Widget["remove"]>();
+const approvedVersion = copy.privacyNoticeVersion;
 
 function scriptFrom(node: string | Node | undefined): HTMLScriptElement {
   if (!(node instanceof HTMLScriptElement)) throw new Error("Missing Turnstile script");
@@ -25,7 +26,7 @@ function scriptFrom(node: string | Node | undefined): HTMLScriptElement {
 }
 
 beforeEach(() => {
-  copy.privacyNoticeVersion = "v1";
+  copy.privacyNoticeVersion = approvedVersion;
   submit.mockReset();
   joinWaitlist.mockReset();
   remove.mockReset();
@@ -39,7 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  copy.privacyNoticeVersion = "pending";
+  copy.privacyNoticeVersion = approvedVersion;
   cleanup();
   delete window.turnstile;
   vi.unstubAllGlobals();
@@ -132,8 +133,35 @@ it("renders the form and privacy entries on their own", () => {
   expect(remove).toHaveBeenCalledWith("widget-id");
   render(<Privacy />);
   expect(screen.getByRole("heading", { name: copy.privacy.title })).toBeTruthy();
-  expect(screen.getByText(copy.privacy.placeholder)).toBeTruthy();
+  expect(screen.getByText(approvedVersion)).toBeTruthy();
   expect(screen.getByRole("link", { name: copy.privacy.homeLink })).toHaveProperty("pathname", "/");
+});
+
+it("publishes the approved privacy sections, deletion scope, and removal contact", () => {
+  render(<Privacy />);
+  expect(screen.getByText(/iMessage에서 AI 캐릭터와 대화하는 시험 서비스/)).toBeTruthy();
+  expect(screen.getByText(/첫 메시지는 서비스가 보내는 AI 안내/)).toBeTruthy();
+  expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(
+    copy.privacy.sections.length + 1,
+  );
+  expect(screen.getByText(/자동 만료 기한 없이 보관/)).toBeTruthy();
+  expect(screen.getByText(/대기 명단에서 삭제/)).toBeTruthy();
+  expect(screen.getByText(/Apple Messages의 대화 기록/)).toBeTruthy();
+  expect(screen.getByText(/14일이 지난 백업/)).toBeTruthy();
+  expect(screen.getByText(/2026년 9월 30일까지/)).toBeTruthy();
+  expect(screen.getByText(/실제 데이터 처리 국가와 지역은 현재 확인되지 않았습니다/)).toBeTruthy();
+  expect(screen.queryByText(copy.privacy.placeholder)).toBeNull();
+  expect(screen.getByRole("link", { name: "hi@hena.dev" })).toHaveProperty(
+    "href",
+    "mailto:hi@hena.dev",
+  );
+  for (const section of copy.privacy.sections) {
+    expect(screen.getByRole("heading", { name: section.title, level: 2 })).toBeTruthy();
+    for (const paragraph of section.paragraphs) expect(screen.getByText(paragraph)).toBeTruthy();
+  }
+  expect(copy.privacy.sections.flatMap((section) => section.paragraphs).join(" ")).not.toMatch(
+    /\[[^\]]+\]/,
+  );
 });
 
 it("uses the deployed Turnstile key when the build variable is set", async () => {

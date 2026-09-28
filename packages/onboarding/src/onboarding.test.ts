@@ -117,6 +117,10 @@ describe("Onboarding contract", () => {
   });
 });
 it("shares the site's locale copy and the Notice's version and text", () => {
+  expect(notice.ko.version).toBe("2026-09-28");
+  expect(notice.ko.text).toBe(
+    "안녕하세요, hena예요. 이제 AI 캐릭터가 메시지를 보낼 거예요. 그만 받고 싶으면 이 대화를 차단해 주세요.",
+  );
   expect(notice.ko).toEqual({
     version: locales.ko.privacyNoticeVersion,
     text: locales.ko.notice,

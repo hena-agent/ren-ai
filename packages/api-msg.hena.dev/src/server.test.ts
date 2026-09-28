@@ -11,6 +11,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import { Session } from "@opencode/schema/session";
 import { afterAll, expect, test, vi } from "vitest";
 import { fakeMessages } from "./messages/messages.fake.ts";
+import { notice } from "@repo/onboarding";
 import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { runOperatorCli } from "./operator/cli.ts";
@@ -318,6 +319,29 @@ test("production settings are isolated and the model is configured without conta
             ),
           );
           expect(pending.status).toBe(400);
+          const rejectedTurnstile = HttpClient.make((request) =>
+            Effect.succeed(
+              HttpClientResponse.fromWeb(
+                request,
+                new Response('{"success":false}', {
+                  headers: { "content-type": "application/json" },
+                }),
+              ),
+            ),
+          );
+          expect(
+            yield* server.host
+              .onboard({
+                handle: "+821012345678",
+                locale: "ko",
+                privacyNoticeVersion: notice.ko.version,
+                turnstileToken: "human",
+              })
+              .pipe(
+                Effect.provide(Layer.succeed(HttpClient.HttpClient, rejectedTurnstile)),
+                Effect.flip,
+              ),
+          ).toBe("Turnstile failed");
           expect(fake.bubbles).toEqual([]);
           expect(network).not.toHaveBeenCalled();
         }).pipe(
