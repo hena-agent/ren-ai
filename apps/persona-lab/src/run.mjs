@@ -6,8 +6,9 @@ import { createJudge } from "./judge.ts";
 import { createStore } from "./store.ts";
 import { liveModel } from "./model.ts";
 
-const page = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const stylesheet = readFileSync(new URL("../public/base.css", import.meta.url), "utf8");
+const page = readFileSync(new URL("../dist/index.html", import.meta.url), "utf8");
+const stylesheet = readFileSync(new URL("../dist/assets/style.css", import.meta.url), "utf8");
+const script = readFileSync(new URL("../dist/assets/app.js", import.meta.url), "utf8");
 const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 const port = Number(process.env.PORT ?? 3000);
 const lab = createLab(
@@ -30,6 +31,7 @@ const lab = createLab(
     (event.error ? process.stderr : process.stdout).write(line);
   },
   () => Date.now(),
+  script,
 );
 
 // oxlint-disable-next-line typescript/no-unsafe-call, typescript/no-unsafe-member-access -- thin Bun entry shim; request and decision logic live in tested modules

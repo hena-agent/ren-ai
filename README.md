@@ -16,7 +16,7 @@ Add `GEMINI_API_KEY` and `AI_GATEWAY_API_KEY` to `apps/persona-lab/.env` (see `.
 bun run dev
 ```
 
-Open http://127.0.0.1:3000. Run the quality gates with:
+Open http://127.0.0.1:3000. Each conversation gets a shareable `/personas/<persona>/sessions/<session>` URL. During development, Vite updates the UI automatically and Bun restarts the API when its source changes. Run the quality gates with:
 
 ```sh
 bun run ci
@@ -53,7 +53,7 @@ quality-exceptions.json  The only place file-level gate exceptions may live.
 ## Design decisions worth knowing
 
 - **bun installs and runs scripts; Node runs tests.** Vitest treats bun as a package manager only, and the v8 coverage provider does not work on the bun runtime.
-- **No build step anywhere.** Packages export TypeScript source directly. A compiled package that has not been built makes type-aware lint and knip exit 0 while enforcing nothing — a silent false pass.
+- **Libraries have no build step.** Packages export TypeScript source directly. Persona Lab builds its browser UI with Vite when starting; the libraries remain Just-in-Time. A compiled library that has not been built makes type-aware lint and knip exit 0 while enforcing nothing — a silent false pass.
 - **Exact version pins, no ranges.** oxfmt is pre-1.0 with no semver protection on formatting output, and `oxlint-tsgolint` is hard-pinned to a TypeScript patch release.
 - **bun's default isolated linker is kept.** It turns an undeclared dependency into an immediate failure instead of a latent bug.
 - **`globalStore = true` in `bunfig.toml`.** Packages are symlinked from one machine-wide store, so a clone's `node_modules` is ~200KB instead of ~240MB. The cost is that tools resolving plugins by package name from their _own_ location break, since the store is not a parent of the project — `stryker.config.js` references its runner by path for exactly this reason.

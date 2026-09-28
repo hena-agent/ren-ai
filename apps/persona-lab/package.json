@@ -7,17 +7,28 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "bun src/run.mjs",
-    "start": "bun src/run.mjs",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "dev": "bun run build && bun run --parallel --no-orphans dev:api dev:web",
+    "dev:api": "PORT=3001 bun --watch src/run.mjs",
+    "dev:web": "vite --host 127.0.0.1",
+    "start": "bun run build && bun src/run.mjs",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json"
   },
   "dependencies": {
     "@ren-ai/persona-engine": "workspace:*",
-    "ai": "7.0.113"
+    "ai": "7.0.113",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "use-stick-to-bottom": "1.1.6"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "4.1.13",
     "@types/node": "26.6.2",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "tailwindcss": "4.1.13",
     "typescript": "7.0.2",
+    "vite": "7.3.1",
     "vitest": "5.0.1"
   }
 }

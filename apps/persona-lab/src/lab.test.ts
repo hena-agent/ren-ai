@@ -91,13 +91,33 @@ it("serves the page and stylesheet", async () => {
     createStore(dir),
     silent,
     clock,
+    "app code",
   );
   const page = await instance.handle(get("/"));
   expect(await page.text()).toContain("Lab");
   expect(page.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+  const deepLink = await instance.handle(get("/personas/jiwoo/sessions/6713a5b2-0000"));
+  expect(await deepLink.text()).toBe("<h1>Lab</h1>");
+  expect(deepLink.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+  expect((await instance.handle(get("/personas/jiwoo/sessions"))).status).toBe(404);
+  expect((await instance.handle(get("/prefix/personas/jiwoo/sessions/6713a5b2-0000"))).status).toBe(
+    404,
+  );
+  expect((await instance.handle(get("/personas/jiwoo/sessions/6713a5b2-0000/extra"))).status).toBe(
+    404,
+  );
+  expect((await instance.handle(post("/personas/jiwoo/sessions/6713a5b2-0000"))).status).toBe(404);
   const css = await instance.handle(get("/base.css"));
   expect(await css.text()).toBe("body { color: green }");
   expect(css.headers.get("Content-Type")).toBe("text/css; charset=utf-8");
+  expect(await (await instance.handle(get("/assets/style.css"))).text()).toBe(
+    "body { color: green }",
+  );
+  const script = await instance.handle(get("/assets/app.js"));
+  expect(await script.text()).toBe("app code");
+  expect(script.headers.get("Content-Type")).toBe("text/javascript; charset=utf-8");
+  expect(await (await lab().handle(get("/assets/app.js"))).text()).toBe("");
+  expect(await (await instance.handle(post("/assets/app.js"))).text()).toBe("Not found");
   expect(await (await instance.handle(post("/base.css"))).text()).toBe("Not found");
 });
 
