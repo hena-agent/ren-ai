@@ -40,6 +40,8 @@ export const failedTurns = (host: Host, directory: Directory, alerts: FailureAle
         if (!(yield* directory.bySession(id))) return;
         yield* host.sessions.resume(Session.ID.make(id)).pipe(Effect.catchCause(Effect.logWarning));
       });
+    const startResume = (id: string) =>
+      resume(id).pipe(Effect.catchCause(Effect.logWarning), Effect.forkScoped);
 
     const quotaIDs = () => [...pending].filter(([, state]) => state.quota).map(([id]) => id);
     const hasProviderFailure = () => [...pending.values()].some((state) => !state.quota);
@@ -128,7 +130,7 @@ export const failedTurns = (host: Host, directory: Directory, alerts: FailureAle
         .pipe(Effect.option);
       if (Option.isNone(session)) continue;
       if (session.value.outcome === "failed") {
-        yield* resume(conversation.sessionID);
+        yield* startResume(conversation.sessionID);
         continue;
       }
       const id = Session.ID.make(conversation.sessionID);
@@ -147,6 +149,6 @@ export const failedTurns = (host: Host, directory: Directory, alerts: FailureAle
         );
         continue;
       }
-      yield* resume(conversation.sessionID);
+      yield* startResume(conversation.sessionID);
     }
   });

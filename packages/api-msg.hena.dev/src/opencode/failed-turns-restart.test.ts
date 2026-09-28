@@ -12,26 +12,55 @@ import { TestLLM } from "@opencode/ai/testing";
 import { AIError, InvalidRequestError } from "@opencode/ai/schema/errors";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
-import { Effect } from "effect";
+import { ConfigProvider, Effect } from "effect";
 import { expect, test } from "vitest";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { outbox } from "../outbox/outbox.ts";
+import { servePublic } from "../public-listener.ts";
+import { serveViewer } from "./viewer.ts";
 
 const reopen = (
   open: (llm: TestLLM.TestInterface) => ReturnType<typeof startTestHost>,
   databaseFile: string,
   sessionID: string,
   requests: number,
+  pending = false,
 ) =>
   runMessagingTest(
     Effect.gen(function* () {
       const llm = yield* scriptedPersona();
       yield* llm.serve(() => TestLLM.text("recovered", "answer"));
-      const host = yield* open(llm);
+      const gate = pending ? yield* llm.gate() : undefined;
+      const host = yield* open(llm).pipe(Effect.timeout("3 seconds"));
+      if (gate) {
+        yield* gate.started;
+        const publicServer = yield* servePublic(() => Promise.resolve(new Response("ready")), 0);
+        const viewerServer = yield* serveViewer(host.web, 0).pipe(
+          Effect.provide(
+            ConfigProvider.layer(ConfigProvider.fromUnknown({ VIEWER_PASSWORD: "test" })),
+          ),
+        );
+        const publicAddress = publicServer.address();
+        const viewerAddress = viewerServer.address();
+        if (!publicAddress || typeof publicAddress === "string")
+          throw new Error("No public listener");
+        if (!viewerAddress || typeof viewerAddress === "string")
+          throw new Error("No viewer listener");
+        expect(
+          (yield* Effect.promise(() => fetch(`http://127.0.0.1:${publicAddress.port}`))).status,
+        ).toBe(200);
+        expect(
+          (yield* Effect.promise(() => fetch(`http://127.0.0.1:${viewerAddress.port}/api/info`)))
+            .status,
+        ).toBe(401);
+        expect(yield* llm.requests()).toHaveLength(1); // The model is still blocked.
+        yield* gate.release;
+      }
       expect((yield* host.conversations.byHandle("restart@example.com"))?.sessionID).toBe(
         sessionID,
       );
+      if (requests > 0) yield* llm.wait(requests).pipe(Effect.timeout("20 seconds"));
       yield* host.sessions.wait(Session.ID.make(sessionID)).pipe(Effect.timeout("20 seconds"));
       expect((yield* host.sessions.get(Session.ID.make(sessionID))).outcome).toBe("succeeded");
       const observed = yield* llm.requests();
@@ -67,7 +96,7 @@ test("a failed Conversation resumes after closing and reopening both persisted d
       }),
       databaseFile,
     );
-    expect(JSON.stringify(await reopen(open, databaseFile, sessionID, 1))).toContain(
+    expect(JSON.stringify(await reopen(open, databaseFile, sessionID, 1, true))).toContain(
       "persisted failure",
     );
     await reopen(open, databaseFile, sessionID, 0); // A silent successful turn stays successful.
@@ -134,7 +163,7 @@ test.each([false, true])(
         }),
         databaseFile,
       );
-      await reopen(open, databaseFile, sessionID, outgoing ? 0 : 1);
+      await reopen(open, databaseFile, sessionID, outgoing ? 0 : 1, !outgoing);
       expect(fake.bubbles).toHaveLength(outgoing ? 1 : 0);
       expect(alerts.some((detail) => detail.includes("manual review"))).toBe(outgoing);
     } finally {
