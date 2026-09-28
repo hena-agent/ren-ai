@@ -26,7 +26,9 @@ const isSessionInfo = (value: unknown): value is SessionInfo =>
   "persona" in value &&
   typeof value.persona === "string" &&
   "events" in value &&
-  typeof value.events === "number";
+  typeof value.events === "number" &&
+  "paused" in value &&
+  typeof value.paused === "boolean";
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: server JSON
 const json = async (response: Response): Promise<unknown> => {
@@ -65,7 +67,7 @@ export const createSession = async (persona: string): Promise<Character> =>
   character(await fetch(`/api/new?persona=${encodeURIComponent(persona)}`, { method: "POST" }));
 
 export const sessionAction = async (
-  action: "reset" | "tick" | "import" | "input",
+  action: "reset" | "tick" | "event" | "input" | "pause" | "resume",
   id: string,
   options?: { minutes?: string; body?: string },
 ): Promise<Character> =>
@@ -79,6 +81,19 @@ export const sessionAction = async (
           : { headers: { "Content-Type": "application/json" }, body: options.body }),
       },
     ),
+  );
+
+export const deleteSession = async (id: string): Promise<void> => {
+  await json(await fetch(`/api/session?session=${encodeURIComponent(id)}`, { method: "DELETE" }));
+};
+
+export const importSession = async (body: string): Promise<Character> =>
+  character(
+    await fetch("/api/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    }),
   );
 
 export const exportSession = async (id: string): Promise<string> =>

@@ -9,6 +9,7 @@ it("reads a deep link and falls back for unknown people or sessions", () => {
     sessionId: "6713a5b2-0000",
   });
   expect(locationFromPath("/")).toEqual({ persona: "harin", sessionId: null });
+  expect(locationFromPath("/personas/jiwoo")).toEqual({ persona: "jiwoo", sessionId: null });
   expect(locationFromPath("/personas/ghost/sessions/old")).toEqual({
     persona: "harin",
     sessionId: null,
@@ -47,4 +48,6 @@ it("records selections in history and avoids repeating the current path", () => 
   expect(pushState).toHaveBeenCalledWith(null, "", "/personas/jiwoo/sessions/second");
   showLocation("jiwoo", "a b", "push");
   expect(pushState).toHaveBeenCalledWith(null, "", "/personas/jiwoo/sessions/a%20b");
+  showLocation("jiwoo", null, "replace");
+  expect(replaceState).toHaveBeenCalledWith(null, "", "/personas/jiwoo");
 });

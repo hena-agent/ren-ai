@@ -1,5 +1,20 @@
+import { useEffect, useRef, useState } from "react";
 import type { Character } from "../src/loop.ts";
 import { labels, stageLabels } from "./labels.ts";
+import {
+  PromptInputSelect,
+  PromptInputSelectContent,
+  PromptInputSelectItem,
+  PromptInputSelectTrigger,
+  PromptInputSelectValue,
+} from "./components/ai-elements/prompt-input.tsx";
+
+const minuteChoices = [
+  ["5", "5분"],
+  ["30", "30분"],
+  ["60", "1시간"],
+  ["1440", "1일"],
+] as const;
 
 const Scores = ({ title, id, scores }: { title: string; id: string; scores: object }) => (
   <section className="observation-group">
@@ -22,6 +37,7 @@ export const Observations = ({
   minutes,
   setMinutes,
   tick,
+  triggerEvent,
   busy,
   changes,
   titleId = "state-title",
@@ -31,19 +47,28 @@ export const Observations = ({
   minutes: string;
   setMinutes: (value: string) => void;
   tick: () => void;
+  triggerEvent: () => void;
   busy: boolean;
   changes: string;
   titleId?: string;
   className?: string;
 }) => {
   const { session } = current;
+  const root = useRef<HTMLElement>(null);
+  const [dialog, setDialog] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setDialog(root.current?.closest("dialog") ?? null);
+  }, []);
   return (
-    <aside className={`side ${className}`} aria-labelledby={titleId}>
+    <aside ref={root} className={`side ${className}`} aria-labelledby={titleId}>
       <div className="side-heading">
         <p className="eyebrow">Private notes / 내부 관찰</p>
         <h2 id={titleId}>인물의 현재</h2>
         <p className="profile">{session.definition.profile}</p>
-        <p className="stage">관계 단계 · {stageLabels[session.stage] ?? session.stage}</p>
+        <p className="stage">
+          관계 단계 · {stageLabels[session.stage] ?? session.stage}
+          {current.paused && " · 자동 판단 일시정지"}
+        </p>
       </div>
       <div className="side-content">
         <Scores title="기본 특성" id="base" scores={session.definition.base} />
@@ -82,25 +107,48 @@ export const Observations = ({
         <section className="observation-group">
           <h3>시간과 판단</h3>
           <p className="muted">
-            가상 시각: {new Date(Date.now() + current.offset).toLocaleString()} · 다음 판단:{" "}
-            {new Date(current.nextCheckAt).toLocaleString()}
+            가상 시각: {new Date(Date.now() + current.offset).toLocaleString()} ·{" "}
+            {current.paused
+              ? "자동 판단: 일시정지"
+              : `다음 판단: ${new Date(current.nextCheckAt).toLocaleString()}`}
           </p>
           <div className="tick-controls">
-            <label>
-              가상 시간 진행
-              <select value={minutes} onChange={(event) => setMinutes(event.target.value)}>
-                <option value="5">5분</option>
-                <option value="30">30분</option>
-                <option value="60">1시간</option>
-                <option value="1440">1일</option>
-              </select>
-            </label>
+            <div className="select-field">
+              <label htmlFor={`${titleId}-minutes`}>가상 시간 진행</label>
+              <PromptInputSelect value={minutes} onValueChange={setMinutes} disabled={busy}>
+                <PromptInputSelectTrigger id={`${titleId}-minutes`}>
+                  <PromptInputSelectValue>
+                    {minuteChoices.find(([value]) => value === minutes)?.[1] ?? minutes}
+                  </PromptInputSelectValue>
+                </PromptInputSelectTrigger>
+                <PromptInputSelectContent container={dialog}>
+                  {minuteChoices.map(([value, label]) => (
+                    <PromptInputSelectItem key={value} value={value}>
+                      {label}
+                    </PromptInputSelectItem>
+                  ))}
+                </PromptInputSelectContent>
+              </PromptInputSelect>
+            </div>
             <button className="button button-outline" type="button" onClick={tick} disabled={busy}>
               시간 진행 →
+            </button>
+            <button
+              className="button button-outline"
+              type="button"
+              onClick={triggerEvent}
+              disabled={
+                busy ||
+                session.stage === "ended" ||
+                session.events.some((event) => event.id.startsWith("event:"))
+              }
+            >
+              이벤트 발생
             </button>
           </div>
           <p className="muted record">
             {current.decisions
+              .toSorted((a, b) => b.at - a.at)
               .map(
                 (decision) =>
                   `${new Date(decision.at).toLocaleString()} · ${decision.trigger} · Jev: ${decision.requested} → ${decision.action} · 확률 ${JSON.stringify(decision.probabilities)} · 적용 ${decision.applied.map((change) => `${change.kind}.${"field" in change ? change.field : "trait"}=${"value" in change ? change.value : "변경"}`).join(", ") || "없음"} · 대기 ${decision.pendingIds.length}${decision.error ? ` (${decision.error})` : ""}`,

@@ -2,7 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { Character } from "../src/loop.ts";
 import type { SessionInfo } from "../src/store.ts";
-import { createSession, exportSession, openSession, sessionAction, sessionsFor } from "./api.ts";
+import {
+  createSession,
+  deleteSession,
+  exportSession,
+  importSession,
+  openSession,
+  sessionAction,
+  sessionsFor,
+} from "./api.ts";
 import { locationFromPath, showLocation } from "./location.ts";
 
 const messageOf = (cause: Error | string): string =>
@@ -14,7 +22,8 @@ const hasChanged = (previous: Character, fresh: Character): boolean =>
   (fresh.entries.length !== previous.entries.length ||
     fresh.decisions.length !== previous.decisions.length ||
     fresh.nextCheckAt !== previous.nextCheckAt ||
-    fresh.offset !== previous.offset);
+    fresh.offset !== previous.offset ||
+    fresh.paused !== previous.paused);
 
 export const useLab = () => {
   const [persona, setPersona] = useState(() =>
@@ -28,6 +37,7 @@ export const useLab = () => {
   const [changes, setChanges] = useState("아직 변경이 없습니다.");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const currentRef = useRef<Character | null>(null);
   const generation = useRef(0);
   const working = useRef(false);
@@ -38,7 +48,9 @@ export const useLab = () => {
     if (value)
       setSessions((list) =>
         list.map((info) =>
-          info.id === value.session.id ? { ...info, events: value.session.events.length } : info,
+          info.id === value.session.id
+            ? { ...info, events: value.session.events.length, paused: value.paused }
+            : info,
         ),
       );
   }, []);
@@ -48,25 +60,24 @@ export const useLab = () => {
       const version = ++generation.current;
       setPersona(selected);
       update(null);
+      setLoading(true);
+      setSessions([]);
       setError("");
       setChanges("아직 변경이 없습니다.");
       try {
-        let list = await sessionsFor(selected);
+        const list = await sessionsFor(selected);
         if (version !== generation.current) return;
         const chosen = list.find((info) => info.id === preferredId) ?? list[0];
-        let selectedSession: Character;
-        if (chosen) selectedSession = await openSession(chosen.id);
-        else {
-          selectedSession = await createSession(selected);
-          list = await sessionsFor(selected);
-        }
+        const selectedSession = chosen ? await openSession(chosen.id) : null;
         if (version !== generation.current) return;
         setSessions(list);
         update(selectedSession);
-        showLocation(selected, selectedSession.session.id, mode);
+        showLocation(selected, selectedSession?.session.id ?? null, mode);
       } catch (cause) {
         if (version === generation.current)
           setError(messageOf(cause instanceof Error ? cause : "세션을 불러오지 못했습니다."));
+      } finally {
+        if (version === generation.current) setLoading(false);
       }
     },
     [update],
@@ -178,6 +189,45 @@ export const useLab = () => {
       void act(() => sessionAction("reset", current.session.id), "초기화되었습니다.");
   };
 
+  const togglePause = () => {
+    if (current)
+      void act(
+        () => sessionAction(current.paused ? "resume" : "pause", current.session.id),
+        current.paused ? "자동 판단을 재개했습니다." : "자동 판단을 일시정지했습니다.",
+      );
+  };
+
+  const removeSession = () => {
+    if (!current || working.current || !window.confirm("이 세션의 모든 기록을 삭제할까요?")) return;
+    const id = current.session.id;
+    const version = ++generation.current;
+    working.current = true;
+    setBusy(true);
+    setError("");
+    void (async () => {
+      try {
+        await deleteSession(id);
+        if (version !== generation.current) return;
+        update(null);
+        setSessions((list) => list.filter((info) => info.id !== id));
+        showLocation(persona, null, "replace");
+        const list = await sessionsFor(persona);
+        const next = list[0] ? await openSession(list[0].id) : null;
+        if (version !== generation.current) return;
+        setSessions(list);
+        update(next);
+        showLocation(persona, next?.session.id ?? null, "replace");
+        setChanges("세션을 삭제했습니다.");
+      } catch (cause) {
+        if (version === generation.current)
+          setError(messageOf(cause instanceof Error ? cause : "세션을 삭제하지 못했습니다."));
+      } finally {
+        working.current = false;
+        setBusy(false);
+      }
+    })();
+  };
+
   const send = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!current || !text.trim() || working.current) return;
@@ -198,6 +248,10 @@ export const useLab = () => {
 
   const tick = () => {
     if (current) void act(() => sessionAction("tick", current.session.id, { minutes }));
+  };
+
+  const triggerEvent = () => {
+    if (current) void act(() => sessionAction("event", current.session.id));
   };
 
   const download = async () => {
@@ -221,13 +275,12 @@ export const useLab = () => {
   const importFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !current || !window.confirm("저장한 기록을 새 세션으로 불러올까요?")) return;
-    const id = current.session.id;
+    if (!file || !window.confirm("저장한 기록을 새 세션으로 불러올까요?")) return;
     let importedPersona = persona;
     let list: SessionInfo[] = [];
     void act(
       async () => {
-        const imported = await sessionAction("import", id, { body: await file.text() });
+        const imported = await importSession(await file.text());
         const all = await sessionsFor("");
         const info = all.find((entry) => entry.id === imported.session.id);
         if (!info) throw new Error("세션을 불러오지 못했습니다.");
@@ -257,12 +310,16 @@ export const useLab = () => {
     changes,
     error,
     busy,
+    loading,
     selectPersona,
     selectSession,
     newSession,
     reset,
+    togglePause,
+    removeSession,
     send,
     tick,
+    triggerEvent,
     download,
     importFile,
   };
