@@ -5,7 +5,6 @@ import { expect, test, vi } from "vitest";
 import { serveViewer, viewerFront } from "./viewer.ts";
 
 const auth = `Basic ${Buffer.from("opencode:secret").toString("base64")}`;
-const origin = "https://app.opencode.ai";
 
 test("viewer forwards exactly the protected browse routes, never config or mutations", async () => {
   const web = vi.fn<(request: Request) => Promise<Response>>(async () => new Response("from host"));
@@ -41,6 +40,15 @@ test("viewer forwards exactly the protected browse routes, never config or mutat
           new Request(`http://localhost/private${path}`, { headers: { authorization: auth } }),
         )
       ).status,
+    ).toBe(503);
+    expect(
+      (
+        await viewer(
+          new Request(`http://localhost/api/unexpected${path}`, {
+            headers: { authorization: auth },
+          }),
+        )
+      ).status,
     ).toBe(403);
   }
   for (const path of [
@@ -60,7 +68,7 @@ test("viewer forwards exactly the protected browse routes, never config or mutat
         .status,
     ).toBe(403);
   }
-  for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD"]) {
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]) {
     expect(
       (
         await viewer(
@@ -73,56 +81,106 @@ test("viewer forwards exactly the protected browse routes, never config or mutat
   expect(() => viewerFront(web, "")).toThrow(/password/);
 });
 
-test("only the web app origin can preflight permitted GET routes", async () => {
+test("the same-origin V2 shell needs no API authentication, while the API denies CORS", async () => {
   const web = vi.fn<(request: Request) => Promise<Response>>(
     async () =>
       new Response("safe", {
         headers: { "X-Host": "present", "Access-Control-Allow-Origin": "*" },
       }),
   );
-  const viewer = viewerFront(web, "secret");
-  const request = (path: string, method: string, requestedMethod: string, requestOrigin = origin) =>
-    viewer(
-      new Request(`http://localhost${path}`, {
-        method,
-        headers: {
-          origin: requestOrigin,
-          "access-control-request-method": requestedMethod,
-          authorization: auth,
-        },
+  const ui = vi.fn<(request: Request) => Promise<Response>>(
+    async () =>
+      new Response("<!doctype html><title>OpenCode V2</title>", {
+        headers: { "Content-Type": "text/html" },
       }),
-    );
-  const preflight = await request("/api/event", "OPTIONS", "GET");
-  expect(preflight.status).toBe(204);
-  expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
-  expect(preflight.headers.get("access-control-allow-headers")).toContain("Authorization");
-  expect(preflight.headers.get("access-control-allow-headers")).toContain("X-OpenCode-Directory");
-  expect(preflight.headers.get("access-control-allow-methods")).toBe("GET");
-  expect(preflight.headers.get("vary")).toBe("Origin");
-  expect((await request("/api/config", "OPTIONS", "GET")).status).toBe(403);
-  expect((await request("/api/event", "OPTIONS", "POST")).status).toBe(403);
-  expect((await request("/api/event", "OPTIONS", "GET", "https://evil.example")).status).toBe(403);
-  expect(
-    (await request("/api/event", "OPTIONS", "GET", "https://evil.example")).headers.get(
-      "access-control-allow-origin",
-    ),
-  ).toBeNull();
-  const response = await request("/api/session", "GET", "GET");
+  );
+  const viewer = viewerFront(web, "secret", ui);
+  for (const path of [
+    "/",
+    "/connect",
+    "/_assets/index.js",
+    "/icons/prod/favicon.ico",
+    "/server/key/session/ses_1",
+  ]) {
+    const response = await viewer(new Request(`http://localhost${path}`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html");
+  }
+  for (const path of ["/api", "/api/config", "/openapi.json"]) {
+    expect(
+      (await viewer(new Request(`http://localhost${path}`, { headers: { authorization: auth } })))
+        .status,
+    ).toBe(403);
+  }
+  const preflight = await viewer(
+    new Request("http://localhost/api/info", {
+      method: "OPTIONS",
+      headers: { origin: "https://evil.example", "access-control-request-method": "GET" },
+    }),
+  );
+  expect(preflight.status).toBe(403);
+  expect(preflight.headers.get("access-control-allow-origin")).toBeNull();
+  const response = await viewer(
+    new Request("http://localhost/api/session", {
+      headers: { authorization: auth, origin: "https://evil.example" },
+    }),
+  );
   expect(response.headers.get("x-host")).toBe("present");
-  expect(response.headers.get("access-control-allow-origin")).toBe(origin);
+  expect(response.headers.get("access-control-allow-origin")).toBeNull();
+  expect((await viewer(new Request("http://localhost/api/session"))).status).toBe(401);
+  expect(web).toHaveBeenCalledTimes(1);
+  expect(ui).toHaveBeenCalledTimes(5);
+});
+
+test("without the isolated shell, the viewer fails closed on HTML routes", async () => {
+  const viewer = viewerFront(async () => new Response("safe"), "secret");
+  expect((await viewer(new Request("http://localhost/"))).status).toBe(503);
   expect(
-    (
-      await viewer(
-        new Request("http://localhost/api/session", {
-          headers: { authorization: auth, origin: "https://evil.example" },
-        }),
-      )
-    ).headers.get("access-control-allow-origin"),
-  ).toBeNull();
-  expect(
-    (await viewer(new Request("http://localhost/api/session", { headers: { origin } }))).status,
-  ).toBe(401);
-  expect(web).toHaveBeenCalledTimes(2);
+    (await viewer(new Request("http://localhost/api/config", { headers: { authorization: auth } })))
+      .status,
+  ).toBe(403);
+});
+
+test("listener serves the isolated V2 shell at / but never forwards an API path to it", async () => {
+  const shell = vi.fn<typeof fetch>((input) =>
+    typeof input === "string" && input.endsWith("/unavailable")
+      ? Promise.reject(new Error("isolated shell stopped"))
+      : Promise.resolve(
+          new Response("<!doctype html><title>OpenCode</title>", {
+            headers: { "Content-Type": "text/html" },
+          }),
+        ),
+  );
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const web = vi.fn<(request: Request) => Promise<Response>>(async () => new Response("API"));
+        const server = yield* serveViewer(web, 0, shell);
+        const address = server.address();
+        if (!address || typeof address === "string") throw new Error("Expected TCP listener");
+        const base = `http://127.0.0.1:${address.port}`;
+        expect((yield* Effect.promise(() => fetch(base))).status).toBe(200);
+        expect(
+          (yield* Effect.promise(() => fetch(`${base}/connect`))).headers.get("content-type"),
+        ).toBe("text/html");
+        const unavailable = yield* Effect.promise(() => fetch(`${base}/unavailable`));
+        expect(unavailable.status).toBe(502);
+        expect(yield* Effect.promise(() => unavailable.text())).toBe("Web UI unavailable");
+        expect(
+          (yield* Effect.promise(() =>
+            fetch(`${base}/api/info`, { headers: { authorization: auth } }),
+          )).status,
+        ).toBe(200);
+        expect(web).toHaveBeenCalledTimes(1);
+        expect(shell).toHaveBeenCalledTimes(3);
+        expect(shell.mock.calls[0]![1]?.headers).toEqual({ "Accept-Encoding": "identity" });
+      }),
+    ).pipe(
+      Effect.provide(
+        ConfigProvider.layer(ConfigProvider.fromUnknown({ VIEWER_PASSWORD: "secret" })),
+      ),
+    ),
+  );
 });
 
 test("listener binds loopback, reads password from ConfigProvider and streams responses", async () => {

@@ -2,7 +2,6 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { Config, Effect } from "effect";
 
-const origin = "https://app.opencode.ai";
 const paths = [
   /^\/api\/info$/,
   /^\/api\/project$/,
@@ -18,59 +17,55 @@ const paths = [
 const allowed = (path: string) => paths.some((pattern) => pattern.test(path));
 
 /** The raw host handler must never be exposed directly: GET /api/config contains provider keys. */
-export const viewerFront = (web: (request: Request) => Promise<Response>, password: string) => {
+export const viewerFront = (
+  web: (request: Request) => Promise<Response>,
+  password: string,
+  ui?: (request: Request) => Promise<Response>,
+) => {
   if (!password) throw new Error("Viewer password must not be empty");
   const expected = createHash("sha256")
     .update(`Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`)
     .digest();
   return (request: Request): Promise<Response> => {
     const path = new URL(request.url).pathname;
-    const trustedOrigin = request.headers.get("origin") === origin;
-    const headers = trustedOrigin
-      ? {
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Headers": "Authorization, Content-Type, X-OpenCode-Directory",
-          "Access-Control-Allow-Methods": "GET",
-          Vary: "Origin",
-        }
-      : {};
-    // Browsers preflight credentialed GETs without sending credentials. Never forward OPTIONS.
-    if (request.method === "OPTIONS") {
-      return Promise.resolve(
-        new Response(null, {
-          status:
-            trustedOrigin &&
-            allowed(path) &&
-            request.headers.get("access-control-request-method") === "GET"
-              ? 204
-              : 403,
-          headers,
-        }),
-      );
+    // The official V2 app is same-origin; it needs no CORS access to the API.
+    if (request.method !== "GET") return Promise.resolve(new Response(null, { status: 403 }));
+    if (path !== "/api" && !path.startsWith("/api/") && path !== "/openapi.json") {
+      return ui ? ui(request) : Promise.resolve(new Response(null, { status: 503 }));
     }
     const authorization = request.headers.get("authorization");
-    if (!authorization) return Promise.resolve(new Response(null, { status: 401, headers }));
+    if (!authorization) return Promise.resolve(new Response(null, { status: 401 }));
     const actual = createHash("sha256").update(authorization).digest();
     if (!timingSafeEqual(actual, expected)) {
-      return Promise.resolve(new Response(null, { status: 401, headers }));
+      return Promise.resolve(new Response(null, { status: 401 }));
     }
-    if (request.method !== "GET" || !allowed(path)) {
-      return Promise.resolve(new Response(null, { status: 403, headers }));
+    if (!allowed(path)) {
+      return Promise.resolve(new Response(null, { status: 403 }));
     }
     return web(request).then((response) => {
       const output = new Response(response.body, response);
       output.headers.delete("access-control-allow-origin");
-      for (const [name, value] of Object.entries(headers)) output.headers.set(name, value);
+      output.headers.delete("access-control-allow-credentials");
       return output;
     });
   };
 };
 
 /** The viewer is the only listener for the host handler; it binds to loopback for Tailscale Serve. */
-export const serveViewer = (web: (request: Request) => Promise<Response>, port: number) =>
+export const serveViewer = (
+  web: (request: Request) => Promise<Response>,
+  port: number,
+  fetchAssets: typeof fetch = fetch,
+) =>
   Effect.gen(function* () {
     const password = yield* Config.string("VIEWER_PASSWORD");
-    const front = viewerFront(web, password);
+    // The isolated CLI serves only immutable V2 app assets here. Its API is never proxied.
+    const front = viewerFront(web, password, (request) =>
+      fetchAssets(`http://127.0.0.1:47987${new URL(request.url).pathname}`, {
+        headers: { "Accept-Encoding": "identity" },
+        signal: request.signal,
+      }).catch(() => new Response("Web UI unavailable", { status: 502 })),
+    );
     return yield* Effect.acquireRelease(
       Effect.tryPromise(
         () =>
