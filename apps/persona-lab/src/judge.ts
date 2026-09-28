@@ -1,5 +1,5 @@
-import { STAGES } from "@repo/persona-engine";
-import type { Event, Session, Stage } from "@repo/persona-engine";
+import { STAGES } from "@ren-ai/persona-engine";
+import type { Event, Session, Stage } from "@ren-ai/persona-engine";
 
 const criteria = {
   fall_clear: "Strong evidence of a lasting decrease caused by the new event.",

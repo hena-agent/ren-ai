@@ -1,5 +1,5 @@
 {
-  "name": "@repo/cli",
+  "name": "@ren-ai/cli",
   "version": "0.0.0",
   "private": true,
   "bin": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@repo/duration": "workspace:*"
+    "@ren-ai/duration": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.6.2",

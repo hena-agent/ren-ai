@@ -1,4 +1,4 @@
-import type { Definition } from "@repo/persona-engine";
+import type { Definition } from "@ren-ai/persona-engine";
 
 export const personas: Record<string, Definition> = {
   harin: {

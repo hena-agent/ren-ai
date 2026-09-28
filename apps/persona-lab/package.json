@@ -1,5 +1,5 @@
 {
-  "name": "@repo/persona-lab",
+  "name": "@ren-ai/persona-lab",
   "version": "0.0.0",
   "private": true,
   "bin": {
@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@repo/persona-engine": "workspace:*",
+    "@ren-ai/persona-engine": "workspace:*",
     "ai": "7.0.113"
   },
   "devDependencies": {

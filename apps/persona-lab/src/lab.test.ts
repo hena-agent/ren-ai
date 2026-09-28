@@ -9,7 +9,7 @@ import type { SessionInfo } from "./store.ts";
 import { begin } from "./loop.ts";
 import type { Character } from "./loop.ts";
 import type { Judge } from "./judge.ts";
-import type { Model } from "@repo/persona-engine";
+import type { Model } from "@ren-ai/persona-engine";
 import { personas } from "./personas.ts";
 
 let dir = "";

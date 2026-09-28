@@ -4,7 +4,7 @@ import { createStore, restore } from "./store.ts";
 import type { Saved, SessionInfo } from "./store.ts";
 import { personas } from "./personas.ts";
 import type { Judge } from "./judge.ts";
-import type { Event, Model } from "@repo/persona-engine";
+import type { Event, Model } from "@ren-ai/persona-engine";
 
 export type TurnLog = {
   session: string;

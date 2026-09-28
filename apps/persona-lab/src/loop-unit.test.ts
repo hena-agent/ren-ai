@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { Model } from "@repo/persona-engine";
+import type { Model } from "@ren-ai/persona-engine";
 import type { Judge } from "./judge.ts";
 import { admit, begin, decide } from "./loop.ts";
 import { personas } from "./personas.ts";

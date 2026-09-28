@@ -1,5 +1,5 @@
-import { parseProposal } from "@repo/persona-engine";
-import type { Event, Model, Proposal, Session } from "@repo/persona-engine";
+import { parseProposal } from "@ren-ai/persona-engine";
+import type { Event, Model, Proposal, Session } from "@ren-ai/persona-engine";
 import { stageGuidance } from "./judge.ts";
 
 export type ModelOptions = { key: string; endpoint: string; name: string; fetcher: typeof fetch };

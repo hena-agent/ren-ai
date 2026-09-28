@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "ts-template",
+      "name": "ren-ai",
       "devDependencies": {
         "@stryker-mutator/core": "10.0.0",
         "@stryker-mutator/vitest-runner": "10.0.0",
@@ -22,13 +22,13 @@
       },
     },
     "apps/cli": {
-      "name": "@repo/cli",
+      "name": "@ren-ai/cli",
       "version": "0.0.0",
       "bin": {
         "duration": "./src/index.ts",
       },
       "dependencies": {
-        "@repo/duration": "workspace:*",
+        "@ren-ai/duration": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "26.6.2",
@@ -37,13 +37,13 @@
       },
     },
     "apps/persona-lab": {
-      "name": "@repo/persona-lab",
+      "name": "@ren-ai/persona-lab",
       "version": "0.0.0",
       "bin": {
         "persona-lab": "./src/run.mjs",
       },
       "dependencies": {
-        "@repo/persona-engine": "workspace:*",
+        "@ren-ai/persona-engine": "workspace:*",
         "ai": "7.0.113",
       },
       "devDependencies": {
@@ -53,7 +53,7 @@
       },
     },
     "packages/duration": {
-      "name": "@repo/duration",
+      "name": "@ren-ai/duration",
       "version": "0.0.0",
       "devDependencies": {
         "typescript": "7.0.2",
@@ -61,7 +61,7 @@
       },
     },
     "packages/persona-engine": {
-      "name": "@repo/persona-engine",
+      "name": "@ren-ai/persona-engine",
       "version": "0.0.0",
       "devDependencies": {
         "@types/node": "26.6.2",
@@ -372,13 +372,13 @@
 
     "@oxlint/plugins": ["@oxlint/plugins@1.85.0", "", {}, "sha512-qqHqML3ME3cxGgFvWJG8wwMnJc9ol5SMdtqkq0k8r7l0USmC+HRXYjzDacME4Dqkx4yqrUsBhj0JYvji8fHxJQ=="],
 
-    "@repo/cli": ["@repo/cli@workspace:apps/cli"],
+    "@ren-ai/cli": ["@ren-ai/cli@workspace:apps/cli"],
 
-    "@repo/duration": ["@repo/duration@workspace:packages/duration"],
+    "@ren-ai/duration": ["@ren-ai/duration@workspace:packages/duration"],
 
-    "@repo/persona-engine": ["@repo/persona-engine@workspace:packages/persona-engine"],
+    "@ren-ai/persona-engine": ["@ren-ai/persona-engine@workspace:packages/persona-engine"],
 
-    "@repo/persona-lab": ["@repo/persona-lab@workspace:apps/persona-lab"],
+    "@ren-ai/persona-lab": ["@ren-ai/persona-lab@workspace:apps/persona-lab"],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.11", "", { "os": "android", "cpu": "arm" }, "sha512-A5kXfGKvKWWZE0TtPrfsvT+q4Y5d1QG8gGUzpYjGydM+fARM9MuX90PrXYXe0XbsDVgyxxNzHo6giCj90bsFNw=="],
 

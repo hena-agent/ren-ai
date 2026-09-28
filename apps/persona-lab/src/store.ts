@@ -7,8 +7,8 @@ import {
   parseChanges,
   parseProposal,
   recordInput,
-} from "@repo/persona-engine";
-import type { Event } from "@repo/persona-engine";
+} from "@ren-ai/persona-engine";
+import type { Event } from "@ren-ai/persona-engine";
 import { personas } from "./personas.ts";
 import type { Character, Decision, Entry } from "./loop.ts";
 

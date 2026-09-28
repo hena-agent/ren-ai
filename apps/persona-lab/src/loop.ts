@@ -1,5 +1,5 @@
-import { applyTransition, createSession, emit, recordInput } from "@repo/persona-engine";
-import type { Change, Definition, Event, Model, Proposal, Session } from "@repo/persona-engine";
+import { applyTransition, createSession, emit, recordInput } from "@ren-ai/persona-engine";
+import type { Change, Definition, Event, Model, Proposal, Session } from "@ren-ai/persona-engine";
 import type { Action, Judge, Judgment, Trigger } from "./judge.ts";
 import { transition } from "./transition.ts";
 

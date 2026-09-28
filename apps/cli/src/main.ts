@@ -1,4 +1,4 @@
-import { parseDuration } from "@repo/duration";
+import { parseDuration } from "@ren-ai/duration";
 
 export type Invocation = {
   readonly code: number;

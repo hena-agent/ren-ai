@@ -4,7 +4,7 @@
 
 ## 작업 목록
 
-- [x] `packages/persona-engine`에 빌드 없는 JIT 패키지(`@repo/persona-engine`)를 만든다. 웹·저장소·특정 모델 공급자에 의존하지 않는다.
+- [x] `packages/persona-engine`에 빌드 없는 JIT 패키지(`@ren-ai/persona-engine`)를 만든다. 웹·저장소·특정 모델 공급자에 의존하지 않는다.
 - [x] 운영자 정의(서술형 Persona, 기본/현재/관계 시작 Stat, 숨겨진 특성)로 독립된 세션을 생성한다. 기본 특성은 대화에서 수정할 수 없다.
 - [x] 한 턴의 입력(사용자 메시지 또는 운영자가 확정한 생활 사건)과 현재 상태에서 모델이 응답·변경안을 제안한다. 엔진은 검증한 뒤 다음 상태·응답·변경 이력을 반환한다.
 - [x] 새 특성에는 이름·강도·근거 사건 ID·형성 이유·나타나는 상황·지속성(상황 한정/지속)·적용 범위(사용자/생활 전반)를 기록한다. 숨겨진 면의 발견과 기분 변화를 새 특성으로 저장하지 않는다.
@@ -30,7 +30,7 @@ Gemini는 실제 사람이 메신저로 문자하듯 쓴다. 한두 개의 짧�
 
 ## 로컬 실행
 
-`bun install` 후 `apps/persona-lab/.env`에 `GEMINI_API_KEY`와 `AI_GATEWAY_API_KEY`를 입력하고 `apps/persona-lab`에서 `bun run dev`를 실행해 `http://127.0.0.1:3000`에 접속한다. `.env`는 Git에서 제외하며 `.env.example`은 설정 예시다. `GEMINI_MODEL`(기본값 `gemini-2.5-flash`)과 `GEMINI_BASE_URL`은 선택 사항이다. Lab에서는 `시간 진행`으로 Jev의 다음 판단을 곧바로 시험할 수 있고, `새 세션`으로 같은 페르소나의 독립된 세션을 만들어 목록에서 골라 이어갈 수 있다. 세션은 `apps/persona-lab/data/{세션 ID}.json`에 보관되며, 버튼으로 명시적으로 초기화할 수 있다.
+`bun install` 후 `apps/persona-lab/.env`에 `GEMINI_API_KEY`와 `AI_GATEWAY_API_KEY`를 입력하고 저장소 루트에서 `bun run dev`를 실행해 `http://127.0.0.1:3000`에 접속한다. `.env`는 Git에서 제외하며 `.env.example`은 설정 예시다. `GEMINI_MODEL`(기본값 `gemini-2.5-flash`)과 `GEMINI_BASE_URL`은 선택 사항이다. Lab에서는 `시간 진행`으로 Jev의 다음 판단을 곧바로 시험할 수 있고, `새 세션`으로 같은 페르소나의 독립된 세션을 만들어 목록에서 골라 이어갈 수 있다. 세션은 `apps/persona-lab/data/{세션 ID}.json`에 보관되며, 버튼으로 명시적으로 초기화할 수 있다.
 
 서버를 시작하면 터미널에 접속 주소·Jev/Gemini 키 설정 여부·Gemini 모델 이름이 출력된다. 터미널을 열어 둔 채 브라우저에서 접속한다. 판단마다 캐릭터·트리거·선택·소요 시간과 실패 이유를 출력하며, API 키나 대화 내용은 로그에 남기지 않는다. 서버 종료는 `Ctrl+C`.
 

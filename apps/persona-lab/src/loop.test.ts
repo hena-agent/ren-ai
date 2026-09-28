@@ -3,7 +3,7 @@ import { personas } from "./personas.ts";
 import { admit, begin, decide } from "./loop.ts";
 const INTERVAL_MS = 5 * 60_000;
 import type { Action, Judge, Judgment } from "./judge.ts";
-import type { Model, Stage } from "@repo/persona-engine";
+import type { Model, Stage } from "@ren-ai/persona-engine";
 
 const start = () => begin(personas["harin"]!, "harin", 1_000);
 const choice =

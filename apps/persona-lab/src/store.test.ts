@@ -6,7 +6,7 @@ import { createStore, restore } from "./store.ts";
 import { admit, begin, decide } from "./loop.ts";
 import { personas } from "./personas.ts";
 import type { Judge } from "./judge.ts";
-import type { Model } from "@repo/persona-engine";
+import type { Model } from "@ren-ai/persona-engine";
 
 let dir = "";
 beforeEach(async () => {
