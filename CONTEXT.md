@@ -71,7 +71,7 @@ _Avoid_: stage, level, phase
 ### Structure
 
 **Archetype**:
-One of the two roles a workspace package takes. A **library** is consumed by other workspace packages; an **application** is the thing that runs. Both live in `packages/`.
+One of the two roles a workspace package takes. A **library** is consumed by other workspace packages; an **application** is the thing that runs.
 _Avoid_: kind, category, template (overloaded here), project
 
 **Just-in-Time package**:

@@ -15,6 +15,8 @@ const TARGETS = [
   "package.json",
   "README.md",
   "AGENTS.md",
+  "apps/*/package.json",
+  "apps/*/src/**/*.ts",
   "packages/*/package.json",
   "packages/*/src/**/*.ts",
 ];

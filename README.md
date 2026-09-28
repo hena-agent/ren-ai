@@ -14,6 +14,8 @@ bun run ci
 ## Layout
 
 ```
+apps/persona-lab/     Local simulation app for the standalone persona engine.
+packages/persona-engine/  Relationship state engine (not wired into iMessage runtime).
 packages/onboarding/   Shared browser-safe Handle rules, locale copy, and Onboarding/Waitlist shapes.
 scripts/               Repo tooling: exceptions report, gate verification, init.
 quality-exceptions.json  The only place file-level gate exceptions may live.

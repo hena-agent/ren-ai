@@ -9,7 +9,7 @@ const GATES = ["coverage", "mutation", "duplication", "lint"] as const;
 const SUPPRESSION =
   /(oxlint-disable\S*|eslint-disable\S*|@ts-nocheck|Stryker disable\S*|v8 ignore\S*)(?<rest>[^\n]*)/gu;
 
-const SOURCE_GLOB = "packages/*/src/**/*.{ts,tsx}";
+const SOURCE_GLOB = "{apps,packages}/*/src/**/*.{ts,tsx}";
 
 const fileEntries = (): readonly (readonly [string, Entry])[] =>
   GATES.flatMap((gate) =>

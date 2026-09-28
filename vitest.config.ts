@@ -3,10 +3,10 @@ import exceptions from "./quality-exceptions.json" with { type: "json" };
 
 export default defineConfig({
   test: {
-    projects: ["packages/*"],
+    projects: ["apps/*", "packages/*"],
     coverage: {
       provider: "v8",
-      include: ["packages/*/src/**/*.{ts,tsx}"],
+      include: ["{apps,packages}/*/src/**/*.{ts,tsx}"],
       exclude: [
         "**/*.test.{ts,tsx}",
         ...(exceptions.coverage as readonly { path: string }[]).map((entry) => entry.path),

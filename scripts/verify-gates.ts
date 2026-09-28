@@ -89,10 +89,27 @@ const CHECKS: readonly Check[] = [
     checkInverse: false,
   },
   {
+    gate: "app coverage",
+    files: {
+      "apps/persona-lab/src/gate-check.ts":
+        "export const untested = (n: number): number => (n > 0 ? n : 0);\n",
+    },
+    command: ["vitest", "run", "--coverage", "--silent"],
+    expect: "does not meet",
+    checkInverse: false,
+  },
+  {
     gate: "dead code",
     files: {
       "packages/onboarding/src/gate-check.ts": "export const orphan = 1;\n",
     },
+    command: ["knip"],
+    expect: "Unused files",
+    checkInverse: false,
+  },
+  {
+    gate: "app dead code",
+    files: { "apps/persona-lab/src/gate-check.ts": "export const orphan = 1;\n" },
     command: ["knip"],
     expect: "Unused files",
     checkInverse: false,
@@ -108,6 +125,23 @@ const CHECKS: readonly Check[] = [
     checkInverse: false,
   },
   {
+    gate: "app duplicated code",
+    files: {
+      "apps/persona-lab/src/gate-check-a.ts": duplicatedModule("a"),
+      "apps/persona-lab/src/gate-check-b.ts": duplicatedModule("b"),
+    },
+    command: ["bun", "run", "scripts/run-quality-gate.ts", "duplication"],
+    expect: "Clone found",
+    checkInverse: false,
+  },
+  {
+    gate: "app type-aware lint",
+    files: { "apps/persona-lab/src/gate-check.ts": "export const loose = (v: any): any => v;\n" },
+    command: ["bun", "run", "scripts/run-quality-gate.ts", "lint"],
+    expect: "no-explicit-any",
+    checkInverse: false,
+  },
+  {
     gate: "eslint-disable reasons in TSX",
     files: { "packages/onboarding/src/gate-check.tsx": "/* eslint-disable */\n" },
     command: ["bun", "run", "exceptions"],
@@ -118,6 +152,14 @@ const CHECKS: readonly Check[] = [
   {
     gate: "@ts-nocheck reasons in TSX",
     files: { "packages/onboarding/src/gate-check.tsx": "// @ts-nocheck\n" },
+    command: ["bun", "run", "exceptions"],
+    expect: 'inline suppression has no "-- reason"',
+    checkInverse: true,
+    allowed: "// @ts-nocheck -- documented exception\n",
+  },
+  {
+    gate: "app suppression reasons",
+    files: { "apps/persona-lab/src/gate-check.ts": "// @ts-nocheck\n" },
     command: ["bun", "run", "exceptions"],
     expect: 'inline suppression has no "-- reason"',
     checkInverse: true,
@@ -214,8 +256,8 @@ const verifyStrykerPatch = (): readonly string[] => {
 const verifyGateInputs = (): readonly string[] => {
   const failures: string[] = [];
   const config = readFileSync("stryker.config.js", "utf8");
-  if (!/mutate:\s*\[[^\n]*\{ts,tsx\}/.test(config)) {
-    failures.push("mutation: mutate patterns must include .tsx files");
+  if (!/mutate:\s*\[[^\n]*\{apps,packages\}[^\n]*\{ts,tsx\}/.test(config)) {
+    failures.push("mutation: mutate patterns must include apps, packages and .tsx files");
   }
   const lint = qualityCommand("lint") ?? [];
   const duplication = qualityCommand("duplication") ?? [];
