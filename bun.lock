@@ -23,13 +23,13 @@
       },
     },
     "apps/persona-lab": {
-      "name": "@repo/persona-lab",
+      "name": "@ren-ai/persona-lab",
       "version": "0.0.0",
       "bin": {
         "persona-lab": "./src/run.mjs",
       },
       "dependencies": {
-        "@repo/persona-engine": "workspace:*",
+        "@ren-ai/persona-engine": "workspace:*",
         "ai": "7.0.113",
       },
       "devDependencies": {
@@ -39,8 +39,11 @@
       },
     },
     "packages/api-msg.hena.dev": {
-      "name": "@repo/api-msg.hena.dev",
+      "name": "@ren-ai/api-msg.hena.dev",
       "version": "0.0.0",
+      "bin": {
+        "ren-ai-operator": "./src/operator-entry.ts",
+      },
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.112",
         "@effect/sql-sqlite-bun": "4.0.0-rc.112",
@@ -48,7 +51,7 @@
         "@opencode/plugin": "2.0.16",
         "@opencode/schema": "2.0.16",
         "@opencode/server": "2.0.16",
-        "@repo/onboarding": "workspace:*",
+        "@ren-ai/onboarding": "workspace:*",
         "effect": "4.0.0-rc.112",
         "yaml": "2.8.2",
       },
@@ -61,10 +64,10 @@
       },
     },
     "packages/msg.hena.dev": {
-      "name": "@repo/msg.hena.dev",
+      "name": "@ren-ai/msg.hena.dev",
       "version": "0.0.0",
       "dependencies": {
-        "@repo/onboarding": "workspace:*",
+        "@ren-ai/onboarding": "workspace:*",
         "@tanstack/react-router": "1.170.39",
         "@tanstack/react-start": "1.168.58",
         "effect": "4.0.0-rc.112",
@@ -86,7 +89,7 @@
       },
     },
     "packages/onboarding": {
-      "name": "@repo/onboarding",
+      "name": "@ren-ai/onboarding",
       "version": "0.0.0",
       "dependencies": {
         "effect": "4.0.0-rc.112",
@@ -97,7 +100,7 @@
       },
     },
     "packages/persona-engine": {
-      "name": "@repo/persona-engine",
+      "name": "@ren-ai/persona-engine",
       "version": "0.0.0",
       "devDependencies": {
         "@types/node": "26.6.2",
@@ -836,15 +839,15 @@
 
     "@redis/time-series": ["@redis/time-series@6.2.1", "", { "peerDependencies": { "@redis/client": "^6.2.1" } }, "sha512-kiYniph04dJOole+L359B6C9E+jYS2uDP7hca6Onj0xF38ZIpyxARO0Iq0W4ZRn1e8Q6vqW00QFZVSMRA/2Ijw=="],
 
-    "@repo/api-msg.hena.dev": ["@repo/api-msg.hena.dev@workspace:packages/api-msg.hena.dev"],
+    "@ren-ai/api-msg.hena.dev": ["@ren-ai/api-msg.hena.dev@workspace:packages/api-msg.hena.dev"],
 
-    "@repo/msg.hena.dev": ["@repo/msg.hena.dev@workspace:packages/msg.hena.dev"],
+    "@ren-ai/msg.hena.dev": ["@ren-ai/msg.hena.dev@workspace:packages/msg.hena.dev"],
 
-    "@repo/onboarding": ["@repo/onboarding@workspace:packages/onboarding"],
+    "@ren-ai/onboarding": ["@ren-ai/onboarding@workspace:packages/onboarding"],
 
-    "@repo/persona-engine": ["@repo/persona-engine@workspace:packages/persona-engine"],
+    "@ren-ai/persona-engine": ["@ren-ai/persona-engine@workspace:packages/persona-engine"],
 
-    "@repo/persona-lab": ["@repo/persona-lab@workspace:apps/persona-lab"],
+    "@ren-ai/persona-lab": ["@ren-ai/persona-lab@workspace:apps/persona-lab"],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-rc.3", "", {}, "sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q=="],
 

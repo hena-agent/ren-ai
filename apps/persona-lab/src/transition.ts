@@ -1,5 +1,5 @@
-import { canTransitionStage, capsFor } from "@repo/persona-engine";
-import type { Change, Relationship, Session } from "@repo/persona-engine";
+import { canTransitionStage, capsFor } from "@ren-ai/persona-engine";
+import type { Change, Relationship, Session } from "@ren-ai/persona-engine";
 import type { Judgment, Step, Trigger } from "./judge.ts";
 
 const stepValue: Record<Step, number> = {

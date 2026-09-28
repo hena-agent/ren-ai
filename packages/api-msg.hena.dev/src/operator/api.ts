@@ -1,4 +1,4 @@
-import { normalizeHandle, normalizeWaitlistEmail } from "@repo/onboarding";
+import { normalizeHandle, normalizeWaitlistEmail } from "@ren-ai/onboarding";
 import { Effect, Layer, Schema } from "effect";
 import { HttpRouter, HttpServer } from "effect/unstable/http";
 import {

@@ -7,6 +7,7 @@
   ],
   "type": "module",
   "scripts": {
+    "dev": "turbo run dev",
     "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run knip && bun run dup && bun run exceptions && bun run verify-gates && bun run mutate && bun run --cwd packages/msg.hena.dev build",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -18,8 +19,7 @@
     "mutate": "stryker run",
     "exceptions": "bun run scripts/exceptions.ts",
     "verify-gates": "bun run scripts/verify-gates.ts",
-    "prepare": "lefthook install",
-    "init": "bun run scripts/init.ts"
+    "prepare": "lefthook install"
   },
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",

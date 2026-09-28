@@ -4,7 +4,7 @@ import {
   OnboardingRequest,
   WaitlistRequest,
   notice as localeNotice,
-} from "@repo/onboarding";
+} from "@ren-ai/onboarding";
 import { Clock, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect";
 import {
   HttpClient,

@@ -1,5 +1,5 @@
 {
-  "name": "@repo/api-msg.hena.dev",
+  "name": "@ren-ai/api-msg.hena.dev",
   "version": "0.0.0",
   "private": true,
   "bin": {
@@ -19,7 +19,7 @@
     "@opencode/plugin": "2.0.16",
     "@opencode/schema": "2.0.16",
     "@opencode/server": "2.0.16",
-    "@repo/onboarding": "workspace:*",
+    "@ren-ai/onboarding": "workspace:*",
     "effect": "4.0.0-rc.112",
     "yaml": "2.8.2"
   },

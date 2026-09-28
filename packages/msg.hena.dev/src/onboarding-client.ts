@@ -1,4 +1,4 @@
-import { OnboardingAnswer, OnboardingRequest, WaitlistRequest } from "@repo/onboarding";
+import { OnboardingAnswer, OnboardingRequest, WaitlistRequest } from "@ren-ai/onboarding";
 import { Schema } from "effect";
 
 export type OnboardingClient = {

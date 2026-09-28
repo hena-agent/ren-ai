@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createSession } from "@repo/persona-engine";
+import { createSession } from "@ren-ai/persona-engine";
 import { liveModel } from "./model.ts";
 import { personas } from "./personas.ts";
 

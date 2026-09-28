@@ -1,5 +1,5 @@
-import { countries, normalizeHandle, normalizeWaitlistEmail } from "@repo/onboarding";
-import type { Country } from "@repo/onboarding";
+import { countries, normalizeHandle, normalizeWaitlistEmail } from "@ren-ai/onboarding";
+import type { Country } from "@ren-ai/onboarding";
 import { useState } from "react";
 import { copy } from "../copy.ts";
 import type { OnboardingClient } from "../onboarding-client.ts";

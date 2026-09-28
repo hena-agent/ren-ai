@@ -1,4 +1,4 @@
-import { locales } from "@repo/onboarding";
+import { locales } from "@ren-ai/onboarding";
 
 export type Copy = {
   market: { country: string; dialCode: string };

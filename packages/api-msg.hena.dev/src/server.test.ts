@@ -11,7 +11,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import { Session } from "@opencode/schema/session";
 import { afterAll, expect, test, vi } from "vitest";
 import { fakeMessages } from "./messages/messages.fake.ts";
-import { notice } from "@repo/onboarding";
+import { notice } from "@ren-ai/onboarding";
 import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { runOperatorCli } from "./operator/cli.ts";

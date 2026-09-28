@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Proves the template is still green when nobody has touched it.
+    # Proves the quality gates still pass when nobody has touched the repo.
     - cron: "0 6 * * 1"
 
 permissions: {}
