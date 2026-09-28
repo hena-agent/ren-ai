@@ -1,7 +1,7 @@
 [install]
 # Symlink packages from bun's global store instead of a project-local
 # node_modules/.bun. One copy on disk shared by every project on the machine,
-# rather than ~240MB duplicated per clone of this template.
+# rather than ~240MB duplicated per checkout.
 globalStore = true
 
 # Already bun's default for workspaces, stated explicitly because the gates

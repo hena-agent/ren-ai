@@ -1,6 +1,6 @@
-# ts-template
+# ren-ai
 
-A TypeScript monorepo template built for agent-generated code: bun, Turborepo, TypeScript 7, and eight quality gates that block CI.
+An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo currently includes a local Persona Lab for testing characters and their decision engine.
 
 The premise is that when agents write most of the code, review does not scale but gates do.
 
@@ -8,15 +8,28 @@ The premise is that when agents write most of the code, review does not scale bu
 
 ```sh
 bun install
+```
+
+Add `GEMINI_API_KEY` and `AI_GATEWAY_API_KEY` to `apps/persona-lab/.env` (see `.env.example`), then start the lab from the repo root:
+
+```sh
+bun run dev
+```
+
+Open http://127.0.0.1:3000. Run the quality gates with:
+
+```sh
 bun run ci
 ```
 
 ## Layout
 
 ```
-apps/cli/              Example application. Zero dependencies, no build step.
-packages/duration/     Example library. Demonstrates narrowing `unknown` at a trust boundary.
-scripts/               Repo tooling: exceptions report, gate verification, init.
+apps/persona-lab/       Local web lab for experimenting with personas.
+packages/persona-engine/ Persona state and transition rules.
+apps/cli/               Duration CLI and quality-gate example.
+packages/duration/      Duration parser and trust-boundary example.
+scripts/                Repo tooling: exceptions report and gate verification.
 quality-exceptions.json  The only place file-level gate exceptions may live.
 ```
 
@@ -44,14 +57,6 @@ quality-exceptions.json  The only place file-level gate exceptions may live.
 - **Exact version pins, no ranges.** oxfmt is pre-1.0 with no semver protection on formatting output, and `oxlint-tsgolint` is hard-pinned to a TypeScript patch release.
 - **bun's default isolated linker is kept.** It turns an undeclared dependency into an immediate failure instead of a latent bug.
 - **`globalStore = true` in `bunfig.toml`.** Packages are symlinked from one machine-wide store, so a clone's `node_modules` is ~200KB instead of ~240MB. The cost is that tools resolving plugins by package name from their _own_ location break, since the store is not a parent of the project — `stryker.config.js` references its runner by path for exactly this reason.
-
-## Starting a project from this template
-
-```sh
-bun run init @your-scope
-```
-
-Rewrites the package scope, updates the README, and removes itself.
 
 ## Known patch
 
