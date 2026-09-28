@@ -346,6 +346,9 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           ).toEqual(Array.from({ length: 4 }, () => ["react", "read", "send", "wait"]));
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
           const initialRequests = yield* llm.requests();
+          expect(initialRequests[0]?.tools.find((tool) => tool.name === "read")).toMatchObject({
+            inputSchema: { type: "object", additionalProperties: false },
+          });
           expect(JSON.stringify(initialRequests[0]?.messages)).toContain(
             'your-last-message=\\"sent\\"',
           );

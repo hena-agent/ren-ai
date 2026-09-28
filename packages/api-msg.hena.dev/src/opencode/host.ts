@@ -169,7 +169,7 @@ export const createHost = (options: HostOptions) =>
               editor.add({
                 name: "read",
                 description: "Mark this Conversation's messages read now",
-                input: Schema.Struct({}),
+                input: Schema.Record(Schema.String, Schema.Never),
                 output: Schema.String,
                 options: { codemode: false },
                 execute: (_, context) => toolResult(read(context.sessionID)),
