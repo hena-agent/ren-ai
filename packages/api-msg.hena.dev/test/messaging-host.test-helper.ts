@@ -8,6 +8,7 @@ import { Effect, type Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { scriptedOverrides } from "./host.test-helper.ts";
 import { startMessagingHost } from "../src/main.ts";
+import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 import type { Messages } from "../src/messages/messages.ts";
 import { fakeGestures } from "../src/gestures/gestures.fake.ts";
 import { noticeCopy } from "../src/onboarding/onboarding.ts";
@@ -64,6 +65,7 @@ export const startTestHost = (
   llm: TestLLM.TestInterface,
   messages: Messages,
   databasePath = ":memory:",
+  alerts: FailureAlerts = silentAlerts,
 ) =>
   startMessagingHost(
     join(root, "isolated"),
@@ -71,7 +73,7 @@ export const startTestHost = (
     messages,
     fakeGestures().gestures,
     { turnstileSecret: "test", notice: noticeCopy },
-    silentAlerts,
+    alerts,
   );
 
 export const quietTestHost = (root: string, personaDirectory: string, messages: Messages) =>

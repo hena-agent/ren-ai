@@ -2,6 +2,7 @@ import { SessionEvent } from "@opencode/schema/session-event";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option, Stream, type Fiber } from "effect";
 import type { SqlError } from "effect/unstable/sql/SqlError";
+import { SqlClient } from "effect/unstable/sql";
 import type { createHost } from "./host.ts";
 import type { conversations } from "../conversations/conversations.ts";
 
@@ -21,6 +22,7 @@ const interval = "15 minutes";
 /** OpenCode owns the durable outcome; this scheduler owns only live delays. */
 export const failedTurns = (host: Host, directory: Directory, alerts: FailureAlerts) =>
   Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
     const pending = new Map<
       string,
       {
@@ -124,8 +126,27 @@ export const failedTurns = (host: Host, directory: Directory, alerts: FailureAle
       const session = yield* host.sessions
         .get(Session.ID.make(conversation.sessionID))
         .pipe(Effect.option);
-      if (Option.isSome(session) && session.value.outcome === "failed") {
+      if (Option.isNone(session)) continue;
+      if (session.value.outcome === "failed") {
         yield* resume(conversation.sessionID);
+        continue;
       }
+      const id = Session.ID.make(conversation.sessionID);
+      const [assistant] = yield* host.sessions.messages({
+        sessionID: id,
+        type: "assistant",
+        limit: 1,
+      });
+      if (!(assistant?.type === "assistant" && assistant.error)) continue;
+      const sent = yield* sql`SELECT 1 FROM send WHERE conversation_id = ${conversation.id}
+        AND kind IN ('text', 'tapback') LIMIT 1`;
+      if (sent.length) {
+        yield* alerts.raise(
+          turnAlert(conversation.sessionID),
+          "Failed turn needs manual review after an outgoing attempt in this Conversation",
+        );
+        continue;
+      }
+      yield* resume(conversation.sessionID);
     }
   });
