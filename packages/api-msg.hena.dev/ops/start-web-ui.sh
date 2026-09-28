@@ -13,7 +13,7 @@ if [[ "${1:-}" != --isolated ]]; then
 fi
 
 umask 077
-OPENCODE_PASSWORD="$(/usr/bin/security find-generic-password -w -s dev.hena.ren-ai.web-ui -a api-msg)"
+OPENCODE_PASSWORD="$(/usr/bin/security find-generic-password -w -s dev.hena.ren-ai.web-ui -a api-msg /Users/chris/Library/Keychains/login.keychain-db)"
 [[ -n "$OPENCODE_PASSWORD" ]] || { echo 'Missing web UI asset-server password' >&2; exit 1; }
 export OPENCODE_PASSWORD
 exec /Users/chris/.local/share/ren-ai/web-ui/bin/opencode-2.0.16 serve --hostname 127.0.0.1 --port 47987
