@@ -136,6 +136,34 @@ it("clamps relationship growth to the current stage cap", () => {
   ).toEqual([]);
 });
 
+it("reserves the event-sized increase for a clear user reaction, not slight shifts or ticks", () => {
+  const session = state();
+  const base = {
+    session,
+    sourceId: "u1",
+    serviceBlocked: false,
+    turningPoint: "event:harin-exhibit",
+  };
+  expect(
+    transition({
+      ...base,
+      judgment: judgment({ "relationship.affection": "rise_slight" }),
+      trigger: "input",
+      window: null,
+    }),
+  ).toEqual([{ kind: "relationship", field: "affection", value: 16, reason: "사건 u1" }]);
+  expect(
+    transition({
+      ...base,
+      judgment: judgment({ "relationship.affection": "rise_clear" }, true),
+      trigger: "tick",
+      window: "1000:half_hour",
+    }),
+  ).toEqual([
+    { kind: "relationship", field: "affection", value: 16, reason: "시간 경과 1000:half_hour" },
+  ]);
+});
+
 it("advances a stage only when the gate is met, applying stat changes first", () => {
   const atGate = state();
   atGate.relationship.familiarity = 14;

@@ -15,13 +15,18 @@ const context = () => ({
 });
 const axisNames = Object.keys(questions).filter(
   (key) =>
-    key !== "action" && key !== "meaningfulAbsence" && key !== "unitEnded" && key !== "stage",
+    key !== "action" &&
+    key !== "meaningfulAbsence" &&
+    key !== "eventReaction" &&
+    key !== "unitEnded" &&
+    key !== "stage",
 );
 const shifts = () => Object.fromEntries(axisNames.map((key) => [key, { choice: "stable" }]));
 const valid = () => ({
   stage: { choice: "stranger" },
   action: { choice: "wait_for_user" },
   meaningfulAbsence: { probability: 0.1 },
+  eventReaction: { probability: 0.1 },
   unitEnded: { probability: 0.1 },
   ...shifts(),
 });
@@ -38,7 +43,7 @@ it("asks Jev to score every mutable dimension and the relationship stage", async
   let evaluated = "";
   const judge = createJudge(async (state, asked) => {
     evaluated = state;
-    expect(Object.keys(asked)).toHaveLength(16);
+    expect(Object.keys(asked)).toHaveLength(17);
     return {
       ...valid(),
       action: { choice: "hold", probabilities: { hold: 0.7, send_now: 0.3 } },
@@ -130,6 +135,23 @@ it("rejects missing or invalid Jev judgments, retaining stable as an explicit ch
       expect(
         (await createJudge(async () => ({ ...valid(), [key]: { probability } }))(context()))[key],
       ).toBe(probability >= 0.8);
+  expect(
+    (
+      await createJudge(async () => ({ ...valid(), eventReaction: { probability: 0.8 } }))(
+        context(),
+      )
+    ).eventReaction,
+  ).toBe(true);
+  expect(
+    (
+      await createJudge(async () => ({ ...valid(), eventReaction: { probability: 0.2 } }))(
+        context(),
+      )
+    ).eventReaction,
+  ).toBeUndefined();
+  const noReaction = valid();
+  Reflect.deleteProperty(noReaction, "eventReaction");
+  expect((await createJudge(async () => noReaction)(context())).eventReaction).toBeUndefined();
   for (const answer of [
     { ...valid(), action: { choice: "spam" } },
     { ...valid(), meaningfulAbsence: { probability: 2 } },
@@ -137,6 +159,7 @@ it("rejects missing or invalid Jev judgments, retaining stable as an explicit ch
     { ...valid(), meaningfulAbsence: { probability: Number.NaN } },
     { ...valid(), unitEnded: { probability: 2 } },
     { ...valid(), unitEnded: { probability: -1 } },
+    { ...valid(), eventReaction: { probability: 2 } },
   ])
     await expect(createJudge(async () => answer)(context())).rejects.toThrow(
       "Invalid Jev judgment",

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createStore, restore } from "./store.ts";
 import { admit, begin, decide } from "./loop.ts";
 import { personas } from "./personas.ts";
+import { eventFor } from "./events.ts";
 import type { Judge } from "./judge.ts";
 import type { Model } from "@ren-ai/persona-engine";
 
@@ -79,6 +80,16 @@ it("replays a stage change from its recorded entries", async () => {
   expect(restored?.character.session.stage).toBe("acquaintance");
   expect(restored?.character).toEqual(outcome.character);
   expect(restored?.persona).toBe("harin");
+  const event = {
+    id: "event:harin-exhibit",
+    kind: "life",
+    text: "사진전을 설치할 준비를 한다",
+  } as const;
+  const continued = admit(outcome.character, event, 400);
+  await store.save("harin", continued);
+  const reloaded = (await createStore(dir).load("harin"))!.character;
+  expect(reloaded.session.events.at(-1)).toEqual(event);
+  expect(eventFor(reloaded, "harin", 400 + 86_400_000)).toBeNull();
 });
 
 it("rejects a saved record whose persona is not a name", async () => {
@@ -101,7 +112,9 @@ it("lists stored sessions and tolerates missing or unreadable directories", asyn
   expect(await createStore(join(dir, "none")).list()).toEqual([]);
   const store = createStore(dir);
   await store.save("harin", begin(personas["harin"]!, "s-list", 100));
-  expect(await store.list()).toEqual([{ id: "s-list", persona: "harin", events: 0 }]);
+  expect(await store.list()).toEqual([
+    { id: "s-list", persona: "harin", events: 0, paused: false },
+  ]);
   await writeFile(join(dir, "afile"), "x");
   await expect(createStore(join(dir, "afile")).list()).rejects.toMatchObject({
     code: "ENOTDIR",
@@ -339,4 +352,36 @@ it("preserves legacy inputs without times and rejects invalid saved times", () =
     expect(() => restore("harin", "harin", { ...base, entries: [{ ...input, at }] })).toThrow(
       "Invalid saved input time",
     );
+});
+
+it("persists paused sessions, loads old records as active, and deletes only the requested file", async () => {
+  const store = createStore(dir);
+  const character = begin(personas["harin"]!, "pause-me", 100);
+  character.paused = true;
+  await store.save("harin", character);
+  expect((await createStore(dir).load("pause-me"))?.character.paused).toBe(true);
+  expect(await store.list()).toEqual([
+    { id: "pause-me", persona: "harin", events: 0, paused: true },
+  ]);
+  const legacy = {
+    persona: "harin",
+    entries: [],
+    decisions: [],
+    nextCheckAt: 1,
+    offset: 0,
+    lastSentAt: null,
+  };
+  await writeFile(join(dir, "legacy.json"), JSON.stringify(legacy));
+  expect((await store.load("legacy"))?.character.paused).toBe(false);
+  expect((await store.list()).find((info) => info.id === "legacy")?.paused).toBe(false);
+  for (const paused of [null, "yes", 0])
+    expect(() => restore("harin", "legacy", { ...legacy, paused })).toThrow(
+      "Invalid saved Character",
+    );
+  await writeFile(join(dir, "invalid.json"), JSON.stringify({ ...legacy, paused: "yes" }));
+  await store.remove("pause-me");
+  expect(await store.load("pause-me")).toBeUndefined();
+  expect((await store.list()).map((info) => info.id)).toEqual(["legacy"]);
+  await expect(store.remove("pause-me")).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(store.remove("../legacy")).rejects.toThrow("Invalid session id");
 });

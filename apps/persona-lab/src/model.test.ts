@@ -104,6 +104,25 @@ const unitFetcher: typeof fetch = async (_url, init) => {
   expect(init?.body).not.toContain("옛 단위");
   return reply();
 };
+const withEvent: typeof fetch = async (_url, init) => {
+  expect(init?.body).toContain(
+    '"role":"user","parts":[{"text":"(최근 실제로 일어난 생활 사건) 사진전 설치를 앞둠',
+  );
+  expect(init?.body).toContain("(최근 실제로 일어난 생활 사건) 사진전 설치를 앞둠");
+  expect(init?.body).toContain("사진은 골랐어요?");
+  expect(init?.body).not.toContain("혼자 정리해 볼게요.");
+  expect(init?.body).toContain("Life events are facts about your own day");
+  return reply();
+};
+const expired: typeof fetch = async (_url, init) => {
+  expect(init?.body).not.toContain("(최근 실제로 일어난 생활 사건) 사진전 설치를 앞둠");
+  return reply();
+};
+const currentEvent: typeof fetch = async (_url, init) => {
+  expect(init?.body).not.toContain("(최근 실제로 일어난 생활 사건)");
+  expect(init?.body).toContain("(생활 사건) 사진전 설치를 앞둠");
+  return reply();
+};
 
 it("reads only the events recorded since the current unit boundary", async () => {
   const unit = createSession(harin, "unit");
@@ -114,6 +133,55 @@ it("reads only the events recorded since the current unit boundary", async () =>
   );
   unit.unitStart = 2;
   await expect(liveModel(options(unitFetcher))(unit, input)).resolves.toEqual({
+    reply: "안녕",
+    changes: [],
+  });
+});
+
+it("keeps a recent prepared life event available after the conversation unit closes", async () => {
+  const first = createSession(harin, "first-event");
+  first.events.push(
+    { id: "event:harin-exhibit", kind: "life", text: "사진전 설치를 앞둠" },
+    { id: "r1", kind: "reply", text: "혼자 정리해 볼게요." },
+    { id: "u2", kind: "user", text: "사진은 골랐어요?" },
+  );
+  first.unitStart = 2;
+  await expect(liveModel(options(withEvent))(first, input)).resolves.toEqual({
+    reply: "안녕",
+    changes: [],
+  });
+  const continued = createSession(harin, "event");
+  continued.events.push(
+    { id: "u0", kind: "user", text: "이전 대화" },
+    { id: "r0", kind: "reply", text: "안녕하세요" },
+    { id: "event:harin-exhibit", kind: "life", text: "사진전 설치를 앞둠" },
+    { id: "r1", kind: "reply", text: "혼자 정리해 볼게요." },
+    { id: "u2", kind: "user", text: "사진은 골랐어요?" },
+  );
+  continued.unitStart = 4;
+  await expect(liveModel(options(withEvent))(continued, input)).resolves.toEqual({
+    reply: "안녕",
+    changes: [],
+  });
+  continued.unitStart = 2;
+  await expect(liveModel(options(currentEvent))(continued, input)).resolves.toEqual({
+    reply: "안녕",
+    changes: [],
+  });
+  continued.unitStart = 4;
+  continued.events.push(
+    ...Array.from({ length: 37 }, (_, index) => ({
+      id: `late-${index}`,
+      kind: "user" as const,
+      text: "새 대화",
+    })),
+  );
+  await expect(liveModel(options(withEvent))(continued, input)).resolves.toEqual({
+    reply: "안녕",
+    changes: [],
+  });
+  continued.events.push({ id: "later", kind: "user", text: "다른 이야기" });
+  await expect(liveModel(options(expired))(continued, input)).resolves.toEqual({
     reply: "안녕",
     changes: [],
   });

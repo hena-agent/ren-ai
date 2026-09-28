@@ -27,7 +27,7 @@ const axes = {
   "relationship.familiarity": "Did the two learn something meaningful about each other?",
   "relationship.trust": "Did an observed action or meaningful broken expectation change trust?",
   "relationship.affection":
-    "Did something meaningful change their affection? Do not equate payment, message count, or technical silence with affection.",
+    "Did something meaningful change their affection? A life event alone is not affection; only a meaningful response or shared experience can change it. Do not equate payment, message count, or technical silence with affection.",
 } as const;
 
 export const stageGuidance: Record<Stage, string> = {
@@ -70,13 +70,18 @@ export const questions = {
         "Send a short follow-up because your own earlier message is still unanswered and you want to prompt them.",
       wait_for_user: "Stay silent and wait for the user's next message.",
       initiate:
-        "Send a spontaneous check-in only if no user message is pending and it feels natural.",
+        "Send a spontaneous check-in only if no user message is pending and it feels natural. You may share a new life event if this person would choose to; the event does not require a message.",
     },
   },
   meaningfulAbsence: {
     type: "boolean",
     instructions:
       "Has elapsed time created a genuinely new, unmet interpersonal expectation? Consider this person's own response habits, promises, the other person's circumstances, and service outages. Five more minutes alone is usually not new evidence.",
+  },
+  eventReaction: {
+    type: "boolean",
+    instructions:
+      "Did the latest user message meaningfully respond to a recent prepared life event in a way that changes how this person sees them? A greeting, praise unrelated to the event, or the event occurring by itself is not enough.",
   },
   unitEnded: {
     type: "boolean",
@@ -100,6 +105,7 @@ export type Judgment = {
   probabilities: Partial<Record<Action, number>>;
   shifts: Partial<Record<Axis, Step>>;
   meaningfulAbsence: boolean;
+  eventReaction?: boolean;
   unitEnded: boolean;
   stage: Stage;
 };
@@ -162,6 +168,9 @@ export const createJudge =
     if (!chosen || !action) throw new Error("Invalid Jev judgment");
     const absence = probability(answer, "meaningfulAbsence");
     const ended = probability(answer, "unitEnded");
+    const eventReaction = answer["eventReaction"]
+      ? probability(answer, "eventReaction") >= 0.8
+      : false;
     const stageAnswer = answer["stage"];
     const stage = STAGES.find(
       (candidate) => stageAnswer && "choice" in stageAnswer && candidate === stageAnswer.choice,
@@ -181,6 +190,7 @@ export const createJudge =
       probabilities: "probabilities" in chosen ? (chosen.probabilities ?? {}) : {},
       shifts,
       meaningfulAbsence: absence >= 0.8,
+      ...(eventReaction ? { eventReaction } : {}),
       unitEnded: ended >= 0.8,
       stage,
     };

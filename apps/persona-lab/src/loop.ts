@@ -3,7 +3,7 @@ import type { Change, Definition, Event, Model, Proposal, Session } from "@ren-a
 import type { Action, Judge, Judgment, Trigger } from "./judge.ts";
 import { transition } from "./transition.ts";
 
-const INTERVAL_MS = 5 * 60_000;
+export const INTERVAL_MS = 5 * 60_000;
 export const ABSORB_MS = 60_000;
 
 export type Decision = {
@@ -33,6 +33,7 @@ export type Character = {
   nextCheckAt: number;
   offset: number;
   lastSentAt: number | null;
+  paused: boolean;
 };
 export type Outcome = { character: Character; decision: Decision; changes: Change[] };
 
@@ -43,6 +44,7 @@ export const begin = (definition: Definition, id: string, at: number): Character
   nextCheckAt: at + INTERVAL_MS,
   offset: 0,
   lastSentAt: null,
+  paused: false,
 });
 
 export const admit = (character: Character, event: Event, at?: number): Character => ({
@@ -120,6 +122,34 @@ const recentTransitions = (decisions: Decision[]) =>
     ),
   }));
 
+const turningPointFor = (
+  character: Character,
+  at: number,
+  eventReaction: boolean,
+): string | null => {
+  if (!eventReaction) return null;
+  const events = character.session.events;
+  const latest = events.at(-1);
+  if (latest?.kind !== "user") return null;
+  const event = events.findLast((item) => item.kind === "life" && item.id.startsWith("event:"));
+  if (!event) return null;
+  const occurred = character.entries.find(
+    (entry): entry is Extract<Entry, { type: "input" }> =>
+      entry.type === "input" && entry.event.id === event.id,
+  );
+  if (occurred?.at === undefined) return null;
+  if (at - occurred.at > 24 * 60 * 60_000) return null;
+  if (
+    character.decisions.some((decision) =>
+      decision.applied.some(
+        (change) => change.kind === "relationship" && change.reason === `전환점 ${event.id}`,
+      ),
+    )
+  )
+    return null;
+  return event.id;
+};
+
 export const decide = async (
   character: Character,
   trigger: Trigger,
@@ -195,6 +225,7 @@ export const decide = async (
     sourceId,
     window,
     serviceBlocked,
+    turningPoint: turningPointFor(character, at, judgment.eventReaction === true),
   });
   const action = actionFor(judgment.action, pending.length, character.lastSentAt);
   const progressed: Character = {

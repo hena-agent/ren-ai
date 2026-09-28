@@ -17,6 +17,7 @@ export type TransitionContext = {
   sourceId: string;
   window: string | null;
   serviceBlocked: boolean;
+  turningPoint?: string | null;
 };
 
 const adjusted = (before: number, step: Step, trigger: Trigger): number => {
@@ -75,13 +76,21 @@ const relationshipChange = (
   if (!field) return null;
   if (ctx.trigger === "tick" && (!ctx.judgment.meaningfulAbsence || ctx.serviceBlocked))
     return null;
+  const exceptional = ctx.turningPoint && ctx.trigger === "input" && step === "rise_clear";
   const value = Math.min(
     capsFor(ctx.session.stage)[field],
-    adjusted(ctx.session.relationship[field], step, ctx.trigger),
+    exceptional
+      ? ctx.session.relationship[field] + 12
+      : adjusted(ctx.session.relationship[field], step, ctx.trigger),
   );
   if (value === ctx.session.relationship[field]) return null;
   relationship[field] = value;
-  return { kind: "relationship", field, value, reason };
+  return {
+    kind: "relationship",
+    field,
+    value,
+    reason: exceptional ? `전환점 ${ctx.turningPoint}` : reason,
+  };
 };
 
 const stageChange = (

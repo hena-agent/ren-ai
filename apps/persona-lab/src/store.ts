@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyTransition,
@@ -12,7 +12,7 @@ import type { Event } from "@ren-ai/persona-engine";
 import { personas } from "./personas.ts";
 import type { Character, Decision, Entry } from "./loop.ts";
 
-export type SessionInfo = { id: string; persona: string; events: number };
+export type SessionInfo = { id: string; persona: string; events: number; paused: boolean };
 export type Saved = { persona: string; character: Character };
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: persisted JSON is revalidated on load
@@ -120,7 +120,8 @@ export const restore = (persona: string, id: string, value: unknown): Character 
     !Array.isArray(data["decisions"]) ||
     typeof data["nextCheckAt"] !== "number" ||
     typeof data["offset"] !== "number" ||
-    (data["lastSentAt"] !== null && typeof data["lastSentAt"] !== "number")
+    (data["lastSentAt"] !== null && typeof data["lastSentAt"] !== "number") ||
+    (data["paused"] !== undefined && typeof data["paused"] !== "boolean")
   )
     throw new Error("Invalid saved Character");
   let session = createSession(definition, safeId(id));
@@ -153,6 +154,7 @@ export const restore = (persona: string, id: string, value: unknown): Character 
     nextCheckAt: data["nextCheckAt"],
     offset: data["offset"],
     lastSentAt: data["lastSentAt"],
+    paused: data["paused"] === true,
   };
 };
 
@@ -161,8 +163,13 @@ const summarize = (id: string, value: unknown): SessionInfo | undefined => {
   const data = object(value);
   const entries = data["entries"];
   const persona = String(data["persona"]);
-  if (!Array.isArray(entries) || !personas[persona]) return undefined;
-  return { id, persona, events: entries.length };
+  if (
+    !Array.isArray(entries) ||
+    !personas[persona] ||
+    (data["paused"] !== undefined && typeof data["paused"] !== "boolean")
+  )
+    return undefined;
+  return { id, persona, events: entries.length, paused: data["paused"] === true };
 };
 
 export const createStore = (dir: string) => ({
@@ -194,9 +201,13 @@ export const createStore = (dir: string) => ({
         nextCheckAt: character.nextCheckAt,
         offset: character.offset,
         lastSentAt: character.lastSentAt,
+        paused: character.paused,
       }),
     );
     await rename(temp, path);
+  },
+  remove: async (id: string): Promise<void> => {
+    await unlink(join(dir, `${safeId(id)}.json`));
   },
   list: async (): Promise<SessionInfo[]> => {
     const files = await readdir(dir).then(

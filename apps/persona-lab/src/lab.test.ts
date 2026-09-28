@@ -75,11 +75,13 @@ const failingStore = (): ReturnType<typeof createStore> => ({
   load: async () => Promise.reject(new Error("disk failure")),
   save: async () => Promise.reject(new Error("disk failure")),
   list: async () => Promise.reject(new Error("disk failure")),
+  remove: async () => Promise.reject(new Error("disk failure")),
 });
 const oddStore = (): ReturnType<typeof createStore> => ({
   load: async () => Promise.reject("disk outage"),
   save: async () => Promise.reject("disk outage"),
   list: async () => Promise.reject("disk outage"),
+  remove: async () => Promise.reject("disk outage"),
 });
 
 it("serves the page and stylesheet", async () => {
@@ -295,11 +297,12 @@ it("rejects invalid requests, unknown sessions and malformed storage", async () 
   const missingPersona = await instance.handle(post("/new"));
   expect(missingPersona.status).toBe(404);
   expect(await missingPersona.json()).toEqual({ error: "Missing Persona" });
-  for (const route of ["/input", "/tick", "/reset", "/import"]) {
+  for (const route of ["/input", "/tick", "/reset", "/pause", "/resume"]) {
     const response = await instance.handle(post(route));
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Missing session" });
   }
+  expect((await instance.handle(post("/import"))).status).toBe(400);
   for (const body of [
     null,
     3,
@@ -369,7 +372,7 @@ it("skips corrupt or unrelated files when listing", async () => {
   expect(sessions.map((info) => info.id)).toEqual([created.session.id]);
   // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: integration-test HTTP JSON
   const raw: unknown = await (await instance.handle(get("/sessions"))).json();
-  expect(raw).toEqual([{ id: created.session.id, persona: "harin", events: 0 }]);
+  expect(raw).toEqual([{ id: created.session.id, persona: "harin", events: 0, paused: false }]);
 });
 
 it("reports storage failures without crashing", async () => {
@@ -475,7 +478,8 @@ it("ignores a listed session that vanishes before it loads", async () => {
   const phantom: ReturnType<typeof createStore> = {
     load: async () => undefined,
     save: async () => undefined,
-    list: async () => [{ id: "ghost", persona: "harin", events: 0 }],
+    list: async () => [{ id: "ghost", persona: "harin", events: 0, paused: false }],
+    remove: async () => undefined,
   };
   const instance = createLab("page", "css", model, judge, phantom, silent, clock);
   await expect(instance.runDue()).resolves.toBeUndefined();

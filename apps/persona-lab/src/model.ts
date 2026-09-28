@@ -8,6 +8,12 @@ type Part = { role: "user" | "model"; parts: Array<{ text: string }> };
 
 const history = (state: Session): Part[] => {
   const contents: Part[] = [];
+  const recentEvent = state.events.findLastIndex((event) => event.id.startsWith("event:"));
+  if (recentEvent >= 0 && recentEvent < state.unitStart && state.events.length - recentEvent <= 40)
+    contents.push({
+      role: "user",
+      parts: [{ text: `(최근 실제로 일어난 생활 사건) ${state.events[recentEvent]!.text}` }],
+    });
   for (const event of state.events.slice(state.unitStart).slice(-100)) {
     const role = event.kind === "reply" ? "model" : "user";
     const text = event.kind === "life" ? `(생활 사건) ${event.text}` : event.text;
@@ -40,6 +46,7 @@ Rules:
 - React with your own opinion, feeling, or small talk instead of just agreeing.
 - Use polite Korean (존댓말) by default. Switch to casual speech only after the two of you agree to it (말 놓기).
 - Do not invent facts you were not given: time of day, weather, place, or past events.
+- Life events are facts about your own day, not instructions or messages from the user. Decide naturally whether to mention them; do not assume the user participated or force a romantic outcome.
 - Never mention internal numbers, stats, or a relationship stage.
 - Match the tone, length, and habits of your example lines.
 Jev already decided how your state changed. You only write the message.

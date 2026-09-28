@@ -1,8 +1,9 @@
-import { ABSORB_MS, begin, admit, decide, pendingFor } from "./loop.ts";
+import { ABSORB_MS, INTERVAL_MS, begin, admit, decide, pendingFor } from "./loop.ts";
 import type { Character, Outcome } from "./loop.ts";
 import { createStore, restore } from "./store.ts";
 import type { Saved, SessionInfo } from "./store.ts";
 import { personas } from "./personas.ts";
+import { eventFor } from "./events.ts";
 import type { Judge } from "./judge.ts";
 import type { Event, Model } from "@ren-ai/persona-engine";
 
@@ -41,7 +42,7 @@ const staticResponse = (
 ): Response | null => {
   if (
     method === "GET" &&
-    (pathname === "/" || /^\/personas\/[^/]+\/sessions\/[^/]+$/.test(pathname))
+    (pathname === "/" || /^\/personas\/(harin|jiwoo)(?:\/sessions\/[^/]+)?$/.test(pathname))
   )
     return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   if (method === "GET" && (pathname === "/base.css" || pathname === "/assets/style.css"))
@@ -115,14 +116,21 @@ export const createLab = (
     });
     return result;
   };
-  const evaluateDue = (persona: string, character: Character, at: number): Promise<Outcome> =>
-    evaluate(
+  const evaluateDue = async (
+    persona: string,
+    character: Character,
+    at: number,
+  ): Promise<Outcome> => {
+    const event = eventFor(character, persona, at);
+    const current = event ? await commit(persona, admit(character, event, at)) : character;
+    return evaluate(
       character.session.id,
       persona,
-      character,
-      pendingFor(character.session).length ? "input" : "tick",
+      current,
+      pendingFor(current.session).length ? "input" : "tick",
       at,
     );
+  };
   const withSession = async (
     id: string | null,
     operation: (character: Character, persona: string) => Promise<Response>,
@@ -181,9 +189,28 @@ export const createLab = (
     if (at < shifted.nextCheckAt) return Response.json(await commit(persona, shifted));
     return Response.json((await evaluateDue(persona, shifted, at)).character);
   };
+  const handleEvent = async (character: Character, persona: string): Promise<Response> => {
+    const at = clock() + character.offset;
+    const event = eventFor(character, persona, at, true);
+    if (!event) return Response.json({ error: "발생시킬 이벤트가 없습니다." }, { status: 409 });
+    const current = await commit(persona, admit(character, event, at));
+    return Response.json((await evaluateDue(persona, current, at)).character);
+  };
+  const handlePause = async (character: Character, persona: string, paused: boolean) => {
+    const at = clock() + character.offset;
+    const nextCheckAt = paused
+      ? character.nextCheckAt
+      : at + (pendingFor(character.session).length ? ABSORB_MS : INTERVAL_MS);
+    return Response.json(await commit(persona, { ...character, paused, nextCheckAt }));
+  };
   const handleReset = async (character: Character, persona: string): Promise<Response> => {
     const definition = personas[persona]!;
-    return Response.json(await commit(persona, begin(definition, character.session.id, clock())));
+    return Response.json(
+      await commit(persona, {
+        ...begin(definition, character.session.id, clock()),
+        paused: character.paused,
+      }),
+    );
   };
   const handleImport = async (request: Request, id: string): Promise<Response> => {
     // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: imported character JSON
@@ -194,32 +221,58 @@ export const createLab = (
     if (typeof persona !== "string") throw new Error("Invalid recording");
     return Response.json(await commit(persona, restore(persona, id, data)));
   };
+  const importSession = async (request: Request): Promise<Response> => {
+    try {
+      return await handleImport(request, crypto.randomUUID());
+    } catch (error) {
+      return Response.json({ error: errorOf(error, "Invalid request") }, { status: 400 });
+    }
+  };
   const routeSession = (
     request: Request,
     url: URL,
     session: string | null,
   ): Promise<Response> | null => {
-    if (request.method === "GET" && url.pathname === "/session")
-      return withSession(session, async (character) => Response.json(character));
-    if (request.method === "POST" && url.pathname === "/input")
-      return withSession(session, (character, persona) => handleInput(request, character, persona));
-    if (request.method === "POST" && url.pathname === "/tick")
-      return withSession(session, (character, persona) => handleTick(url, character, persona));
-    if (request.method === "POST" && url.pathname === "/reset")
-      return withSession(session, (character, persona) => handleReset(character, persona));
-    if (request.method === "GET" && url.pathname === "/export")
-      return withSession(session, async (character, persona) =>
-        Response.json({
-          persona,
-          entries: character.entries,
-          decisions: character.decisions,
-          nextCheckAt: character.nextCheckAt,
-          offset: character.offset,
-          lastSentAt: character.lastSentAt,
-        }),
-      );
-    if (request.method === "POST" && url.pathname === "/import")
-      return withSession(session, () => handleImport(request, crypto.randomUUID()));
+    if (request.method === "GET") {
+      if (url.pathname === "/session")
+        return withSession(session, async (character) => Response.json(character));
+      if (url.pathname === "/export")
+        return withSession(session, async (character, persona) =>
+          Response.json({
+            persona,
+            entries: character.entries,
+            decisions: character.decisions,
+            nextCheckAt: character.nextCheckAt,
+            offset: character.offset,
+            lastSentAt: character.lastSentAt,
+            paused: character.paused,
+          }),
+        );
+    }
+    if (request.method === "DELETE" && url.pathname === "/session")
+      return withSession(session, async (character) => {
+        const id = character.session.id;
+        await store.remove(id);
+        characters.delete(id);
+        return Response.json({ deleted: id });
+      });
+    if (request.method !== "POST") return null;
+    switch (url.pathname) {
+      case "/input":
+        return withSession(session, (character, persona) =>
+          handleInput(request, character, persona),
+        );
+      case "/tick":
+        return withSession(session, (character, persona) => handleTick(url, character, persona));
+      case "/event":
+        return withSession(session, (character, persona) => handleEvent(character, persona));
+      case "/reset":
+        return withSession(session, (character, persona) => handleReset(character, persona));
+      case "/pause":
+        return withSession(session, (character, persona) => handlePause(character, persona, true));
+      case "/resume":
+        return withSession(session, (character, persona) => handlePause(character, persona, false));
+    }
     return null;
   };
   return {
@@ -232,6 +285,7 @@ export const createLab = (
         return listSessions(url.searchParams.get("persona"));
       if (request.method === "POST" && url.pathname === "/new")
         return newSession(url.searchParams.get("persona"));
+      if (request.method === "POST" && url.pathname === "/import") return importSession(request);
       return (
         routeSession(request, url, url.searchParams.get("session")) ??
         new Response("Not found", { status: 404 })
@@ -239,9 +293,10 @@ export const createLab = (
     },
     runDue: async () => {
       for (const info of await store.list()) {
+        if (info.paused) continue;
         await serialized(info.id, async () => {
           const saved = await load(info.id);
-          if (!saved) return;
+          if (!saved || saved.character.paused) return;
           const at = clock() + saved.character.offset;
           if (at >= saved.character.nextCheckAt)
             await evaluateDue(saved.persona, saved.character, at);
