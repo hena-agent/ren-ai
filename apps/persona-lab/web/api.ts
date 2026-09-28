@@ -52,17 +52,17 @@ const character = async (response: Response): Promise<Character> => {
 };
 
 export const sessionsFor = async (persona: string): Promise<SessionInfo[]> => {
-  const value = await json(await fetch(`/sessions?persona=${encodeURIComponent(persona)}`));
+  const value = await json(await fetch(`/api/sessions?persona=${encodeURIComponent(persona)}`));
   if (!Array.isArray(value) || !value.every(isSessionInfo))
     throw new Error("세션을 불러오지 못했습니다.");
   return value;
 };
 
 export const openSession = async (id: string): Promise<Character> =>
-  character(await fetch(`/session?session=${encodeURIComponent(id)}`));
+  character(await fetch(`/api/session?session=${encodeURIComponent(id)}`));
 
 export const createSession = async (persona: string): Promise<Character> =>
-  character(await fetch(`/new?persona=${encodeURIComponent(persona)}`, { method: "POST" }));
+  character(await fetch(`/api/new?persona=${encodeURIComponent(persona)}`, { method: "POST" }));
 
 export const sessionAction = async (
   action: "reset" | "tick" | "import" | "input",
@@ -71,7 +71,7 @@ export const sessionAction = async (
 ): Promise<Character> =>
   character(
     await fetch(
-      `/${action}?session=${encodeURIComponent(id)}${options?.minutes ? `&minutes=${options.minutes}` : ""}`,
+      `/api/${action}?session=${encodeURIComponent(id)}${options?.minutes ? `&minutes=${options.minutes}` : ""}`,
       {
         method: "POST",
         ...(options?.body === undefined
@@ -82,4 +82,4 @@ export const sessionAction = async (
   );
 
 export const exportSession = async (id: string): Promise<string> =>
-  JSON.stringify(await json(await fetch(`/export?session=${encodeURIComponent(id)}`)), null, 2);
+  JSON.stringify(await json(await fetch(`/api/export?session=${encodeURIComponent(id)}`)), null, 2);

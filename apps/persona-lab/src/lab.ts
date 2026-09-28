@@ -227,6 +227,7 @@ export const createLab = (
       const url = new URL(request.url);
       const asset = staticResponse(request.method, url.pathname, page, stylesheet, script);
       if (asset) return asset;
+      if (url.pathname.startsWith("/api/")) url.pathname = url.pathname.slice(4);
       if (request.method === "GET" && url.pathname === "/sessions")
         return listSessions(url.searchParams.get("persona"));
       if (request.method === "POST" && url.pathname === "/new")

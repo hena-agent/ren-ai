@@ -16,7 +16,7 @@ Add `GEMINI_API_KEY` and `AI_GATEWAY_API_KEY` to `apps/persona-lab/.env` (see `.
 bun run dev
 ```
 
-Open http://127.0.0.1:3000. Each conversation gets a shareable `/personas/<persona>/sessions/<session>` URL. During development, Vite updates the UI automatically and Bun restarts the API when its source changes. Run the quality gates with:
+Open http://127.0.0.1:3000. Each conversation gets a shareable `/personas/<persona>/sessions/<session>` URL; API routes live under `/api/`. During development, Vite updates the UI automatically and Bun restarts the API when its source changes. Run the quality gates with:
 
 ```sh
 bun run ci

@@ -9,7 +9,7 @@ export default defineConfig({
     port: Number(process.env.PORT ?? 3000),
     strictPort: true,
     proxy: {
-      "^/(sessions|session|new|input|tick|reset|export|import)(?:\\?|$)": "http://127.0.0.1:3001",
+      "^/api/": "http://127.0.0.1:3001",
     },
   },
   build: {
