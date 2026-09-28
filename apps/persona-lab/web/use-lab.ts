@@ -22,6 +22,7 @@ export const useLab = () => {
   );
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [current, setCurrent] = useState<Character | null>(null);
+  const [observedAt, setObservedAt] = useState(0);
   const [text, setText] = useState("");
   const [kind, setKind] = useState("user");
   const [minutes, setMinutes] = useState("5");
@@ -35,6 +36,7 @@ export const useLab = () => {
   const update = useCallback((value: Character | null) => {
     currentRef.current = value;
     setCurrent(value);
+    setObservedAt(Date.now());
     if (value)
       setSessions((list) =>
         list.map((info) =>
@@ -248,6 +250,7 @@ export const useLab = () => {
     persona,
     sessions,
     current,
+    observedAt,
     text,
     setText,
     kind,

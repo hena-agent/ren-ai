@@ -4,3 +4,4 @@
 scripts/*.mjs
 skills-lock.json
 fixtures/
+packages/msg.hena.dev/src/routeTree.gen.ts

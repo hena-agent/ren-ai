@@ -6,6 +6,8 @@ pre-commit:
     # have the last word on any lint auto-fix.
     - name: lint
       glob: "*.{ts,tsx}"
+      exclude:
+        - "**/routeTree.gen.ts"
       run: bunx --no-install oxlint --fix {staged_files}
       stage_fixed: true
     - name: format

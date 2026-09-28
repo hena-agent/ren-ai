@@ -101,7 +101,7 @@ export const App = () => {
           {lab.current ? (
             <Timeline current={lab.current} />
           ) : (
-            <div className="timeline loading" role="status">
+            <output className="timeline loading">
               {lab.error ? (
                 <button
                   className="button button-outline"
@@ -113,7 +113,7 @@ export const App = () => {
               ) : (
                 "세션을 불러오는 중입니다."
               )}
-            </div>
+            </output>
           )}
           <div className="composer-area">
             <PromptInput id="composer" onSubmit={lab.send}>
@@ -153,6 +153,7 @@ export const App = () => {
         {lab.current && (
           <Observations
             current={lab.current}
+            observedAt={lab.observedAt}
             minutes={lab.minutes}
             setMinutes={lab.setMinutes}
             busy={lab.busy}
@@ -176,6 +177,7 @@ export const App = () => {
         {lab.current && (
           <Observations
             current={lab.current}
+            observedAt={lab.observedAt}
             minutes={lab.minutes}
             setMinutes={lab.setMinutes}
             busy={lab.busy}

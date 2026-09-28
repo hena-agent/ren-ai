@@ -8,14 +8,14 @@
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
-    "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run knip && bun run dup && bun run exceptions && bun run verify-gates && bun run mutate",
+    "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run knip && bun run dup && bun run exceptions && bun run verify-gates && bun run mutate && bun run --cwd packages/msg.hena.dev build",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "oxlint --type-aware --report-unused-disable-directives",
+    "lint": "bun run scripts/run-quality-gate.ts lint",
     "typecheck": "turbo run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "vitest run --coverage",
-    "knip": "knip && knip --production",
-    "dup": "jscpd",
+    "knip": "knip && knip --production --config knip.production.json",
+    "dup": "bun run scripts/run-quality-gate.ts duplication",
     "mutate": "stryker run",
     "exceptions": "bun run scripts/exceptions.ts",
     "verify-gates": "bun run scripts/verify-gates.ts",
@@ -35,6 +35,7 @@
     "oxlint-tsgolint": "7.0.2003",
     "turbo": "2.11.4",
     "typescript": "7.0.2",
+    "vite": "7.3.6",
     "vitest": "5.0.1"
   },
   "devEngines": {

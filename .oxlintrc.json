@@ -9,10 +9,12 @@
     "scripts/**/*.mjs",
     "fixtures/**"
   ],
-  "plugins": ["typescript", "oxc", "import", "promise", "unicorn", "vitest"],
+  "plugins": ["typescript", "oxc", "import", "promise", "unicorn", "vitest", "react", "jsx-a11y"],
   "jsPlugins": ["oxlint-plugin-complexity"],
   "categories": { "correctness": "error", "suspicious": "error" },
   "rules": {
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
     "complexity/complexity": ["error", { "cyclomatic": 21, "cognitive": 21 }],
     "eslint/max-lines": ["error", { "max": 499, "skipBlankLines": false, "skipComments": false }],
     "typescript/no-explicit-any": "error",
