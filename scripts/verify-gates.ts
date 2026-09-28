@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import process from "node:process";
+import exceptions from "../quality-exceptions.json" with { type: "json" };
+import { qualityCommand } from "./quality-commands.ts";
 
 /**
  * Proves each gate actually rejects the thing it claims to reject.
@@ -23,6 +25,7 @@ type Check = {
   readonly expect: string;
   /** Re-run on a clean tree to catch a gate that rejects everything. */
   readonly checkInverse: boolean;
+  readonly allowed?: string;
 };
 
 const repeat = (count: number, make: (index: number) => string): string =>
@@ -78,7 +81,17 @@ const CHECKS: readonly Check[] = [
   {
     gate: "100% coverage",
     files: {
-      "packages/duration/src/gate-check.ts":
+      "packages/onboarding/src/gate-check.tsx":
+        "export const untested = (n: number): number => (n > 0 ? n : 0);\n",
+    },
+    command: ["vitest", "run", "--coverage", "--silent"],
+    expect: "does not meet",
+    checkInverse: false,
+  },
+  {
+    gate: "app coverage",
+    files: {
+      "apps/persona-lab/src/gate-check.ts":
         "export const untested = (n: number): number => (n > 0 ? n : 0);\n",
     },
     command: ["vitest", "run", "--coverage", "--silent"],
@@ -88,8 +101,15 @@ const CHECKS: readonly Check[] = [
   {
     gate: "dead code",
     files: {
-      "packages/duration/src/gate-check.ts": "export const orphan = 1;\n",
+      "packages/onboarding/src/gate-check.ts": "export const orphan = 1;\n",
     },
+    command: ["knip"],
+    expect: "Unused files",
+    checkInverse: false,
+  },
+  {
+    gate: "app dead code",
+    files: { "apps/persona-lab/src/gate-check.ts": "export const orphan = 1;\n" },
     command: ["knip"],
     expect: "Unused files",
     checkInverse: false,
@@ -97,12 +117,53 @@ const CHECKS: readonly Check[] = [
   {
     gate: "duplicated code",
     files: {
-      "packages/duration/src/gate-check-a.ts": duplicatedModule("a"),
-      "packages/duration/src/gate-check-b.ts": duplicatedModule("b"),
+      "packages/onboarding/src/gate-check-a.tsx": duplicatedModule("a"),
+      "packages/onboarding/src/gate-check-b.tsx": duplicatedModule("b"),
     },
-    command: ["jscpd"],
+    command: ["bun", "run", "scripts/run-quality-gate.ts", "duplication"],
     expect: "Clone found",
     checkInverse: false,
+  },
+  {
+    gate: "app duplicated code",
+    files: {
+      "apps/persona-lab/src/gate-check-a.ts": duplicatedModule("a"),
+      "apps/persona-lab/src/gate-check-b.ts": duplicatedModule("b"),
+    },
+    command: ["bun", "run", "scripts/run-quality-gate.ts", "duplication"],
+    expect: "Clone found",
+    checkInverse: false,
+  },
+  {
+    gate: "app type-aware lint",
+    files: { "apps/persona-lab/src/gate-check.ts": "export const loose = (v: any): any => v;\n" },
+    command: ["bun", "run", "scripts/run-quality-gate.ts", "lint"],
+    expect: "no-explicit-any",
+    checkInverse: false,
+  },
+  {
+    gate: "eslint-disable reasons in TSX",
+    files: { "packages/onboarding/src/gate-check.tsx": "/* eslint-disable */\n" },
+    command: ["bun", "run", "exceptions"],
+    expect: 'inline suppression has no "-- reason"',
+    checkInverse: true,
+    allowed: "/* eslint-disable -- documented exception */\n",
+  },
+  {
+    gate: "@ts-nocheck reasons in TSX",
+    files: { "packages/onboarding/src/gate-check.tsx": "// @ts-nocheck\n" },
+    command: ["bun", "run", "exceptions"],
+    expect: 'inline suppression has no "-- reason"',
+    checkInverse: true,
+    allowed: "// @ts-nocheck -- documented exception\n",
+  },
+  {
+    gate: "app suppression reasons",
+    files: { "apps/persona-lab/src/gate-check.ts": "// @ts-nocheck\n" },
+    command: ["bun", "run", "exceptions"],
+    expect: 'inline suppression has no "-- reason"',
+    checkInverse: true,
+    allowed: "// @ts-nocheck -- documented exception\n",
   },
 ];
 
@@ -143,13 +204,18 @@ const verify = (check: Check): readonly string[] => {
 
   if (check.checkInverse) {
     const clean = Object.fromEntries(
-      Object.keys(check.files).map((path) => [path, "export const fine = 1;\n"]),
+      Object.keys(check.files).map((path) => [path, check.allowed ?? "export const fine = 1;\n"]),
     );
     try {
       plant(clean);
       const accepted = run(check.command);
       if (accepted.code !== 0) {
         problems.push(`${check.gate}: rejected clean code\n${accepted.output}`);
+      } else if (
+        check.allowed &&
+        !accepted.output.includes(`[inline] ${Object.keys(check.files)[0]} `)
+      ) {
+        problems.push(`${check.gate}: accepted suppression but did not report it`);
       }
     } finally {
       uproot(clean);
@@ -169,23 +235,57 @@ const verifyStrykerPatch = (): readonly string[] => {
     "node_modules/@stryker-mutator/vitest-runner/dist/src/test-helpers.js",
     "node_modules/@stryker-mutator/vitest-runner/dist/src/stryker-setup.js",
   ];
-  return patched
+  const nameFailures = patched
     .filter((path) => !existsSync(path) || !readFileSync(path, "utf8").includes("join(' > ')"))
     .map(
       (path) =>
         `mutation runner patch: ${path} is missing the " > " test-name separator; mutation results cannot be trusted`,
     );
+  const runner = "node_modules/@stryker-mutator/vitest-runner/dist/src/vitest-test-runner.js";
+  const forked =
+    existsSync(runner) &&
+    readFileSync(runner, "utf8").includes("pool: 'forks',\n            maxWorkers: 1");
+  return forked
+    ? nameFailures
+    : [
+        ...nameFailures,
+        "mutation runner patch: Vitest 5 must use one forked worker (ffi-rs segfaults in Linux threads)",
+      ];
+};
+
+const verifyGateInputs = (): readonly string[] => {
+  const failures: string[] = [];
+  const config = readFileSync("stryker.config.js", "utf8");
+  if (!/mutate:\s*\[[^\n]*\{apps,packages\}[^\n]*\{ts,tsx\}/.test(config)) {
+    failures.push("mutation: mutate patterns must include apps, packages and .tsx files");
+  }
+  const lint = qualityCommand("lint") ?? [];
+  const duplication = qualityCommand("duplication") ?? [];
+  for (const { path } of exceptions.lint) {
+    if (!lint.some((arg, index) => arg === path && lint[index - 1] === "--ignore-pattern"))
+      failures.push(`lint exception missing from command: ${path}`);
+  }
+  for (const { path } of exceptions.duplication) {
+    if (
+      !duplication.some(
+        (arg, index) => duplication[index - 1] === "--ignore" && arg.split(",").includes(path),
+      )
+    )
+      failures.push(`duplication exception missing from command: ${path}`);
+  }
+  return failures;
 };
 
 rmSync(SCRATCH, { recursive: true, force: true });
 mkdirSync(SCRATCH, { recursive: true });
 
-const failures = [...CHECKS.flatMap(verify), ...verifyStrykerPatch()];
+const failures = [...CHECKS.flatMap(verify), ...verifyStrykerPatch(), ...verifyGateInputs()];
 
 for (const check of CHECKS) {
   process.stdout.write(`  ${check.gate}\n`);
 }
 process.stdout.write("  mutation runner patch\n");
+process.stdout.write("  mutation TSX and lint/duplication exceptions\n");
 
 rmSync(SCRATCH, { recursive: true, force: true });
 

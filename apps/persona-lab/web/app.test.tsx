@@ -41,7 +41,8 @@ it("renders conversation events and the existing observation vocabulary", () => 
   expect(html).toContain("산책을 했다");
   const observations = (
     <Observations
-      current={current}
+      current={{ ...current, offset: 300_000 }}
+      observedAt={31_000}
       minutes="5"
       setMinutes={() => undefined}
       tick={() => undefined}
@@ -53,6 +54,7 @@ it("renders conversation events and the existing observation vocabulary", () => 
   const side = renderToStaticMarkup(observations);
   for (const text of [
     "Private notes / 내부 관찰",
+    new Date(331_000).toLocaleString(),
     "인물의 현재",
     "기본 특성",
     "현재 상태",

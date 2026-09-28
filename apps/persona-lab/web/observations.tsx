@@ -34,6 +34,7 @@ const Scores = ({ title, id, scores }: { title: string; id: string; scores: obje
 
 export const Observations = ({
   current,
+  observedAt,
   minutes,
   setMinutes,
   tick,
@@ -44,6 +45,7 @@ export const Observations = ({
   className = "",
 }: {
   current: Character;
+  observedAt: number;
   minutes: string;
   setMinutes: (value: string) => void;
   tick: () => void;
@@ -107,7 +109,7 @@ export const Observations = ({
         <section className="observation-group">
           <h3>시간과 판단</h3>
           <p className="muted">
-            가상 시각: {new Date(Date.now() + current.offset).toLocaleString()} ·{" "}
+            가상 시각: {new Date(observedAt + current.offset).toLocaleString()} ·{" "}
             {current.paused
               ? "자동 판단: 일시정지"
               : `다음 판단: ${new Date(current.nextCheckAt).toLocaleString()}`}

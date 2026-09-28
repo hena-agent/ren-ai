@@ -1,6 +1,6 @@
 # ren-ai
 
-An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo currently includes a local Persona Lab for testing characters and their decision engine.
+An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo includes the messaging site and server, a local Persona Lab, and a standalone persona engine, with eight quality gates that block CI.
 
 The premise is that when agents write most of the code, review does not scale but gates do.
 
@@ -25,10 +25,11 @@ bun run ci
 ## Layout
 
 ```
-apps/persona-lab/       Local web lab for experimenting with personas.
-packages/persona-engine/ Persona state and transition rules.
-apps/cli/               Duration CLI and quality-gate example.
-packages/duration/      Duration parser and trust-boundary example.
+apps/persona-lab/     Local simulation app for the standalone persona engine.
+packages/persona-engine/  Relationship state engine (not wired into iMessage runtime).
+packages/onboarding/   Shared browser-safe Handle rules, locale copy, and Onboarding/Waitlist shapes.
+packages/msg.hena.dev/   Prerendered Korean onboarding site, served as static assets.
+packages/api-msg.hena.dev/  iMessage server, embedded OpenCode host, and operator CLI.
 scripts/                Repo tooling: exceptions report and gate verification.
 quality-exceptions.json  The only place file-level gate exceptions may live.
 ```
@@ -53,7 +54,7 @@ quality-exceptions.json  The only place file-level gate exceptions may live.
 ## Design decisions worth knowing
 
 - **bun installs and runs scripts; Node runs tests.** Vitest treats bun as a package manager only, and the v8 coverage provider does not work on the bun runtime.
-- **Libraries have no build step.** Packages export TypeScript source directly. Persona Lab builds its browser UI with Vite when starting; the libraries remain Just-in-Time. A compiled library that has not been built makes type-aware lint and knip exit 0 while enforcing nothing — a silent false pass.
+- **Libraries are Just-in-Time.** They export TypeScript source directly, with no build step. The messaging site and Persona Lab build their browser UIs with Vite; the lab builds when starting. An unbuilt compiled library makes type-aware lint and knip exit 0 while enforcing nothing — a silent false pass.
 - **Exact version pins, no ranges.** oxfmt is pre-1.0 with no semver protection on formatting output, and `oxlint-tsgolint` is hard-pinned to a TypeScript patch release.
 - **bun's default isolated linker is kept.** It turns an undeclared dependency into an immediate failure instead of a latent bug.
 - **`globalStore = true` in `bunfig.toml`.** Packages are symlinked from one machine-wide store, so a clone's `node_modules` is ~200KB instead of ~240MB. The cost is that tools resolving plugins by package name from their _own_ location break, since the store is not a parent of the project — `stryker.config.js` references its runner by path for exactly this reason.
@@ -64,4 +65,6 @@ quality-exceptions.json  The only place file-level gate exceptions may live.
 
 Vitest 5 changed `testNamePattern` to match against a `" > "`-joined test name; the Stryker runner still joins with a single space, so every test nested in a `describe` is skipped and every mutant is reported as survived. Upstream: [stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210).
 
-The patch is pinned to exactly `10.0.0`. If Renovate bumps the runner, `patchedDependencies` stops matching and bun applies nothing — but it **fails closed**: unpatched, the score collapses to 3.33% and `thresholds.break: 100` reds the build. Remove the patch when the fix ships upstream.
+The runner also forces Vitest's thread pool. OpenCode loads `ffi-rs`, whose native addon segfaults on Linux when imported in a worker thread (reproduced with a bare Node worker thread). The patch uses Vitest's fork pool instead, as plain Vitest does, retaining one worker per Stryker runner and all mutation gates. Stryker concurrency is capped at two because seven forked runners exhausted an 8 GB Linux container; the mutation scope and 100% threshold remain unchanged.
+
+The patch is pinned to exactly `10.0.0`. If Renovate bumps the runner, `patchedDependencies` stops matching and bun applies nothing — but it **fails closed**: `verify-gates` checks both changes, and without the test-name fix the score collapses to 3.33% and `thresholds.break: 100` reds the build. Remove each hunk when its upstream fix ships.

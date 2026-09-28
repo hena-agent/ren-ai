@@ -24,7 +24,7 @@ const EmptyTimeline = ({
   loading: boolean;
   retry: () => void;
 }) => (
-  <div className="timeline loading" role="status">
+  <output className="timeline loading">
     {error ? (
       <button className="button button-outline" type="button" onClick={retry}>
         다시 시도
@@ -34,7 +34,7 @@ const EmptyTimeline = ({
     ) : (
       "세션이 없습니다. 새 세션을 만들어 시작하세요."
     )}
-  </div>
+  </output>
 );
 
 export const App = () => {
@@ -211,6 +211,7 @@ export const App = () => {
         {lab.current && (
           <Observations
             current={lab.current}
+            observedAt={lab.observedAt}
             minutes={lab.minutes}
             setMinutes={lab.setMinutes}
             busy={lab.busy}
@@ -235,6 +236,7 @@ export const App = () => {
         {lab.current && (
           <Observations
             current={lab.current}
+            observedAt={lab.observedAt}
             minutes={lab.minutes}
             setMinutes={lab.setMinutes}
             busy={lab.busy}
