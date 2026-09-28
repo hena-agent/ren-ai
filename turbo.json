@@ -7,7 +7,13 @@
       "cache": false
     },
     "typecheck": {
-      "inputs": ["src/**", "tsconfig.json", "package.json", "$TURBO_ROOT$/tsconfig.base.json"]
+      "inputs": [
+        "src/**",
+        "web/**",
+        "tsconfig.json",
+        "package.json",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ]
     }
   }
 }

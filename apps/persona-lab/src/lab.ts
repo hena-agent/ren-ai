@@ -37,11 +37,17 @@ const staticResponse = (
   pathname: string,
   page: string,
   stylesheet: string,
+  script: string,
 ): Response | null => {
-  if (method === "GET" && pathname === "/")
+  if (
+    method === "GET" &&
+    (pathname === "/" || /^\/personas\/[^/]+\/sessions\/[^/]+$/.test(pathname))
+  )
     return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-  if (method === "GET" && pathname === "/base.css")
+  if (method === "GET" && (pathname === "/base.css" || pathname === "/assets/style.css"))
     return new Response(stylesheet, { headers: { "Content-Type": "text/css; charset=utf-8" } });
+  if (method === "GET" && pathname === "/assets/app.js")
+    return new Response(script, { headers: { "Content-Type": "text/javascript; charset=utf-8" } });
   return null;
 };
 
@@ -57,6 +63,7 @@ export const createLab = (
   store: ReturnType<typeof createStore>,
   log: (event: TurnLog) => void,
   clock: () => number,
+  script = "",
 ): Lab => {
   const characters = new Map<string, Saved>();
   const queues = new Map<string, Promise<void>>();
@@ -218,7 +225,7 @@ export const createLab = (
   return {
     handle: async (request) => {
       const url = new URL(request.url);
-      const asset = staticResponse(request.method, url.pathname, page, stylesheet);
+      const asset = staticResponse(request.method, url.pathname, page, stylesheet, script);
       if (asset) return asset;
       if (request.method === "GET" && url.pathname === "/sessions")
         return listSessions(url.searchParams.get("persona"));
