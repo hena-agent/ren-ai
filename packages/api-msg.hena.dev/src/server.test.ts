@@ -302,7 +302,7 @@ test("production settings are isolated and the model is configured without conta
           expect(session.model).toEqual({
             providerID: "opencode-go",
             id: "deepseek-v4.1-flash",
-            variant: "max",
+            variant: "default",
           });
           const config = yield* Effect.promise(() =>
             server.host.web(new Request("http://host/api/config")),

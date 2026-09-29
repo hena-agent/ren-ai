@@ -30,7 +30,7 @@ export interface ServerConfig {
 
 /** The only model choice. DeepSeek V4.1 Flash has a 1M-token context window. */
 const productionHost = (key: string) => ({
-  model: "opencode-go/deepseek-v4.1-flash#max",
+  model: "opencode-go/deepseek-v4.1-flash",
   providers: { "opencode-go": { settings: { apiKey: key } } },
   memory: { contextTokens: 1_000_000, budgetTokens: 600_000, recentTokens: 12_000 },
 });
