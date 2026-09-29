@@ -17,6 +17,7 @@ These run one at a time across all conversations, and after each one the server 
 ## Consequences
 
 - Typing, read receipts and tapbacks sit behind one seam, so the helper can replace the UI adapter without touching the persona's tools.
+- Typing waits its turn for the one lock instead of being skipped while a read or tapback holds it. The persona reads and sends in the same step, so skipping meant no typing at all. A busy queue therefore delays replies; when it outgrows that, the helper replaces this adapter. Typing that fails outright still doesn't hold the reply back: it alerts at once and the message goes out.
 - The Mac must stay awake and unlocked with Messages' window open, because display sleep locks it at once.
 - Messages' "Send read receipts" is on, so anything that uncovers a conversation can mark it read. Parking the UI after each action keeps that from happening before the persona chooses.
 - Whether another account's iPhone shows the typing indicator is still unverified, because the probe that would check it is on hold.
