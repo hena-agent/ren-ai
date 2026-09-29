@@ -39,9 +39,10 @@ it("renders conversation events and the existing observation vocabulary", () => 
   const html = renderToStaticMarkup(<Timeline current={current} />);
   expect(html).toContain("생활 사건");
   expect(html).toContain("산책을 했다");
+  current.offset = 300_000;
   const observations = (
     <Observations
-      current={{ ...current, offset: 300_000 }}
+      current={current}
       observedAt={31_000}
       minutes="5"
       setMinutes={() => undefined}
@@ -102,6 +103,7 @@ it("shows judgment history in descending timestamp order", () => {
   const html = renderToStaticMarkup(
     <Observations
       current={current}
+      observedAt={31_000}
       minutes="5"
       setMinutes={() => undefined}
       tick={() => undefined}
