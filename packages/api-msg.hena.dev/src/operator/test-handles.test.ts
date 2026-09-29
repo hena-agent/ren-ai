@@ -33,6 +33,7 @@ test("operator commands mark test handles and preserve their sessions on removal
         expect((yield* host.sessions.get(fresh)).title).toMatch(
           /^Persona1 · tester@example\.com · removed \d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}$/,
         );
+        expect(yield* runOperatorCli(["remove", handle], socket)).toBe(`No User for ${handle}`);
         expect(yield* runOperatorCli(["untest-handle", handle], socket)).toContain("Unmarked");
         expect(yield* runOperatorCli(["remove", handle], socket)).toContain("Removed");
         expect((yield* host.sessions.list()).data).toEqual([]);

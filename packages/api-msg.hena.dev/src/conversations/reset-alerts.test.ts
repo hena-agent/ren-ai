@@ -1,8 +1,9 @@
 import { Clock, Duration, Effect } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
 import { AIError, QuotaExceededError } from "@opencode/ai/schema/errors";
+import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
-import { bindTestHandle, currentMemory, resetFixture } from "../../test/reset.test-helper.ts";
+import { bindTestHandle, resetFixture } from "../../test/reset.test-helper.ts";
 import {
   providerUnavailable,
   scriptedPersona,
@@ -20,9 +21,11 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
         Effect.gen(function* () {
           const llm = yield* scriptedPersona();
           let failing = true;
-          yield* llm.serve(() =>
+          yield* llm.serve((request) =>
             !failing
-              ? TestLLM.text("quiet", "answer")
+              ? JSON.stringify(request).includes("<conversation-started")
+                ? TestLLM.tool("fresh-wait", "wait", { minutes: 720 })
+                : TestLLM.text("quiet", "answer")
               : kind.includes("provider")
                 ? providerUnavailable("unavailable")
                 : TestLLM.failAfter(
@@ -58,24 +61,35 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* Effect.sleep("20 millis");
           failing = false;
           yield* f.fake.text(f.handle, "/reset", Date.now());
-          yield* currentMemory(host, f.handle);
-          const oldRequests = () =>
+          const fresh = Session.ID.make((yield* host.conversations.byHandle(f.handle))!.sessionID);
+          while (
+            !JSON.stringify(yield* host.sessions.messages({ sessionID: fresh })).includes(
+              '"status":"running"',
+            )
+          )
+            yield* Effect.sleep("10 millis");
+          const requestsFor = (text: string) =>
             llm
               .requests()
               .pipe(
                 Effect.map(
                   (requests) =>
-                    requests.filter((request) => JSON.stringify(request).includes("fail this turn"))
-                      .length,
+                    requests.filter((request) => JSON.stringify(request).includes(text)).length,
                 ),
               );
-          const requests = yield* oldRequests();
+          const requests = yield* requestsFor("fail this turn");
+          const otherRequests = yield* requestsFor("other failure");
           yield* Effect.sleep("600 millis");
-          expect(yield* oldRequests()).toBe(requests);
+          expect(yield* requestsFor("fail this turn")).toBe(requests);
           if (kind === "other-provider") expect(alerts).toContain("provider-failing");
           else expect(alerts).not.toContain("provider-failing");
           expect(alerts).toContain(`clear:conversation-turn-failing:${old.id}`);
           if (kind === "quota") expect(alerts).toContain("clear:go-cap");
+          if (kind.includes("provider")) expect(alerts).not.toContain("clear:go-cap");
+          if (kind === "other-quota")
+            expect(yield* requestsFor("other failure")).toBeGreaterThan(otherRequests);
+          yield* host.sessions.interrupt(fresh);
+          yield* host.sessions.wait(fresh);
         }).pipe(
           Effect.provideService(Clock.Clock, {
             currentTimeMillis: clock.currentTimeMillis,

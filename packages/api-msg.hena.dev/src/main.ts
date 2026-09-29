@@ -86,7 +86,7 @@ export const startMessagingHost = (
       send: (sessionID, text, callID) =>
         inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
       wait: (sessionID, minutes) =>
-        inConversation(sessionID, (conversation) => pace.wait(conversation.id, minutes)),
+        inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, minutes)),
       onContext: (sessionID) =>
         Effect.gen(function* () {
           const seen = yield* sql<{
@@ -148,7 +148,7 @@ export const startMessagingHost = (
       forget,
     );
     yield* Effect.forkScoped(follow.monitor);
-    incoming.onNew((conversation) => pace.onNew(conversation.id));
+    incoming.onNew((conversation) => pace.onNew(conversation.sessionID));
     const persona = host.personas.values().next().value!;
     const api = yield* onboarding({
       messages,
