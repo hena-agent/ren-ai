@@ -1,5 +1,17 @@
 # Mac mini operations
 
+## Development resets
+
+Run `XDG_STATE_HOME=/Users/chris/.local/state/ren-ai /Users/chris/.bun/bin/bun run packages/api-msg.hena.dev/src/operator-entry.ts test-handle HANDLE` to mark a test handle, before or after onboarding. Use `untest-handle HANDLE` to unmark it. Changes apply immediately and marks survive User removal.
+
+From a marked handle, text `/reset` (case-insensitive, surrounding whitespace allowed). The service sends the Notice and starts a new session with a fresh Greeting. Earlier sessions stay readable in the OpenCode Web UI with `· reset TIME` in their titles. The new session appears separately with the usual title. Rebuilds never restore pre-reset memory. From an unmarked handle, `/reset` is ordinary text; editing a message into the command does not execute it.
+
+`remove HANDLE` preserves a test handle's sessions and marks the current one `· removed TIME`. To delete all sessions, run `untest-handle HANDLE` followed by `remove HANDLE`, including after an earlier removal. Ordinary User removal still deletes sessions. `rebuild` still deletes the session it replaces.
+
+## Installation and deployment
+
+Command recognition uses the first text observed for a message GUID. The pinned imsg adapter exposes no edit history: a message first observed after an offline edit to `/reset` is treated as a command. A previously received message is never reinterpreted as a command.
+
 Run `ops/install.sh` as `chris` from the repo at `/Users/chris/git/hena-agent/ren-ai`. It creates owner-only state/log/socket directories, downloads and SHA-256-checks the pinned official V2.0.16 CLI with `ops/install-web-ui.sh` **only at install time**, and installs three per-user LaunchAgent plists **without loading them**. A differing existing plist is left untouched and causes the installer to stop for manual review. Keep the desktop logged in and awake; turn off automatic macOS installs and turn on Messages' “Send read receipts.” The server listens on `127.0.0.1:4700` (Cloudflare Tunnel for `api-msg.hena.dev`) and `127.0.0.1:4701` (Tailscale Serve HTTPS 8447). Run `tailscale serve --bg --https=8447 http://127.0.0.1:4701` on the mini; do not expose either listener directly. The operator socket is `$HOME/.local/state/ren-ai/operator/operator.sock` (owner-only directory and socket).
 
 Create login Keychain generic-password items with `/usr/bin/security add-generic-password -U -s dev.hena.ren-ai.<name> -a api-msg -w` (enter each value at the prompt), for `turnstile`, `viewer`, `discord`, and a separate random `web-ui` password for the isolated asset process. The existing Go key is service `dev.hena.ren-ai.opencode-go`, account `personas`. The asset process uses the pinned binary at `~/.local/share/ren-ai/web-ui/bin/opencode-2.0.16` with isolated home/config/data/cache/state under `~/.local/state/ren-ai/web-ui`; it cannot read the owner's or Persona host's database or configs. It listens **only** on `127.0.0.1:47987`, which must never get a Tailscale Serve/Funnel mapping. The viewer proxies its UI assets from there, never its API. [Viewer access instructions](../../../docs/agents/persona-viewer.md).

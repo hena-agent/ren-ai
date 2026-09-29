@@ -24,6 +24,7 @@ test("an operator removes a Waitlist-only email without touching any User", asyn
 
 test("the operator rejects invalid emails and reports Waitlist removal failures", async () => {
   const api = operatorHandler({
+    testHandle: () => Effect.void,
     block: () => Effect.void,
     remove: () => Effect.succeed("not_found"),
     removeWaitlist: () => Effect.fail(new Error("database offline")),

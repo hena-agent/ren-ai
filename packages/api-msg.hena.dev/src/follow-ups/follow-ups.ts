@@ -40,14 +40,17 @@ export const followUps = (
         const now = at ?? (yield* Clock.currentTimeMillis);
         const [row] = yield* sql<{ wakePending: number; followedUp: number; unanswered: number }>`
           SELECT wake_pending AS wakePending, followed_up AS followedUp, unanswered
-          FROM follow_up WHERE conversation_id = ${conversation.id}`;
+          FROM follow_up JOIN conversation ON conversation.id = follow_up.conversation_id
+          WHERE conversation_id = ${conversation.id} AND conversation.session_id = ${conversation.sessionID}
+            AND (conversation.reset_guid IS NULL OR conversation.last_received_at IS NOT NULL)`;
         if (!row) return;
         const first = row.wakePending === 1 && row.followedUp === 0;
         const unanswered = row.unanswered + (first ? 1 : 0);
         const wake = unanswered >= 2 ? null : yield* next(now, row.wakePending === 1);
         yield* sql`UPDATE follow_up SET last_sent_at = ${now}, next_wake_at = ${wake},
           unanswered = ${unanswered}, followed_up = ${row.wakePending === 1 ? 1 : 0}
-          WHERE conversation_id = ${conversation.id}`;
+          WHERE conversation_id = ${conversation.id} AND EXISTS (SELECT 1 FROM conversation
+            WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID})`;
         yield* signal;
       });
     // Upgrade existing Conversations without requiring him to text again.

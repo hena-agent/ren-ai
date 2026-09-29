@@ -1,5 +1,7 @@
 # Viewing a Persona session in OpenCode V2
 
+After `/reset`, a test handle has a new session with its usual title. Earlier sessions remain readable and carry `· reset TIME` (or `· removed TIME`) in their titles. Search by handle to find them; opening the new entry shows its fresh Memory. An existing browser tab stays on its original session.
+
 `https://chris-mini.pug-mohs.ts.net:8447/` serves the official V2 browser UI at the same origin as the Persona viewer's password-protected, GET-only API. The UI assets come from a separately isolated OpenCode 2.0.16 process on `127.0.0.1:47987`. See [the Mac mini runbook](../../packages/api-msg.hena.dev/ops/README.md) for its install and startup. Never expose 47987 through Tailscale or Funnel, use the Mac owner's OpenCode service, or run `opencode pair` on the Persona host.
 
 1. Open `https://chris-mini.pug-mohs.ts.net:8447/`. At the browser's **Persona viewer** authentication prompt, enter username **opencode** and the `dev.hena.ren-ai.viewer` / `api-msg` password from Keychain. Authentication is required before the UI loads, so the browser can also authenticate same-origin event requests when the app omits an Authorization header. If the app then shows its connection form, enter `https://chris-mini.pug-mohs.ts.net:8447` as **Server address** and the same viewer password. Do not use the isolated asset process's password. The form checks `GET /api/info`; it sends no messages.
@@ -8,7 +10,7 @@
    ```sh
    { printf 'header = "Authorization: Basic %s"\n' "$(printf 'opencode:%s' "$(/usr/bin/security find-generic-password -w -s dev.hena.ren-ai.viewer -a api-msg)" | base64 | tr -d '\n')"; } |
      curl --silent --show-error --fail --config - 'https://chris-mini.pug-mohs.ts.net:8447/api/session' |
-     jq -r '.data[] | [.agent, .id] | @tsv'
+      jq -r '.data[] | [.title, .id] | @tsv'
    ```
 
 3. Open `https://chris-mini.pug-mohs.ts.net:8447/server/aHR0cHM6Ly9jaHJpcy1taW5pLnB1Zy1tb2hzLnRzLm5ldDo4NDQ3/session/<session-id>` with the chosen ID. The encoded server segment is base64url of the viewer URL; it is not a credential. A fresh browser needs step 1 first.

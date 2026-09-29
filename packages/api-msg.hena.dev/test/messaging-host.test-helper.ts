@@ -76,9 +76,14 @@ export const startTestHost = (
     alerts,
   );
 
-export const quietTestHost = (root: string, personaDirectory: string, messages: Messages) =>
+export const quietTestHost = (
+  root: string,
+  personaDirectory: string,
+  messages: Messages,
+  databasePath = ":memory:",
+) =>
   Effect.gen(function* () {
     const llm = yield* scriptedPersona();
     yield* llm.serve(() => TestLLM.text("quiet", "answer"));
-    return yield* startTestHost(root, personaDirectory, llm, messages);
+    return yield* startTestHost(root, personaDirectory, llm, messages, databasePath);
   });
