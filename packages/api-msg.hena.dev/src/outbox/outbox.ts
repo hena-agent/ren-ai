@@ -242,7 +242,7 @@ export const outbox = (
               let row = (yield* sql<SendRow>`SELECT id, state, content, guid, late,
                notification_pending AS notificationPending, recorded_at AS recordedAt,
                updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
-              for (let attempt = 0; attempt < 10 && row.state === "uncertain"; attempt++) {
+              for (let attempt = 0; attempt < 15 && row.state === "uncertain"; attempt++) {
                 // imsg can accept a send before Messages exposes its row.
                 yield* Effect.sleep("200 millis");
                 row = yield* check(conversation, row);
