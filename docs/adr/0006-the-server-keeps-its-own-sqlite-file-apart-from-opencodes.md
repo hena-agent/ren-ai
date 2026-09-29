@@ -1,5 +1,7 @@
 # The server keeps its own SQLite file, apart from OpenCode's
 
+ADR-0009 adds an exception to removal: test handles retain their sessions for review. Unmarking a test handle before removal deletes all its sessions, including retained ones.
+
 The api-msg server keeps its state in a SQLite file of its own, beside the database of the OpenCode host it embeds. That state is Users, Conversations, the record of sends, the imsg bookmark, follow-ups, the Waitlist and blocked handles. Our code reaches OpenCode's data only through OpenCode's API: it never adds tables to OpenCode's file or borrows OpenCode's connection. This replaces the single shared file first chosen in ADR-0004, so that an OpenCode upgrade, migration or reset never touches our tables, and neither side depends on the other's layout.
 
 ## Considered Options

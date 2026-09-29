@@ -32,7 +32,7 @@ export const watchEdits = (
     const remember = (conversation: Conversation, row: IncomingMessage) => {
       if (!row.text) return;
       let group = watched.get(conversation.id);
-      if (!group) {
+      if (!group || group.conversation.sessionID !== conversation.sessionID) {
         group = { conversation, rows: new Map() };
         watched.set(conversation.id, group);
       }
@@ -66,7 +66,7 @@ export const watchEdits = (
         const zone = timeZone(group.conversation.personaID);
         const text = currentText ? edited(entry.text, currentText, time, zone) : unsent(time, zone);
         const revision = entry.revision + 1;
-        const promptID = `edit_${createHash("sha256")
+        const promptID = `msg_edit_${createHash("sha256")
           .update(
             [group.conversation.sessionID, guid, entry.text, currentText, String(revision)].join(
               "\0",
@@ -82,6 +82,12 @@ export const watchEdits = (
     const poll = Effect.gen(function* () {
       const time = yield* Clock.currentTimeMillis;
       for (const [id, group] of watched) {
+        const bound = yield* sql`SELECT 1 FROM conversation WHERE id = ${id}
+          AND session_id = ${group.conversation.sessionID}`;
+        if (!bound.length) {
+          watched.delete(id);
+          continue;
+        }
         for (const [guid, entry] of group.rows) {
           if (entry.row.createdAt + editWindow < time) group.rows.delete(guid);
         }

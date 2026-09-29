@@ -85,6 +85,21 @@ export const migrate = Effect.gen(function* () {
           (SELECT date FROM intake_last WHERE conversation_id = conversation.id)`;
         yield* sql`DROP TABLE intake_last`;
       }),
+      "015_resets": Effect.gen(function* () {
+        yield* sql`CREATE TABLE test_handle (handle TEXT PRIMARY KEY)`;
+        yield* sql`CREATE TABLE retained_session (
+          session_id TEXT PRIMARY KEY, handle TEXT NOT NULL, title TEXT NOT NULL
+        )`;
+        yield* sql`CREATE TABLE reset (
+          guid TEXT PRIMARY KEY, handle TEXT NOT NULL, row_id INTEGER NOT NULL,
+          date INTEGER NOT NULL, session_id TEXT NOT NULL, complete INTEGER NOT NULL DEFAULT 0
+        )`;
+        yield* sql`ALTER TABLE conversation ADD COLUMN reset_guid TEXT`;
+        yield* sql`ALTER TABLE removal RENAME TO old_removal`;
+        yield* sql`CREATE TABLE removal (handle TEXT NOT NULL, session_id TEXT PRIMARY KEY)`;
+        yield* sql`INSERT INTO removal SELECT handle, session_id FROM old_removal`;
+        yield* sql`DROP TABLE old_removal`;
+      }),
     }),
   });
 });

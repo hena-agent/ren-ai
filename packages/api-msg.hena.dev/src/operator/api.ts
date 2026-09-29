@@ -21,6 +21,13 @@ const normalized = (handle: string) =>
 export const operatorApi = HttpApi.make("operator").add(
   HttpApiGroup.make("operator")
     .add(
+      HttpApiEndpoint.post("testHandle", "/test-handle", {
+        payload: Schema.Struct({ handle: Schema.String, enabled: Schema.Boolean }),
+        success: Schema.Void,
+        error,
+      }),
+    )
+    .add(
       HttpApiEndpoint.post("remove", "/remove", {
         payload: handlePayload,
         success: Schema.Struct({ result: Schema.Literals(["removed", "not_found"]) }),
@@ -51,6 +58,7 @@ export const operatorApi = HttpApi.make("operator").add(
 );
 
 type Operations = {
+  readonly testHandle: (handle: string, enabled: boolean) => Effect.Effect<void, Error>;
   readonly block: (handle: string) => Effect.Effect<void, Error>;
   readonly remove: (handle: string) => Effect.Effect<"removed" | "not_found", Error>;
   readonly removeWaitlist: (email: string) => Effect.Effect<"removed" | "not_found", Error>;
@@ -60,6 +68,12 @@ type Operations = {
 export const operatorHandler = (operations: Operations) => {
   const handlers = HttpApiBuilder.group(operatorApi, "operator", (group) =>
     group
+      .handle("testHandle", ({ payload }) =>
+        normalized(payload.handle).pipe(
+          Effect.flatMap((handle) => operations.testHandle(handle, payload.enabled)),
+          Effect.mapError((failure) => ({ reason: String(failure) })),
+        ),
+      )
       .handle("remove", ({ payload }) =>
         normalized(payload.handle).pipe(
           Effect.flatMap((handle) => operations.remove(handle)),
