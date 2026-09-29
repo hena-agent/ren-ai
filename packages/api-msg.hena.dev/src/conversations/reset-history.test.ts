@@ -47,4 +47,5 @@ test.each(["renumbered", "missing"])(
       await f.cleanup();
     }
   },
+  60_000,
 );

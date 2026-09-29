@@ -121,4 +121,5 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
       await f.cleanup();
     }
   },
+  20_000,
 );

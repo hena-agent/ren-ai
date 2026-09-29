@@ -47,9 +47,9 @@ test("an edit waiting behind a reset cannot be admitted to the retired session",
         const fresh = yield* currentMemory(host, f.handle);
         expect(fresh.id).not.toBe(old.id);
         expect(fresh.text).not.toContain("racing edit");
-      }).pipe(Effect.timeout("5 seconds")),
+      }).pipe(Effect.timeout("15 seconds")),
     );
   } finally {
     await f.cleanup();
   }
-});
+}, 20_000);

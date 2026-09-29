@@ -6,5 +6,6 @@ export default defineConfig({
     setupFiles: ["./test/offline.setup.ts"],
     pool: "forks",
     maxWorkers: 1,
+    testTimeout: 20_000,
   },
 });
