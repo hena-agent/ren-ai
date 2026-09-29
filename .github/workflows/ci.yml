@@ -23,11 +23,11 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
-      # Vitest requires Node >= 22.12 and does not support the bun runtime with
-      # the v8 coverage provider. bun installs and runs scripts; Node runs tests.
+      # OpenCode uses explicit resource management (await using), which needs
+      # Node 24. Bun installs and runs scripts; Node runs tests with v8 coverage.
       - uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version-file: .nvmrc
       # A clean checkout is always a clean tree. bun's isolated installs are not
       # pruned incrementally, so a stale local node_modules can hide a removed
       # dependency that fails here.
@@ -48,7 +48,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2.2.0
       - uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version-file: .nvmrc
       - run: bun install --frozen-lockfile
       # Plants bad files; use a separate checkout from tests/build and Stryker.
       - run: bun run verify-gates
@@ -75,7 +75,7 @@ jobs:
       - uses: actions/setup-node@v6
         id: node
         with:
-          node-version: lts/*
+          node-version-file: .nvmrc
       - name: Fingerprint mutation inputs
         id: inputs
         run: node scripts/mutation-cache-key.ts >> "$GITHUB_OUTPUT"
@@ -134,7 +134,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2.2.0
       - uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version-file: .nvmrc
       - run: bun install --frozen-lockfile
       - run: bun run --cwd packages/msg.hena.dev build
         env:
