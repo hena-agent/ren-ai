@@ -1,4 +1,4 @@
-import { Deferred, Effect, Fiber, Layer, PlatformError, Sink, Stream } from "effect";
+import { Cause, Deferred, Effect, Exit, Fiber, Layer, PlatformError, Sink, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { expect, test } from "vitest";
@@ -11,12 +11,15 @@ const setup = async () => {
   let keyPause: Effect.Effect<void> = Effect.void;
   let chats = '{"id":42,"identifier":"alice@example.com","service":"iMessage","is_group":false}\n';
   let block: Effect.Effect<void> = Effect.void;
+  let blockedAction = "";
+  let blockedFor: Effect.Effect<void> = Effect.void;
   const spawner = ChildProcessSpawner.make((command) =>
     Effect.gen(function* () {
       if (!ChildProcess.isStandardCommand(command)) throw Error("Unexpected pipeline");
       if (command.command !== "imsg") {
         expect(command.command).toBe("/usr/bin/osascript");
         expect(command.args[0]).toMatch(/\/messages-ui\.applescript$/);
+        expect(command.options.forceKillAfter).toBe("1 second");
       }
       const action = command.command === "imsg" ? command.args[0]! : command.args[1]!;
       events.push(
@@ -33,6 +36,7 @@ const setup = async () => {
         );
       if (action === "react") yield* block;
       if (action === "key") yield* keyPause;
+      if (action === blockedAction) yield* blockedFor;
       return ChildProcessSpawner.makeHandle({
         stdout: Stream.make(new TextEncoder().encode(action === "chats" ? chats : "ok")),
         stderr: Stream.empty,
@@ -76,8 +80,74 @@ const setup = async () => {
     blockReact: (effect: Effect.Effect<void>) => {
       block = effect;
     },
+    blockAction: (action: string, effect: Effect.Effect<void>) => {
+      blockedAction = action;
+      blockedFor = effect;
+    },
   };
 };
+
+const finishAfterDeadline = (task: Effect.Effect<void | boolean, Error>) =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkScoped(task);
+        yield* TestClock.adjust("16 seconds");
+        const result = fiber.pollUnsafe();
+        yield* Fiber.interrupt(fiber);
+        return result;
+      }).pipe(Effect.provide(TestClock.layer())),
+    ),
+  );
+
+const expectTimeout = (
+  completed: Awaited<ReturnType<typeof finishAfterDeadline>>,
+  action: string,
+) => {
+  expect(completed).toBeDefined();
+  expect(Exit.isFailure(completed!)).toBe(true);
+  expect(Exit.match(completed!, { onFailure: Cause.pretty, onSuccess: () => "" })).toContain(
+    `${action} timed out`,
+  );
+};
+
+const expectReadAfterTimeout = async (fixture: Awaited<ReturnType<typeof setup>>) => {
+  fixture.blockAction("", Effect.void);
+  await Effect.runPromise(fixture.gestures.read("alice@example.com"));
+  expect(fixture.events.at(-1)).toBe("park");
+};
+
+test("a stalled Apple Event cannot hold a read and the shared lock for five minutes", async () => {
+  const fixture = await setup();
+  fixture.blockAction("read", Effect.sleep("5 minutes"));
+  const completed = await finishAfterDeadline(fixture.gestures.read("alice@example.com"));
+  expectTimeout(completed, "read");
+  expect(fixture.events.at(-1)).toBe("park");
+  await expectReadAfterTimeout(fixture);
+});
+
+test("a stalled park finishes within the deadline and releases the shared lock", async () => {
+  const fixture = await setup();
+  fixture.blockAction("park", Effect.sleep("5 minutes"));
+  const completed = await finishAfterDeadline(fixture.gestures.read("alice@example.com"));
+  expectTimeout(completed, "park");
+  expect(fixture.events.at(-1)).toBe("park");
+  await expectReadAfterTimeout(fixture);
+});
+
+test("a stalled keystroke is followed by guarded cleanup, not another keystroke", async () => {
+  const fixture = await setup();
+  fixture.blockAction("key", Effect.sleep("5 minutes"));
+  const completed = await finishAfterDeadline(
+    fixture.gestures.typing("alice@example.com", "xy", 0),
+  );
+  expectTimeout(completed, "key");
+  expect(fixture.events.slice(-2)).toEqual([
+    "clear sms://open?groupid=alice%40example.com",
+    "park",
+  ]);
+  expect(fixture.events.some((event) => event === "key y")).toBe(false);
+});
 
 test("typing checks the chat, guards each character, clears and parks", async () => {
   const { gestures, events } = await setup();
@@ -86,6 +156,7 @@ test("typing checks the chat, guards each character, clears and parks", async ()
     "ensure",
     "chats --limit 10000 --json",
     "open sms://open?groupid=alice%40example.com",
+    "clear sms://open?groupid=alice%40example.com",
     "key h",
     "key i",
     "clear sms://open?groupid=alice%40example.com",
@@ -134,6 +205,7 @@ test("typing stops on a failed guard and still parks", async () => {
     "ensure",
     "chats --limit 10000 --json",
     "open sms://open?groupid=alice%40example.com",
+    "clear sms://open?groupid=alice%40example.com",
     "key h",
     "clear sms://open?groupid=alice%40example.com",
     "park",
