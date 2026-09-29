@@ -68,6 +68,15 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
             )
           )
             yield* Effect.sleep("10 millis");
+          if (kind === "quota") {
+            failing = true;
+            const subsequent = yield* bindTestHandle(host, "subsequent@example.com");
+            yield* host.sessions.prompt({
+              sessionID: subsequent.id,
+              text: "subsequent quota failure",
+            });
+            yield* host.sessions.wait(subsequent.id);
+          }
           const requestsFor = (text: string) =>
             llm
               .requests()
@@ -85,6 +94,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           else expect(alerts).not.toContain("provider-failing");
           expect(alerts).toContain(`clear:conversation-turn-failing:${old.id}`);
           if (kind === "quota") expect(alerts).toContain("clear:go-cap");
+          if (kind === "quota") expect(yield* requestsFor("subsequent quota failure")).toBe(2);
           if (kind.includes("provider")) expect(alerts).not.toContain("clear:go-cap");
           if (kind === "other-quota")
             expect(yield* requestsFor("other failure")).toBeGreaterThan(otherRequests);
