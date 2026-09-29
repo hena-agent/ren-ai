@@ -1,6 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
-import { Config, Effect } from "effect";
+import { Location } from "@opencode/schema/location";
+import { Mcp } from "@opencode/schema/mcp";
+import { Plugin } from "@opencode/schema/plugin";
+import { Skill } from "@opencode/schema/skill";
+import { Config, Effect, Schema } from "effect";
 
 const paths = [
   /^\/api\/info$/,
@@ -16,6 +20,65 @@ const paths = [
 
 const allowed = (path: string) => paths.some((pattern) => pattern.test(path));
 
+const extensions = new Set(["/api/mcp", "/api/plugin", "/api/skill"]);
+const pluginName = /^(?:@[a-z\d][\w.-]*\/)?[a-z\d][\w.-]*$/i;
+
+const extensionResponse = async (path: string, response: Response): Promise<Response> => {
+  if (!response.ok) return new Response(null, { status: response.status });
+  try {
+    const body = await response.json();
+    if (path === "/api/mcp") {
+      const { location, data } = Schema.decodeUnknownSync(
+        Location.response(Schema.Array(Mcp.Server)),
+      )(body);
+      return Response.json({
+        location,
+        data: data.map(({ name, status }) => ({
+          name,
+          status:
+            status.status === "failed" || status.status === "needs_auth"
+              ? { status: status.status, error: "Details hidden" }
+              : { status: status.status },
+        })),
+      });
+    }
+    if (path === "/api/plugin") {
+      const { location, data } = Schema.decodeUnknownSync(
+        Location.response(Schema.Array(Plugin.Info)),
+      )(body);
+      return Response.json({
+        location,
+        data: data.map(({ id, source, state }) => ({
+          ...(id && pluginName.test(id) ? { id } : {}),
+          source:
+            source.type === "local"
+              ? { type: "local", path: "/" }
+              : source.type === "package"
+                ? {
+                    type: "package",
+                    target: pluginName.test(source.target) ? source.target : "package",
+                  }
+                : { type: source.type },
+          features: {},
+          state:
+            state.status === "failed"
+              ? { status: "failed", error: "Details hidden" }
+              : { status: "active" },
+        })),
+      });
+    }
+    const { location, data } = Schema.decodeUnknownSync(
+      Location.response(Schema.Array(Skill.Info)),
+    )(body);
+    return Response.json({
+      location,
+      data: data.map(({ id, name }) => ({ id, name, path: "/", content: "" })),
+    });
+  } catch {
+    return new Response(null, { status: 502 });
+  }
+};
+
 /** The raw host handler must never be exposed directly: GET /api/config contains provider keys. */
 export const viewerFront = (
   web: (request: Request) => Promise<Response>,
@@ -27,7 +90,8 @@ export const viewerFront = (
     .update(`Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`)
     .digest();
   return (request: Request): Promise<Response> => {
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
     // The official V2 app is same-origin; it needs no CORS access to the API.
     if (request.method !== "GET") return Promise.resolve(new Response(null, { status: 403 }));
     const authorization = request.headers.get("authorization");
@@ -45,6 +109,19 @@ export const viewerFront = (
     // Challenge navigation too: browser authentication then covers same-origin event requests.
     if (path !== "/api" && !path.startsWith("/api/") && path !== "/openapi.json") {
       return ui ? ui(request) : Promise.resolve(new Response(null, { status: 503 }));
+    }
+    if (extensions.has(path)) {
+      // Only the default location: an arbitrary location would scan another directory for skills.
+      if (
+        [...url.searchParams].some(([key, value]) => key !== "location[directory]" || value !== "")
+      ) {
+        return Promise.resolve(new Response(null, { status: 403 }));
+      }
+      const headers = new Headers(request.headers);
+      headers.delete("x-opencode-directory");
+      return web(new Request(request, { headers })).then((response) =>
+        extensionResponse(path, response),
+      );
     }
     if (!allowed(path)) {
       return Promise.resolve(new Response(null, { status: 403 }));
