@@ -73,6 +73,8 @@ export const intake = (
     const replaced = history.find((row) => row.id === current.rowID)?.createdAt !== current.date;
     const cursor = replaced ? 0 : current.rowID;
     let last = current;
+    const afterBookmark = (row: IncomingMessage) =>
+      replaced ? row.createdAt >= current.date : row.id > last.rowID || row.createdAt > last.date;
     const outgoing = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!reconcile) return;
@@ -207,8 +209,7 @@ export const intake = (
       });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
-        if (!replaced && row.id <= last.rowID && row.createdAt <= last.date) return;
-        if (replaced && row.createdAt < current.date) return;
+        if (!afterBookmark(row)) return;
         if (row.tapback && !row.tapback.added) {
           last = { rowID: row.id, date: row.createdAt };
           yield* save(last);
@@ -268,10 +269,7 @@ export const intake = (
     if (startImmediately) yield* start;
     yield* Effect.forkScoped(changes.monitor);
     return {
-      resetPending: Effect.forEach(
-        history.filter((row) => (replaced ? row.createdAt >= current.date : row.id > cursor)),
-        reset,
-      ).pipe(Effect.asVoid),
+      resetPending: Effect.forEach(history.filter(afterBookmark), reset).pipe(Effect.asVoid),
       replay,
       start,
       onNew: (listener: (conversation: Conversation) => void) => {

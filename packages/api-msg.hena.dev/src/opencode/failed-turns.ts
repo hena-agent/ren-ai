@@ -134,7 +134,7 @@ export const failedTurns = (host: Host, directory: Directory, alerts: FailureAle
           yield* alerts.clear(provider);
         }
         if (wasQuota && quotaIDs().length === 0) {
-          capTimer?.interruptUnsafe();
+          capTimer!.interruptUnsafe();
           yield* alerts.clear(cap);
         }
       });

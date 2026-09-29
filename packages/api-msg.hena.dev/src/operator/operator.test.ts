@@ -190,6 +190,8 @@ test("the operator HTTP API documents its typed request, result and error contra
   expect(spec.paths).toHaveProperty("/block");
   expect(spec.paths).toHaveProperty("/rebuild");
   expect(spec.paths).toHaveProperty("/remove-waitlist");
+  expect(spec.paths).toHaveProperty("/test-handle");
+  expect(JSON.stringify(spec.paths["/test-handle"])).toContain('"required":["handle","enabled"]');
   const waitlist = JSON.stringify(spec.paths["/remove-waitlist"]);
   expect(waitlist).toContain('"required":["email"]');
   expect(waitlist).toContain('"required":["result"]');
