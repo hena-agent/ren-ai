@@ -38,6 +38,9 @@
     "vite": "7.3.6",
     "vitest": "5.0.1"
   },
+  "overrides": {
+    "@effect/platform-node-shared": "4.0.0-rc.112"
+  },
   "devEngines": {
     "packageManager": {
       "name": "bun",
