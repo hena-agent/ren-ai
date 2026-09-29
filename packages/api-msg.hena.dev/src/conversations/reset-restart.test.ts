@@ -6,6 +6,28 @@ import { expect, test } from "vitest";
 import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
 import { resetFixture, bindTestHandle, currentMemory } from "../../test/reset.test-helper.ts";
 
+test("startup does not reinterpret a reset already passed by the bookmark before the User joined", async () => {
+  const f = await resetFixture("reset-bookmark-");
+  try {
+    await Effect.runPromise(f.fake.text(f.handle, "/reset", Date.now()));
+    const original = await f.run(
+      f.startMarked.pipe(
+        Effect.flatMap((host) => currentMemory(host, f.handle)),
+        Effect.map((memory) => memory.id),
+      ),
+    );
+    await f.run(
+      Effect.gen(function* () {
+        const host = yield* f.start;
+        expect((yield* currentMemory(host, f.handle)).id).toBe(original);
+        expect(f.fake.bubbles).toEqual([]);
+      }),
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("restart and a missing session cannot restore pre-reset Memory, including an offline reset", async () => {
   const { start, run, fake, handle, cleanup } = await resetFixture("reset-restart-");
   try {

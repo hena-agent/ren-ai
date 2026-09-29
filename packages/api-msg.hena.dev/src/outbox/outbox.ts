@@ -232,7 +232,7 @@ export const outbox = (
                 }),
               ),
             );
-            const ready = pace ? yield* pace.during(conversation.id, type) : yield* type;
+            const ready = pace ? yield* pace.during(conversation.sessionID, type) : yield* type;
             if (ready !== true) return notSent("a new message arrived");
             const recorded = yield* recordAttempt(conversation, "text", text, callID);
             if (!recorded) return notSent("this Conversation is unavailable");

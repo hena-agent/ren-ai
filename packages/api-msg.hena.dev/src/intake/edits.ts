@@ -28,13 +28,13 @@ export const watchEdits = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const watched = new Map<number, WatchedConversation>();
+    const watched = new Map<string, WatchedConversation>();
     const remember = (conversation: Conversation, row: IncomingMessage) => {
       if (!row.text) return;
-      let group = watched.get(conversation.id);
-      if (!group || group.conversation.sessionID !== conversation.sessionID) {
+      let group = watched.get(conversation.sessionID);
+      if (!group) {
         group = { conversation, rows: new Map() };
-        watched.set(conversation.id, group);
+        watched.set(conversation.sessionID, group);
       }
       group.rows.set(row.guid, { row, text: row.text, revision: 0 });
     };
@@ -82,12 +82,6 @@ export const watchEdits = (
     const poll = Effect.gen(function* () {
       const time = yield* Clock.currentTimeMillis;
       for (const [id, group] of watched) {
-        const bound = yield* sql`SELECT 1 FROM conversation WHERE id = ${id}
-          AND session_id = ${group.conversation.sessionID}`;
-        if (!bound.length) {
-          watched.delete(id);
-          continue;
-        }
         for (const [guid, entry] of group.rows) {
           if (entry.row.createdAt + editWindow < time) group.rows.delete(guid);
         }
