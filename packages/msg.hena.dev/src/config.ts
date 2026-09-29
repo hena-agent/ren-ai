@@ -1,4 +1,4 @@
-// Cloudflare's always-pass key is for dev and tests; deployment supplies the real widget key.
+// Cloudflare's invisible always-pass key is for dev/tests; deployment supplies an Invisible widget key.
 declare global {
   interface ImportMetaEnv {
     readonly VITE_TURNSTILE_SITE_KEY?: string;
@@ -6,4 +6,4 @@ declare global {
 }
 
 const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-export const turnstileSiteKey = siteKey || "1x00000000000000000000AA";
+export const turnstileSiteKey = siteKey || "1x00000000000000000000BB";

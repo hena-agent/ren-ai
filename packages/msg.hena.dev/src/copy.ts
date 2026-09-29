@@ -11,6 +11,7 @@ export type Copy = {
     invalidHandle: string;
     consent: string;
     inProgress: string;
+    verificationFailed: string;
     waitlistLink: string;
   };
   privacy: {
