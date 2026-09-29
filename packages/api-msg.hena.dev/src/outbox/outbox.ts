@@ -239,9 +239,14 @@ export const outbox = (
               WHERE id = ${id} AND state = 'recorded'`;
               const observed = yield* messages.recent(conversation.handle, now);
               for (const item of observed) yield* reconcile(conversation, item);
-              const row = (yield* sql<SendRow>`SELECT id, state, content, guid, late,
-              notification_pending AS notificationPending, recorded_at AS recordedAt,
-              updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+              let row = (yield* sql<SendRow>`SELECT id, state, content, guid, late,
+               notification_pending AS notificationPending, recorded_at AS recordedAt,
+               updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+              for (let attempt = 0; attempt < 10 && row.state === "uncertain"; attempt++) {
+                // imsg can accept a send before Messages exposes its row.
+                yield* Effect.sleep("200 millis");
+                row = yield* check(conversation, row);
+              }
               if (row.state === "sent" || row.state === "delivered") return sent();
               yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`;
               // The RPC accepted the send; the Messages row is the authority.
