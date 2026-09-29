@@ -6,6 +6,9 @@ export const expectedViewerResults = (sessionID: string, messageID: string) => (
     "/api/info",
     "/api/project",
     "/api/location",
+    "/api/mcp",
+    "/api/plugin",
+    "/api/skill",
     "/api/session",
     `/api/session/${sessionID}`,
     `/api/session/${sessionID}/message`,
@@ -14,7 +17,7 @@ export const expectedViewerResults = (sessionID: string, messageID: string) => (
   ].map((path) => `${path}:200:401`),
   forbiddenRoutes: [
     "/api/config:403",
-    "/api/plugin:403",
+    "/api/provider:403",
     "/openapi.json:403",
     "/api/session/active:403",
   ],
@@ -47,6 +50,9 @@ export const verifyViewer = (
       "/api/info",
       "/api/project",
       "/api/location",
+      "/api/mcp",
+      "/api/plugin",
+      "/api/skill",
       "/api/session",
       `/api/session/${sessionID}`,
       `/api/session/${sessionID}/message`,
@@ -59,7 +65,7 @@ export const verifyViewer = (
       publicRoutes.push(`${path}:${allowed.status}:${refused.status}`);
     }
     const forbiddenRoutes: string[] = [];
-    for (const path of ["/api/config", "/api/plugin", "/openapi.json", "/api/session/active"]) {
+    for (const path of ["/api/config", "/api/provider", "/openapi.json", "/api/session/active"]) {
       forbiddenRoutes.push(`${path}:${(yield* Effect.promise(() => viewed(path))).status}`);
     }
     const postPath = "/api/session";

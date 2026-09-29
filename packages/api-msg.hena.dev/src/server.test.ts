@@ -186,7 +186,7 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
           expect(fake.bubbles.at(-1)).toEqual({ handle: conversation!.handle, text: "반가워!" });
           expect(JSON.stringify(yield* llm.requests())).toContain("안녕?");
           const authorization = `Basic ${Buffer.from("opencode:viewer-test").toString("base64")}`;
-          for (const route of ["/api/config", "/api/plugin", "/openapi.json"]) {
+          for (const route of ["/api/config", "/api/provider", "/openapi.json"]) {
             const denied = yield* Effect.promise(() =>
               server.viewerWeb(
                 new Request(`http://viewer${route}`, { headers: { authorization } }),
