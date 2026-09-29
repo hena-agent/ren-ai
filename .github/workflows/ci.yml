@@ -11,11 +11,12 @@ on:
 permissions: {}
 
 jobs:
-  gates:
-    name: Quality gates
+  checks:
+    name: Checks and build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
-      group: gates-${{ github.ref }}
+      group: checks-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
@@ -31,9 +32,92 @@ jobs:
       # pruned incrementally, so a stale local node_modules can hide a removed
       # dependency that fails here.
       - run: bun install --frozen-lockfile
-      # Includes mutation testing, which runs in ~2s today. If it stops being cheap,
-      # split it into its own job: incremental on PRs, full on main and nightly.
-      - run: bun run ci
+      - run: bun run ci:checks
+
+  verify:
+    name: Gate self-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: verify-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+      - run: bun install --frozen-lockfile
+      # Plants bad files; use a separate checkout from tests/build and Stryker.
+      - run: bun run verify-gates
+
+  mutation:
+    name: Mutation ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    concurrency:
+      group: mutation-${{ github.ref }}-${{ matrix.shard }}
+      cancel-in-progress: true
+    env:
+      STRYKER_SHARD: ${{ matrix.shard }}/4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2.2.0
+        id: bun
+      - uses: actions/setup-node@v6
+        id: node
+        with:
+          node-version: lts/*
+      - name: Fingerprint mutation inputs
+        id: inputs
+        run: node scripts/mutation-cache-key.ts >> "$GITHUB_OUTPUT"
+      - name: Restore mutation results
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ steps.bun.outputs.bun-version }}-${{ matrix.shard }}-${{ steps.inputs.outputs.key }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          # GitHub scopes caches to this PR and its base branch. Main never
+          # restores PR results. Fingerprints include every non-mutated input.
+          restore-keys: |
+            stryker-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ steps.bun.outputs.bun-version }}-${{ matrix.shard }}-${{ steps.inputs.outputs.key }}-
+      - run: bun install --frozen-lockfile
+      - name: Incremental mutations (PR)
+        if: github.event_name == 'pull_request'
+        run: bun run mutate --incremental
+      - name: Full mutations (main and schedule)
+        if: github.event_name != 'pull_request'
+        run: bun run mutate --incremental --force
+      - name: Save successful mutation results
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ steps.bun.outputs.bun-version }}-${{ matrix.shard }}-${{ steps.inputs.outputs.key }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+  gates:
+    name: Quality gates
+    needs: [checks, verify, mutation]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require every gate to pass
+        env:
+          CHECKS: ${{ needs.checks.result }}
+          VERIFY: ${{ needs.verify.result }}
+          MUTATION: ${{ needs.mutation.result }}
+        run: |
+          test "$CHECKS" = success
+          test "$VERIFY" = success
+          test "$MUTATION" = success
 
   deploy:
     name: Deploy msg.hena.dev

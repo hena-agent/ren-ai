@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import process from "node:process";
 import exceptions from "../quality-exceptions.json" with { type: "json" };
 import { qualityCommand } from "./quality-commands.ts";
+import { mutationPatterns } from "./mutation-ci.ts";
 
 /**
  * Proves each gate actually rejects the thing it claims to reject.
@@ -23,6 +24,8 @@ type Check = {
   readonly files: Readonly<Record<string, string>>;
   readonly command: readonly string[];
   readonly expect: string;
+  /** Each planted coverage file must be named in its own threshold failure. */
+  readonly coverageFailures?: readonly string[];
   /** Re-run on a clean tree to catch a gate that rejects everything. */
   readonly checkInverse: boolean;
   readonly allowed?: string;
@@ -79,23 +82,19 @@ const CHECKS: readonly Check[] = [
     checkInverse: true,
   },
   {
-    gate: "100% coverage",
+    gate: "100% package and app coverage",
     files: {
       "packages/onboarding/src/gate-check.tsx":
         "export const untested = (n: number): number => (n > 0 ? n : 0);\n",
-    },
-    command: ["vitest", "run", "--coverage", "--silent"],
-    expect: "does not meet",
-    checkInverse: false,
-  },
-  {
-    gate: "app coverage",
-    files: {
       "apps/persona-lab/src/gate-check.ts":
         "export const untested = (n: number): number => (n > 0 ? n : 0);\n",
     },
     command: ["vitest", "run", "--coverage", "--silent"],
     expect: "does not meet",
+    coverageFailures: [
+      "packages/onboarding/src/gate-check.tsx",
+      "apps/persona-lab/src/gate-check.ts",
+    ],
     checkInverse: false,
   },
   {
@@ -198,6 +197,15 @@ const verify = (check: Check): readonly string[] => {
         `${check.gate}: rejected, but never mentioned "${check.expect}" — it may be failing for an unrelated reason`,
       );
     }
+    for (const path of check.coverageFailures ?? []) {
+      if (
+        !rejected.output
+          .split("\n")
+          .some((line) => line.includes(path) && line.includes(check.expect))
+      ) {
+        problems.push(`${check.gate}: no coverage threshold failure named ${path}`);
+      }
+    }
   } finally {
     uproot(check.files);
   }
@@ -255,8 +263,7 @@ const verifyStrykerPatch = (): readonly string[] => {
 
 const verifyGateInputs = (): readonly string[] => {
   const failures: string[] = [];
-  const config = readFileSync("stryker.config.js", "utf8");
-  if (!/mutate:\s*\[[^\n]*\{apps,packages\}[^\n]*\{ts,tsx\}/.test(config)) {
+  if (!mutationPatterns.includes("{apps,packages}/*/src/**/*.{ts,tsx}")) {
     failures.push("mutation: mutate patterns must include apps, packages and .tsx files");
   }
   const lint = qualityCommand("lint") ?? [];
