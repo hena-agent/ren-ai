@@ -11,3 +11,4 @@ stryker.log
 apps/persona-lab/data/
 lefthook-local.yml
 .opencode/
+.DS_Store
