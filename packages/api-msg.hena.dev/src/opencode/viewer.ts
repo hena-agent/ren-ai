@@ -2,8 +2,12 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { Location } from "@opencode/schema/location";
 import { Mcp } from "@opencode/schema/mcp";
+import { Model } from "@opencode/schema/model";
 import { Plugin } from "@opencode/schema/plugin";
+import { Provider } from "@opencode/schema/provider";
 import { Skill } from "@opencode/schema/skill";
+import { Integration } from "@opencode/schema/integration";
+import { Vcs } from "@opencode/schema/vcs";
 import { Config, Effect, Schema } from "effect";
 
 const paths = [
@@ -21,7 +25,29 @@ const paths = [
 const allowed = (path: string) => paths.some((pattern) => pattern.test(path));
 
 const extensions = new Set(["/api/mcp", "/api/plugin", "/api/skill"]);
+const metadata = new Set(["/api/provider", "/api/model", "/api/integration", "/api/vcs"]);
 const pluginName = /^(?:@[a-z\d][\w.-]*\/)?[a-z\d][\w.-]*$/i;
+
+const defaultLocation = async (
+  web: (request: Request) => Promise<Response>,
+  url: URL,
+): Promise<string | undefined> => {
+  const response = await web(new Request(new URL("/api/location", url)));
+  if (!response.ok) return undefined;
+  return Schema.decodeUnknownSync(Location.PublicInfo)(await response.json()).directory;
+};
+
+const safeLocation = async (
+  web: (request: Request) => Promise<Response>,
+  url: URL,
+): Promise<boolean> => {
+  const params = [...url.searchParams];
+  if (params.some(([key]) => key !== "location[directory]")) return false;
+  const values = params.map(([, value]) => value).filter(Boolean);
+  if (values.length === 0) return true;
+  const directory = await defaultLocation(web, url);
+  return values.every((value) => value === directory);
+};
 
 const extensionResponse = async (path: string, response: Response): Promise<Response> => {
   if (!response.ok) return new Response(null, { status: response.status });
@@ -79,6 +105,78 @@ const extensionResponse = async (path: string, response: Response): Promise<Resp
   }
 };
 
+const metadataResponse = async (path: string, response: Response): Promise<Response> => {
+  if (!response.ok) return new Response(null, { status: response.status });
+  try {
+    const body = await response.json();
+    if (path === "/api/session/active") {
+      const data = Schema.decodeUnknownSync(
+        Schema.Struct({
+          data: Schema.Record(Schema.String, Schema.Struct({ type: Schema.Literal("running") })),
+        }),
+      )(body);
+      return Response.json(data);
+    }
+    if (path === "/api/provider") {
+      const { location, data } = Schema.decodeUnknownSync(
+        Location.response(Schema.Array(Provider.Info)),
+      )(body);
+      return Response.json({
+        location,
+        data: data.map(({ id, name, activation }) => ({ id, name, activation, package: "" })),
+      });
+    }
+    if (path === "/api/model") {
+      const { location, data } = Schema.decodeUnknownSync(
+        Location.response(Schema.Array(Model.Info)),
+      )(body);
+      return Response.json({
+        location,
+        data: data.map(
+          ({
+            id,
+            modelID,
+            providerID,
+            name,
+            capabilities,
+            variants,
+            time,
+            cost,
+            status,
+            enabled,
+            limit,
+          }) => ({
+            id,
+            modelID,
+            providerID,
+            name,
+            capabilities,
+            variants: variants.map(({ id: variantID }) => ({ id: variantID })),
+            time,
+            cost,
+            status,
+            enabled,
+            limit,
+          }),
+        ),
+      });
+    }
+    if (path === "/api/integration") {
+      const { location, data } = Schema.decodeUnknownSync(
+        Location.response(Schema.Array(Integration.Info)),
+      )(body);
+      return Response.json({
+        location,
+        data: data.map(({ id, name }) => ({ id, name, methods: [], connections: [] })),
+      });
+    }
+    const { location, data } = Schema.decodeUnknownSync(Location.response(Vcs.Info))(body);
+    return Response.json({ location, data });
+  } catch {
+    return new Response(null, { status: 502 });
+  }
+};
+
 /** The raw host handler must never be exposed directly: GET /api/config contains provider keys. */
 export const viewerFront = (
   web: (request: Request) => Promise<Response>,
@@ -110,18 +208,21 @@ export const viewerFront = (
     if (path !== "/api" && !path.startsWith("/api/") && path !== "/openapi.json") {
       return ui ? ui(request) : Promise.resolve(new Response(null, { status: 503 }));
     }
-    if (extensions.has(path)) {
-      // Only the default location: an arbitrary location would scan another directory for skills.
-      if (
-        [...url.searchParams].some(([key, value]) => key !== "location[directory]" || value !== "")
-      ) {
+    if (extensions.has(path) || metadata.has(path) || path === "/api/session/active") {
+      if (path === "/api/session/active" && url.search) {
         return Promise.resolve(new Response(null, { status: 403 }));
       }
-      const headers = new Headers(request.headers);
-      headers.delete("x-opencode-directory");
-      return web(new Request(request, { headers })).then((response) =>
-        extensionResponse(path, response),
-      );
+      return safeLocation(web, url)
+        .then((safe) =>
+          safe
+            ? web(new Request(new URL(path, url))).then((response) =>
+                extensions.has(path)
+                  ? extensionResponse(path, response)
+                  : metadataResponse(path, response),
+              )
+            : new Response(null, { status: 403 }),
+        )
+        .catch(() => new Response(null, { status: 502 }));
     }
     if (!allowed(path)) {
       return Promise.resolve(new Response(null, { status: 403 }));
