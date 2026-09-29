@@ -332,9 +332,9 @@ test("an inbound signal while typing cancels the draft before recording or sendi
         const sends = yield* outbox(fake.messages, ui, personas, directory.active, pace);
         const interrupted = yield* Effect.forkScoped(sends.send(conversation, "hello", "first"));
         yield* TestClock.adjust("1 second");
-        pace.onNew(conversation.id + 1);
+        pace.onNew(`${conversation.sessionID}-other`);
         expect(interrupted.pollUnsafe()).toBeUndefined();
-        pace.onNew(conversation.id);
+        pace.onNew(conversation.sessionID);
         expect(yield* Fiber.join(interrupted)).toBe("not sent: a new message arrived");
         expect(fake.bubbles).toEqual([]);
         const sql = yield* SqlClient.SqlClient;

@@ -36,7 +36,10 @@ test("forward migration leaves exactly the PRD app tables", async () => {
         "follow_up",
         "intake_seen",
         "removal",
+        "reset",
+        "retained_session",
         "send",
+        "test_handle",
         "user",
         "waitlist",
       ]);

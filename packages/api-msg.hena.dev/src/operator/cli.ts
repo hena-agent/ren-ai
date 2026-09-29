@@ -7,14 +7,24 @@ export const runOperatorCli = (args: readonly string[], socketPath: string) =>
     const [command, handle] = args;
     if (
       !handle ||
-      !["remove", "block", "rebuild", "remove-waitlist"].includes(command!) ||
+      !["remove", "block", "rebuild", "remove-waitlist", "test-handle", "untest-handle"].includes(
+        command!,
+      ) ||
       args.length !== 2
     ) {
       return yield* Effect.fail(
-        new Error("Usage: operator remove|block|rebuild HANDLE | remove-waitlist EMAIL"),
+        new Error(
+          "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | remove-waitlist EMAIL",
+        ),
       );
     }
     const client = yield* operatorClient(socketPath);
+    if (command === "test-handle" || command === "untest-handle") {
+      yield* client.operator.testHandle({
+        payload: { handle, enabled: command === "test-handle" },
+      });
+      return command === "test-handle" ? `Test handle ${handle}` : `Unmarked ${handle}`;
+    }
     if (command === "remove-waitlist") {
       const answer = yield* client.operator.removeWaitlist({ payload: { email: handle } });
       return answer.result === "removed"

@@ -1,5 +1,7 @@
 # Each conversation has one lifelong OpenCode session; iMessage is the record
 
+ADR-0009 adds a development exception: a test handle can reset its memory into a new session, retaining the old one for review. Rebuilds then replay from the latest reset, not onboarding.
+
 The conversation as it exists in iMessage, read through imsg, is the record. The persona's OpenCode session is only her memory of it, and can be rebuilt at any time by replaying the conversation from onboarding. Each conversation gets one session for its whole life. Every message or tapback from the user becomes one prompt whose ID is derived from its iMessage GUID, so delivering it twice is harmless. OpenCode's own mid-turn delivery, per-session ordering, prompt caching, compaction and restart recovery do the rest.
 
 ## Considered Options

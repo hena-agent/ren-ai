@@ -190,6 +190,8 @@ test("the operator HTTP API documents its typed request, result and error contra
   expect(spec.paths).toHaveProperty("/block");
   expect(spec.paths).toHaveProperty("/rebuild");
   expect(spec.paths).toHaveProperty("/remove-waitlist");
+  expect(spec.paths).toHaveProperty("/test-handle");
+  expect(JSON.stringify(spec.paths["/test-handle"])).toContain('"required":["handle","enabled"]');
   const waitlist = JSON.stringify(spec.paths["/remove-waitlist"]);
   expect(waitlist).toContain('"required":["email"]');
   expect(waitlist).toContain('"required":["result"]');
@@ -204,6 +206,7 @@ test("the operator HTTP API documents its typed request, result and error contra
 
 test("the rebuild route handles an unavailable operation", async () => {
   const api = operatorHandler({
+    testHandle: () => Effect.void,
     block: () => Effect.void,
     remove: () => Effect.succeed("not_found"),
     removeWaitlist: () => Effect.succeed("not_found"),
@@ -301,7 +304,9 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
             ["remove", input.handle, "extra"],
           ]) {
             expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
-              new Error("Usage: operator remove|block|rebuild HANDLE | remove-waitlist EMAIL"),
+              new Error(
+                "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | remove-waitlist EMAIL",
+              ),
             );
           }
           expect(yield* runOperatorCli(["block", "other@example.com"], path)).toBe(
@@ -316,8 +321,22 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
             responseMode: "response-only",
           });
           expect(rawInvalid.status).toBe(503);
+          expect(yield* runOperatorCli(["test-handle", "bad"], path).pipe(Effect.flip)).toEqual({
+            reason: "Error: Invalid Handle",
+          });
+          const retainedHandle = "retention@example.com";
+          yield* directory.create({ ...input, handle: retainedHandle, sessionID: "retention" });
+          yield* runOperatorCli(["test-handle", retainedHandle], path);
+          expect(yield* runOperatorCli(["remove", retainedHandle], path).pipe(Effect.flip)).toEqual(
+            { reason: "Error: Session retention unavailable" },
+          );
+          yield* runOperatorCli(["untest-handle", retainedHandle], path);
+          expect(yield* runOperatorCli(["remove", retainedHandle], path)).toBe(
+            `Removed ${retainedHandle}`,
+          );
           let failedCalls = 0;
           const failed = operatorHandler({
+            testHandle: () => Effect.fail(new Error("database offline")),
             block: () => Effect.fail(new Error("database offline")),
             remove: () =>
               Effect.gen(function* () {

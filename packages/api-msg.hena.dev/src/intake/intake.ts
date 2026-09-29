@@ -14,6 +14,7 @@ import {
 } from "../transcript/transcript.ts";
 import { watchEdits } from "./edits.ts";
 import { imageData, imageMime } from "./images.ts";
+import { resetBoundary } from "../conversations/reset-boundary.ts";
 
 export interface PromptImage {
   readonly uri: string;
@@ -44,9 +45,11 @@ export const intake = (
   startImmediately = true,
   sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error> = () =>
     Effect.void,
+  reset: (row: IncomingMessage) => Effect.Effect<void, Error> = () => Effect.void,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const beforeReset = yield* resetBoundary(messages);
     const listeners = new Set<(conversation: Conversation) => void>();
     const signal = (conversation: Conversation) => {
       for (const listener of listeners) listener(conversation);
@@ -70,6 +73,8 @@ export const intake = (
     const replaced = history.find((row) => row.id === current.rowID)?.createdAt !== current.date;
     const cursor = replaced ? 0 : current.rowID;
     let last = current;
+    const afterBookmark = (row: IncomingMessage) =>
+      replaced ? row.createdAt >= current.date : row.id > last.rowID || row.createdAt > last.date;
     const outgoing = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!reconcile) return;
@@ -167,7 +172,8 @@ export const intake = (
         for (const row of rows) {
           if (
             (yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID ||
-            noticeGUIDs.has(row.guid)
+            noticeGUIDs.has(row.guid) ||
+            (yield* beforeReset(row))
           )
             continue;
           const seen =
@@ -203,9 +209,14 @@ export const intake = (
       });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
-        if (!replaced && row.id <= last.rowID && row.createdAt <= last.date) return;
-        if (replaced && row.createdAt < current.date) return;
+        if (!afterBookmark(row)) return;
         if (row.tapback && !row.tapback.added) {
+          last = { rowID: row.id, date: row.createdAt };
+          yield* save(last);
+          return;
+        }
+        yield* reset(row);
+        if (yield* beforeReset(row)) {
           last = { rowID: row.id, date: row.createdAt };
           yield* save(last);
           return;
@@ -258,6 +269,7 @@ export const intake = (
     if (startImmediately) yield* start;
     yield* Effect.forkScoped(changes.monitor);
     return {
+      resetPending: Effect.forEach(history.filter(afterBookmark), reset).pipe(Effect.asVoid),
       replay,
       start,
       onNew: (listener: (conversation: Conversation) => void) => {

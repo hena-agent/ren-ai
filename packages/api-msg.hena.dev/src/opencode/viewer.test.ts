@@ -189,7 +189,7 @@ test("listener serves the isolated V2 shell at / but never forwards an API path 
     Effect.scoped(
       Effect.gen(function* () {
         const web = vi.fn<(request: Request) => Promise<Response>>(async () => new Response("API"));
-        const server = yield* serveViewer(web, 0, shell);
+        const server = yield* serveViewer(web, 0, shell, "/personas");
         const address = server.address();
         if (!address || typeof address === "string") throw new Error("Expected TCP listener");
         const base = `http://127.0.0.1:${address.port}`;
@@ -214,6 +214,18 @@ test("listener serves the isolated V2 shell at / but never forwards an API path 
         expect(web).toHaveBeenCalledTimes(1);
         expect(shell).toHaveBeenCalledTimes(3);
         expect(shell.mock.calls[0]![1]?.headers).toEqual({ "Accept-Encoding": "identity" });
+        const files = yield* Effect.promise(() =>
+          fetch(`${base}/api/fs/list?path=&location[directory]=/personas`, {
+            headers: { authorization: auth },
+          }),
+        );
+        expect(files.status).toBe(200);
+        expect(yield* Effect.promise(() => files.json())).toEqual({
+          location: { directory: "/personas" },
+          data: [],
+        });
+        expect(web).toHaveBeenCalledTimes(1);
+        expect(shell).toHaveBeenCalledTimes(3);
       }),
     ).pipe(
       Effect.provide(

@@ -26,6 +26,10 @@ _Avoid_: persona handle, sender, bot account
 Submitting a handle at msg.hena.dev to become a user.
 _Avoid_: signup, registration
 
+**Test handle**:
+A handle the operator marks for trying the service as a user would. Only a test handle's conversation can be reset.
+_Avoid_: developer handle, dev number, allowlist
+
 **Greeting**:
 The first message a persona sends a new user, triggered by onboarding.
 _Avoid_: welcome message, intro
@@ -45,6 +49,10 @@ _Avoid_: context, history, session
 **Waitlist**:
 The emails of people who can't be let in yet: their handle can't receive iMessage, or the service is full.
 _Avoid_: queue, signup list
+
+**Reset**:
+Wiping a persona's memory of a conversation, so she carries on as if meeting the user for the first time. The memory she had is kept for review.
+_Avoid_: clear, restart, new conversation
 
 **Operator**:
 The person who runs the service: watches conversations as they happen and fixes what breaks.
