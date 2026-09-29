@@ -203,7 +203,7 @@ test("accepted RPC without a row remains in doubt; a failed status lookup cannot
         };
         const sends = yield* outbox(messages, fakeGestures().gestures, personas);
         const attempted = yield* Effect.forkScoped(sends.send(conversation, "maybe", "one"));
-        yield* TestClock.adjust("2 seconds");
+        yield* TestClock.adjust("3 seconds");
         expect(yield* Fiber.join(attempted)).toBe("not sent: send in doubt");
         const row = yield* fake.outgoing(conversation.handle, "maybe", 0, "sent", "uncertain-guid");
         expect(yield* sends.reconcile(conversation, row)).toBe(true);
@@ -223,7 +223,7 @@ test("accepted RPC without a row remains in doubt; a failed status lookup cannot
   );
 });
 
-test("an accepted send waits for a delayed Messages row before allowing a distinct next bubble", async () => {
+test("an accepted send waits for a 2.3-second Messages row delay before allowing a distinct next bubble", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -241,7 +241,7 @@ test("an accepted send waits for a delayed Messages row before allowing a distin
             Effect.gen(function* () {
               const guid = `delayed-${text}`;
               yield* Effect.forkIn(
-                Effect.sleep("500 millis").pipe(
+                Effect.sleep("2300 millis").pipe(
                   Effect.andThen(
                     Effect.gen(function* () {
                       yield* fake.outgoing(
@@ -263,11 +263,11 @@ test("an accepted send waits for a delayed Messages row before allowing a distin
         const sends = yield* outbox(messages, fakeGestures().gestures, personas);
         const first = yield* Effect.forkScoped(sends.send(conversation, "first", "first-call"));
         yield* Deferred.await(firstAccepted);
-        yield* TestClock.adjust("700 millis");
+        yield* TestClock.adjust("2500 millis");
         expect(yield* Fiber.join(first)).toBe("sent");
         const second = yield* Effect.forkScoped(sends.send(conversation, "second", "second-call"));
         yield* Deferred.await(secondAccepted);
-        yield* TestClock.adjust("700 millis");
+        yield* TestClock.adjust("2500 millis");
         expect(yield* Fiber.join(second)).toBe("sent");
         const sql = yield* SqlClient.SqlClient;
         expect(yield* sql<{ state: string }>`SELECT state FROM send ORDER BY id`).toEqual([
