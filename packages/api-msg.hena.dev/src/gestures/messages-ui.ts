@@ -33,8 +33,18 @@ export const makeMessagesUi = (health: {
 
     const run = (action: string, ...args: string[]) =>
       processes
-        .string(ChildProcess.make("/usr/bin/osascript", [script, action, ...args]))
-        .pipe(Effect.mapError((error) => new Error(`Messages UI ${action}: ${error.message}`)));
+        .string(
+          ChildProcess.make("/usr/bin/osascript", [script, action, ...args], {
+            forceKillAfter: "1 second",
+          }),
+        )
+        .pipe(
+          Effect.mapError((error) => new Error(`Messages UI ${action}: ${error.message}`)),
+          Effect.timeoutOrElse({
+            duration: "15 seconds",
+            orElse: () => Effect.fail(new Error(`Messages UI ${action} timed out`)),
+          }),
+        );
     const find = (handle: string) =>
       processes.string(ChildProcess.make("imsg", ["chats", "--limit", "10000", "--json"])).pipe(
         Effect.flatMap((output) =>
@@ -81,6 +91,8 @@ export const makeMessagesUi = (health: {
               Effect.gen(function* () {
                 yield* find(handle);
                 yield* run("open", url(handle));
+                // A previous interrupted turn may have left a draft, even across a restart.
+                yield* run("clear", url(handle));
                 // Always clear the draft, including on an interrupted Effect.
                 yield* Effect.gen(function* () {
                   for (const character of text) {
