@@ -10,33 +10,19 @@ import type { OnboardingClient } from "./onboarding-client.ts";
 import { Home } from "./pages/home.tsx";
 import { Privacy } from "./pages/privacy.tsx";
 import { getRouter } from "./router.tsx";
-import { Turnstile } from "./turnstile.tsx";
+import { widget, widgetOptions } from "./turnstile.fake.ts";
 
 const submit = vi.fn<OnboardingClient["submit"]>();
 const joinWaitlist = vi.fn<OnboardingClient["joinWaitlist"]>();
 const fake: OnboardingClient = { submit, joinWaitlist };
-type Widget = NonNullable<Window["turnstile"]>;
-let widgetOptions: Parameters<Widget["render"]>[1];
-const remove = vi.fn<Widget["remove"]>();
 const approvedVersion = copy.privacyNoticeVersion;
 
-function scriptFrom(node: string | Node | undefined): HTMLScriptElement {
-  if (!(node instanceof HTMLScriptElement)) throw new Error("Missing Turnstile script");
-  return node;
-}
-
 beforeEach(() => {
+  vi.clearAllMocks();
   copy.privacyNoticeVersion = approvedVersion;
   submit.mockReset();
   joinWaitlist.mockReset();
-  remove.mockReset();
-  window.turnstile = {
-    render: vi.fn<Widget["render"]>((_element, options) => {
-      widgetOptions = options;
-      return "widget-id";
-    }),
-    remove,
-  };
+  window.turnstile = widget;
 });
 
 afterEach(() => {
@@ -88,14 +74,6 @@ function expectPost(path: string, request: object) {
   );
 }
 
-function mountBeforeScript() {
-  const append = vi.spyOn(document.head, "append").mockImplementation(() => {});
-  delete window.turnstile;
-  const view = render(<Home onboarding={fake} />);
-  const script = scriptFrom(append.mock.calls[0]?.[0]);
-  return { append, view, script };
-}
-
 it("renders the root document in Korean", async () => {
   const router = getRouter(fake);
   expect(router.options.context.onboarding).toBe(fake);
@@ -126,11 +104,11 @@ it("renders the form and privacy entries on their own", () => {
   );
   expect(window.turnstile?.render).toHaveBeenCalled();
   expect(widgetOptions.sitekey).toBe(turnstileSiteKey);
-  expect(turnstileSiteKey).toBe("1x00000000000000000000AA");
+  expect(turnstileSiteKey).toBe("1x00000000000000000000BB");
   expect(screen.getByRole("textbox", { name: copy.form.handleLabel })).toHaveProperty("value", "");
   expect(screen.queryByRole("alert")).toBeNull();
   view.unmount();
-  expect(remove).toHaveBeenCalledWith("widget-id");
+  expect(widget.remove).toHaveBeenCalledWith("widget-id");
   render(<Privacy />);
   expect(screen.getByRole("heading", { name: copy.privacy.title })).toBeTruthy();
   expect(screen.getByText(approvedVersion)).toBeTruthy();
@@ -150,6 +128,7 @@ it("publishes the approved privacy sections, deletion scope, and removal contact
   expect(screen.getByText(/14일이 지난 백업/)).toBeTruthy();
   expect(screen.getByText(/2026년 9월 30일까지/)).toBeTruthy();
   expect(screen.getByText(/실제 데이터 처리 국가와 지역은 현재 확인되지 않았습니다/)).toBeTruthy();
+  expect(screen.getByText(/https:\/\/www.cloudflare.com\/turnstile-privacy-policy\//)).toBeTruthy();
   expect(screen.queryByText(copy.privacy.placeholder)).toBeNull();
   expect(screen.getByRole("link", { name: "hi@hena.dev" })).toHaveProperty(
     "href",
@@ -360,6 +339,49 @@ it("treats a failed request as try_later", async () => {
   expect(await screen.findByText(copy.answers.try_later)).toBeTruthy();
 });
 
+it.each(["error-callback", "unsupported-callback"] as const)(
+  "explains %s and clears the alert when verification recovers",
+  (callback) => {
+    render(<Home onboarding={fake} />);
+    fillForm();
+    const button = screen.getByRole("button", { name: copy.form.submit });
+    act(() => widgetOptions[callback]());
+    expect(screen.getByRole("alert").textContent).toBe(copy.form.verificationFailed);
+    expect(button).toHaveProperty("disabled", true);
+    fireEvent.submit(button.closest("form")!);
+    expect(submit).not.toHaveBeenCalled();
+    act(() => widgetOptions.callback("recovered"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(button).toHaveProperty("disabled", false);
+  },
+);
+
+it.each(["success", "failure"])("obtains a fresh token after a %s response", async (result) => {
+  let finish: (() => void) | undefined;
+  submit.mockImplementationOnce(
+    () =>
+      new Promise((resolve, reject) => {
+        finish = () => (result === "success" ? resolve("sent") : reject(new Error("offline")));
+      }),
+  );
+  render(<Home onboarding={fake} />);
+  sendForm();
+  expect(widget.remove).toHaveBeenCalledExactlyOnceWith("widget-id");
+  expect(widget.render).toHaveBeenCalledTimes(1);
+  await act(async () => finish?.());
+  expect(widget.render).toHaveBeenCalledTimes(2);
+  const button = screen.getByRole("button", { name: copy.form.submit });
+  expect(button).toHaveProperty("disabled", true);
+  act(() => widgetOptions.callback("fresh-token"));
+  expect(button).toHaveProperty("disabled", false);
+  submit.mockResolvedValueOnce("sent");
+  fireEvent.click(button);
+  await screen.findByText(copy.answers.sent);
+  expect(submit).toHaveBeenLastCalledWith(
+    expect.objectContaining({ turnstileToken: "fresh-token" }),
+  );
+});
+
 it("clears the last answer on retry while waiting", async () => {
   submit.mockResolvedValueOnce("sent");
   submit.mockImplementationOnce(() => new Promise(() => {}));
@@ -370,73 +392,6 @@ it("clears the last answer on retry while waiting", async () => {
   fireEvent.click(screen.getByRole("button", { name: copy.form.submit }));
   expect(screen.getByRole("status").textContent).toBe(copy.form.inProgress);
   expect(screen.queryByText(copy.answers.sent)).toBeNull();
-});
-
-it("loads Turnstile when its script arrives after the form mounts", () => {
-  const { append, view, script } = mountBeforeScript();
-  expect(script.src).toContain("challenges.cloudflare.com/turnstile/v0/api.js?render=explicit");
-  expect(script.async).toBe(true);
-  window.turnstile = { render: vi.fn<Widget["render"]>(() => "late-widget"), remove };
-  fireEvent.load(script);
-  expect(window.turnstile.render).toHaveBeenCalled();
-  view.unmount();
-  expect(remove).toHaveBeenCalledWith("late-widget");
-  expect(document.head.contains(script)).toBe(false);
-  append.mockRestore();
-});
-
-it("does not render a widget if the script loads without Turnstile", () => {
-  const { append, view, script } = mountBeforeScript();
-  const removeListener = vi.spyOn(script, "removeEventListener");
-  const removeScript = vi.spyOn(script, "remove");
-  fireEvent.load(script);
-  view.unmount();
-  expect(remove).not.toHaveBeenCalled();
-  expect(removeListener).toHaveBeenCalledWith("load", expect.any(Function));
-  expect(removeScript).toHaveBeenCalledTimes(1);
-  append.mockRestore();
-});
-
-it("cleans up if the widget script disappears or returns no widget", () => {
-  window.turnstile = { render: vi.fn<Widget["render"]>(() => ""), remove };
-  const first = render(<Home onboarding={fake} />);
-  first.unmount();
-  expect(remove).not.toHaveBeenCalled();
-  window.turnstile = { render: vi.fn<Widget["render"]>(() => "widget"), remove };
-  const second = render(<Home onboarding={fake} />);
-  delete window.turnstile;
-  second.unmount();
-  expect(remove).not.toHaveBeenCalled();
-  const { append, view: third, script } = mountBeforeScript();
-  window.turnstile = { render: vi.fn<Widget["render"]>(() => "widget"), remove };
-  fireEvent.load(script);
-  delete window.turnstile;
-  third.unmount();
-  expect(remove).not.toHaveBeenCalled();
-  append.mockRestore();
-});
-
-it("does not remove an empty widget ID after a late script load", () => {
-  const { append, view, script } = mountBeforeScript();
-  window.turnstile = { render: vi.fn<Widget["render"]>(() => ""), remove };
-  fireEvent.load(script);
-  view.unmount();
-  expect(remove).not.toHaveBeenCalled();
-  append.mockRestore();
-});
-
-it("rebinds Turnstile callbacks when the token handler changes", () => {
-  const first = vi.fn<(token: string) => void>();
-  const second = vi.fn<(token: string) => void>();
-  const widget = window.turnstile!;
-  const view = render(<Turnstile onToken={first} />);
-  const previous = widgetOptions.callback;
-  view.rerender(<Turnstile onToken={second} />);
-  act(() => widgetOptions.callback("updated"));
-  expect(widget.render).toHaveBeenCalledTimes(2);
-  expect(remove).toHaveBeenCalledWith("widget-id");
-  expect(second).toHaveBeenCalledWith("updated");
-  expect(previous).not.toBe(widgetOptions.callback);
 });
 
 it("navigates both routes through the in-memory router with a fake API", async () => {

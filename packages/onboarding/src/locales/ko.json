@@ -1,6 +1,6 @@
 {
   "market": { "country": "KR", "dialCode": "+82" },
-  "privacyNoticeVersion": "2026-09-28",
+  "privacyNoticeVersion": "2026-09-29",
   "home": {
     "title": "메시지로 만나는 새로운 대화",
     "description": "iMessage에서 AI 페르소나와 자연스럽게 이야기를 나눠 보세요.",
@@ -13,6 +13,7 @@
     "invalidHandle": "전화번호 또는 이메일을 확인해 주세요.",
     "consent": "개인정보 처리방침을 읽고 동의합니다.",
     "inProgress": "iMessage를 확인하고 있어요.",
+    "verificationFailed": "사람 확인을 완료하지 못했어요. 페이지를 새로고침하거나 다른 브라우저에서 다시 시도해 주세요.",
     "waitlistLink": "대기 명단에 등록하기"
   },
   "privacy": {
@@ -30,7 +31,8 @@
           "언어 설정과 동의한 안내의 버전·언어·시각은 알맞은 언어로 안내하고 동의 사실을 기록하는 데 사용합니다.",
           "주고받은 글, 사진 등 첨부물, 반응, 캐릭터의 대화 기억과 전송 기록은 답변을 만들고 지난 대화를 기억하며 전달 오류와 남용을 확인하는 데 사용합니다. 대화를 계속하면 그 내용이 AI 모델로 전달될 수 있습니다.",
           "대기 명단에 신청하면 이메일 주소, 언어 설정, 대기 이유를 기록하여 나중에 서비스를 이용할 수 있을 때 연락하는 데 사용합니다.",
-          "신청 과정의 IP 주소와 사람 확인 정보는 남용 방지와 Cloudflare Turnstile 확인에 사용합니다. IP 주소를 이용한 서버의 신청 횟수 제한 목록은 메모리에만 일시적으로 유지하며 파일로 저장하지 않습니다."
+          "신청 과정의 IP 주소와 사람 확인 정보는 남용 방지와 Cloudflare Turnstile 확인에 사용합니다. IP 주소를 이용한 서버의 신청 횟수 제한 목록은 메모리에만 일시적으로 유지하며 파일로 저장하지 않습니다.",
+          "사람 확인은 Cloudflare Turnstile이 화면에 표시하지 않고 백그라운드에서 진행합니다. 이 과정에서 Cloudflare가 처리하는 정보에는 Cloudflare Turnstile 개인정보 보호 부록(Turnstile Privacy Addendum, https://www.cloudflare.com/turnstile-privacy-policy/)이 적용됩니다."
         ]
       },
       {
