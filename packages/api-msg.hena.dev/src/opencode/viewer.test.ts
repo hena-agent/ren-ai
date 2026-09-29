@@ -82,9 +82,9 @@ test("viewer forwards exactly the protected browse routes, never config or mutat
   }
   for (const path of [
     "/api/config",
-    "/api/provider",
+    "/api/provider/sample",
     "/api/mcp/resource",
-    "/api/session/active",
+    "/api/session/active/extra",
     "/api/session/s_1/permission",
     "/api/session/s_1/form",
     "/api/session/s_1/diff",

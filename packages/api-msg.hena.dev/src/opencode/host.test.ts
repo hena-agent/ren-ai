@@ -203,6 +203,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           expect(publicBodies["/api/session"]).toContain(session.id);
           expect(publicBodies[`/api/session/${session.id}`]).toContain(session.id);
           expect(publicBodies[`/api/session/${session.id}/message`]).toContain(messages[0]!.id);
+          expect(JSON.stringify(publicBodies)).not.toContain("passed-in-code");
           for (const id of disabledIDs) {
             expect(config).toContain(`-${id}`);
           }
