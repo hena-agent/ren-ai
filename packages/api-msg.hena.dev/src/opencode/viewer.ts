@@ -30,14 +30,21 @@ export const viewerFront = (
     const path = new URL(request.url).pathname;
     // The official V2 app is same-origin; it needs no CORS access to the API.
     if (request.method !== "GET") return Promise.resolve(new Response(null, { status: 403 }));
+    const authorization = request.headers.get("authorization");
+    if (
+      !authorization ||
+      !timingSafeEqual(createHash("sha256").update(authorization).digest(), expected)
+    ) {
+      return Promise.resolve(
+        new Response(null, {
+          status: 401,
+          headers: { "WWW-Authenticate": 'Basic realm="Persona viewer", charset="UTF-8"' },
+        }),
+      );
+    }
+    // Challenge navigation too: browser authentication then covers same-origin event requests.
     if (path !== "/api" && !path.startsWith("/api/") && path !== "/openapi.json") {
       return ui ? ui(request) : Promise.resolve(new Response(null, { status: 503 }));
-    }
-    const authorization = request.headers.get("authorization");
-    if (!authorization) return Promise.resolve(new Response(null, { status: 401 }));
-    const actual = createHash("sha256").update(authorization).digest();
-    if (!timingSafeEqual(actual, expected)) {
-      return Promise.resolve(new Response(null, { status: 401 }));
     }
     if (!allowed(path)) {
       return Promise.resolve(new Response(null, { status: 403 }));

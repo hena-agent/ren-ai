@@ -2,7 +2,7 @@
 
 `https://chris-mini.pug-mohs.ts.net:8447/` serves the official V2 browser UI at the same origin as the Persona viewer's password-protected, GET-only API. The UI assets come from a separately isolated OpenCode 2.0.16 process on `127.0.0.1:47987`. See [the Mac mini runbook](../../packages/api-msg.hena.dev/ops/README.md) for its install and startup. Never expose 47987 through Tailscale or Funnel, use the Mac owner's OpenCode service, or run `opencode pair` on the Persona host.
 
-1. Open `https://chris-mini.pug-mohs.ts.net:8447/connect`. Enter the same `https://chris-mini.pug-mohs.ts.net:8447` as **Server address** and the `dev.hena.ren-ai.viewer` / `api-msg` password from Keychain as **Password**. Do not use the isolated asset process's password. The form checks `GET /api/info`; it sends no messages.
+1. Open `https://chris-mini.pug-mohs.ts.net:8447/`. At the browser's **Persona viewer** authentication prompt, enter username **opencode** and the `dev.hena.ren-ai.viewer` / `api-msg` password from Keychain. Authentication is required before the UI loads, so the browser can also authenticate same-origin event requests when the app omits an Authorization header. If the app then shows its connection form, enter `https://chris-mini.pug-mohs.ts.net:8447` as **Server address** and the same viewer password. Do not use the isolated asset process's password. The form checks `GET /api/info`; it sends no messages.
 2. Obtain the session ID for the Conversation from the authenticated `GET /api/session` response (the array is under `data`). The operator can retrieve IDs and Persona names without putting a password in argv or printing message content:
 
    ```sh

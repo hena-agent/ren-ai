@@ -6,6 +6,35 @@ import { serveViewer, viewerFront } from "./viewer.ts";
 
 const auth = `Basic ${Buffer.from("opencode:secret").toString("base64")}`;
 
+test("browser login challenges the page and event stream before serving either", async () => {
+  const web = vi.fn<(request: Request) => Promise<Response>>(
+    async () => new Response("data: ready\n\n"),
+  );
+  const ui = vi.fn<(request: Request) => Promise<Response>>(
+    async () => new Response("<html>OpenCode</html>"),
+  );
+  const viewer = viewerFront(web, "secret", ui);
+  for (const path of ["/", "/connect", "/_assets/index.js", "/api/event"]) {
+    for (const authorization of ["", "Basic wrong"]) {
+      const response = await viewer(
+        new Request(`http://localhost${path}`, { headers: { authorization } }),
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toBe(
+        'Basic realm="Persona viewer", charset="UTF-8"',
+      );
+    }
+  }
+  expect(web).not.toHaveBeenCalled();
+  expect(ui).not.toHaveBeenCalled();
+  const page = await viewer(new Request("http://localhost/", { headers: { authorization: auth } }));
+  expect(await page.text()).toBe("<html>OpenCode</html>");
+  const stream = await viewer(
+    new Request("http://localhost/api/event", { headers: { authorization: auth } }),
+  );
+  expect(await stream.text()).toBe("data: ready\n\n");
+});
+
 test("viewer forwards exactly the protected browse routes, never config or mutations", async () => {
   const web = vi.fn<(request: Request) => Promise<Response>>(async () => new Response("from host"));
   const viewer = viewerFront(web, "secret");
@@ -81,7 +110,7 @@ test("viewer forwards exactly the protected browse routes, never config or mutat
   expect(() => viewerFront(web, "")).toThrow(/password/);
 });
 
-test("the same-origin V2 shell needs no API authentication, while the API denies CORS", async () => {
+test("the same-origin V2 shell shares authentication, while the API denies CORS", async () => {
   const web = vi.fn<(request: Request) => Promise<Response>>(
     async () =>
       new Response("safe", {
@@ -102,7 +131,9 @@ test("the same-origin V2 shell needs no API authentication, while the API denies
     "/icons/prod/favicon.ico",
     "/server/key/session/ses_1",
   ]) {
-    const response = await viewer(new Request(`http://localhost${path}`));
+    const response = await viewer(
+      new Request(`http://localhost${path}`, { headers: { authorization: auth } }),
+    );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/html");
   }
@@ -134,7 +165,9 @@ test("the same-origin V2 shell needs no API authentication, while the API denies
 
 test("without the isolated shell, the viewer fails closed on HTML routes", async () => {
   const viewer = viewerFront(async () => new Response("safe"), "secret");
-  expect((await viewer(new Request("http://localhost/"))).status).toBe(503);
+  expect(
+    (await viewer(new Request("http://localhost/", { headers: { authorization: auth } }))).status,
+  ).toBe(503);
   expect(
     (await viewer(new Request("http://localhost/api/config", { headers: { authorization: auth } })))
       .status,
@@ -159,11 +192,17 @@ test("listener serves the isolated V2 shell at / but never forwards an API path 
         const address = server.address();
         if (!address || typeof address === "string") throw new Error("Expected TCP listener");
         const base = `http://127.0.0.1:${address.port}`;
-        expect((yield* Effect.promise(() => fetch(base))).status).toBe(200);
         expect(
-          (yield* Effect.promise(() => fetch(`${base}/connect`))).headers.get("content-type"),
+          (yield* Effect.promise(() => fetch(base, { headers: { authorization: auth } }))).status,
+        ).toBe(200);
+        expect(
+          (yield* Effect.promise(() =>
+            fetch(`${base}/connect`, { headers: { authorization: auth } }),
+          )).headers.get("content-type"),
         ).toBe("text/html");
-        const unavailable = yield* Effect.promise(() => fetch(`${base}/unavailable`));
+        const unavailable = yield* Effect.promise(() =>
+          fetch(`${base}/unavailable`, { headers: { authorization: auth } }),
+        );
         expect(unavailable.status).toBe(502);
         expect(yield* Effect.promise(() => unavailable.text())).toBe("Web UI unavailable");
         expect(
