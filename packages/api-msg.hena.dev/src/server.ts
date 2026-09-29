@@ -3,6 +3,7 @@ import { ConfigProvider, Context, Effect } from "effect";
 import { HttpClient } from "effect/unstable/http";
 import type { HostOptions } from "./opencode/host.ts";
 import type { Messages } from "./messages/messages.ts";
+import { sendDiagnostic, type SendDiagnostic } from "./messages/send-diagnostic.ts";
 import type { Gestures } from "./gestures/gestures.ts";
 import { makeHealth } from "./health/health.ts";
 import { makeBackup } from "./backup/backup.ts";
@@ -18,6 +19,8 @@ export interface ServerConfig {
   readonly personaDirectory: string;
   readonly publicPort: number;
   readonly viewerPort: number;
+  /** TEMPORARY: one redacted persona-send trace per process; opt in explicitly. */
+  readonly diagnoseNextSend?: boolean;
   readonly noticeVersion?: string;
   readonly secrets: Readonly<
     Record<
@@ -41,6 +44,7 @@ export const composeServer = (
   adapters: {
     readonly messages: (
       health: Effect.Success<typeof makeHealth>,
+      diagnostic?: SendDiagnostic,
     ) => Effect.Effect<
       Messages,
       Error,
@@ -61,7 +65,8 @@ export const composeServer = (
     const provider = ConfigProvider.fromUnknown(secrets);
     const health = yield* makeHealth.pipe(Effect.provide(ConfigProvider.layer(provider)));
     const client = yield* HttpClient.HttpClient;
-    const messages = yield* adapters.messages(health);
+    const diagnostic = config.diagnoseNextSend ? sendDiagnostic() : undefined;
+    const messages = yield* adapters.messages(health, diagnostic);
     const gestures = yield* adapters.gestures(health);
     const state = config.stateDirectory;
     const host = yield* startMessagingHost(
@@ -82,6 +87,7 @@ export const composeServer = (
         ...(config.noticeVersion ? { noticeVersion: config.noticeVersion } : {}),
       },
       health,
+      diagnostic,
     );
     yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
     yield* Effect.forkScoped(health.monitor);

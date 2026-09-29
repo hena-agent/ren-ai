@@ -4,6 +4,15 @@ import { parseRpc } from "./imsg-protocol.ts";
 
 type Frame = ReturnType<typeof parseRpc>;
 
+export class ImsgRpcError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+  ) {
+    super(`imsg ${code}: ${message}`);
+  }
+}
+
 /** One multiplexed child, shared by all callers; scope owns the child and its streams. */
 export const imsgRpc = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -50,10 +59,7 @@ export const imsgRpc = Effect.gen(function* () {
               const wait = pending.get(frame.id);
               if (wait) {
                 yield* frame.error
-                  ? Deferred.fail(
-                      wait,
-                      new Error(`imsg ${frame.error.code}: ${frame.error.message}`),
-                    )
+                  ? Deferred.fail(wait, new ImsgRpcError(frame.error.code, frame.error.message))
                   : Deferred.succeed(wait, frame.result!);
               }
             } else yield* Queue.offer(notices, frame);
