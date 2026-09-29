@@ -17,6 +17,7 @@ import { conversations } from "./conversations/conversations.ts";
 import type { Conversation } from "./conversations/conversations.ts";
 import { outbox } from "./outbox/outbox.ts";
 import type { Messages } from "./messages/messages.ts";
+import type { SendDiagnostic } from "./messages/send-diagnostic.ts";
 import type { Gestures } from "./gestures/gestures.ts";
 import { onboarding } from "./onboarding/onboarding.ts";
 import { SqlClient } from "effect/unstable/sql";
@@ -53,6 +54,7 @@ export const startMessagingHost = (
   gestures: Gestures,
   onboardingConfig: OnboardingConfig,
   alerts: FailureAlerts,
+  diagnostic?: SendDiagnostic,
 ) =>
   Effect.gen(function* () {
     yield* migrate;
@@ -60,7 +62,7 @@ export const startMessagingHost = (
     const directory = yield* conversations;
     const pace = timing();
     const personas = yield* loadPersonas(options.personaDirectory);
-    const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
+    const sends = yield* outbox(messages, gestures, personas, directory.active, pace, diagnostic);
     const seenAtRequest = new Map<string, string | undefined>();
     const inConversation = (
       sessionID: string,

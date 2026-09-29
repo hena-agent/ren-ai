@@ -18,6 +18,7 @@ import { runOperatorCli } from "./operator/cli.ts";
 import { scriptedOverrides } from "./opencode/scripted-overrides.test-helper.ts";
 import { model, valid } from "../test/host.test-helper.ts";
 import { composeServer } from "./server.ts";
+import type { SendDiagnostic } from "./messages/send-diagnostic.ts";
 import { servePublic } from "./public-listener.ts";
 
 vi.mock("@effect/sql-sqlite-bun", async () => ({
@@ -87,6 +88,7 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
   await writeFile(join(personaDirectory, "persona1.md"), valid);
   const fake = fakeMessages();
   const ui = fakeGestures();
+  let capturedDiagnostic: SendDiagnostic | undefined;
   let greeted = false;
   let replied = false;
   const offlineFetch = globalThis.fetch;
@@ -125,6 +127,7 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
               personaDirectory,
               publicPort: 0,
               viewerPort: 0,
+              diagnoseNextSend: true,
               noticeVersion: "v1",
               secrets,
               host: {
@@ -135,7 +138,11 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
               },
             },
             {
-              messages: () => Effect.succeed(fake.messages),
+              messages: (_health, diagnostic) => {
+                expect(diagnostic).toBeDefined();
+                capturedDiagnostic = diagnostic;
+                return Effect.succeed(fake.messages);
+              },
               gestures: () => Effect.succeed(ui.gestures),
             },
           );
@@ -178,6 +185,7 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
             { handle: conversation!.handle, text: noticeCopy.ko },
             { handle: conversation!.handle, text: "안녕 🙂" },
           ]);
+          expect(yield* capturedDiagnostic!.claim(-1, "unused", "unused")).toBe(false);
           yield* fake.text(conversation!.handle, "안녕?", Date.now());
           yield* waitForBubbles(3);
           yield* server.host.sessions
