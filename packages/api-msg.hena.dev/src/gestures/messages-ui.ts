@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { Effect, Option, Semaphore } from "effect";
+import { Effect, Semaphore, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { Gestures } from "./gestures.ts";
 
@@ -31,22 +31,39 @@ export const makeMessagesUi = (health: {
     const lock = yield* Semaphore.make(1);
     let failures = 0;
 
+    // osascript and imsg report failure by exit status and stderr, never on stdout. The spawner's
+    // own `string` ignores the status, so a guard that fails would look like success.
+    const capture = (command: ChildProcess.Command) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const child = yield* processes.spawn(command);
+          const [stdout, stderr, code] = yield* Effect.all(
+            [
+              Stream.mkString(Stream.decodeText(child.stdout)),
+              Stream.mkString(Stream.decodeText(child.stderr)),
+              child.exitCode,
+            ],
+            { concurrency: "unbounded" },
+          );
+          if (code !== 0)
+            return yield* Effect.fail(new Error(`exit code ${code}: ${stderr.trim()}`));
+          return stdout;
+        }),
+      );
     const run = (action: string, ...args: string[]) =>
-      processes
-        .string(
-          ChildProcess.make("/usr/bin/osascript", [script, action, ...args], {
-            forceKillAfter: "1 second",
-          }),
-        )
-        .pipe(
-          Effect.mapError((error) => new Error(`Messages UI ${action}: ${error.message}`)),
-          Effect.timeoutOrElse({
-            duration: "15 seconds",
-            orElse: () => Effect.fail(new Error(`Messages UI ${action} timed out`)),
-          }),
-        );
+      capture(
+        ChildProcess.make("/usr/bin/osascript", [script, action, ...args], {
+          forceKillAfter: "1 second",
+        }),
+      ).pipe(
+        Effect.mapError((error) => new Error(`Messages UI ${action}: ${error.message}`)),
+        Effect.timeoutOrElse({
+          duration: "15 seconds",
+          orElse: () => Effect.fail(new Error(`Messages UI ${action} timed out`)),
+        }),
+      );
     const find = (handle: string) =>
-      processes.string(ChildProcess.make("imsg", ["chats", "--limit", "10000", "--json"])).pipe(
+      capture(ChildProcess.make("imsg", ["chats", "--limit", "10000", "--json"])).pipe(
         Effect.flatMap((output) =>
           Effect.try({
             try: () => chatFor(output, handle),
@@ -58,14 +75,20 @@ export const makeMessagesUi = (health: {
     const alert = (action: string, error: Error) =>
       Effect.gen(function* () {
         failures++;
-        if (failures >= 3) yield* health.raise("gestures", `${action}: ${error.message}`);
+        const detail = `${action}: ${error.message}`;
+        if (failures >= 3) yield* health.raise("gestures", detail);
+        // The reply goes out anyway, so a typing that cannot show is reported at once.
+        if (action === "typing") yield* health.raise("typing", detail);
         if (action === "ensure") yield* health.raise("messages-window", error.message);
       });
-    const success = Effect.gen(function* () {
-      failures = 0;
-      yield* health.clear("gestures");
-      yield* health.clear("messages-window");
-    });
+    // Only a working typing clears its own alert: a read in the same turn must not.
+    const success = (action: string) =>
+      Effect.gen(function* () {
+        failures = 0;
+        yield* health.clear("gestures");
+        yield* health.clear("messages-window");
+        if (action === "typing") yield* health.clear("typing");
+      });
     const act = <A>(action: string, body: Effect.Effect<A, Error>) =>
       Effect.gen(function* () {
         yield* run("ensure").pipe(Effect.tapError((error) => alert("ensure", error)));
@@ -77,7 +100,7 @@ export const makeMessagesUi = (health: {
             Effect.tapError((error) => alert("park", error)),
           ),
         ),
-        Effect.tap(success),
+        Effect.tap(() => success(action)),
         Effect.tapError((error) => alert(action, error)),
       );
 
@@ -85,7 +108,7 @@ export const makeMessagesUi = (health: {
       typing: (handle, text, durationMillis) =>
         Effect.gen(function* () {
           const started = yield* Effect.clockWith((clock) => clock.currentTimeMillis);
-          const attempt = lock.withPermitsIfAvailable(1)(
+          return yield* lock.withPermit(
             act(
               "typing",
               Effect.gen(function* () {
@@ -106,10 +129,6 @@ export const makeMessagesUi = (health: {
               }),
             ),
           );
-          const result = yield* attempt;
-          if (Option.isSome(result)) return result.value;
-          yield* Effect.sleep(durationMillis);
-          return true;
         }),
       read: (handle) =>
         lock.withPermit(
@@ -127,18 +146,16 @@ export const makeMessagesUi = (health: {
             "react",
             Effect.gen(function* () {
               const chat = yield* find(handle);
-              yield* processes
-                .string(
-                  ChildProcess.make("imsg", [
-                    "react",
-                    "--chat-id",
-                    String(chat),
-                    "--reaction",
-                    tapback,
-                    "--json",
-                  ]),
-                )
-                .pipe(Effect.mapError((error) => new Error(`Tapback failed: ${error.message}`)));
+              yield* capture(
+                ChildProcess.make("imsg", [
+                  "react",
+                  "--chat-id",
+                  String(chat),
+                  "--reaction",
+                  tapback,
+                  "--json",
+                ]),
+              ).pipe(Effect.mapError((error) => new Error(`Tapback failed: ${error.message}`)));
             }),
           ),
         ),
