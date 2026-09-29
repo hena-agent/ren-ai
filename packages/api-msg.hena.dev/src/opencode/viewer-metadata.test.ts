@@ -1,3 +1,6 @@
+import { FileSystem } from "@opencode/schema/filesystem";
+import { Location } from "@opencode/schema/location";
+import { Schema } from "effect";
 import { expect, test, vi } from "vitest";
 import { expectViewerMutationsDenied, expectViewerRead } from "./viewer-check.test-helper.ts";
 import { viewerFront } from "./viewer.ts";
@@ -5,6 +8,121 @@ import { viewerFront } from "./viewer.ts";
 const auth = `Basic ${Buffer.from("opencode:secret").toString("base64")}`;
 const location = { directory: "/trusted/default" };
 const secret = "provider-secret";
+const defaultLocation = () =>
+  Response.json({
+    ...location,
+    project: { id: "project", directory: location.directory, canonical: location.directory },
+  });
+
+test("the V2 file tree gets an empty schema-valid listing without reading host files", async () => {
+  const web = vi.fn<(request: Request) => Promise<Response>>(async (request) => {
+    expect(new URL(request.url).pathname).toBe("/api/location");
+    expect(new URL(request.url).search).toBe("");
+    expect([...request.headers]).toEqual([]);
+    return defaultLocation();
+  });
+  const viewer = viewerFront(web, "secret");
+  for (const query of [
+    "",
+    "?path=",
+    "?path=.",
+    "?path=src&location[directory]=/trusted/default",
+    "?path=../../private&path=/private&location[directory]=",
+  ]) {
+    await expectViewerRead(viewer, `/api/fs/list${query}`, auth, { location, data: [] }, "private");
+  }
+  const response = await viewer(
+    new Request("http://localhost/api/fs/list?path=&location[directory]=/trusted/default", {
+      headers: { authorization: auth, "x-opencode-directory": "/private" },
+    }),
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("application/json");
+  expect(
+    Schema.decodeUnknownSync(Location.response(Schema.Array(FileSystem.Entry)))(
+      await response.json(),
+    ),
+  ).toEqual({ location, data: [] });
+  expect(web).toHaveBeenCalled();
+});
+
+test("file compatibility keeps authentication, location restrictions and filesystem writes closed", async () => {
+  const web = vi.fn<(request: Request) => Promise<Response>>(async () => defaultLocation());
+  const viewer = viewerFront(web, "secret");
+  for (const path of [
+    "/api/fs/list?path=&location[directory]=/private",
+    "/api/fs/list?location[directory]=/trusted/default&location[directory]=/private",
+    "/api/fs/list?location[workspaceID]=other",
+    "/api/fs/list?unexpected=",
+    "/api/fs/list/extra",
+    "/api/fs/read/private",
+    "/api/fs/find?query=secret",
+    "/api/config",
+  ]) {
+    expect(
+      (await viewer(new Request(`http://localhost${path}`, { headers: { authorization: auth } })))
+        .status,
+    ).toBe(403);
+  }
+  expect(web).toHaveBeenCalledTimes(2);
+  web.mockClear();
+  expect(
+    (
+      await viewer(
+        new Request("http://localhost/api/fs/list?path=", {
+          headers: { authorization: "Basic wrong" },
+        }),
+      )
+    ).status,
+  ).toBe(401);
+  await expectViewerMutationsDenied(viewer, ["/api/fs/list", "/api/experimental/fs/write"], auth);
+  expect(web).not.toHaveBeenCalled();
+});
+
+test("the configured Persona directory works even when the host default is elsewhere", async () => {
+  const web = vi.fn<(request: Request) => Promise<Response>>(async () => defaultLocation());
+  const viewer = viewerFront(web, "secret", undefined, "/trusted/personas");
+  for (const query of ["", "?path=&location[directory]=/trusted/personas"]) {
+    await expectViewerRead(
+      viewer,
+      `/api/fs/list${query}`,
+      auth,
+      { location: { directory: "/trusted/personas" }, data: [] },
+      "private",
+    );
+  }
+  for (const query of [
+    "?location[directory]=/trusted/default",
+    "?location[directory]=/private",
+    "?location[directory]=/trusted/personas&location[directory]=/private",
+  ]) {
+    expect(
+      (
+        await viewer(
+          new Request(`http://localhost/api/fs/list${query}`, { headers: { authorization: auth } }),
+        )
+      ).status,
+    ).toBe(403);
+  }
+  expect(web).not.toHaveBeenCalled();
+});
+
+test("file listing fails closed when the host cannot supply its default location", async () => {
+  const web = vi.fn<(request: Request) => Promise<Response>>();
+  const viewer = viewerFront(web, "secret");
+  for (const respond of [
+    async () => new Response("private", { status: 503 }),
+    async () => Response.json({ secret: "private" }),
+    async () => Promise.reject(new Error("private")),
+  ]) {
+    web.mockImplementation(respond);
+    const response = await viewer(
+      new Request("http://localhost/api/fs/list?path=", { headers: { authorization: auth } }),
+    );
+    expect(response.status).toBe(502);
+    expect(await response.text()).toBe("");
+  }
+});
 
 test("metadata reads preserve V2 display fields but remove credentials and arbitrary provider options", async () => {
   const web = vi.fn<(request: Request) => Promise<Response>>(async (request) => {

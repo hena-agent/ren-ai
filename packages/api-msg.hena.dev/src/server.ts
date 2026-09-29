@@ -101,7 +101,7 @@ export const composeServer = (
     const publicWeb = (request: Request) =>
       host.onboardingWeb(request, Context.make(HttpClient.HttpClient, client));
     yield* servePublic(publicWeb, config.publicPort);
-    yield* serveViewer(host.web, config.viewerPort).pipe(
+    yield* serveViewer(host.web, config.viewerPort, undefined, config.personaDirectory).pipe(
       Effect.provide(ConfigProvider.layer(provider)),
     );
     return {
@@ -109,6 +109,6 @@ export const composeServer = (
       backup,
       socket,
       publicWeb,
-      viewerWeb: viewerFront(host.web, secrets.VIEWER_PASSWORD),
+      viewerWeb: viewerFront(host.web, secrets.VIEWER_PASSWORD, undefined, config.personaDirectory),
     };
   });

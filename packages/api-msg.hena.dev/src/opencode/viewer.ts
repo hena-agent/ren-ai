@@ -40,13 +40,27 @@ const defaultLocation = async (
 const safeLocation = async (
   web: (request: Request) => Promise<Response>,
   url: URL,
+  directory?: string,
 ): Promise<boolean> => {
   const params = [...url.searchParams];
   if (params.some(([key]) => key !== "location[directory]")) return false;
   const values = params.map(([, value]) => value).filter(Boolean);
   if (values.length === 0) return true;
-  const directory = await defaultLocation(web, url);
-  return values.every((value) => value === directory);
+  const permitted = directory ?? (await defaultLocation(web, url));
+  return values.every((value) => value === permitted);
+};
+
+const emptyFileList = async (
+  web: (request: Request) => Promise<Response>,
+  url: URL,
+  fileDirectory?: string,
+): Promise<Response> => {
+  // The stock UI loads a file tree, but this viewer exposes conversations only.
+  url.searchParams.delete("path");
+  if (!(await safeLocation(web, url, fileDirectory))) return new Response(null, { status: 403 });
+  const directory = fileDirectory ?? (await defaultLocation(web, url));
+  if (!directory) return new Response(null, { status: 502 });
+  return Response.json({ location: { directory }, data: [] });
 };
 
 const extensionResponse = async (path: string, response: Response): Promise<Response> => {
@@ -182,6 +196,7 @@ export const viewerFront = (
   web: (request: Request) => Promise<Response>,
   password: string,
   ui?: (request: Request) => Promise<Response>,
+  fileDirectory?: string,
 ) => {
   if (!password) throw new Error("Viewer password must not be empty");
   const expected = createHash("sha256")
@@ -207,6 +222,11 @@ export const viewerFront = (
     // Challenge navigation too: browser authentication then covers same-origin event requests.
     if (path !== "/api" && !path.startsWith("/api/") && path !== "/openapi.json") {
       return ui ? ui(request) : Promise.resolve(new Response(null, { status: 503 }));
+    }
+    if (path === "/api/fs/list") {
+      return emptyFileList(web, url, fileDirectory).catch(
+        () => new Response(null, { status: 502 }),
+      );
     }
     if (extensions.has(path) || metadata.has(path) || path === "/api/session/active") {
       if (path === "/api/session/active" && url.search) {
@@ -241,15 +261,20 @@ export const serveViewer = (
   web: (request: Request) => Promise<Response>,
   port: number,
   fetchAssets: typeof fetch = fetch,
+  fileDirectory?: string,
 ) =>
   Effect.gen(function* () {
     const password = yield* Config.string("VIEWER_PASSWORD");
     // The isolated CLI serves only immutable V2 app assets here. Its API is never proxied.
-    const front = viewerFront(web, password, (request) =>
-      fetchAssets(`http://127.0.0.1:47987${new URL(request.url).pathname}`, {
-        headers: { "Accept-Encoding": "identity" },
-        signal: request.signal,
-      }).catch(() => new Response("Web UI unavailable", { status: 502 })),
+    const front = viewerFront(
+      web,
+      password,
+      (request) =>
+        fetchAssets(`http://127.0.0.1:47987${new URL(request.url).pathname}`, {
+          headers: { "Accept-Encoding": "identity" },
+          signal: request.signal,
+        }).catch(() => new Response("Web UI unavailable", { status: 502 })),
+      fileDirectory,
     );
     return yield* Effect.acquireRelease(
       Effect.tryPromise(
