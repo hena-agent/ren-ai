@@ -1,91 +1,9 @@
-import { Cause, Deferred, Effect, Exit, Fiber, Layer, PlatformError, Sink, Stream } from "effect";
+import { Cause, Deferred, Effect, Exit, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { expect, test } from "vitest";
-import { makeMessagesUi } from "./messages-ui.ts";
+import { failure, setup } from "../../test/messages-ui.test-helper.ts";
 
-const setup = async () => {
-  const events: string[] = [];
-  const alerts: string[] = [];
-  let fail = "";
-  let keyPause: Effect.Effect<void> = Effect.void;
-  let chats = '{"id":42,"identifier":"alice@example.com","service":"iMessage","is_group":false}\n';
-  let block: Effect.Effect<void> = Effect.void;
-  let blockedAction = "";
-  let blockedFor: Effect.Effect<void> = Effect.void;
-  const spawner = ChildProcessSpawner.make((command) =>
-    Effect.gen(function* () {
-      if (!ChildProcess.isStandardCommand(command)) throw Error("Unexpected pipeline");
-      if (command.command !== "imsg") {
-        expect(command.command).toBe("/usr/bin/osascript");
-        expect(command.args[0]).toMatch(/\/messages-ui\.applescript$/);
-        expect(command.options.forceKillAfter).toBe("1 second");
-      }
-      const action = command.command === "imsg" ? command.args[0]! : command.args[1]!;
-      events.push(
-        `${action} ${command.args.slice(command.command === "imsg" ? 1 : 2).join(" ")}`.trim(),
-      );
-      if (action === fail)
-        return yield* Effect.fail(
-          PlatformError.systemError({
-            _tag: "Unknown",
-            module: "test",
-            method: action,
-            description: `${action} failed`,
-          }),
-        );
-      if (action === "react") yield* block;
-      if (action === "key") yield* keyPause;
-      if (action === blockedAction) yield* blockedFor;
-      return ChildProcessSpawner.makeHandle({
-        stdout: Stream.make(new TextEncoder().encode(action === "chats" ? chats : "ok")),
-        stderr: Stream.empty,
-        all: Stream.empty,
-        pid: ChildProcessSpawner.ProcessId(1),
-        exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
-        isRunning: Effect.succeed(false),
-        kill: () => Effect.void,
-        stdin: Sink.drain,
-        getInputFd: () => Sink.drain,
-        getOutputFd: () => Stream.empty,
-        unref: Effect.succeed(Effect.void),
-      });
-    }),
-  );
-  const gestures = await Effect.runPromise(
-    makeMessagesUi({
-      raise: (name, detail) =>
-        Effect.sync(() => {
-          alerts.push(`${name}: ${detail}`);
-        }),
-      clear: (name) =>
-        Effect.sync(() => {
-          alerts.push(`clear: ${name}`);
-        }),
-    }).pipe(Effect.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner))),
-  );
-  return {
-    gestures,
-    events,
-    alerts,
-    failOn: (action: string) => {
-      fail = action;
-    },
-    pauseKey: (effect: Effect.Effect<void>) => {
-      keyPause = effect;
-    },
-    setChats: (output: string) => {
-      chats = output;
-    },
-    blockReact: (effect: Effect.Effect<void>) => {
-      block = effect;
-    },
-    blockAction: (action: string, effect: Effect.Effect<void>) => {
-      blockedAction = action;
-      blockedFor = effect;
-    },
-  };
-};
+type Fixture = Awaited<ReturnType<typeof setup>>;
 
 const finishAfterDeadline = (task: Effect.Effect<void | boolean, Error>) =>
   Effect.runPromise(
@@ -195,12 +113,15 @@ test("time spent typing characters counts toward the typing duration", async () 
   ).toEqual({ pending: true, result: true });
 });
 
-test("typing stops on a failed guard and still parks", async () => {
+test.each([
+  ["cannot start", (fixture: Fixture) => fixture.failOn("key")],
+  ["exits non-zero", (fixture: Fixture) => fixture.exitOn("key", "key failed")],
+])("typing stops on a guard that %s, and still clears and parks", async (_mode, fail) => {
   const fixture = await setup();
-  fixture.failOn("key");
-  await expect(
-    Effect.runPromise(fixture.gestures.typing("alice@example.com", "hi", 0)),
-  ).rejects.toThrow("key failed");
+  fail(fixture);
+  expect(await failure(fixture.gestures.typing("alice@example.com", "hi", 0))).toContain(
+    "key failed",
+  );
   expect(fixture.events).toEqual([
     "ensure",
     "chats --limit 10000 --json",
@@ -210,6 +131,22 @@ test("typing stops on a failed guard and still parks", async () => {
     "clear sms://open?groupid=alice%40example.com",
     "park",
   ]);
+});
+
+test("a tapback that imsg rejects fails instead of counting as sent", async () => {
+  const fixture = await setup();
+  fixture.exitOn("react", "chat not found");
+  expect(await failure(fixture.gestures.react("alice@example.com", "love"))).toBe(
+    "Tapback failed: exit code 1: chat not found",
+  );
+});
+
+test("a chat lookup that imsg rejects says why, not that the Conversation is missing", async () => {
+  const fixture = await setup();
+  fixture.exitOn("chats", "Invalid value for option: --limit");
+  expect(await failure(fixture.gestures.read("alice@example.com"))).toBe(
+    "Cannot find Conversation: Error: exit code 1: Invalid value for option: --limit",
+  );
 });
 
 test("an interrupted typing Effect clears the draft and releases the lock", async () => {
@@ -226,23 +163,31 @@ test("an interrupted typing Effect clears the draft and releases the lock", asyn
   expect(fixture.events.at(-1)).toBe("park");
 });
 
-test("one lock serializes other Conversations and busy typing waits without touching UI", async () => {
+test("one lock serializes every gesture across Conversations, and typing waits its turn", async () => {
   const fixture = await setup();
+  fixture.setChats(
+    '{"id":42,"identifier":"alice@example.com","service":"iMessage","is_group":false}\n' +
+      '{"id":43,"identifier":"bob@example.com","service":"iMessage","is_group":false}\n',
+  );
   const gate = await Effect.runPromise(Deferred.make<void>());
   fixture.blockReact(Deferred.await(gate));
   const reaction = Effect.runFork(fixture.gestures.react("alice@example.com", "love"));
   while (!fixture.events.some((event) => event.startsWith("react ")))
     await new Promise((resolve) => setTimeout(resolve, 1));
-  const started = Date.now();
-  expect(await Effect.runPromise(fixture.gestures.typing("bob@example.com", "x", 60))).toBe(true);
-  expect(Date.now() - started).toBeGreaterThanOrEqual(50);
+  const typing = Effect.runFork(fixture.gestures.typing("bob@example.com", "x", 0));
   const read = Effect.runFork(fixture.gestures.read("alice@example.com"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(typing.pollUnsafe()).toBeUndefined();
   expect(fixture.events.filter((event) => event === "ensure")).toHaveLength(1);
   await Effect.runPromise(Deferred.succeed(gate, undefined));
   await Effect.runPromise(Fiber.join(reaction));
+  expect(await Effect.runPromise(Fiber.join(typing))).toBe(true);
   await Effect.runPromise(Fiber.join(read));
-  expect(fixture.events.filter((event) => event === "park")).toHaveLength(2);
+  expect(fixture.events.filter((event) => event === "ensure" || event === "park")).toEqual(
+    Array.from({ length: 3 }, () => ["ensure", "park"]).flat(),
+  );
   expect(fixture.events).toContain("react --chat-id 42 --reaction love --json");
+  expect(fixture.events).toContain("key x");
   expect(fixture.events).toContain("read sms://open?groupid=alice%40example.com");
 });
 
