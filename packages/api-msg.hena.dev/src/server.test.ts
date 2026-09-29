@@ -186,7 +186,20 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
           expect(fake.bubbles.at(-1)).toEqual({ handle: conversation!.handle, text: "반가워!" });
           expect(JSON.stringify(yield* llm.requests())).toContain("안녕?");
           const authorization = `Basic ${Buffer.from("opencode:viewer-test").toString("base64")}`;
-          for (const route of ["/api/config", "/api/plugin", "/openapi.json"]) {
+          const files = yield* Effect.promise(() =>
+            server.viewerWeb(
+              new Request(
+                `http://viewer/api/fs/list?path=&location[directory]=${encodeURIComponent(personaDirectory)}`,
+                { headers: { authorization } },
+              ),
+            ),
+          );
+          expect(files.status).toBe(200);
+          expect(yield* Effect.promise(() => files.json())).toEqual({
+            location: { directory: personaDirectory },
+            data: [],
+          });
+          for (const route of ["/api/config", "/api/provider/private", "/openapi.json"]) {
             const denied = yield* Effect.promise(() =>
               server.viewerWeb(
                 new Request(`http://viewer${route}`, { headers: { authorization } }),
@@ -289,7 +302,7 @@ test("production settings are isolated and the model is configured without conta
           expect(session.model).toEqual({
             providerID: "opencode-go",
             id: "deepseek-v4.1-flash",
-            variant: "max",
+            variant: "default",
           });
           const config = yield* Effect.promise(() =>
             server.host.web(new Request("http://host/api/config")),

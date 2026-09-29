@@ -30,7 +30,7 @@ export interface ServerConfig {
 
 /** The only model choice. DeepSeek V4.1 Flash has a 1M-token context window. */
 const productionHost = (key: string) => ({
-  model: "opencode-go/deepseek-v4.1-flash#max",
+  model: "opencode-go/deepseek-v4.1-flash",
   providers: { "opencode-go": { settings: { apiKey: key } } },
   memory: { contextTokens: 1_000_000, budgetTokens: 600_000, recentTokens: 12_000 },
 });
@@ -101,7 +101,7 @@ export const composeServer = (
     const publicWeb = (request: Request) =>
       host.onboardingWeb(request, Context.make(HttpClient.HttpClient, client));
     yield* servePublic(publicWeb, config.publicPort);
-    yield* serveViewer(host.web, config.viewerPort).pipe(
+    yield* serveViewer(host.web, config.viewerPort, undefined, config.personaDirectory).pipe(
       Effect.provide(ConfigProvider.layer(provider)),
     );
     return {
@@ -109,6 +109,6 @@ export const composeServer = (
       backup,
       socket,
       publicWeb,
-      viewerWeb: viewerFront(host.web, secrets.VIEWER_PASSWORD),
+      viewerWeb: viewerFront(host.web, secrets.VIEWER_PASSWORD, undefined, config.personaDirectory),
     };
   });

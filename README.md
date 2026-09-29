@@ -51,6 +51,14 @@ quality-exceptions.json  The only place file-level gate exceptions may live.
 
 `bun run verify-gates` proves the gates actually reject bad code. It plants a deliberate violation for each gate, runs the real gate, and asserts it is rejected **and named the expected rule** — an exit code alone would pass if the gate had failed for an unrelated reason. It also asserts the Stryker patch is still applied, since that is the mutation gate’s real failure mode. A gate that has silently stopped enforcing anything is the failure mode this repo is designed around.
 
+### CI execution
+
+`bun run ci` runs every gate locally. GitHub Actions runs `ci:checks` (including the site build), `verify-gates`, and four mutation shards in parallel, each in its own checkout. The required **Quality gates** check succeeds only when all jobs pass; deployment waits for it. `verify-gates` plants both coverage violations in one suite run and checks that each file has its own threshold failure.
+
+Mutation testing takes roughly 80–90 minutes unsharded on the hosted runner. `STRYKER_SHARD=1/4 bun run mutate` selects a stable, path-hashed quarter of the existing mutation scope, including its API files. Each runner retains the two-worker memory cap. `bun run verify-ci` checks that the four shards cover the complete scope exactly once and retain the 100% threshold.
+
+PRs use Stryker's incremental reports from a previous successful shard on that PR or its base branch. Main and the weekly schedule always run every mutant and refresh the reports. Cache keys include shard, OS/architecture, Node/Bun versions, and every tracked input except mutated source files (Stryker compares those itself). Tests, shared helpers, and fakes also invalidate the cache, covering Stryker's static-mutant and helper-change limitations. Missing caches run the full shard. Incremental results are a PR optimization; main's full pass also checks interactions between changed and unchanged source files.
+
 ## Design decisions worth knowing
 
 - **bun installs and runs scripts; Node runs tests.** Vitest treats bun as a package manager only, and the v8 coverage provider does not work on the bun runtime.

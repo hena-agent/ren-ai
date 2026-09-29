@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { Clock, Deferred, Effect, Fiber, Random } from "effect";
+import { Clock, Deferred, Effect, Fiber, Random, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { outbox } from "./outbox.ts";
 import { SqlClient } from "effect/unstable/sql";
@@ -202,7 +202,9 @@ test("accepted RPC without a row remains in doubt; a failed status lookup cannot
           sendStatus: () => Effect.fail(new Error("status unavailable")),
         };
         const sends = yield* outbox(messages, fakeGestures().gestures, personas);
-        expect(yield* sends.send(conversation, "maybe", "one")).toBe("not sent: send in doubt");
+        const attempted = yield* Effect.forkScoped(sends.send(conversation, "maybe", "one"));
+        yield* TestClock.adjust("3 seconds");
+        expect(yield* Fiber.join(attempted)).toBe("not sent: send in doubt");
         const row = yield* fake.outgoing(conversation.handle, "maybe", 0, "sent", "uncertain-guid");
         expect(yield* sends.reconcile(conversation, row)).toBe(true);
         const waiting = yield* Effect.forkScoped(sends.send(conversation, "next", "two"));
@@ -214,6 +216,66 @@ test("accepted RPC without a row remains in doubt; a failed status lookup cannot
         );
       }).pipe(
         Random.withSeed("ambiguous"),
+        Effect.provide(TestClock.layer()),
+        Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
+      ),
+    ),
+  );
+});
+
+test("an accepted send waits for a 2.3-second Messages row delay before allowing a distinct next bubble", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* migrate;
+        const conversation = yield* (yield* conversations).create(
+          registration("delayed@example.com", "delayed"),
+        );
+        const fake = fakeMessages();
+        const scope = yield* Scope.Scope;
+        const firstAccepted = yield* Deferred.make<void>();
+        const secondAccepted = yield* Deferred.make<void>();
+        const messages = {
+          ...fake.messages,
+          sendText: (handle: string, text: string) =>
+            Effect.gen(function* () {
+              const guid = `delayed-${text}`;
+              yield* Effect.forkIn(
+                Effect.sleep("2300 millis").pipe(
+                  Effect.andThen(
+                    Effect.gen(function* () {
+                      yield* fake.outgoing(
+                        handle,
+                        text,
+                        yield* Clock.currentTimeMillis,
+                        "sent",
+                        guid,
+                      );
+                    }),
+                  ),
+                ),
+                scope,
+              );
+              yield* Deferred.succeed(text === "first" ? firstAccepted : secondAccepted, undefined);
+              return { guid };
+            }),
+        };
+        const sends = yield* outbox(messages, fakeGestures().gestures, personas);
+        const first = yield* Effect.forkScoped(sends.send(conversation, "first", "first-call"));
+        yield* Deferred.await(firstAccepted);
+        yield* TestClock.adjust("2500 millis");
+        expect(yield* Fiber.join(first)).toBe("sent");
+        const second = yield* Effect.forkScoped(sends.send(conversation, "second", "second-call"));
+        yield* Deferred.await(secondAccepted);
+        yield* TestClock.adjust("2500 millis");
+        expect(yield* Fiber.join(second)).toBe("sent");
+        const sql = yield* SqlClient.SqlClient;
+        expect(yield* sql<{ state: string }>`SELECT state FROM send ORDER BY id`).toEqual([
+          { state: "sent" },
+          { state: "sent" },
+        ]);
+      }).pipe(
+        Random.withSeed("delayed-row"),
         Effect.provide(TestClock.layer()),
         Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
       ),

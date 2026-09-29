@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, PartitionedSemaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 
 export interface Conversation {
@@ -10,6 +10,8 @@ export interface Conversation {
 
 export const conversations = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const locks = yield* PartitionedSemaphore.make<string>({ permits: 1 });
+  const withHandle = (handle: string) => PartitionedSemaphore.withPermit(locks, handle);
   const lookup = (column: "handle" | "session_id", value: string) =>
     Effect.map(
       sql<Conversation>`SELECT conversation.id, user.handle, conversation.persona_id AS personaID,
@@ -20,6 +22,17 @@ export const conversations = Effect.gen(function* () {
       (rows) => rows[0],
     );
   return {
+    withHandle,
+    admit: <A, E, R>(sessionID: string, action: Effect.Effect<A, E, R>) =>
+      Effect.gen(function* () {
+        const conversation = yield* lookup("session_id", sessionID);
+        if (!conversation) return;
+        yield* withHandle(conversation.handle)(
+          Effect.gen(function* () {
+            if (yield* lookup("session_id", sessionID)) yield* action;
+          }),
+        );
+      }),
     byHandle: (handle: string) => lookup("handle", handle),
     bySession: (sessionID: string) => lookup("session_id", sessionID),
     all: () => sql<Conversation>`SELECT conversation.id, user.handle, conversation.persona_id AS personaID,

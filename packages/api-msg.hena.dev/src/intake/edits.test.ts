@@ -66,9 +66,9 @@ test("polls only active Conversations, reports each change once and stops after 
           '<message at="2026-09-25 Fri 20:00">old "text"</message>',
           '<edited was="old ”text”" at="2026-09-25 Fri 20:00">edited "text"</edited>',
         ]);
-        expect(prompts[1]?.id).toMatch(/^edit_[0-9a-f]{64}$/);
+        expect(prompts[1]?.id).toMatch(/^msg_edit_[0-9a-f]{64}$/);
         expect(prompts[1]?.id).toBe(
-          `edit_${createHash("sha256").update([first.sessionID, a.guid, 'old "text"', 'edited "text"', "1"].join("\0")).digest("hex")}`,
+          `msg_edit_${createHash("sha256").update([first.sessionID, a.guid, 'old "text"', 'edited "text"', "1"].join("\0")).digest("hex")}`,
         );
         expect(reads).toEqual([first.handle]);
         yield* TestClock.adjust("1 second");

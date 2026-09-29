@@ -28,13 +28,13 @@ export const watchEdits = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const watched = new Map<number, WatchedConversation>();
+    const watched = new Map<string, WatchedConversation>();
     const remember = (conversation: Conversation, row: IncomingMessage) => {
       if (!row.text) return;
-      let group = watched.get(conversation.id);
+      let group = watched.get(conversation.sessionID);
       if (!group) {
         group = { conversation, rows: new Map() };
-        watched.set(conversation.id, group);
+        watched.set(conversation.sessionID, group);
       }
       group.rows.set(row.guid, { row, text: row.text, revision: 0 });
     };
@@ -66,7 +66,7 @@ export const watchEdits = (
         const zone = timeZone(group.conversation.personaID);
         const text = currentText ? edited(entry.text, currentText, time, zone) : unsent(time, zone);
         const revision = entry.revision + 1;
-        const promptID = `edit_${createHash("sha256")
+        const promptID = `msg_edit_${createHash("sha256")
           .update(
             [group.conversation.sessionID, guid, entry.text, currentText, String(revision)].join(
               "\0",

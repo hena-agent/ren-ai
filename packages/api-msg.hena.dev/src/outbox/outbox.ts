@@ -39,6 +39,24 @@ export const outbox = (
     const sentListeners = new Set<(conversation: Conversation) => Effect.Effect<void, Error>>();
     const notifySent = (conversation: Conversation) =>
       Effect.forEach(sentListeners, (listener) => listener(conversation)).pipe(Effect.asVoid);
+    const recordAttempt = (
+      conversation: Conversation,
+      kind: "text" | "tapback",
+      content: string,
+      callID: string,
+      targetGUID: string | null = null,
+    ) =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        // Fence the send in the same statement that records it: reset may race typing.
+        const rows = yield* sql<{ id: number; recordedAt: number }>`INSERT INTO send
+        (handle, conversation_id, kind, content, tool_call_id, state, target_guid, recorded_at, updated_at)
+        SELECT ${conversation.handle}, id, ${kind}, ${content}, ${callID}, 'recorded', ${targetGUID}, ${now}, ${now}
+        FROM conversation WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID}
+          AND rebuilding = 0 AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = ${conversation.handle})
+        RETURNING id, recorded_at AS recordedAt`;
+        return rows[0];
+      });
     const reconcile = (conversation: Conversation, row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!row.fromMe || row.handle !== conversation.handle) return false;
@@ -183,11 +201,8 @@ export const outbox = (
             AND kind = 'tapback' AND content = ${tapback} AND target_guid = ${seenGUID} LIMIT 1`;
             if (attempted.length)
               return notReacted("this tapback was already attempted on that message");
-            if (!(yield* active(conversation)))
+            if (!(yield* recordAttempt(conversation, "tapback", tapback, callID, seenGUID)))
               return notReacted("this Conversation is unavailable");
-            const now = yield* Clock.currentTimeMillis;
-            yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, target_guid, recorded_at, updated_at)
-            VALUES (${conversation.handle}, ${conversation.id}, 'tapback', ${tapback}, ${callID}, 'recorded', ${seenGUID}, ${now}, ${now})`;
             const outcome = yield* Effect.result(gestures.react(conversation.handle, tapback));
             const state = Result.isFailure(outcome) ? "uncertain" : "sent";
             yield* sql`UPDATE send SET state = ${state}, updated_at = ${yield* Clock.currentTimeMillis}
@@ -217,16 +232,11 @@ export const outbox = (
                 }),
               ),
             );
-            const ready = pace ? yield* pace.during(conversation.id, type) : yield* type;
+            const ready = pace ? yield* pace.during(conversation.sessionID, type) : yield* type;
             if (ready !== true) return notSent("a new message arrived");
-            if (!(yield* active(conversation))) return notSent("this Conversation is unavailable");
-            const now = yield* Clock.currentTimeMillis;
-            yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
-            VALUES (${conversation.handle}, ${conversation.id}, 'text', ${text}, ${callID}, 'recorded', ${now}, ${now})`;
-            const rows = yield* sql<{
-              id: number;
-            }>`SELECT id FROM send WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
-            const id = rows[0]!.id;
+            const recorded = yield* recordAttempt(conversation, "text", text, callID);
+            if (!recorded) return notSent("this Conversation is unavailable");
+            const { id, recordedAt: now } = recorded;
             inFlight.add(id);
             return yield* Effect.gen(function* () {
               const outcome = yield* Effect.result(messages.sendText(conversation.handle, text));
@@ -239,9 +249,14 @@ export const outbox = (
               WHERE id = ${id} AND state = 'recorded'`;
               const observed = yield* messages.recent(conversation.handle, now);
               for (const item of observed) yield* reconcile(conversation, item);
-              const row = (yield* sql<SendRow>`SELECT id, state, content, guid, late,
-              notification_pending AS notificationPending, recorded_at AS recordedAt,
-              updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+              let row = (yield* sql<SendRow>`SELECT id, state, content, guid, late,
+               notification_pending AS notificationPending, recorded_at AS recordedAt,
+               updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+              for (let attempt = 0; attempt < 15 && row.state === "uncertain"; attempt++) {
+                // imsg can accept a send before Messages exposes its row.
+                yield* Effect.sleep("200 millis");
+                row = yield* check(conversation, row);
+              }
               if (row.state === "sent" || row.state === "delivered") return sent();
               yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`;
               // The RPC accepted the send; the Messages row is the authority.

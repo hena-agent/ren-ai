@@ -27,6 +27,7 @@ import { followUps } from "./follow-ups/follow-ups.ts";
 import { makeOperator } from "./operator/operator.ts";
 import { failedTurns, type FailureAlerts } from "./opencode/failed-turns.ts";
 import { setupRebuilding } from "./conversations/rebuild.ts";
+import { retainedSessions } from "./conversations/retained.ts";
 export { operatorHandler, operatorApi } from "./operator/api.ts";
 export { serveOperatorSocket, operatorClient } from "./operator/socket.ts";
 export { runOperatorCli } from "./operator/cli.ts";
@@ -85,7 +86,7 @@ export const startMessagingHost = (
       send: (sessionID, text, callID) =>
         inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
       wait: (sessionID, minutes) =>
-        inConversation(sessionID, (conversation) => pace.wait(conversation.id, minutes)),
+        inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, minutes)),
       onContext: (sessionID) =>
         Effect.gen(function* () {
           const seen = yield* sql<{
@@ -124,12 +125,17 @@ export const startMessagingHost = (
       directory.active,
       (personaID) => host.personas.get(personaID)!.timeZone,
       (sessionID, id, text) =>
-        host.sessions
-          .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
-          .pipe(Effect.asVoid),
+        directory.admit(
+          sessionID,
+          host.sessions
+            .prompt({ sessionID: Session.ID.make(sessionID), id: SessionMessage.ID.make(id), text })
+            .pipe(Effect.asVoid),
+        ),
     );
+    const retained = yield* retainedSessions(host);
+    yield* retained.resume;
     sends.onSent(follow.sent);
-    yield* failedTurns(host, directory, alerts);
+    const forget = yield* failedTurns(host, directory, alerts);
     const { incoming, recovery } = yield* setupRebuilding(
       directory,
       host,
@@ -138,9 +144,11 @@ export const startMessagingHost = (
       sends.reconcile,
       follow.received,
       follow.sent,
+      sends.notice,
+      forget,
     );
     yield* Effect.forkScoped(follow.monitor);
-    incoming.onNew((conversation) => pace.onNew(conversation.id));
+    incoming.onNew((conversation) => pace.onNew(conversation.sessionID));
     const persona = host.personas.values().next().value!;
     const api = yield* onboarding({
       messages,
@@ -171,6 +179,8 @@ export const startMessagingHost = (
           .remove(Session.ID.make(sessionID))
           .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
       (handle) => recovery.rebuild(handle, true),
+      (sessionID, handle) =>
+        retained.retainRemoved(sessionID, handle).pipe(Effect.tap(() => forget(sessionID))),
     );
     return {
       ...host,

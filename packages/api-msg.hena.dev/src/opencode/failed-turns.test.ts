@@ -283,6 +283,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           mode = "ok";
           const beforeRecovery = (yield* llm.requests()).length;
           yield* failedTurns(host, host.conversations, notifications);
+          yield* llm.wait(beforeRecovery + 1);
           yield* host.sessions.wait(orphan.id);
           expect((yield* host.sessions.get(orphan.id)).outcome).toBe("succeeded");
           expect(yield* llm.requests()).toHaveLength(beforeRecovery + 1);

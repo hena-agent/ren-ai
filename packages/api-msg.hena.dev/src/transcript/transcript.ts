@@ -8,7 +8,7 @@ const tags =
 const words = (text: string) => text.replace(tags, "‹");
 const attribute = (text: string) => words(text).replaceAll('"', "”");
 
-const timestamp = (date: number, timeZone: string) => {
+export const timestamp = (date: number, timeZone: string) => {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
