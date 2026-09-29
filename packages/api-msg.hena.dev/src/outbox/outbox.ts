@@ -3,7 +3,6 @@ import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { Gestures } from "../gestures/gestures.ts";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
-import type { SendDiagnostic } from "../messages/send-diagnostic.ts";
 import type { Persona } from "../personas/personas.ts";
 import { notReacted, notSent, sent } from "../transcript/transcript.ts";
 import type { timing } from "../timing/timing.ts";
@@ -32,7 +31,6 @@ export const outbox = (
   active: (conversation: Conversation) => Effect.Effect<boolean, Error> = () =>
     Effect.succeed(true),
   pace?: ReturnType<typeof timing>,
-  diagnostic?: SendDiagnostic,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -55,7 +53,6 @@ export const outbox = (
         const status = yield* messages
           .sendStatus(row.guid)
           .pipe(Effect.catch(() => Effect.succeed("unknown" as const)));
-        if (diagnostic) yield* diagnostic.row(match.id, status);
         if (status !== "unknown") {
           const late = inFlight.has(match.id) ? match.late : 1;
           const updated =
@@ -103,7 +100,6 @@ export const outbox = (
             yield* sql`UPDATE send SET state = 'failed', late = 1, notification_pending = 1,
               updated_at = ${yield* Clock.currentTimeMillis}
               WHERE id = ${earlier.id} AND state IN ('recorded', 'uncertain')`;
-            if (diagnostic) yield* diagnostic.missing(earlier.id);
             current = yield* check(conversation, earlier);
           }
         }
@@ -232,11 +228,8 @@ export const outbox = (
             }>`SELECT id FROM send WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
             const id = rows[0]!.id;
             inFlight.add(id);
-            if (diagnostic) yield* diagnostic.claim(id, conversation.handle, text);
             return yield* Effect.gen(function* () {
               const outcome = yield* Effect.result(messages.sendText(conversation.handle, text));
-              if (diagnostic)
-                yield* diagnostic.result(id, Result.isFailure(outcome) ? "failure" : "success");
               if (Result.isFailure(outcome)) {
                 yield* sql`UPDATE send SET state = 'uncertain', late = 1, notification_pending = 1,
                 updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`;

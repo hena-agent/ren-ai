@@ -8,8 +8,7 @@ import {
   sendStatus,
   subscription,
 } from "./imsg-protocol.ts";
-import { ImsgRpcError, imsgRpc } from "./imsg-rpc.ts";
-import type { SendDiagnostic } from "./send-diagnostic.ts";
+import { imsgRpc } from "./imsg-rpc.ts";
 
 interface Alerts {
   raise(name: string, detail?: string): Effect.Effect<void>;
@@ -19,7 +18,7 @@ interface Alerts {
 const pageSize = 100;
 
 /** Scoped adapter: keep its scope alive for as long as Messages is in use. */
-export const makeImsgMessages = (alerts: Alerts, diagnostic?: SendDiagnostic) =>
+export const makeImsgMessages = (alerts: Alerts) =>
   Effect.gen(function* () {
     const rpc = yield* imsgRpc;
     const lifetime = yield* Scope.Scope;
@@ -87,31 +86,17 @@ export const makeImsgMessages = (alerts: Alerts, diagnostic?: SendDiagnostic) =>
         }),
       sendText: (handle, text) =>
         Effect.gen(function* () {
-          const reply = yield* Effect.result(
-            rpc.request("send", {
+          const outcome = yield* rpc
+            .request("send", {
               to: handle,
               text,
               service: "imessage",
               allow_sms_fallback: false,
-            }),
-          );
-          if (Result.isFailure(reply)) {
-            const error = reply.failure;
-            yield* (
-              diagnostic?.rpcError(
-                handle,
-                text,
-                error instanceof ImsgRpcError ? error.code : null,
-              ) ?? Effect.void
+            })
+            .pipe(
+              Effect.flatMap((value) => Effect.try(() => accepted(value))),
+              Effect.result,
             );
-          } else {
-            yield* diagnostic?.ack(handle, text, reply.success) ?? Effect.void;
-          }
-          const outcome = Result.isFailure(reply)
-            ? reply
-            : yield* Effect.result(Effect.try(() => accepted(reply.success)));
-          if (Result.isSuccess(reply) && Result.isFailure(outcome))
-            yield* diagnostic?.decodeError(handle, text) ?? Effect.void;
           if (Result.isFailure(outcome)) {
             sendFailures++;
             if (sendFailures >= 3) yield* alerts.raise("imsg-sends", "Repeated imsg send failures");

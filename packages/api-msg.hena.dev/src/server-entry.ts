@@ -35,7 +35,6 @@ await Effect.runPromise(
         personaDirectory: "/Users/chris/git/hena-agent/persona",
         publicPort: 4700,
         viewerPort: 4701,
-        diagnoseNextSend: process.env["REN_AI_SEND_DIAGNOSTIC"] === "1",
         secrets,
       },
       { messages: makeImsgMessages, gestures: makeMessagesUi },
