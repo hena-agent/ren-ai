@@ -11,7 +11,7 @@ export function Home({ onboarding }: { onboarding: OnboardingClient }) {
   const [input, setInput] = useState("");
   const [country, setCountry] = useState<Country>("KR");
   const [consent, setConsent] = useState(false);
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState<string | null>("");
   const [pending, setPending] = useState(false);
   const [answer, setAnswer] = useState<keyof typeof copy.answers>();
   const handle = normalizeHandle(input, country);
@@ -86,10 +86,13 @@ export function Home({ onboarding }: { onboarding: OnboardingClient }) {
             />
             {copy.form.consent}
           </label>
-          <a className="w-fit underline underline-offset-4" href="/privacy">
-            {copy.home.privacyLink}
-          </a>
-          <Turnstile onToken={setToken} />
+          <div>
+            <a className="block w-fit underline underline-offset-4" href="/privacy">
+              {copy.home.privacyLink}
+            </a>
+            {!pending && <Turnstile onToken={setToken} />}
+          </div>
+          {token === null && <p role="alert">{copy.form.verificationFailed}</p>}
           <button
             className="rounded bg-slate-900 p-3 text-white disabled:opacity-50"
             disabled={pending || !handle || !consent || !token}
