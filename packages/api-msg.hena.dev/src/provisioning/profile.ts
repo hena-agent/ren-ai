@@ -27,7 +27,12 @@ async function identity(identifier: string, path: string, run: Run): Promise<Ide
 
 async function receiver(name: string, run: Run): Promise<Identity> {
   const path = (
-    await run("/usr/bin/osascript", ["-e", `POSIX path of (path to application "${name}")`])
+    await run("/usr/bin/osascript", [
+      "-l",
+      "JavaScript",
+      "-e",
+      `ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.fullPathForApplication("${name}").js + "/"`,
+    ])
   ).trim();
   const id = (
     await run("/usr/libexec/PlistBuddy", [

@@ -13,7 +13,7 @@ describe("Mac permission provisioning", () => {
     const run = async (file: string, args: readonly string[]) => {
       commands.push([file, ...args]);
       if (file.endsWith("osascript"))
-        return args[1]?.includes('"Messages"')
+        return args[3]?.includes('"Messages"')
           ? "/Applications/Messages.app/\n"
           : "/System/Library/CoreServices/System Events.app/\n";
       if (file.endsWith("PlistBuddy"))
@@ -56,8 +56,10 @@ describe("Mac permission provisioning", () => {
     expect(commands).toContainEqual(["/usr/bin/codesign", "-dr", "-", "/opt/messaging/bun"]);
     expect(commands).toContainEqual([
       "/usr/bin/osascript",
+      "-l",
+      "JavaScript",
       "-e",
-      'POSIX path of (path to application "System Events")',
+      'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.fullPathForApplication("System Events").js + "/"',
     ]);
     expect(commands).toContainEqual([
       "/usr/libexec/PlistBuddy",
