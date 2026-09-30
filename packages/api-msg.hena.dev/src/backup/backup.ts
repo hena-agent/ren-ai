@@ -5,10 +5,10 @@ const retention = 14 * 24 * 60 * 60 * 1000;
 
 interface BackupOptions {
   readonly directory: string;
-  readonly openCodeDatabase: string;
+  readonly sessions: Effect.Effect<string, Error>;
 }
 
-/** Requires the server's SqlClient; opens the embedded host's file only during a snapshot. */
+/** Application SQLite and persona-scoped remote exports have independent storage owners. */
 export const makeBackup = (
   options: BackupOptions,
   health: {
@@ -26,14 +26,14 @@ export const makeBackup = (
       yield* fs.makeDirectory(options.directory, { recursive: true, mode: 0o700 });
       yield* fs.chmod(options.directory, 0o700);
       yield* sql`VACUUM INTO ${`${options.directory}/server-${now}.sqlite`}`;
-      const { SqliteClient } = yield* Effect.promise(() => import("@effect/sql-sqlite-bun"));
-      yield* Effect.gen(function* () {
-        const hostSql = yield* SqlClient.SqlClient;
-        yield* hostSql`VACUUM INTO ${`${options.directory}/opencode-${now}.sqlite`}`;
-      }).pipe(Effect.provide(SqliteClient.layer({ filename: options.openCodeDatabase })));
+      yield* fs.writeFileString(
+        `${options.directory}/opencode-${now}.json`,
+        yield* options.sessions,
+        { mode: 0o600 },
+      );
 
       for (const file of yield* fs.readDirectory(options.directory)) {
-        const match = /^(?:server|opencode)-(\d+)\.sqlite$/.exec(file);
+        const match = /^(?:server|opencode)-(\d+)\.(?:sqlite|json)$/.exec(file);
         if (match && Number(match[1]) < now - retention) {
           yield* fs.remove(`${options.directory}/${file}`);
         }

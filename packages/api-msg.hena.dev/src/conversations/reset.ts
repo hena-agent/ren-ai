@@ -3,7 +3,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { conversations } from "./conversations.ts";
-import type { isolatedHost } from "../opencode/isolate.ts";
+import type { PersonaRuntime } from "../opencode/runtime.ts";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
 import { conversationStarted, timestamp } from "../transcript/transcript.ts";
 import { retainedSessions } from "./retained.ts";
@@ -11,7 +11,7 @@ import { resetBoundary } from "./reset-boundary.ts";
 
 export const resets = (
   directory: Effect.Success<typeof conversations>,
-  host: Effect.Success<ReturnType<typeof isolatedHost>>,
+  host: PersonaRuntime,
   notice: Readonly<Record<"ko", string>>,
   sendNotice: (handle: string, text: string) => Effect.Effect<void, Error>,
   forget: (sessionID: string) => Effect.Effect<void>,

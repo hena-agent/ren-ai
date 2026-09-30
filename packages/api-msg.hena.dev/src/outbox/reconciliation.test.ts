@@ -107,7 +107,7 @@ test("a recorded crash, confirmed late send, and Apple error 22 settle before th
   );
 });
 
-test("a crash with no row or only unrelated rows fails safely after grace", async () => {
+test("a missing row after a crash stays uncertain until the exact late delivery is observed", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -137,14 +137,20 @@ test("a crash with no row or only unrelated rows fails safely after grace", asyn
           sends.send(conversation, "proceed", "after-crash"),
         );
         yield* TestClock.adjust("3 seconds");
-        expect(yield* Fiber.join(waiting)).toBe("sent");
-        expect((yield* sends.results("unobserved"))[0]?.state).toBe("failed");
+        expect(yield* Fiber.join(waiting)).toBe("not sent: an earlier send is still in doubt");
+        expect(fake.bubbles).toEqual([]);
         yield* sql`UPDATE send SET state = 'uncertain', guid = 'expected-guid', late = 1,
-          notification_pending = 1 WHERE tool_call_id = 'after-crash'`;
-        yield* fake.outgoing(conversation.handle, "proceed", 3000, "sent", "different-guid");
+          notification_pending = 1 WHERE tool_call_id = 'crash'`;
+        yield* fake.outgoing(conversation.handle, "absent", 3000, "sent", "different-guid");
         const another = yield* Effect.forkScoped(sends.send(conversation, "second", "second-call"));
         yield* TestClock.adjust("3 seconds");
-        expect(yield* Fiber.join(another)).toBe("sent");
+        expect(yield* Fiber.join(another)).toBe("not sent: an earlier send is still in doubt");
+        yield* fake.outgoing(conversation.handle, "absent", 6000, "delivered", "expected-guid");
+        expect(yield* sends.send(conversation, "second", "second-call")).toContain(
+          'earlier message "absent" did go out',
+        );
+        expect(fake.bubbles).toEqual([]);
+        expect((yield* sends.results("unobserved"))[0]?.state).toBe("delivered");
       }).pipe(
         Random.withSeed("unobserved"),
         Effect.provide(TestClock.layer()),

@@ -11,7 +11,7 @@ import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
-import { startMessagingHost } from "../main.ts";
+import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { silentAlerts } from "./scripted-overrides.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";

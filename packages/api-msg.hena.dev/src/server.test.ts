@@ -1,67 +1,23 @@
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
-import { SqliteClient } from "@effect/sql-sqlite-node";
 import { TestLLM } from "@opencode/ai/testing";
 import { Effect, Layer, Sink, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { Session } from "@opencode/schema/session";
-import { afterAll, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { fakeMessages } from "./messages/messages.fake.ts";
 import { notice } from "@ren-ai/onboarding";
 import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { runOperatorCli } from "./operator/cli.ts";
-import { scriptedOverrides } from "./opencode/scripted-overrides.test-helper.ts";
-import { model, valid } from "../test/host.test-helper.ts";
-import { composeServer } from "./server.ts";
+import { valid, personaFixture } from "../test/host.test-helper.ts";
+import { composedTestServer, listenerUrl, unrelatedSession } from "../test/server.test-helper.ts";
 import { servePublic } from "./public-listener.ts";
+import { runMessagingTest } from "../test/messaging-host.test-helper.ts";
 
-vi.mock("@effect/sql-sqlite-bun", async () => ({
-  SqliteClient: { layer: (await import("@effect/sql-sqlite-node")).SqliteClient.layer },
-}));
-
-const xdg = await vi.hoisted(async () => {
-  const fs = await import("node:fs");
-  const os = await import("node:os");
-  const paths = await import("node:path");
-  const root = fs.mkdtempSync(paths.join(os.tmpdir(), "server-xdg-"));
-  for (const name of ["config", "data", "state", "cache"]) {
-    const location = paths.join(root, name);
-    fs.mkdirSync(location);
-    process.env[`XDG_${name.toUpperCase()}_HOME`] = location;
-  }
-  return root;
-});
-afterAll(() => rmSync(xdg, { recursive: true, force: true }));
-
-const secrets = {
-  OPENCODE_GO_KEY: "scripted",
-  TURNSTILE_SECRET: "turnstile-test",
-  VIEWER_PASSWORD: "viewer-test",
-  DISCORD_WEBHOOK_URL: "https://discord.invalid/hook",
-};
-
-const http = HttpClient.make((request) =>
-  Effect.succeed(
-    HttpClientResponse.fromWeb(
-      request,
-      new Response(request.url.includes("siteverify") ? '{"success":true}' : "ok", {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    ),
-  ),
-);
-const platform = Layer.mergeAll(
-  NodeServices.layer,
-  SqliteClient.layer({ filename: ":memory:" }),
-  Layer.succeed(HttpClient.HttpClient, http),
-);
-
+const platform = Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer);
 const processes = ChildProcessSpawner.make(() =>
   Effect.succeed(
     ChildProcessSpawner.makeHandle({
@@ -80,153 +36,125 @@ const processes = ChildProcessSpawner.make(() =>
   ),
 );
 
-test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conversation", async () => {
-  const root = await mkdtemp(join(tmpdir(), "composed-server-"));
-  const personaDirectory = join(root, "persona");
-  await mkdir(personaDirectory);
-  await writeFile(join(personaDirectory, "persona1.md"), valid);
+const onboardingRequest = (privacyNoticeVersion: string) =>
+  new Request("http://local/onboarding", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "https://msg.hena.dev" },
+    body: JSON.stringify({
+      handle: "+821012345678",
+      locale: "ko",
+      privacyNoticeVersion,
+      turnstileToken: "human",
+    }),
+  });
+
+test("composed HTTP, remote OpenCode, messaging API and operator socket complete a Conversation", async () => {
+  const { root, personaDirectory, cleanup } = await personaFixture("composed-server-", valid);
   const fake = fakeMessages();
   const ui = fakeGestures();
   let greeted = false;
   let replied = false;
-  const offlineFetch = globalThis.fetch;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(
-      async () =>
-        new Response('{"success":true}', {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-    ),
-  );
+  const network = globalThis.fetch;
+  vi.stubGlobal("fetch", (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    return url.includes("siteverify") || url.includes("discord.invalid")
+      ? Promise.resolve(Response.json({ success: true }))
+      : network(input, init);
+  });
   try {
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()));
-          yield* llm.serve((request) => {
-            if (!request.tools.some((tool) => tool.name === "send"))
-              return TestLLM.text("title", "title");
-            if (JSON.stringify(request.messages).includes("안녕?")) {
-              if (!replied) {
-                replied = true;
-                return TestLLM.tool("call-2", "send", { text: "반가워!" });
-              }
-            } else if (!greeted) {
-              greeted = true;
-              return TestLLM.tool("call-1", "send", { text: "안녕 🙂" });
+    await runMessagingTest(
+      Effect.gen(function* () {
+        const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()));
+        yield* llm.serve((request) => {
+          if (!request.tools.some((tool) => tool.name === "send"))
+            return TestLLM.text("title", "title");
+          if (JSON.stringify(request.messages).includes("안녕?")) {
+            if (!replied) {
+              replied = true;
+              return TestLLM.tool("call-2", "send", { text: "반가워!" });
             }
-            return TestLLM.text("done", "done");
-          });
-          const server = yield* composeServer(
-            {
-              stateDirectory: root,
-              personaDirectory,
-              publicPort: 0,
-              viewerPort: 0,
-              noticeVersion: "v1",
-              secrets,
-              host: {
-                model: "test/probe",
-                providers: {},
-                overrides: scriptedOverrides(llm, model),
-                memory: { contextTokens: 100_000, budgetTokens: 60_000, recentTokens: 12_000 },
-              },
-            },
-            {
-              messages: () => Effect.succeed(fake.messages),
-              gestures: () => Effect.succeed(ui.gestures),
-            },
-          );
-          const body = JSON.stringify({
-            handle: "+821012345678",
-            locale: "ko",
-            privacyNoticeVersion: "v1",
-            turnstileToken: "human",
-          });
-          const response = yield* Effect.promise(() =>
-            server.publicWeb(
-              new Request("http://local/onboarding", {
-                method: "POST",
-                headers: { "content-type": "application/json", origin: "https://msg.hena.dev" },
-                body,
-              }),
-            ),
-          );
-          expect(response.status).toBe(200);
-          expect(yield* Effect.promise(() => response.json())).toBe("sent");
-          const conversation = yield* server.host.conversations.byHandle("+821012345678");
-          expect(conversation).toBeDefined();
-          const waitForBubbles = (count: number) =>
-            Effect.gen(function* () {
-              for (let attempt = 0; attempt < 200 && fake.bubbles.length < count; attempt++) {
-                yield* Effect.sleep("20 millis");
-              }
-              expect(fake.bubbles).toHaveLength(count);
-            });
-          yield* waitForBubbles(2);
-          yield* server.host.sessions
-            .wait(Session.ID.make(conversation!.sessionID))
-            .pipe(Effect.timeout("20 seconds"));
-          expect(
-            (yield* server.host.sessions.messages({
-              sessionID: Session.ID.make(conversation!.sessionID),
-            })).some((message) => message.id === `msg_onboarding_${conversation!.sessionID}`),
-          ).toBe(true);
-          expect(fake.bubbles).toEqual([
-            { handle: conversation!.handle, text: noticeCopy.ko },
-            { handle: conversation!.handle, text: "안녕 🙂" },
-          ]);
-          yield* fake.text(conversation!.handle, "안녕?", Date.now());
-          yield* waitForBubbles(3);
-          yield* server.host.sessions
-            .wait(Session.ID.make(conversation!.sessionID))
-            .pipe(Effect.timeout("20 seconds"));
-          expect(fake.bubbles.at(-1)).toEqual({ handle: conversation!.handle, text: "반가워!" });
-          expect(JSON.stringify(yield* llm.requests())).toContain("안녕?");
-          const authorization = `Basic ${Buffer.from("opencode:viewer-test").toString("base64")}`;
-          const files = yield* Effect.promise(() =>
-            server.viewerWeb(
-              new Request(
-                `http://viewer/api/fs/list?path=&location[directory]=${encodeURIComponent(personaDirectory)}`,
-                { headers: { authorization } },
-              ),
-            ),
-          );
-          expect(files.status).toBe(200);
-          expect(yield* Effect.promise(() => files.json())).toEqual({
-            location: { directory: personaDirectory },
-            data: [],
-          });
-          for (const route of ["/api/config", "/api/provider/private", "/openapi.json"]) {
-            const denied = yield* Effect.promise(() =>
-              server.viewerWeb(
-                new Request(`http://viewer${route}`, { headers: { authorization } }),
-              ),
-            );
-            expect(process.env["HOME"]).toBe(join(root, "isolated"));
-            expect(server.socket).toBe(join(root, "operator", "operator.sock"));
-            expect(denied.status).toBe(403);
+          } else if (!greeted) {
+            greeted = true;
+            return TestLLM.tool("call-1", "send", { text: "안녕 🙂" });
           }
-          expect(yield* runOperatorCli(["remove", conversation!.handle], server.socket)).toBe(
-            `Removed ${conversation!.handle}`,
-          );
-          expect(yield* server.host.conversations.byHandle(conversation!.handle)).toBeUndefined();
-          expect(fake.bubbles).toHaveLength(3);
-        }).pipe(
-          Effect.provide(platform),
-          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, processes),
-        ),
+          return TestLLM.text("done", "done");
+        });
+        const server = yield* composedTestServer(
+          root,
+          personaDirectory,
+          llm,
+          fake.messages,
+          ui.gestures,
+          "test/probe",
+        );
+        const response = yield* Effect.promise(() => server.publicWeb(onboardingRequest("v1")));
+        expect(response.status).toBe(200);
+        expect(yield* Effect.promise(() => response.json())).toBe("sent");
+        const conversation = yield* server.host.conversations.byHandle("+821012345678");
+        expect(conversation).toBeDefined();
+        const waitForBubbles = (count: number) =>
+          Effect.gen(function* () {
+            while (fake.bubbles.length < count) yield* Effect.sleep("20 millis");
+            expect(fake.bubbles).toHaveLength(count);
+          }).pipe(Effect.timeout("5 seconds"));
+        yield* waitForBubbles(2);
+        const sessionID = Session.ID.make(conversation!.sessionID);
+        yield* server.host.sessions.wait(sessionID);
+        expect(
+          (yield* server.host.sessions.messages({ sessionID })).some(
+            (message) => message.id === `msg_onboarding_${sessionID}`,
+          ),
+        ).toBe(true);
+        expect(fake.bubbles).toEqual([
+          { handle: conversation!.handle, text: noticeCopy.ko },
+          { handle: conversation!.handle, text: "안녕 🙂" },
+        ]);
+        yield* fake.text(conversation!.handle, "안녕?", Date.now());
+        yield* waitForBubbles(3);
+        yield* server.host.sessions.wait(sessionID);
+        expect(fake.bubbles.at(-1)).toEqual({ handle: conversation!.handle, text: "반가워!" });
+        expect(JSON.stringify(yield* llm.requests())).toContain("안녕?");
+        yield* server.host.client.session.update({
+          sessionID,
+          title: "Native OpenCode operator edit",
+        });
+        expect((yield* server.host.sessions.get(sessionID)).title).toBe(
+          "Native OpenCode operator edit",
+        );
+        expect(
+          (yield* Effect.promise(() =>
+            server.publicWeb(new Request("http://local/rpc", { method: "POST" })),
+          )).status,
+        ).toBe(401);
+        expect(
+          (yield* Effect.promise(() => server.publicWeb(new Request("http://local/api/config"))))
+            .status,
+        ).toBe(404);
+        yield* server.backup.tick;
+        const files = yield* Effect.promise(() => readdir(join(root, "backups")));
+        expect(files.filter((name) => /^server-\d+\.sqlite$/.test(name))).toHaveLength(1);
+        const archive = files.find((name) => /^opencode-\d+\.json$/.test(name))!;
+        expect(
+          yield* Effect.promise(() => readFile(join(root, "backups", archive), "utf8")),
+        ).toContain("반가워!");
+        expect(server.socket).toBe(join(root, "operator", "operator.sock"));
+        expect(yield* runOperatorCli(["remove", conversation!.handle], server.socket)).toBe(
+          `Removed ${conversation!.handle}`,
+        );
+        expect(yield* server.host.conversations.byHandle(conversation!.handle)).toBeUndefined();
+        expect(fake.bubbles).toHaveLength(3);
+      }).pipe(
+        Effect.provide(platform),
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, processes),
       ),
     );
   } finally {
-    vi.stubGlobal("fetch", offlineFetch);
-    await rm(root, { recursive: true, force: true });
+    vi.stubGlobal("fetch", network);
+    await cleanup();
   }
 }, 60000);
 
-test("production model settings and public listener reject invalid binding", async () => {
+test("the public listener preserves bodies and headers and rejects an occupied port", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -238,10 +166,8 @@ test("production model settings and public listener reject invalid binding", asy
             }),
           0,
         );
-        const address = listener.address();
-        if (!address || typeof address === "string") throw new Error("Expected TCP listener");
-        expect(address.address).toBe("127.0.0.1");
-        const url = `http://127.0.0.1:${address.port}`;
+        const url = listenerUrl(listener);
+        expect(listener.address()).toMatchObject({ address: "127.0.0.1", family: "IPv4" });
         const get = yield* Effect.promise(() => fetch(url));
         expect(get.status).toBe(201);
         expect(yield* Effect.promise(() => get.text())).toBe("");
@@ -255,116 +181,89 @@ test("production model settings and public listener reject invalid binding", asy
         expect(yield* Effect.promise(() => post.text())).toBe("payload");
         expect(post.headers.get("x-check")).toBe("ok");
         expect(
-          yield* servePublic(() => Promise.resolve(new Response()), address.port).pipe(Effect.flip),
+          yield* servePublic(() => Promise.resolve(new Response()), Number(new URL(url).port)).pipe(
+            Effect.flip,
+          ),
         ).toBeDefined();
-      }),
-    ),
-  );
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const listener = yield* servePublic(() => Promise.reject(new Error("closed")), 0);
-        const address = listener.address();
-        if (!address || typeof address === "string") throw new Error("Expected TCP listener");
-        yield* Effect.promise(() =>
-          fetch(`http://127.0.0.1:${address.port}`).catch(() => undefined),
-        );
+        const failed = yield* servePublic(() => Promise.reject(new Error("closed")), 0);
+        expect((yield* Effect.promise(() => fetch(listenerUrl(failed)))).status).toBe(500);
       }),
     ),
   );
 });
 
-test("production settings are isolated and the model is configured without contacting it", async () => {
-  const root = await mkdtemp(join(tmpdir(), "production-settings-"));
-  const personaDirectory = join(root, "persona");
-  await mkdir(personaDirectory);
-  await writeFile(join(personaDirectory, "persona1.md"), valid);
-  const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Offline test"));
+test("production model selection uses remote OpenCode and onboarding still rejects invalid consent and Turnstile", async () => {
+  const { root, personaDirectory, cleanup } = await personaFixture("remote-settings-", valid);
   const fake = fakeMessages();
   try {
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const server = yield* composeServer(
-            {
-              stateDirectory: root,
-              personaDirectory,
-              publicPort: 0,
-              viewerPort: 0,
-              secrets,
-            },
-            {
-              messages: () => Effect.succeed(fake.messages),
-              gestures: () => Effect.succeed(fakeGestures().gestures),
-            },
-          );
-          const session = yield* server.host.createSession("persona1");
-          expect(session.model).toEqual({
-            providerID: "opencode-go",
-            id: "deepseek-v4.1-flash",
-            variant: "default",
-          });
-          const config = yield* Effect.promise(() =>
-            server.host.web(new Request("http://host/api/config")),
-          );
-          const body = yield* Effect.promise(() => config.text());
-          expect(body).toContain('"apiKey":"scripted"');
-          expect(body).toContain(join(root, "isolated", "config"));
-          expect(body).toContain('"buffer":400000');
-          expect(body).toContain('"tokens":12000');
-          yield* server.backup.tick;
-          const files = yield* Effect.promise(() => readdir(join(root, "backups")));
-          expect(
-            files.filter((name) => /^(?:server|opencode)-\d+\.sqlite$/.test(name)),
-          ).toHaveLength(2);
-          const pending = yield* Effect.promise(() =>
-            server.publicWeb(
-              new Request("http://local/onboarding", {
-                method: "POST",
-                headers: { "content-type": "application/json", origin: "https://msg.hena.dev" },
-                body: JSON.stringify({
-                  handle: "+821012345678",
-                  locale: "ko",
-                  privacyNoticeVersion: "pending",
-                  turnstileToken: "human",
-                }),
-              }),
-            ),
-          );
-          expect(pending.status).toBe(400);
-          const rejectedTurnstile = HttpClient.make((request) =>
-            Effect.succeed(
-              HttpClientResponse.fromWeb(
-                request,
-                new Response('{"success":false}', {
-                  headers: { "content-type": "application/json" },
-                }),
-              ),
-            ),
-          );
-          expect(
-            yield* server.host
-              .onboard({
-                handle: "+821012345678",
-                locale: "ko",
-                privacyNoticeVersion: notice.ko.version,
-                turnstileToken: "human",
-              })
-              .pipe(
-                Effect.provide(Layer.succeed(HttpClient.HttpClient, rejectedTurnstile)),
-                Effect.flip,
-              ),
-          ).toBe("Turnstile failed");
-          expect(fake.bubbles).toEqual([]);
-          expect(network).not.toHaveBeenCalled();
-        }).pipe(
-          Effect.provide(platform),
-          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, processes),
-        ),
+    await runMessagingTest(
+      Effect.gen(function* () {
+        const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()));
+        const server = yield* composedTestServer(
+          root,
+          personaDirectory,
+          llm,
+          fake.messages,
+          fakeGestures().gestures,
+        );
+        const session = yield* server.host.createSession("persona1");
+        expect(session.model).toEqual({
+          providerID: "opencode-go",
+          id: "deepseek-v4.1-flash",
+          variant: "default",
+        });
+        const pending = yield* Effect.promise(() => server.publicWeb(onboardingRequest("pending")));
+        expect(pending.status).toBe(400);
+        const rejected = HttpClient.make((request) =>
+          Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ success: false }))),
+        );
+        expect(
+          yield* server.host
+            .onboard({
+              handle: "+821012345678",
+              locale: "ko",
+              privacyNoticeVersion: notice.ko.version,
+              turnstileToken: "human",
+            })
+            .pipe(Effect.provideService(HttpClient.HttpClient, rejected), Effect.flip),
+        ).toBe("Turnstile failed");
+        expect(fake.bubbles).toEqual([]);
+        yield* llm.serve(() => TestLLM.text("fixture answer", "answer"));
+        yield* server.host.sessions.prompt({
+          sessionID: session.id,
+          text: "check persona configuration",
+        });
+        yield* server.host.sessions.wait(session.id);
+        const managed = yield* server.host.client.agent.list({
+          location: { directory: personaDirectory },
+        });
+        expect(managed.data.find((agent) => agent.id === "persona1")?.system).toContain(
+          "You are Persona1",
+        );
+        const otherDirectory = join(root, "unrelated-project");
+        yield* Effect.promise(() => mkdir(otherDirectory));
+        yield* Effect.promise(() => rm(join(root, "application-token")));
+        expect((yield* unrelatedSession(server.host.client, otherDirectory)).outcome).toBe(
+          "succeeded",
+        );
+        const other = yield* server.host.client.agent.list({
+          location: { directory: otherDirectory },
+        });
+        expect(other.data.find((agent) => agent.id === "persona1")?.system ?? "").not.toContain(
+          "You are Persona1",
+        );
+        const plugins = yield* server.host.client.plugin.list({
+          location: { directory: otherDirectory },
+        });
+        expect(plugins.data.find((plugin) => plugin.id === "personas")?.state.status).toBe(
+          "active",
+        );
+      }).pipe(
+        Effect.provide(platform),
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, processes),
       ),
     );
   } finally {
-    network.mockRestore();
-    await rm(root, { recursive: true, force: true });
+    await cleanup();
   }
 }, 60000);

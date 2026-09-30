@@ -1,4 +1,9 @@
 #!/bin/bash
 set -euo pipefail
-host="${1:-chris-mini}"
-ssh "$host" 'set -e; cd /Users/chris/git/hena-agent/ren-ai; git fetch origin main; git merge --ff-only origin/main; /Users/chris/.bun/bin/bun install --frozen-lockfile; launchctl kickstart -k gui/$(id -u)/dev.hena.ren-ai-web-ui; launchctl kickstart -k gui/$(id -u)/dev.hena.ren-ai'
+ops="$(cd "$(dirname "$0")" && pwd)"
+[[ "${CONFIRM_STAGED_DEPLOYMENT:-}" == yes ]] || { echo 'Set CONFIRM_STAGED_DEPLOYMENT=yes only after reviewing maintenance mode and old intake status' >&2; exit 1; }
+grep -qx 'BOOTSTRAP_ONLY=true' "${REN_AI_APP_ENV:?Set REN_AI_APP_ENV}" || { echo 'Deploy script only starts in bootstrap mode; resumption is an explicit cutover step' >&2; exit 1; }
+docker compose -f "$ops/compose.yml" config --quiet
+docker compose -f "$ops/compose.yml" build api-msg
+docker compose -f "$ops/compose.yml" up -d api-msg cloudflared
+echo 'Staged application only. Import/reconcile/verify before explicitly turning bootstrap mode off.'

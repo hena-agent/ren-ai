@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/*.ts"],
+  "workspaces": {
+    ".": { "entry": ["scripts/check-site-build.ts"] },
+    "packages/api-msg.hena.dev": { "entry": ["src/opencode/remote-plugin.ts"] }
+  },
   "ignore": [".agents/**", "scripts/**/*.mjs"],
   "ignoreDependencies": ["jscpd"]
 }

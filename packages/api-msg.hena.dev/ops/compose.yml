@@ -1,0 +1,48 @@
+name: ren-ai
+services:
+  api-msg:
+    image: ren-ai/application:local
+    build:
+      context: ../../..
+      dockerfile: packages/api-msg.hena.dev/ops/Dockerfile
+      target: application
+    restart: unless-stopped
+    init: true
+    env_file: ${REN_AI_APP_ENV:?Set REN_AI_APP_ENV to a protected application env file}
+    environment:
+      STATE_DIRECTORY: /state
+      PERSONA_DIRECTORY: /personas
+      LISTEN_HOST: 0.0.0.0
+      PORT: "4700"
+    volumes:
+      - application-state:/state
+      - ${REN_AI_PERSONAS:?Set REN_AI_PERSONAS to the reviewed persona directory}:/personas:ro
+    networks: [application]
+    # No host/LAN ports. Configure the Cloudflare ingress as http://api-msg:4700.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.0
+    restart: unless-stopped
+    command: [tunnel, run]
+    environment:
+      TUNNEL_TOKEN: ${REN_AI_TUNNEL_TOKEN:?Set the application Cloudflare Tunnel token}
+    networks: [application]
+    depends_on: [api-msg]
+  install-location:
+    profiles: [tools]
+    image: ren-ai/plugin:local
+    build:
+      context: ../../..
+      dockerfile: packages/api-msg.hena.dev/ops/Dockerfile
+      target: plugin
+    network_mode: none
+    volumes:
+      - persona-location:/location
+      - ${REN_AI_LOCATION_INPUT:?Set REN_AI_LOCATION_INPUT to reviewed config/token directory}:/input:ro
+networks:
+  application:
+volumes:
+  application-state:
+    name: ${REN_AI_STATE_VOLUME:-ren-ai-application-state}
+  persona-location:
+    external: true
+    name: ${REN_AI_LOCATION_VOLUME:-ren-ai-opencode-location}

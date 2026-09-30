@@ -1,0 +1,12 @@
+{
+  "name": "ren-ai-persona-location-plugin",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "dependencies": {
+    "@opencode/plugin": "2.0.19",
+    "@opencode/ai": "2.0.19",
+    "@opencode/schema": "2.0.19",
+    "effect": "4.0.0-rc.112"
+  }
+}

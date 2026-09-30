@@ -10,7 +10,7 @@ import { expect } from "vitest";
 import { join } from "node:path";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { startMessagingHost } from "../src/main.ts";
+import { startMessagingHost } from "./application.test-helper.ts";
 import type { Messages } from "../src/messages/messages.ts";
 import type { Gestures } from "../src/gestures/gestures.ts";
 import { noticeCopy } from "../src/onboarding/onboarding.ts";

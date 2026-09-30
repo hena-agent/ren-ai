@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import type { Conversation, conversations } from "./conversations.ts";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
-import type { isolatedHost } from "../opencode/isolate.ts";
+import type { PersonaRuntime } from "../opencode/runtime.ts";
 import type { Messages, IncomingMessage } from "../messages/messages.ts";
 import { intake } from "../intake/intake.ts";
 import { rebuilder } from "./rebuild-session.ts";
@@ -10,7 +10,7 @@ import { resets } from "./reset.ts";
 
 export const setupRebuilding = (
   directory: Effect.Success<typeof conversations>,
-  host: Effect.Success<ReturnType<typeof isolatedHost>>,
+  host: PersonaRuntime,
   messages: Messages,
   notice: Readonly<Record<"ko", string>>,
   reconcile: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,

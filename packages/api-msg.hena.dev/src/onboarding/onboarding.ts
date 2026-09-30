@@ -1,11 +1,10 @@
 import {
   normalizeHandle,
-  OnboardingAnswer,
   OnboardingRequest,
   WaitlistRequest,
   notice as localeNotice,
 } from "@ren-ai/onboarding";
-import { Clock, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect";
+import { Clock, Effect, Layer, Option, Schedule, Semaphore } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
@@ -13,35 +12,12 @@ import {
   HttpServer,
   HttpServerRequest,
 } from "effect/unstable/http";
-import {
-  HttpApi,
-  HttpApiBuilder,
-  HttpApiEndpoint,
-  HttpApiGroup,
-  HttpApiSchema,
-} from "effect/unstable/httpapi";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { onboardingApi } from "./api.ts";
 import { SqlClient } from "effect/unstable/sql";
 import type { Messages } from "../messages/messages.ts";
 import type { Persona } from "../personas/personas.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
-
-export const onboardingApi = HttpApi.make("onboarding").add(
-  HttpApiGroup.make("public")
-    .add(
-      HttpApiEndpoint.post("submit", "/onboarding", {
-        payload: OnboardingRequest,
-        success: OnboardingAnswer,
-        error: Schema.String.pipe(HttpApiSchema.status(400)),
-      }),
-    )
-    .add(
-      HttpApiEndpoint.post("waitlist", "/waitlist", {
-        payload: WaitlistRequest,
-        success: Schema.Void,
-        error: Schema.String.pipe(HttpApiSchema.status(400)),
-      }),
-    ),
-);
 
 export const noticeCopy = { ko: localeNotice.ko.text };
 

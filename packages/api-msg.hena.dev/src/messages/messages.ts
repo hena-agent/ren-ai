@@ -2,6 +2,9 @@ import type { Effect } from "effect";
 
 /** The adapter must force iMessage and must never fall back to SMS. */
 export interface Messages {
+  image(
+    attachment: NonNullable<IncomingMessage["attachments"]>[number],
+  ): Effect.Effect<{ readonly uri: string }, Error>;
   sendText(handle: string, text: string): Effect.Effect<{ readonly guid: string | null }, Error>;
   /** Status of her most recent outgoing row, using its date_read and delivery fields. */
   lastOutgoingStatus(handle: string): Effect.Effect<OutgoingStatus | undefined, Error>;

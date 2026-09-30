@@ -18,7 +18,7 @@ import { Session } from "@opencode/schema/session";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
-import { startMessagingHost } from "../main.ts";
+import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";

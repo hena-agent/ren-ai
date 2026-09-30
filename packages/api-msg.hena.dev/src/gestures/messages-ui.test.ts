@@ -5,6 +5,23 @@ import { failure, setup } from "../../test/messages-ui.test-helper.ts";
 
 type Fixture = Awaited<ReturnType<typeof setup>>;
 
+test("a failed permission probe reports its action in repeated failure diagnostics", async () => {
+  const fixture = await setup();
+  fixture.exitOn("ensure", "Automation denied");
+  for (let attempt = 0; attempt < 3; attempt++)
+    expect(await failure(fixture.gestures.probe())).toContain("Automation denied");
+  const repeated = fixture.alerts.filter((alert) => alert.startsWith("gestures:"));
+  expect(repeated.length).toBeGreaterThan(0);
+  for (const alert of repeated)
+    expect(alert).toBe("gestures: ensure: Messages UI ensure: exit code 1: Automation denied");
+});
+
+test("permission verification exercises Messages automation without selecting a Conversation", async () => {
+  const fixture = await setup();
+  await Effect.runPromise(fixture.gestures.probe());
+  expect(fixture.events).toEqual(["ensure", "park"]);
+});
+
 const finishAfterDeadline = (task: Effect.Effect<void | boolean, Error>) =>
   Effect.runPromise(
     Effect.scoped(

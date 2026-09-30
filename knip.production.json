@@ -1,6 +1,34 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/*.ts"],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "stryker.config.js!",
+        "scripts/check-site-build.ts!",
+        "scripts/exceptions.ts!",
+        "scripts/mutation-cache-key.ts!",
+        "scripts/mutation-ci.ts!",
+        "scripts/run-quality-gate.ts!",
+        "scripts/verify-gates.ts!"
+      ]
+    },
+    "packages/api-msg.hena.dev": {
+      "entry": [
+        "src/server-entry.ts!",
+        "src/operator-entry.ts!",
+        "src/opencode/remote-plugin.ts!",
+        "ops/imsg-entry.ts!",
+        "ops/imsg-verify.ts!",
+        "ops/location-config.ts!",
+        "ops/mdm/enrollment-entry.ts!",
+        "ops/mdm/profile-entry.ts!",
+        "ops/offline-export.ts!",
+        "ops/patch-opencode-proxy.ts!",
+        "ops/session-transfer.ts!",
+        "ops/verify-mac-graph.ts!"
+      ]
+    }
+  },
   "ignore": [".agents/**", "scripts/**/*.mjs"],
   "ignoreFiles": [
     "**/*.fake.ts",

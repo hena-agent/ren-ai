@@ -9,23 +9,33 @@
   "main": "./src/server-entry.ts",
   "scripts": {
     "start": "bun run src/server-entry.ts",
+    "start:imsg": "bun run ops/imsg-entry.ts",
+    "mdm:profile": "bun run ops/mdm/profile-entry.ts",
+    "mdm:enrollment": "bun run ops/mdm/enrollment-entry.ts",
+    "verify:imsg": "bun run ops/imsg-verify.ts",
+    "opencode:config": "bun run ops/location-config.ts",
+    "opencode:proxy": "bun run ops/patch-opencode-proxy.ts",
+    "migration:export-legacy": "bun run ops/offline-export.ts",
+    "migration:sessions": "bun run ops/session-transfer.ts",
+    "verify:mac-bundle": "bun run ops/verify-mac-graph.ts",
     "operator": "bun run src/operator-entry.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
     "@effect/sql-sqlite-bun": "4.0.0-rc.112",
-    "@opencode/core": "2.0.16",
-    "@opencode/plugin": "2.0.16",
-    "@opencode/schema": "2.0.16",
-    "@opencode/server": "2.0.16",
+    "@opencode/ai": "2.0.19",
+    "@opencode/client": "2.0.19",
+    "@opencode/plugin": "2.0.19",
+    "@opencode/schema": "2.0.19",
     "@ren-ai/onboarding": "workspace:*",
     "effect": "4.0.0-rc.112",
     "yaml": "2.8.2"
   },
   "devDependencies": {
     "@effect/sql-sqlite-node": "4.0.0-rc.112",
-    "@opencode/ai": "2.0.16",
+    "@opencode/core": "2.0.19",
+    "@opencode/server": "2.0.19",
     "@types/node": "26.6.2",
     "typescript": "7.0.2",
     "vitest": "5.0.1"

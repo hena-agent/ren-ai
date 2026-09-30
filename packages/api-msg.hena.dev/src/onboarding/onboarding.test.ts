@@ -9,7 +9,8 @@ import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { outbox } from "../outbox/outbox.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
-import { onboarding, onboardingApi, noticeCopy } from "./onboarding.ts";
+import { onboarding, noticeCopy } from "./onboarding.ts";
+import { onboardingApi } from "./api.ts";
 
 const input = {
   handle: "+821012345678",

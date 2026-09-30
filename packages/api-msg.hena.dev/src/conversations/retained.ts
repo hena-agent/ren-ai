@@ -1,10 +1,10 @@
 import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
-import type { isolatedHost } from "../opencode/isolate.ts";
+import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { timestamp } from "../transcript/transcript.ts";
 
-export const retainedSessions = (host: Effect.Success<ReturnType<typeof isolatedHost>>) => {
+export const retainedSessions = (host: PersonaRuntime) => {
   const stop = (sessionID: string, title: string) =>
     Effect.gen(function* () {
       const id = Session.ID.make(sessionID);

@@ -7,7 +7,7 @@ import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, type Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { scriptedOverrides } from "./host.test-helper.ts";
-import { startMessagingHost } from "../src/main.ts";
+import { startMessagingHost, startPersonaHost } from "./application.test-helper.ts";
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 import type { Messages } from "../src/messages/messages.ts";
 import { fakeGestures } from "../src/gestures/gestures.fake.ts";
@@ -55,6 +55,16 @@ export const runMessagingTest = <A, E>(
 ) => Effect.runPromise(Effect.scoped(body.pipe(Effect.provide(SqliteClient.layer({ filename })))));
 
 export const scriptedPersona = () => TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()));
+
+export const standaloneTestHost = (
+  root: string,
+  personaDirectory: string,
+  llm: TestLLM.TestInterface,
+) =>
+  startPersonaHost(join(root, "isolated"), {
+    ...messagingOptions(root, personaDirectory, llm),
+    handleForSession: () => Effect.succeed(undefined),
+  });
 
 export const providerUnavailable = (message: string) =>
   TestLLM.failAfter(new AIError({ reason: new AuthenticationError({ message }) }));

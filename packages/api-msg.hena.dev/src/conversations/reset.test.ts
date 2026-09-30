@@ -4,7 +4,6 @@ import { expect, test } from "vitest";
 import { registration } from "../../test/messaging-host.test-helper.ts";
 import { resetFixture, bindTestHandle } from "../../test/reset.test-helper.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
-import { viewerFront } from "../opencode/viewer.ts";
 
 test("a test handle resets Memory into a new session and keeps the old session for review", async () => {
   const { fake, handle, start, run, cleanup } = await resetFixture("reset-");
@@ -24,15 +23,8 @@ test("a test handle resets Memory into a new session and keeps the old session f
         expect((yield* host.sessions.get(old.id)).title).toBe(
           "Persona1 · tester@example.com · reset 2026-09-29 Tue 14:03",
         );
-        const viewer = viewerFront(host.web, "test");
         const listed = yield* Effect.promise(() =>
-          viewer(
-            new Request("http://viewer/api/session", {
-              headers: {
-                authorization: `Basic ${Buffer.from("opencode:test").toString("base64")}`,
-              },
-            }),
-          ).then((response) => response.text()),
+          host.web(new Request("http://opencode/api/session")).then((response) => response.text()),
         );
         expect(listed).toContain(old.id);
         expect(listed).toContain(id);

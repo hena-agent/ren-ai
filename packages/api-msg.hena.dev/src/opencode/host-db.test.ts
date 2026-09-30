@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
-import { startPersonaHost } from "../main.ts";
+import { startPersonaHost } from "../../test/application.test-helper.ts";
 
 test("a host cannot silently fall back to the Mac database", async () => {
   const root = await mkdtemp(join(tmpdir(), "invalid-host-db-"));

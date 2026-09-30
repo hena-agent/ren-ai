@@ -8,7 +8,7 @@ import { expect, test, vi } from "vitest";
 import { migrate } from "./database.ts";
 import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
-import { startMessagingServer } from "./main.ts";
+import { startMessagingServer } from "../test/application.test-helper.ts";
 import { fakeMessages } from "./messages/messages.fake.ts";
 import { silentAlerts } from "./opencode/scripted-overrides.test-helper.ts";
 

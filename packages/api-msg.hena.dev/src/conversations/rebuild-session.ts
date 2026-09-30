@@ -4,7 +4,7 @@ import type { Conversation, conversations } from "./conversations.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
-import type { isolatedHost } from "../opencode/isolate.ts";
+import type { PersonaRuntime } from "../opencode/runtime.ts";
 
 interface Origin {
   readonly locale: "ko";
@@ -13,7 +13,7 @@ interface Origin {
 
 export const rebuilder = (
   directory: Effect.Success<typeof conversations>,
-  host: Effect.Success<ReturnType<typeof isolatedHost>>,
+  host: PersonaRuntime,
   notice: Readonly<Record<"ko", string>>,
   replay: (conversation: Conversation) => Effect.Effect<void, Error>,
 ) => {

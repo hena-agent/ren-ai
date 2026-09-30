@@ -1,0 +1,101 @@
+name: ren-ai-fleet
+
+services:
+  mysql:
+    image: mysql:8.0.44@sha256:9c3380eac945af0736031b200027f581925927c81e010056214a4bd6b6693714
+    platform: linux/amd64
+    environment:
+      MYSQL_DATABASE: fleet
+      MYSQL_USER: fleet
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Run setup.sh first}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run setup.sh first}
+    volumes:
+      - mysql:/var/lib/mysql
+    healthcheck:
+      test:
+        [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_PASSWORD" mysqladmin ping -h 127.0.0.1 -u fleet --silent']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+    command: [redis-server, --appendonly, "yes"]
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  fleet-init:
+    image: alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
+    volumes:
+      - fleet:/fleet
+    command: [chown, -R, "100:101", /fleet]
+
+  fleet:
+    image: fleetdm/fleet:v4.92.1@sha256:876767da337d962a53ce97152693670913883248807f16c65aa94dc7b282aeb8
+    platform: linux/amd64
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      fleet-init:
+        condition: service_completed_successfully
+    command: [sh, -c, /usr/bin/fleet prepare db --no-prompt && /usr/bin/fleet serve]
+    environment:
+      FLEET_MYSQL_ADDRESS: mysql:3306
+      FLEET_MYSQL_DATABASE: fleet
+      FLEET_MYSQL_USERNAME: fleet
+      FLEET_MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      FLEET_REDIS_ADDRESS: redis:6379
+      FLEET_SERVER_ADDRESS: 0.0.0.0:8080
+      FLEET_SERVER_TLS: "false"
+      FLEET_SERVER_PRIVATE_KEY: ${FLEET_SERVER_PRIVATE_KEY:?Run setup.sh first}
+      FLEET_LOGGING_JSON: "true"
+    ports:
+      - 127.0.0.1:${FLEET_LOCAL_PORT:-8081}:8080
+    volumes:
+      - fleet:/fleet
+    healthcheck:
+      test: [CMD-SHELL, wget -qO- http://127.0.0.1:8080/healthz]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  snapshot:
+    profiles: [maintenance]
+    image: alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
+    volumes:
+      - mysql:/snapshot/mysql
+      - redis:/snapshot/redis
+      - fleet:/snapshot/fleet
+      - ${FLEET_BACKUP_DIR:-./backups}:/backup
+
+  # Optional dedicated free Cloudflare Tunnel; existing tunnels can route instead.
+  tunnel:
+    profiles: [ingress]
+    image: cloudflare/cloudflared:2026.9.1@sha256:b269e8abd07a5bf6f3f4be65d5050b2174eca89c56a0241a8ff32a16aec454e4
+    # Compose file-backed secrets retain host mode 0600; root can read that bind mount.
+    user: "0:0"
+    command: [tunnel, --no-autoupdate, run, --token-file, /run/secrets/cloudflare_token]
+    secrets: [cloudflare_token]
+    depends_on:
+      fleet:
+        condition: service_healthy
+    restart: unless-stopped
+
+secrets:
+  cloudflare_token:
+    file: ${CLOUDFLARE_TOKEN_FILE:-./cloudflare-token}
+
+volumes:
+  mysql:
+  redis:
+  fleet:

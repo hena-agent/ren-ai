@@ -13,7 +13,7 @@ import {
   tapback,
 } from "../transcript/transcript.ts";
 import { watchEdits } from "./edits.ts";
-import { imageData, imageMime } from "./images.ts";
+import { imageMime } from "./images.ts";
 import { resetBoundary } from "../conversations/reset-boundary.ts";
 
 export interface PromptImage {
@@ -118,7 +118,7 @@ export const intake = (
         for (const attachment of row.attachments ?? []) {
           const mime = imageMime(attachment);
           if (mime && !attachment.missing) {
-            const image = yield* imageData(attachment);
+            const image = yield* messages.image(attachment);
             lines.push(photo(row.createdAt, zone));
             files.push(image);
           } else {

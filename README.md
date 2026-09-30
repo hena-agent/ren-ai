@@ -29,12 +29,14 @@ apps/persona-lab/     Local simulation app for the standalone persona engine.
 packages/persona-engine/  Relationship state engine (not wired into iMessage runtime).
 packages/onboarding/   Shared browser-safe Handle rules, locale copy, and Onboarding/Waitlist shapes.
 packages/msg.hena.dev/   Prerendered Korean onboarding site, served as static assets.
-packages/api-msg.hena.dev/  iMessage server, embedded OpenCode host, and operator CLI.
+packages/api-msg.hena.dev/  Mac messaging API, portable application, OpenCode persona plugin, and operator CLI.
 scripts/                Repo tooling: exceptions report and gate verification.
 quality-exceptions.json  The only place file-level gate exceptions may live.
 ```
 
 ## The gates
+
+For the messaging services, use the [deployment and relocation runbook](packages/api-msg.hena.dev/ops/README.md). The [service boundary decision](docs/adr/0010-separate-the-messages-mac-from-opencode.md) records the Mac/Docker split and the native OpenCode interface at `oc.hena.dev`.
 
 | Gate                  | Threshold      | Command                |
 | --------------------- | -------------- | ---------------------- |

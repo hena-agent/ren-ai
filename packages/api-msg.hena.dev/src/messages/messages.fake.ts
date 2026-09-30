@@ -1,5 +1,6 @@
 import { Clock, Effect } from "effect";
 import type { IncomingMessage, Messages, OutgoingStatus } from "./messages.ts";
+import { imageData } from "../intake/images.ts";
 
 export const fakeMessages = (events: string[] = []) => {
   const bubbles: { handle: string; text: string }[] = [];
@@ -12,6 +13,7 @@ export const fakeMessages = (events: string[] = []) => {
   const statusFailures = new Set<string>();
   const statusChecks: string[] = [];
   const messages: Messages = {
+    image: imageData,
     sendText: (handle, text) =>
       Effect.suspend(() =>
         rejected.has(handle)
