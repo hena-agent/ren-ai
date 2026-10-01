@@ -17,6 +17,7 @@ import { sessionArchive } from "../src/opencode/transfer-format.ts";
 import { expect } from "vitest";
 
 type Remote = Effect.Success<ReturnType<typeof remoteHost>>;
+type Native = Effect.Success<ReturnType<typeof startPersonaHost>>;
 
 export const withRemoteHost = async <A, E>(
   story: (
@@ -24,6 +25,9 @@ export const withRemoteHost = async <A, E>(
     directory: string,
     boundary: {
       readonly llm: TestLLM.TestInterface;
+      readonly registerPlugin: (
+        plugin: Parameters<Native["plugins"]["register"]>[0],
+      ) => Effect.Effect<void, Error>;
       readonly transport: {
         readonly requests: Array<Request>;
         fetch: (request: Request) => Promise<Response>;
@@ -70,7 +74,12 @@ export const withRemoteHost = async <A, E>(
               transport.fetch(new Request(input, init)),
             ),
           );
-          return yield* story(remote, personaDirectory, { llm, transport });
+          const registerPlugin = (plugin: Parameters<Native["plugins"]["register"]>[0]) =>
+            Effect.tryPromise({
+              try: () => native.run(native.plugins.register(plugin)),
+              catch: (error) => new Error(String(error)),
+            });
+          return yield* story(remote, personaDirectory, { llm, transport, registerPlugin });
         }),
       ),
     );

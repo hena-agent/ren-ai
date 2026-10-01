@@ -90,13 +90,16 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
             return;
           }
           if (session.outcome === "succeeded") return;
-          const [latest] = yield* sessions.messages({ sessionID, type: "assistant", limit: 1 });
-          if (session.outcome !== "failed" && !(latest?.type === "assistant" && latest.error))
-            return;
+          const history = yield* sessions.messages({ sessionID, order: "desc" });
+          const latest = history.find((message) => message.type === "assistant");
+          if (session.outcome !== "failed" && !latest?.error) return;
+          // A context failure may create a new terminal checkpoint without a
+          // new assistant. Keep its key stable while retry preparation runs.
+          const checkpoint = history.find((message) => message.type === "idle");
           yield* client.session
             .synthetic({
               sessionID,
-              id: SessionMessage.ID.make(`msg_retry_${latest?.id ?? sessionID}`),
+              id: SessionMessage.ID.make(`msg_retry_${checkpoint?.id ?? latest?.id ?? sessionID}`),
               text: "Continue the interrupted Conversation. Check the recorded tool results and do not repeat completed sends or reactions.",
               delivery: "queue",
             })
