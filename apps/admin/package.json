@@ -1,0 +1,25 @@
+{
+  "name": "@ren-ai/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/run.mjs",
+  "scripts": {
+    "dev": "bun --watch src/run.mjs",
+    "start": "bun run src/run.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ren-ai/personas": "workspace:*",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "happy-dom": "20.14.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  }
+}

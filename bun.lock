@@ -22,6 +22,23 @@
         "vitest": "5.0.1",
       },
     },
+    "apps/admin": {
+      "name": "@ren-ai/admin",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ren-ai/personas": "workspace:*",
+        "react": "19.2.4",
+        "react-dom": "19.2.4",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "@types/react": "19.2.14",
+        "@types/react-dom": "19.2.3",
+        "happy-dom": "20.14.5",
+        "typescript": "7.0.2",
+        "vitest": "5.0.1",
+      },
+    },
     "apps/persona-lab": {
       "name": "@ren-ai/persona-lab",
       "version": "0.0.0",
@@ -62,8 +79,8 @@
         "@opencode/schema": "2.0.16",
         "@opencode/server": "2.0.16",
         "@ren-ai/onboarding": "workspace:*",
+        "@ren-ai/personas": "workspace:*",
         "effect": "4.0.0-rc.112",
-        "yaml": "2.8.2",
       },
       "devDependencies": {
         "@effect/sql-sqlite-node": "4.0.0-rc.112",
@@ -112,6 +129,19 @@
     "packages/persona-engine": {
       "name": "@ren-ai/persona-engine",
       "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+        "vitest": "5.0.1",
+      },
+    },
+    "packages/personas": {
+      "name": "@ren-ai/personas",
+      "version": "0.0.0",
+      "dependencies": {
+        "effect": "4.0.0-rc.112",
+        "yaml": "2.8.2",
+      },
       "devDependencies": {
         "@types/node": "26.6.2",
         "typescript": "7.0.2",
@@ -920,6 +950,8 @@
 
     "@redis/time-series": ["@redis/time-series@6.2.1", "", { "peerDependencies": { "@redis/client": "^6.2.1" } }, "sha512-kiYniph04dJOole+L359B6C9E+jYS2uDP7hca6Onj0xF38ZIpyxARO0Iq0W4ZRn1e8Q6vqW00QFZVSMRA/2Ijw=="],
 
+    "@ren-ai/admin": ["@ren-ai/admin@workspace:apps/admin"],
+
     "@ren-ai/api-msg.hena.dev": ["@ren-ai/api-msg.hena.dev@workspace:packages/api-msg.hena.dev"],
 
     "@ren-ai/msg.hena.dev": ["@ren-ai/msg.hena.dev@workspace:packages/msg.hena.dev"],
@@ -929,6 +961,8 @@
     "@ren-ai/persona-engine": ["@ren-ai/persona-engine@workspace:packages/persona-engine"],
 
     "@ren-ai/persona-lab": ["@ren-ai/persona-lab@workspace:apps/persona-lab"],
+
+    "@ren-ai/personas": ["@ren-ai/personas@workspace:packages/personas"],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-rc.3", "", {}, "sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q=="],
 
