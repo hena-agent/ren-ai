@@ -9,6 +9,7 @@ reports/
 stryker.log
 .env
 apps/persona-lab/data/
+apps/admin/data/
 lefthook-local.yml
 .opencode/
 .DS_Store

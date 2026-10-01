@@ -29,8 +29,8 @@
     "@opencode/plugin": "2.0.19",
     "@opencode/schema": "2.0.19",
     "@ren-ai/onboarding": "workspace:*",
-    "effect": "4.0.0-rc.112",
-    "yaml": "2.8.2"
+    "@ren-ai/personas": "workspace:*",
+    "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
     "@effect/sql-sqlite-node": "4.0.0-rc.112",

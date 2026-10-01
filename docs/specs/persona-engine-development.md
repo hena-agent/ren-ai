@@ -38,7 +38,7 @@ Gemini는 실제 사람이 메신저로 문자하듯 쓴다. 한두 개의 짧�
 
 ## 로컬 실행
 
-`bun install` 후 `apps/persona-lab/.env`에 `GEMINI_API_KEY`와 `AI_GATEWAY_API_KEY`를 입력하고 저장소 루트에서 `bun run dev`를 실행해 `http://127.0.0.1:3000`에 접속한다. `.env`는 Git에서 제외하며 `.env.example`은 설정 예시다. `GEMINI_MODEL`(기본값 `gemini-2.5-flash`)과 `GEMINI_BASE_URL`은 선택 사항이다. Lab에서는 `시간 진행`으로 Jev의 다음 판단을 곧바로 시험할 수 있고, `새 세션`으로 같은 페르소나의 독립된 세션을 만들어 목록에서 골라 이어갈 수 있다. 세션은 `apps/persona-lab/data/{세션 ID}.json`에 보관되며, 버튼으로 명시적으로 초기화할 수 있다.
+`bun install` 후 `apps/persona-lab/.env`에 `GEMINI_API_KEY`와 `AI_GATEWAY_API_KEY`를 입력하고 저장소 루트에서 `bun run --cwd apps/persona-lab dev`를 실행해 `http://127.0.0.1:3617`에 접속한다. 개발 API는 `127.0.0.1:4617`에서 실행되며 Vite가 `/api/` 요청을 전달한다. `FRONTEND_PORT`와 `BACKEND_PORT`로 각각 변경할 수 있다. 단일 서버 `start` 모드는 기본 3617에서 UI와 API를 함께 제공하며 `PORT`로 변경한다. `.env`는 Git에서 제외하며 `.env.example`은 설정 예시다. `GEMINI_MODEL`(기본값 `gemini-2.5-flash`)과 `GEMINI_BASE_URL`은 선택 사항이다. Lab에서는 `시간 진행`으로 Jev의 다음 판단을 곧바로 시험할 수 있고, `새 세션`으로 같은 페르소나의 독립된 세션을 만들어 목록에서 골라 이어갈 수 있다. 세션은 `apps/persona-lab/data/{세션 ID}.json`에 보관되며, 버튼으로 명시적으로 초기화할 수 있다.
 
 서버를 시작하면 터미널에 접속 주소·Jev/Gemini 키 설정 여부·Gemini 모델 이름이 출력된다. 터미널을 열어 둔 채 브라우저에서 접속한다. 판단마다 캐릭터·트리거·선택·소요 시간과 실패 이유를 출력하며, API 키나 대화 내용은 로그에 남기지 않는다. 서버 종료는 `Ctrl+C`.
 
