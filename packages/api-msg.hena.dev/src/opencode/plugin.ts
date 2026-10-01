@@ -83,7 +83,14 @@ export const personaPlugin = (options: PersonaPluginOptions) =>
             editor.add({
               name: "wait",
               description: "Pause for up to 12 hours, or until something new arrives",
-              input: Schema.Struct({ minutes: Schema.Number.check(Schema.isGreaterThan(0)) }),
+              // The compiled CLI has its own Effect instance; never share its private AST sentinels.
+              input: {
+                "~standard": Schema.toStandardJSONSchemaV1(
+                  Schema.toStandardSchemaV1(
+                    Schema.Struct({ minutes: Schema.Number.check(Schema.isGreaterThan(0)) }),
+                  ),
+                )["~standard"],
+              },
               output: Schema.String,
               options: { codemode: false },
               execute: ({ minutes }, context) => toolResult(wait(context.sessionID, minutes)),
