@@ -47,3 +47,11 @@ A sudden burst of `no-unsafe-*` errors means the TypeScript program is misconfig
 Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no build step, and relative imports use explicit `.ts` extensions. Do not add a `build` script or emit `dist/` in a library — an unbuilt compiled package makes type-aware lint and knip exit 0 while enforcing nothing. The site (`packages/msg.hena.dev`) is the one package with a build: browsers need JavaScript, nothing imports its output, and every gate runs on its source.
 
 Changes to the shapes in `packages/onboarding` must keep the new site working with the API still running: new fields stay optional until the API deploys, and the site continues handling every answer the old API can give.
+
+## Ports
+
+Assign a stable, uncommon default per local service: **3000–3999 for frontends**, **4000–4999 for backends**, and **5000–5999 for auxiliary services**. A browser-facing full-stack app uses the frontend range; a separate API listener uses the backend range.
+
+Before choosing a default, check existing service configs and local listeners for collisions. Keep ports configurable through per-app environment variables, and update launch commands, frontend proxies, `.env.example`, and documented URLs together. Vite development and preview servers use `strictPort: true` so a busy default is reported rather than silently changed.
+
+Tests that bind real listeners use port `0` for OS allocation. Existing deployed listeners and third-party internal ports follow their deployment contracts; changing them also requires updating the corresponding tunnel/proxy mappings.

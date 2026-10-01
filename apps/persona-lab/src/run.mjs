@@ -10,7 +10,7 @@ const page = readFileSync(new URL("../dist/index.html", import.meta.url), "utf8"
 const stylesheet = readFileSync(new URL("../dist/assets/style.css", import.meta.url), "utf8");
 const script = readFileSync(new URL("../dist/assets/app.js", import.meta.url), "utf8");
 const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 3617);
 const lab = createLab(
   page,
   stylesheet,

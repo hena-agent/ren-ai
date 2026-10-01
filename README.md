@@ -13,10 +13,10 @@ bun install
 Add `GEMINI_API_KEY` and `AI_GATEWAY_API_KEY` to `apps/persona-lab/.env` (see `.env.example`), then start the lab from the repo root:
 
 ```sh
-bun run dev
+bun run --cwd apps/persona-lab dev
 ```
 
-Open http://127.0.0.1:3000. Each conversation gets a shareable `/personas/<persona>/sessions/<session>` URL; API routes live under `/api/`. During development, Vite updates the UI automatically and Bun restarts the API when its source changes. Run the quality gates with:
+Open http://127.0.0.1:3617. Each conversation gets a shareable `/personas/<persona>/sessions/<session>` URL; Vite proxies `/api/` to the lab backend on port 4617. Override them with `FRONTEND_PORT` and `BACKEND_PORT` in the lab's `.env`. During development, Vite updates the UI automatically and Bun restarts the API when its source changes. Run the quality gates with:
 
 ```sh
 bun run ci
