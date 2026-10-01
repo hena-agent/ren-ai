@@ -3,6 +3,13 @@ import { Schema } from "effect";
 type Profile = { identifier: string; xml: string };
 type Http = (url: URL, init: RequestInit) => Promise<Response>;
 const profilesPath = "/api/v1/fleet/configuration_profiles";
+const enrollSecretsSchema = Schema.Struct({
+  spec: Schema.Struct({
+    secrets: Schema.NonEmptyArray(
+      Schema.Struct({ secret: Schema.NonEmptyString.check(Schema.isTrimmed()) }),
+    ),
+  }),
+});
 const pageSchema = Schema.Struct({
   profiles: Schema.Array(
     Schema.Struct({ identifier: Schema.optional(Schema.String), profile_uuid: Schema.String }),
@@ -35,15 +42,36 @@ function authorization(token: string) {
   };
 }
 
+async function enrollmentGet(url: URL, token: string, http: Http): Promise<Response> {
+  const response = await http(url, { ...authorization(token), method: "GET" }).catch(() => {
+    // The native OTA query carries an enroll secret; never expose transport errors containing it.
+    throw new Error("Fleet enrollment request failed");
+  });
+  if (!response.ok) throw new Error(`Fleet enrollment download failed (HTTP ${response.status})`);
+  return response;
+}
+
+/** Free OTA bootstrap, company-owned by default. Preserve the signed CMS bytes verbatim. */
 export async function downloadEnrollmentProfile(
   base: string,
   token: string,
   http: Http,
-): Promise<string> {
-  const url = new URL("/api/v1/fleet/enrollment_profiles/manual", endpoint(base, token));
-  const response = await http(url, { ...authorization(token), method: "GET" });
-  if (!response.ok) throw new Error(`Fleet enrollment download failed (HTTP ${response.status})`);
-  return response.text();
+): Promise<ArrayBuffer> {
+  const origin = endpoint(base, token);
+  const secretsURL = new URL("/api/v1/fleet/spec/enroll_secret", origin);
+  const secretsResponse = await enrollmentGet(secretsURL, token, http);
+  const secrets = await secretsResponse
+    .json()
+    .then(Schema.decodeUnknownSync(enrollSecretsSchema))
+    .catch(() => {
+      throw new Error("Invalid Fleet enroll secrets response");
+    });
+  const url = new URL("/api/v1/fleet/enrollment_profiles/ota", origin);
+  url.searchParams.set("enroll_secret", secrets.spec.secrets[0].secret);
+  const response = await enrollmentGet(url, token, http);
+  return response.arrayBuffer().catch(() => {
+    throw new Error("Fleet enrollment body download failed");
+  });
 }
 
 async function matchingProfile(

@@ -221,7 +221,8 @@ step "Upload the APNs .pem into Fleet's Apple MDM setup/renewal screen. Record t
 confirm "Does Fleet show Apple MDM turned on and a current certificate?" || exit 1
 
 stage "Approve this Mac's Device Enrollment"
-say "Run this wizard on the target Mac. The next command downloads Fleet's manual enrollment profile, not a PPPC profile."
+say "Run this wizard on the target Mac. The next command reads an existing global enroll secret and downloads Fleet Free's signed company-owned OTA profile, not PPPC."
+confirm "Is Fleet's public HTTPS origin reachable from this Mac, with no interactive Access challenge?" || exit 1
 confirm "Download and open this Fleet enrollment profile for your approval?" || exit 1
 (
   cd "$MDM_DIR/../.."
@@ -229,6 +230,7 @@ confirm "Download and open this Fleet enrollment profile for your approval?" || 
 )
 open "$MDM_DIR/.generated/enrollment.mobileconfig"
 step "System Settings > General > Device Management: select the downloaded Fleet profile and approve enrollment as the Mac administrator."
+step "Follow Fleet's native OTA instructions. If a second Device Enrollment profile downloads, open it and approve its installation too. Keep Fleet's public HTTPS reachable throughout."
 note "Use full, user-approved Device Enrollment; BYOD User Enrollment cannot grant the required PPPC permissions. No Apple Business/ADE subscription is needed."
 open_url "$FLEET_URL"
 step "In Fleet > Hosts, confirm this Mac has MDM turned on and is Unassigned."
