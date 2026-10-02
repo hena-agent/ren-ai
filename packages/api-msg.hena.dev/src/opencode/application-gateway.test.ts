@@ -8,9 +8,8 @@ import { servePublic } from "../public-listener.ts";
 import { rpcClient } from "../transport/rpc.ts";
 import { applicationApi } from "./application-protocol.ts";
 import { applicationGateway } from "./application-gateway.ts";
-import { silentAlerts } from "./scripted-overrides.test-helper.ts";
-import { registration, runMessagingTest } from "../../test/messaging-host.test-helper.ts";
-import { listenerUrl } from "../../test/server.test-helper.ts";
+import { registration, runMessagingTest, silentAlerts } from "../../test/messaging.test-helper.ts";
+import { listenerUrl } from "../../test/listener.test-helper.ts";
 
 test(
   "interrupting a remote wait cancels promptly without waiting for a heartbeat",

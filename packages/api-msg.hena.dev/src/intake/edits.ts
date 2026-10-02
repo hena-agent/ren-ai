@@ -86,7 +86,6 @@ export const watchEdits = (
           if (entry.row.createdAt + editWindow < time) group.rows.delete(guid);
         }
         if (!group.rows.size) {
-          // Stryker disable next-line CallExpression -- empty-group cleanup changes only private memory, not polling behavior
           watched.delete(id);
           continue;
         }

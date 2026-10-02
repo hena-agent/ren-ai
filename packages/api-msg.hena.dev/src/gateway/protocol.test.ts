@@ -83,7 +83,6 @@ test.each([
   ["sendText", { handle: "handle" }],
   ["sendText", { handle: 1, text: "text" }],
   ["follow", { rowID: 0, date: "yesterday" }],
-  ["image", { reference: 1 }],
   ["read", { handle: 1 }],
   ["lastOutgoingStatus", {}],
   ["react", { handle: 1, tapback: "like" }],

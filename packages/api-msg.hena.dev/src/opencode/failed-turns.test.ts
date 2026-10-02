@@ -3,6 +3,9 @@ import {
   messagingFixture,
   registration,
   runMessagingTest,
+  silentAlerts,
+} from "../../test/messaging.test-helper.ts";
+import {
   scriptedPersona,
   startTestHost,
   providerUnavailable,
@@ -23,7 +26,7 @@ import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { failedTurns } from "./failed-turns.ts";
-import { scriptedOverrides, silentAlerts } from "./scripted-overrides.test-helper.ts";
+import { scriptedOverrides } from "./scripted-overrides.test-helper.ts";
 
 const advanceUntil = <E, R>(done: () => Effect.Effect<boolean, E, R>) =>
   Effect.gen(function* () {

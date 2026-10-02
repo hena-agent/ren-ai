@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
 import { servePublic } from "../public-listener.ts";
 import { remoteMessages } from "./client.ts";
-import { listenerUrl } from "../../test/server.test-helper.ts";
+import { listenerUrl } from "../../test/listener.test-helper.ts";
 
 test("the messaging listener delivers stream rows before the HTTP response ends", async () => {
   const fixture = gatewayFixture();

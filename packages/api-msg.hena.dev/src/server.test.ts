@@ -13,9 +13,10 @@ import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { runOperatorCli } from "./operator/cli.ts";
 import { valid, personaFixture } from "../test/host.test-helper.ts";
-import { composedTestServer, listenerUrl, unrelatedSession } from "../test/server.test-helper.ts";
+import { composedTestServer, unrelatedSession } from "../test/server.test-helper.ts";
+import { listenerUrl } from "../test/listener.test-helper.ts";
 import { servePublic } from "./public-listener.ts";
-import { runMessagingTest } from "../test/messaging-host.test-helper.ts";
+import { runMessagingTest } from "../test/messaging.test-helper.ts";
 
 const platform = Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer);
 const processes = ChildProcessSpawner.make(() =>

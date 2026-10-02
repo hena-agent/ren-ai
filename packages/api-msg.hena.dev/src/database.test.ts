@@ -10,7 +10,7 @@ import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { startMessagingServer } from "../test/application.test-helper.ts";
 import { fakeMessages } from "./messages/messages.fake.ts";
-import { silentAlerts } from "./opencode/scripted-overrides.test-helper.ts";
+import { silentAlerts } from "../test/messaging.test-helper.ts";
 
 vi.mock("@effect/sql-sqlite-bun", async () => ({
   SqliteClient: { layer: (await import("@effect/sql-sqlite-node")).SqliteClient.layer },

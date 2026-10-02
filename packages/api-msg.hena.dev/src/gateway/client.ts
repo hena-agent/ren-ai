@@ -26,6 +26,9 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
                 client.follow({ rowID, date }).pipe(Stream.filter((row) => row !== null)),
                 (row) =>
                   receive(row).pipe(
+                    Effect.tapError((error) =>
+                      Effect.logWarning("Message processing failed; retrying", error.message),
+                    ),
                     Effect.tap(() =>
                       Effect.sync(() => {
                         rowID = row.id;
@@ -35,7 +38,7 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
                   ),
               ),
             ).pipe(
-              Effect.catch(() => Effect.logWarning("Messaging stream disconnected; reconnecting")),
+              Effect.catch(() => Effect.logWarning("Messaging stream ended; reconnecting")),
               Effect.andThen(Effect.sleep("1 second")),
             ),
           ).pipe(Effect.forkIn(lifetime)),

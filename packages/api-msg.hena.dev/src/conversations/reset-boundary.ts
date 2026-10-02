@@ -10,9 +10,8 @@ export const resetBoundary = (messages: Messages) =>
       Effect.gen(function* () {
         if ((yield* sql`SELECT 1 FROM reset WHERE guid = ${row.guid}`).length) return true;
         const [boundary] = yield* sql<{ guid: string; date: number; rowID: number }>`
-      SELECT reset.guid, reset.date, reset.row_id AS rowID FROM reset
-      JOIN conversation ON conversation.reset_guid = reset.guid
-      JOIN user ON user.id = conversation.user_id WHERE user.handle = ${row.handle}`;
+      SELECT guid, date, row_id AS rowID FROM reset WHERE handle = ${row.handle}
+      ORDER BY date DESC, row_id DESC LIMIT 1`;
         if (!boundary) return false;
         const rows = yield* messages.recent(row.handle, 0);
         const cutoff = rows.find((item) => item.guid === boundary.guid)?.id ?? boundary.rowID;

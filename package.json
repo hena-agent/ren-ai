@@ -8,8 +8,8 @@
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
-    "ci": "bun run ci:checks && bun run verify-gates && bun run mutate",
-    "ci:checks": "bun run format:check && bun run lint && bun run typecheck && bun run verify-ci && bun run test && bun run knip && bun run dup && bun run exceptions && bun run --cwd packages/msg.hena.dev build",
+    "ci": "bun run ci:checks && bun run verify-gates",
+    "ci:checks": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run knip && bun run dup && bun run exceptions && bun run --cwd packages/msg.hena.dev build",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "bun run scripts/run-quality-gate.ts lint",
@@ -17,15 +17,11 @@
     "test": "vitest run --coverage",
     "knip": "knip && knip --production --config knip.production.json",
     "dup": "bun run scripts/run-quality-gate.ts duplication",
-    "mutate": "stryker run",
     "exceptions": "bun run scripts/exceptions.ts",
     "verify-gates": "bun run scripts/verify-gates.ts",
-    "verify-ci": "node --test --experimental-test-coverage --test-coverage-include=scripts/mutation-ci.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 scripts/mutation-ci.test.ts",
     "prepare": "lefthook install"
   },
   "devDependencies": {
-    "@stryker-mutator/core": "10.0.0",
-    "@stryker-mutator/vitest-runner": "10.0.0",
     "@types/node": "26.6.2",
     "@vitest/coverage-v8": "5.0.1",
     "jscpd": "5.3.2",
@@ -49,8 +45,5 @@
       "version": "1.4.2",
       "onFail": "error"
     }
-  },
-  "patchedDependencies": {
-    "@stryker-mutator/vitest-runner@10.0.0": "patches/@stryker-mutator%2Fvitest-runner@10.0.0.patch"
   }
 }

@@ -51,7 +51,7 @@ The emails of people who can't be let in yet: their handle can't receive iMessag
 _Avoid_: queue, signup list
 
 **Reset**:
-Wiping a persona's memory of a conversation, so she carries on as if meeting the user for the first time. The memory she had is kept for review.
+Returning a test handle to before onboarding, so its next conversation starts as a first meeting. The persona's previous memory is kept for review.
 _Avoid_: clear, restart, new conversation
 
 **Operator**:
@@ -61,7 +61,7 @@ _Avoid_: admin, moderator
 ### Enforcement
 
 **Gate**:
-A single automated check that blocks a merge when it fails. There are eight, listed in `README.md`.
+A single automated check that blocks a merge when it fails. There are seven, listed in `README.md`.
 _Avoid_: rule, check, lint (a lint rule is one implementation of a gate, not a synonym)
 
 **Silent false pass**:

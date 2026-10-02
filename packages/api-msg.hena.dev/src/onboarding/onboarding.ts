@@ -110,11 +110,13 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
     const unavailable = (handle: string) =>
       Effect.map(
         sql`SELECT handle FROM blocked WHERE handle = ${handle}
-          UNION SELECT handle FROM removal WHERE handle = ${handle}`,
+          UNION SELECT handle FROM removal WHERE handle = ${handle}
+          UNION SELECT handle FROM reset WHERE handle = ${handle} AND complete = 0`,
         (rows) => rows.length > 0,
       );
+    const currentNotice = sql`send.id > COALESCE((SELECT MAX(notice_id) FROM reset WHERE reset.handle = send.handle), 0)`;
     const latest = (handle: string) => sql<NoticeRow>`SELECT id, recorded_at, state FROM send
-    WHERE handle = ${handle} AND kind = 'notice' ORDER BY id DESC LIMIT 1`;
+    WHERE handle = ${handle} AND kind = 'notice' AND ${currentNotice} ORDER BY id DESC LIMIT 1`;
 
     const settle = (handle: string, row: NoticeRow) =>
       Effect.gen(function* () {
@@ -231,11 +233,12 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
       const greetings =
         yield* sql<GreetingRow>`SELECT conversation.session_id, conversation.started_at
       FROM conversation JOIN user ON user.id = conversation.user_id
-      JOIN send ON send.handle = user.handle AND send.kind = 'notice' AND send.state IN ('sent', 'delivered')`;
+      JOIN send ON send.handle = user.handle AND send.kind = 'notice' AND send.state IN ('sent', 'delivered')
+      WHERE ${currentNotice}`;
       for (const row of greetings) yield* Effect.forkDetach(greet(row.session_id, row.started_at));
       const pending = yield* sql<{ handle: string }>`SELECT user.handle FROM user
       JOIN send ON send.handle = user.handle AND send.kind = 'notice'
-      WHERE user.joined_at IS NULL AND send.state IN ('recorded', 'uncertain')`;
+       WHERE user.joined_at IS NULL AND send.state IN ('recorded', 'uncertain') AND ${currentNotice}`;
       for (const row of pending) {
         yield* Effect.forkDetach(watch(row.handle));
       }

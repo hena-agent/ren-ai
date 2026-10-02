@@ -54,7 +54,6 @@ const failed: typeof fetch = async () => new Response("no", { status: 503 });
 const bareFetcher: typeof fetch = async (_url, init) => {
   expect(init?.body).toContain("Write naturally and briefly.");
   expect(init?.body).not.toContain("Lines you might actually send");
-  expect(init?.body).not.toContain("Stryker was here!");
   expect(init?.body).not.toContain("undefined");
   return reply();
 };

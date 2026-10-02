@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { expect, test } from "vitest";
-import { applicationRpcFixture, malformedRpcReply } from "../../test/server.test-helper.ts";
-import { runMessagingTest } from "../../test/messaging-host.test-helper.ts";
+import {
+  applicationRpcFixture,
+  malformedRpcReply,
+} from "../../test/application-rpc.test-helper.ts";
+import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 
 test.each([
   ["send", { sessionID: "session", callID: "send-call" }],

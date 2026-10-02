@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { messagingFixture } from "./messaging-host.test-helper.ts";
+import { messagingFixture } from "./messaging.test-helper.ts";
 
 const listeningPort = async (server: ReturnType<typeof createServer>) => {
   server.listen(0, "127.0.0.1");

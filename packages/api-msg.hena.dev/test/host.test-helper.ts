@@ -14,7 +14,7 @@ import { startMessagingHost } from "./application.test-helper.ts";
 import type { Messages } from "../src/messages/messages.ts";
 import type { Gestures } from "../src/gestures/gestures.ts";
 import { noticeCopy } from "../src/onboarding/onboarding.ts";
-import { silentAlerts } from "../src/opencode/scripted-overrides.test-helper.ts";
+import { silentAlerts } from "./messaging.test-helper.ts";
 
 export const expectLateResults = (messages: ReadonlyArray<Message>) => {
   const parts = messages.flatMap((entry) => entry.content);

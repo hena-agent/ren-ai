@@ -1,14 +1,11 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { notice } from "@ren-ai/onboarding";
 import { Session } from "@opencode/schema/session";
-import {
-  messagingFixture,
-  quietTestHost,
-  registration,
-  runMessagingTest,
-  startTestHost,
-} from "./messaging-host.test-helper.ts";
+import { messagingFixture, registration, runMessagingTest } from "./messaging.test-helper.ts";
+import { quietTestHost, startTestHost } from "./messaging-host.test-helper.ts";
 import { fakeMessages } from "../src/messages/messages.fake.ts";
 
 export const resetFixture = async (prefix: string) => {
@@ -37,6 +34,30 @@ export const resetFixture = async (prefix: string) => {
 };
 
 type Host = Effect.Success<ReturnType<typeof startTestHost>>;
+
+export const onboardTestHandle = (host: Pick<Host, "onboard">, handle: string) =>
+  host
+    .onboard({
+      handle,
+      locale: "ko",
+      privacyNoticeVersion: notice.ko.version,
+      turnstileToken: "test",
+    })
+    .pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              new Response('{"success":true}', {
+                headers: { "content-type": "application/json" },
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
 
 export const bindTestHandle = (host: Host, handle: string) =>
   Effect.gen(function* () {

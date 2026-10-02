@@ -145,8 +145,9 @@ try {
     ),
     [200, 60, 30.5, 59],
   );
+  assert.equal(JSON.parse(request("catalogs", undefined, 4710)), 2);
   process.stdout.write(
-    "Compiled OpenCode 2.0.19: installed wait accepts positive numbers, preserves fractions, and rejects nonpositive input before RPC.\n",
+    "Compiled OpenCode 2.0.19: plugin recovers a startup outage; installed wait accepts positive numbers, preserves fractions, and rejects nonpositive input before RPC.\n",
   );
 } catch (error) {
   process.stderr.write(docker("logs", "--tail", "20", name));

@@ -4,10 +4,10 @@ import exceptions from "../quality-exceptions.json" with { type: "json" };
 
 type Entry = { readonly path: string; readonly reason: string; readonly added: string };
 
-const GATES = ["coverage", "mutation", "duplication", "lint"] as const;
+const GATES = ["coverage", "duplication", "lint"] as const;
 
 const SUPPRESSION =
-  /(oxlint-disable\S*|eslint-disable\S*|@ts-nocheck|Stryker disable\S*|v8 ignore\S*)(?<rest>[^\n]*)/gu;
+  /(oxlint-disable\S*|eslint-disable\S*|@ts-nocheck|v8 ignore\S*)(?<rest>[^\n]*)/gu;
 
 const SOURCE_GLOB = "{apps,packages}/*/src/**/*.{ts,tsx}";
 

@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode/plugin/effect";
 import { readFile } from "node:fs/promises";
-import { Effect, Option, Schema, Stream } from "effect";
+import { Effect, Option, Schedule, Schema, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { rpcClient } from "../transport/rpc.ts";
 import type { Tapback } from "../outbox/outbox.ts";
@@ -20,7 +20,7 @@ export const remotePersonaPlugin = (config: {
       Effect.gen(function* () {
         if (ctx.location.directory !== config.directory) return;
         const api = yield* rpcClient(applicationApi, config);
-        const personas = yield* api.catalog();
+        const personas = yield* api.catalog().pipe(Effect.retry(Schedule.spaced("1 second")));
         yield* personaPlugin({
           personaDirectory: config.directory,
           personas: new Map(personas.map((persona) => [persona.id, persona])),

@@ -12,13 +12,12 @@ import { remoteMessages } from "../gateway/client.ts";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
 import {
   messagingFixture,
-  scriptedPersona,
   registration,
   runMessagingTest,
-  standaloneTestHost,
-} from "../../test/messaging-host.test-helper.ts";
+  silentAlerts,
+} from "../../test/messaging.test-helper.ts";
+import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 import { intruder } from "../../test/host.test-helper.ts";
-import { silentAlerts } from "./scripted-overrides.test-helper.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import {
   unrelatedSession,

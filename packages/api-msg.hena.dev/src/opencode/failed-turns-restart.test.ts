@@ -3,6 +3,8 @@ import {
   messagingFixture,
   registration,
   runMessagingTest,
+} from "../../test/messaging.test-helper.ts";
+import {
   scriptedPersona,
   startTestHost,
   providerUnavailable,

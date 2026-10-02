@@ -5,12 +5,8 @@ import { TestLLM } from "@opencode/ai/testing";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
 import { localOpenCode } from "../../test/server.test-helper.ts";
-import {
-  messagingFixture,
-  runMessagingTest,
-  scriptedPersona,
-  standaloneTestHost,
-} from "../../test/messaging-host.test-helper.ts";
+import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
+import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 
 test("the persona plugin does not rewrite an unrelated project's persona-named agent or model context", async () => {
   const { root, personaDirectory } = await messagingFixture("plugin-location-");

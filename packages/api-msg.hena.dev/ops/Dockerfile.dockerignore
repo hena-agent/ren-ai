@@ -9,5 +9,3 @@
 **/.turbo
 **/dist
 coverage
-reports
-.stryker-tmp

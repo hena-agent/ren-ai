@@ -3,39 +3,57 @@ import { expect, test } from "vitest";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
 import type { IncomingMessage } from "../messages/messages.ts";
 
-test("a disconnected messaging stream replays pending messages after reconnecting", async () => {
-  const fixture = gatewayFixture();
-  const logs: string[] = [];
-  let follows = 0;
-  fixture.transport.fetch = async (request) => {
-    if ((await request.clone().text()).includes('"tag":"follow"') && ++follows === 1)
-      return new Response("temporarily offline", { status: 503 });
-    return fixture.server.handler(request);
-  };
-  try {
-    await fixture.run((remote) =>
-      Effect.gen(function* () {
-        const received = yield* Deferred.make<IncomingMessage>();
-        const stop = yield* remote.follow(0, (row) =>
-          Deferred.succeed(received, row).pipe(Effect.asVoid),
-        );
-        const pending = yield* fixture.local.text("+821012345678", "during outage", 200);
-        expect(yield* Deferred.await(received).pipe(Effect.timeout("4 seconds"))).toEqual(pending);
-        expect(follows).toBe(2);
-        stop();
-      }).pipe(
-        Effect.withLogger(
-          Logger.make<ReadonlyArray<string>, void>(({ message }) => {
-            logs.push(...message);
-          }),
+test.each(["transport", "processing"])(
+  "a %s failure replays pending messages and reports its source",
+  async (source) => {
+    const fixture = gatewayFixture();
+    const logs: string[] = [];
+    let follows = 0;
+    fixture.transport.fetch = async (request) => {
+      if (
+        (await request.clone().text()).includes('"tag":"follow"') &&
+        ++follows === 1 &&
+        source === "transport"
+      )
+        return new Response("temporarily offline", { status: 503 });
+      return fixture.server.handler(request);
+    };
+    try {
+      await fixture.run((remote) =>
+        Effect.gen(function* () {
+          const received = yield* Deferred.make<IncomingMessage>();
+          let first = true;
+          const stop = yield* remote.follow(0, (row) =>
+            Effect.gen(function* () {
+              if (source === "processing" && first) {
+                first = false;
+                yield* Effect.fail(new Error("inbox cancellation unavailable"));
+              }
+              yield* Deferred.succeed(received, row);
+            }),
+          );
+          const pending = yield* fixture.local.text("+821012345678", "during outage", 200);
+          expect(yield* Deferred.await(received).pipe(Effect.timeout("4 seconds"))).toEqual(
+            pending,
+          );
+          expect(follows).toBe(2);
+          stop();
+        }).pipe(
+          Effect.withLogger(
+            Logger.make<ReadonlyArray<string>, void>(({ message }) => {
+              logs.push(...message);
+            }),
+          ),
         ),
-      ),
-    );
-    expect(logs).toContain("Messaging stream disconnected; reconnecting");
-  } finally {
-    await fixture.server.dispose();
-  }
-});
+      );
+      expect(logs).toContain("Messaging stream ended; reconnecting");
+      expect(logs.includes("Message processing failed; retrying")).toBe(source === "processing");
+      expect(logs.includes("inbox cancellation unavailable")).toBe(source === "processing");
+    } finally {
+      await fixture.server.dispose();
+    }
+  },
+);
 
 test.each([false, true])(
   "reconnect preserves the checkpoint and rebases a replacement Mac (replaced: %s)",

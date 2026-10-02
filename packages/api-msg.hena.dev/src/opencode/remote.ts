@@ -1,4 +1,5 @@
 import { OpenCode } from "@opencode/client/effect";
+import { createHash } from "node:crypto";
 import type {
   MessageListInput,
   SessionPromptInput,
@@ -11,6 +12,9 @@ import { Effect, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import type { Persona } from "../personas/personas.ts";
 import { MissingSession, type PersonaRuntime } from "./runtime.ts";
+
+const recoveryID = (key: string) =>
+  SessionMessage.ID.make(`msg_${createHash("sha256").update(key).digest("hex")}`);
 
 const remoteError = (error: Error & { readonly _tag: string }): Error | MissingSession =>
   error["_tag"] === "SessionNotFoundError"
@@ -82,7 +86,7 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
             yield* client.session
               .synthetic({
                 sessionID,
-                id: SessionMessage.ID.make(`msg_resume_${pending[0]!.id}`),
+                id: recoveryID(pending[0]!.id),
                 text: "Continue the pending Conversation work without repeating completed sends or reactions.",
                 delivery: "queue",
               })
@@ -99,7 +103,7 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
           yield* client.session
             .synthetic({
               sessionID,
-              id: SessionMessage.ID.make(`msg_retry_${checkpoint?.id ?? latest?.id ?? sessionID}`),
+              id: recoveryID(checkpoint?.id ?? latest?.id ?? sessionID),
               text: "Continue the interrupted Conversation. Check the recorded tool results and do not repeat completed sends or reactions.",
               delivery: "queue",
             })

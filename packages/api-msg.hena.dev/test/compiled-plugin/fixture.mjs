@@ -4,6 +4,7 @@ import { Schema } from "effect";
 const seen = new Set();
 /** @type {number[]} */
 const waits = [];
+let catalogs = 0;
 /** @param {object} delta @param {string | null} finish_reason */
 const chunk = (delta, finish_reason) => ({
   id: "isolated-probe",
@@ -21,50 +22,56 @@ const rpcRequest = Schema.fromJsonString(
     ),
   }),
 );
+/** @param {Request} request */
+async function completion(request) {
+  const text = await request.text();
+  const body = Schema.decodeUnknownSync(
+    Schema.fromJsonString(
+      Schema.Struct({
+        tools: Schema.optional(
+          Schema.Array(Schema.Struct({ function: Schema.Struct({ name: Schema.String }) })),
+        ),
+      }),
+    ),
+  )(text);
+  const match = /compiled-case:([0-9]+)/.exec(text);
+  const index = Number(match?.[1] ?? -1);
+  const inputs = [200, 60, 30.5, 59, 0, -1, "120"];
+  const waiting = body.tools?.some((tool) => tool.function.name === "wait") && !seen.has(index);
+  if (waiting) seen.add(index);
+  const delta = waiting
+    ? {
+        role: "assistant",
+        tool_calls: [
+          {
+            index: 0,
+            id: `wait-case-${index}`,
+            type: "function",
+            function: { name: "wait", arguments: JSON.stringify({ minutes: inputs[index] }) },
+          },
+        ],
+      }
+    : { role: "assistant", content: "isolated case complete" };
+  return new Response(
+    `data: ${JSON.stringify(chunk(delta, null))}\n\ndata: ${JSON.stringify(chunk({}, waiting ? "tool_calls" : "stop"))}\n\ndata: [DONE]\n\n`,
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
 Bun.serve({
   hostname: "127.0.0.1",
   port: 4710,
   async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === "/waits") return Response.json(waits);
-    if (path.includes("chat/completions")) {
-      const text = await request.text();
-      const body = Schema.decodeUnknownSync(
-        Schema.fromJsonString(
-          Schema.Struct({
-            tools: Schema.optional(
-              Schema.Array(Schema.Struct({ function: Schema.Struct({ name: Schema.String }) })),
-            ),
-          }),
-        ),
-      )(text);
-      const match = /compiled-case:([0-9]+)/.exec(text);
-      const index = Number(match?.[1] ?? -1);
-      const inputs = [200, 60, 30.5, 59, 0, -1, "120"];
-      const waiting = body.tools?.some((tool) => tool.function.name === "wait") && !seen.has(index);
-      if (waiting) seen.add(index);
-      const delta = waiting
-        ? {
-            role: "assistant",
-            tool_calls: [
-              {
-                index: 0,
-                id: `wait-case-${index}`,
-                type: "function",
-                function: { name: "wait", arguments: JSON.stringify({ minutes: inputs[index] }) },
-              },
-            ],
-          }
-        : { role: "assistant", content: "isolated case complete" };
-      return new Response(
-        `data: ${JSON.stringify(chunk(delta, null))}\n\ndata: ${JSON.stringify(chunk({}, waiting ? "tool_calls" : "stop"))}\n\ndata: [DONE]\n\n`,
-        { headers: { "content-type": "text/event-stream" } },
-      );
-    }
+    if (path === "/catalogs") return Response.json(catalogs);
+    if (path.includes("chat/completions")) return completion(request);
     /** @type {object[]} */
     const frames = [];
     for (const line of (await request.text()).trim().split("\n")) {
       const message = Schema.decodeUnknownSync(rpcRequest)(line);
+      if (message.tag === "catalog" && ++catalogs === 1)
+        return new Response("Starting", { status: 503 });
       const values = {
         catalog: [
           {

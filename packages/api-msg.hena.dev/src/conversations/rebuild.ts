@@ -16,12 +16,11 @@ export const setupRebuilding = (
   reconcile: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,
   received: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
   sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
-  sendNotice: (handle: string, text: string) => Effect.Effect<void, Error>,
   forget: (sessionID: string) => Effect.Effect<void>,
 ) =>
   Effect.gen(function* () {
     let restore: (handle: string) => Effect.Effect<void, Error>;
-    const reset = yield* resets(directory, host, notice, sendNotice, forget, messages);
+    const reset = yield* resets(directory, host, forget, messages);
     const incoming = yield* intake(
       messages,
       directory.byHandle,

@@ -1,11 +1,5 @@
-import { beforeAll, expect, it, vi } from "vitest";
-
-let deliverPermissionProfile: typeof import("./fleet.ts").deliverPermissionProfile;
-let downloadEnrollmentProfile: typeof import("./fleet.ts").downloadEnrollmentProfile;
-// Evaluate the public module after setup hooks activate module-scope mutations.
-beforeAll(async () => {
-  ({ deliverPermissionProfile, downloadEnrollmentProfile } = await import("./fleet.ts"));
-});
+import { expect, it, vi } from "vitest";
+import { deliverPermissionProfile, downloadEnrollmentProfile } from "./fleet.ts";
 
 it("uploads one free unassigned profile using native Bearer auth, without replacing other policies", async () => {
   const calls: { url: string; init: RequestInit }[] = [];

@@ -55,7 +55,6 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       sends.reconcile,
       follow.received,
       follow.sent,
-      sends.notice,
       forget,
     );
     yield* Effect.forkScoped(follow.monitor);
@@ -67,13 +66,16 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       persona,
       createSession: (id) => host.createSession(id),
       prompt: (sessionID, text) =>
-        host.sessions
-          .prompt({
-            sessionID: Session.ID.make(sessionID),
-            id: SessionMessage.ID.make(`msg_onboarding_${sessionID}`),
-            text,
-          })
-          .pipe(Effect.asVoid),
+        directory.admit(
+          sessionID,
+          host.sessions
+            .prompt({
+              sessionID: Session.ID.make(sessionID),
+              id: SessionMessage.ID.make(`msg_onboarding_${sessionID}`),
+              text,
+            })
+            .pipe(Effect.asVoid),
+        ),
       sendNotice: (handle, text) => sends.notice(handle, text),
       turnstileSecret: onboardingConfig.turnstileSecret,
       userCap: onboardingConfig.userCap,

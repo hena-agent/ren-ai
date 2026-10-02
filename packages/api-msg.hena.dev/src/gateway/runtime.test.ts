@@ -3,7 +3,7 @@ import { ConfigProvider, Effect, Schema } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { expect, test, vi } from "vitest";
 import { fixture, raw } from "../messages/imsg.fake.ts";
-import { listenerUrl } from "../../test/server.test-helper.ts";
+import { listenerUrl } from "../../test/listener.test-helper.ts";
 import { remoteMessages } from "./client.ts";
 import { startMessagingGateway } from "./runtime.ts";
 

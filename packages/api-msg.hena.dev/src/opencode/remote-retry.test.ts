@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
+import { SessionMessage } from "@opencode/schema/session-message";
 import { expect, test } from "vitest";
 import {
   withRemoteHost,
@@ -8,6 +9,34 @@ import {
   replaceCheckpoint,
 } from "../../test/remote-host.test-helper.ts";
 import { providerUnavailable } from "../../test/messaging-host.test-helper.ts";
+
+test("repeated pending-work recovery stays cancellable through the HTTP router", () =>
+  withRemoteHost((remote, _directory, { llm }) =>
+    Effect.gen(function* () {
+      const session = yield* remote.createSession("persona1");
+      const gate = yield* llm.gate();
+      yield* remote.sessions.prompt({ sessionID: session.id, text: "busy" });
+      yield* gate.started;
+      yield* remote.sessions.prompt({
+        sessionID: session.id,
+        id: SessionMessage.ID.make(`msg_${"x".repeat(94)}`),
+        text: "parked",
+        resume: false,
+      });
+      for (let round = 0; round < 12; round++) {
+        const [previous] = yield* remote.sessions.inbox(session.id);
+        yield* remote.retry(session.id);
+        yield* remote.retry(session.id);
+        expect(yield* remote.sessions.inbox(session.id)).toHaveLength(2);
+        yield* remote.sessions.cancelInbox({ sessionID: session.id, inboxID: previous!.id });
+      }
+      const [last] = yield* remote.sessions.inbox(session.id);
+      yield* remote.sessions.cancelInbox({ sessionID: session.id, inboxID: last!.id });
+      expect(yield* remote.sessions.inbox(session.id)).toEqual([]);
+      yield* remote.sessions.interrupt(session.id);
+      yield* gate.release;
+    }),
+  ));
 
 test("each failed assistant gets its own durable retry and the model sees the no-repeat instruction", () =>
   withRemoteHost((remote, _directory, { llm }) =>

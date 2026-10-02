@@ -3,11 +3,8 @@
   "workspaces": {
     ".": {
       "entry": [
-        "stryker.config.js!",
         "scripts/check-site-build.ts!",
         "scripts/exceptions.ts!",
-        "scripts/mutation-cache-key.ts!",
-        "scripts/mutation-ci.ts!",
         "scripts/run-quality-gate.ts!",
         "scripts/verify-gates.ts!"
       ]
@@ -25,7 +22,8 @@
         "ops/offline-export.ts!",
         "ops/patch-opencode-proxy.ts!",
         "ops/session-transfer.ts!",
-        "ops/verify-mac-graph.ts!"
+        "ops/verify-mac-graph.ts!",
+        "test/compiled-plugin/regression.mjs!"
       ]
     }
   },

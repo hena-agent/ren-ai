@@ -10,7 +10,7 @@ import {
 } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { expect, test } from "vitest";
-import { messagingFixture } from "../test/messaging-host.test-helper.ts";
+import { messagingFixture } from "../test/messaging.test-helper.ts";
 import { composeServer } from "./server.ts";
 import { applicationApi } from "./opencode/application-protocol.ts";
 

@@ -3,8 +3,8 @@ import { Effect, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
+import { messagingFixture } from "../../test/messaging.test-helper.ts";
 import {
-  messagingFixture,
   scriptedPersona,
   providerUnavailable,
   standaloneTestHost,

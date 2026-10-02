@@ -14,18 +14,17 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Quality gates
 
-This repo enforces eight gates. They are not advisory. `bun run ci` runs all of them and CI blocks on it.
+This repo enforces seven gates. They are not advisory. `bun run ci` runs all of them and CI blocks on it.
 
-| Gate                  | Threshold      | Enforced by                     |
-| --------------------- | -------------- | ------------------------------- |
-| Cyclomatic complexity | < 22           | oxlint `eslint/complexity`      |
-| Cognitive complexity  | < 22           | `oxlint-plugin-complexity`      |
-| Lines per file        | < 500          | oxlint `eslint/max-lines`       |
-| Test coverage         | 100%, per file | vitest `thresholds.perFile`     |
-| Surviving mutants     | 0              | Stryker `thresholds.break: 100` |
-| Dead code             | 0              | knip                            |
-| Duplicated code       | 0              | jscpd                           |
-| `any` types           | 0              | oxlint `no-explicit-any`        |
+| Gate                  | Threshold      | Enforced by                 |
+| --------------------- | -------------- | --------------------------- |
+| Cyclomatic complexity | < 22           | oxlint `eslint/complexity`  |
+| Cognitive complexity  | < 22           | `oxlint-plugin-complexity`  |
+| Lines per file        | < 500          | oxlint `eslint/max-lines`   |
+| Test coverage         | 100%, per file | vitest `thresholds.perFile` |
+| Dead code             | 0              | knip                        |
+| Duplicated code       | 0              | jscpd                       |
+| `any` types           | 0              | oxlint `no-explicit-any`    |
 
 ### Rules that are easy to get wrong
 

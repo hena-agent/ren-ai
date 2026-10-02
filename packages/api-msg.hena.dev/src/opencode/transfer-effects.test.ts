@@ -5,11 +5,10 @@ import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
 import {
   messagingFixture,
-  scriptedPersona,
-  startTestHost,
   registration,
   runMessagingTest,
-} from "../../test/messaging-host.test-helper.ts";
+} from "../../test/messaging.test-helper.ts";
+import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { remoteHost } from "./remote.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";

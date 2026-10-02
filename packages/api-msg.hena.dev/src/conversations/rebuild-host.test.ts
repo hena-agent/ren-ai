@@ -1,10 +1,10 @@
 import { rm } from "node:fs/promises";
 import {
   messagingFixture,
-  quietTestHost,
   registration,
   runMessagingTest,
-} from "../../test/messaging-host.test-helper.ts";
+} from "../../test/messaging.test-helper.ts";
+import { quietTestHost } from "../../test/messaging-host.test-helper.ts";
 import { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
@@ -97,7 +97,6 @@ test("a deleted session heals on the next message and an operator rebuild replac
           messages,
           noticeCopy,
           () => Effect.succeed(false),
-          () => Effect.void,
           () => Effect.void,
           () => Effect.void,
           () => Effect.void,

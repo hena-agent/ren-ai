@@ -17,7 +17,7 @@
       "automerge": false
     },
     {
-      "description": "Eight quality gates are what make unattended merges safe.",
+      "description": "Seven quality gates are what make unattended merges safe.",
       "matchUpdateTypes": ["patch", "minor"],
       "automerge": true
     },

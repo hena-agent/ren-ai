@@ -1,6 +1,6 @@
 # ren-ai
 
-An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo includes the messaging site and server, a local Persona Lab, and a standalone persona engine, with eight quality gates that block CI.
+An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo includes the messaging site and server, a local Persona Lab, and a standalone persona engine, with seven quality gates that block CI.
 
 The premise is that when agents write most of the code, review does not scale but gates do.
 
@@ -49,17 +49,12 @@ For the messaging services, use the [deployment and relocation runbook](packages
 | Coverage              | 100%, per file | `bun run test`         |
 | Dead code             | 0              | `bun run knip`         |
 | Duplicated code       | 0              | `bun run dup`          |
-| Surviving mutants     | 0              | `bun run mutate`       |
 
-`bun run verify-gates` proves the gates actually reject bad code. It plants a deliberate violation for each gate, runs the real gate, and asserts it is rejected **and named the expected rule** — an exit code alone would pass if the gate had failed for an unrelated reason. It also asserts the Stryker patch is still applied, since that is the mutation gate’s real failure mode. A gate that has silently stopped enforcing anything is the failure mode this repo is designed around.
+`bun run verify-gates` proves the gates actually reject bad code. It plants a deliberate violation for each gate, runs the real gate, and asserts it is rejected **and named the expected rule** — an exit code alone would pass if the gate had failed for an unrelated reason. A gate that has silently stopped enforcing anything is the failure mode this repo is designed around.
 
 ### CI execution
 
-`bun run ci` runs every gate locally. GitHub Actions runs `ci:checks` (including the site build), `verify-gates`, and four mutation shards in parallel, each in its own checkout. The required **Quality gates** check succeeds only when all jobs pass; deployment waits for it. `verify-gates` plants both coverage violations in one suite run and checks that each file has its own threshold failure.
-
-Mutation testing takes roughly 80–90 minutes unsharded on the hosted runner. `STRYKER_SHARD=1/4 bun run mutate` selects a stable, path-hashed quarter of the existing mutation scope, including its API files. Each runner retains the two-worker memory cap. `bun run verify-ci` checks that the four shards cover the complete scope exactly once and retain the 100% threshold.
-
-PRs use Stryker's incremental reports from a previous successful shard on that PR or its base branch. Main and the weekly schedule always run every mutant and refresh the reports. Cache keys include shard, OS/architecture, Node/Bun versions, and every tracked input except mutated source files (Stryker compares those itself). Tests, shared helpers, and fakes also invalidate the cache, covering Stryker's static-mutant and helper-change limitations. Missing caches run the full shard. Incremental results are a PR optimization; main's full pass also checks interactions between changed and unchanged source files.
+`bun run ci` runs every gate locally. GitHub Actions runs `ci:checks` (including the site build) and `verify-gates` in parallel, each in its own checkout. The **Quality gates** check succeeds only when both jobs pass; deployment waits for it. `verify-gates` plants both coverage violations in one suite run and checks that each file has its own threshold failure.
 
 ## Design decisions worth knowing
 
@@ -67,14 +62,4 @@ PRs use Stryker's incremental reports from a previous successful shard on that P
 - **Libraries are Just-in-Time.** They export TypeScript source directly, with no build step. The messaging site and Persona Lab build their browser UIs with Vite; the lab builds when starting. An unbuilt compiled library makes type-aware lint and knip exit 0 while enforcing nothing — a silent false pass.
 - **Exact version pins, no ranges.** oxfmt is pre-1.0 with no semver protection on formatting output, and `oxlint-tsgolint` is hard-pinned to a TypeScript patch release.
 - **bun's default isolated linker is kept.** It turns an undeclared dependency into an immediate failure instead of a latent bug.
-- **`globalStore = true` in `bunfig.toml`.** Packages are symlinked from one machine-wide store, so a clone's `node_modules` is ~200KB instead of ~240MB. The cost is that tools resolving plugins by package name from their _own_ location break, since the store is not a parent of the project — `stryker.config.js` references its runner by path for exactly this reason.
-
-## Known patch
-
-`@stryker-mutator/vitest-runner@10.0.0` is patched via `bun patch` (see `patches/`).
-
-Vitest 5 changed `testNamePattern` to match against a `" > "`-joined test name; the Stryker runner still joins with a single space, so every test nested in a `describe` is skipped and every mutant is reported as survived. Upstream: [stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210).
-
-The runner also forces Vitest's thread pool. OpenCode loads `ffi-rs`, whose native addon segfaults on Linux when imported in a worker thread (reproduced with a bare Node worker thread). The patch uses Vitest's fork pool instead, as plain Vitest does, retaining one worker per Stryker runner and all mutation gates. Stryker concurrency is capped at two because seven forked runners exhausted an 8 GB Linux container; the mutation scope and 100% threshold remain unchanged.
-
-The patch is pinned to exactly `10.0.0`. If Renovate bumps the runner, `patchedDependencies` stops matching and bun applies nothing — but it **fails closed**: `verify-gates` checks both changes, and without the test-name fix the score collapses to 3.33% and `thresholds.break: 100` reds the build. Remove each hunk when its upstream fix ships.
+- **`globalStore = true` in `bunfig.toml`.** Packages are symlinked from one machine-wide store, so a clone's `node_modules` is ~200KB instead of ~240MB.

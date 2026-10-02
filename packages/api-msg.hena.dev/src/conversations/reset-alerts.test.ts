@@ -3,7 +3,7 @@ import { TestLLM } from "@opencode/ai/testing";
 import { AIError, QuotaExceededError } from "@opencode/ai/schema/errors";
 import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
-import { bindTestHandle, resetFixture } from "../../test/reset.test-helper.ts";
+import { bindTestHandle, resetFixture, onboardTestHandle } from "../../test/reset.test-helper.ts";
 import {
   providerUnavailable,
   scriptedPersona,
@@ -61,6 +61,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* Effect.sleep("20 millis");
           failing = false;
           yield* f.fake.text(f.handle, "/reset", Date.now());
+          yield* onboardTestHandle(host, f.handle);
           const fresh = Session.ID.make((yield* host.conversations.byHandle(f.handle))!.sessionID);
           while (
             !JSON.stringify(yield* host.sessions.messages({ sessionID: fresh })).includes(

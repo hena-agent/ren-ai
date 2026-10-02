@@ -25,7 +25,7 @@ import {
   valid,
   expectLateResults,
 } from "../../test/host.test-helper.ts";
-import { silentAlerts } from "./scripted-overrides.test-helper.ts";
+import { silentAlerts } from "../../test/messaging.test-helper.ts";
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
   const { tmpdir: temporaryDirectory } = await import("node:os");

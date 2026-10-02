@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
-import { registration } from "../../test/messaging-host.test-helper.ts";
-import { resetFixture, bindTestHandle } from "../../test/reset.test-helper.ts";
+import { registration } from "../../test/messaging.test-helper.ts";
+import { resetFixture, bindTestHandle, onboardTestHandle } from "../../test/reset.test-helper.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 
 test("a test handle resets Memory into a new session and keeps the old session for review", async () => {
@@ -16,6 +16,7 @@ test("a test handle resets Memory into a new session and keeps the old session f
         yield* fake.text(handle, "My secret is marmalade", at);
         yield* host.sessions.wait(old.id);
         const command = yield* fake.text(handle, " /Reset \n", at + 1);
+        yield* onboardTestHandle(host, handle);
         const fresh = (yield* host.conversations.byHandle(handle))!;
         expect(fresh.sessionID).not.toBe(old.id);
         const id = Session.ID.make(fresh.sessionID);
@@ -32,7 +33,7 @@ test("a test handle resets Memory into a new session and keeps the old session f
         expect(JSON.stringify(yield* host.sessions.messages({ sessionID: old.id }))).toContain(
           "marmalade",
         );
-        yield* fake.text(handle, "Hello again", at + 2);
+        yield* fake.text(handle, "Hello again", Date.now());
         yield* host.sessions.wait(id);
         const memory = JSON.stringify(yield* host.sessions.messages({ sessionID: id }));
         expect(memory).toContain("Hello again");
@@ -94,6 +95,7 @@ test("only a complete command from a marked, active User resets and unrelated ha
         expect((yield* host.conversations.byHandle(handle))!.sessionID).toBe(old.id);
         const before = yield* fake.text(handle, "old target", Date.now());
         const reset = yield* fake.text(handle, "/RESET", Date.now());
+        yield* onboardTestHandle(host, handle);
         const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
         yield* fake.text(handle, "late old row", reset.createdAt - 1);
         yield* fake.text(handle, "", Date.now(), {

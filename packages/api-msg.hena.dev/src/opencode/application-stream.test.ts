@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { expect, test, vi } from "vitest";
-import { applicationRpcFixture } from "../../test/server.test-helper.ts";
-import { runMessagingTest } from "../../test/messaging-host.test-helper.ts";
+import { applicationRpcFixture } from "../../test/application-rpc.test-helper.ts";
+import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 
 test("wait flushes readiness, emits empty heartbeats every twenty seconds, and completes with its result", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
