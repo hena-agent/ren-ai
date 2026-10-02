@@ -89,8 +89,8 @@
         "vitest": "5.0.1",
       },
     },
-    "packages/msg.hena.dev": {
-      "name": "@ren-ai/msg.hena.dev",
+    "packages/discovery.hena.dev": {
+      "name": "@ren-ai/discovery.hena.dev",
       "version": "0.0.0",
       "dependencies": {
         "@ren-ai/onboarding": "workspace:*",
@@ -878,7 +878,7 @@
 
     "@ren-ai/api-msg.hena.dev": ["@ren-ai/api-msg.hena.dev@workspace:packages/api-msg.hena.dev"],
 
-    "@ren-ai/msg.hena.dev": ["@ren-ai/msg.hena.dev@workspace:packages/msg.hena.dev"],
+    "@ren-ai/discovery.hena.dev": ["@ren-ai/discovery.hena.dev@workspace:packages/discovery.hena.dev"],
 
     "@ren-ai/onboarding": ["@ren-ai/onboarding@workspace:packages/onboarding"],
 

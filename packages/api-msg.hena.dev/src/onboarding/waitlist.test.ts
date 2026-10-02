@@ -49,7 +49,7 @@ test("the site's Waitlist form stores its email, locale, answer and time over HT
         handler(
           new Request("http://local/waitlist", {
             method: "POST",
-            headers: { "content-type": "application/json", origin: "https://msg.hena.dev" },
+            headers: { "content-type": "application/json", origin: "https://discovery.hena.dev" },
             body: JSON.stringify(body),
           }),
           Context.make(HttpClient.HttpClient, client),
@@ -60,7 +60,9 @@ test("the site's Waitlist form stores its email, locale, answer and time over HT
             post({ email: "person@example.com", locale: "ko", answer }),
           );
           expect(response.status).toBe(200);
-          expect(response.headers.get("access-control-allow-origin")).toBe("https://msg.hena.dev");
+          expect(response.headers.get("access-control-allow-origin")).toBe(
+            "https://discovery.hena.dev",
+          );
         }
         for (const body of [
           { email: "not-an-email", locale: "ko", answer: "full" },

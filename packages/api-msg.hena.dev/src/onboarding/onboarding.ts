@@ -258,7 +258,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
     const routes = HttpApiBuilder.layer(onboardingApi).pipe(
       Layer.provide(handlers),
       Layer.provideMerge(HttpRouter.layer),
-      Layer.provideMerge(HttpRouter.cors({ allowedOrigins: ["https://msg.hena.dev"] })),
+      Layer.provideMerge(HttpRouter.cors({ allowedOrigins: ["https://discovery.hena.dev"] })),
       Layer.provide(HttpServer.layerServices),
     );
     return { submit, waitlist, resume, routes };

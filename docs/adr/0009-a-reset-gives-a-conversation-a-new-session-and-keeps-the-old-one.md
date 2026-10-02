@@ -1,6 +1,6 @@
 # A reset returns a test handle to onboarding and keeps the old session for review
 
-A test handle can text `/reset` to return to before onboarding. The old OpenCode session is interrupted and retained for review, and the active user and conversation are removed. Submitting the handle at msg.hena.dev again records fresh consent and sends a new notice and greeting in a new session. This revises the original memory-only reset decision: retaining admission status prevented operators from testing onboarding from the beginning. The physical iMessage thread stays the same; rebuilding never restores memory from before the latest reset.
+A test handle can text `/reset` to return to before onboarding. The old OpenCode session is interrupted and retained for review, and the active user and conversation are removed. Submitting the handle at discovery.hena.dev again records fresh consent and sends a new notice and greeting in a new session. This revises the original memory-only reset decision: retaining admission status prevented operators from testing onboarding from the beginning. The physical iMessage thread stays the same; rebuilding never restores memory from before the latest reset.
 
 ## Considered Options
 

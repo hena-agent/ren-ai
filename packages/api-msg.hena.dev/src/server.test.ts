@@ -40,7 +40,7 @@ const processes = ChildProcessSpawner.make(() =>
 const onboardingRequest = (privacyNoticeVersion: string) =>
   new Request("http://local/onboarding", {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "https://msg.hena.dev" },
+    headers: { "content-type": "application/json", origin: "https://discovery.hena.dev" },
     body: JSON.stringify({
       handle: "+821012345678",
       locale: "ko",

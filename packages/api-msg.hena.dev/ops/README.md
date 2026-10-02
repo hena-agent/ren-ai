@@ -1,5 +1,15 @@
 # Separate application, OpenCode, and Messages deployments
 
+## Discovery domain cutover
+
+The site is `discovery.hena.dev` in `packages/discovery.hena.dev`, served by the `discovery-hena-dev` Worker. The former `msg-hena-dev` Worker and its `msg.hena.dev` domain are retired without a redirect. The existing Turnstile widget now permits only `discovery.hena.dev`.
+
+For a future domain move, deploy the API's new CORS origin and update Turnstile before deploying the website. Verify HTTPS, `/`, `/privacy`, and browser access to `/onboarding` and `/waitlist` before retiring the old Worker, custom-domain/DNS binding, and CORS origin. Build with the production `VITE_TURNSTILE_SITE_KEY`; main auto-deploys the site. `ops/deploy.sh` is for bootstrap-only migration, not a routine API update.
+
+The generated route file's three exception paths move with the package; their reasons and dates stay unchanged. Changes to `quality-exceptions.json` require the human CODEOWNER's review.
+
+## Service deployment and relocation
+
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
 ## Services and credentials

@@ -28,7 +28,7 @@ bun run ci
 apps/persona-lab/     Local simulation app for the standalone persona engine.
 packages/persona-engine/  Relationship state engine (not wired into iMessage runtime).
 packages/onboarding/   Shared browser-safe Handle rules, locale copy, and Onboarding/Waitlist shapes.
-packages/msg.hena.dev/   Prerendered Korean onboarding site, served as static assets.
+packages/discovery.hena.dev/   Prerendered Korean onboarding site, served as static assets.
 packages/api-msg.hena.dev/  Mac messaging API, portable application, OpenCode persona plugin, and operator CLI.
 scripts/                Repo tooling: exceptions report and gate verification.
 quality-exceptions.json  The only place file-level gate exceptions may live.

@@ -23,7 +23,7 @@ The handle every persona texts from, currently hi@hena.dev.
 _Avoid_: persona handle, sender, bot account
 
 **Onboarding**:
-Submitting a handle at msg.hena.dev to become a user.
+Submitting a handle at discovery.hena.dev to become a user.
 _Avoid_: signup, registration
 
 **Test handle**:
@@ -83,7 +83,7 @@ One of the two roles a workspace package takes. A **library** is consumed by oth
 _Avoid_: kind, category, template (overloaded here), project
 
 **Just-in-Time package**:
-A workspace package whose `exports` points at TypeScript source, with no build step and no emitted `dist/`. Every library takes this shape; only the site, msg.hena.dev, is built, by Vite, because browsers can't run TypeScript.
+A workspace package whose `exports` points at TypeScript source, with no build step and no emitted `dist/`. Every library takes this shape; only the site, discovery.hena.dev, is built, by Vite, because browsers can't run TypeScript.
 _Avoid_: source package, unbuilt package, internal package
 
 **Trust boundary**:
