@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/*.ts"],
+  "workspaces": {
+    ".": { "entry": ["scripts/*.ts"] },
+    "apps/admin": { "entry": ["src/pending-entry.mjs"] }
+  },
   "ignore": [".agents/**", "scripts/**/*.mjs"],
   "ignoreDependencies": ["jscpd"]
 }

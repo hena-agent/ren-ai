@@ -1,151 +1,209 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PersonaRecord } from "@ren-ai/personas";
+import { descriptionOf } from "./authoring.ts";
 import copy from "./copy.json";
 
-export const emptyPersona: PersonaRecord = {
-  id: "",
-  name: "",
-  bio: "",
-  imageUrl: "",
-  published: false,
-  timeZone: "Asia/Seoul",
-  language: "ko",
-  openingLine: "",
-  memory: "",
-  prompt: "",
-};
-
-const profileFields = [
-  { name: "name", label: "이름", type: "text" },
-  { name: "imageUrl", label: "프로필 이미지 URL", type: "url" },
-] as const;
-const runtimeFields = [
-  { name: "language", label: "언어" },
-  { name: "timeZone", label: "시간대" },
-] as const;
-const longFields = [
-  { name: "openingLine", label: "첫 인사 지침", rows: 3 },
-  { name: "memory", label: "기억 지침", rows: 4 },
-  { name: "prompt", label: "페르소나 프롬프트", rows: 12 },
-] as const;
+function ProfileContent({ persona }: { persona: PersonaRecord }) {
+  return (
+    <div className="card-content">
+      <span className={persona.published ? "badge live" : "badge"}>
+        {persona.published ? copy.live : copy.draft}
+      </span>
+      <h3>{persona.name || copy.noName}</h3>
+      <p>{persona.bio || copy.noBio}</p>
+    </div>
+  );
+}
 
 function Preview({ persona }: { persona: PersonaRecord }) {
   return (
     <article className="persona-card">
       {persona.imageUrl ? (
-        <img src={persona.imageUrl} alt={`${persona.name} 프로필`} />
+        <img
+          src={persona.imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+          alt={`${persona.name} 프로필`}
+        />
       ) : (
         <div className="image-placeholder">{copy.noImage}</div>
       )}
-      <div className="card-content">
-        <span className={persona.published ? "badge live" : "badge"}>
-          {persona.published ? copy.live : copy.draft}
-        </span>
-        <h3>{persona.name || copy.noName}</h3>
-        <p>{persona.bio || copy.noBio}</p>
-      </div>
+      <ProfileContent persona={persona} />
     </article>
   );
 }
 
-function Editor({ persona, editing }: { persona: PersonaRecord; editing: boolean }) {
+function Comparison({
+  persona,
+  portraits,
+}: {
+  persona: PersonaRecord;
+  portraits: NonNullable<PersonaRecord["portraits"]>;
+}) {
+  return (
+    <article className="persona-card">
+      <fieldset className="image-options" aria-describedby="comparison-hint">
+        <legend>{copy.comparison}</legend>
+        <p className="hint" id="comparison-hint">
+          {copy.comparisonHint}
+        </p>
+        <div className="image-options-grid">
+          {Object.entries(portraits).map(([style, imageUrl]) => (
+            <figure className="image-option" key={style}>
+              <img
+                src={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+                alt={`${persona.name} ${style === "anime" ? copy.styles.anime : copy.styles.photo}`}
+              />
+              <figcaption>{style === "anime" ? copy.styles.anime : copy.styles.photo}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </fieldset>
+      <ProfileContent persona={persona} />
+    </article>
+  );
+}
+
+function Editor({
+  persona,
+  editing,
+  draft,
+  seed,
+}: {
+  persona: PersonaRecord;
+  editing: boolean;
+  draft: string;
+  seed?: string | undefined;
+}) {
   return (
     <div className="editor-layout">
-      <form action={editing ? `/personas/${persona.id}` : "/personas"} method="post">
-        <fieldset>
-          <legend>{copy.profile}</legend>
-          <label htmlFor="id">ID</label>
-          <input
-            id="id"
-            name="id"
-            defaultValue={persona.id}
-            readOnly={editing}
-            required
-            maxLength={64}
-            pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}"
-            aria-describedby="id-hint"
-          />
-          <p className="hint" id="id-hint">
-            {copy.idHint}
-          </p>
-          {profileFields.map((field) => (
-            <div className="field" key={field.name}>
-              <label htmlFor={field.name}>{field.label}</label>
-              <input
-                id={field.name}
-                name={field.name}
-                type={field.type}
-                defaultValue={persona[field.name]}
-                required={field.name === "name"}
-              />
-            </div>
-          ))}
-          <label htmlFor="bio">짧은 소개</label>
-          <textarea id="bio" name="bio" rows={3} defaultValue={persona.bio} />
-          <label className="toggle" htmlFor="published">
-            <input
-              id="published"
-              name="published"
-              type="checkbox"
-              defaultChecked={persona.published}
+      <div className="authoring-column">
+        <form
+          className="seed-form"
+          action={editing ? `/personas/${persona.id}` : "/personas"}
+          method="post"
+          data-generating={copy.generating}
+        >
+          <input type="hidden" name="draft" value={draft} />
+          <fieldset>
+            <legend>{copy.seedTitle}</legend>
+            <label htmlFor="seed">{copy.seedLabel}</label>
+            <textarea
+              id="seed"
+              name="seed"
+              rows={3}
+              defaultValue={seed}
+              placeholder={copy.seedPlaceholder}
+              aria-describedby="seed-hint"
+              required
             />
-            {copy.published}
-          </label>
-          <p className="hint">{copy.publishHint}</p>
-        </fieldset>
-        <fieldset>
-          <legend>{copy.runtime}</legend>
-          <p className="hint runtime-hint">{copy.runtimeHint}</p>
-          <div className="field-pair">
-            {runtimeFields.map((field) => (
-              <div className="field" key={field.name}>
-                <label htmlFor={field.name}>{field.label}</label>
-                <input
-                  id={field.name}
-                  name={field.name}
-                  defaultValue={persona[field.name]}
-                  required
-                />
-              </div>
-            ))}
-          </div>
-          {longFields.map((field) => (
-            <div className="field" key={field.name}>
-              <label htmlFor={field.name}>{field.label}</label>
-              <textarea
-                id={field.name}
-                name={field.name}
-                rows={field.rows}
-                defaultValue={persona[field.name]}
-                required
-              />
+            <p className="hint" id="seed-hint">
+              {copy.seedHint}
+            </p>
+            <button type="submit" name="intent" value="character">
+              {copy.seedGenerate}
+            </button>
+            <output className="pending-status" data-pending aria-live="polite" />
+          </fieldset>
+        </form>
+        <form
+          id="persona-editor"
+          action={editing ? `/personas/${persona.id}` : "/personas"}
+          method="post"
+          data-generating={copy.generating}
+          data-saving={copy.saving}
+        >
+          <input type="hidden" name="draft" value={draft} />
+          <button hidden type="submit" name="intent" value="save">
+            {copy.save}
+          </button>
+          <fieldset>
+            <legend>{copy.character}</legend>
+            <label htmlFor="name">이름</label>
+            <input id="name" name="name" defaultValue={persona.name} required />
+            <label htmlFor="description">캐릭터 설명</label>
+            <p className="hint" id="description-hint">
+              {copy.characterHint}
+            </p>
+            <textarea
+              id="description"
+              name="description"
+              rows={16}
+              defaultValue={descriptionOf(persona)}
+              placeholder={copy.characterPlaceholder}
+              aria-describedby="description-hint"
+              required
+            />
+            <div className="generation-actions">
+              <button type="submit" name="intent" value="generate">
+                {copy.generate}
+              </button>
+              {persona.imageUrl && persona.bio && (
+                <button className="secondary" type="submit" name="intent" value="portrait">
+                  {copy.regenerateImage}
+                </button>
+              )}
             </div>
-          ))}
-        </fieldset>
-        <div className="form-actions">
-          <button type="submit">{copy.save}</button>
-          <a href="/">{copy.list}</a>
-        </div>
-      </form>
+            <p className="hint">{copy.generationHint}</p>
+            <output className="pending-status" data-pending aria-live="polite" />
+          </fieldset>
+          <fieldset>
+            <legend>{copy.publication}</legend>
+            <label className="toggle" htmlFor="published">
+              <input
+                id="published"
+                name="published"
+                type="checkbox"
+                defaultChecked={persona.published}
+              />
+              {copy.published}
+            </label>
+            <p className="hint">{copy.publishHint}</p>
+          </fieldset>
+          <div className="form-actions">
+            <button type="submit" name="intent" value="save">
+              {copy.save}
+            </button>
+            <a href="/">{copy.list}</a>
+          </div>
+        </form>
+      </div>
       <aside aria-labelledby="preview-title">
         <h2 id="preview-title">{copy.preview}</h2>
         <p className="hint">{copy.previewHint}</p>
-        <Preview persona={persona} />
+        {persona.portraits ? (
+          <Comparison persona={persona} portraits={persona.portraits} />
+        ) : (
+          <Preview persona={persona} />
+        )}
       </aside>
     </div>
   );
 }
 
+export type PageContent =
+  | {
+      record: PersonaRecord;
+      editing: boolean;
+      draft: string;
+      seed?: string | undefined;
+      personas?: never;
+    }
+  | {
+      personas: readonly PersonaRecord[];
+      record?: never;
+      editing?: never;
+      draft?: never;
+      seed?: never;
+    };
+
 export function renderPage({
   personas,
   record,
   editing,
+  draft,
   error = "",
-  saved = false,
-}: {
-  personas: readonly PersonaRecord[];
-  record?: PersonaRecord | undefined;
-  editing?: boolean | undefined;
+  saved,
+  seed,
+}: PageContent & {
   error?: string;
   saved?: boolean;
 }) {
@@ -158,6 +216,7 @@ export function renderPage({
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>{copy.title}</title>
           <link rel="stylesheet" href="/style.css" />
+          <script src="/pending.js" defer />
         </head>
         <body>
           <a className="skip-link" href="#main">
@@ -189,14 +248,14 @@ export function renderPage({
             )}
             {saved && <output className="notice success">{copy.saved}</output>}
             {record ? (
-              <Editor persona={record} editing={editing === true} />
+              <Editor persona={record} editing={editing} draft={draft} seed={seed} />
             ) : personas.length ? (
               <div className="persona-grid">
                 {personas.map((persona) => (
                   <div key={persona.id}>
                     <a className="card-link" href={`/personas/${persona.id}`}>
                       <Preview persona={persona} />
-                      <span className="card-id">{persona.id} / EDIT →</span>
+                      <span className="edit-label">{copy.edit}</span>
                     </a>
                   </div>
                 ))}
