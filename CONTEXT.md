@@ -10,6 +10,14 @@ A service where people text fictional personas over iMessage. The repo also carr
 A fictional character the service plays in iMessage.
 _Avoid_: bot, character, agent (an agent is the OpenCode mechanism that implements a persona)
 
+**Persona description**:
+The operator's detailed, private description of a persona's appearance, background, personality and speech. It is the source for her public profile and conversation instructions.
+_Avoid_: bio, introduction, system prompt
+
+**Public profile**:
+The name, image and introduction shown to people choosing personas. It is distinct from the private persona description.
+_Avoid_: persona definition, prompt
+
 **User**:
 A person who has onboarded and texts a persona.
 _Avoid_: recipient, contact, customer
@@ -23,7 +31,7 @@ The handle every persona texts from, currently hi@hena.dev.
 _Avoid_: persona handle, sender, bot account
 
 **Onboarding**:
-Submitting a handle at msg.hena.dev to become a user.
+Providing a handle and consent to start receiving a persona's iMessages.
 _Avoid_: signup, registration
 
 **Test handle**:
@@ -31,11 +39,11 @@ A handle the operator marks for trying the service as a user would. Only a test 
 _Avoid_: developer handle, dev number, allowlist
 
 **Greeting**:
-The first message a persona sends a new user, triggered by onboarding.
+The first message a persona sends a new user.
 _Avoid_: welcome message, intro
 
 **Notice**:
-A fixed message the service sends from the service handle in its own voice, not a persona's. The first one reaches a new user just before the greeting, saying they are talking to an AI and how to stop.
+A fixed message the service sends from the service handle in its own voice, not a persona's. Legacy onboarding sends one before the greeting. Discovery obtains AI-service consent on the web rather than sending a separate notice.
 _Avoid_: disclaimer, system message
 
 **Conversation**:
@@ -47,7 +55,7 @@ What a persona remembers of one conversation: the latest messages word for word 
 _Avoid_: context, history, session
 
 **Waitlist**:
-The emails of people who can't be let in yet: their handle can't receive iMessage, or the service is full.
+People waiting to start a conversation. Discovery registrations include a handle, liked personas and web consent; selection has no promised order or time. The legacy waitlist contains emails from people whose handle can't receive iMessage or for whom the service is full.
 _Avoid_: queue, signup list
 
 **Reset**:
@@ -83,7 +91,7 @@ One of the two roles a workspace package takes. A **library** is consumed by oth
 _Avoid_: kind, category, template (overloaded here), project
 
 **Just-in-Time package**:
-A workspace package whose `exports` points at TypeScript source, with no build step and no emitted `dist/`. Every library takes this shape; only the site, msg.hena.dev, is built, by Vite, because browsers can't run TypeScript.
+A workspace package whose `exports` points at TypeScript source, with no build step and no emitted `dist/`. Every library takes this shape; browser applications build JavaScript because browsers can't run TypeScript.
 _Avoid_: source package, unbuilt package, internal package
 
 **Trust boundary**:

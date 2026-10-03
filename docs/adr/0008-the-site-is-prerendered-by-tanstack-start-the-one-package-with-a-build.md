@@ -1,6 +1,8 @@
-# The site is prerendered by TanStack Start, the one package with a build
+# The messaging site is prerendered by TanStack Start
 
-msg.hena.dev is a TanStack Start app, in React, that Vite prerenders into static files. Cloudflare Workers serves them as static assets with no Worker code, and the browser calls api-msg.hena.dev directly. Every other package is Just-in-Time, and AGENTS.md forbids a build step, because a library whose compiled output hasn't been built makes type-aware lint and knip pass while checking nothing. Browsers can't run TypeScript, so the site is the one exception. It can't cause that failure: nothing imports its build output, `dist/` is ignored by git and by every gate, and every gate runs on the site's source, `.tsx` files included.
+msg.hena.dev is a TanStack Start app, in React, that Vite prerenders into static files. Cloudflare Workers serves them as static assets with no Worker code, and the browser calls api-msg.hena.dev directly. Libraries are Just-in-Time, and AGENTS.md forbids a library build step, because a library whose compiled output hasn't been built makes type-aware lint and knip pass while checking nothing. Browser applications build JavaScript. They can't cause that failure: nothing imports their build output, `dist/` is ignored by git and by every gate, and every gate runs on their source, `.tsx` files included.
+
+`apps/discovery` is a separate Vite browser application for persona discovery and waiting registration. It builds alongside the existing site in CI. This ADR still describes the deployed TanStack site; Discovery's domain and replacement of the existing site remain open in the [MVP spec](../specs/persona-discovery-admin.md).
 
 ## Considered Options
 
