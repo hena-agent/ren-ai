@@ -250,15 +250,30 @@ const verifyStrykerPatch = (): readonly string[] => {
         `mutation runner patch: ${path} is missing the " > " test-name separator; mutation results cannot be trusted`,
     );
   const runner = "node_modules/@stryker-mutator/vitest-runner/dist/src/vitest-test-runner.js";
-  const forked =
-    existsSync(runner) &&
-    readFileSync(runner, "utf8").includes("pool: 'forks',\n            maxWorkers: 1");
-  return forked
-    ? nameFailures
-    : [
-        ...nameFailures,
-        "mutation runner patch: Vitest 5 must use one forked worker (ffi-rs segfaults in Linux threads)",
-      ];
+  const content = existsSync(runner) ? readFileSync(runner, "utf8") : "";
+  const failures = [...nameFailures];
+  if (!content.includes("pool: 'forks',\n            maxWorkers: 1")) {
+    failures.push(
+      "mutation runner patch: Vitest 5 must use one forked worker (ffi-rs segfaults in Linux threads)",
+    );
+  }
+  const suiteFailureHandler = `if (!failure && errors.length > 0) {
+            const errorText = errors
+                .map(errorToString)
+                .join('\\n');
+            return {
+                status: DryRunStatus.Error,`;
+  if (
+    !content.includes(
+      "...this.ctx.state.getFiles().flatMap((file) => file.result?.errors ?? []),",
+    ) ||
+    !content.includes(suiteFailureHandler)
+  ) {
+    failures.push(
+      "mutation runner patch: Vitest suite import failures must be reported as runtime errors, not surviving mutants",
+    );
+  }
+  return failures;
 };
 
 const verifyGateInputs = (): readonly string[] => {

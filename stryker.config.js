@@ -19,6 +19,9 @@ export default {
   // Plain Vitest uses forks, but Stryker overrides its pool to threads.
   // Forks preserve the same tests, coverage analysis and mutation threshold.
 
+  // The patch also includes Vitest file-level import errors in the adapter's existing error
+  // result: failed module initialization registers no tests and must not look like a passing run.
+
   // Each Stryker process now starts a Vitest fork. The CPU-based default starts seven runners
   // in an 8 GB Linux container and exhausts its memory; cap processes without skipping mutants.
   concurrency: 2,

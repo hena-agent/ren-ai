@@ -36,3 +36,18 @@ diff --git a/dist/src/vitest-test-runner.js b/dist/src/vitest-test-runner.js
              maxWorkers: 1,
          };
      }
+@@ -177,8 +177,12 @@ export class VitestTestRunner {
+             failure ||= testResult.status === TestStatus.Failed;
+             return testResult;
+         });
+-        if (!failure && this.ctx.state.errorsSet.size > 0) {
+-            const errorText = [...this.ctx.state.errorsSet]
++        const errors = [
++            ...this.ctx.state.errorsSet,
++            ...this.ctx.state.getFiles().flatMap((file) => file.result?.errors ?? []),
++        ];
++        if (!failure && errors.length > 0) {
++            const errorText = errors
+                 .map(errorToString)
+                 .join('\n');
+             return {
