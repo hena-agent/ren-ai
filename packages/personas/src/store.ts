@@ -11,6 +11,8 @@ import {
   validateID,
 } from "./model.ts";
 import type { PersonaRecord } from "./model.ts";
+import { imageResponse, saveImage } from "./images.ts";
+import type { Portrait } from "./images.ts";
 
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
@@ -56,9 +58,29 @@ export async function createPersonaStore(directory: string) {
     get,
     create: (input: PersonaRecord) => write(input, true),
     update: (input: PersonaRecord) => write(input, false),
+    saveImage: (image: Portrait) => saveImage(directory, image),
+    image: (filename: string) => imageResponse(directory, filename),
+    publicImage: async (filename: string) => {
+      if (
+        !(await list()).some(
+          (persona) =>
+            persona.published &&
+            (persona.imageUrl === `/discovery/images/${filename}` ||
+              Object.values(persona.portraits ?? {}).includes(`/discovery/images/${filename}`)),
+        )
+      )
+        return new Response(null, { status: 404 });
+      return imageResponse(directory, filename);
+    },
     publicList: async () =>
       (await list())
         .filter((persona) => persona.published)
-        .map(({ id, name, bio, imageUrl }) => ({ id, name, bio, imageUrl })),
+        .map(({ id, name, bio, imageUrl, portraits }) => ({
+          id,
+          name,
+          bio,
+          imageUrl,
+          ...(portraits === undefined ? {} : { portraits }),
+        })),
   };
 }

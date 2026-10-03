@@ -45,7 +45,7 @@ test("publishing exposes only card fields, editing persists, and unpublishing re
     await store.create(harin);
     expect(await store.publicList()).toEqual([]);
     await store.update({ ...harin, name: "미라 수정", published: true });
-    expect(await store.publicList()).toEqual([
+    expect(await store.publicList()).toStrictEqual([
       {
         id: "mira",
         name: "미라 수정",
@@ -107,6 +107,9 @@ test("duplicate creation cannot overwrite a persona and missing edits cannot cre
     await expect(store.create({ ...harin, name: "다른 인물" })).rejects.toMatchObject({
       kind: "conflict",
     });
+    await expect(store.create({ ...harin, name: "다른 인물" })).rejects.toThrow(
+      "이미 사용 중인 ID입니다.",
+    );
     expect(await store.get("mira")).toEqual(harin);
     const results = await Promise.allSettled([
       store.create({ ...harin, id: "race", name: "A" }),

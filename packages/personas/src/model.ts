@@ -15,6 +15,8 @@ export interface PersonaRecord extends Persona {
   readonly bio: string;
   readonly imageUrl: string;
   readonly published: boolean;
+  readonly description?: string;
+  readonly portraits?: { readonly anime: string; readonly photo: string };
 }
 
 export class PersonaError extends Error {
@@ -35,6 +37,13 @@ const Frontmatter = Schema.Struct({
   bio: Schema.optionalKey(Schema.String),
   "image-url": Schema.optionalKey(Schema.String),
   published: Schema.optionalKey(Schema.Boolean),
+  description: Schema.optionalKey(Schema.String.check(Schema.isPattern(/\S/))),
+  portraits: Schema.optionalKey(
+    Schema.Struct({
+      anime: Schema.String.check(Schema.isNonEmpty()),
+      photo: Schema.String.check(Schema.isNonEmpty()),
+    }),
+  ),
 });
 
 const Input = Schema.Struct({
@@ -48,6 +57,8 @@ const Input = Schema.Struct({
   openingLine: Schema.String,
   memory: Schema.String,
   prompt: Schema.String,
+  description: Frontmatter.fields.description,
+  portraits: Frontmatter.fields.portraits,
 });
 
 export function validateID(id: string) {
@@ -79,9 +90,16 @@ export function decodePersona(input: unknown): PersonaRecord {
     validateID(persona.id);
     validateRuntime(persona);
     if (!persona.name.trim()) throw new Error("이름을 입력해 주세요.");
-    if (persona.imageUrl && new URL(persona.imageUrl).protocol !== "https:") {
-      throw new Error("프로필 이미지는 HTTPS URL이어야 합니다.");
-    }
+    const images = [persona.imageUrl, ...Object.values(persona.portraits ?? {})].filter(Boolean);
+    for (const imageUrl of images)
+      if (
+        !/^\/discovery\/images\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|webp)$/.test(
+          imageUrl,
+        ) &&
+        new URL(imageUrl).protocol !== "https:"
+      ) {
+        throw new Error("프로필 이미지는 HTTPS URL이어야 합니다.");
+      }
     if (persona.published && (!persona.bio.trim() || !persona.imageUrl)) {
       throw new Error("공개하려면 소개와 프로필 이미지가 필요합니다.");
     }
@@ -113,6 +131,8 @@ export function parsePersona(id: string, source: string): PersonaRecord {
     bio: fields.bio ?? "",
     imageUrl: fields["image-url"] ?? "",
     published: fields.published ?? false,
+    ...(fields.description === undefined ? {} : { description: fields.description }),
+    ...(fields.portraits === undefined ? {} : { portraits: fields.portraits }),
   };
   return decodePersona(persona);
 }
@@ -127,5 +147,7 @@ export function serializePersona(persona: PersonaRecord): string {
     bio: persona.bio,
     "image-url": persona.imageUrl,
     published: persona.published,
+    description: persona.description,
+    portraits: persona.portraits,
   })}---\n${persona.prompt}`;
 }
