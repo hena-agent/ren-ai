@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@ren-ai/onboarding": fileURLToPath(new URL("../onboarding/src/index.ts", import.meta.url)),
       "@ren-ai/personas": fileURLToPath(new URL("../personas/src/index.ts", import.meta.url)),
     },
   },

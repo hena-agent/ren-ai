@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./turnstile": "./src/turnstile.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.0-rc.112",
+    "react": "19.2.4"
   },
   "devDependencies": {
+    "@types/react": "19.2.14",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
   }

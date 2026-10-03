@@ -28,6 +28,8 @@ import { makeOperator } from "./operator/operator.ts";
 import { failedTurns, type FailureAlerts } from "./opencode/failed-turns.ts";
 import { setupRebuilding } from "./conversations/rebuild.ts";
 import { retainedSessions } from "./conversations/retained.ts";
+import { createPersonaStore } from "@ren-ai/personas";
+import { makeDiscoveryWeb } from "./discovery/discovery.ts";
 export { operatorHandler, operatorApi } from "./operator/api.ts";
 export { serveOperatorSocket, operatorClient } from "./operator/socket.ts";
 export { runOperatorCli } from "./operator/cli.ts";
@@ -169,9 +171,23 @@ export const startMessagingHost = (
       noticeVersion: onboardingConfig.noticeVersion,
     });
     yield* api.resume;
-    const { handler: onboardingWeb, dispose: disposeOnboarding } = HttpRouter.toWebHandler(
+    const { handler: legacyWeb, dispose: disposeLegacy } = HttpRouter.toWebHandler(
       api.routes.pipe(Layer.provide(FetchHttpClient.layer)),
     );
+    const catalog = yield* Effect.tryPromise(() => createPersonaStore(options.personaDirectory));
+    const discovery = yield* makeDiscoveryWeb({
+      catalog: catalog.publicList,
+      turnstileSecret: onboardingConfig.turnstileSecret,
+      image: catalog.publicImage,
+    });
+    const onboardingWeb: typeof legacyWeb = (request, context) =>
+      new URL(request.url).pathname.startsWith("/discovery/")
+        ? discovery.handler(request, context)
+        : legacyWeb(request, context);
+    const disposeOnboarding = async () => {
+      await discovery.dispose();
+      await disposeLegacy();
+    };
     const operator = yield* makeOperator(
       directory,
       (sessionID) =>

@@ -3,12 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "bin": {
+    "ren-ai-discovery": "./src/discovery-entry.mjs",
     "ren-ai-operator": "./src/operator-entry.ts"
   },
   "type": "module",
   "main": "./src/server-entry.ts",
   "scripts": {
     "start": "bun run src/server-entry.ts",
+    "dev:discovery": "bun --watch src/discovery-entry.mjs",
     "operator": "bun run src/operator-entry.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

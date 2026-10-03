@@ -32,7 +32,9 @@ export const makeOperator = (
           Effect.gen(function* () {
             // The first phase is atomic: no live User can rebuild a session awaiting removal.
             const state = yield* Effect.gen(function* () {
-              const existed = (yield* sql`SELECT 1 FROM user WHERE handle = ${handle}`).length > 0;
+              const existed =
+                (yield* sql`SELECT 1 FROM user WHERE handle = ${handle}
+                UNION SELECT 1 FROM discovery_registration WHERE handle = ${handle}`).length > 0;
               const keep =
                 (yield* sql`SELECT 1 FROM test_handle WHERE handle = ${handle}`).length > 0;
               yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
@@ -46,6 +48,7 @@ export const makeOperator = (
               yield* sql`DELETE FROM send WHERE handle = ${handle}`;
               yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
               yield* sql`DELETE FROM waitlist WHERE email = ${handle}`;
+              yield* sql`DELETE FROM discovery_registration WHERE handle = ${handle}`;
               yield* sql`DELETE FROM user WHERE handle = ${handle}`;
               yield* sql`DELETE FROM reset WHERE handle = ${handle}`;
               const pending =

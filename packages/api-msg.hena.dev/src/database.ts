@@ -100,6 +100,20 @@ export const migrate = Effect.gen(function* () {
         yield* sql`INSERT INTO removal SELECT handle, session_id FROM old_removal`;
         yield* sql`DROP TABLE old_removal`;
       }),
+      "016_discovery": Effect.gen(function* () {
+        yield* sql`CREATE TABLE discovery_registration (
+          id TEXT PRIMARY KEY,
+          handle TEXT NOT NULL UNIQUE,
+          locale TEXT NOT NULL,
+          consent_version TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`;
+        yield* sql`CREATE TABLE discovery_like (
+          registration_id TEXT NOT NULL REFERENCES discovery_registration(id) ON DELETE CASCADE,
+          persona_id TEXT NOT NULL,
+          PRIMARY KEY (registration_id, persona_id)
+        )`;
+      }),
     }),
   });
 });

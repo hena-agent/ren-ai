@@ -145,6 +145,11 @@ test("composed HTTP, real OpenCode, iMessage and operator socket complete a Conv
             privacyNoticeVersion: "v1",
             turnstileToken: "human",
           });
+          const catalog = yield* Effect.promise(() =>
+            server.publicWeb(new Request("http://local/discovery/personas")),
+          );
+          expect(catalog.status).toBe(200);
+          expect(yield* Effect.promise(() => catalog.json())).toEqual([]);
           const response = yield* Effect.promise(() =>
             server.publicWeb(
               new Request("http://local/onboarding", {

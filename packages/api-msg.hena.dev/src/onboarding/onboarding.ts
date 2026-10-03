@@ -24,6 +24,7 @@ import { SqlClient } from "effect/unstable/sql";
 import type { Messages } from "../messages/messages.ts";
 import type { Persona } from "../personas/personas.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
+import { submissionLimit } from "./rate-limit.ts";
 
 export const onboardingApi = HttpApi.make("onboarding").add(
   HttpApiGroup.make("public")
@@ -64,7 +65,7 @@ interface GreetingRow {
   readonly started_at: number;
 }
 
-const verify = (token: string, secret: string) =>
+export const verifyTurnstile = (token: string, secret: string) =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
     const response = yield* HttpClientRequest.post(
@@ -108,19 +109,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
   return Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const admission = Semaphore.makeUnsafe(1);
-    const submissions = new Map<string, number[]>();
-
-    const limitIP = (ip: string, now: number) => {
-      const recent = submissions.get(ip);
-      if (!recent) {
-        submissions.set(ip, [now]);
-        return false;
-      }
-      const active = recent.filter((date) => date > now - 3_600_000);
-      active.push(now);
-      submissions.set(ip, active);
-      return active.length > 5;
-    };
+    const limitIP = submissionLimit();
 
     const waitlist = (input: typeof WaitlistRequest.Type) =>
       Effect.gen(function* () {
@@ -206,7 +195,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
           return yield* Effect.fail("Privacy notice unavailable");
         if (normalizeHandle(input.handle) !== input.handle)
           return yield* Effect.fail("Invalid Handle");
-        if (!(yield* verify(input.turnstileToken, turnstileSecret)))
+        if (!(yield* verifyTurnstile(input.turnstileToken, turnstileSecret)))
           return yield* Effect.fail("Turnstile failed");
         const now = yield* Clock.currentTimeMillis;
         if (limitIP(ip, now)) return "try_later" as const;
