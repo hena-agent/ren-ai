@@ -25,6 +25,12 @@ export function readIntent(form: FormData) {
   throw new PersonaError("invalid", copy.formError);
 }
 
+export function readPortraitInstructions(form: FormData) {
+  const value = form.get("portraitInstructions") ?? "";
+  if (typeof value !== "string") throw new PersonaError("invalid", copy.formError);
+  return value.trim();
+}
+
 export function authorPersona(form: FormData, previous: PersonaRecord) {
   const read = (field: string) => {
     const value = form.get(field);
@@ -55,4 +61,13 @@ export function requireMatchingProfile(persona: PersonaRecord, previous: Persona
     (persona.name !== previous.name || descriptionOf(persona) !== descriptionOf(previous))
   )
     throw new PersonaError("invalid", copy.regenerateRequired);
+}
+
+export function needsIntroduction(persona: PersonaRecord, previous: PersonaRecord) {
+  return (
+    !previous.bio ||
+    !previous.imageUrl ||
+    persona.name !== previous.name ||
+    descriptionOf(persona) !== descriptionOf(previous)
+  );
 }

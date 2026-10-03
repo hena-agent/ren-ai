@@ -112,7 +112,9 @@ test("missing credentials, provider outages, refusals and malformed content neve
   for (const response of bad) {
     await expect(
       createProfileGenerator({ key: "key", fetcher: async () => response }).introduction(character),
-    ).rejects.toThrow(/Profile generation failed|Expected|Missing key|Invalid introduction/);
+    ).rejects.toThrow(
+      /Profile generation failed|No generated content|Invalid generation response|Invalid introduction/,
+    );
   }
   for (const parts of [
     [],
@@ -125,7 +127,9 @@ test("missing credentials, provider outages, refusals and malformed content neve
         character,
         "photo",
       ),
-    ).rejects.toThrow(/No generated portrait|Expected|Invalid portrait encoding/);
+    ).rejects.toThrow(
+      /No generated portrait|Invalid generation response|Invalid portrait encoding/,
+    );
   }
   await expect(
     createProfileGenerator({

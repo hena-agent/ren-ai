@@ -185,6 +185,7 @@ export type PageContent =
       editing: boolean;
       draft: string;
       seed?: string | undefined;
+      portraitInstructions?: string | undefined;
       personas?: never;
     }
   | {
@@ -193,6 +194,7 @@ export type PageContent =
       editing?: never;
       draft?: never;
       seed?: never;
+      portraitInstructions?: never;
     };
 
 export function renderPage({

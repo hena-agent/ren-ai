@@ -10,6 +10,7 @@ test("draft decoding validates the envelope even when a signature is valid", () 
     { id: "draft", base: null, preview: "" },
     { id: "draft", base: "", preview: {} },
     { id: "draft", preview: "" },
+    { id: "draft", base: "", preview: "", portraitInstructions: 42 },
   ]) {
     const body = Buffer.from(JSON.stringify(value)).toString("base64url");
     const signature = createHmac("sha256", "test-password").update(body).digest("base64url");

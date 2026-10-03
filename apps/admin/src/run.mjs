@@ -37,4 +37,6 @@ const handle = createAdmin(
 const port = Number(process.env.PORT ?? 3729);
 // oxlint-disable-next-line typescript/no-unsafe-call, typescript/no-unsafe-member-access -- thin Bun entry shim; handler and persistence are tested through their public interfaces
 Bun.serve({ hostname: "127.0.0.1", port, fetch: handle });
-process.stdout.write(`[admin] http://127.0.0.1:${port} · personas: ${directory}\n`);
+process.stdout.write(
+  `${JSON.stringify({ time: new Date().toISOString(), service: "admin", level: "info", event: "server.started", url: `http://127.0.0.1:${port}`, directory, generationConfigured: Boolean(key.trim()) })}\n`,
+);

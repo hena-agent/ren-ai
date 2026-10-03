@@ -120,8 +120,6 @@ test("the AI draft adapter requests structured character JSON and validates it b
     fetcher.mockResolvedValueOnce(
       Response.json({ candidates: [{ content: { parts: [{ text }] } }] }),
     );
-    await expect(model.character("아이디어")).rejects.toThrow(
-      /JSON|Expected|Unexpected|Missing key/,
-    );
+    await expect(model.character("아이디어")).rejects.toThrow("Invalid character draft");
   }
 });

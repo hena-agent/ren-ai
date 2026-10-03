@@ -5,7 +5,9 @@ import {
   authorPersona,
   descriptionOf,
   emptyPersona,
+  needsIntroduction,
   readIntent,
+  readPortraitInstructions,
   requireMatchingProfile,
 } from "./authoring.ts";
 import { draftFor, draftTokens, previewOf } from "./draft.ts";
@@ -15,6 +17,15 @@ import { renderPage } from "./page.tsx";
 import type { PageContent } from "./page.tsx";
 import copy from "./copy.json";
 import { characterDraft, profileDraft } from "./generation-workflows.ts";
+import {
+  loggedRequest,
+  operation,
+  protect,
+  reportFailure,
+  requestFields,
+  requestId,
+} from "./logging.ts";
+import type { Log } from "./logging.ts";
 
 const html = (page: string, status = 200) =>
   new Response(page, {
@@ -31,7 +42,7 @@ export function createAdmin(
   store: Awaited<ReturnType<typeof createPersonaStore>>,
   password: string,
   stylesheet: string,
-  { generator, script }: { generator?: ProfileGenerator; script?: string } = {},
+  { generator, script, log }: { generator?: ProfileGenerator; script?: string; log?: Log } = {},
 ) {
   if (!password.trim()) throw new Error("ADMIN_PASSWORD is required");
   const expected = createHash("sha256")
@@ -41,6 +52,7 @@ export function createAdmin(
   const busy = new Set<string>();
   // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow request, generation and storage failures before responding
   const failure = (error: unknown, record?: PersonaRecord, draft?: Draft) => {
+    reportFailure(error, { stage: "request" }, error instanceof PersonaError ? "warn" : "error");
     const content: PageContent =
       record && draft
         ? {
@@ -53,7 +65,7 @@ export function createAdmin(
     return html(
       renderPage({
         ...content,
-        error: error instanceof PersonaError ? error.message : copy.failure,
+        error: `${error instanceof PersonaError ? error.message : copy.failure} (요청 ID: ${requestId()})`,
       }),
       error instanceof PersonaError
         ? { invalid: 400, not_found: 404, conflict: 409 }[error.kind]
@@ -74,8 +86,9 @@ export function createAdmin(
       if (intent === "save") {
         requireMatchingProfile(persona, previewOf(draft, emptyPersona));
         const valid = decodePersona(persona);
-        if (draft.base) await store.update(valid);
-        else await store.create(valid);
+        await operation("persona.save", {}, () =>
+          draft.base ? store.update(valid) : store.create(valid),
+        );
         return new Response(null, {
           status: 303,
           headers: { Location: `/personas/${valid.id}?saved=1` },
@@ -85,21 +98,32 @@ export function createAdmin(
         if (!persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
         requireMatchingProfile(persona, previewOf(draft, emptyPersona));
       }
-      if (!generator)
+      if (!generator) {
+        reportFailure(new Error("Profile generator is not configured"), {
+          stage: "generation.configuration",
+        });
         return html(
           renderPage({
             record: persona,
             editing: Boolean(draft.base),
             draft: tokens.encode(draft),
             seed: draft.seed,
-            error: copy.generationUnavailable,
+            portraitInstructions: draft.portraitInstructions,
+            error: `${copy.generationUnavailable} (요청 ID: ${requestId()})`,
           }),
           503,
         );
+      }
       const generated =
         intent === "character"
           ? await characterDraft(draft.seed!, persona, generator)
-          : await profileDraft(persona, intent === "generate", generator, store);
+          : await profileDraft(
+              persona,
+              intent === "generate" && needsIntroduction(persona, previewOf(draft, emptyPersona)),
+              generator,
+              store,
+              draft.portraitInstructions,
+            );
       const next = {
         ...draft,
         preview: serializePersona(generated),
@@ -129,9 +153,17 @@ export function createAdmin(
         throw new PersonaError("invalid", copy.formError);
       });
       draft = tokens.decode(form.get("draft"));
+      protect(
+        ...["draft", "name", "description", "seed", "portraitInstructions"].map((key) => {
+          const value = form.get(key);
+          return typeof value === "string" ? value : "";
+        }),
+      );
+      requestFields({ personaId: draft.id });
       if ((id && (id !== draft.id || !draft.base)) || (!id && draft.base))
         throw new PersonaError("invalid", copy.identityError);
       const intent = readIntent(form);
+      requestFields({ intent });
       const previous = previewOf(draft, emptyPersona);
       if (intent === "character") {
         record = { ...previous, description: descriptionOf(previous) };
@@ -144,17 +176,19 @@ export function createAdmin(
         if (!record.name || !record.description)
           throw new PersonaError("invalid", copy.characterRequired);
       }
+      if (intent === "portrait" || intent === "generate")
+        draft = { ...draft, portraitInstructions: readPortraitInstructions(form) };
       return await execute(record, draft, intent);
     } catch (error) {
       return failure(error, record, draft);
     }
   };
 
-  return async (request: Request): Promise<Response> => {
+  const handle = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     try {
       if (request.method === "GET" && url.pathname === "/api/personas")
-        return Response.json(await store.publicList(), {
+        return Response.json(await operation("persona.publicList", {}, store.publicList), {
           headers: { "Cache-Control": "no-store" },
         });
       const authorization = request.headers.get("authorization");
@@ -178,11 +212,16 @@ export function createAdmin(
           headers: { "Content-Type": "text/javascript; charset=utf-8" },
         });
       if (request.method === "GET" && url.pathname.startsWith("/images/"))
-        return await store.image(url.pathname.slice("/images/".length));
+        return await operation("image.read", {}, () =>
+          store.image(url.pathname.slice("/images/".length)),
+        );
       const match = /^\/personas\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
       if (request.method === "POST") return submit(request, url, match?.[1]);
       let record: PersonaRecord | undefined;
-      if (match) record = await store.get(match[1]!);
+      if (match)
+        record = await operation("persona.get", { personaId: match[1]! }, () =>
+          store.get(match[1]!),
+        );
       else if (url.pathname === "/new") record = { ...emptyPersona, id: randomUUID() };
       else if (url.pathname !== "/")
         return html(renderPage({ personas: [], error: copy.notFound }), 404);
@@ -192,7 +231,7 @@ export function createAdmin(
             editing: Boolean(match),
             draft: tokens.encode(draftFor(record, Boolean(match))),
           }
-        : { personas: await store.list() };
+        : { personas: await operation("persona.list", {}, store.list) };
       return html(
         renderPage({
           ...content,
@@ -203,4 +242,5 @@ export function createAdmin(
       return failure(error);
     }
   };
+  return (request: Request) => loggedRequest(request, () => handle(request), log);
 }

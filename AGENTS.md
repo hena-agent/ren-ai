@@ -48,6 +48,15 @@ Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no bu
 
 Changes to the shapes in `packages/onboarding` must keep the new site working with the API still running: new fields stay optional until the API deploys, and the site continues handling every answer the old API can give.
 
+## Logging
+
+- At boundaries that turn failures into user responses or background-task results, emit structured diagnostics before handling the failure. Preserve the underlying cause and error code; a generic user-facing message is not a diagnostic.
+- Correlate request and operation events with a server-generated request ID. Record the operation, stage, outcome and duration; include relevant persona ID, model, portrait style and upstream HTTP status. Make the request ID available on error responses so operators can find the corresponding logs.
+- Use `info` for lifecycle events, `warn` for expected input/conflict failures and `error` for generation, persistence and unexpected failures. Runtime sinks write one JSON event per line to stdout (`info`) or stderr (`warn`/`error`). Reuse the application's logging path; `apps/admin/src/logging.ts` is the Admin implementation.
+- Log a failure's diagnostic once per operation, with a completion summary at the request boundary. Observe each parallel task so a sibling failure remains visible after the request has returned.
+- Keep credentials, authorization headers, signed drafts, handles, conversation text, private persona descriptions, prompts and image bytes/base64 out of logs. Allowlist provider diagnostic fields, redact echoed secrets/private inputs and bound diagnostic strings. Replace payload-bearing schema/JSON errors with a safe summary and retain stack frames separately.
+- Test failure logging through the real request/task boundary: assert correlation, stage/cause metadata and sensitive-data exclusion alongside the existing recovery behavior.
+
 ## Ports
 
 Assign a stable, uncommon default per local service: **3000–3999 for frontends**, **4000–4999 for backends**, and **5000–5999 for auxiliary services**. A browser-facing full-stack app uses the frontend range; a separate API listener uses the backend range.

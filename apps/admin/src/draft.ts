@@ -9,6 +9,7 @@ const Draft = Schema.Struct({
   base: Schema.String,
   preview: Schema.String,
   seed: Schema.optionalKey(Schema.String),
+  portraitInstructions: Schema.optionalKey(Schema.String),
 });
 export type Draft = typeof Draft.Type;
 

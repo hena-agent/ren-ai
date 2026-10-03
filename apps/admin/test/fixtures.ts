@@ -5,6 +5,7 @@ import { afterEach } from "vitest";
 import { createPersonaStore } from "@ren-ai/personas";
 import { createAdmin } from "../src/admin.ts";
 import type { ProfileGenerator } from "../src/generation.ts";
+import type { LogEntry } from "../src/logging.ts";
 
 export const authorization = `Basic ${Buffer.from("admin:test-password").toString("base64")}`;
 export const character = {
@@ -45,11 +46,13 @@ export async function fixture(model = generator) {
   const root = await mkdtemp(join(tmpdir(), "admin-creator-"));
   roots.push(root);
   const store = await createPersonaStore(root);
+  const logs: LogEntry[] = [];
   const admin = createAdmin(store, "test-password", "test styles", {
     generator: model,
     script: "test script",
+    log: (entry) => logs.push(entry),
   });
-  return { root, store, admin };
+  return { root, store, admin, logs };
 }
 export const request = (path: string, fields?: Record<string, string>) =>
   new Request(`http://localhost:3729${path}`, {
