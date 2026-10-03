@@ -71,14 +71,20 @@ const setup = (
     const api = yield* onboarding({
       messages: fake.messages,
       notice: noticeCopy,
-      persona: {
-        id: "persona1",
-        timeZone: "Asia/Seoul",
-        language: "ko",
-        openingLine: "번호 받았으니까 먼저 연락해 봐",
-        memory: "Remember",
-        prompt: "Persona1",
-      },
+      defaultPersonaID: "persona1",
+      personas: new Map([
+        [
+          "persona1",
+          {
+            id: "persona1",
+            timeZone: "Asia/Seoul",
+            language: "ko",
+            openingLine: "번호 받았으니까 먼저 연락해 봐",
+            memory: "Remember",
+            prompt: "Persona1",
+          },
+        ],
+      ]),
       createSession: () =>
         Effect.sync(() => {
           const id = `session-${sessions.length + 1}`;
@@ -429,13 +435,6 @@ test("the in-process HTTP handler returns the site's literal answer after the No
       }
     }),
   );
-});
-
-test("the Greeting format stamps her own time zone", () => {
-  expect(conversationStarted(0, "opening", "notice", "Asia/Seoul")).toBe(
-    '<conversation-started at="1970-01-01 Thu 09:00"/>\nopening\n<notice>notice</notice>',
-  );
-  expect(conversationStarted(0, "hello", "notice", "UTC")).toContain('at="1970-01-01 Thu 00:00"');
 });
 
 test("a sixth submission from one IP is refused before looking at its Handle", async () => {

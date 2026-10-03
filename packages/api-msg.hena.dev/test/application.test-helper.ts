@@ -31,7 +31,7 @@ export const startMessagingHost = (
       (tools) => isolatedHost(root, { ...options, ...tools }),
       messages,
       gestures,
-      onboarding,
+      { defaultPersonaID: "persona1", ...onboarding },
       alerts,
     ),
   );

@@ -5,7 +5,7 @@ import { locationConfig } from "../src/operations/location-config.ts";
 const [disabledFile, destination] = process.argv.slice(2);
 if (!disabledFile || !destination)
   throw new Error(
-    "Usage: bun ops/location-config.ts REVIEWED-PLUGIN-TARGETS.json NEW-opencode.json",
+    "Usage: bun ops/location-config.ts REVIEWED-PLUGIN-TARGETS.json NEW-opencode.json (native agent/instruction loaders stay enabled)",
   );
 const disabledPlugins = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Array(Schema.String)),

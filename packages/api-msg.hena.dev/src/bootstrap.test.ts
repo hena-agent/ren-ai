@@ -30,6 +30,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
           const server = yield* composeServer({
             stateDirectory: root,
             personaDirectory,
+            defaultPersonaID: "persona1",
             publicPort: 0,
             bootstrapOnly: true,
             messaging: { url: "https://imsg.invalid/rpc", token: "messaging" },

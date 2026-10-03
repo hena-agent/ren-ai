@@ -6,7 +6,7 @@ import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
 import { startMessagingApplication } from "../application.ts";
 import { applicationGateway } from "./application-gateway.ts";
-import { remotePersonaPlugin } from "./remote-plugin.ts";
+import { remotePersonaPlugins } from "../../test/persona-plugins.test-helper.ts";
 import { remoteHost } from "./remote.ts";
 import { remoteMessages } from "../gateway/client.ts";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
@@ -73,7 +73,10 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           return response;
         };
         const application = yield* Effect.gen(function* () {
-          const messages = yield* remoteMessages({ url: "https://imsg.test/rpc", token: "secret" });
+          const messages = yield* remoteMessages({
+            url: "https://imsg.test/rpc",
+            token: "secret",
+          });
           return yield* startMessagingApplication(
             native.personas,
             (tools) =>
@@ -91,7 +94,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
                 );
                 applicationWeb = api.handler;
                 yield* Effect.addFinalizer(() => Effect.promise(api.dispose));
-                const plugin = remotePersonaPlugin({
+                const plugin = remotePersonaPlugins({
                   url: "https://app.test/rpc",
                   token: "application-secret",
                   directory: personaDirectory,
@@ -170,7 +173,10 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           return TestLLM.text("stopped", "answer");
         });
         const orphan = yield* application.createSession("persona1");
-        yield* application.sessions.prompt({ sessionID: orphan.id, text: "an unbound session" });
+        yield* application.sessions.prompt({
+          sessionID: orphan.id,
+          text: "an unbound session",
+        });
         yield* application.sessions.wait(orphan.id);
         expect(
           JSON.stringify(yield* application.sessions.messages({ sessionID: orphan.id })),
@@ -185,9 +191,11 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         const plugins = yield* application.client.plugin.list({
           location: { directory: otherDirectory },
         });
-        expect(plugins.data.find((plugin) => plugin.id === "personas")?.state.status).toBe(
-          "active",
-        );
+        for (const id of ["tools", "context", "memory", "title"]) {
+          expect(plugins.data.find((plugin) => plugin.id === `ren-ai.${id}`)?.state.status).toBe(
+            "active",
+          );
+        }
         yield* Effect.promise(application.disposeOnboarding);
       }),
     );

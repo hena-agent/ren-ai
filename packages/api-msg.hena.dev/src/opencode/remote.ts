@@ -6,10 +6,12 @@ import type {
   SessionUpdateInput,
   SessionInboxCancelInput,
 } from "@opencode/client/effect/api";
-import { AbsolutePath, Agent, Model, Session } from "@opencode/schema";
+import { Session } from "@opencode/schema";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Effect, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
+import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
+import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import type { Persona } from "../personas/personas.ts";
 import { MissingSession, type PersonaRuntime } from "./runtime.ts";
 
@@ -39,6 +41,8 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
         ),
       ),
     );
+    const folders = client.rpc(sessionFolders);
+    const location = { location: { directory: config.directory } };
     const sessions = {
       get: (sessionID: Session.ID) =>
         client.session.get({ sessionID }).pipe(Effect.mapError(remoteError)),
@@ -59,7 +63,12 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
           Effect.mapError(remoteError),
         ),
       remove: (sessionID: Session.ID) =>
-        client.session.remove({ sessionID }).pipe(Effect.mapError(remoteError)),
+        client.session.remove({ sessionID }).pipe(
+          Effect.catchTag("SessionNotFoundError", () => Effect.void),
+          Effect.andThen(folders.remove({ folderID: sessionID }, location)),
+          Effect.asVoid,
+          Effect.mapError((error) => new Error(JSON.stringify(error))),
+        ),
       inbox: (sessionID: Session.ID) =>
         client.session.inbox.list({ sessionID }).pipe(Effect.mapError(remoteError)),
       cancelInbox: (input: SessionInboxCancelInput) =>
@@ -113,21 +122,19 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
         Effect.gen(function* () {
           if (!personas.has(personaID))
             return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
-          return yield* client.session
-            .create({
-              agent: Agent.ID.make(personaID),
-              model: Model.Ref.parse(config.model),
-              location: { directory: AbsolutePath.make(config.directory) },
-              permissions: [
-                { action: "*", resource: "*", effect: "deny" },
-                ...["send", "read", "react", "wait"].map((action) => ({
-                  action,
-                  resource: "*",
-                  effect: "allow" as const,
-                })),
-              ],
-            })
-            .pipe(Effect.mapError(remoteError));
+          const id = Session.ID.create();
+          const rules = yield* Effect.tryPromise(loadGroundRules);
+          yield* folders
+            .create(
+              {
+                folderID: id,
+                snapshot: renderSnapshot(personas.get(personaID)!, rules),
+                model: config.model,
+              },
+              location,
+            )
+            .pipe(Effect.mapError((error) => new Error(error.message)));
+          return yield* sessions.get(id);
         }),
     };
     return host satisfies PersonaRuntime;

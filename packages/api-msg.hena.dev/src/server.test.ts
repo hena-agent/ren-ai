@@ -236,7 +236,7 @@ test("production model selection uses remote OpenCode and onboarding still rejec
         });
         yield* server.host.sessions.wait(session.id);
         const managed = yield* server.host.client.agent.list({
-          location: { directory: personaDirectory },
+          location: session.location,
         });
         expect(managed.data.find((agent) => agent.id === "persona1")?.system).toContain(
           "You are Persona1",
@@ -256,7 +256,7 @@ test("production model selection uses remote OpenCode and onboarding still rejec
         const plugins = yield* server.host.client.plugin.list({
           location: { directory: otherDirectory },
         });
-        expect(plugins.data.find((plugin) => plugin.id === "personas")?.state.status).toBe(
+        expect(plugins.data.find((plugin) => plugin.id === "ren-ai.tools")?.state.status).toBe(
           "active",
         );
       }).pipe(

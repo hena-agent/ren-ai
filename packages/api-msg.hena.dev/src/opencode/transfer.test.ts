@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
-import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
+import { withRemoteHost, replaceCheckpoint } from "../../test/remote-host.test-helper.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";
 import { Session } from "@opencode/schema/session";
@@ -20,8 +20,7 @@ test.each(["user", "synthetic"] as const)(
           text: "promoted work",
           time: { created: session.time.created },
         };
-        yield* remote.sessions.remove(session.id);
-        yield* remote.client.session.import({ info: session, messages: [message] });
+        yield* replaceCheckpoint(remote, { info: session, messages: [message] });
         const first = yield* exportSessions(remote.client, [session.id]);
         const second = yield* exportSessions(remote.client, [session.id]);
         expect(Schema.decodeUnknownSync(sessionArchive)(first).sessions[0]?.recovery).toEqual({
@@ -128,8 +127,7 @@ test("a child archive imports its parent first", () =>
       const original = Schema.decodeUnknownSync(sessionArchive)(
         yield* exportSessions(remote.client, [child.id]),
       ).sessions[0]!;
-      yield* remote.sessions.remove(child.id);
-      yield* remote.client.session.import({
+      yield* replaceCheckpoint(remote, {
         messages: original.messages,
         info: { ...original.info, parentID: parent.id },
       });

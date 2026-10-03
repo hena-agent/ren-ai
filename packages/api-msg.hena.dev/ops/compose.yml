@@ -16,7 +16,7 @@ services:
       PORT: "4700"
     volumes:
       - application-state:/state
-      - ${REN_AI_PERSONAS:?Set REN_AI_PERSONAS to the reviewed persona directory}:/personas:ro
+      - ${REN_AI_PERSONAS:?Set REN_AI_PERSONAS to the externally deployed persona catalog}:/personas:ro
     networks: [application]
     # No host/LAN ports. Configure the Cloudflare ingress as http://api-msg:4700.
   cloudflared:

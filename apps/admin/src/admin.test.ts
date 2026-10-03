@@ -233,19 +233,19 @@ test("validation preserves submitted fields, publication can be reversed, and mi
   try {
     const store = await createPersonaStore(root);
     const admin = createAdmin(store, "test-password", "");
-    const invalid = await admin(request("/personas", { ...fields, published: "on", imageUrl: "" }));
+    const invalid = await admin(
+      request("/personas", { ...fields, published: "on", bio: "", imageUrl: "" }),
+    );
     expect(invalid.status).toBe(400);
     window.document.write(await invalid.text());
-    expect(window.document.querySelector('[role="alert"]')?.textContent).toContain(
-      "소개와 프로필 이미지",
-    );
+    expect(window.document.querySelector('[role="alert"]')?.textContent).toContain("소개가 필요");
     expect(window.document.querySelector<HTMLInputElement>("#name")?.value).toBe("하린");
     expect(window.document.querySelector<HTMLInputElement>("#published")?.checked).toBe(true);
     expect(window.document.querySelector(".image-placeholder")?.textContent).toBe(
       "NO PROFILE IMAGE",
     );
     expect(await store.list()).toEqual([]);
-    await admin(request("/personas", { ...fields, published: "on" }));
+    await admin(request("/personas", { ...fields, published: "on", imageUrl: "" }));
     const duplicate = await admin(request("/personas", { ...fields, name: "덮어쓰기" }));
     expect(duplicate.status).toBe(409);
     expect(await duplicate.text()).toContain("이미 사용 중인 ID");

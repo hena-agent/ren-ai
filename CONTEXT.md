@@ -7,8 +7,16 @@ A service where people text fictional personas over iMessage. The repo also carr
 ### Product
 
 **Persona**:
-A fictional character the service plays in iMessage.
+A fictional character the service plays in iMessage. A conversation's persona is chosen at onboarding and never changes.
 _Avoid_: bot, character, agent (an agent is the OpenCode mechanism that implements a persona)
+
+**Catalog**:
+Every persona the service can play. Only published personas are offered at onboarding; editing a persona changes her in every ongoing conversation.
+_Avoid_: roster, lineup, persona list
+
+**Ground rules**:
+The instructions every persona follows regardless of who she is, such as never acting like an AI and how to read events on her phone.
+_Avoid_: system prompt, guidelines, policy
 
 **User**:
 A person who has onboarded and texts a persona.
@@ -23,7 +31,7 @@ The handle every persona texts from, currently hi@hena.dev.
 _Avoid_: persona handle, sender, bot account
 
 **Onboarding**:
-Submitting a handle at discovery.hena.dev to become a user.
+Choosing a persona and submitting a handle at discovery.hena.dev to become a user. It starts the user's conversation.
 _Avoid_: signup, registration
 
 **Test handle**:

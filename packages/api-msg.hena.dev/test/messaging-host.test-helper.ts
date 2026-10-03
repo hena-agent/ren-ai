@@ -37,6 +37,14 @@ export const standaloneTestHost = (
     handleForSession: () => Effect.succeed(undefined),
   });
 
+export const ordinaryProjectHost = (root: string, personaDirectory: string) =>
+  Effect.gen(function* () {
+    const llm = yield* scriptedPersona();
+    yield* llm.serve(() => TestLLM.text("ordinary project", "answer"));
+    const native = yield* standaloneTestHost(root, personaDirectory, llm);
+    return { native, llm };
+  });
+
 export const providerUnavailable = (message: string) =>
   TestLLM.failAfter(new AIError({ reason: new AuthenticationError({ message }) }));
 

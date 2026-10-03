@@ -6,10 +6,12 @@ import { AbsolutePath, Agent, Location, Model } from "@opencode/schema";
 import { SessionEvent } from "@opencode/schema/session-event";
 import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect";
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
-import { personaPlugin, type PersonaPluginOptions } from "../src/opencode/plugin.ts";
+import { sessionFolderPlugin } from "@ren-ai/plugin-session-folder";
+import { folderFiles, loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
+import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
+import { personaPlugins } from "./persona-plugins.test-helper.ts";
 
 const disabled = [
-  "opencode.config.instruction",
   "opencode.config.compatibility",
   "opencode.provider.ollama",
   "opencode.provider.lmstudio",
@@ -57,13 +59,10 @@ export const createHost = (options: HostOptions) =>
               database: { path: options.databasePath },
               config: {
                 directory: options.configDirectory,
-                project: false,
+                project: true,
                 content: JSON.stringify({
                   plugins: disabled.map((id) => `-${id}`),
                   providers: options.providers,
-                  agents: Object.fromEntries(
-                    [...options.personas.keys()].map((id) => [id, { mode: "primary" }]),
-                  ),
                   compaction: {
                     buffer: memory.contextTokens - memory.budgetTokens,
                     keep: { tokens: memory.recentTokens },
@@ -81,7 +80,12 @@ export const createHost = (options: HostOptions) =>
     const services = yield* runtime.contextEffect;
     const sessions = Context.get(services, Session.Service);
     const plugins = Context.get(services, SdkPlugins.Service);
-    yield* Effect.tryPromise(() => runtime.runPromise(plugins.register(personaPlugin(options))));
+    yield* Effect.tryPromise(() =>
+      runtime.runPromise(plugins.register(sessionFolderPlugin(options.personaDirectory))),
+    );
+    yield* Effect.forEach(personaPlugins(options), (plugin) =>
+      Effect.tryPromise(() => runtime.runPromise(plugins.register(plugin))),
+    );
     const web = HttpEffect.toWebHandlerWith<
       typeof services extends Context.Context<infer Provided> ? Provided : never,
       Scope.Scope | HttpServerRequest.HttpServerRequest
@@ -98,23 +102,38 @@ export const createHost = (options: HostOptions) =>
       retry: sessions.resume,
       run: runtime.runPromise.bind(runtime),
       web,
-      createSession: (personaID: string) => {
-        if (!options.personas.has(personaID))
-          return Effect.fail(new Error(`Unknown persona: ${personaID}`));
-        return sessions.create({
-          agent: Agent.ID.make(personaID),
-          model: Model.Ref.parse(options.model),
-          location: Location.Ref.make({ directory: AbsolutePath.make(options.personaDirectory) }),
-          permissions: [
-            { action: "*", resource: "*", effect: "deny" },
-            ...(options.send ? [{ action: "send", resource: "*", effect: "allow" } as const] : []),
-            ...(options.wait ? [{ action: "wait", resource: "*", effect: "allow" } as const] : []),
-            ...(options.read ? [{ action: "read", resource: "*", effect: "allow" } as const] : []),
-            ...(options.react
-              ? [{ action: "react", resource: "*", effect: "allow" } as const]
-              : []),
-          ],
-        });
-      },
+      createSession: (personaID: string) =>
+        Effect.gen(function* () {
+          if (!options.personas.has(personaID))
+            return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
+          const id = Session.ID.create();
+          const directory = yield* Effect.tryPromise(async () =>
+            folderFiles(options.personaDirectory).write(
+              id,
+              renderSnapshot(options.personas.get(personaID)!, await loadGroundRules()),
+            ),
+          );
+          return yield* sessions.create({
+            id,
+            agent: Agent.ID.make(personaID),
+            model: Model.Ref.parse(options.model),
+            location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
+            permissions: [
+              { action: "*", resource: "*", effect: "deny" },
+              ...(options.send
+                ? [{ action: "send", resource: "*", effect: "allow" } as const]
+                : []),
+              ...(options.wait
+                ? [{ action: "wait", resource: "*", effect: "allow" } as const]
+                : []),
+              ...(options.read
+                ? [{ action: "read", resource: "*", effect: "allow" } as const]
+                : []),
+              ...(options.react
+                ? [{ action: "react", resource: "*", effect: "allow" } as const]
+                : []),
+            ],
+          });
+        }),
     };
   });

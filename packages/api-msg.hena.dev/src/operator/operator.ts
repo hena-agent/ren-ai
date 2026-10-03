@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { conversations } from "../conversations/conversations.ts";
+import { withLifecycle } from "../conversations/lifecycle.ts";
 
 interface PendingRemoval {
   readonly sessionID: string;
@@ -51,7 +52,7 @@ export const makeOperator = (
               const pending =
                 yield* sql<PendingRemoval>`SELECT session_id AS sessionID FROM removal WHERE handle = ${handle}`;
               return { pending, existed, keep };
-            }).pipe(sql.withTransaction);
+            }).pipe(sql.withTransaction, withLifecycle);
             if (!state.pending.length && !state.existed) return "not_found" as const;
             for (const pending of state.pending) {
               if (state.keep) yield* retainSession(pending.sessionID, handle);

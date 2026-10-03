@@ -3,6 +3,41 @@ import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
 import { withRemoteHost, pausedRestore } from "../../test/remote-host.test-helper.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
+import { sessionArchive } from "./transfer-format.ts";
+
+test("a snapshot for another persona rejects the entire archive before any folder or session is written", () =>
+  withRemoteHost((remote, directory, { transport }) =>
+    Effect.gen(function* () {
+      const first = yield* remote.createSession("persona1");
+      const second = yield* remote.createSession("persona1");
+      const archive = Schema.decodeUnknownSync(sessionArchive)(
+        yield* exportSessions(remote.client, [first.id, second.id]),
+      );
+      const malformed = Schema.encodeSync(sessionArchive)({
+        ...archive,
+        sessions: archive.sessions.map((entry) =>
+          entry.info.id === second.id
+            ? {
+                ...entry,
+                folder: { ...entry.folder!, persona: { ...entry.folder!.persona, id: "another" } },
+              }
+            : entry,
+        ),
+      });
+      yield* remote.sessions.remove(first.id);
+      yield* remote.sessions.remove(second.id);
+      transport.requests.length = 0;
+      expect(
+        (yield* restoreSessions(remote.client, malformed, directory).pipe(Effect.flip)).message,
+      ).toContain("Snapshot persona does not match session agent");
+      expect(transport.requests.every((request) => request.method === "GET")).toBe(true);
+      expect(
+        yield* remote.client.session
+          .get({ sessionID: first.id })
+          .pipe(Effect.catchTag("SessionNotFoundError", () => Effect.succeed("absent"))),
+      ).toBe("absent");
+    }),
+  ));
 
 test("a later target collision rejects the whole archive before any earlier session is imported", () =>
   withRemoteHost((remote, directory, { transport }) =>

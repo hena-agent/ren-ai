@@ -19,14 +19,19 @@ test("the site's Waitlist form stores its email, locale, answer and time over HT
       const api = yield* onboarding({
         messages: fakeMessages().messages,
         notice: noticeCopy,
-        persona: {
-          id: "persona1",
-          timeZone: "Asia/Seoul",
-          language: "ko",
-          openingLine: "hi",
-          memory: "remember",
-          prompt: "persona",
-        },
+        personas: new Map([
+          [
+            "persona1",
+            {
+              id: "persona1",
+              timeZone: "Asia/Seoul",
+              language: "ko",
+              openingLine: "hi",
+              memory: "remember",
+              prompt: "persona",
+            },
+          ],
+        ]),
         createSession: () => Effect.succeed({ id: "session" }),
         prompt: () => Effect.void,
         sendNotice: () => Effect.void,

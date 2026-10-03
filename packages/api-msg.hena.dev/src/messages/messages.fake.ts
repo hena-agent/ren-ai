@@ -1,5 +1,6 @@
 import { Clock, Effect } from "effect";
-import type { IncomingMessage, Messages, OutgoingStatus } from "./messages.ts";
+import type { IncomingMessage, Messages } from "./messages.ts";
+import type { OutgoingStatus } from "@ren-ai/plugin-application/protocol";
 import { imageData } from "../intake/images.ts";
 
 export const fakeMessages = (events: string[] = []) => {

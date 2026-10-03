@@ -4,6 +4,7 @@ export { countries } from "./countries.ts";
 export type { Country } from "./countries.ts";
 export {
   Handle,
+  PublicPersonas,
   OnboardingRequest,
   OnboardingAnswer,
   WaitlistRequest,

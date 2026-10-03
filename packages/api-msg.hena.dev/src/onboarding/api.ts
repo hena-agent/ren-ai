@@ -1,9 +1,15 @@
-import { OnboardingAnswer, OnboardingRequest, WaitlistRequest } from "@ren-ai/onboarding";
+import {
+  OnboardingAnswer,
+  OnboardingRequest,
+  WaitlistRequest,
+  PublicPersonas,
+} from "@ren-ai/onboarding";
 import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 
 export const onboardingApi = HttpApi.make("onboarding").add(
   HttpApiGroup.make("public")
+    .add(HttpApiEndpoint.get("personas", "/personas", { success: PublicPersonas }))
     .add(
       HttpApiEndpoint.post("submit", "/onboarding", {
         payload: OnboardingRequest,

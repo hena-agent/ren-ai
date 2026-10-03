@@ -15,6 +15,7 @@ import { setupRebuilding } from "./conversations/rebuild.ts";
 import { retainedSessions } from "./conversations/retained.ts";
 
 export interface OnboardingConfig {
+  readonly defaultPersonaID?: string;
   readonly turnstileSecret: string;
   readonly notice: Readonly<Record<"ko", string>>;
   readonly userCap?: number;
@@ -59,11 +60,13 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
     );
     yield* Effect.forkScoped(follow.monitor);
     incoming.onNew((conversation) => pace.onNew(conversation.sessionID));
-    const persona = host.personas.values().next().value!;
     const api = yield* onboarding({
       messages,
       notice: onboardingConfig.notice,
-      persona,
+      personas: host.personas,
+      ...(onboardingConfig.defaultPersonaID
+        ? { defaultPersonaID: onboardingConfig.defaultPersonaID }
+        : {}),
       createSession: (id) => host.createSession(id),
       prompt: (sessionID, text) =>
         directory.admit(

@@ -1,4 +1,5 @@
 import type { Effect } from "effect";
+import type { OutgoingStatus } from "@ren-ai/plugin-application/protocol";
 
 /** The adapter must force iMessage and must never fall back to SMS. */
 export interface Messages {
@@ -31,11 +32,6 @@ interface MessageStatus {
   readonly state: "pending" | "sent" | "delivered" | "failed";
   readonly error: number;
   readonly dateRead: number | null;
-}
-
-export interface OutgoingStatus {
-  readonly delivered: boolean;
-  readonly readAt: number | null;
 }
 
 export interface IncomingMessage {

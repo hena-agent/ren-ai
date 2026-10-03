@@ -8,7 +8,7 @@ import { notReacted } from "./transcript/transcript.ts";
 import type { Persona } from "./personas/personas.ts";
 import type { Messages } from "./messages/messages.ts";
 import type { Gestures } from "./gestures/gestures.ts";
-import type { PersonaPluginOptions } from "./opencode/plugin.ts";
+import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
 
 export type MessagingTools = {
   readonly [

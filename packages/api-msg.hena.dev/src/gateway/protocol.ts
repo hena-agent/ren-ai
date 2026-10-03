@@ -4,15 +4,11 @@ import { Rpc, RpcGroup } from "effect/unstable/rpc";
 const handle = { handle: Schema.String };
 const guid = { guid: Schema.String };
 const since = { ...handle, since: Schema.Number };
-const cursor = { rowID: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)) };
-export const tapback = Schema.Literals([
-  "love",
-  "like",
-  "dislike",
-  "laugh",
-  "emphasis",
-  "question",
-]);
+const cursor = {
+  rowID: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
+};
+import { tapback, outgoingStatus } from "@ren-ai/plugin-application/protocol";
+export { tapback };
 const message = Schema.Struct({
   id: Schema.Number,
   guid: Schema.String,
@@ -31,7 +27,11 @@ const message = Schema.Struct({
     ),
   ),
   tapback: Schema.optionalKey(
-    Schema.Struct({ emoji: Schema.String, targetGuid: Schema.String, added: Schema.Boolean }),
+    Schema.Struct({
+      emoji: Schema.String,
+      targetGuid: Schema.String,
+      added: Schema.Boolean,
+    }),
   ),
   replyToGuid: Schema.optionalKey(Schema.String),
   payload: Schema.optionalKey(Schema.Literals(["location", "app"])),
@@ -49,14 +49,22 @@ export const messagingApi = RpcGroup.make(
     success: Schema.Struct({ guid: Schema.NullOr(Schema.String) }),
     error: Schema.String,
   }),
-  Rpc.make("after", { payload: cursor, success: Schema.Array(message), error: Schema.String }),
+  Rpc.make("after", {
+    payload: cursor,
+    success: Schema.Array(message),
+    error: Schema.String,
+  }),
   Rpc.make("follow", {
     payload: { ...cursor, date: Schema.NullOr(Schema.Number) },
     success: Schema.NullOr(message),
     stream: true,
     error: Schema.String,
   }),
-  Rpc.make("recent", { payload: since, success: Schema.Array(message), error: Schema.String }),
+  Rpc.make("recent", {
+    payload: since,
+    success: Schema.Array(message),
+    error: Schema.String,
+  }),
   Rpc.make("status", {
     payload: guid,
     success: Schema.Struct({
@@ -78,9 +86,7 @@ export const messagingApi = RpcGroup.make(
   }),
   Rpc.make("lastOutgoingStatus", {
     payload: handle,
-    success: Schema.UndefinedOr(
-      Schema.Struct({ delivered: Schema.Boolean, readAt: Schema.NullOr(Schema.Number) }),
-    ),
+    success: Schema.UndefinedOr(outgoingStatus),
     error: Schema.String,
   }),
   Rpc.make("typing", {

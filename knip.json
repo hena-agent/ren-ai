@@ -3,7 +3,7 @@
   "workspaces": {
     ".": { "entry": ["scripts/check-site-build.ts"] },
     "packages/api-msg.hena.dev": {
-      "entry": ["src/opencode/remote-plugin.ts", "test/compiled-plugin/regression.mjs"]
+      "entry": ["test/compiled-plugin/regression.mjs"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],

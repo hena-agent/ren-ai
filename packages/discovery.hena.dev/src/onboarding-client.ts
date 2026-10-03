@@ -1,7 +1,13 @@
-import { OnboardingAnswer, OnboardingRequest, WaitlistRequest } from "@ren-ai/onboarding";
+import {
+  OnboardingAnswer,
+  OnboardingRequest,
+  WaitlistRequest,
+  PublicPersonas,
+} from "@ren-ai/onboarding";
 import { Schema } from "effect";
 
 export type OnboardingClient = {
+  catalog: () => Promise<typeof PublicPersonas.Type | undefined>;
   submit: (
     request: Schema.Schema.Type<typeof OnboardingRequest>,
   ) => Promise<Schema.Schema.Type<typeof OnboardingAnswer>>;
@@ -9,6 +15,14 @@ export type OnboardingClient = {
 };
 
 export const onboardingClient: OnboardingClient = {
+  async catalog() {
+    const response = await fetch("https://api-msg.hena.dev/personas", {
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (response.status === 404) return undefined;
+    if (!response.ok) throw new Error("Catalog request failed");
+    return Schema.decodeUnknownSync(PublicPersonas)(await response.json());
+  },
   async submit(request) {
     const response = await fetch("https://api-msg.hena.dev/onboarding", {
       method: "POST",

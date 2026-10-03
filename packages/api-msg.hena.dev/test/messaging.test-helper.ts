@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
@@ -10,12 +10,12 @@ const quiet = () => Effect.void;
 export const silentAlerts: FailureAlerts = { raise: quiet, clear: quiet };
 
 export const messagingFixture = async (prefix: string, opening = "Hi") => {
-  const root = await mkdtemp(join(tmpdir(), prefix));
+  const root = await realpath(await mkdtemp(join(tmpdir(), prefix)));
   const personaDirectory = join(root, "content");
   await mkdir(personaDirectory);
   await writeFile(
     join(personaDirectory, "persona1.md"),
-    `---\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: ${opening}\nmemory: Remember.\n---\nYou are Persona1.\n`,
+    `---\nname: 수아\nbio: 24살 대학생\npublished: true\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: ${opening}\nmemory: Remember.\n---\nYou are Persona1.\n`,
   );
   return { root, personaDirectory };
 };

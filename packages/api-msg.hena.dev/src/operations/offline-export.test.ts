@@ -139,7 +139,7 @@ test("location export walks all native pages and fails on a stuck server cursor"
           ).toHaveLength(101);
           stuck = true;
           expect((yield* exportLocation(host.client, root).pipe(Effect.flip)).message).toBe(
-            "OpenCode export pagination did not advance",
+            "OpenCode session pagination did not advance",
           );
         }),
       ),

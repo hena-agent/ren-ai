@@ -72,18 +72,24 @@
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.112",
         "@effect/sql-sqlite-bun": "4.0.0-rc.112",
-        "@opencode/ai": "2.0.19",
         "@opencode/client": "2.0.19",
-        "@opencode/plugin": "2.0.19",
         "@opencode/schema": "2.0.19",
         "@ren-ai/onboarding": "workspace:*",
         "@ren-ai/personas": "workspace:*",
+        "@ren-ai/plugin-application": "workspace:*",
+        "@ren-ai/plugin-session-folder": "workspace:*",
         "effect": "4.0.0-rc.112",
       },
       "devDependencies": {
         "@effect/sql-sqlite-node": "4.0.0-rc.112",
+        "@opencode/ai": "2.0.19",
         "@opencode/core": "2.0.19",
+        "@opencode/plugin": "2.0.19",
         "@opencode/server": "2.0.19",
+        "@ren-ai/plugin-context": "workspace:*",
+        "@ren-ai/plugin-memory": "workspace:*",
+        "@ren-ai/plugin-title": "workspace:*",
+        "@ren-ai/plugin-tools": "workspace:*",
         "@types/node": "26.6.2",
         "typescript": "7.0.2",
         "vitest": "5.0.1",
@@ -145,6 +151,87 @@
         "@types/node": "26.6.2",
         "typescript": "7.0.2",
         "vitest": "5.0.1",
+      },
+    },
+    "packages/plugins/application": {
+      "name": "@ren-ai/plugin-application",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/plugin": "2.0.19",
+        "@ren-ai/plugin-session-folder": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+      },
+    },
+    "packages/plugins/context": {
+      "name": "@ren-ai/plugin-context",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/ai": "2.0.19",
+        "@opencode/plugin": "2.0.19",
+        "@ren-ai/plugin-application": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+      },
+    },
+    "packages/plugins/memory": {
+      "name": "@ren-ai/plugin-memory",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/plugin": "2.0.19",
+        "@ren-ai/plugin-application": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+      },
+    },
+    "packages/plugins/session-folder": {
+      "name": "@ren-ai/plugin-session-folder",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/plugin": "2.0.19",
+        "@opencode/schema": "2.0.19",
+        "@ren-ai/personas": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+      },
+    },
+    "packages/plugins/title": {
+      "name": "@ren-ai/plugin-title",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/plugin": "2.0.19",
+        "@ren-ai/plugin-application": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+      },
+    },
+    "packages/plugins/tools": {
+      "name": "@ren-ai/plugin-tools",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/plugin": "2.0.19",
+        "@opencode/schema": "2.0.19",
+        "@ren-ai/plugin-application": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
       },
     },
   },
@@ -887,6 +974,18 @@
     "@ren-ai/persona-lab": ["@ren-ai/persona-lab@workspace:apps/persona-lab"],
 
     "@ren-ai/personas": ["@ren-ai/personas@workspace:packages/personas"],
+
+    "@ren-ai/plugin-application": ["@ren-ai/plugin-application@workspace:packages/plugins/application"],
+
+    "@ren-ai/plugin-context": ["@ren-ai/plugin-context@workspace:packages/plugins/context"],
+
+    "@ren-ai/plugin-memory": ["@ren-ai/plugin-memory@workspace:packages/plugins/memory"],
+
+    "@ren-ai/plugin-session-folder": ["@ren-ai/plugin-session-folder@workspace:packages/plugins/session-folder"],
+
+    "@ren-ai/plugin-title": ["@ren-ai/plugin-title@workspace:packages/plugins/title"],
+
+    "@ren-ai/plugin-tools": ["@ren-ai/plugin-tools@workspace:packages/plugins/tools"],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-rc.3", "", {}, "sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q=="],
 

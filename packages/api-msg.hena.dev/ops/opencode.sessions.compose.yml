@@ -1,0 +1,13 @@
+# Apply AFTER the user-owned OpenCode Compose file, never as a standalone stack.
+# Only OpenCode gets this mount; the application uses authenticated plugin RPC.
+services:
+  opencode-upstream:
+    volumes:
+      - persona-location:/srv/ren-ai:ro
+      - persona-sessions:/srv/ren-ai/sessions
+volumes:
+  persona-location:
+    external: true
+    name: ${REN_AI_LOCATION_VOLUME:-ren-ai-opencode-location}
+  persona-sessions:
+    name: ${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}

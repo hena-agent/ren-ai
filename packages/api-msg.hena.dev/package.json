@@ -24,18 +24,24 @@
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
     "@effect/sql-sqlite-bun": "4.0.0-rc.112",
-    "@opencode/ai": "2.0.19",
     "@opencode/client": "2.0.19",
-    "@opencode/plugin": "2.0.19",
     "@opencode/schema": "2.0.19",
     "@ren-ai/onboarding": "workspace:*",
     "@ren-ai/personas": "workspace:*",
+    "@ren-ai/plugin-application": "workspace:*",
+    "@ren-ai/plugin-session-folder": "workspace:*",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
     "@effect/sql-sqlite-node": "4.0.0-rc.112",
+    "@opencode/ai": "2.0.19",
     "@opencode/core": "2.0.19",
+    "@opencode/plugin": "2.0.19",
     "@opencode/server": "2.0.19",
+    "@ren-ai/plugin-context": "workspace:*",
+    "@ren-ai/plugin-memory": "workspace:*",
+    "@ren-ai/plugin-title": "workspace:*",
+    "@ren-ai/plugin-tools": "workspace:*",
     "@types/node": "26.6.2",
     "typescript": "7.0.2",
     "vitest": "5.0.1"

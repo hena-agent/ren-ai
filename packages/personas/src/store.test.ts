@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import * as files from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test, vi } from "vitest";
 import { createPersonaStore } from "./store.ts";
 import { decodePersona } from "./model.ts";
@@ -22,6 +23,19 @@ const harin = {
   memory: "Remember the paintings we discussed.",
   prompt: "You are Mira, a painter in Paris.\n",
 };
+
+test("the shipped catalog offers 수아, 하린 and 서연 without requiring photos", async () => {
+  const store = await createPersonaStore(fileURLToPath(new URL("../catalog/", import.meta.url)));
+  const cards = await store.publicList();
+  expect(cards.map(({ id, name, imageUrl }) => ({ id, name, imageUrl }))).toEqual([
+    { id: "Persona1", name: "수아", imageUrl: "" },
+    { id: "harin", name: "하린", imageUrl: "" },
+    { id: "seoyeon", name: "서연", imageUrl: "" },
+  ]);
+  expect(cards[0]?.bio).toMatch(/24살.*대학/);
+  expect(cards[1]?.bio).toMatch(/29살.*서울.*사진가/);
+  expect(cards[2]?.bio).toMatch(/33살.*부산.*교대 근무.*간호사/);
+});
 
 test("an operator can save a persona and reopen it after restarting the store", async () => {
   const root = await mkdtemp(join(tmpdir(), "persona-catalog-"));
@@ -82,16 +96,26 @@ test("invalid definitions fail before writing and IDs cannot traverse the person
       await expect(store.create({ ...harin, imageUrl })).rejects.toThrow(/Invalid URL|HTTPS/);
     }
     await expect(store.create({ ...harin, published: true, bio: "  " })).rejects.toThrow(
-      /소개와 프로필 이미지/,
-    );
-    await expect(store.create({ ...harin, published: true, imageUrl: "" })).rejects.toThrow(
-      /소개와 프로필 이미지/,
+      /소개가 필요/,
     );
     expect(() => decodePersona({ ...harin, published: "yes" })).toThrow(/published/);
     expect(() => decodePersona({ ...harin, extra: true })).toThrow(/extra/);
     expect(await store.list()).toEqual([]);
     await store.create({ ...harin, id: "X_1-" + "a".repeat(60), bio: "", imageUrl: "" });
     expect((await store.list()).length).toBe(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a published persona needs a bio but not a profile photo", async () => {
+  const root = await mkdtemp(join(tmpdir(), "persona-no-photo-"));
+  try {
+    const store = await createPersonaStore(root);
+    await store.create({ ...harin, published: true, imageUrl: "" });
+    expect(await store.publicList()).toEqual([
+      { id: "mira", name: "미라", bio: "그림을 그리며 파리에서 살아요.", imageUrl: "" },
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

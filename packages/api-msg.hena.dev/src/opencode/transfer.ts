@@ -4,6 +4,11 @@ import { SessionMessage } from "@opencode/schema/session-message";
 import type { SessionInbox } from "@opencode/schema/session-inbox";
 import { Effect, Schema } from "effect";
 import { sessionArchive } from "./transfer-format.ts";
+import { dirname } from "node:path";
+import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
+import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
+import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
+import type { Persona } from "../personas/personas.ts";
 
 type Client = Effect.Success<ReturnType<typeof OpenCode.make>>;
 type RestorableSession = Omit<(typeof sessionArchive.Type)["sessions"][number], "pending"> & {
@@ -18,6 +23,14 @@ export const exportSessions = (client: Client, ids: ReadonlyArray<Session.ID>) =
         const pending = yield* client.session.inbox.list({ sessionID });
         const [last] = (yield* client.message.list({ sessionID, order: "desc", limit: 1 })).data;
         const data = yield* client.session.export({ sessionID, sanitize: false });
+        const directory = data.info.location.directory;
+        const root = dirname(dirname(directory));
+        const source = managedFolder(root, directory);
+        const folder = source
+          ? yield* client
+              .rpc(sessionFolders)
+              .read({ folderID: source }, { location: { directory: root } })
+          : undefined;
         const unfinished =
           last !== undefined &&
           data.messages.at(-1)?.type !== "idle" &&
@@ -27,6 +40,7 @@ export const exportSessions = (client: Client, ids: ReadonlyArray<Session.ID>) =
         return {
           ...data,
           pending,
+          ...(folder ? { folder } : {}),
           ...(unfinished
             ? {
                 recovery: {
@@ -44,7 +58,11 @@ export const exportSessions = (client: Client, ids: ReadonlyArray<Session.ID>) =
       }),
     );
     return Schema.encodeSync(sessionArchive)({ version: 1, sessions });
-  }).pipe(Effect.mapError((error) => new Error(String(error))));
+  }).pipe(
+    Effect.mapError(
+      (error) => new Error(error instanceof Error ? error.message : JSON.stringify(error)),
+    ),
+  );
 
 const restoreInput = (
   client: Client,
@@ -78,8 +96,8 @@ const restoredHistory = (entry: (typeof sessionArchive.Type)["sessions"][number]
   ];
 };
 
-/** Validate the entire archive and all destination IDs before importing anything. */
-export const restoreSessions = (client: Client, contents: string, directory: string) =>
+/** Decode and order the complete archive before any OpenCode mutations. */
+const orderedSessions = (contents: string, personas: ReadonlyMap<string, Persona> | undefined) =>
   Effect.gen(function* () {
     const data = yield* Schema.decodeUnknownEffect(sessionArchive)(contents);
     const ids = new Set(data.sessions.map((entry) => entry.info.id));
@@ -94,11 +112,12 @@ export const restoreSessions = (client: Client, contents: string, directory: str
       const pending = entry.pending;
       if (!pending.every(restorable))
         return yield* Effect.fail(new Error("Drain pending control operations before migration"));
-      const present = yield* client.session.get({ sessionID: entry.info.id }).pipe(
-        Effect.as(true),
-        Effect.catchTag("SessionNotFoundError", () => Effect.succeed(false)),
-      );
-      if (present) return yield* Effect.fail(new Error(`Session ${entry.info.id} already exists`));
+      if (entry.folder && entry.folder.persona.id !== entry.info.agent)
+        return yield* Effect.fail(new Error("Snapshot persona does not match session agent"));
+      if (!entry.folder && !personas?.has(entry.info.agent!))
+        return yield* Effect.fail(
+          new Error("Legacy restore requires the original persona catalog"),
+        );
       validated.push({ ...entry, pending });
     }
     const remaining = [...validated];
@@ -111,12 +130,40 @@ export const restoreSessions = (client: Client, contents: string, directory: str
       const [entry] = remaining.splice(index, 1);
       ordered.push(entry!);
     }
+    return ordered;
+  });
+
+/** Validate the entire archive and all destination IDs before importing anything. */
+export const restoreSessions = (
+  client: Client,
+  contents: string,
+  directory: string,
+  personas?: ReadonlyMap<string, Persona>,
+) =>
+  Effect.gen(function* () {
+    const ordered = yield* orderedSessions(contents, personas);
+    for (const entry of ordered) {
+      const present = yield* client.session.get({ sessionID: entry.info.id }).pipe(
+        Effect.as(true),
+        Effect.catchTag("SessionNotFoundError", () => Effect.succeed(false)),
+      );
+      if (present) return yield* Effect.fail(new Error(`Session ${entry.info.id} already exists`));
+    }
     for (const entry of ordered) {
       const sessionID = entry.info.id;
+      const folder =
+        entry.folder ??
+        renderSnapshot(
+          personas!.get(entry.info.agent!)!,
+          yield* Effect.tryPromise(loadGroundRules),
+        );
+      const target = yield* client
+        .rpc(sessionFolders)
+        .write({ folderID: sessionID, snapshot: folder }, { location: { directory } });
       yield* client.session.import({
         info: entry.info,
         messages: restoredHistory(entry),
-        location: { directory: AbsolutePath.make(directory) },
+        location: { directory: AbsolutePath.make(target) },
       });
       for (const item of entry.pending) {
         yield* restoreInput(client, sessionID, item);
@@ -131,4 +178,8 @@ export const restoreSessions = (client: Client, contents: string, directory: str
         });
     }
     return yield* Effect.void;
-  }).pipe(Effect.mapError((error) => new Error(String(error))));
+  }).pipe(
+    Effect.mapError(
+      (error) => new Error(error instanceof Error ? error.message : JSON.stringify(error)),
+    ),
+  );

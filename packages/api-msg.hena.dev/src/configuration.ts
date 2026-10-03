@@ -4,6 +4,7 @@ export const applicationConfig = Effect.gen(function* () {
   const env = yield* Config.all({
     stateDirectory: Config.string("STATE_DIRECTORY"),
     personaDirectory: Config.string("PERSONA_DIRECTORY"),
+    defaultPersonaID: Config.string("DEFAULT_PERSONA_ID").pipe(Config.withDefault("Persona1")),
     publicPort: Config.int("PORT").pipe(Config.withDefault(4700)),
     hostname: Config.string("LISTEN_HOST").pipe(Config.withDefault("0.0.0.0")),
     bootstrapOnly: Config.boolean("BOOTSTRAP_ONLY").pipe(Config.withDefault(false)),
@@ -22,6 +23,7 @@ export const applicationConfig = Effect.gen(function* () {
   return {
     stateDirectory: env.stateDirectory,
     personaDirectory: env.personaDirectory,
+    defaultPersonaID: env.defaultPersonaID,
     publicPort: env.publicPort,
     hostname: env.hostname,
     bootstrapOnly: env.bootstrapOnly,

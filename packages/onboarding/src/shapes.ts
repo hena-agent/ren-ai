@@ -11,6 +11,7 @@ const Phone = Schema.String.pipe(Schema.refine((value): value is string => isPho
 export const Handle = Schema.Union([Phone, WaitlistEmail]);
 
 export const OnboardingRequest = Schema.Struct({
+  personaID: Schema.optionalKey(Schema.String),
   handle: Handle,
   locale: Schema.Literal("ko"),
   privacyNoticeVersion: Schema.String.pipe(Schema.check(Schema.isNonEmpty())),
@@ -23,7 +24,17 @@ export const OnboardingAnswer = Schema.Literals([
   "unknown",
   "full",
   "try_later",
+  "persona_unavailable",
 ]);
+
+export const PublicPersonas = Schema.Array(
+  Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    bio: Schema.String,
+    imageUrl: Schema.String,
+  }),
+);
 
 export const WaitlistRequest = Schema.Struct({
   email: WaitlistEmail,

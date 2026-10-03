@@ -1,5 +1,6 @@
 import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { Effect, Schema, type Scope } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { TestLLM } from "@opencode/ai/testing";
@@ -125,8 +126,16 @@ export const pausedRestore = (
 
 export const replaceCheckpoint = (remote: Remote, input: SessionImportInput) =>
   Effect.gen(function* () {
+    const location = { location: { directory: dirname(dirname(input.info.location.directory)) } };
+    const snapshot = yield* remote.client
+      .rpc(sessionFolders)
+      .read({ folderID: input.info.id }, location);
     yield* remote.sessions.remove(input.info.id);
-    return yield* remote.client.session.import(input);
+    yield* remote.client.rpc(sessionFolders).write({ folderID: input.info.id, snapshot }, location);
+    return yield* remote.client.session.import({
+      ...input,
+      location: input.location ?? input.info.location,
+    });
   });
 
 export const promotedCheckpoint = (remote: Remote, id: SessionMessage.ID, text: string) =>

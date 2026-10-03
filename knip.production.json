@@ -13,7 +13,6 @@
       "entry": [
         "src/server-entry.ts!",
         "src/operator-entry.ts!",
-        "src/opencode/remote-plugin.ts!",
         "ops/imsg-entry.ts!",
         "ops/imsg-verify.ts!",
         "ops/location-config.ts!",

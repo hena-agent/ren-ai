@@ -105,6 +105,7 @@ export const migrate = Effect.gen(function* () {
         yield* sql`UPDATE reset SET notice_id = COALESCE((SELECT MAX(send.id) FROM send
           WHERE send.handle = reset.handle AND send.kind = 'notice' AND send.recorded_at <= reset.date), 0)`;
       }),
+      "017_selected_persona": sql`ALTER TABLE user ADD COLUMN persona_id TEXT`,
     }),
   });
 });

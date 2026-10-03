@@ -1,4 +1,5 @@
-import { rm } from "node:fs/promises";
+import { rm, readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { Effect, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { TestLLM } from "@opencode/ai/testing";
@@ -48,6 +49,17 @@ test("persona sessions are operated through the public OpenCode API", async () =
             unrelated.data.find((agent) => agent.id === "persona1")?.system ?? "",
           ).not.toContain("You are Persona1");
           const session = yield* remote.createSession("persona1");
+          expect(session.location.directory).toBe(join(personaDirectory, "sessions", session.id));
+          expect(
+            yield* Effect.promise(() =>
+              readdir(join(session.location.directory, ".opencode/agents")),
+            ),
+          ).toEqual(["persona1.md"]);
+          expect(
+            yield* Effect.promise(() =>
+              readFile(join(session.location.directory, "AGENTS.md"), "utf8"),
+            ),
+          ).toContain("<conversation-started>");
           const expectReply = (text: string) =>
             Effect.gen(function* () {
               yield* remote.sessions.wait(session.id);

@@ -7,7 +7,7 @@ import { Session } from "@opencode/core/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Agent, AbsolutePath, Location } from "@opencode/schema";
 import { Plugin } from "@opencode/plugin/effect";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer } from "effect";
 import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { afterAll, expect, test, vi } from "vitest";
 import { startMessagingHost, startPersonaHost } from "../../test/application.test-helper.ts";
@@ -17,13 +17,13 @@ import { noticeCopy } from "../onboarding/onboarding.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
 import {
-  disabledIDs,
   intruder,
   model,
   scriptedOverrides,
-  unrestricted,
+  permissivePersonaSession,
   valid,
   expectLateResults,
+  expectSealedHostApi,
 } from "../../test/host.test-helper.ts";
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
 const xdg = await vi.hoisted(async () => {
@@ -73,7 +73,10 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             databasePath: ":memory:",
             personaDirectory,
             providers: {
-              "private-test": { name: "Private Test", settings: { apiKey: "passed-in-code" } },
+              "private-test": {
+                name: "Private Test",
+                settings: { apiKey: "passed-in-code" },
+              },
             },
             model: "test/probe",
             handleForSession: (sessionID) => Effect.succeed(handles.get(sessionID)),
@@ -129,82 +132,45 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           expect(requests.every((request) => request.tools.length === 0)).toBe(true);
           expect(JSON.stringify(requests)).toContain("You are Persona1. Speak Korean.");
           expect(JSON.stringify(requests)).not.toMatch(/PLANTED|planted instruction|malicious/);
-          const messages = yield* host.sessions.messages({ sessionID: session.id });
+          const messages = yield* host.sessions.messages({
+            sessionID: session.id,
+          });
           expect(JSON.stringify(messages)).toContain("안녕!");
           expect((yield* host.sessions.get(session.id)).title).toBe("Persona1 · +821012345678");
-          const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
-          yield* host.sessions.prompt({ sessionID: permissive.id, text: "test backstop" });
+          const permissive = yield* permissivePersonaSession(host);
+          yield* host.sessions.prompt({
+            sessionID: permissive.id,
+            text: "test backstop",
+          });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).every((request) => request.tools.length === 0)).toBe(true);
           expect((yield* host.sessions.get(permissive.id)).title).not.toContain("undefined");
           const nonPersona = yield* host.sessions.create({
             agent: Agent.ID.make("build"),
             model: model.ref,
-            location: Location.Ref.make({ directory: AbsolutePath.make(personaDirectory) }),
+            location: Location.Ref.make({
+              directory: AbsolutePath.make(personaDirectory),
+            }),
             permissions: [{ action: "*", resource: "*", effect: "deny" }],
           });
           expect(nonPersona.permissions).toEqual([{ action: "*", resource: "*", effect: "deny" }]);
-          yield* host.sessions.prompt({ sessionID: nonPersona.id, text: "not a persona" });
+          yield* host.sessions.prompt({
+            sessionID: nonPersona.id,
+            text: "not a persona",
+          });
           yield* host.sessions.wait(nonPersona.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* host.sessions.get(nonPersona.id)).outcome).toBe("succeeded");
           expect(process.env["OPENAI_API_KEY"]).toBeUndefined();
           expect((yield* host.createSession("missing").pipe(Effect.flip)).message).toMatch(
             /Unknown persona/,
           );
-          const response = yield* Effect.promise(() =>
-            host.web(new Request("http://host.local/openapi.json")),
-          );
-          expect(response.status).toBe(200);
-          const get = (route: string) =>
-            host
-              .web(
-                new Request(`http://host.local/api/${route}`, {
-                  headers: { "x-opencode-directory": personaDirectory },
-                }),
-              )
-              .then((page) => page.text());
-          const agent = Schema.decodeUnknownSync(
-            Schema.Struct({
-              data: Schema.Struct({
-                id: Schema.String,
-                system: Schema.String,
-                description: Schema.String,
-                permissions: Schema.Array(
-                  Schema.Struct({
-                    action: Schema.String,
-                    resource: Schema.String,
-                    effect: Schema.String,
-                  }),
-                ),
-              }),
-            }),
-          )(JSON.parse(yield* Effect.promise(() => get("agent/persona1"))));
-          expect(agent.data).toEqual({
-            id: "persona1",
-            system: "You are Persona1. Speak Korean.\n",
-            description: "번호 받았으니까 먼저 연락해 봐",
-            permissions: [{ action: "*", resource: "*", effect: "deny" }],
-          });
-          const config = yield* Effect.promise(() => get("config"));
-          expect(config).toContain(configDirectory);
-          expect(config).toContain(
-            '"private-test":{"name":"Private Test","settings":{"apiKey":"passed-in-code"}}',
-          );
-          expect(config).toContain('"persona1":{"mode":"primary"}');
-          expect(config).toContain('"compaction":{"keep":{"tokens":12000},"buffer":40000}');
-          expect(yield* Effect.promise(() => get("session"))).toContain(session.id);
-          expect(yield* Effect.promise(() => get(`session/${session.id}`))).toContain(session.id);
-          expect(yield* Effect.promise(() => get(`session/${session.id}/message`))).toContain(
+          yield* expectSealedHostApi(
+            host.web,
+            session.location.directory,
+            configDirectory,
+            session.id,
             messages[0]!.id,
           );
-          for (const id of disabledIDs) {
-            expect(config).toContain(`-${id}`);
-          }
-          const plugins = yield* Effect.promise(() => get("plugin"));
-          expect(plugins).toContain('"id":"personas"');
-          for (const id of disabledIDs) {
-            expect(plugins).not.toContain(`"id":"${id}"`);
-          }
           expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
         }),
       ),
@@ -241,7 +207,10 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             if (!request.tools.some((tool) => tool.name === "send"))
               return TestLLM.text("title", "title");
             step++;
-            if (step <= 2) return TestLLM.tool(`call-${step}`, "send", { text: `bubble ${step}` });
+            if (step <= 2)
+              return TestLLM.tool(`call-${step}`, "send", {
+                text: `bubble ${step}`,
+              });
             if (step === 3) return TestLLM.tool("pause", "wait", { minutes: 0.001 });
             return TestLLM.text("done", "answer");
           });
@@ -279,7 +248,11 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
                 }),
             },
             ui.gestures,
-            { turnstileSecret: "test-secret", notice: noticeCopy, noticeVersion: "v1" },
+            {
+              turnstileSecret: "test-secret",
+              notice: noticeCopy,
+              noticeVersion: "v1",
+            },
             silentAlerts,
           );
           let toolDescription = "";
@@ -372,15 +345,28 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             guid: string;
           }>`SELECT handle, content, state, guid FROM send ORDER BY id`;
           expect(rows).toEqual([
-            { handle: first.handle, content: "bubble 1", state: "sent", guid: "fake-1" },
-            { handle: first.handle, content: "bubble 2", state: "sent", guid: "fake-2" },
+            {
+              handle: first.handle,
+              content: "bubble 1",
+              state: "sent",
+              guid: "fake-1",
+            },
+            {
+              handle: first.handle,
+              content: "bubble 2",
+              state: "sent",
+              guid: "fake-2",
+            },
           ]);
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).toContain("paused");
           step = 3;
           imessage.status(first.handle, { delivered: true, readAt: null });
-          yield* host.sessions.prompt({ sessionID: session.id, text: "check delivery" });
+          yield* host.sessions.prompt({
+            sessionID: session.id,
+            text: "check delivery",
+          });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(JSON.stringify((yield* llm.requests()).at(-1)?.messages)).toContain(
             'your-last-message=\\"delivered\\"',
@@ -389,14 +375,20 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             delivered: true,
             readAt: Date.parse("2026-09-25T12:04:00Z"),
           });
-          yield* host.sessions.prompt({ sessionID: session.id, text: "check read" });
+          yield* host.sessions.prompt({
+            sessionID: session.id,
+            text: "check read",
+          });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(JSON.stringify((yield* llm.requests()).at(-1)?.messages)).toContain(
             'your-last-message=\\"read 02:04\\"',
           );
           statusFails = true;
           const beforeFailure = (yield* llm.requests()).length;
-          yield* host.sessions.prompt({ sessionID: session.id, text: "status unavailable" });
+          yield* host.sessions.prompt({
+            sessionID: session.id,
+            text: "status unavailable",
+          });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* host.sessions.get(session.id)).outcome).toBe("failed");
           expect(yield* llm.requests()).toHaveLength(beforeFailure);
@@ -413,8 +405,11 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).not.toContain("confirmed late");
           step = 3;
-          const permissive = yield* host.sessions.create(unrestricted(personaDirectory));
-          yield* host.sessions.prompt({ sessionID: permissive.id, text: "check tool backstop" });
+          const permissive = yield* permissivePersonaSession(host);
+          yield* host.sessions.prompt({
+            sessionID: permissive.id,
+            text: "check tool backstop",
+          });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual([
             "react",
@@ -465,6 +460,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             yield* host
               .onboard({
                 handle: "+821033333333",
+                personaID: "persona1",
                 locale: "ko",
                 privacyNoticeVersion: "v1",
                 turnstileToken: "human",
@@ -476,7 +472,10 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           yield* host.sessions
             .wait(Session.ID.make(joined!.sessionID))
             .pipe(Effect.timeout("20 seconds"));
-          expect(imessage.bubbles[3]).toEqual({ handle: joined!.handle, text: "bubble 1" });
+          expect(imessage.bubbles[3]).toEqual({
+            handle: joined!.handle,
+            text: "bubble 1",
+          });
           yield* Effect.promise(host.disposeOnboarding);
           expect(yield* host.operator.remove(first.handle)).toBe("removed");
           expect(yield* host.conversations.byHandle(first.handle)).toBeUndefined();

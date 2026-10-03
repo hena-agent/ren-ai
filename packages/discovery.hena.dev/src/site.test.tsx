@@ -7,14 +7,17 @@ import { copy } from "./copy.ts";
 import { turnstileSiteKey } from "./config.ts";
 import { onboardingClient } from "./onboarding-client.ts";
 import type { OnboardingClient } from "./onboarding-client.ts";
-import { Home } from "./pages/home.tsx";
+import { OnboardingForm } from "./pages/onboarding-form.tsx";
 import { Privacy } from "./pages/privacy.tsx";
 import { getRouter } from "./router.tsx";
 import { widget, widgetOptions } from "./turnstile.fake.ts";
 
 const submit = vi.fn<OnboardingClient["submit"]>();
 const joinWaitlist = vi.fn<OnboardingClient["joinWaitlist"]>();
-const fake: OnboardingClient = { submit, joinWaitlist };
+const fake: OnboardingClient = { submit, joinWaitlist, catalog: async () => [] };
+const Home = ({ onboarding: client }: { onboarding: OnboardingClient }) => (
+  <OnboardingForm onboarding={client} personaID="Persona1" onUnavailable={() => {}} />
+);
 const approvedVersion = copy.privacyNoticeVersion;
 
 beforeEach(() => {
@@ -229,6 +232,7 @@ it.each([
   expect(screen.queryByText(copy.form.waitlistLink) !== null).toBe(offer);
   expect(screen.queryByRole("textbox", { name: copy.waitlist.emailLabel }) !== null).toBe(offer);
   expect(submit).toHaveBeenCalledWith({
+    personaID: "Persona1",
     handle: "+821012345678",
     locale: "ko",
     privacyNoticeVersion: copy.privacyNoticeVersion,

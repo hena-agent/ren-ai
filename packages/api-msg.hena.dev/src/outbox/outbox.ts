@@ -6,9 +6,9 @@ import type { IncomingMessage, Messages } from "../messages/messages.ts";
 import type { Persona } from "../personas/personas.ts";
 import { notReacted, notSent, sent } from "../transcript/transcript.ts";
 import type { timing } from "../timing/timing.ts";
+import type { Tapback } from "@ren-ai/plugin-application/protocol";
 
-export const tapbacks = ["love", "like", "dislike", "laugh", "emphasis", "question"] as const;
-export type Tapback = (typeof tapbacks)[number];
+export type { Tapback } from "@ren-ai/plugin-application/protocol";
 
 interface SendRow {
   readonly id: number;

@@ -16,10 +16,12 @@ import { remoteMessages } from "./gateway/client.ts";
 import { applicationGateway } from "./opencode/application-gateway.ts";
 import { remoteHost, type RemoteConfig } from "./opencode/remote.ts";
 import { exportSessions } from "./opencode/transfer.ts";
+import { syncFolders, watchCatalog } from "./opencode/catalog-sync.ts";
 
 export interface ServerConfig {
   readonly stateDirectory: string;
   readonly personaDirectory: string;
+  readonly defaultPersonaID: string;
   readonly publicPort: number;
   readonly hostname?: string;
   readonly noticeVersion?: string;
@@ -71,18 +73,27 @@ export const composeServer = (config: ServerConfig) =>
       (tools) =>
         Effect.gen(function* () {
           yield* registerCallback(tools, true);
-          return yield* remoteHost(config.opencode, personas);
+          const runtime = yield* remoteHost(config.opencode, personas);
+          yield* syncFolders(runtime.client, config.opencode.directory, personas);
+          return runtime;
         }),
       messages,
       messages.gestures,
       {
         turnstileSecret: config.secrets.TURNSTILE_SECRET,
         notice: noticeCopy,
+        defaultPersonaID: config.defaultPersonaID,
         ...(config.noticeVersion ? { noticeVersion: config.noticeVersion } : {}),
       },
       health,
     );
     yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
+    yield* watchCatalog(
+      host.client,
+      config.opencode.directory,
+      config.personaDirectory,
+      personas,
+    ).pipe(Effect.forkScoped);
     onboardingWeb = (request) =>
       host.onboardingWeb(request, Context.make(HttpClient.HttpClient, client));
     yield* Effect.forkScoped(health.monitor);
