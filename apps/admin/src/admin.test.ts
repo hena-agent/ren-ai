@@ -57,7 +57,9 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(description.required).toBe(true);
     expect(description.getAttribute("aria-describedby")).toBe("description-hint");
     expect(
-      [...window.document.querySelectorAll("label")].map((label) => label.textContent?.trim()),
+      [...window.document.querySelectorAll("fieldset label")].map((label) =>
+        label.textContent?.trim(),
+      ),
     ).toEqual(["간단한 설명", "이름", "캐릭터 설명", "프로필 공개"]);
     for (const label of window.document.querySelectorAll("label"))
       expect(window.document.getElementById(label.getAttribute("for")!)).not.toBeNull();
@@ -134,7 +136,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   const page = await generated.text();
   expect(page).not.toContain('class="notice success"');
   expect(page).toContain(introduction);
-  expect(page).toContain(copy.regenerateImage);
+  expect(page).toContain(copy.regenerate);
   expect(page).toContain(`alt="${character.name} ${copy.styles.anime}"`);
   expect(page).toContain(`alt="${character.name} ${copy.styles.photo}"`);
   const image = /src="(\/images\/[^"]+)"/.exec(page)![1]!;

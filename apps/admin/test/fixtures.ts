@@ -19,6 +19,16 @@ export const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
   "base64",
 );
+export const portraitReply = async () =>
+  Response.json({
+    candidates: [
+      {
+        content: {
+          parts: [{ inlineData: { mimeType: "image/png", data: png.toString("base64") } }],
+        },
+      },
+    ],
+  });
 export const generator: ProfileGenerator = {
   character: async () => character,
   introduction: async () => introduction,

@@ -33,6 +33,11 @@ test("both styles are saved together, survive restart and become public without 
       (image) => `/discovery${image.getAttribute("src")}`,
     );
     expect(images).toHaveLength(2);
+    const comparison = window.document.querySelector("section.image-options");
+    expect(comparison?.getAttribute("aria-labelledby")).toBe("comparison-title");
+    expect(comparison?.getAttribute("aria-describedby")).toBe("comparison-hint");
+    expect(comparison?.querySelector("#comparison-title")?.textContent).toBe(copy.comparison);
+    expect(comparison?.querySelector("fieldset, legend")).toBeNull();
     expect(
       [...window.document.querySelectorAll(".image-option img")].map((image) =>
         image.getAttribute("alt"),
@@ -143,6 +148,8 @@ test("portrait requests use distinct art direction while preserving the characte
   const anime = await new Request(...fetcher.mock.calls[0]!).text();
   const photo = await new Request(...fetcher.mock.calls[1]!).text();
   expect(anime).toContain("LovePlus");
+  expect(anime).toContain("2D Japanese");
+  expect(anime).toContain("hand-drawn anime illustration");
   expect(anime).toContain("cel shading");
   expect(photo).toContain("photorealistic editorial");
   expect(photo).toContain("natural skin texture");

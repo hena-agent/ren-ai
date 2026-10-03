@@ -40,8 +40,14 @@ function Comparison({
 }) {
   return (
     <article className="persona-card">
-      <fieldset className="image-options" aria-describedby="comparison-hint">
-        <legend>{copy.comparison}</legend>
+      <section
+        className="image-options"
+        aria-labelledby="comparison-title"
+        aria-describedby="comparison-hint"
+      >
+        <h3 className="image-options-title" id="comparison-title">
+          {copy.comparison}
+        </h3>
         <p className="hint" id="comparison-hint">
           {copy.comparisonHint}
         </p>
@@ -56,7 +62,7 @@ function Comparison({
             </figure>
           ))}
         </div>
-      </fieldset>
+      </section>
       <ProfileContent persona={persona} />
     </article>
   );
@@ -67,11 +73,13 @@ function Editor({
   editing,
   draft,
   seed,
+  portraitInstructions,
 }: {
   persona: PersonaRecord;
   editing: boolean;
   draft: string;
   seed?: string | undefined;
+  portraitInstructions?: string | undefined;
 }) {
   return (
     <div className="editor-layout">
@@ -115,6 +123,34 @@ function Editor({
           <button hidden type="submit" name="intent" value="save">
             {copy.save}
           </button>
+          <dialog
+            className="portrait-dialog"
+            data-portrait-dialog
+            aria-labelledby="portrait-dialog-title"
+            aria-describedby="portrait-instructions-hint"
+          >
+            <h2 id="portrait-dialog-title">{copy.portraitDialogTitle}</h2>
+            <p className="hint" id="portrait-instructions-hint">
+              {copy.portraitInstructionsHint}
+            </p>
+            <label htmlFor="portrait-instructions">{copy.portraitInstructionsLabel}</label>
+            <textarea
+              id="portrait-instructions"
+              name="portraitInstructions"
+              rows={5}
+              defaultValue={portraitInstructions}
+              placeholder={copy.portraitInstructionsPlaceholder}
+              aria-describedby="portrait-instructions-hint"
+            />
+            <div className="dialog-actions">
+              <button className="secondary" type="button" data-portrait-cancel>
+                {copy.portraitDialogCancel}
+              </button>
+              <button type="button" data-portrait-confirm>
+                {copy.portraitDialogConfirm}
+              </button>
+            </div>
+          </dialog>
           <fieldset>
             <legend>{copy.character}</legend>
             <label htmlFor="name">이름</label>
@@ -134,13 +170,8 @@ function Editor({
             />
             <div className="generation-actions">
               <button type="submit" name="intent" value="generate">
-                {copy.generate}
+                {persona.imageUrl && persona.bio ? copy.regenerate : copy.generate}
               </button>
-              {persona.imageUrl && persona.bio && (
-                <button className="secondary" type="submit" name="intent" value="portrait">
-                  {copy.regenerateImage}
-                </button>
-              )}
             </div>
             <p className="hint">{copy.generationHint}</p>
             <output className="pending-status" data-pending aria-live="polite" />
@@ -205,6 +236,7 @@ export function renderPage({
   error = "",
   saved,
   seed,
+  portraitInstructions,
 }: PageContent & {
   error?: string;
   saved?: boolean;
@@ -250,7 +282,13 @@ export function renderPage({
             )}
             {saved && <output className="notice success">{copy.saved}</output>}
             {record ? (
-              <Editor persona={record} editing={editing} draft={draft} seed={seed} />
+              <Editor
+                persona={record}
+                editing={editing}
+                draft={draft}
+                seed={seed}
+                portraitInstructions={portraitInstructions}
+              />
             ) : personas.length ? (
               <div className="persona-grid">
                 {personas.map((persona) => (

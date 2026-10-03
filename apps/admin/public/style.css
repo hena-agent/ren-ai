@@ -210,6 +210,36 @@ button:hover {
   border: 1px solid var(--line);
   color: var(--ink);
 }
+.portrait-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 28px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px #0008;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.portrait-dialog::backdrop {
+  background: #000a;
+}
+.portrait-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+.portrait-dialog textarea {
+  line-height: 1.7;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
 button:active {
   transform: translateY(1px);
 }
@@ -238,16 +268,22 @@ aside h2 {
 }
 .image-options {
   margin: 0;
-  padding: 16px;
-  border: 0;
-  background: transparent;
+  padding: 20px 20px 0;
+}
+.image-options-title {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .image-options-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .image-option {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   margin: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -261,10 +297,13 @@ aside h2 {
 }
 .image-option figcaption {
   display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  padding: 10px 8px;
-  font-size: 11px;
+  flex: 1;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .authoring-column {
   min-width: 0;
@@ -352,7 +391,9 @@ aside h2 {
   }
   aside {
     position: static;
-    max-width: 360px;
+    width: 100%;
+    max-width: 420px;
+    margin-inline: auto;
   }
 }
 @media (max-width: 540px) {

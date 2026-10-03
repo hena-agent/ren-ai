@@ -60,6 +60,7 @@ export function createAdmin(
             draft: tokens.encode(draft),
             editing: Boolean(draft.base),
             seed: draft.seed,
+            portraitInstructions: draft.portraitInstructions,
           }
         : { personas: [] };
     return html(
@@ -134,6 +135,7 @@ export function createAdmin(
           editing: Boolean(draft.base),
           draft: tokens.encode(next),
           seed: next.seed,
+          portraitInstructions: next.portraitInstructions,
         }),
       );
     } finally {

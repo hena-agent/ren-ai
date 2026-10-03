@@ -1,18 +1,8 @@
-import { Window } from "happy-dom";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 import { bindPending } from "./pending.ts";
+import { useBrowser } from "../test/browser.ts";
 
-let browser: Window;
-beforeEach(() => {
-  browser = new Window();
-  vi.stubGlobal("document", browser.document);
-  vi.stubGlobal("SubmitEvent", browser.SubmitEvent);
-  vi.stubGlobal("Event", browser.Event);
-});
-afterEach(async () => {
-  await browser.happyDOM.close();
-  vi.unstubAllGlobals();
-});
+useBrowser();
 
 test("generation announces progress, prevents repeated native submissions and recovers on browser navigation", () => {
   document.body.innerHTML =

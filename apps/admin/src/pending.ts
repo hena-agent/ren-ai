@@ -1,7 +1,11 @@
+import { bindPortraitDialog } from "./portrait-dialog.ts";
+
 export function bindPending(form: HTMLFormElement) {
+  bindPortraitDialog(form);
   let pending = false;
   const status = form.querySelector<HTMLOutputElement>("[data-pending]");
   form.addEventListener("submit", (event) => {
+    if (event.defaultPrevented) return;
     if (pending) {
       event.preventDefault();
       return;
