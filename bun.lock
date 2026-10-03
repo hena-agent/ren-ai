@@ -27,6 +27,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@ren-ai/personas": "workspace:*",
+        "effect": "4.0.0-rc.112",
         "react": "19.2.4",
         "react-dom": "19.2.4",
       },
@@ -36,6 +37,26 @@
         "@types/react-dom": "19.2.3",
         "happy-dom": "20.14.5",
         "typescript": "7.0.2",
+        "vitest": "5.0.1",
+      },
+    },
+    "apps/discovery": {
+      "name": "@ren-ai/discovery",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ren-ai/onboarding": "workspace:*",
+        "effect": "4.0.0-rc.112",
+        "react": "19.2.4",
+        "react-dom": "19.2.4",
+      },
+      "devDependencies": {
+        "@testing-library/react": "16.3.0",
+        "@types/react": "19.2.14",
+        "@types/react-dom": "19.2.3",
+        "@vitejs/plugin-react": "5.2.0",
+        "happy-dom": "20.14.5",
+        "typescript": "7.0.2",
+        "vite": "7.3.6",
         "vitest": "5.0.1",
       },
     },
@@ -120,8 +141,10 @@
       "version": "0.0.0",
       "dependencies": {
         "effect": "4.0.0-rc.112",
+        "react": "19.2.4",
       },
       "devDependencies": {
+        "@types/react": "19.2.14",
         "typescript": "7.0.2",
         "vitest": "5.0.1",
       },
@@ -953,6 +976,8 @@
     "@ren-ai/admin": ["@ren-ai/admin@workspace:apps/admin"],
 
     "@ren-ai/api-msg.hena.dev": ["@ren-ai/api-msg.hena.dev@workspace:packages/api-msg.hena.dev"],
+
+    "@ren-ai/discovery": ["@ren-ai/discovery@workspace:apps/discovery"],
 
     "@ren-ai/msg.hena.dev": ["@ren-ai/msg.hena.dev@workspace:packages/msg.hena.dev"],
 

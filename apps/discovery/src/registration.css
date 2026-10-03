@@ -1,0 +1,157 @@
+.join-panel,
+.receipt {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+.back-button.text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -12px 0 20px;
+  text-decoration: none;
+}
+.back-button .icon {
+  width: 18px;
+  height: 18px;
+  transform: rotate(180deg);
+}
+.form-step {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.join-intro {
+  margin: 12px 0 24px;
+  color: var(--muted);
+  font-size: 14px;
+  word-break: keep-all;
+}
+.liked-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+.liked-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.liked-list img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.contact-fields {
+  display: grid;
+  gap: 8px;
+}
+.contact-fields label {
+  font-size: 13px;
+  font-weight: 600;
+}
+input:not([type="checkbox"]) {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid #cdd2da;
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 16px;
+}
+.field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ai-notice {
+  margin: 24px 0 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--canvas);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.privacy-disclosure {
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.privacy-disclosure summary {
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.privacy-disclosure h3 {
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+.privacy-disclosure h4 {
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+.notice-version {
+  color: var(--muted);
+  font-size: 12px;
+}
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.8;
+}
+input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--ink);
+}
+.join-submit {
+  margin-top: 12px;
+}
+.receipt {
+  padding: 48px 28px;
+  text-align: center;
+}
+.receipt-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 24px;
+  border-radius: 50%;
+  color: #247449;
+  background: #edf7f0;
+}
+.receipt p {
+  margin: 16px 0 0;
+  font-size: 14px;
+  word-break: keep-all;
+}
+.receipt .receipt-hint {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .join-panel {
+    padding: 24px 20px;
+  }
+}

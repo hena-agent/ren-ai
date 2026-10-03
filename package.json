@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "ci": "bun run ci:checks && bun run verify-gates && bun run mutate",
-    "ci:checks": "bun run format:check && bun run lint && bun run typecheck && bun run verify-ci && bun run test && bun run knip && bun run dup && bun run exceptions && bun run --cwd packages/msg.hena.dev build",
+    "ci:checks": "bun run format:check && bun run lint && bun run typecheck && bun run verify-ci && bun run test && bun run knip && bun run dup && bun run exceptions && bun run --cwd packages/msg.hena.dev build && bun run --cwd apps/discovery build",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "bun run scripts/run-quality-gate.ts lint",
