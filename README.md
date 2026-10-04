@@ -24,7 +24,7 @@ bun run ci
 
 ## Persona discovery and Admin
 
-Admin creates OpenCode personas from a name and detailed private character description. A brief idea can generate an editable AI character draft. AI creates a public introduction and both portrait styles—LovePlus-inspired anime and near-photorealistic—with preview and retry before saving them together. IDs and runtime instructions are managed internally. Discovery users choose a display style for the whole catalog and can switch it without losing Like / Pass choices. Discovery registers a Handle and liked personas on the server after web consent. This stage ends at waiting registration; invitations, operator selection and delayed first messages are the next implementation unit.
+Admin creates OpenCode personas from a name and detailed private character description. A brief idea can generate an editable AI character draft. AI creates a public introduction and both portrait styles—LovePlus-inspired Japanese 2D anime and near-photorealistic—with preview and retry before saving them together. IDs and runtime instructions are managed internally. Discovery users choose a display style for the whole catalog and can switch it without losing Like / Pass choices. Discovery registers a Handle and liked personas on the server after web consent. This stage ends at waiting registration; invitations, operator selection and delayed first messages are the next implementation unit.
 
 Start Admin with a password:
 
@@ -36,7 +36,9 @@ Open http://127.0.0.1:3729 and sign in as `admin`. Write a name and detailed des
 
 Admin uses `GEMINI_API_KEY`, or the existing key in `apps/persona-lab/.env` when unset. Its default models are `gemini-3.8-flash` for introductions and `gemini-3.1-flash-image` for 4:5 portraits. Override them with `ADMIN_TEXT_MODEL` / `ADMIN_IMAGE_MODEL`, and the provider's API base with `GEMINI_API_URL`. Keys stay on the server. Admin renders HTML and bundles only its small progress script in memory at startup.
 
-Run the discovery-only local API and frontend in separate terminals:
+Anime and live-action portraits are generated independently in parallel from the same character description, with no image reference sent between styles. Live-action direction emphasizes an attractive romantic lead, character-specific expression, polished styling and a fresh moment grounded in the character's interests. The description guides identity and personality rather than fixing one costume, pose or setting. Additional image instructions apply to both styles. Either style failing keeps the previous complete preview; only a successful pair is published after saving. Each parallel task remains observable in diagnostics, without logging private prompts or image bytes.
+
+The root `bun run dev` starts the Discovery API alongside the frontends and Admin. Set the API's local `TURNSTILE_SECRET` from `packages/api-msg.hena.dev/.env.example` when testing registration. To run just the discovery-only API and frontend, use separate terminals:
 
 ```sh
 TURNSTILE_SECRET=1x0000000000000000000000000000000AA bun run --cwd packages/api-msg.hena.dev dev:discovery
@@ -48,6 +50,8 @@ Open http://127.0.0.1:3867 and choose anime or realistic display for the whole c
 For public hosting, configure the frontend's `VITE_DISCOVERY_API_URL` and real `VITE_TURNSTILE_SITE_KEY`, and the API's matching `TURNSTILE_SECRET`. The existing messaging API also serves `/discovery/personas` and `/discovery/waitlist`, using its own server database. Its allowed browser origin remains `https://msg.hena.dev`; deployment and domain cutover are tracked in the [MVP spec](docs/specs/persona-discovery-admin.md). See both apps' `.env.example` files for configuration.
 
 Quality checks and mutation tests use Node 24 from `.nvmrc`.
+
+Discovery uses a viewport-filling swipe layout on mobile, with round Pass / Like controls and bottom navigation. Desktop adds a liked-persona sidebar beside the large card. Tapping a card or its information button opens the full public introduction; only swiping, the action buttons or arrow keys choose Like / Pass. Exit animations complete a choice once, with immediate completion for reduced motion. Liked profiles, image style and registration behavior remain shared across both layouts.
 
 ## Layout
 
