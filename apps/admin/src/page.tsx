@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PersonaRecord } from "@ren-ai/personas";
 import { descriptionOf } from "./authoring.ts";
@@ -16,9 +17,26 @@ function ProfileContent({ persona }: { persona: PersonaRecord }) {
 }
 
 function Preview({ persona }: { persona: PersonaRecord }) {
+  const portraits = persona.portraits;
   return (
     <article className="persona-card">
-      {persona.imageUrl ? (
+      {portraits ? (
+        <div className="portrait-split">
+          {(["anime", "photo"] as const).map((style) => (
+            <Fragment key={style}>
+              <div className={`portrait-pane portrait-${style}`}>
+                <img
+                  src={portraits[style].replace(/^\/discovery\/images\//, "/images/")}
+                  alt={`${persona.name} ${copy.styles[style]}`}
+                />
+              </div>
+              <span className={`portrait-label portrait-label-${style}`} aria-hidden="true">
+                {copy.portraitLabels[style]}
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      ) : persona.imageUrl ? (
         <img
           src={persona.imageUrl.replace(/^\/discovery\/images\//, "/images/")}
           alt={`${persona.name} 프로필`}

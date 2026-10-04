@@ -323,6 +323,74 @@ aside h2 {
   font-size: 11px;
   letter-spacing: 0.06em;
 }
+.portrait-split {
+  --split-top: 60%;
+  --split-bottom: 40%;
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--field);
+}
+.portrait-pane {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transition: clip-path 250ms ease;
+}
+.portrait-anime {
+  --portrait-shift: -20%;
+  clip-path: polygon(0 0, var(--split-top) 0, var(--split-bottom) 100%, 0 100%);
+}
+.portrait-photo {
+  --portrait-shift: 20%;
+  clip-path: polygon(var(--split-top) 0, 100% 0, 100% 100%, var(--split-bottom) 100%);
+}
+.portrait-pane img {
+  height: 100%;
+  aspect-ratio: auto;
+  transform: translateX(var(--portrait-shift));
+  transition: transform 250ms ease;
+}
+.portrait-label {
+  position: absolute;
+  z-index: 1;
+  bottom: 12px;
+  padding: 4px 8px;
+  border: 1px solid #ffffff30;
+  border-radius: 6px;
+  background: #101214cc;
+  color: var(--ink);
+  font-size: 10px;
+  pointer-events: none;
+}
+.portrait-label-anime {
+  left: 12px;
+}
+.portrait-label-photo {
+  right: 12px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .portrait-split:has(.portrait-anime:hover) {
+    --split-top: 90%;
+    --split-bottom: 70%;
+  }
+  .portrait-split:has(.portrait-photo:hover) {
+    --split-top: 30%;
+    --split-bottom: 10%;
+  }
+  .portrait-anime:hover {
+    --portrait-shift: -5%;
+  }
+  .portrait-photo:hover {
+    --portrait-shift: 5%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portrait-pane,
+  .portrait-pane img {
+    transition: none;
+  }
+}
 .card-content {
   padding: 20px;
 }

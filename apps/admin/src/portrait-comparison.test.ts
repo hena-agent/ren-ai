@@ -90,10 +90,40 @@ test("saved previews keep external portrait URLs intact and use authenticated ro
   const owned = await store.saveImage({ bytes: png, mimeType: "image/png" });
   const external = `https://example.net${owned}`;
   await store.create({ ...legacy, imageUrl: owned, portraits: { anime: external, photo: owned } });
+  await store.create({ ...legacy, id: "single", imageUrl: owned });
   const window = new Window();
   try {
     window.document.body.innerHTML = await (await admin(request("/"))).text();
-    const thumbnail = window.document.querySelector(".persona-card img");
+    const card = window.document.querySelector('a[href="/personas/legacy"]');
+    expect(card?.className).toBe("card-link");
+    expect(card?.querySelectorAll(".portrait-pane")).toHaveLength(2);
+    expect([...card!.querySelectorAll(".portrait-pane")].map((pane) => pane.className)).toEqual([
+      "portrait-pane portrait-anime",
+      "portrait-pane portrait-photo",
+    ]);
+    expect(
+      [...card!.querySelectorAll(".portrait-pane img")].map((image) => [
+        image.getAttribute("src"),
+        image.getAttribute("alt"),
+      ]),
+    ).toEqual([
+      [external, `${legacy.name} ${copy.styles.anime}`],
+      [owned.replace("/discovery", ""), `${legacy.name} ${copy.styles.photo}`],
+    ]);
+    expect(
+      [...card!.querySelectorAll(".portrait-label")].map((label) => [
+        label.className,
+        label.textContent,
+        label.getAttribute("aria-hidden"),
+      ]),
+    ).toEqual([
+      ["portrait-label portrait-label-anime", copy.portraitLabels.anime, "true"],
+      ["portrait-label portrait-label-photo", copy.portraitLabels.photo, "true"],
+    ]);
+    const single = window.document.querySelector('a[href="/personas/single"]');
+    expect(single?.querySelector(".portrait-split")).toBeNull();
+    expect(single?.querySelectorAll("img")).toHaveLength(1);
+    const thumbnail = single?.querySelector(".persona-card img");
     expect(thumbnail?.getAttribute("src")).toBe(owned.replace("/discovery", ""));
     expect(thumbnail?.getAttribute("alt")).toBe(`${legacy.name} 프로필`);
     window.document.body.innerHTML = await (await admin(request(`/personas/${legacy.id}`))).text();
