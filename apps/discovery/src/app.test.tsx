@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
+import { choose } from "../test/choose.ts";
 beforeEach(() => localStorage.setItem("ren-ai.discovery.image-style", "photo"));
 
 afterEach(() => {
@@ -40,7 +41,7 @@ test("a visitor likes a profile, enters a handle and consent, and really joins t
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
   expect(screen.getByRole("button", { name: /연락받기/ }).hasAttribute("disabled")).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "좋아요" }));
+  choose(true);
   await screen.findByRole("heading", { name: "지우" });
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
   fireEvent.change(screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }), {
@@ -80,7 +81,7 @@ test("an existing user is directed to the assigned conversation instead of a new
   };
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
-  fireEvent.click(screen.getByRole("button", { name: "좋아요" }));
+  choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "existing@example.com" } });
   fireEvent.click(screen.getByRole("checkbox"));

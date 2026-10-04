@@ -9,56 +9,30 @@ import copy from "./copy.json";
 import { readImageStyle, saveImageStyle, withImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
 import { StylePicker, StyleSwitch } from "./style-picker.tsx";
-
-function SwipeActions({
-  current,
-  choose,
-  disabled,
-}: {
-  current: PublicPersona | undefined;
-  choose: (persona: PublicPersona, like: boolean) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="swipe-actions">
-      <button
-        className="pass-button"
-        type="button"
-        aria-label={copy.pass}
-        onClick={current ? () => choose(current, false) : undefined}
-        disabled={disabled}
-      >
-        <span className="icon icon-pass" aria-hidden="true" />
-        <span>{copy.pass}</span>
-      </button>
-      <button
-        className="like-button"
-        type="button"
-        aria-label={copy.like}
-        onClick={current ? () => choose(current, true) : undefined}
-        disabled={disabled}
-      >
-        <span className="icon icon-heart" aria-hidden="true" />
-        <span>{copy.like}</span>
-      </button>
-    </div>
-  );
-}
+import { Header, LikedPanel, Navigation } from "./chrome.tsx";
+import type { BrowseView } from "./chrome.tsx";
+import { ProfileDetails } from "./profile-details.tsx";
 
 function Deck({
   people,
   current,
+  next,
   likedCount,
   hasPassed,
   choose,
   restart,
+  onOpen,
+  onBusyChange,
 }: {
   people: readonly PublicPersona[];
   current: PublicPersona | undefined;
+  next: PublicPersona | undefined;
   likedCount: number;
   hasPassed: boolean;
   choose: (persona: PublicPersona, like: boolean) => void;
   restart: () => void;
+  onOpen: (persona: PublicPersona) => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   if (!people.length)
     return (
@@ -70,11 +44,14 @@ function Deck({
     );
   if (current)
     return (
-      <div className="card-stack">
+      <div className="deck">
         <Card
-          key={`${current.id}:${current.imageUrl}`}
+          key={current.id}
           persona={current}
+          next={next}
           onChoose={(like) => choose(current, like)}
+          onOpen={onOpen}
+          onBusyChange={onBusyChange}
         />
       </div>
     );
@@ -141,33 +118,26 @@ export function App({ client = discoveryClient }: { client?: DiscoveryClient }) 
   }
   return (
     <div className="discovery-shell">
-      <header className="site-header">
-        <a className="wordmark" href="/">
-          {copy.brand}
-        </a>
-        <span className="header-channel">{copy.channel}</span>
-      </header>
-      <main className="discovery-main">
-        <div className="experience">
-          {catalog.phase === "ready" ? (
-            <Experience people={catalog.people} client={client} />
-          ) : (
-            <section className="browse-panel">
-              <div className="empty-card">
-                {catalog.phase === "failed" && (
-                  <>
-                    <h2>{copy.loadFailure}</h2>
-                    <button className="primary-button" type="button" onClick={retry}>
-                      {copy.retry}
-                    </button>
-                  </>
-                )}
-                {catalog.phase === "loading" && <output>{copy.loading}</output>}
-              </div>
-            </section>
-          )}
-        </div>
-      </main>
+      {catalog.phase === "ready" ? (
+        <Experience people={catalog.people} client={client} />
+      ) : (
+        <>
+          <Header />
+          <main className="onboarding-view" id="discovery-content">
+            <div className="empty-card">
+              {catalog.phase === "failed" && (
+                <>
+                  <h2>{copy.loadFailure}</h2>
+                  <button className="primary-button" type="button" onClick={retry}>
+                    {copy.retry}
+                  </button>
+                </>
+              )}
+              {catalog.phase === "loading" && <output>{copy.loading}</output>}
+            </div>
+          </main>
+        </>
+      )}
     </div>
   );
 }
@@ -182,83 +152,89 @@ function Experience({
   const [choices, setChoices] = useState(readChoices);
   const [style, setStyle] = useState(readImageStyle);
   const [styleStorageFailure, setStyleStorageFailure] = useState(false);
-  const chosen = useRef(choices);
   const [storageFailure, setStorageFailure] = useState<true>();
-  const [view, setView] = useState<"browse" | "contact" | "waiting" | "active">("browse");
+  const [view, setView] = useState<BrowseView | "waiting" | "active">("browse");
+  const [busy, setBusy] = useState(false);
+  const [detailsID, setDetailsID] = useState<string>();
   const displayed = style ? people.map((persona) => withImageStyle(persona, style)) : people;
-  const current = displayed.find((persona) => !Object.hasOwn(choices, persona.id));
+  const remaining = displayed.filter((persona) => !Object.hasOwn(choices, persona.id));
+  const current = remaining[0];
   const liked = displayed.filter((persona) => choices[persona.id] === true);
+  const detail = displayed.find((persona) => persona.id === detailsID);
+  const openDetails = (persona: PublicPersona) => setDetailsID(persona.id);
   function chooseStyle(next: ImageStyle) {
     setStyle(next);
     setStyleStorageFailure(!saveImageStyle(next));
   }
   function choose(persona: PublicPersona, like: boolean) {
-    if (Object.hasOwn(chosen.current, persona.id)) return;
-    const next = { ...chosen.current, [persona.id]: like };
-    chosen.current = next;
+    const next = { ...choices, [persona.id]: like };
     setChoices(next);
     setStorageFailure(saveChoices(next) ? undefined : true);
   }
   function restart() {
-    const next = Object.fromEntries(Object.entries(chosen.current).filter(([, like]) => like));
-    chosen.current = next;
+    const next = Object.fromEntries(Object.entries(choices).filter(([, like]) => like));
     setChoices(next);
     setStorageFailure(saveChoices(next) ? undefined : true);
   }
   const sample = people.find((persona) => persona.portraits) ?? people[0];
-  if (!style && sample) return <StylePicker sample={sample} onChoose={chooseStyle} />;
+  if (!style && sample)
+    return (
+      <>
+        <Header />
+        <main className="onboarding-view" id="discovery-content">
+          <StylePicker sample={sample} onChoose={chooseStyle} />
+        </main>
+      </>
+    );
   return (
     <>
-      {style && <StyleSwitch style={style} onChoose={chooseStyle} />}
+      <Header>{style && <StyleSwitch style={style} onChoose={chooseStyle} />}</Header>
       {styleStorageFailure && (
         <output className="storage-warning">{copy.styleStorageFailure}</output>
       )}
-      {view === "browse" ? (
-        <section className="browse-panel" aria-label={copy.explore}>
-          <div className="browse-topline">
-            <h1>{copy.explore}</h1>
-            <span className="like-count">
-              <span className="icon icon-heart" aria-hidden="true" />
-              <span className="sr-only">{copy.likeCount} </span>
-              {liked.length}
-            </span>
-          </div>
-          <p className="browse-intro">{copy.intro}</p>
-          <Deck
-            people={people}
-            current={current}
-            likedCount={liked.length}
-            hasPassed={people.some((persona) => choices[persona.id] === false)}
-            choose={choose}
-            restart={restart}
-          />
-          <p id="swipe-help" className="sr-only">
-            {copy.instructions}
-          </p>
-          <SwipeActions current={current} choose={choose} disabled={!current} />
-          {storageFailure && <output className="storage-warning">{copy.storageFailure}</output>}
-          <button
-            className="primary-button contact-button"
-            type="button"
-            disabled={!liked.length}
-            onClick={() => setView("contact")}
-          >
-            {copy.contact}
-            <span className="contact-count">{liked.length}</span>
-            <span className="icon icon-arrow" aria-hidden="true" />
-          </button>
-          <p className="browse-hint">{copy.browseHint}</p>
-        </section>
-      ) : view === "contact" ? (
-        <JoinForm
-          liked={liked}
-          client={client}
-          onBack={() => setView("browse")}
-          onSuccess={setView}
-        />
+      {view === "waiting" || view === "active" ? (
+        <main className="onboarding-view" id="discovery-content">
+          <Receipt waiting={view === "waiting"} />
+        </main>
       ) : (
-        <Receipt waiting={view === "waiting"} />
+        <main className="app-workspace" id="discovery-content" data-view={view}>
+          <LikedPanel people={liked} onOpen={openDetails} />
+          <section className="swipe-stage" aria-label={copy.explore}>
+            <h1 className="sr-only">{copy.explore}</h1>
+            {view === "contact" ? (
+              <JoinForm
+                liked={liked}
+                client={client}
+                onBack={() => setView("browse")}
+                onSuccess={setView}
+                onBusyChange={setBusy}
+              />
+            ) : (
+              <div className="browse-panel">
+                <Deck
+                  people={displayed}
+                  current={current}
+                  next={remaining[1]}
+                  likedCount={liked.length}
+                  hasPassed={people.some((persona) => choices[persona.id] === false)}
+                  choose={choose}
+                  restart={restart}
+                  onOpen={openDetails}
+                  onBusyChange={setBusy}
+                />
+                <p id="swipe-help" className="sr-only">
+                  {copy.instructions}
+                </p>
+                {storageFailure && (
+                  <output className="storage-warning">{copy.storageFailure}</output>
+                )}
+              </div>
+            )}
+          </section>
+          <Navigation view={view} likedCount={liked.length} disabled={busy} onView={setView} />
+        </main>
       )}
+      {detail && <ProfileDetails persona={detail} onClose={() => setDetailsID(undefined)} />}
     </>
   );
 }

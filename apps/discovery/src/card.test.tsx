@@ -1,54 +1,88 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { Card } from "./card.tsx";
+import { endAnimation, resetCardTest, preferReducedMotion } from "../test/choose.ts";
 
-afterEach(cleanup);
+afterEach(resetCardTest);
 const profile = {
   id: "yerin",
   name: "예린",
   bio: "필름 사진을 찍어요.",
   imageUrl: "https://example.org/yerin.png",
 };
-const point = (x: number, pointerId = 1) => ({ clientX: x, pointerId, isPrimary: true, button: 0 });
+const point = (x: number, pointerId = 1, y = 0) => ({
+  clientX: x,
+  clientY: y,
+  pointerId,
+  isPrimary: true,
+  button: 0,
+});
 
-test("a profile supports pointer swipes, keyboard arrows and a native Like button", () => {
+test("a swipe animates before committing exactly one choice; card taps open details", () => {
   const select = vi.fn<(like: boolean) => void>();
-  render(<Card persona={profile} onChoose={select} />);
-  const surface = screen.getByRole("button", { name: "예린 프로필 카드 좋아요" });
-  expect(screen.getByRole("img").getAttribute("src")).toBe("https://example.org/yerin.png");
+  const open = vi.fn<(persona: typeof profile) => void>();
+  const busy = vi.fn<(value: boolean) => void>();
+  const focus = vi.spyOn(HTMLElement.prototype, "focus");
+  render(
+    <Card
+      persona={profile}
+      onChoose={select}
+      onOpen={open}
+      onBusyChange={busy}
+      next={{ ...profile, id: "next" }}
+    />,
+  );
+  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
+  const article = surface.closest("article")!;
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  expect(article.getAttribute("data-dragging")).toBe("false");
+  expect(article.getAttribute("aria-busy")).toBe("false");
+  expect(document.querySelector(".card-back img")?.getAttribute("src")).toBe(profile.imageUrl);
+  expect(document.querySelector(".card-back img")?.getAttribute("draggable")).toBe("false");
   expect(screen.getByRole("img").getAttribute("draggable")).toBe("false");
-  expect(screen.queryByText("LIKE")).toBeNull();
-  expect(screen.queryByText("PASS")).toBeNull();
+  fireEvent.click(surface, { detail: 1 });
+  fireEvent.click(screen.getByRole("button", { name: "예린 소개 전체 보기" }));
+  expect(open).toHaveBeenCalledTimes(2);
+  expect(open).toHaveBeenCalledWith(profile);
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerMove(surface, point(160));
+  expect(article.style.transform).toBe("translateX(60px) rotate(2.5deg)");
+  expect(article.getAttribute("data-dragging")).toBe("true");
   expect(screen.getByText("LIKE")).toBeTruthy();
-  expect(surface.closest("article")?.style.transform).toBe("translateX(60px) rotate(2.5deg)");
   fireEvent.pointerUp(surface, point(190));
-  expect(select).toHaveBeenLastCalledWith(true);
-  expect(surface.closest("article")?.style.transform).toBe("translateX(0px) rotate(0deg)");
+  expect(article.getAttribute("data-exit")).toBe("like");
+  expect(article.getAttribute("aria-busy")).toBe("true");
+  expect(screen.getByRole("button", { name: "좋아요" }).hasAttribute("disabled")).toBe(true);
+  expect(select).not.toHaveBeenCalled();
+  fireEvent.click(surface);
+  fireEvent.click(screen.getByRole("button", { name: "예린 소개 전체 보기" }));
+  expect(open).toHaveBeenCalledTimes(2);
+  fireEvent.keyDown(surface, { key: "ArrowLeft" });
+  endAnimation(article, "card-enter");
+  endAnimation(screen.getByRole("img"));
+  expect(select).not.toHaveBeenCalled();
+  endAnimation(article);
+  expect(select).toHaveBeenCalledExactlyOnceWith(true);
+  endAnimation(article);
+  expect(select).toHaveBeenCalledTimes(1);
+  expect(busy).toHaveBeenLastCalledWith(false);
+  expect(article.hasAttribute("data-exit")).toBe(false);
+  expect(article.getAttribute("aria-busy")).toBe("false");
+  expect(screen.getByRole("button", { name: "좋아요" }).hasAttribute("disabled")).toBe(false);
   fireEvent.pointerDown(surface, point(200));
   fireEvent.pointerMove(surface, point(150));
   expect(screen.getByText("PASS")).toBeTruthy();
   fireEvent.pointerUp(surface, point(110));
+  endAnimation(article);
   expect(select).toHaveBeenLastCalledWith(false);
-  const left = new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true });
-  fireEvent(surface, left);
-  expect(left.defaultPrevented).toBe(true);
-  expect(select).toHaveBeenLastCalledWith(false);
-  fireEvent.keyDown(surface, { key: "ArrowRight" });
-  expect(select).toHaveBeenLastCalledWith(true);
-  fireEvent.click(surface);
-  expect(select).toHaveBeenLastCalledWith(true);
-  expect(select).toHaveBeenCalledTimes(5);
 });
 
-test("small gestures, cancelled pointers, other fingers and secondary clicks do not choose", () => {
+test("small, vertical or cancelled drags do not become a choice or an accidental profile tap", () => {
   const select = vi.fn<(like: boolean) => void>();
-  render(<Card persona={profile} onChoose={select} />);
-  const surface = screen.getByRole("button");
+  const open = vi.fn<(persona: typeof profile) => void>();
+  render(<Card persona={profile} onChoose={select} onOpen={open} />);
+  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
   const capture = vi.fn<(id: number) => void>();
-  const errors = vi.fn<(event: ErrorEvent) => void>();
-  window.addEventListener("error", errors);
   surface.setPointerCapture = capture;
   fireEvent.pointerMove(surface, point(80));
   fireEvent.pointerUp(surface, point(80));
@@ -60,25 +94,89 @@ test("small gestures, cancelled pointers, other fingers and secondary clicks do 
   expect(capture).toHaveBeenCalledWith(1);
   fireEvent.pointerMove(surface, point(200, 2));
   fireEvent.pointerUp(surface, point(200, 2));
-  expect(select).not.toHaveBeenCalled();
-  expect(surface.closest("article")?.style.transform).toBe("translateX(0px) rotate(0deg)");
   fireEvent.pointerUp(surface, point(139));
-  expect(select).not.toHaveBeenCalled();
+  fireEvent.click(surface, { detail: 1 });
+  expect(open).not.toHaveBeenCalled();
+  expect(surface.closest("article")?.style.transform).toBe("translateX(0px) rotate(0deg)");
+  fireEvent.pointerDown(surface, point(0));
+  fireEvent.pointerUp(surface, point(100, 1, 120));
   fireEvent.pointerDown(surface, point(200));
-  fireEvent.pointerMove(surface, point(190));
-  expect(screen.queryByText("PASS")).toBeNull();
+  fireEvent.pointerUp(surface, point(100, 1, 120));
+  fireEvent.pointerDown(surface, point(100));
+  fireEvent.pointerMove(surface, point(110));
   fireEvent.pointerCancel(surface);
-  fireEvent.pointerUp(surface, point(100));
+  fireEvent.pointerUp(surface, point(250));
+  fireEvent.click(surface, { detail: 1 });
   fireEvent.keyDown(surface, { key: "Home" });
   expect(select).not.toHaveBeenCalled();
-  expect(surface.closest("article")?.style.transform).toBe("translateX(0px) rotate(0deg)");
-  expect(errors).not.toHaveBeenCalled();
-  window.removeEventListener("error", errors);
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.pointerDown(surface, point(100));
+  fireEvent.pointerUp(surface, point(106));
+  fireEvent.click(surface, { detail: 1 });
+  expect(open).toHaveBeenCalledExactlyOnceWith(profile);
+  fireEvent.pointerDown(surface, point(100));
+  fireEvent.pointerMove(surface, point(100, 1, 7));
+  fireEvent.pointerMove(surface, point(100));
+  fireEvent.pointerUp(surface, point(100));
+  fireEvent.click(surface, { detail: 1 });
+  expect(open).toHaveBeenCalledTimes(1);
 });
 
-test("the Like and Pass stamps appear only beyond the visual drag boundary", () => {
-  render(<Card persona={profile} onChoose={vi.fn<(like: boolean) => void>()} />);
-  const surface = screen.getByRole("button");
+test("buttons and keyboard share exit animations, a fallback finishes interrupted animation, and unmount cancels it", () => {
+  vi.useFakeTimers();
+  const select = vi.fn<(like: boolean) => void>();
+  const view = render(
+    <Card
+      persona={profile}
+      onChoose={select}
+      onOpen={vi.fn<(persona: typeof profile) => void>()}
+    />,
+  );
+  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
+  const event = new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true });
+  fireEvent(surface, event);
+  expect(event.defaultPrevented).toBe(true);
+  expect(surface.closest("article")?.getAttribute("data-exit")).toBe("pass");
+  act(() => {
+    vi.advanceTimersByTime(399);
+  });
+  expect(select).not.toHaveBeenCalled();
+  act(() => {
+    vi.advanceTimersByTime(1);
+  });
+  expect(select).toHaveBeenCalledExactlyOnceWith(false);
+  fireEvent.keyDown(surface, { key: "ArrowRight" });
+  endAnimation(surface.closest("article")!);
+  expect(select).toHaveBeenLastCalledWith(true);
+  fireEvent.click(screen.getByRole("button", { name: "넘기기" }));
+  view.unmount();
+  act(() => {
+    vi.runAllTimers();
+  });
+  expect(select).toHaveBeenCalledTimes(2);
+});
+
+test("reduced motion commits immediately without an exit timer", () => {
+  preferReducedMotion();
+  const select = vi.fn<(like: boolean) => void>();
+  render(
+    <Card
+      persona={profile}
+      onChoose={select}
+      onOpen={vi.fn<(persona: typeof profile) => void>()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "좋아요" }));
+  expect(select).toHaveBeenCalledExactlyOnceWith(true);
+  expect(vi.getTimerCount()).toBe(0);
+  expect(document.querySelector("article")?.hasAttribute("data-exit")).toBe(false);
+});
+
+test("drag stamps use strict boundaries and image style changes retry a failed portrait", () => {
+  const select = vi.fn<(like: boolean) => void>();
+  const open = vi.fn<(persona: typeof profile) => void>();
+  const view = render(<Card persona={profile} onChoose={select} onOpen={open} />);
+  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerMove(surface, point(124));
   expect(screen.queryByText("LIKE")).toBeNull();
@@ -88,16 +186,39 @@ test("the Like and Pass stamps appear only beyond the visual drag boundary", () 
   expect(screen.queryByText("PASS")).toBeNull();
   fireEvent.pointerMove(surface, point(75));
   expect(screen.getByText("PASS")).toBeTruthy();
-});
-
-test("an unavailable photograph keeps the persona and Like action usable", () => {
-  const select = vi.fn<(like: boolean) => void>();
-  render(<Card persona={profile} onChoose={select} />);
   fireEvent.error(screen.getByRole("img"));
   expect(screen.queryByRole("img")).toBeNull();
   expect(screen.getByText("예")).toBeTruthy();
   expect(screen.getByText("사진을 불러오지 못했어요.")).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "예린" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button"));
-  expect(select).toHaveBeenCalledWith(true);
+  view.rerender(
+    <Card
+      persona={{ ...profile, imageUrl: "https://example.org/anime.png" }}
+      onChoose={select}
+      onOpen={open}
+    />,
+  );
+  expect(screen.getByRole("img").getAttribute("src")).toBe("https://example.org/anime.png");
+  view.rerender(<Card persona={profile} onChoose={select} onOpen={open} />);
+  expect(screen.getByRole("img").getAttribute("src")).toBe(profile.imageUrl);
+});
+
+test("a newly mounted card preserves focus on existing navigation", () => {
+  const view = render(
+    <div>
+      <button type="button">설정</button>
+    </div>,
+  );
+  const navigation = screen.getByRole("button", { name: "설정" });
+  navigation.focus();
+  view.rerender(
+    <div>
+      <button type="button">설정</button>
+      <Card
+        persona={profile}
+        onChoose={vi.fn<(like: boolean) => void>()}
+        onOpen={vi.fn<(persona: typeof profile) => void>()}
+      />
+    </div>,
+  );
+  expect(document.activeElement).toBe(navigation);
 });

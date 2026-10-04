@@ -4,6 +4,8 @@ import { discoveryNotice } from "@ren-ai/onboarding";
 import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { readImageStyle, saveImageStyle } from "./image-style.ts";
+import { choose } from "../test/choose.ts";
+import { fakeVerification } from "../test/turnstile.ts";
 
 afterEach(() => {
   cleanup();
@@ -80,14 +82,7 @@ test("the initial comparison uses a paired persona even when a legacy profile ap
 
 test("style changes and reloads preserve Like and Pass, contact input and candidate IDs", async () => {
   const join = vi.fn<DiscoveryClient["join"]>().mockResolvedValue({ status: "waiting" });
-  let verify: (token: string) => void = vi.fn<(token: string) => void>();
-  window.turnstile = {
-    render: (_, options) => {
-      verify = options.callback;
-      return "widget";
-    },
-    remove: () => {},
-  };
+  const verify = fakeVerification();
   localStorage.setItem("ren-ai.discovery.image-style", "anime");
   const first = render(<App client={{ ...client, join }} />);
   await screen.findByRole("heading", { name: "하린" });
@@ -96,8 +91,8 @@ test("style changes and reloads preserve Like and Pass, contact input and candid
       "이 브라우저에 이미지 스타일을 보관하지 못했어요. 지금 선택은 계속 사용할 수 있어요.",
     ),
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "좋아요" }));
-  fireEvent.click(screen.getByRole("button", { name: "넘기기" }));
+  choose(true);
+  choose(false);
   expect(screen.getByRole("heading", { name: "미라" })).toBeTruthy();
   const saved = localStorage.getItem("ren-ai.discovery.choices");
   fireEvent.click(screen.getByRole("button", { name: "실사" }));

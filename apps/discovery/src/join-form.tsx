@@ -19,11 +19,13 @@ export function JoinForm({
   client,
   onBack,
   onSuccess,
+  onBusyChange,
 }: {
   liked: readonly PublicPersona[];
   client: DiscoveryClient;
   onBack: () => void;
   onSuccess: (status: "waiting" | "active") => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [contact, setContact] = useState({
     input: "",
@@ -40,6 +42,7 @@ export function JoinForm({
     if (submitting.current || !handle || !contact.consent || !token || !liked.length) return;
     submitting.current = true;
     setPending(true);
+    onBusyChange?.(true);
     setFailure(false);
     try {
       const answer = await client.join({
@@ -55,6 +58,7 @@ export function JoinForm({
     } finally {
       submitting.current = false;
       setPending(false);
+      onBusyChange?.(false);
       setToken("");
     }
   }
