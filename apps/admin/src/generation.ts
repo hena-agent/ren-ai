@@ -145,7 +145,8 @@ export function createProfileGenerator({
     style?: PortraitStyle,
   ) =>
     operation("generation.api", { model, ...(style && { style }) }, async () => {
-      protect(key, prompt, input);
+      const secrets = [key, prompt, input];
+      protect(...secrets);
       const fields = { model };
       if (!key.trim())
         throw new GenerationError("GEMINI_API_KEY is required", { ...fields, code: "missing_key" });
@@ -169,9 +170,9 @@ export function createProfileGenerator({
           },
         );
       } catch (cause) {
-        throw networkError(cause, model, [key, prompt, input]);
+        throw networkError(cause, model, secrets);
       }
-      return readReply(response, model, [key, prompt, input]);
+      return readReply(response, model, secrets);
     });
   return {
     character: async (seed) => {
@@ -203,7 +204,9 @@ export function createProfileGenerator({
     portrait: async (character, style, instructions = "") => {
       const { parts, fields } = await request(
         imageModel,
-        policy.portraits[style],
+        style === "photo"
+          ? `${policy.portraits.photo}\n\n${policy.photoSceneDirection}`
+          : policy.portraits.anime,
         `${character.name}\n${character.description}${instructions ? `\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}` : ""}`,
         "image",
         style,

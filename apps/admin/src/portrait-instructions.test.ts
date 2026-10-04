@@ -314,11 +314,12 @@ test("Gemini receives extra image instructions after the unchanged character and
   for (const style of ["anime", "photo"] satisfies ("anime" | "photo")[]) {
     await model.portrait(character, style, instructions);
     const body = await new Request(...fetcher.mock.calls.at(-1)!).text();
-    const expected = `${policy.portraits[style]}\n\n${character.name}\n${character.description}\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}`;
+    const expected = `${policy.portraits[style]}${style === "photo" ? `\n\n${policy.photoSceneDirection}` : ""}\n\n${character.name}\n${character.description}\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}`;
     expect(body).toContain(JSON.stringify(expected));
   }
   await model.portrait(character, "photo");
   const plain = await new Request(...fetcher.mock.calls.at(-1)!).text();
+  expect(plain).toContain(policy.photoSceneDirection);
   expect(plain).not.toContain("ADDITIONAL PORTRAIT INSTRUCTIONS");
   expect(plain).not.toContain("private direction");
 });

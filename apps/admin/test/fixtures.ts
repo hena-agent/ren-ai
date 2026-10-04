@@ -34,6 +34,7 @@ export const generator: ProfileGenerator = {
   introduction: async () => introduction,
   portrait: async () => ({ bytes: png, mimeType: "image/png" }),
 };
+export const portraitImage = { bytes: png, mimeType: "image/png" as const };
 export const legacy = {
   id: "legacy",
   name: "미라",

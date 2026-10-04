@@ -14,7 +14,7 @@ import {
 } from "./logging.ts";
 import type { LogEntry } from "./logging.ts";
 import { createProfileGenerator } from "./generation.ts";
-import { introduction, png, tokenOf } from "../test/fixtures.ts";
+import { introduction, png, tokenOf, portraitImage, portraitReply } from "../test/fixtures.ts";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -99,22 +99,27 @@ test("successful generation, saving and reads emit timed lifecycle events with s
   );
 });
 
-test("parallel portrait failures remain visible after the response and concurrent requests keep separate IDs", async () => {
+test("parallel portrait failures stay correlated after the response and concurrent requests keep separate IDs", async () => {
   let rejectPhoto = vi.fn<(error: Error) => void>();
   const photo = new Promise<typeof png>((_resolve, reject) => {
     rejectPhoto = vi.fn<(error: Error) => void>(reject);
   });
-  const { admin, logs } = await fixture({
-    ...generator,
-    portrait: async (_character, style) => {
+  const portrait = vi
+    .fn<typeof generator.portrait>()
+    .mockImplementation(async (_character, style) => {
       if (style === "anime") throw new Error("anime offline");
       await photo;
-      return { bytes: png, mimeType: "image/png" };
-    },
+      return portraitImage;
+    });
+  const { admin, logs } = await fixture({
+    ...generator,
+    portrait,
   });
   const draft = await newToken(admin);
-  const failed = await admin(request("/personas", { ...character, draft, intent: "generate" }));
+  const pending = admin(request("/personas", { ...character, draft, intent: "generate" }));
+  await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(2));
   const other = await admin(request("/"));
+  const failed = await pending;
   expect(other.headers.get("x-request-id")).not.toBe(failed.headers.get("x-request-id"));
   rejectPhoto(new Error("photo offline"));
   await photo.catch(() => {});
@@ -135,23 +140,27 @@ test("Gemini HTTP failures identify the model and style while removing echoed se
   const provider = createProfileGenerator({
     key,
     imageModel: "image-model",
-    fetcher: async () =>
-      Response.json(
-        {
-          error: {
-            code: 429,
-            status: "RESOURCE_EXHAUSTED",
-            message: `Quota exceeded ${key} ${character.name}\n${character.description}`,
+    fetcher: vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce(portraitReply)
+      .mockImplementation(async () =>
+        Response.json(
+          {
+            error: {
+              code: 429,
+              status: "RESOURCE_EXHAUSTED",
+              message: `Quota exceeded ${key} ${character.name}\n${character.description}`,
+            },
           },
-        },
-        { status: 429 },
+          { status: 429 },
+        ),
       ),
   });
   const { admin, logs } = await fixture({ ...provider, introduction: generator.introduction });
   const draft = await newToken(admin);
   const response = await admin(request("/personas", { ...character, draft, intent: "generate" }));
   const failures = logs.filter((entry) => entry.event === "operation.failed");
-  expect(failures).toHaveLength(2);
+  expect(failures).toHaveLength(1);
   for (const entry of failures)
     expect(entry).toMatchObject({
       stage: "generation.api",
@@ -162,7 +171,7 @@ test("Gemini HTTP failures identify the model and style while removing echoed se
       error: { name: "GenerationError" },
     });
   for (const entry of failures) expect(entry.error?.message).toContain("Quota exceeded");
-  expect(failures.map(({ style }) => style)).toEqual(["anime", "photo"]);
+  expect(failures.map(({ style }) => style)).toEqual(["photo"]);
   const output = JSON.stringify(logs);
   for (const secret of [
     key,

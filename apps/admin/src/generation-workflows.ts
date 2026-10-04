@@ -44,5 +44,10 @@ export async function profileDraft(
   };
   const [anime, photo] = await Promise.all([portrait("anime"), portrait("photo")]);
   // Legacy clients still read imageUrl; current clients select from the complete pair.
-  return decodePersona({ ...persona, bio, imageUrl: photo, portraits: { anime, photo } });
+  return decodePersona({
+    ...persona,
+    bio,
+    imageUrl: photo,
+    portraits: { anime, photo },
+  });
 }
