@@ -160,6 +160,8 @@ export const restoreSessions = (
       const target = yield* client
         .rpc(sessionFolders)
         .write({ folderID: sessionID, snapshot: folder }, { location: { directory } });
+      // Recreated folders may still have an empty agent registry cached after deletion.
+      yield* client.debug.location.evict({ location: { directory: target } });
       yield* client.session.import({
         info: entry.info,
         messages: restoredHistory(entry),

@@ -98,6 +98,19 @@ test("persona sessions are operated through the public OpenCode API", async () =
               .get(session.id)
               .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.succeed("missing"))),
           ).toBe("missing");
+          yield* Effect.promise(async () => {
+            await expect
+              .poll(
+                async () =>
+                  (
+                    await Effect.runPromise(
+                      remote.client.agent.list({ location: session.location }),
+                    )
+                  ).data.some((agent) => agent.id === "persona1"),
+                { timeout: 5000 },
+              )
+              .toBe(false);
+          });
           yield* restoreSessions(remote.client, archive, personaDirectory);
           expect((yield* remote.sessions.get(session.id)).title).toBe("operator title");
           expect(
