@@ -220,7 +220,7 @@ try {
     200,
     60,
     30.5,
-    59,
+    55,
     0,
     -1,
     "120",
@@ -260,7 +260,7 @@ try {
     const history = request(`api/session/${session}/message`, undefined);
     assert(!history.includes("Cannot convert a symbol to a number"), history);
     if (index > 6) assert(history.includes(`isolated ${minutes} completed`), history);
-    else if (typeof minutes === "number" && minutes > 0)
+    else if (typeof minutes === "number" && minutes > 0 && minutes <= 55)
       assert(history.includes(`isolated wait completed: ${minutes}`), history);
     else assert(history.includes('"status":"error"'), history);
   }
@@ -268,7 +268,7 @@ try {
     Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.Number)))(
       request("waits", undefined, 4710),
     ),
-    [200, 60, 30.5, 59],
+    [30.5, 55],
   );
   request(`api/session/${lastSession}/compact`, {});
   request(`api/experimental/session/${lastSession}/wait`, {});

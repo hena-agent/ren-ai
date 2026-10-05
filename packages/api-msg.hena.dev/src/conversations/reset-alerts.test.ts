@@ -24,7 +24,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* llm.serve((request) =>
             !failing
               ? JSON.stringify(request).includes("<conversation-started")
-                ? TestLLM.tool("fresh-wait", "wait", { minutes: 720 })
+                ? TestLLM.tool("fresh-wait", "wait", { minutes: 55 })
                 : TestLLM.text("quiet", "answer")
               : kind.includes("provider")
                 ? providerUnavailable("unavailable")

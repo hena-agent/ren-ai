@@ -56,7 +56,7 @@ async function completion(request) {
   )(text);
   const match = /compiled-case:([0-9]+)/.exec(text);
   const index = Number(match?.[1] ?? -1);
-  const inputs = [200, 60, 30.5, 59, 0, -1, "120"];
+  const inputs = [200, 60, 30.5, 55, 0, -1, "120"];
   const tool = ["send", "read", "react"][index - inputs.length] ?? "wait";
   const input =
     index < inputs.length

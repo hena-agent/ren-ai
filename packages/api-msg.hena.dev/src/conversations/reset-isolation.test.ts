@@ -27,7 +27,7 @@ test.each([false, true])(
           yield* llm.serve(() => {
             if (!pause) return TestLLM.text("done", "done");
             pause = false;
-            return TestLLM.tool("long-wait", "wait", { minutes: 720 });
+            return TestLLM.tool("long-wait", "wait", { minutes: 55 });
           });
           const host = yield* startTestHost(root, personaDirectory, llm, {
             ...fake.messages,

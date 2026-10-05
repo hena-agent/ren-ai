@@ -35,7 +35,7 @@ test.each([false, true])(
                 name: "send",
                 input: { text: "one-time bubble" },
               },
-              { type: "tool-call", id: "blocked-wait", name: "wait", input: { minutes: 60 } },
+              { type: "tool-call", id: "blocked-wait", name: "wait", input: { minutes: 55 } },
             ),
           );
           const source = yield* startTestHost(root, personaDirectory, llm, messages.messages);
@@ -104,7 +104,7 @@ test.each([false, true])(
             {
               callID: "blocked-wait",
               tool: "wait",
-              state: { status: "running", input: { minutes: 60 } },
+              state: { status: "running", input: { minutes: 55 } },
             },
           ]);
           yield* remote.sessions.interrupt(session.id);

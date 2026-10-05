@@ -42,6 +42,16 @@ test("messaging tool identity requires its complete registered description and i
   expect(isMessagingTool("read", { description: read.description, input })).toBe(true);
 });
 
+test("wait accepts only positive durations up to 55 minutes at the tool boundary", async () => {
+  const schema = messagingToolDefinitions.wait.input["~standard"];
+  for (const minutes of [0.001, 55]) {
+    expect(await schema.validate({ minutes })).toEqual({ value: { minutes } });
+  }
+  for (const minutes of [0, -1, 55.001, 60, 720]) {
+    expect((await schema.validate({ minutes })).issues).toBeDefined();
+  }
+});
+
 test("snapshot reads refresh runtime metadata and reject malformed files at the boundary", async () => {
   const { root, personaDirectory } = await messagingFixture("snapshot-metadata-");
   const folder = join(personaDirectory, "sessions", "ses_snapshot");

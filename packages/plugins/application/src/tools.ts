@@ -14,8 +14,10 @@ export const messagingToolDefinitions = {
     Schema.Struct({ text: Schema.String }),
   ),
   wait: definition(
-    "Pause for up to 12 hours, or until something new arrives",
-    Schema.Struct({ minutes: Schema.Number.check(Schema.isGreaterThan(0)) }),
+    "Pause for up to 55 minutes, or until something new arrives. Call wait again if you still need to sleep or remain busy.",
+    Schema.Struct({
+      minutes: Schema.Number.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(55)),
+    }),
   ),
   read: definition(
     "Mark this Conversation's messages read now",

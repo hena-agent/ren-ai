@@ -100,7 +100,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
                         )
                         .map((tool) => tool.name);
                       expect(tools.find((tool) => tool.name === "wait")?.description).not.toBe(
-                        "Pause for up to 12 hours, or until something new arrives",
+                        "Pause for up to 55 minutes, or until something new arrives. Call wait again if you still need to sleep or remain busy.",
                       );
                     }),
                 }),

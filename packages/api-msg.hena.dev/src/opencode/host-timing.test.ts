@@ -67,7 +67,7 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
           const firstRequest = (yield* llm.requests())[0]!;
           expect(JSON.stringify(firstRequest.tools)).toContain("minutes");
           expect(JSON.stringify(firstRequest.tools)).toContain(
-            "Pause for up to 12 hours, or until something new arrives",
+            "Pause for up to 55 minutes, or until something new arrives",
           );
 
           step = 0;
