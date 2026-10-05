@@ -272,7 +272,9 @@ test(
       yield* expectProfile(host, "수아 수정");
       const child = yield* host.nativeChild(retained.parent);
       yield* expectPrompt(host, child.id, updated.prompt);
-      expect(connections).toBeGreaterThanOrEqual(2);
+      yield* Effect.promise(async () => {
+        await expect.poll(() => connections, { timeout: 5000 }).toBeGreaterThanOrEqual(2);
+      });
       expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
     }),
   ),
