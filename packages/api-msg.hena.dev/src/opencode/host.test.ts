@@ -469,13 +469,17 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           ).toBe("sent");
           expect(imessage.bubbles[2]?.text).toContain("그만 받고 싶으면");
           const joined = yield* host.conversations.byHandle("+821033333333");
+          yield* Effect.promise(async () => {
+            await expect
+              .poll(() => imessage.bubbles[3], { timeout: 5000 })
+              .toEqual({
+                handle: joined!.handle,
+                text: "bubble 1",
+              });
+          });
           yield* host.sessions
             .wait(Session.ID.make(joined!.sessionID))
             .pipe(Effect.timeout("20 seconds"));
-          expect(imessage.bubbles[3]).toEqual({
-            handle: joined!.handle,
-            text: "bubble 1",
-          });
           yield* Effect.promise(host.disposeOnboarding);
           expect(yield* host.operator.remove(first.handle)).toBe("removed");
           expect(yield* host.conversations.byHandle(first.handle)).toBeUndefined();

@@ -168,7 +168,10 @@ const CHECKS: readonly Check[] = [
 const run = (command: readonly string[]): { readonly code: number; readonly output: string } => {
   const [binary, ...args] = command;
   const result = spawnSync(binary ?? "", args, { encoding: "utf8", shell: false });
-  return { code: result.status ?? 1, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+  return {
+    code: result.status ?? 1,
+    output: `${result.stdout ?? ""}${result.stderr ?? ""}${result.error?.message ?? ""}`,
+  };
 };
 
 const plant = (files: Readonly<Record<string, string>>): void => {
@@ -205,6 +208,8 @@ const verify = (check: Check): readonly string[] => {
         problems.push(`${check.gate}: no coverage threshold failure named ${path}`);
       }
     }
+    if (problems.length > 0)
+      process.stderr.write(`${check.gate} command output:\n${rejected.output}\n`);
   } finally {
     uproot(check.files);
   }
