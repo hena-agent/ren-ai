@@ -106,8 +106,13 @@ test("persona sessions are operated through the public OpenCode API", async () =
           const restoredPending = yield* remote.sessions.inbox(session.id);
           expect(restoredPending.map((item) => item.id)).toEqual([pending[0]!.id]);
           yield* remote.retry(session.id);
+          yield* Effect.promise(async () => {
+            await expect
+              .poll(() => Effect.runPromise(remote.sessions.inbox(session.id)), { timeout: 5000 })
+              .toEqual([]);
+          });
           yield* remote.sessions.wait(session.id);
-          expect(yield* remote.sessions.inbox(session.id)).toEqual([]);
+          expect((yield* remote.sessions.get(session.id)).outcome).toBe("succeeded");
         }),
       ),
     );
