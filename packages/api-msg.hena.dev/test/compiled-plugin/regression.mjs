@@ -216,11 +216,11 @@ try {
       `${loaded}\n${request(`api/config?${locationQuery}`, undefined)}`,
     );
   let lastSession = "";
-  for (const [index, minutes] of [
-    200,
-    60,
-    30.5,
-    55,
+  for (const [index, seconds] of [
+    12000,
+    3600,
+    5.5,
+    3300,
     0,
     -1,
     "120",
@@ -259,16 +259,16 @@ try {
     );
     const history = request(`api/session/${session}/message`, undefined);
     assert(!history.includes("Cannot convert a symbol to a number"), history);
-    if (index > 6) assert(history.includes(`isolated ${minutes} completed`), history);
-    else if (typeof minutes === "number" && minutes > 0 && minutes <= 55)
-      assert(history.includes(`isolated wait completed: ${minutes}`), history);
+    if (index > 6) assert(history.includes(`isolated ${seconds} completed`), history);
+    else if (typeof seconds === "number" && seconds > 0 && seconds <= 3300)
+      assert(history.includes(`isolated wait completed: ${seconds}`), history);
     else assert(history.includes('"status":"error"'), history);
   }
   assert.deepEqual(
     Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.Number)))(
       request("waits", undefined, 4710),
     ),
-    [30.5, 55],
+    [5.5, 3300],
   );
   request(`api/session/${lastSession}/compact`, {});
   request(`api/experimental/session/${lastSession}/wait`, {});

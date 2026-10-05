@@ -33,7 +33,7 @@ test(
           token: "secret",
         });
         const waiting = yield* client
-          .wait({ sessionID: conversation.sessionID, minutes: 60 })
+          .wait({ sessionID: conversation.sessionID, seconds: 3600 })
           .pipe(Stream.runDrain, Effect.forkScoped);
         yield* Deferred.await(requested);
         expect(waiting.pollUnsafe()).toBeUndefined();

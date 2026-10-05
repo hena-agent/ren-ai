@@ -36,7 +36,7 @@ export const toolsPlugin = (options: PersonaPluginOptions) =>
               ...messagingToolDefinitions.wait,
               output: Schema.String,
               options: { codemode: false },
-              execute: ({ minutes }, context) => toolResult(wait(context.sessionID, minutes)),
+              execute: ({ seconds }, context) => toolResult(wait(context.sessionID, seconds)),
             });
           });
         }

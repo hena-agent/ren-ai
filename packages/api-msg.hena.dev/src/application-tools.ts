@@ -50,8 +50,8 @@ export const prepareMessaging = (
         ),
       send: (sessionID, text, callID) =>
         inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
-      wait: (sessionID, minutes) =>
-        inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, minutes)),
+      wait: (sessionID, seconds) =>
+        inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, seconds)),
       onContext: (sessionID) =>
         Effect.gen(function* () {
           const seen = yield* sql<{

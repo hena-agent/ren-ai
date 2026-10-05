@@ -39,7 +39,7 @@ test.each([false, true])(
           yield* llm.serve((request) => {
             if (request.tools.some((tool) => tool.name === "wait") && !attempted) {
               attempted = true;
-              return TestLLM.tool("heartbeat-only", "wait", { minutes: 1 });
+              return TestLLM.tool("heartbeat-only", "wait", { seconds: 60 });
             }
             return TestLLM.text("observed result", "answer");
           });

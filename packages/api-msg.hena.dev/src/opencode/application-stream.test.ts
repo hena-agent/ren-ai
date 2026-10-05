@@ -10,7 +10,7 @@ test("wait flushes readiness, emits empty heartbeats every twenty seconds, and c
       Effect.gen(function* () {
         const fixture = yield* applicationRpcFixture;
         const response = yield* Effect.promise(() =>
-          fixture.request("wait", { sessionID: "session", minutes: 1 }),
+          fixture.request("wait", { sessionID: "session", seconds: 60 }),
         );
         const reader: ReadableStreamDefaultReader<Uint8Array> = response.body!.getReader();
         yield* Effect.addFinalizer(() => Effect.promise(() => reader.cancel()));
@@ -38,7 +38,7 @@ test("wait flushes readiness, emits empty heartbeats every twenty seconds, and c
           if (chunk.done) break;
           ending += new TextDecoder().decode(chunk.value);
         }
-        expect(ending).toContain('"paused 1m"');
+        expect(ending).toContain('"paused 60s"');
         expect(ending).toContain('"_tag":"Success"');
       }),
     );

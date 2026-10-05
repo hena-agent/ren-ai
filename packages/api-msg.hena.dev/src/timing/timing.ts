@@ -18,16 +18,16 @@ export const timing = () => {
       const result = yield* Effect.race(action, Effect.as(Deferred.await(signal), "new" as const));
       return (yield* Deferred.isDone(signal)) ? "new" : result;
     });
-  const wait = (id: string, minutes: number) =>
+  const wait = (id: string, seconds: number) =>
     Effect.gen(function* () {
       const start = yield* Clock.currentTimeMillis;
       // Finish before OpenCode's 60-minute inactivity eviction so the persona can wait again.
-      const duration = Math.min(minutes, 55);
-      const outcome = yield* during(id, Effect.sleep(duration * 60_000));
-      const seconds = Math.floor(((yield* Clock.currentTimeMillis) - start) / 1000);
+      const duration = Math.min(seconds, 3300);
+      const outcome = yield* during(id, Effect.sleep(duration * 1000));
+      const elapsed = Math.floor(((yield* Clock.currentTimeMillis) - start) / 1000);
       return outcome === "new"
-        ? `paused ${seconds}s, cut short by something new`
-        : `paused ${duration}m`;
+        ? `paused ${elapsed}s, cut short by something new`
+        : `paused ${duration}s`;
     });
   return { onNew, during, wait };
 };

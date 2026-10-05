@@ -100,7 +100,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
                         )
                         .map((tool) => tool.name);
                       expect(tools.find((tool) => tool.name === "wait")?.description).not.toBe(
-                        "Pause for up to 55 minutes, or until something new arrives. Call wait again if you still need to sleep or remain busy.",
+                        "Pause for the requested seconds (up to 3300 seconds / 55 minutes), or until something new arrives. Call wait again if you still need to sleep or remain busy.",
                       );
                     }),
                 }),
@@ -211,7 +211,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               return TestLLM.tool(`call-${step}`, "send", {
                 text: `bubble ${step}`,
               });
-            if (step === 3) return TestLLM.tool("pause", "wait", { minutes: 0.001 });
+            if (step === 3) return TestLLM.tool("pause", "wait", { seconds: 0.06 });
             return TestLLM.text("done", "answer");
           });
           const host = yield* startMessagingHost(

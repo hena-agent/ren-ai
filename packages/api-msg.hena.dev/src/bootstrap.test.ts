@@ -89,7 +89,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
           ).toBe("Error: Application is in migration mode");
           expect(
             yield* client
-              .wait({ sessionID: "existing", minutes: 1 })
+              .wait({ sessionID: "existing", seconds: 60 })
               .pipe(Stream.runDrain, Effect.flip),
           ).toBe("Error: Application is in migration mode");
           expect(external).toEqual([]);

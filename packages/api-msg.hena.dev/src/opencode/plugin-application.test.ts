@@ -42,13 +42,16 @@ test("messaging tool identity requires its complete registered description and i
   expect(isMessagingTool("read", { description: read.description, input })).toBe(true);
 });
 
-test("wait accepts only positive durations up to 55 minutes at the tool boundary", async () => {
+test("wait accepts only positive seconds up to 3300 at the tool boundary", async () => {
   const schema = messagingToolDefinitions.wait.input["~standard"];
-  for (const minutes of [0.001, 55]) {
-    expect(await schema.validate({ minutes })).toEqual({ value: { minutes } });
+  for (const seconds of [0.001, 5, 3300]) {
+    expect(await schema.validate({ seconds })).toEqual({ value: { seconds } });
   }
-  for (const minutes of [0, -1, 55.001, 60, 720]) {
-    expect((await schema.validate({ minutes })).issues).toBeDefined();
+  for (const seconds of [0, -1, 3300.001, 3600, NaN, Infinity, "5"]) {
+    expect((await schema.validate({ seconds })).issues).toBeDefined();
+  }
+  for (const input of [{}, { minutes: 1 }]) {
+    expect((await schema.validate(input)).issues).toBeDefined();
   }
 });
 

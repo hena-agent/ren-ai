@@ -30,7 +30,7 @@ export const applicationApi = RpcGroup.make(
     error: Schema.String,
   }),
   Rpc.make("wait", {
-    payload: { ...session, minutes: Schema.Number },
+    payload: { ...session, seconds: Schema.Number },
     success: Schema.String,
     stream: true,
     error: Schema.String,

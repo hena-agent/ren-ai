@@ -58,8 +58,8 @@ const remoteOptions = (config: RemoteConfig) =>
       personas: new Map(),
       send: (sessionID, text, callID) =>
         api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
-      wait: (sessionID, minutes) =>
-        api.wait({ sessionID, minutes }).pipe(
+      wait: (sessionID, seconds) =>
+        api.wait({ sessionID, seconds }).pipe(
           Stream.filter((output) => output !== ""),
           Stream.runLast,
           Effect.flatMap((result) =>

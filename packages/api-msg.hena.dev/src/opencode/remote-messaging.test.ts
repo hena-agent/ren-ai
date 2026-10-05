@@ -41,7 +41,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           step++;
           if (step === 1) return TestLLM.tool("mark", "read", {});
           if (step === 2) return TestLLM.tool("reaction", "react", { tapback: "love" });
-          if (step === 3) return TestLLM.tool("pause", "wait", { minutes: 1 });
+          if (step === 3) return TestLLM.tool("pause", "wait", { seconds: 60 });
           if (step === 4) return TestLLM.tool("reply", "send", { text: "hello from Docker" });
           return TestLLM.text("done", "answer");
         });

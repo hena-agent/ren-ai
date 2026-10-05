@@ -14,9 +14,9 @@ export const messagingToolDefinitions = {
     Schema.Struct({ text: Schema.String }),
   ),
   wait: definition(
-    "Pause for up to 55 minutes, or until something new arrives. Call wait again if you still need to sleep or remain busy.",
+    "Pause for the requested seconds (up to 3300 seconds / 55 minutes), or until something new arrives. Call wait again if you still need to sleep or remain busy.",
     Schema.Struct({
-      minutes: Schema.Number.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(55)),
+      seconds: Schema.Number.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(3300)),
     }),
   ),
   read: definition(

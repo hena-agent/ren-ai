@@ -17,8 +17,8 @@ export const applicationGateway = (
     catalog: () => Effect.succeed([...tools.personas.values()]),
     send: ({ sessionID, text, callID }) =>
       tools.send(sessionID, text, callID).pipe(action, Effect.mapError(String)),
-    wait: ({ sessionID, minutes }) =>
-      Stream.fromEffect(action(tools.wait(sessionID, minutes))).pipe(
+    wait: ({ sessionID, seconds }) =>
+      Stream.fromEffect(action(tools.wait(sessionID, seconds))).pipe(
         Stream.merge(Stream.fromEffectRepeat(Effect.sleep("20 seconds").pipe(Effect.as(""))), {
           haltStrategy: "left",
         }),

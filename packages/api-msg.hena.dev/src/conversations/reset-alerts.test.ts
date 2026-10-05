@@ -25,7 +25,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
             !failing &&
             !(kind.startsWith("other-") && JSON.stringify(request).includes("other failure"))
               ? JSON.stringify(request).includes("<conversation-started")
-                ? TestLLM.tool("fresh-wait", "wait", { minutes: 55 })
+                ? TestLLM.tool("fresh-wait", "wait", { seconds: 3300 })
                 : TestLLM.text("quiet", "answer")
               : kind.includes("provider")
                 ? providerUnavailable("unavailable")

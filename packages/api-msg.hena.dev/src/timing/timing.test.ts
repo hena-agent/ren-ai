@@ -8,24 +8,24 @@ test("wait caps each call at 55 minutes, can repeat, and wakes only for its Conv
     Effect.scoped(
       Effect.gen(function* () {
         const pace = timing();
-        const full = yield* Effect.forkScoped(pace.wait("first", 30));
-        yield* TestClock.adjust("29 minutes");
+        const full = yield* Effect.forkScoped(pace.wait("first", 5));
+        yield* TestClock.adjust("4 seconds");
         expect(full.pollUnsafe()).toBeUndefined();
-        yield* TestClock.adjust("1 minute");
-        expect(yield* Fiber.join(full)).toBe("paused 30m");
+        yield* TestClock.adjust("1 second");
+        expect(yield* Fiber.join(full)).toBe("paused 5s");
 
-        const capped = yield* Effect.forkScoped(pace.wait("first", 1000));
+        const capped = yield* Effect.forkScoped(pace.wait("first", 60_000));
         yield* TestClock.adjust("54 minutes");
         expect(capped.pollUnsafe()).toBeUndefined();
         yield* TestClock.adjust("1 minute");
         expect(capped.pollUnsafe()).toBeDefined();
-        expect(yield* Fiber.join(capped)).toBe("paused 55m");
+        expect(yield* Fiber.join(capped)).toBe("paused 3300s");
 
-        const repeated = yield* Effect.forkScoped(pace.wait("first", 55));
+        const repeated = yield* Effect.forkScoped(pace.wait("first", 3300));
         yield* TestClock.adjust("54 minutes");
         expect(repeated.pollUnsafe()).toBeUndefined();
         yield* TestClock.adjust("1 minute");
-        expect(yield* Fiber.join(repeated)).toBe("paused 55m");
+        expect(yield* Fiber.join(repeated)).toBe("paused 3300s");
 
         const early = yield* Effect.forkScoped(pace.wait("first", 60));
         yield* TestClock.adjust("20 seconds");

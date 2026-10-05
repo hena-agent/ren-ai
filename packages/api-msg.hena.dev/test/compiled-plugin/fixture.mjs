@@ -33,7 +33,7 @@ const rpcRequest = Schema.fromJsonString(
       "react",
     ]),
     payload: Schema.optional(
-      Schema.NullOr(Schema.Struct({ minutes: Schema.optional(Schema.Number) })),
+      Schema.NullOr(Schema.Struct({ seconds: Schema.optional(Schema.Number) })),
     ),
   }),
 );
@@ -56,11 +56,11 @@ async function completion(request) {
   )(text);
   const match = /compiled-case:([0-9]+)/.exec(text);
   const index = Number(match?.[1] ?? -1);
-  const inputs = [200, 60, 30.5, 55, 0, -1, "120"];
+  const inputs = [12000, 3600, 5.5, 3300, 0, -1, "120"];
   const tool = ["send", "read", "react"][index - inputs.length] ?? "wait";
   const input =
     index < inputs.length
-      ? { minutes: inputs[index] }
+      ? { seconds: inputs[index] }
       : tool === "send"
         ? { text: "isolated message" }
         : tool === "react"
@@ -155,13 +155,13 @@ globalThis[Symbol.for("ren-ai.compiled-plugin.fixture")] ??= Bun.serve({
         react: "isolated react completed",
       };
       if (message.tag === "wait") {
-        if (typeof message.payload?.minutes !== "number")
+        if (typeof message.payload?.seconds !== "number")
           throw new Error("Missing numeric wait argument");
-        waits.push(message.payload.minutes);
+        waits.push(message.payload.seconds);
         frames.push({
           _tag: "Chunk",
           requestId: message.id,
-          values: ["", `isolated wait completed: ${message.payload.minutes}`],
+          values: ["", `isolated wait completed: ${message.payload.seconds}`],
         });
       } else if (!(message.tag in values))
         throw new Error(`Forbidden isolated action: ${message.tag}`);

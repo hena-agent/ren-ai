@@ -35,7 +35,7 @@ type HostTools =
         text: string,
         callID: string,
       ) => Effect.Effect<string, Error>;
-      readonly wait: (sessionID: string, minutes: number) => Effect.Effect<string, Error>;
+      readonly wait: (sessionID: string, seconds: number) => Effect.Effect<string, Error>;
     }
   | { readonly send?: undefined; readonly wait?: undefined };
 
