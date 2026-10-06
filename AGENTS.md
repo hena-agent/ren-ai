@@ -48,6 +48,18 @@ Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no bu
 
 Changes to the shapes in `packages/onboarding` must keep the new site working with the API still running: new fields stay optional until the API deploys, and the site continues handling every answer the old API can give.
 
+## Persona authoring
+
+- Every image-generation action offers an **optional operator prompt**: initial main portraits, independent secondary images, and individual image regeneration. An empty prompt uses the normal character, style and reference direction. Submit paid generation only after the operator confirms the image-options dialog.
+- Give each actual image its own optional prompt: two additional photos have two inputs; two per style initially have four. All initial, additional and regeneration images share one process-local FIFO worker and run one at a time. Acknowledge queued browser submissions promptly, show per-photo waiting/generating/saving/completed/failed states and apply completed previews immediately. Retrying a failed row creates only that image, preserving completed siblings. Keep operational queue IDs and task state out of persona files and public responses.
+- Allow more image batches for the same persona while work is running; show running and waiting batches together and preserve an open prompt dialog during polling. Count completed photos plus queued/running additions against each style's six-photo limit. Adopt the latest preview at worker start. Keep source editing, deletion and saving locked until all that persona's queued work finishes.
+- Image count defaults to **1** and increases only by operator selection. Initial creation offers 1–6 per style and shows the doubled total; additional generation targets one style within its six-photo capacity, and individual regeneration always makes one. Preserve the count for a failed same-target retry; reset a different target to one.
+- Keep the optional prompt scoped to its image/action. Preserve it for a failed same-target retry; start a different target with an empty prompt. Keep prompt text in private editing drafts and exclude it from persona files, public API responses and logs.
+- Create initial main portraits in both styles. Store each style's main and independent secondary images without scene/pair IDs, completion records or persistent recommendation plans. Suggestions are ephemeral; add, regenerate and delete one selected image while preserving the others. Changed names or character descriptions require whole-profile regeneration before saving.
+- Generate self-presentation: photos the persona would choose for a dating profile and a first-person introduction they would actually write. Express private emotional darkness only as a subtle undertone. Vary selfies, friend-taken snapshots, travel/full-body and everyday pictures instead of imposing headshot framing or illustrating internal pathology.
+- New persona creation defaults to female, with the male option disabled in both the UI and creation boundary. Keep the character and image prompts capable of representing either gender; legacy records without a gender continue using their descriptions.
+- When changing authoring or image generation, read the latest workflow section in `docs/specs/persona-discovery-admin.md` for reference, retry and publication behavior.
+
 ## Logging
 
 - At boundaries that turn failures into user responses or background-task results, emit structured diagnostics before handling the failure. Preserve the underlying cause and error code; a generic user-facing message is not a diagnostic.

@@ -1,17 +1,25 @@
 import { Schema } from "effect";
-import type { Portrait } from "@ren-ai/personas";
+import type { Portrait, PersonaRecord } from "@ren-ai/personas";
 import policy from "./policy.json";
 import { GenerationError, operation, protect, safeText } from "./logging.ts";
 
-type Character = { readonly name: string; readonly description: string };
+type Character = {
+  readonly name: string;
+  readonly description: string;
+  readonly gender?: NonNullable<PersonaRecord["gender"]>;
+};
+const characterText = (character: Character) =>
+  `${character.name}\n${character.description}${character.gender ? `\n\nSELECTED GENDER: ${character.gender}` : ""}`;
 type PortraitStyle = keyof typeof policy.portraits;
 export interface ProfileGenerator {
-  character: (seed: string) => Promise<Character>;
+  character: (seed: string, gender?: NonNullable<PersonaRecord["gender"]>) => Promise<Character>;
   introduction: (character: Character) => Promise<string>;
   portrait: (
     character: Character,
     style: PortraitStyle,
     instructions?: string,
+    reference?: Portrait,
+    composition?: Portrait,
   ) => Promise<Portrait>;
 }
 
@@ -143,9 +151,16 @@ export function createProfileGenerator({
     input: string,
     format: "image" | "text" | "json",
     style?: PortraitStyle,
+    references: readonly Portrait[] = [],
   ) =>
     operation("generation.api", { model, ...(style && { style }) }, async () => {
-      const secrets = [key, prompt, input];
+      const imageParts = references.map((reference) => ({
+        inlineData: {
+          mimeType: reference.mimeType,
+          data: Buffer.from(reference.bytes).toString("base64"),
+        },
+      }));
+      const secrets = [key, prompt, input, ...imageParts.map((part) => part.inlineData.data)];
       protect(...secrets);
       const fields = { model };
       if (!key.trim())
@@ -162,7 +177,7 @@ export function createProfileGenerator({
               contents: [
                 {
                   role: "user",
-                  parts: [{ text: `${prompt}\n\n${input}` }],
+                  parts: [{ text: `${prompt}\n\n${input}` }, ...imageParts],
                 },
               ],
               generationConfig: configurations[format],
@@ -175,8 +190,13 @@ export function createProfileGenerator({
       return readReply(response, model, secrets);
     });
   return {
-    character: async (seed) => {
-      const { parts, fields } = await request(textModel, policy.characterDraft, seed, "json");
+    character: async (seed, gender) => {
+      const { parts, fields } = await request(
+        textModel,
+        `${policy.characterDraft}\n\n${policy.genderDirection}`,
+        `${seed}${gender ? `\n\nSELECTED GENDER: ${gender}` : ""}`,
+        "json",
+      );
       try {
         return Schema.decodeUnknownSync(CharacterDraft)(JSON.parse(visibleText(parts)));
       } catch {
@@ -189,8 +209,8 @@ export function createProfileGenerator({
     introduction: async (character) => {
       const { parts, fields } = await request(
         textModel,
-        policy.introduction,
-        `${character.name}\n${character.description}`,
+        `${policy.introduction}\n\n${policy.genderDirection}`,
+        characterText(character),
         "text",
       );
       const text = visibleText(parts);
@@ -201,15 +221,21 @@ export function createProfileGenerator({
         });
       return text;
     },
-    portrait: async (character, style, instructions = "") => {
+    portrait: async (character, style, instructions = "", reference, composition) => {
       const { parts, fields } = await request(
         imageModel,
-        style === "photo"
-          ? `${policy.portraits.photo}\n\n${policy.photoSceneDirection}`
-          : policy.portraits.anime,
-        `${character.name}\n${character.description}${instructions ? `\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}` : ""}`,
+        (composition
+          ? `${policy.portraits[style]}\n\n${policy.regeneratePortraitDirection}`
+          : reference
+            ? `${policy.portraits[style]}\n\n${policy.subPortraitDirection}`
+            : style === "photo"
+              ? `${policy.portraits.photo}\n\n${policy.photoSceneDirection}`
+              : policy.portraits.anime) +
+          `\n\n${policy.profilePhotoDirection}\n\n${policy.genderDirection}`,
+        `${characterText(character)}${instructions ? `\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}` : ""}`,
         "image",
         style,
+        [reference, composition].filter((image): image is Portrait => image !== undefined),
       );
       const image = parts.find((part) => part.inlineData)?.inlineData;
       if (!image)

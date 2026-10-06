@@ -35,8 +35,10 @@ const handle = createAdmin(
   },
 );
 const port = Number(process.env.PORT ?? 3729);
+// A gallery spans several provider calls, each independently bounded to 120 seconds.
+// Bun's default idle timeout would reset the connection before the preview is ready.
 // oxlint-disable-next-line typescript/no-unsafe-call, typescript/no-unsafe-member-access -- thin Bun entry shim; handler and persistence are tested through their public interfaces
-Bun.serve({ hostname: "127.0.0.1", port, fetch: handle });
+Bun.serve({ hostname: "127.0.0.1", port, idleTimeout: 0, fetch: handle });
 process.stdout.write(
   `${JSON.stringify({ time: new Date().toISOString(), service: "admin", level: "info", event: "server.started", url: `http://127.0.0.1:${port}`, directory, generationConfigured: Boolean(key.trim()) })}\n`,
 );

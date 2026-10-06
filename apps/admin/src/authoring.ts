@@ -6,6 +6,7 @@ import copy from "./copy.json";
 export const emptyPersona: Omit<PersonaRecord, "id"> = {
   name: "",
   description: "",
+  gender: "female",
   bio: "",
   imageUrl: "",
   published: false,
@@ -17,10 +18,32 @@ export const emptyPersona: Omit<PersonaRecord, "id"> = {
 };
 
 export const descriptionOf = (persona: PersonaRecord) => persona.description ?? persona.prompt;
+export const characterOf = (persona: PersonaRecord) => ({
+  name: persona.name,
+  description: descriptionOf(persona),
+  ...(persona.gender && { gender: persona.gender }),
+});
+
+export function selectedGender(form: FormData, previous: PersonaRecord) {
+  const value = form.get("gender");
+  if (value === null) return previous.gender;
+  if (value === "female") return value;
+  if (value === "male" && previous.gender === "male") return value;
+  throw new PersonaError("invalid", copy.genderUnavailable);
+}
 
 export function readIntent(form: FormData) {
   const intent = form.get("intent") ?? "save";
-  if (intent === "save" || intent === "generate" || intent === "portrait" || intent === "character")
+  if (
+    intent === "save" ||
+    intent === "generate" ||
+    intent === "portrait" ||
+    intent === "character" ||
+    intent === "subportrait" ||
+    intent === "regenerate" ||
+    intent === "delete-image" ||
+    intent === "introduction"
+  )
     return intent;
   throw new PersonaError("invalid", copy.formError);
 }
@@ -39,17 +62,20 @@ export function authorPersona(form: FormData, previous: PersonaRecord) {
   };
   const name = read("name");
   const description = read("description");
-  const changed = name !== previous.name || description !== descriptionOf(previous);
+  const gender = selectedGender(form, previous);
+  const changed =
+    name !== previous.name || description !== descriptionOf(previous) || gender !== previous.gender;
   return {
     ...previous,
     name,
     description,
+    ...(gender && { gender }),
     published: form.get("published") === "on",
     ...(changed
       ? {
           openingLine: policy.openingLine,
           memory: policy.memory,
-          prompt: `${policy.conversation}\n\n이름: ${name}\n언어: ${previous.language}\n\n${description}`,
+          prompt: `${policy.conversation}\n\n이름: ${name}\n언어: ${previous.language}${gender ? `\n성별: ${gender}` : ""}\n\n${description}`,
         }
       : {}),
   };
@@ -58,7 +84,9 @@ export function authorPersona(form: FormData, previous: PersonaRecord) {
 export function requireMatchingProfile(persona: PersonaRecord, previous: PersonaRecord) {
   if (
     (previous.bio || previous.imageUrl) &&
-    (persona.name !== previous.name || descriptionOf(persona) !== descriptionOf(previous))
+    (persona.name !== previous.name ||
+      descriptionOf(persona) !== descriptionOf(previous) ||
+      persona.gender !== previous.gender)
   )
     throw new PersonaError("invalid", copy.regenerateRequired);
 }
@@ -68,6 +96,7 @@ export function needsIntroduction(persona: PersonaRecord, previous: PersonaRecor
     !previous.bio ||
     !previous.imageUrl ||
     persona.name !== previous.name ||
-    descriptionOf(persona) !== descriptionOf(previous)
+    descriptionOf(persona) !== descriptionOf(previous) ||
+    persona.gender !== previous.gender
   );
 }

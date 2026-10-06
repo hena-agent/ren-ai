@@ -7,6 +7,7 @@ import { createAdmin } from "./admin.ts";
 import {
   fixture,
   character,
+  femaleCharacter,
   introduction,
   generator,
   legacy,
@@ -17,6 +18,7 @@ import {
   idOf,
 } from "../test/fixtures.ts";
 import copy from "./copy.json";
+import { preview } from "../test/sub-portraits.ts";
 
 test("the authoring form asks for name and a long description, with no internal configuration fields", async () => {
   const { admin } = await fixture();
@@ -60,7 +62,7 @@ test("the authoring form asks for name and a long description, with no internal 
       [...window.document.querySelectorAll("fieldset label")].map((label) =>
         label.textContent?.trim(),
       ),
-    ).toEqual(["간단한 설명", "이름", "캐릭터 설명", "프로필 공개"]);
+    ).toEqual(["성별 선택", "간단한 설명", "이름", "캐릭터 설명", "프로필 공개"]);
     for (const label of window.document.querySelectorAll("label"))
       expect(window.document.getElementById(label.getAttribute("for")!)).not.toBeNull();
     expect(window.document.querySelector<HTMLInputElement>("#published")?.checked).toBe(false);
@@ -200,7 +202,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect((await store.publicImage(image.slice("/images/".length))).status).toBe(404);
 });
 
-test("failed image regeneration preserves the last result and can be retried without regenerating the introduction", async () => {
+test("a failed full image refresh preserves completed photos and can be retried without regenerating the introduction", async () => {
   const portrait = vi
     .fn<ProfileGeneratorPortrait>()
     .mockResolvedValue({ bytes: png, mimeType: "image/png" })
@@ -223,7 +225,9 @@ test("failed image regeneration preserves the last result and can be retried wit
   const page = await failed.text();
   expect(page).toContain(copy.failure);
   expect(page).not.toContain("private upstream detail");
-  expect(page).toContain(originalImage);
+  expect(page).not.toContain(originalImage);
+  expect(preview(page).portraits?.anime).toBeUndefined();
+  expect(preview(page).portraits?.photo).toBeTruthy();
   expect(page).toContain(introduction);
   expect(page).toContain("독립적인 성격의 도예가");
   const retried = await (
@@ -233,8 +237,8 @@ test("failed image regeneration preserves the last result and can be retried wit
   expect(retried).not.toContain(originalImage);
   expect(intro).toHaveBeenCalledTimes(1);
   expect(portrait).toHaveBeenCalledTimes(6);
-  expect(portrait).toHaveBeenCalledWith(character, "anime");
-  expect(portrait).toHaveBeenCalledWith(character, "photo");
+  expect(portrait).toHaveBeenCalledWith(femaleCharacter, "anime");
+  expect(portrait).toHaveBeenCalledWith(femaleCharacter, "photo");
   expect((await admin(request(originalImage))).status).toBe(200);
   expect(await store.list()).toEqual([]);
 });

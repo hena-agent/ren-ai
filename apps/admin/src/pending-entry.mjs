@@ -1,2 +1,4 @@
 import { bindPending } from "./pending.ts";
-for (const form of document.querySelectorAll("form")) bindPending(form);
+import { submitImageForm, watchImageQueue } from "./image-queue-browser.ts";
+for (const form of document.querySelectorAll("form")) bindPending(form, submitImageForm);
+watchImageQueue();

@@ -227,9 +227,10 @@ test("simultaneous generation and stale editors cannot duplicate or overwrite a 
   expect((await admin(request("/personas", { ...character, draft, intent: "save" }))).status).toBe(
     409,
   );
-  expect(
-    (await admin(request("/personas", { ...character, draft, intent: "generate" }))).status,
-  ).toBe(409);
+  const duplicate = request("/personas", { ...character, draft, intent: "generate" });
+  duplicate.headers.set("X-Image-Queue", "1");
+  expect((await admin(duplicate)).status).toBe(303);
+  expect(delayedIntroduction).toHaveBeenCalledTimes(1);
   release();
   const generated = await (await running).text();
   expect(

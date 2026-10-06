@@ -71,9 +71,12 @@ test("successful generation, saving and reads emit timed lifecycle events with s
   expect(completed.map(({ stage, style }) => [stage, style])).toEqual([
     ["introduction.generate", undefined],
     ["portrait.generate", "anime"],
+    ["image.save", "anime"],
+    ["image.queue.task", "anime"],
     ["portrait.generate", "photo"],
-    ["image.save", expect.stringMatching(/anime|photo/)],
-    ["image.save", expect.stringMatching(/anime|photo/)],
+    ["image.save", "photo"],
+    ["image.queue.task", "photo"],
+    ["image.queue.batch", undefined],
   ]);
   for (const entry of logs.slice(1)) {
     expect(entry).toMatchObject({
@@ -99,7 +102,7 @@ test("successful generation, saving and reads emit timed lifecycle events with s
   );
 });
 
-test("parallel portrait failures stay correlated after the response and concurrent requests keep separate IDs", async () => {
+test("parallel portrait outcomes stay correlated until both finish and concurrent requests keep separate IDs", async () => {
   let rejectPhoto = vi.fn<(error: Error) => void>();
   const photo = new Promise<typeof png>((_resolve, reject) => {
     rejectPhoto = vi.fn<(error: Error) => void>(reject);
@@ -119,10 +122,10 @@ test("parallel portrait failures stay correlated after the response and concurre
   const pending = admin(request("/personas", { ...character, draft, intent: "generate" }));
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(2));
   const other = await admin(request("/"));
-  const failed = await pending;
-  expect(other.headers.get("x-request-id")).not.toBe(failed.headers.get("x-request-id"));
   rejectPhoto(new Error("photo offline"));
   await photo.catch(() => {});
+  const failed = await pending;
+  expect(other.headers.get("x-request-id")).not.toBe(failed.headers.get("x-request-id"));
   await Promise.resolve();
   const failures = logs.filter((entry) => entry.event === "operation.failed");
   expect(failures).toHaveLength(2);
@@ -156,7 +159,7 @@ test("Gemini HTTP failures identify the model and style while removing echoed se
         ),
       ),
   });
-  const { admin, logs } = await fixture({ ...provider, introduction: generator.introduction });
+  const { admin, logs } = await fixture({ ...generator, portrait: provider.portrait });
   const draft = await newToken(admin);
   const response = await admin(request("/personas", { ...character, draft, intent: "generate" }));
   const failures = logs.filter((entry) => entry.event === "operation.failed");

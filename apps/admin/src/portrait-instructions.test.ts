@@ -1,9 +1,10 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { Window } from "happy-dom";
 import type { HTMLTextAreaElement } from "happy-dom";
-import { serializePersona } from "@ren-ai/personas";
+import { serializePersona, parsePersona } from "@ren-ai/personas";
 import {
   character,
+  femaleCharacter,
   fixture,
   generator,
   introduction,
@@ -52,7 +53,7 @@ test("a closed prompt dialog supports first generation and regeneration without 
       '[name="portraitInstructions"]',
     )!;
     expect(input.id).toBe("portrait-instructions");
-    expect(input.value).toBe(instructions);
+    expect(input.value).toBe("");
     expect(input.required).toBe(false);
     expect(input.getAttribute("rows")).toBe("5");
     expect(input.placeholder).toBe(copy.portraitInstructionsPlaceholder);
@@ -80,12 +81,12 @@ test("a closed prompt dialog supports first generation and regeneration without 
     expect(dialog.querySelector("[data-portrait-confirm]")?.getAttribute("type")).toBe("button");
     expect(dialog.querySelector("[data-portrait-cancel]")?.getAttribute("type")).toBe("button");
     expect(portrait.mock.calls).toEqual([
-      [character, "anime", instructions],
-      [character, "photo", instructions],
+      [femaleCharacter, "anime", instructions],
+      [femaleCharacter, "photo", instructions],
     ]);
-    expect(intro).toHaveBeenCalledWith(character);
+    expect(intro).toHaveBeenCalledWith(femaleCharacter);
     expect(window.document.querySelector('[name="intent"][value="portrait"]')).toBeNull();
-    expect(window.document.querySelectorAll(".generation-actions button")).toHaveLength(1);
+    expect(window.document.querySelectorAll('[value="generate"]')).toHaveLength(1);
     expect(window.document.querySelector(".generation-actions button")?.textContent).toBe(
       copy.regenerate,
     );
@@ -103,16 +104,16 @@ test("a closed prompt dialog supports first generation and regeneration without 
     window.document.body.innerHTML = page;
     expect(
       window.document.querySelector<HTMLTextAreaElement>('[name="portraitInstructions"]')?.value,
-    ).toBe(instructions);
+    ).toBe("");
     expect(page).not.toContain("<script>private direction</script>");
     expect(portrait.mock.calls).toEqual([
-      [character, "anime", instructions],
-      [character, "photo", instructions],
+      [femaleCharacter, "anime", instructions],
+      [femaleCharacter, "photo", instructions],
     ]);
     expect(intro).toHaveBeenCalledTimes(1);
     expect(page).toContain(introduction);
-    expect(draftTokens("test-password").decode(tokenOf(page)).portraitInstructions).toBe(
-      instructions,
+    expect(draftTokens("test-password").decode(tokenOf(page))).not.toHaveProperty(
+      "portraitInstructions",
     );
     expect(await store.list()).toEqual([]);
     const saved = await admin(
@@ -136,7 +137,7 @@ test("a closed prompt dialog supports first generation and regeneration without 
   }
 });
 
-test("failed regeneration retains the extra instructions and old images, while retries can clear them", async () => {
+test("failed profile regeneration retains the extra instructions and completed photos, while retries can clear them", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(generator.portrait);
   const { admin, store, logs } = await fixture({ ...generator, portrait });
   const generated = await profilePreview(admin);
@@ -153,7 +154,10 @@ test("failed regeneration retains the extra instructions and old images, while r
   expect(failed.status).toBe(503);
   const page = await failed.text();
   const draft = draftTokens("test-password").decode(tokenOf(page));
-  expect(draft.preview).toBe(previous);
+  expect(draft.preview).not.toBe(previous);
+  const partial = parsePersona(draft.id, draft.preview);
+  expect(partial.portraits?.anime).toBeUndefined();
+  expect(partial.portraits?.photo).toBeTruthy();
   expect(draft.portraitInstructions).toBe(instructions);
   expect(page).toContain("&lt;script&gt;private direction&lt;/script&gt;");
   expect(JSON.stringify(logs)).not.toContain("private direction");
@@ -186,12 +190,12 @@ test("failed regeneration retains the extra instructions and old images, while r
   );
   expect(retried.status).toBe(200);
   expect(portrait.mock.calls).toEqual([
-    [character, "anime"],
-    [character, "photo"],
+    [femaleCharacter, "anime"],
+    [femaleCharacter, "photo"],
   ]);
-  expect(
-    draftTokens("test-password").decode(tokenOf(await retried.text())).portraitInstructions,
-  ).toBe("");
+  expect(draftTokens("test-password").decode(tokenOf(await retried.text()))).not.toHaveProperty(
+    "portraitInstructions",
+  );
   portrait.mockClear();
   const full = await admin(
     request("/personas", {
@@ -202,12 +206,12 @@ test("failed regeneration retains the extra instructions and old images, while r
     }),
   );
   expect(full.status).toBe(200);
-  expect(draftTokens("test-password").decode(tokenOf(await full.text())).portraitInstructions).toBe(
-    "new private direction",
+  expect(draftTokens("test-password").decode(tokenOf(await full.text()))).not.toHaveProperty(
+    "portraitInstructions",
   );
   expect(portrait.mock.calls).toEqual([
-    [character, "anime", "new private direction"],
-    [character, "photo", "new private direction"],
+    [femaleCharacter, "anime", "new private direction"],
+    [femaleCharacter, "photo", "new private direction"],
   ]);
 });
 
@@ -222,8 +226,8 @@ test("old forms can omit extra instructions and uploaded files cannot become ima
   );
   expect(response.status).toBe(200);
   expect(portrait.mock.calls).toEqual([
-    [source, "anime"],
-    [source, "photo"],
+    [{ ...source, gender: "female" }, "anime"],
+    [{ ...source, gender: "female" }, "photo"],
   ]);
   const form = new FormData();
   for (const [field, value] of Object.entries({
@@ -293,8 +297,12 @@ test("incomplete legacy profiles regenerate their introduction even when the cha
   expect(introductionModel).toHaveBeenCalledTimes(2);
   await store.update({ ...legacy, imageUrl: "" });
   introductionModel.mockClear();
-  const legacyPage = await (await admin(request("/personas/legacy"))).text();
-  const imageOnly = await admin(
+  const restarted = createAdmin(store, "test-password", "", {
+    generator: { ...generator, introduction: introductionModel },
+    log: () => {},
+  });
+  const legacyPage = await (await restarted(request("/personas/legacy"))).text();
+  const imageOnly = await restarted(
     request("/personas/legacy", {
       name: legacy.name,
       description: legacy.prompt,
@@ -314,7 +322,7 @@ test("Gemini receives extra image instructions after the unchanged character and
   for (const style of ["anime", "photo"] satisfies ("anime" | "photo")[]) {
     await model.portrait(character, style, instructions);
     const body = await new Request(...fetcher.mock.calls.at(-1)!).text();
-    const expected = `${policy.portraits[style]}${style === "photo" ? `\n\n${policy.photoSceneDirection}` : ""}\n\n${character.name}\n${character.description}\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}`;
+    const expected = `${policy.portraits[style]}${style === "photo" ? `\n\n${policy.photoSceneDirection}` : ""}\n\n${policy.profilePhotoDirection}\n\n${policy.genderDirection}\n\n${character.name}\n${character.description}\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}`;
     expect(body).toContain(JSON.stringify(expected));
   }
   await model.portrait(character, "photo");

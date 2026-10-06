@@ -5,6 +5,7 @@ import { createProfileGenerator } from "./generation.ts";
 import {
   fixture,
   character,
+  femaleCharacter,
   generator,
   request,
   newToken,
@@ -47,14 +48,17 @@ test("both styles are saved together, survive restart and become public without 
       [...window.document.querySelectorAll(".image-option figcaption")].map(
         (caption) => caption.textContent,
       ),
-    ).toEqual([copy.styles.anime, copy.styles.photo]);
+    ).toEqual([
+      `${copy.mainImage} · ${copy.styles.anime}`,
+      `${copy.mainImage} · ${copy.styles.photo}`,
+    ]);
     expect(window.document.querySelector('[name="imageChoice"]')).toBeNull();
     expect(window.document.querySelector('input[type="radio"]')).toBeNull();
   } finally {
     await window.happyDOM.close();
   }
-  expect(portraits).toHaveBeenCalledWith(character, "anime");
-  expect(portraits).toHaveBeenCalledWith(character, "photo");
+  expect(portraits).toHaveBeenCalledWith(femaleCharacter, "anime");
+  expect(portraits).toHaveBeenCalledWith(femaleCharacter, "photo");
   expect(page).toContain(copy.styles.anime);
   expect(page).toContain(copy.styles.photo);
   for (const image of images!)
@@ -179,10 +183,10 @@ test("portrait requests use distinct art direction while preserving the characte
   const photo = await new Request(...fetcher.mock.calls[1]!).text();
   expect(anime).toContain("LovePlus");
   expect(anime).toContain("2D Japanese");
-  expect(anime).toContain("hand-drawn anime illustration");
+  expect(anime).toContain("hand-drawn 2D");
   expect(anime).toContain("cel shading");
-  expect(photo).toContain("photorealistic editorial");
-  expect(photo).toContain("natural skin texture");
+  expect(photo).toContain("photorealistic personal dating-profile photo");
+  expect(photo).toMatch(/natural skin texture/i);
   expect(anime).toContain(character.name);
   expect(photo).toContain(character.name);
   expect(anime).not.toBe(photo);

@@ -1,15 +1,27 @@
 import { decodePersona } from "@ren-ai/personas";
-import type { createPersonaStore, PersonaRecord } from "@ren-ai/personas";
-import { authorPersona } from "./authoring.ts";
+import type { PersonaRecord } from "@ren-ai/personas";
+import { authorPersona, characterOf } from "./authoring.ts";
 import type { ProfileGenerator } from "./generation.ts";
 import { operation } from "./logging.ts";
+import type { Draft } from "./draft.ts";
+import { serializePersona } from "@ren-ai/personas";
 
-export async function characterDraft(
-  seed: string,
-  previous: PersonaRecord,
+const introduce = (persona: PersonaRecord, generator: ProfileGenerator) =>
+  operation("introduction.generate", {}, () => generator.introduction(characterOf(persona)));
+
+async function introductionDraft(
+  persona: PersonaRecord,
+  draft: Draft,
   generator: ProfileGenerator,
 ) {
-  const character = await operation("character.generate", {}, () => generator.character(seed));
+  const bio = await introduce(persona, generator);
+  return { ...draft, preview: serializePersona(decodePersona({ ...persona, bio })) };
+}
+
+async function characterDraft(seed: string, previous: PersonaRecord, generator: ProfileGenerator) {
+  const character = await operation("character.generate", {}, () =>
+    previous.gender ? generator.character(seed, previous.gender) : generator.character(seed),
+  );
   const form = new FormData();
   form.set("name", character.name);
   form.set("description", character.description);
@@ -20,34 +32,20 @@ export async function characterDraft(
     published: false,
   };
   delete draft.portraits;
+  delete draft.portraitGallery;
+  delete draft.secondaryPortraits;
   return decodePersona(draft);
 }
 
-export async function profileDraft(
+export async function generateTextDraft(
   persona: ReturnType<typeof authorPersona>,
-  introduction: boolean,
+  draft: Draft,
+  intent: "character" | "introduction",
   generator: ProfileGenerator,
-  store: Awaited<ReturnType<typeof createPersonaStore>>,
-  instructions: string | undefined,
 ) {
-  const character = { name: persona.name, description: persona.description };
-  const bio = introduction
-    ? await operation("introduction.generate", {}, () => generator.introduction(character))
-    : persona.bio;
-  const portrait = async (style: "anime" | "photo") => {
-    const image = await operation("portrait.generate", { style }, () =>
-      instructions
-        ? generator.portrait(character, style, instructions)
-        : generator.portrait(character, style),
-    );
-    return operation("image.save", { style }, () => store.saveImage(image));
+  if (intent === "introduction") return introductionDraft(persona, draft, generator);
+  return {
+    ...draft,
+    preview: serializePersona(await characterDraft(draft.seed!, persona, generator)),
   };
-  const [anime, photo] = await Promise.all([portrait("anime"), portrait("photo")]);
-  // Legacy clients still read imageUrl; current clients select from the complete pair.
-  return decodePersona({
-    ...persona,
-    bio,
-    imageUrl: photo,
-    portraits: { anime, photo },
-  });
 }

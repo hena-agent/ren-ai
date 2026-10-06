@@ -3,7 +3,7 @@ import { character, fixture, request, tokenOf } from "../test/fixtures.ts";
 import { bindPending } from "./pending.ts";
 import { bindPortraitDialog } from "./portrait-dialog.ts";
 import copy from "./copy.json";
-import { useBrowser } from "../test/browser.ts";
+import { useBrowser, fillCharacterForm } from "../test/browser.ts";
 
 useBrowser();
 
@@ -15,16 +15,25 @@ async function editor(preview = false) {
       await admin(request("/personas", { ...character, draft: tokenOf(page), intent: "generate" }))
     ).text();
   document.body.innerHTML = page;
-  document.querySelector<HTMLInputElement>("#name")!.value = character.name;
-  document.querySelector<HTMLTextAreaElement>("#description")!.value = character.description;
-  const form = document.querySelector<HTMLFormElement>("#persona-editor")!;
+  const form = fillCharacterForm(character);
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const input = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
   const button = (selector: string) => form.querySelector<HTMLButtonElement>(selector)!;
   const submissions: { intent: string | null; prompt: string | null; busy: string | null }[] = [];
+  const buttons = form.ownerDocument.querySelectorAll("button").length;
+  const transports: {
+    connected: boolean | undefined;
+    hidden: HTMLElement["hidden"] | undefined;
+    form: HTMLFormElement | null | undefined;
+  }[] = [];
   bindPending(form);
   form.addEventListener("submit", (event) => {
     if (event.defaultPrevented) return;
+    transports.push({
+      connected: event.submitter?.isConnected,
+      hidden: event.submitter?.hidden,
+      form: event.submitter?.closest("form"),
+    });
     const value = new FormData(form).get("portraitInstructions");
     submissions.push({
       intent: event.submitter?.getAttribute("value") ?? null,
@@ -33,11 +42,11 @@ async function editor(preview = false) {
     });
     event.preventDefault();
   });
-  return { form, dialog, input, button, submissions };
+  return { form, dialog, input, button, submissions, buttons, transports };
 }
 
 test("first generation opens a focused modal and only submits the optional prompt after confirmation", async () => {
-  const { form, dialog, input, button, submissions } = await editor();
+  const { form, dialog, input, button, submissions, buttons, transports } = await editor();
   const generate = button('[value="generate"]');
   generate.focus();
   form.requestSubmit(generate);
@@ -49,6 +58,8 @@ test("first generation opens a focused modal and only submits the optional promp
   input.value = "햇살 아래 웃는 모습";
   button("[data-portrait-confirm]").click();
   expect(dialog.open).toBe(false);
+  expect(document.querySelectorAll("button")).toHaveLength(buttons);
+  expect(transports).toEqual([{ connected: true, hidden: true, form }]);
   expect(document.activeElement).toBe(generate);
   expect(submissions).toEqual([
     { intent: "generate", prompt: "햇살 아래 웃는 모습", busy: "true" },
@@ -82,7 +93,7 @@ test("one generating action changes its label after a preview and saving bypasse
   const { form, dialog, button, submissions } = await editor(true);
   const generate = button('[value="generate"]');
   expect(generate.textContent).toBe(copy.regenerate);
-  expect(form.querySelectorAll(".generation-actions button")).toHaveLength(1);
+  expect(form.querySelectorAll('[value="generate"]')).toHaveLength(1);
   form.requestSubmit(generate);
   expect(dialog.open).toBe(true);
   button("[data-portrait-confirm]").click();
@@ -145,4 +156,13 @@ test("confirmation restores its guard even if native submission throws", async (
   submit.mockRestore();
   form.requestSubmit(button('[value="generate"]'));
   expect(dialog.open).toBe(true);
+});
+
+test("image-options context remains empty for a legacy button without a target label", async () => {
+  const { form, dialog, button } = await editor();
+  const generate = button('[value="generate"]');
+  generate.removeAttribute("data-portrait-label");
+  form.requestSubmit(generate);
+  expect(dialog.open).toBe(true);
+  expect(dialog.querySelector("[data-portrait-target]")?.textContent).toBe("");
 });

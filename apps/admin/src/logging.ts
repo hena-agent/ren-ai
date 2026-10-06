@@ -6,6 +6,7 @@ export interface LogFields {
   intent?: string;
   personaId?: string;
   style?: string;
+  poseIndex?: number;
   model?: string;
   status?: number;
   code?: string;
@@ -15,6 +16,9 @@ export interface LogFields {
   causeName?: string;
   causeCode?: string;
   durationMs?: number;
+  jobId?: string;
+  imageOrdinal?: number;
+  outcome?: "completed" | "failed";
 }
 export interface LogEntry extends LogFields {
   time: string;
@@ -37,7 +41,7 @@ const scope = new AsyncLocalStorage<{
   route: string;
   fields: LogFields;
   secrets: string[];
-  reported: Map<Error, Set<string | undefined>>;
+  reported: Map<Error | string, Set<string | undefined>>;
   log: Log;
 }>();
 
@@ -94,11 +98,15 @@ export function reportFailure(
   const error = cause instanceof Error ? cause : new Error("Non-Error failure");
   const root = error.cause instanceof Error ? error.cause : error;
   const reported = scope.getStore()?.reported;
-  const styles = reported?.get(error);
-  const style = fields.style;
+  const coordinate = { ...scope.getStore()?.fields, ...fields };
+  const style = coordinate.jobId
+    ? JSON.stringify([coordinate.jobId, coordinate.imageOrdinal, coordinate.style])
+    : fields.style;
+  const identity = coordinate.jobId ? style! : error;
+  const styles = reported?.get(identity);
   if (styles && (fields.stage === "request" || styles.has(style))) return;
   if (styles) styles.add(style);
-  else reported?.set(error, new Set([style]));
+  else reported?.set(identity, new Set([style]));
   emit({
     ...fields,
     ...(error instanceof GenerationError && error.fields),
@@ -125,7 +133,10 @@ export async function operation<T>(stage: string, fields: LogFields, run: () => 
   const start = performance.now();
   emit({ ...fields, stage, level: "info", event: "operation.started" });
   try {
-    const result = await run();
+    const context = scope.getStore();
+    const result = await (context
+      ? scope.run({ ...context, fields: { ...context.fields, ...fields } }, run)
+      : run());
     emit({
       ...fields,
       stage,
@@ -175,3 +186,13 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
 }
 
 export const requestId = () => scope.getStore()!.requestId;
+export const captureLogging = () => AsyncLocalStorage.snapshot();
+
+export function reportQueueCompleted(fields: LogFields & { status: number }) {
+  emit({
+    ...fields,
+    stage: "image.queue",
+    event: "image.queue.completed",
+    level: fields.status >= 500 ? "error" : fields.status >= 400 ? "warn" : "info",
+  });
+}
