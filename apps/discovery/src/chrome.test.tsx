@@ -31,29 +31,30 @@ test("the app navigation exposes liked profiles and full details without turning
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
   expect(screen.getByText("아직 비어 있어요")).toBeTruthy();
-  const surface = screen.getByRole("button", { name: "하린 프로필 보기" });
+  const surface = screen.getByRole("button", { name: "하린 소개 전체 보기" });
   expect(document.activeElement).toBe(surface);
   expect(currentTabs()).toEqual(["page", null, null]);
   fireEvent.click(surface);
-  const dialog = screen.getByRole("dialog", { name: "하린" });
-  expect(dialog.hasAttribute("open")).toBe(true);
+  const dialog = screen.getByRole("region", { name: "하린" });
+  expect(dialog.closest(".swipe-stage")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(within(dialog).getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
     people[0]!.imageUrl,
   );
   const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
   fireEvent(dialog, tab);
-  expect(tab.defaultPrevented).toBe(true);
-  expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "프로필 닫기" }));
-  within(dialog).getByRole("button", { name: "프로필 닫기" }).blur();
+  expect(tab.defaultPrevented).toBe(false);
+  expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "프로필 접기" }));
+  within(dialog).getByRole("button", { name: "프로필 접기" }).blur();
   fireEvent.keyDown(dialog, { key: "ArrowDown" });
   expect(document.activeElement).not.toBe(
-    within(dialog).getByRole("button", { name: "프로필 닫기" }),
+    within(dialog).getByRole("button", { name: "프로필 접기" }),
   );
   expect(dialog.querySelector(".details-content p")?.textContent).toBe(people[0]!.bio);
   expect(localStorage.getItem("ren-ai.discovery.choices")).toBeNull();
-  fireEvent.click(within(dialog).getByRole("button", { name: "프로필 닫기" }));
-  expect(screen.queryByRole("dialog")).toBeNull();
-  expect(document.activeElement).toBe(surface);
+  fireEvent.click(within(dialog).getByRole("button", { name: "프로필 접기" }));
+  expect(screen.queryByRole("region", { name: "하린" })).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "하린 소개 전체 보기" }));
   const navigation = screen.getByRole("navigation", { name: "페르소나 탐색 메뉴" });
   fireEvent.click(screen.getByRole("button", { name: "좋아요" }));
   for (const button of within(navigation).getAllByRole("button"))
@@ -72,16 +73,16 @@ test("the app navigation exposes liked profiles and full details without turning
       .getAttribute("aria-current"),
   ).toBe("page");
   fireEvent.click(within(liked).getByRole("button", { name: "하린 프로필 보기" }));
-  const cancel = new Event("cancel", { cancelable: true });
-  fireEvent(screen.getByRole("dialog"), cancel);
+  const cancel = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  fireEvent(screen.getByRole("region", { name: "하린" }), cancel);
   expect(cancel.defaultPrevented).toBe(true);
-  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("region", { name: "하린" })).toBeNull();
   expect(JSON.parse(localStorage.getItem("ren-ai.discovery.choices")!)).toEqual({ person0: true });
   fireEvent.click(within(navigation).getByRole("button", { name: "탐색" }));
   expect(document.querySelector(".app-workspace")?.getAttribute("data-view")).toBe("browse");
   expect(currentTabs()).toEqual(["page", null, null]);
   fireEvent.click(screen.getByRole("button", { name: "지우 소개 전체 보기" }));
-  expect(screen.getByRole("dialog", { name: "지우" })).toBeTruthy();
+  expect(screen.getByRole("region", { name: "지우" })).toBeTruthy();
 });
 
 test("pending registration disables navigation until a recoverable failure completes", async () => {

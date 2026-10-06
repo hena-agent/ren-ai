@@ -1,6 +1,8 @@
 @import "./registration.css";
 @import "./style-picker.css";
 @import "./swipe.css";
+@import "./photo-gallery.css";
+@import "./profile-details.css";
 
 :root {
   --canvas: #f4f5f7;
@@ -211,6 +213,19 @@ button:disabled {
   flex: 1;
   min-height: 0;
 }
+.deck[hidden] {
+  display: none;
+}
+.contact-surface {
+  width: min(460px, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.contact-surface[hidden] {
+  display: none;
+}
 .app-navigation {
   display: grid;
   grid-template-columns: 1fr;
@@ -355,59 +370,6 @@ button:disabled {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
-.profile-details {
-  width: min(440px, calc(100% - 32px));
-  max-width: none;
-  max-height: calc(100dvh - 48px);
-  padding: 0;
-  border: 0;
-  border-radius: 24px;
-  background: var(--surface);
-  color: var(--ink);
-  overflow-y: auto;
-  box-shadow: 0 24px 80px #10131833;
-}
-.profile-details::backdrop {
-  background: #10131880;
-}
-.details-photo {
-  display: block;
-  width: 100%;
-  max-height: 48dvh;
-  aspect-ratio: 4 / 5;
-  object-fit: cover;
-}
-.details-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  color: var(--ink);
-  background: var(--surface);
-}
-.details-content {
-  padding: 24px;
-}
-.details-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.details-content h2 {
-  margin: 8px 0 12px;
-  font-size: 28px;
-  line-height: 1.3;
-}
-.details-content p {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .swipe-stage .join-panel {
   width: min(460px, 100%);
   margin-block: auto;
@@ -484,14 +446,6 @@ button:disabled {
   .nav-liked b {
     font-size: 10px;
     font-variant-numeric: tabular-nums;
-  }
-  .profile-details {
-    position: fixed;
-    inset: auto 0 0;
-    margin: 0;
-    width: 100%;
-    max-height: calc(100dvh - 24px);
-    border-radius: 24px 24px 0 0;
   }
   .onboarding-view {
     padding-block: 24px;

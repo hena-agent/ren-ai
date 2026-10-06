@@ -8,10 +8,10 @@ import { JoinForm } from "./join-form.tsx";
 import copy from "./copy.json";
 import { readImageStyle, saveImageStyle, withImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
+import type { StyledPersona } from "./image-style.ts";
 import { StylePicker, StyleSwitch } from "./style-picker.tsx";
 import { Header, LikedPanel, Navigation } from "./chrome.tsx";
 import type { BrowseView } from "./chrome.tsx";
-import { ProfileDetails } from "./profile-details.tsx";
 
 function Deck({
   people,
@@ -23,16 +23,20 @@ function Deck({
   restart,
   onOpen,
   onBusyChange,
+  details,
+  onCollapse,
 }: {
-  people: readonly PublicPersona[];
-  current: PublicPersona | undefined;
+  people: readonly StyledPersona[];
+  current: StyledPersona | undefined;
   next: PublicPersona | undefined;
   likedCount: number;
   hasPassed: boolean;
   choose: (persona: PublicPersona, like: boolean) => void;
   restart: () => void;
-  onOpen: (persona: PublicPersona) => void;
+  onOpen: (persona: PublicPersona, image?: number) => void;
   onBusyChange: (busy: boolean) => void;
+  details: { persona: StyledPersona; image: number } | undefined;
+  onCollapse: () => void;
 }) {
   if (!people.length)
     return (
@@ -42,18 +46,42 @@ function Deck({
         <p>{copy.emptyHint}</p>
       </div>
     );
-  if (current)
+  if (current || details)
     return (
-      <div className="deck">
-        <Card
-          key={current.id}
-          persona={current}
-          next={next}
-          onChoose={(like) => choose(current, like)}
-          onOpen={onOpen}
-          onBusyChange={onBusyChange}
-        />
-      </div>
+      <>
+        {details && details.persona.id !== current?.id && (
+          <div className="deck">
+            <Card
+              key={details.persona.id}
+              persona={details.persona}
+              initialImage={details.image}
+              onChoose={(like) => {
+                choose(details.persona, like);
+                onCollapse();
+              }}
+              onOpen={onOpen}
+              onCollapse={onCollapse}
+              onBusyChange={onBusyChange}
+            />
+          </div>
+        )}
+        {current && (
+          <div className="deck" hidden={Boolean(details && details.persona.id !== current.id)}>
+            <Card
+              key={current.id}
+              persona={current}
+              next={next}
+              onChoose={(like) => {
+                choose(current, like);
+                onCollapse();
+              }}
+              onOpen={onOpen}
+              onBusyChange={onBusyChange}
+              onCollapse={details?.persona.id === current.id ? onCollapse : undefined}
+            />
+          </div>
+        )}
+      </>
     );
   return (
     <div className="empty-card">
@@ -155,13 +183,14 @@ function Experience({
   const [storageFailure, setStorageFailure] = useState<true>();
   const [view, setView] = useState<BrowseView | "waiting" | "active">("browse");
   const [busy, setBusy] = useState(false);
-  const [detailsID, setDetailsID] = useState<string>();
+  const [details, setDetails] = useState<{ id: string; image: number }>();
   const displayed = style ? people.map((persona) => withImageStyle(persona, style)) : people;
   const remaining = displayed.filter((persona) => !Object.hasOwn(choices, persona.id));
   const current = remaining[0];
   const liked = displayed.filter((persona) => choices[persona.id] === true);
-  const detail = displayed.find((persona) => persona.id === detailsID);
-  const openDetails = (persona: PublicPersona) => setDetailsID(persona.id);
+  const detail = displayed.find((persona) => persona.id === details?.id);
+  const openDetails = (persona: PublicPersona, image = 0) => setDetails({ id: persona.id, image });
+  const closeDetails = () => setDetails(undefined);
   function chooseStyle(next: ImageStyle) {
     setStyle(next);
     setStyleStorageFailure(!saveImageStyle(next));
@@ -186,22 +215,37 @@ function Experience({
         </main>
       </>
     );
-  return (
+  const header = (
     <>
       <Header>{style && <StyleSwitch style={style} onChoose={chooseStyle} />}</Header>
       {styleStorageFailure && (
         <output className="storage-warning">{copy.styleStorageFailure}</output>
       )}
-      {view === "waiting" || view === "active" ? (
+    </>
+  );
+  if (view === "waiting" || view === "active")
+    return (
+      <>
+        {header}
         <main className="onboarding-view" id="discovery-content">
           <Receipt waiting={view === "waiting"} />
         </main>
-      ) : (
-        <main className="app-workspace" id="discovery-content" data-view={view}>
-          <LikedPanel people={liked} onOpen={openDetails} />
-          <section className="swipe-stage" aria-label={copy.explore}>
-            <h1 className="sr-only">{copy.explore}</h1>
-            {view === "contact" ? (
+      </>
+    );
+  return (
+    <>
+      {header}
+      <main
+        className="app-workspace"
+        id="discovery-content"
+        data-view={view}
+        data-detail={Boolean(detail)}
+      >
+        <LikedPanel people={liked} onOpen={openDetails} disabled={busy} />
+        <section className="swipe-stage" aria-label={copy.explore}>
+          <h1 className="sr-only">{copy.explore}</h1>
+          {view === "contact" && (
+            <div className="contact-surface" hidden={Boolean(detail)}>
               <JoinForm
                 liked={liked}
                 client={client}
@@ -209,32 +253,40 @@ function Experience({
                 onSuccess={setView}
                 onBusyChange={setBusy}
               />
-            ) : (
-              <div className="browse-panel">
-                <Deck
-                  people={displayed}
-                  current={current}
-                  next={remaining[1]}
-                  likedCount={liked.length}
-                  hasPassed={people.some((persona) => choices[persona.id] === false)}
-                  choose={choose}
-                  restart={restart}
-                  onOpen={openDetails}
-                  onBusyChange={setBusy}
-                />
-                <p id="swipe-help" className="sr-only">
-                  {copy.instructions}
-                </p>
-                {storageFailure && (
-                  <output className="storage-warning">{copy.storageFailure}</output>
-                )}
-              </div>
-            )}
-          </section>
-          <Navigation view={view} likedCount={liked.length} disabled={busy} onView={setView} />
-        </main>
-      )}
-      {detail && <ProfileDetails persona={detail} onClose={() => setDetailsID(undefined)} />}
+            </div>
+          )}
+          {(view !== "contact" || detail) && (
+            <div className="browse-panel">
+              <Deck
+                people={displayed}
+                current={current}
+                next={remaining[1]}
+                likedCount={liked.length}
+                hasPassed={people.some((persona) => choices[persona.id] === false)}
+                choose={choose}
+                restart={restart}
+                onOpen={openDetails}
+                onBusyChange={setBusy}
+                details={detail && { persona: detail, image: details!.image }}
+                onCollapse={closeDetails}
+              />
+              <p id="swipe-help" className="sr-only">
+                {copy.instructions}
+              </p>
+              {storageFailure && <output className="storage-warning">{copy.storageFailure}</output>}
+            </div>
+          )}
+        </section>
+        <Navigation
+          view={view}
+          likedCount={liked.length}
+          disabled={busy}
+          onView={(next) => {
+            closeDetails();
+            setView(next);
+          }}
+        />
+      </main>
     </>
   );
 }

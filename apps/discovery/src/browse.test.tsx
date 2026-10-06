@@ -114,7 +114,7 @@ test("the real client is used by default and inherited property names are valid 
 test("fast repeated selection cannot overwrite a Like or advance two profiles", async () => {
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "미카" });
-  const surface = screen.getByRole("button", { name: "미카 프로필 보기" });
+  const surface = screen.getByRole("button", { name: "미카 소개 전체 보기" });
   const like = screen.getByRole("button", { name: "좋아요" });
   act(() => {
     like.dispatchEvent(new MouseEvent("click", { bubbles: true }));

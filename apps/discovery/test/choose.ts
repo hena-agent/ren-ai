@@ -23,3 +23,5 @@ export function choose(like: boolean) {
   fireEvent.click(screen.getByRole("button", { name: like ? "좋아요" : "넘기기" }));
   endAnimation(document.querySelector(".profile-card")!);
 }
+
+export const swipeSurface = () => document.querySelector<HTMLElement>(".swipe-surface")!;

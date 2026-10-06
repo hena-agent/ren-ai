@@ -21,9 +21,11 @@ export function Header({ children }: { children?: ReactNode }) {
 export function LikedPanel({
   people,
   onOpen,
+  disabled,
 }: {
   people: readonly PublicPersona[];
   onOpen: (persona: PublicPersona) => void;
+  disabled: boolean;
 }) {
   return (
     <aside className="discovery-sidebar" aria-labelledby="liked-title">
@@ -40,6 +42,7 @@ export function LikedPanel({
             <li key={persona.id}>
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() => onOpen(persona)}
                 aria-label={`${persona.name} ${copy.details}`}
               >

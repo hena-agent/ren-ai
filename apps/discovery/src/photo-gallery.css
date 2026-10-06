@@ -1,0 +1,79 @@
+.gallery-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.gallery-progress {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+.gallery-progress button {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 16px 0 24px;
+  border: 0;
+  background: transparent;
+}
+.gallery-progress span {
+  display: block;
+  height: 4px;
+  border-radius: 4px;
+  background: #ffffff66;
+  box-shadow: 0 1px 3px #10131833;
+}
+.gallery-progress [aria-current] span {
+  background: #fff;
+}
+.gallery-previous,
+.gallery-next {
+  position: absolute;
+  top: 42%;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #10131855;
+  color: #fff;
+  pointer-events: auto;
+}
+.gallery-previous {
+  left: 8px;
+}
+.gallery-previous .icon {
+  transform: rotate(180deg);
+}
+.gallery-next {
+  right: 8px;
+}
+.gallery-controls button:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.gallery-position {
+  position: absolute;
+  top: 48px;
+  right: 16px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  color: #fff;
+  background: #10131866;
+}
+.profile-card[data-gallery="true"] .profile-label {
+  top: 48px;
+}
+.details-media {
+  position: relative;
+}
+.details-close {
+  z-index: 2;
+}

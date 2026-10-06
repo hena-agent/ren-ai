@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { Card } from "./card.tsx";
-import { endAnimation, resetCardTest, preferReducedMotion } from "../test/choose.ts";
+import { endAnimation, resetCardTest, preferReducedMotion, swipeSurface } from "../test/choose.ts";
 
 afterEach(resetCardTest);
 const profile = {
@@ -18,7 +18,7 @@ const point = (x: number, pointerId = 1, y = 0) => ({
   button: 0,
 });
 
-test("a swipe animates before committing exactly one choice; card taps open details", () => {
+test("a swipe commits exactly one choice and only the up-arrow opens details", () => {
   const select = vi.fn<(like: boolean) => void>();
   const open = vi.fn<(persona: typeof profile) => void>();
   const busy = vi.fn<(value: boolean) => void>();
@@ -32,7 +32,7 @@ test("a swipe animates before committing exactly one choice; card taps open deta
       next={{ ...profile, id: "next" }}
     />,
   );
-  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
+  const surface = swipeSurface();
   const article = surface.closest("article")!;
   expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   expect(article.getAttribute("data-dragging")).toBe("false");
@@ -41,8 +41,9 @@ test("a swipe animates before committing exactly one choice; card taps open deta
   expect(document.querySelector(".card-back img")?.getAttribute("draggable")).toBe("false");
   expect(screen.getByRole("img").getAttribute("draggable")).toBe("false");
   fireEvent.click(surface, { detail: 1 });
+  expect(open).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "예린 소개 전체 보기" }));
-  expect(open).toHaveBeenCalledTimes(2);
+  expect(open).toHaveBeenCalledTimes(1);
   expect(open).toHaveBeenCalledWith(profile);
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerMove(surface, point(160));
@@ -56,8 +57,10 @@ test("a swipe animates before committing exactly one choice; card taps open deta
   expect(select).not.toHaveBeenCalled();
   fireEvent.click(surface);
   fireEvent.click(screen.getByRole("button", { name: "예린 소개 전체 보기" }));
-  expect(open).toHaveBeenCalledTimes(2);
-  fireEvent.keyDown(surface, { key: "ArrowLeft" });
+  expect(open).toHaveBeenCalledTimes(1);
+  fireEvent.keyDown(screen.getByRole("button", { name: "예린 소개 전체 보기" }), {
+    key: "ArrowLeft",
+  });
   endAnimation(article, "card-enter");
   endAnimation(screen.getByRole("img"));
   expect(select).not.toHaveBeenCalled();
@@ -81,7 +84,7 @@ test("small, vertical or cancelled drags do not become a choice or an accidental
   const select = vi.fn<(like: boolean) => void>();
   const open = vi.fn<(persona: typeof profile) => void>();
   render(<Card persona={profile} onChoose={select} onOpen={open} />);
-  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
+  const surface = swipeSurface();
   const capture = vi.fn<(id: number) => void>();
   surface.setPointerCapture = capture;
   fireEvent.pointerMove(surface, point(80));
@@ -107,19 +110,20 @@ test("small, vertical or cancelled drags do not become a choice or an accidental
   fireEvent.pointerCancel(surface);
   fireEvent.pointerUp(surface, point(250));
   fireEvent.click(surface, { detail: 1 });
-  fireEvent.keyDown(surface, { key: "Home" });
+  fireEvent.keyDown(screen.getByRole("button", { name: "예린 소개 전체 보기" }), { key: "Home" });
+  expect(surface.closest("article")!.hasAttribute("data-exit")).toBe(false);
   expect(select).not.toHaveBeenCalled();
   expect(open).not.toHaveBeenCalled();
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerUp(surface, point(106));
   fireEvent.click(surface, { detail: 1 });
-  expect(open).toHaveBeenCalledExactlyOnceWith(profile);
+  expect(open).not.toHaveBeenCalled();
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerMove(surface, point(100, 1, 7));
   fireEvent.pointerMove(surface, point(100));
   fireEvent.pointerUp(surface, point(100));
   fireEvent.click(surface, { detail: 1 });
-  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).not.toHaveBeenCalled();
 });
 
 test("buttons and keyboard share exit animations, a fallback finishes interrupted animation, and unmount cancels it", () => {
@@ -132,7 +136,7 @@ test("buttons and keyboard share exit animations, a fallback finishes interrupte
       onOpen={vi.fn<(persona: typeof profile) => void>()}
     />,
   );
-  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
+  const surface = screen.getByRole("button", { name: "예린 소개 전체 보기" });
   const event = new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true });
   fireEvent(surface, event);
   expect(event.defaultPrevented).toBe(true);
@@ -176,7 +180,7 @@ test("drag stamps use strict boundaries and image style changes retry a failed p
   const select = vi.fn<(like: boolean) => void>();
   const open = vi.fn<(persona: typeof profile) => void>();
   const view = render(<Card persona={profile} onChoose={select} onOpen={open} />);
-  const surface = screen.getByRole("button", { name: "예린 프로필 보기" });
+  const surface = swipeSurface();
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerMove(surface, point(124));
   expect(screen.queryByText("LIKE")).toBeNull();
