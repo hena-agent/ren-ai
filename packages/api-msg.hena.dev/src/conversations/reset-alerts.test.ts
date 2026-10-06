@@ -3,7 +3,7 @@ import { TestLLM } from "@opencode/ai/testing";
 import { AIError, QuotaExceededError } from "@opencode/ai/schema/errors";
 import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
-import { bindTestHandle, resetFixture } from "../../test/reset.test-helper.ts";
+import { bindTestHandle, resetFixture, onboardTestHandle } from "../../test/reset.test-helper.ts";
 import {
   providerUnavailable,
   scriptedPersona,
@@ -22,9 +22,10 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           const llm = yield* scriptedPersona();
           let failing = true;
           yield* llm.serve((request) =>
-            !failing
+            !failing &&
+            !(kind.startsWith("other-") && JSON.stringify(request).includes("other failure"))
               ? JSON.stringify(request).includes("<conversation-started")
-                ? TestLLM.tool("fresh-wait", "wait", { minutes: 720 })
+                ? TestLLM.tool("fresh-wait", "wait", { seconds: 3300 })
                 : TestLLM.text("quiet", "answer")
               : kind.includes("provider")
                 ? providerUnavailable("unavailable")
@@ -61,6 +62,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* Effect.sleep("20 millis");
           failing = false;
           yield* f.fake.text(f.handle, "/reset", Date.now());
+          yield* onboardTestHandle(host, f.handle);
           const fresh = Session.ID.make((yield* host.conversations.byHandle(f.handle))!.sessionID);
           while (
             !JSON.stringify(yield* host.sessions.messages({ sessionID: fresh })).includes(
@@ -97,7 +99,11 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           if (kind === "quota") expect(yield* requestsFor("subsequent quota failure")).toBe(2);
           if (kind.includes("provider")) expect(alerts).not.toContain("clear:go-cap");
           if (kind === "other-quota")
-            expect(yield* requestsFor("other failure")).toBeGreaterThan(otherRequests);
+            yield* Effect.promise(async () => {
+              await expect
+                .poll(() => Effect.runPromise(requestsFor("other failure")), { timeout: 5000 })
+                .toBeGreaterThan(otherRequests);
+            });
           yield* host.sessions.interrupt(fresh);
           yield* host.sessions.wait(fresh);
         }).pipe(

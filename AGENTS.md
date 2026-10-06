@@ -1,3 +1,23 @@
+# AGENTS.md
+
+- Do not preserve backward compatibility. Remove obsolete paths instead of
+  adding compatibility layers, fallbacks, or migrations.
+- Choose the simplest implementation that fully meets the current
+  requirements. Avoid speculative abstractions, configuration, and
+  indirection.
+- Grow the system in layers. Start from the smallest version that works end
+  to end, and add each new capability on top of a product that already
+  works. Never trade a working product for unfinished complexity.
+- Keep components modular and concerns clearly separated.
+- Prefer established, well-maintained libraries when they reduce overall
+  complexity or improve reliability. Do not reimplement common
+  functionality without a clear reason.
+- Lean on the dependencies already in the project before writing your own
+  implementation or adding packages. Do not assume a library lacks a
+  capability without checking its documentation and types.
+- Make architectural decisions for the long term. Do not accept a stopgap
+  that only works for now and is meant to be replaced later.
+
 ## Agent skills
 
 ### Issue tracker
@@ -14,18 +34,17 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Quality gates
 
-This repo enforces eight gates. They are not advisory. `bun run ci` runs all of them and CI blocks on it.
+This repo enforces seven gates. They are not advisory. `bun run ci` runs all of them and CI blocks on it.
 
-| Gate                  | Threshold      | Enforced by                     |
-| --------------------- | -------------- | ------------------------------- |
-| Cyclomatic complexity | < 22           | oxlint `eslint/complexity`      |
-| Cognitive complexity  | < 22           | `oxlint-plugin-complexity`      |
-| Lines per file        | < 500          | oxlint `eslint/max-lines`       |
-| Test coverage         | 100%, per file | vitest `thresholds.perFile`     |
-| Surviving mutants     | 0              | Stryker `thresholds.break: 100` |
-| Dead code             | 0              | knip                            |
-| Duplicated code       | 0              | jscpd                           |
-| `any` types           | 0              | oxlint `no-explicit-any`        |
+| Gate                  | Threshold      | Enforced by                 |
+| --------------------- | -------------- | --------------------------- |
+| Cyclomatic complexity | < 22           | oxlint `eslint/complexity`  |
+| Cognitive complexity  | < 22           | `oxlint-plugin-complexity`  |
+| Lines per file        | < 500          | oxlint `eslint/max-lines`   |
+| Test coverage         | 100%, per file | vitest `thresholds.perFile` |
+| Dead code             | 0              | knip                        |
+| Duplicated code       | 0              | jscpd                       |
+| `any` types           | 0              | oxlint `no-explicit-any`    |
 
 ### Rules that are easy to get wrong
 
@@ -44,9 +63,9 @@ A sudden burst of `no-unsafe-*` errors means the TypeScript program is misconfig
 
 ### Package shape
 
-Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no build step, and relative imports use explicit `.ts` extensions. Do not add a `build` script or emit `dist/` in a library — an unbuilt compiled package makes type-aware lint and knip exit 0 while enforcing nothing. Browser applications (`packages/msg.hena.dev`, `apps/discovery`, and Persona Lab's frontend) build JavaScript for browsers; nothing imports their output, and every gate runs on their source.
+Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no build step, and relative imports use explicit `.ts` extensions. Do not add a `build` script or emit `dist/` in a library — an unbuilt compiled package makes type-aware lint and knip exit 0 while enforcing nothing. Browser applications (`packages/discovery.hena.dev`, `apps/discovery`, and Persona Lab's frontend) build JavaScript for browsers; nothing imports their output, and every gate runs on their source.
 
-Changes to the shapes in `packages/onboarding` must keep the new site working with the API still running: new fields stay optional until the API deploys, and the site continues handling every answer the old API can give.
+Changes to the shapes in `packages/onboarding` must keep both discovery clients working with the API still running: new fields stay optional until the API deploys, and clients continue handling every answer the old API can give.
 
 ## Persona authoring
 

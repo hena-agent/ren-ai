@@ -1,0 +1,4 @@
+.env
+cloudflare-token
+.generated/
+backups/

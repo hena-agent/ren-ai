@@ -7,7 +7,7 @@ A service where people text fictional personas over iMessage. The repo also carr
 ### Product
 
 **Persona**:
-A fictional character the service plays in iMessage.
+A fictional character the service plays in iMessage. A conversation's persona is chosen at onboarding and never changes.
 _Avoid_: bot, character, agent (an agent is the OpenCode mechanism that implements a persona)
 
 **Persona description**:
@@ -17,6 +17,14 @@ _Avoid_: bio, introduction, system prompt
 **Public profile**:
 The name, image and introduction shown to people choosing personas. It is distinct from the private persona description.
 _Avoid_: persona definition, prompt
+
+**Catalog**:
+Every persona the service can play. Only published personas are offered at onboarding; editing a persona changes her in every ongoing conversation.
+_Avoid_: roster, lineup, persona list
+
+**Ground rules**:
+The instructions every persona follows regardless of who she is, such as never acting like an AI and how to read events on her phone.
+_Avoid_: system prompt, guidelines, policy
 
 **User**:
 A person who has onboarded and texts a persona.
@@ -31,7 +39,7 @@ The handle every persona texts from, currently hi@hena.dev.
 _Avoid_: persona handle, sender, bot account
 
 **Onboarding**:
-Providing a handle and consent to start receiving a persona's iMessages.
+Choosing a published persona, providing a handle, and consenting to start receiving her iMessages. Discovery may also record Likes before a persona is selected for the conversation.
 _Avoid_: signup, registration
 
 **Test handle**:
@@ -59,7 +67,7 @@ People waiting to start a conversation. Discovery registrations include a handle
 _Avoid_: queue, signup list
 
 **Reset**:
-Wiping a persona's memory of a conversation, so she carries on as if meeting the user for the first time. The memory she had is kept for review.
+Returning a test handle to before onboarding, so its next conversation starts as a first meeting. The persona's previous memory is kept for review.
 _Avoid_: clear, restart, new conversation
 
 **Operator**:
@@ -69,7 +77,7 @@ _Avoid_: admin, moderator
 ### Enforcement
 
 **Gate**:
-A single automated check that blocks a merge when it fails. There are eight, listed in `README.md`.
+A single automated check that blocks a merge when it fails. There are seven, listed in `README.md`.
 _Avoid_: rule, check, lint (a lint rule is one implementation of a gate, not a synonym)
 
 **Silent false pass**:

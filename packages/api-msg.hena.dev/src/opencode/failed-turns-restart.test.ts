@@ -3,6 +3,8 @@ import {
   messagingFixture,
   registration,
   runMessagingTest,
+} from "../../test/messaging.test-helper.ts";
+import {
   scriptedPersona,
   startTestHost,
   providerUnavailable,
@@ -12,13 +14,12 @@ import { TestLLM } from "@opencode/ai/testing";
 import { AIError, InvalidRequestError } from "@opencode/ai/schema/errors";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
-import { ConfigProvider, Effect } from "effect";
+import { Effect } from "effect";
 import { expect, test } from "vitest";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { outbox } from "../outbox/outbox.ts";
 import { servePublic } from "../public-listener.ts";
-import { serveViewer } from "./viewer.ts";
 
 const reopen = (
   open: (llm: TestLLM.TestInterface) => ReturnType<typeof startTestHost>,
@@ -36,11 +37,7 @@ const reopen = (
       if (gate) {
         yield* gate.started;
         const publicServer = yield* servePublic(() => Promise.resolve(new Response("ready")), 0);
-        const viewerServer = yield* serveViewer(host.web, 0).pipe(
-          Effect.provide(
-            ConfigProvider.layer(ConfigProvider.fromUnknown({ VIEWER_PASSWORD: "test" })),
-          ),
-        );
+        const viewerServer = yield* servePublic(host.web, 0);
         const publicAddress = publicServer.address();
         const viewerAddress = viewerServer.address();
         if (!publicAddress || typeof publicAddress === "string")
@@ -53,7 +50,7 @@ const reopen = (
         expect(
           (yield* Effect.promise(() => fetch(`http://127.0.0.1:${viewerAddress.port}/api/info`)))
             .status,
-        ).toBe(401);
+        ).toBe(200);
         expect(yield* llm.requests()).toHaveLength(1); // The model is still blocked.
         yield* gate.release;
       }

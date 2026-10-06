@@ -1,11 +1,10 @@
 import {
   normalizeHandle,
-  OnboardingAnswer,
   OnboardingRequest,
   WaitlistRequest,
   notice as localeNotice,
 } from "@ren-ai/onboarding";
-import { Clock, Effect, Layer, Option, Schedule, Schema, Semaphore } from "effect";
+import { Clock, Effect, Layer, Option, Schedule, Semaphore } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
@@ -13,41 +12,20 @@ import {
   HttpServer,
   HttpServerRequest,
 } from "effect/unstable/http";
-import {
-  HttpApi,
-  HttpApiBuilder,
-  HttpApiEndpoint,
-  HttpApiGroup,
-  HttpApiSchema,
-} from "effect/unstable/httpapi";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { onboardingApi } from "./api.ts";
 import { SqlClient } from "effect/unstable/sql";
 import type { Messages } from "../messages/messages.ts";
 import type { Persona } from "../personas/personas.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { submissionLimit } from "./rate-limit.ts";
-
-export const onboardingApi = HttpApi.make("onboarding").add(
-  HttpApiGroup.make("public")
-    .add(
-      HttpApiEndpoint.post("submit", "/onboarding", {
-        payload: OnboardingRequest,
-        success: OnboardingAnswer,
-        error: Schema.String.pipe(HttpApiSchema.status(400)),
-      }),
-    )
-    .add(
-      HttpApiEndpoint.post("waitlist", "/waitlist", {
-        payload: WaitlistRequest,
-        success: Schema.Void,
-        error: Schema.String.pipe(HttpApiSchema.status(400)),
-      }),
-    ),
-);
+import { withLifecycle } from "../conversations/lifecycle.ts";
 
 export const noticeCopy = { ko: localeNotice.ko.text };
 
 interface UserRow {
   readonly joined_at: number | null;
+  readonly persona_id: string | null;
 }
 
 interface NoticeRow {
@@ -61,6 +39,7 @@ interface CountRow {
 }
 
 interface GreetingRow {
+  readonly persona_id: string;
   readonly session_id: string;
   readonly started_at: number;
 }
@@ -81,7 +60,8 @@ export const verifyTurnstile = (token: string, secret: string) =>
 export const onboarding = <SessionError, PromptError, NoticeError>({
   messages,
   notice,
-  persona,
+  personas,
+  defaultPersonaID = "Persona1",
   createSession,
   prompt,
   sendNotice,
@@ -92,7 +72,8 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
 }: {
   messages: Messages;
   notice: Readonly<Record<"ko", string>>;
-  persona: Persona;
+  personas: ReadonlyMap<string, Persona>;
+  defaultPersonaID?: string;
   createSession: (personaID: string) => Effect.Effect<{ readonly id: string }, SessionError>;
   prompt: (sessionID: string, text: string) => Effect.Effect<void, PromptError>;
   sendNotice: (handle: string, text: string) => Effect.Effect<void, NoticeError>;
@@ -101,7 +82,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
   userCap?: number | undefined;
   noticeVersion?: string | undefined;
 }) => {
-  const greet = (sessionID: string, started: number) =>
+  const greet = (sessionID: string, started: number, persona: Persona) =>
     prompt(
       sessionID,
       conversationStarted(started, persona.openingLine, notice.ko, persona.timeZone),
@@ -119,37 +100,53 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
       });
 
     const user = (handle: string) =>
-      sql<UserRow>`SELECT joined_at FROM user WHERE handle = ${handle}`;
+      sql<UserRow>`SELECT joined_at, persona_id FROM user WHERE handle = ${handle}`;
     const unavailable = (handle: string) =>
       Effect.map(
         sql`SELECT handle FROM blocked WHERE handle = ${handle}
-          UNION SELECT handle FROM removal WHERE handle = ${handle}`,
+          UNION SELECT handle FROM removal WHERE handle = ${handle}
+          UNION SELECT handle FROM reset WHERE handle = ${handle} AND complete = 0`,
         (rows) => rows.length > 0,
       );
+    const currentNotice = sql`send.id > COALESCE((SELECT MAX(notice_id) FROM reset WHERE reset.handle = send.handle), 0)`;
     const latest = (handle: string) => sql<NoticeRow>`SELECT id, recorded_at, state FROM send
-    WHERE handle = ${handle} AND kind = 'notice' ORDER BY id DESC LIMIT 1`;
+    WHERE handle = ${handle} AND kind = 'notice' AND ${currentNotice} ORDER BY id DESC LIMIT 1`;
 
     const settle = (handle: string, row: NoticeRow) =>
       Effect.gen(function* () {
         const status = yield* messages.textStatus(handle, row.recorded_at);
-        if (status === "unknown") return;
+        if (status === "unknown") return undefined;
         if (status === "no_imessage") {
-          yield* sql`UPDATE send SET state = 'failed', updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${row.id}`;
-          yield* sql`DELETE FROM user WHERE handle = ${handle} AND joined_at IS NULL`;
-          return;
+          yield* withLifecycle(
+            Effect.gen(function* () {
+              yield* sql`UPDATE send SET state = 'failed', updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${row.id}`;
+              yield* sql`DELETE FROM user WHERE handle = ${handle} AND joined_at IS NULL`;
+            }),
+          );
+          return undefined;
         }
-        if (yield* unavailable(handle)) return;
-        const started = yield* Clock.currentTimeMillis;
-        const session = yield* createSession(persona.id);
-        yield* sql.withTransaction(
+        const prepared = yield* withLifecycle(
           Effect.gen(function* () {
-            yield* sql`UPDATE user SET joined_at = ${started} WHERE handle = ${handle} AND joined_at IS NULL`;
-            yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
+            if (yield* unavailable(handle)) return undefined;
+            const [pending] = yield* user(handle);
+            if (!pending || pending.joined_at !== null) return undefined;
+            const persona = personas.get(pending.persona_id ?? defaultPersonaID);
+            if (!persona) return yield* Effect.fail(new Error("Selected persona is missing"));
+            const started = yield* Clock.currentTimeMillis;
+            const session = yield* createSession(persona.id);
+            yield* sql.withTransaction(
+              Effect.gen(function* () {
+                yield* sql`UPDATE user SET joined_at = ${started} WHERE handle = ${handle} AND joined_at IS NULL`;
+                yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
         VALUES ((SELECT id FROM user WHERE handle = ${handle}), ${persona.id}, ${session.id}, ${started})`;
-            yield* sql`UPDATE send SET state = 'sent', updated_at = ${started} WHERE id = ${row.id}`;
+                yield* sql`UPDATE send SET state = 'sent', updated_at = ${started} WHERE id = ${row.id}`;
+              }),
+            );
+            return { sessionID: session.id, started, persona };
           }),
         );
-        yield* greet(session.id, started);
+        if (prepared) yield* greet(prepared.sessionID, prepared.started, prepared.persona);
+        return undefined;
       });
 
     const watch = (handle: string) =>
@@ -210,6 +207,18 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
             if (yield* unavailable(input.handle)) return "unknown" as const;
             const [existing] = yield* user(input.handle);
             if (existing?.joined_at != null) return "sent" as const;
+            const selected = personas.get(
+              existing
+                ? (existing.persona_id ?? defaultPersonaID)
+                : (input.personaID ?? defaultPersonaID),
+            );
+            if (
+              !selected ||
+              (!existing &&
+                (selected.published === false ||
+                  (input.personaID !== undefined && !selected.published)))
+            )
+              return "persona_unavailable" as const;
             const [previous] = yield* latest(input.handle);
             if (previous) {
               const answer = yield* oldNotice(input.handle, existing, previous, now);
@@ -217,8 +226,8 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
             }
             yield* sql`DELETE FROM user WHERE handle = ${input.handle} AND joined_at IS NULL`;
             const inserted =
-              yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at)
-      VALUES (${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${input.locale}, ${now}) RETURNING id`;
+              yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at, persona_id)
+      VALUES (${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${input.locale}, ${now}, ${selected.id}) RETURNING id`;
             if (inserted.length) {
               yield* sendNotice(input.handle, notice[input.locale]).pipe(
                 Effect.catchCause(Effect.logError),
@@ -242,13 +251,17 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
 
     const resume = Effect.gen(function* () {
       const greetings =
-        yield* sql<GreetingRow>`SELECT conversation.session_id, conversation.started_at
+        yield* sql<GreetingRow>`SELECT conversation.session_id, conversation.started_at, conversation.persona_id
       FROM conversation JOIN user ON user.id = conversation.user_id
-      JOIN send ON send.handle = user.handle AND send.kind = 'notice' AND send.state IN ('sent', 'delivered')`;
-      for (const row of greetings) yield* Effect.forkDetach(greet(row.session_id, row.started_at));
+      JOIN send ON send.handle = user.handle AND send.kind = 'notice' AND send.state IN ('sent', 'delivered')
+      WHERE ${currentNotice}`;
+      for (const row of greetings)
+        yield* Effect.forkDetach(
+          greet(row.session_id, row.started_at, personas.get(row.persona_id)!),
+        );
       const pending = yield* sql<{ handle: string }>`SELECT user.handle FROM user
       JOIN send ON send.handle = user.handle AND send.kind = 'notice'
-      WHERE user.joined_at IS NULL AND send.state IN ('recorded', 'uncertain')`;
+       WHERE user.joined_at IS NULL AND send.state IN ('recorded', 'uncertain') AND ${currentNotice}`;
       for (const row of pending) {
         yield* Effect.forkDetach(watch(row.handle));
       }
@@ -256,6 +269,18 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
 
     const handlers = HttpApiBuilder.group(onboardingApi, "public", (group) =>
       group
+        .handle("personas", () =>
+          Effect.succeed(
+            [...personas.values()]
+              .filter((persona) => persona.published)
+              .map((persona) => ({
+                id: persona.id,
+                name: persona.name!,
+                bio: persona.bio!,
+                imageUrl: persona.imageUrl!,
+              })),
+          ),
+        )
         .handle("submit", ({ payload }) =>
           Effect.flatMap(HttpServerRequest.HttpServerRequest, (request) =>
             submit(payload, request.headers["cf-connecting-ip"] ?? "missing"),
@@ -268,7 +293,7 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
     const routes = HttpApiBuilder.layer(onboardingApi).pipe(
       Layer.provide(handlers),
       Layer.provideMerge(HttpRouter.layer),
-      Layer.provideMerge(HttpRouter.cors({ allowedOrigins: ["https://msg.hena.dev"] })),
+      Layer.provideMerge(HttpRouter.cors({ allowedOrigins: ["https://discovery.hena.dev"] })),
       Layer.provide(HttpServer.layerServices),
     );
     return { submit, waitlist, resume, routes };

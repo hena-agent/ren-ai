@@ -1,0 +1,11 @@
+**/node_modules
+**/.git
+**/.env
+**/.env.*
+**/*.sqlite
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.token
+**/.turbo
+**/dist
+coverage

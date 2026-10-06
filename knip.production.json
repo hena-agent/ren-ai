@@ -1,13 +1,45 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
-    ".": { "entry": ["scripts/*.ts"] },
-    "apps/admin": { "entry": ["src/pending-entry.mjs"] }
+    ".": {
+      "entry": [
+        "scripts/check-site-build.ts!",
+        "scripts/exceptions.ts!",
+        "scripts/run-quality-gate.ts!",
+        "scripts/verify-gates.ts!"
+      ]
+    },
+    "packages/api-msg.hena.dev": {
+      "entry": [
+        "src/server-entry.ts!",
+        "src/operator-entry.ts!",
+        "ops/imsg-entry.ts!",
+        "ops/imsg-verify.ts!",
+        "ops/location-config.ts!",
+        "ops/mdm/enrollment-entry.ts!",
+        "ops/mdm/profile-entry.ts!",
+        "ops/offline-export.ts!",
+        "ops/patch-opencode-proxy.ts!",
+        "ops/session-transfer.ts!",
+        "ops/verify-mac-graph.ts!",
+        "test/compiled-plugin/regression.mjs!"
+      ]
+    },
+    "apps/admin": {
+      "entry": ["src/run.mjs!", "src/pending-entry.mjs!"]
+    },
+    "apps/discovery": {
+      "entry": ["index.html"]
+    },
+    "packages/discovery.hena.dev": {
+      "entry": ["src/routeTree.gen.ts!"]
+    }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],
   "ignoreFiles": [
     "**/*.fake.ts",
     "**/*.test-helper.ts",
+    "apps/*/test/**",
     "packages/api-msg.hena.dev/test/offline.setup.ts"
   ],
   "ignoreDependencies": ["jscpd"]

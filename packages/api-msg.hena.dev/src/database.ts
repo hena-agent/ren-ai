@@ -100,7 +100,13 @@ export const migrate = Effect.gen(function* () {
         yield* sql`INSERT INTO removal SELECT handle, session_id FROM old_removal`;
         yield* sql`DROP TABLE old_removal`;
       }),
-      "016_discovery": Effect.gen(function* () {
+      "016_reset_onboarding": Effect.gen(function* () {
+        yield* sql`ALTER TABLE reset ADD COLUMN notice_id INTEGER NOT NULL DEFAULT 0`;
+        yield* sql`UPDATE reset SET notice_id = COALESCE((SELECT MAX(send.id) FROM send
+          WHERE send.handle = reset.handle AND send.kind = 'notice' AND send.recorded_at <= reset.date), 0)`;
+      }),
+      "017_selected_persona": sql`ALTER TABLE user ADD COLUMN persona_id TEXT`,
+      "018_discovery": Effect.gen(function* () {
         yield* sql`CREATE TABLE discovery_registration (
           id TEXT PRIMARY KEY,
           handle TEXT NOT NULL UNIQUE,

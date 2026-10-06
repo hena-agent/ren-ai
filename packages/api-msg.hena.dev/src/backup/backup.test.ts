@@ -1,23 +1,18 @@
-import { chmod, mkdtemp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Deferred, Effect, FileSystem, Layer } from "effect";
 import { TestClock } from "effect/testing";
 import { SqlClient } from "effect/unstable/sql";
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 import { makeBackup } from "./backup.ts";
-
-vi.mock("@effect/sql-sqlite-bun", async () => ({
-  SqliteClient: { layer: (await import("@effect/sql-sqlite-node")).SqliteClient.layer },
-}));
 
 const fixture = async () => {
   const root = await mkdtemp(join(tmpdir(), "backup-"));
   const directory = join(root, "nested", "snapshots");
   const server = join(root, "server.sqlite");
-  const openCodeDatabase = join(root, "host.sqlite");
-  for (const filename of [server, openCodeDatabase]) {
+  for (const filename of [server]) {
     await Effect.runPromise(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
@@ -32,6 +27,8 @@ const fixture = async () => {
     chmod: (path, mode) => Effect.promise(() => chmod(path, mode)),
     readDirectory: (path) => Effect.promise(() => readdir(path)),
     remove: (path) => Effect.promise(() => rm(path)),
+    writeFileString: (path, content, options) =>
+      Effect.promise(() => writeFile(path, content, options)),
   });
   const dependencies = Layer.merge(filesystem, SqliteClient.layer({ filename: server }));
   const health = {
@@ -47,16 +44,15 @@ const fixture = async () => {
   return {
     directory,
     server,
-    openCodeDatabase,
+    sessions: Effect.succeed('{"version":1,"sessions":[]}'),
     alerts,
     health,
     dependencies,
     dispose: () => rm(root, { recursive: true, force: true }),
-    missingHost: join(root, "missing", "host.sqlite"),
   };
 };
 
-test("nightly snapshots only the two persona databases and prunes files older than 14 days", async () => {
+test("nightly snapshots application state and remote persona history and prunes files older than 14 days", async () => {
   const f = await fixture();
   const start = Date.parse("2026-09-25T17:59:00Z"); // 02:59 in Seoul
   try {
@@ -73,7 +69,7 @@ test("nightly snapshots only the two persona databases and prunes files older th
           yield* TestClock.setTime(start);
           const finished = yield* Deferred.make<void>();
           const backup = yield* makeBackup(
-            { directory: f.directory, openCodeDatabase: f.openCodeDatabase },
+            { directory: f.directory, sessions: f.sessions },
             {
               ...f.health,
               clear: (name) =>
@@ -94,7 +90,7 @@ test("nightly snapshots only the two persona databases and prunes files older th
     );
     const names = await readdir(f.directory);
     expect(names).toContain(`server-${start + 60000}.sqlite`);
-    expect(names).toContain(`opencode-${start + 60000}.sqlite`);
+    expect(names).toContain(`opencode-${start + 60000}.json`);
     expect(names).not.toContain(`server-${start - 15 * 86400000}.sqlite`);
     expect(names).toContain(`server-${start + 60000 - 14 * 86400000}.sqlite`);
     expect(names).toContain(`opencode-${start - 13 * 86400000}.sqlite`);
@@ -111,9 +107,12 @@ test("nightly snapshots only the two persona databases and prunes files older th
         }).pipe(Effect.provide(SqliteClient.layer({ filename: join(f.directory, name) }))),
       );
     expect(await snapshot(`server-${start + 60000}.sqlite`)).toEqual([{ value: f.server }]);
-    expect(await snapshot(`opencode-${start + 60000}.sqlite`)).toEqual([
-      { value: f.openCodeDatabase },
-    ]);
+    expect(await readFile(join(f.directory, `opencode-${start + 60000}.json`), "utf8")).toBe(
+      '{"version":1,"sessions":[]}',
+    );
+    expect((await stat(join(f.directory, `opencode-${start + 60000}.json`))).mode & 0o777).toBe(
+      0o600,
+    );
   } finally {
     await f.dispose();
   }
@@ -126,7 +125,7 @@ test("snapshot failures raise backup alerts; a later successful local snapshot c
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse("2026-09-26T00:00:00Z"));
         const broken = yield* makeBackup(
-          { directory: f.directory, openCodeDatabase: f.missingHost },
+          { directory: f.directory, sessions: Effect.fail(new Error("OpenCode unavailable")) },
           f.health,
         );
         yield* broken.tick;
@@ -134,7 +133,7 @@ test("snapshot failures raise backup alerts; a later successful local snapshot c
         expect(f.alerts).toEqual(["backup: Backup failed"]);
         yield* TestClock.adjust("1 second");
         const backup = yield* makeBackup(
-          { directory: f.directory, openCodeDatabase: f.openCodeDatabase },
+          { directory: f.directory, sessions: f.sessions },
           f.health,
         );
         yield* backup.tick;

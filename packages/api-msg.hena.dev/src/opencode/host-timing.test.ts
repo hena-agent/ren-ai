@@ -27,7 +27,7 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
             if (!request.tools.some((tool) => tool.name === "wait"))
               return TestLLM.text("title", "title");
             return step++ === 0
-              ? TestLLM.tool("wait-call", "wait", { minutes: 10 })
+              ? TestLLM.tool("wait-call", "wait", { seconds: 600 })
               : TestLLM.text("done", "answer");
           });
           const host = yield* startScriptedMessagingHost(
@@ -65,9 +65,9 @@ test("a text admitted during wait wakes the real OpenCode tool for only its Conv
             ),
           ).toBe(true);
           const firstRequest = (yield* llm.requests())[0]!;
-          expect(JSON.stringify(firstRequest.tools)).toContain("minutes");
+          expect(JSON.stringify(firstRequest.tools)).toContain('"seconds"');
           expect(JSON.stringify(firstRequest.tools)).toContain(
-            "Pause for up to 12 hours, or until something new arrives",
+            "Pause for the requested seconds (up to 3300 seconds / 55 minutes), or until something new arrives",
           );
 
           step = 0;
@@ -110,7 +110,7 @@ test.each([
                 return TestLLM.text("title", "title");
               return step++ === 0
                 ? tool === "wait"
-                  ? TestLLM.tool("waiting", "wait", { minutes: 10 })
+                  ? TestLLM.tool("waiting", "wait", { seconds: 600 })
                   : TestLLM.tool("draft", "send", { text: "unsent draft" })
                 : TestLLM.text("done", "answer");
             });

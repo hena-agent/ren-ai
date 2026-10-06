@@ -9,6 +9,7 @@ import {
   subscription,
 } from "./imsg-protocol.ts";
 import { imsgRpc } from "./imsg-rpc.ts";
+import { imageData } from "../intake/images.ts";
 
 interface Alerts {
   raise(name: string, detail?: string): Effect.Effect<void>;
@@ -69,6 +70,7 @@ export const makeImsgMessages = (alerts: Alerts) =>
           yield* Effect.fail(new Error());
       });
     const messages: Messages = {
+      image: imageData,
       after,
       status,
       sendStatus: (guid) =>

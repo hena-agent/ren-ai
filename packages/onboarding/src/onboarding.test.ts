@@ -67,6 +67,16 @@ describe("Onboarding contract", () => {
     );
   });
 
+  it("preserves an optional persona selection while accepting old requests", () => {
+    expect(Schema.decodeUnknownSync(OnboardingRequest)(request)).toEqual(request);
+    expect(Schema.decodeUnknownSync(OnboardingRequest)({ ...request, personaID: "harin" })).toEqual(
+      { ...request, personaID: "harin" },
+    );
+    expect(() =>
+      Schema.decodeUnknownSync(OnboardingRequest)({ ...request, personaID: 24 }),
+    ).toThrow("Expected");
+  });
+
   it.each([
     { ...request, handle: "01012345678" },
     { ...request, locale: "en" },
@@ -79,7 +89,7 @@ describe("Onboarding contract", () => {
     );
   });
 
-  it.each(["sent", "no_imessage", "unknown", "full", "try_later"])(
+  it.each(["sent", "no_imessage", "unknown", "full", "try_later", "persona_unavailable"])(
     "accepts answer %s",
     (answer) => {
       expect(Schema.decodeUnknownSync(OnboardingAnswer)(answer)).toBe(answer);

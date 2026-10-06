@@ -3,9 +3,8 @@ import {
   messagingFixture,
   registration,
   runMessagingTest,
-  scriptedPersona,
-  startTestHost,
-} from "../../test/messaging-host.test-helper.ts";
+} from "../../test/messaging.test-helper.ts";
+import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
 import { TestLLM } from "@opencode/ai/testing";
 import { Deferred, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";

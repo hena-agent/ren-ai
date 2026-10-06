@@ -4,4 +4,6 @@
 scripts/*.mjs
 skills-lock.json
 fixtures/
-packages/msg.hena.dev/src/routeTree.gen.ts
+reports/mutation/
+.stryker-tmp/
+packages/discovery.hena.dev/src/routeTree.gen.ts

@@ -1,0 +1,20 @@
+{
+  "name": "@ren-ai/plugin-context",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@opencode/ai": "2.0.19",
+    "@opencode/plugin": "2.0.19",
+    "@ren-ai/plugin-application": "workspace:*",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2"
+  }
+}

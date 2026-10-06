@@ -1,14 +1,12 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { notice } from "@ren-ai/onboarding";
 import { Session } from "@opencode/schema/session";
-import {
-  messagingFixture,
-  quietTestHost,
-  registration,
-  runMessagingTest,
-  startTestHost,
-} from "./messaging-host.test-helper.ts";
+import { expect } from "vitest";
+import { messagingFixture, registration, runMessagingTest } from "./messaging.test-helper.ts";
+import { quietTestHost, startTestHost } from "./messaging-host.test-helper.ts";
 import { fakeMessages } from "../src/messages/messages.fake.ts";
 
 export const resetFixture = async (prefix: string) => {
@@ -37,6 +35,58 @@ export const resetFixture = async (prefix: string) => {
 };
 
 type Host = Effect.Success<ReturnType<typeof startTestHost>>;
+
+export const onboardTestHandle = (
+  host: Pick<Host, "onboard" | "conversations" | "sessions">,
+  handle: string,
+) =>
+  host
+    .onboard({
+      handle,
+      locale: "ko",
+      privacyNoticeVersion: notice.ko.version,
+      turnstileToken: "test",
+    })
+    .pipe(
+      // A sent Notice precedes asynchronous greeting admission; session.wait cannot wait for it yet.
+      Effect.tap((result) =>
+        result === "sent"
+          ? Effect.promise(async () => {
+              await expect
+                .poll(
+                  async () => {
+                    const conversation = await Effect.runPromise(
+                      host.conversations.byHandle(handle),
+                    );
+                    if (!conversation) return "";
+                    return JSON.stringify(
+                      await Effect.runPromise(
+                        host.sessions.messages({
+                          sessionID: Session.ID.make(conversation.sessionID),
+                        }),
+                      ),
+                    );
+                  },
+                  { timeout: 5000 },
+                )
+                .toContain("<conversation-started");
+            })
+          : Effect.void,
+      ),
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              new Response('{"success":true}', {
+                headers: { "content-type": "application/json" },
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
 
 export const bindTestHandle = (host: Host, handle: string) =>
   Effect.gen(function* () {

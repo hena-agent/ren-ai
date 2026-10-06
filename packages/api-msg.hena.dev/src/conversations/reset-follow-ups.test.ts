@@ -3,14 +3,10 @@ import { Clock, Duration, Effect } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
 import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
-import {
-  messagingFixture,
-  runMessagingTest,
-  scriptedPersona,
-  startTestHost,
-} from "../../test/messaging-host.test-helper.ts";
+import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
+import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
-import { bindTestHandle } from "../../test/reset.test-helper.ts";
+import { bindTestHandle, onboardTestHandle } from "../../test/reset.test-helper.ts";
 
 test("sending the reset Greeting does not schedule a follow-up until the User replies", async () => {
   const { root, personaDirectory } = await messagingFixture("reset-follow-");
@@ -35,6 +31,7 @@ test("sending the reset Greeting does not schedule a follow-up until the User re
         yield* host.sessions.wait(old.id);
         greet = true;
         yield* fake.text(handle, "/reset", yield* Clock.currentTimeMillis);
+        yield* onboardTestHandle(host, handle);
         const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
         yield* host.sessions.wait(id);
         expect(fake.bubbles).toContainEqual({ handle, text: "Hello stranger" });

@@ -5,6 +5,7 @@ export type { Country } from "./countries.ts";
 export { PublicPersona, DiscoveryRequest, DiscoveryAnswer, discoveryNotice } from "./discovery.ts";
 export {
   Handle,
+  PublicPersonas,
   OnboardingRequest,
   OnboardingAnswer,
   WaitlistRequest,

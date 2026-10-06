@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TestLLM } from "@opencode/ai/testing";
 import { SessionMessage } from "@opencode/schema/session-message";
+import { AbsolutePath, Agent, Location, Model } from "@opencode/schema";
 import { Effect } from "effect";
 import { expect, test, vi } from "vitest";
-import { startPersonaHost } from "../main.ts";
+import { startPersonaHost } from "../../test/application.test-helper.ts";
 import { scriptedOverrides, valid } from "../../test/host.test-helper.ts";
-import { createHost } from "./host.ts";
+import { createHost } from "../../test/embedded-host.test-helper.ts";
 
 test("the host rejects impossible Memory limits before starting", async () => {
   for (const memory of [
@@ -121,6 +122,32 @@ test("automatic compaction writes persona Memory and keeps his name through two 
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: empty.id })),
           ).not.toContain('"summary":" "');
+          const beforeOther = (yield* llm.requests()).length;
+          let otherStep = 0;
+          yield* llm.serve(() =>
+            ++otherStep === 1
+              ? TestLLM.textWithUsage("ordinary reply", "reply", 2_000)
+              : TestLLM.text("## Objective\nOrdinary memory", "answer"),
+          );
+          const other = yield* host.sessions.create({
+            agent: Agent.ID.make("build"),
+            model: Model.Ref.parse("test/probe"),
+            location: Location.Ref.make({ directory: AbsolutePath.make(personaDirectory) }),
+            permissions: [{ action: "*", resource: "*", effect: "deny" }],
+          });
+          for (const text of ["first unrelated turn", "second unrelated turn"]) {
+            yield* host.sessions.prompt({ sessionID: other.id, text });
+            yield* host.sessions.wait(other.id);
+          }
+          expect((yield* host.sessions.get(other.id)).outcome).toBe("succeeded");
+          expect(
+            (yield* host.sessions.messages({ sessionID: other.id })).some(
+              (message) => message.type === "compaction",
+            ),
+          ).toBe(true);
+          expect(JSON.stringify((yield* llm.requests()).slice(beforeOther))).not.toContain(
+            "Write her Memory",
+          );
         }),
       ),
     );

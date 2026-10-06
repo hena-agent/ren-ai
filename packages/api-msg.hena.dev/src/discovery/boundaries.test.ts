@@ -112,18 +112,22 @@ test("the public API allows only the documented browser origin", async () => {
         try {
           const allowed = await web.handler(
             new Request("http://localhost/discovery/personas", {
-              headers: { Origin: "https://msg.hena.dev" },
+              headers: { Origin: "https://discovery.hena.dev" },
             }),
             Context.make(HttpClient.HttpClient, verified),
           );
-          expect(allowed.headers.get("access-control-allow-origin")).toBe("https://msg.hena.dev");
+          expect(allowed.headers.get("access-control-allow-origin")).toBe(
+            "https://discovery.hena.dev",
+          );
           const denied = await web.handler(
             new Request("http://localhost/discovery/personas", {
               headers: { Origin: "https://unrelated.example" },
             }),
             Context.make(HttpClient.HttpClient, verified),
           );
-          expect(denied.headers.get("access-control-allow-origin")).toBe("https://msg.hena.dev");
+          expect(denied.headers.get("access-control-allow-origin")).toBe(
+            "https://discovery.hena.dev",
+          );
         } finally {
           await web.dispose();
         }

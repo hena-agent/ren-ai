@@ -8,12 +8,12 @@
 
 사용자가 틴더처럼 페르소나를 스와이프하고 Like하면, 그중 한 명이 나중에 iMessage로 먼저 연락한다. 운영자는 Admin에서 페르소나를 저장·관리하고, 초대 링크를 발급하며, 대기자 중 연락할 N명을 선정한다.
 
-두 웹 애플리케이션을 `apps/` 아래에 만든다. 아래 디렉터리명은 작업용 제안이다.
+사용자 웹사이트는 기존 패키지를 `packages/discovery.hena.dev`로 이름을 바꾸고 `discovery.hena.dev`에 배포한다. Admin은 `apps/admin`에 둔다.
 
-| 앱              | 제안 경로        | 역할                                                                           |
-| --------------- | ---------------- | ------------------------------------------------------------------------------ |
-| 사용자 웹사이트 | `apps/discovery` | 페르소나 탐색, Like / Pass, 연락처 등록, 초대 적용, 등록 상태 확인·연락처 수정 |
-| Admin           | `apps/admin`     | 페르소나 저장·관리, 초대 링크 관리, 대기자 선정, 첫 연락 상태 확인             |
+| 앱              | 경로                          | 역할                                                                           |
+| --------------- | ----------------------------- | ------------------------------------------------------------------------------ |
+| 사용자 웹사이트 | `packages/discovery.hena.dev` | 페르소나 탐색, Like / Pass, 연락처 등록, 초대 적용, 등록 상태 확인·연락처 수정 |
+| Admin           | `apps/admin`                  | 페르소나 저장·관리, 초대 링크 관리, 대기자 선정, 첫 연락 상태 확인             |
 
 공개 페르소나 목록과 운영자 편집 화면은 같은 저장된 페르소나를 참조한다. 선정·초대 사용·발송 예약의 판단은 서버에서 수행하며, 두 웹 앱이 서로 다른 규칙을 구현하지 않는다.
 
@@ -361,7 +361,7 @@ bun run --cwd apps/discovery dev
 
 ## 현재 저장소와 연결할 작업
 
-- `packages/msg.hena.dev`: 현재 단일 연락처 등록 사이트다. `apps/discovery`로의 이전 또는 대체와 기존 URL 연결이 필요하다.
+- `packages/discovery.hena.dev`: 현재 단일 연락처 등록 사이트다. 도메인 전환 후 기존 `msg.hena.dev`는 리다이렉트 없이 종료한다. 탐색 기능은 이 패키지에 확장한다.
 - `packages/onboarding`: Handle 검증과 요청·응답 형식을 재사용·확장한다. API가 별도로 배포되므로 신규 필드는 배포 전까지 선택적으로 두고 구 API의 응답도 처리한다.
 - `packages/api-msg.hena.dev/src/onboarding/onboarding.ts`: 현재 고정 페르소나·즉시 Notice·Greeting 흐름을 새 등록·선정·예약 흐름으로 변경해야 한다.
 - `packages/api-msg.hena.dev/src/personas/personas.ts`: `packages/personas`의 공용 OpenCode 로더를 재사용한다. 런타임 실시간 반영이 필요해지면 별도 적용 정책을 정한다.
@@ -382,8 +382,9 @@ bun run --cwd apps/discovery dev
 
 제품 흐름을 다시 인터뷰하기 위한 목록이 아니라 구현 시 해소할 결정 목록이다. 추가 사용자 결정이 필요하면 question tool을 사용한다.
 
-- [ ] 두 앱의 최종 디렉터리명, 도메인, 기존 `msg.hena.dev`의 이전·배포 방식.
-- [x] 페르소나 저장은 OpenCode Markdown + YAML frontmatter 단일 파일로 관리한다. 기존 HTTPS 이미지 URL과 서비스가 생성한 `/discovery/images/` 경로를 지원하며, 새 캐릭터의 애니메·실사 이미지 쌍을 함께 저장한다.
+- [x] 사용자 사이트는 `packages/discovery.hena.dev`, 도메인은 `discovery.hena.dev`로 정한다. 새 사이트 검증 후 기존 `msg.hena.dev`는 리다이렉트 없이 종료한다. [배포 순서](../../packages/api-msg.hena.dev/ops/README.md#discovery-domain-cutover)를 따른다.
+- [ ] Admin의 공개 도메인과 배포 방식.
+- [x] 페르소나는 OpenCode Markdown + YAML frontmatter 단일 파일로 저장한다. 이미지는 HTTPS URL 또는 서비스 소유 `/discovery/images/` URL을 사용하고, 스타일별 메인과 독립 추가 사진을 선택적으로 기록한다. 구 `portraitGallery`는 읽을 때 독립 사진으로 정규화한다.
 - [x] Admin 편집 모델은 OpenCode로 정하고 기존 런타임과 로더를 공유한다. 현재 설정 변경은 API 재시작 후 반영한다.
 - [ ] 새 첫 연락 예약과 진행 중 대화에서 설정 변경을 적용할 시점·정의 버전 정책.
 - [ ] 페르소나당 동시 사용자 제한 여부. 제한이 있으면 초대 등록과 N명 선정 모두 후보 가용성을 검사해야 한다.

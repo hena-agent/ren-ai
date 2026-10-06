@@ -2,8 +2,8 @@ import { join } from "node:path";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
 import { Session } from "@opencode/schema/session";
-import { registration } from "../../test/messaging-host.test-helper.ts";
-import { resetFixture } from "../../test/reset.test-helper.ts";
+import { registration } from "../../test/messaging.test-helper.ts";
+import { resetFixture, onboardTestHandle } from "../../test/reset.test-helper.ts";
 import { operatorHandler } from "./api.ts";
 import { runOperatorCli } from "./cli.ts";
 import { serveOperatorSocket } from "./socket.ts";
@@ -25,6 +25,7 @@ test("operator commands mark test handles and preserve their sessions on removal
         const old = yield* host.createSession("persona1");
         yield* host.conversations.create(registration(handle, old.id));
         yield* fake.text(handle, "/reset", Date.now());
+        yield* onboardTestHandle(host, handle);
         const fresh = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
         yield* host.sessions.wait(fresh);
         expect(yield* runOperatorCli(["remove", handle], socket)).toContain("Removed");

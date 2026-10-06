@@ -1,0 +1,25 @@
+{
+  "name": "@ren-ai/plugin-session-folder",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol.ts",
+    "./files": "./src/files.ts",
+    "./paths": "./src/paths.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.0.19",
+    "@opencode/schema": "2.0.19",
+    "@ren-ai/personas": "workspace:*",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2"
+  }
+}

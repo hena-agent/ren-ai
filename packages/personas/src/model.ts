@@ -4,6 +4,10 @@ import { normalizePortraits } from "./portraits.ts";
 import type { PersonaImage } from "./portraits.ts";
 
 export interface Persona {
+  readonly name?: string;
+  readonly bio?: string;
+  readonly imageUrl?: string;
+  readonly published?: boolean;
   readonly id: string;
   readonly timeZone: string;
   readonly language: string;
@@ -136,8 +140,8 @@ export function decodePersona(input: unknown): PersonaRecord {
       ) {
         throw new Error("프로필 이미지는 HTTPS URL이어야 합니다.");
       }
-    if (persona.published && (!persona.bio.trim() || !persona.imageUrl)) {
-      throw new Error("공개하려면 소개와 프로필 이미지가 필요합니다.");
+    if (persona.published && !persona.bio.trim()) {
+      throw new Error("공개하려면 소개가 필요합니다.");
     }
     return persona;
   } catch (error) {

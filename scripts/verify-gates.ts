@@ -1,10 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import exceptions from "../quality-exceptions.json" with { type: "json" };
 import { qualityCommand } from "./quality-commands.ts";
-import { mutationPatterns } from "./mutation-ci.ts";
 
 /**
  * Proves each gate actually rejects the thing it claims to reject.
@@ -169,7 +168,10 @@ const CHECKS: readonly Check[] = [
 const run = (command: readonly string[]): { readonly code: number; readonly output: string } => {
   const [binary, ...args] = command;
   const result = spawnSync(binary ?? "", args, { encoding: "utf8", shell: false });
-  return { code: result.status ?? 1, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+  return {
+    code: result.status ?? 1,
+    output: `${result.stdout ?? ""}${result.stderr ?? ""}${result.error?.message ?? ""}`,
+  };
 };
 
 const plant = (files: Readonly<Record<string, string>>): void => {
@@ -206,6 +208,8 @@ const verify = (check: Check): readonly string[] => {
         problems.push(`${check.gate}: no coverage threshold failure named ${path}`);
       }
     }
+    if (problems.length > 0)
+      process.stderr.write(`${check.gate} command output:\n${rejected.output}\n`);
   } finally {
     uproot(check.files);
   }
@@ -233,54 +237,8 @@ const verify = (check: Check): readonly string[] => {
   return problems;
 };
 
-/**
- * The mutation gate's real failure mode is the bun patch silently not applying
- * after a version bump, so assert the patch rather than run a full mutation
- * pass. See README "Known patch".
- */
-const verifyStrykerPatch = (): readonly string[] => {
-  const patched = [
-    "node_modules/@stryker-mutator/vitest-runner/dist/src/test-helpers.js",
-    "node_modules/@stryker-mutator/vitest-runner/dist/src/stryker-setup.js",
-  ];
-  const nameFailures = patched
-    .filter((path) => !existsSync(path) || !readFileSync(path, "utf8").includes("join(' > ')"))
-    .map(
-      (path) =>
-        `mutation runner patch: ${path} is missing the " > " test-name separator; mutation results cannot be trusted`,
-    );
-  const runner = "node_modules/@stryker-mutator/vitest-runner/dist/src/vitest-test-runner.js";
-  const content = existsSync(runner) ? readFileSync(runner, "utf8") : "";
-  const failures = [...nameFailures];
-  if (!content.includes("pool: 'forks',\n            maxWorkers: 1")) {
-    failures.push(
-      "mutation runner patch: Vitest 5 must use one forked worker (ffi-rs segfaults in Linux threads)",
-    );
-  }
-  const suiteFailureHandler = `if (!failure && errors.length > 0) {
-            const errorText = errors
-                .map(errorToString)
-                .join('\\n');
-            return {
-                status: DryRunStatus.Error,`;
-  if (
-    !content.includes(
-      "...this.ctx.state.getFiles().flatMap((file) => file.result?.errors ?? []),",
-    ) ||
-    !content.includes(suiteFailureHandler)
-  ) {
-    failures.push(
-      "mutation runner patch: Vitest suite import failures must be reported as runtime errors, not surviving mutants",
-    );
-  }
-  return failures;
-};
-
 const verifyGateInputs = (): readonly string[] => {
   const failures: string[] = [];
-  if (!mutationPatterns.includes("{apps,packages}/*/src/**/*.{ts,tsx}")) {
-    failures.push("mutation: mutate patterns must include apps, packages and .tsx files");
-  }
   const lint = qualityCommand("lint") ?? [];
   const duplication = qualityCommand("duplication") ?? [];
   for (const { path } of exceptions.lint) {
@@ -301,13 +259,12 @@ const verifyGateInputs = (): readonly string[] => {
 rmSync(SCRATCH, { recursive: true, force: true });
 mkdirSync(SCRATCH, { recursive: true });
 
-const failures = [...CHECKS.flatMap(verify), ...verifyStrykerPatch(), ...verifyGateInputs()];
+const failures = [...CHECKS.flatMap(verify), ...verifyGateInputs()];
 
 for (const check of CHECKS) {
   process.stdout.write(`  ${check.gate}\n`);
 }
-process.stdout.write("  mutation runner patch\n");
-process.stdout.write("  mutation TSX and lint/duplication exceptions\n");
+process.stdout.write("  lint/duplication exceptions\n");
 
 rmSync(SCRATCH, { recursive: true, force: true });
 

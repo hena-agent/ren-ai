@@ -9,7 +9,8 @@ import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { outbox } from "../outbox/outbox.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
-import { onboarding, onboardingApi, noticeCopy } from "./onboarding.ts";
+import { onboarding, noticeCopy } from "./onboarding.ts";
+import { onboardingApi } from "./api.ts";
 
 const input = {
   handle: "+821012345678",
@@ -70,14 +71,20 @@ const setup = (
     const api = yield* onboarding({
       messages: fake.messages,
       notice: noticeCopy,
-      persona: {
-        id: "persona1",
-        timeZone: "Asia/Seoul",
-        language: "ko",
-        openingLine: "번호 받았으니까 먼저 연락해 봐",
-        memory: "Remember",
-        prompt: "Persona1",
-      },
+      defaultPersonaID: "persona1",
+      personas: new Map([
+        [
+          "persona1",
+          {
+            id: "persona1",
+            timeZone: "Asia/Seoul",
+            language: "ko",
+            openingLine: "번호 받았으니까 먼저 연락해 봐",
+            memory: "Remember",
+            prompt: "Persona1",
+          },
+        ],
+      ]),
       createSession: () =>
         Effect.sync(() => {
           const id = `session-${sessions.length + 1}`;
@@ -355,7 +362,7 @@ test("HTTP schema, Turnstile, and CORS reject unsafe requests without sending", 
       const { handler, dispose } = HttpRouter.toWebHandler(
         api.routes.pipe(Layer.provide(dependencies)),
       );
-      const post = (body: object, origin = "https://msg.hena.dev") =>
+      const post = (body: object, origin = "https://discovery.hena.dev") =>
         handler(
           new Request("http://local/onboarding", {
             method: "POST",
@@ -366,30 +373,32 @@ test("HTTP schema, Turnstile, and CORS reject unsafe requests without sending", 
         );
       try {
         expect(onboardingApi.identifier).toBe("onboarding");
-        const invalid = yield* Effect.promise(() => post({ ...input, handle: "bogus" }));
-        expect(invalid.status).toBe(400);
-        const denied = yield* Effect.promise(() => post({ ...input, turnstileToken: "" }));
-        expect(denied.status).toBe(400);
-        const badToken = yield* Effect.promise(() => post({ ...input, turnstileToken: "invalid" }));
-        expect(badToken.status).toBe(400);
-        const allowed = yield* Effect.promise(() =>
-          post({ ...input, handle: "WRONG@example.com" }),
-        );
-        expect(allowed.status).toBe(400);
-        const preflight = yield* Effect.promise(() =>
-          handler(
-            new Request("http://local/onboarding", {
-              method: "OPTIONS",
-              headers: { origin: "https://msg.hena.dev", "access-control-request-method": "POST" },
-            }),
-            Context.make(HttpClient.HttpClient, client),
-          ),
-        );
-        expect(preflight.headers.get("access-control-allow-origin")).toBe("https://msg.hena.dev");
-        const stranger = yield* Effect.promise(() =>
-          post({ ...input, handle: "bogus" }, "https://evil.test"),
-        );
-        expect(stranger.headers.get("access-control-allow-origin")).not.toBe("https://evil.test");
+        for (const body of [
+          { ...input, handle: "bogus" },
+          { ...input, turnstileToken: "" },
+          { ...input, turnstileToken: "invalid" },
+          { ...input, handle: "WRONG@example.com" },
+        ]) {
+          expect((yield* Effect.promise(() => post(body))).status).toBe(400);
+        }
+        for (const [origin, allowed] of [
+          ["https://discovery.hena.dev", true],
+          ["https://msg.hena.dev", false],
+          ["https://evil.test", false],
+        ] as const) {
+          const preflight = yield* Effect.promise(() =>
+            handler(
+              new Request("http://local/onboarding", {
+                method: "OPTIONS",
+                headers: { origin, "access-control-request-method": "POST" },
+              }),
+              Context.make(HttpClient.HttpClient, client),
+            ),
+          );
+          expect(preflight.headers.get("access-control-allow-origin") === origin).toBe(allowed);
+          const response = yield* Effect.promise(() => post({ ...input, handle: "bogus" }, origin));
+          expect(response.headers.get("access-control-allow-origin") === origin).toBe(allowed);
+        }
         expect(fake.bubbles).toEqual([]);
       } finally {
         yield* Effect.promise(dispose);
@@ -406,18 +415,19 @@ test("the in-process HTTP handler returns the site's literal answer after the No
         api.routes.pipe(Layer.provide(dependencies)),
       );
       try {
+        const origin = "https://discovery.hena.dev";
         const response = yield* Effect.promise(() =>
           handler(
             new Request("http://local/onboarding", {
               method: "POST",
-              headers: { "content-type": "application/json", origin: "https://msg.hena.dev" },
+              headers: { "content-type": "application/json", origin },
               body: JSON.stringify(input),
             }),
             Context.make(HttpClient.HttpClient, client),
           ),
         );
         expect(response.status).toBe(200);
-        expect(response.headers.get("access-control-allow-origin")).toBe("https://msg.hena.dev");
+        expect(response.headers.get("access-control-allow-origin")).toBe(origin);
         expect(yield* Effect.promise(() => response.json())).toBe("sent");
         expect(fake.bubbles).toEqual([{ handle: input.handle, text: noticeCopy.ko }]);
       } finally {
@@ -425,13 +435,6 @@ test("the in-process HTTP handler returns the site's literal answer after the No
       }
     }),
   );
-});
-
-test("the Greeting format stamps her own time zone", () => {
-  expect(conversationStarted(0, "opening", "notice", "Asia/Seoul")).toBe(
-    '<conversation-started at="1970-01-01 Thu 09:00"/>\nopening\n<notice>notice</notice>',
-  );
-  expect(conversationStarted(0, "hello", "notice", "UTC")).toContain('at="1970-01-01 Thu 00:00"');
 });
 
 test("a sixth submission from one IP is refused before looking at its Handle", async () => {

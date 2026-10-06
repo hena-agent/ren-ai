@@ -6,9 +6,9 @@ import type { IncomingMessage, Messages } from "../messages/messages.ts";
 import type { Persona } from "../personas/personas.ts";
 import { notReacted, notSent, sent } from "../transcript/transcript.ts";
 import type { timing } from "../timing/timing.ts";
+import type { Tapback } from "@ren-ai/plugin-application/protocol";
 
-export const tapbacks = ["love", "like", "dislike", "laugh", "emphasis", "question"] as const;
-export type Tapback = (typeof tapbacks)[number];
+export type { Tapback } from "@ren-ai/plugin-application/protocol";
 
 interface SendRow {
   readonly id: number;
@@ -99,30 +99,6 @@ export const outbox = (
               FROM send WHERE id = ${earlier.id}`;
         return state[0]!;
       });
-    const settle = (conversation: Conversation, earlier: SendRow) =>
-      Effect.gen(function* () {
-        // An imsg send can finish after its process exits. Never issue the next send before
-        // checking Messages, even when this record predates the current process.
-        let current = yield* check(conversation, earlier);
-        if (current.state === "recorded" || current.state === "uncertain") {
-          yield* Effect.sleep("3 seconds");
-          current = yield* check(conversation, earlier);
-          if (
-            !(yield* messages.recent(conversation.handle, earlier.recordedAt)).some(
-              (row) =>
-                row.fromMe &&
-                row.text === earlier.content &&
-                (!earlier.guid || row.guid === earlier.guid),
-            )
-          ) {
-            yield* sql`UPDATE send SET state = 'failed', late = 1, notification_pending = 1,
-              updated_at = ${yield* Clock.currentTimeMillis}
-              WHERE id = ${earlier.id} AND state IN ('recorded', 'uncertain')`;
-            current = yield* check(conversation, earlier);
-          }
-        }
-        return current;
-      });
     const before = (
       conversation: Conversation,
       kind: "text" | "tapback",
@@ -137,7 +113,8 @@ export const outbox = (
         if (existing.length) return prefix("this call was already recorded");
         const earlier = yield* pending(conversation);
         if (!earlier) return undefined;
-        const settled = yield* settle(conversation, earlier);
+        // A missing row is not a rejection; only an observed outcome releases this fence.
+        const settled = yield* check(conversation, earlier);
         if (settled.state === "recorded" || settled.state === "uncertain")
           return prefix("an earlier send is still in doubt");
         yield* sql`UPDATE send SET notification_pending = 0 WHERE id = ${settled.id}`;

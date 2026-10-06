@@ -16,6 +16,13 @@ const input = {
   privacyNoticeVersion: "v1",
   turnstileToken: "human",
 } as const;
+
+test("the Greeting format stamps her own time zone", () => {
+  expect(conversationStarted(0, "opening", "notice", "Asia/Seoul")).toBe(
+    '<conversation-started at="1970-01-01 Thu 09:00"/>\nopening\n<notice>notice</notice>',
+  );
+  expect(conversationStarted(0, "hello", "notice", "UTC")).toContain('at="1970-01-01 Thu 00:00"');
+});
 const client = HttpClient.make((request) =>
   Effect.succeed(
     HttpClientResponse.fromWeb(
@@ -52,7 +59,8 @@ const setup = (deadline = 30, noticeVersion = "v1") =>
     const api = yield* onboarding({
       messages: fake.messages,
       notice: noticeCopy,
-      persona,
+      personas: new Map([[persona.id, persona]]),
+      defaultPersonaID: persona.id,
       createSession: () => Effect.sync(() => ({ id: `session-${++sessions}` })),
       prompt: (_, text) =>
         Effect.sync(() => {

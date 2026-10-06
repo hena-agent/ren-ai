@@ -3,6 +3,9 @@ import {
   messagingFixture,
   registration,
   runMessagingTest,
+  silentAlerts,
+} from "../../test/messaging.test-helper.ts";
+import {
   scriptedPersona,
   startTestHost,
   providerUnavailable,
@@ -18,19 +21,21 @@ import { Session } from "@opencode/schema/session";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
-import { startMessagingHost } from "../main.ts";
+import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { failedTurns } from "./failed-turns.ts";
-import { scriptedOverrides, silentAlerts } from "./scripted-overrides.test-helper.ts";
+import { scriptedOverrides } from "./scripted-overrides.test-helper.ts";
 
-const advanceUntil = <E, R>(done: () => Effect.Effect<boolean, E, R>) =>
-  Effect.gen(function* () {
-    for (let tick = 0; tick < 30; tick++) {
-      if (yield* done()) return;
-      yield* TestClock.adjust("20 millis");
-    }
+const awaitUntil = <E>(done: () => Effect.Effect<boolean, E>) =>
+  Effect.promise(async () => {
+    await expect.poll(() => Effect.runPromise(done())).toBe(true);
+  });
+
+const awaitAlert = (alerts: readonly string[], name: string, count: number) =>
+  Effect.promise(async () => {
+    await expect.poll(() => alerts.filter((item) => item === name)).toHaveLength(count);
   });
 
 const model = SessionRunnerModel.resolved(
@@ -131,6 +136,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
             expect((yield* host.sessions.get(session.id)).outcome).toBe("failed");
             if (sessions.length === 1) {
               yield* TestClock.adjust("20 millis");
+              yield* awaitAlert(alerts, "raise:go-cap", 1);
               expect(alerts).toContain("raise:go-cap");
               expect(alerts).not.toContain(`raise:conversation-turn-failing:${session.id}`);
             }
@@ -143,6 +149,10 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           expect(yield* llm.requests()).toHaveLength(baseline + 2);
           yield* TestClock.adjust("1 minute");
           yield* TestClock.adjust("20 millis");
+          // Fake-clock progress does not finish the real folder/context I/O of a probe.
+          // Observe admission and completion before changing the provider or its next tick.
+          yield* llm.wait(baseline + 3);
+          yield* host.sessions.wait(sessions[0]!.id);
           expect(yield* llm.requests()).toHaveLength(baseline + 3);
           expect(JSON.stringify((yield* llm.requests())[baseline + 2])).toContain(
             "first@example.com",
@@ -151,15 +161,19 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           secondStillCapped = true;
           yield* TestClock.adjust("15 minutes");
           yield* TestClock.adjust("50 millis");
+          yield* llm.wait(baseline + 4);
+          yield* host.sessions.wait(sessions[1]!.id);
+          expect(yield* llm.requests()).toHaveLength(baseline + 4);
           expect((yield* host.sessions.get(sessions[0]!.id)).outcome).toBe("failed");
           expect((yield* host.sessions.get(sessions[1]!.id)).outcome).toBe("failed");
           yield* TestClock.adjust("15 minutes");
           yield* TestClock.adjust("150 millis");
+          yield* llm.wait(baseline + 5);
+          yield* host.sessions.wait(sessions[0]!.id);
+          yield* llm.wait(baseline + 6);
           yield* host.sessions.wait(sessions[1]!.id);
-          yield* Effect.yieldNow;
-          yield* advanceUntil(() =>
-            Effect.succeed(alerts.filter((item) => item === "raise:go-cap").length === 2),
-          );
+          yield* awaitAlert(alerts, "raise:go-cap", 2);
+          expect(yield* llm.requests()).toHaveLength(baseline + 6);
           expect((yield* host.sessions.get(sessions[0]!.id)).outcome).toBe("succeeded");
           expect((yield* host.sessions.get(sessions[1]!.id)).outcome).toBe("failed");
           expect(alerts.filter((alert) => alert === "raise:go-cap")).toHaveLength(2);
@@ -169,9 +183,11 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           expect(yield* llm.requests()).toHaveLength(stillHeld);
           yield* TestClock.adjust("1 second");
           yield* TestClock.adjust("50 millis");
+          yield* llm.wait(stillHeld + 1);
           yield* host.sessions.wait(sessions[0]!.id);
           yield* host.sessions.wait(sessions[1]!.id);
           const quotaRequests = yield* llm.requests();
+          expect(quotaRequests).toHaveLength(stillHeld + 1);
           expect(JSON.stringify(quotaRequests[baseline + 3])).toContain("second@example.com");
           expect(JSON.stringify(quotaRequests[baseline + 4])).toContain("first@example.com");
           expect((yield* host.sessions.get(sessions[0]!.id)).outcome).toBe("succeeded");
@@ -186,12 +202,14 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* host.sessions.prompt({ sessionID: later.id, text: "later" });
           yield* host.sessions.wait(later.id);
           yield* TestClock.adjust("20 millis");
+          yield* awaitAlert(alerts, "raise:go-cap", 3);
           const laterRequests = (yield* llm.requests()).length;
           yield* TestClock.adjust("8 minutes");
           expect(yield* llm.requests()).toHaveLength(laterRequests);
           mode = "ok";
           yield* TestClock.adjust("7 minutes");
           yield* TestClock.adjust("20 millis");
+          yield* llm.wait(laterRequests + 1);
           yield* host.sessions.wait(later.id);
           expect((yield* host.sessions.get(later.id)).outcome).toBe("succeeded");
 
@@ -204,6 +222,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* TestClock.adjust("20 millis");
           const before = (yield* llm.requests()).length;
           yield* host.sessions.resume(broken.id).pipe(Effect.catchCause(() => Effect.void));
+          yield* llm.wait(before + 1);
           yield* host.sessions.wait(broken.id);
           yield* TestClock.adjust("20 millis");
           expect(yield* llm.requests()).toHaveLength(before + 1);
@@ -214,6 +233,9 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           expect(alerts).not.toContain(`raise:conversation-turn-failing:${broken.id}`);
           yield* TestClock.adjust("1 second");
           yield* TestClock.adjust("20 millis");
+          yield* llm.wait(before + 2);
+          yield* host.sessions.wait(broken.id);
+          yield* awaitAlert(alerts, `raise:conversation-turn-failing:${broken.id}`, 1);
           expect(yield* llm.requests()).toHaveLength(before + 2);
           expect(alerts).toContain(`raise:conversation-turn-failing:${broken.id}`);
           expect(details).toContain("A Conversation's turn keeps failing");
@@ -222,11 +244,15 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* host.sessions.wait(sessions[0]!.id);
           mode = "auth";
           yield* TestClock.adjust("10 minutes");
+          yield* awaitAlert(alerts, "raise:provider-failing", 1);
           expect(alerts).toContain("raise:provider-failing");
           expect(details).toContain("Provider failing for 10 minutes");
           mode = "ok";
+          const beforeProviderRecovery = (yield* llm.requests()).length;
           yield* TestClock.adjust("15 minutes");
           yield* TestClock.adjust("20 millis");
+          yield* llm.wait(beforeProviderRecovery + 1);
+          yield* host.sessions.wait(broken.id);
           expect((yield* host.sessions.get(broken.id)).outcome).toBe("succeeded");
           expect(alerts).toContain("clear:provider-failing");
 
@@ -263,7 +289,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* TestClock.adjust("20 millis");
           yield* host.sessions.wait(heldByCap.id);
           yield* host.sessions.wait(capped.id);
-          yield* advanceUntil(() =>
+          yield* awaitUntil(() =>
             Effect.forEach([heldByCap, capped, duringCap], (session) =>
               host.sessions.get(session.id).pipe(Effect.map((info) => info.outcome)),
             ).pipe(Effect.map((outcomes) => outcomes.every((outcome) => outcome === "succeeded"))),
@@ -294,7 +320,10 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* host.sessions.wait(orphan.id);
           yield* TestClock.adjust("20 millis");
           mode = "ok";
+          const beforeClearing = (yield* llm.requests()).length;
           yield* host.sessions.resume(orphan.id);
+          yield* llm.wait(beforeClearing + 1);
+          yield* host.sessions.wait(orphan.id);
           yield* TestClock.adjust("10 minutes");
           expect(alerts.filter((item) => item === "raise:provider-failing")).toHaveLength(1);
 

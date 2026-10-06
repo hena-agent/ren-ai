@@ -7,7 +7,8 @@ import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
-import { outbox, tapbacks } from "./outbox.ts";
+import { outbox } from "./outbox.ts";
+import { tapbacks } from "@ren-ai/plugin-application/protocol";
 import { timing } from "../timing/timing.ts";
 
 const personas = new Map([["persona1", { timeZone: "Asia/Seoul" }]]);
@@ -114,7 +115,15 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
       );
       const waiting = yield* Effect.forkScoped(recovered.send(conversation, "must wait", "call-3"));
       yield* TestClock.adjust("3 seconds");
-      expect(yield* Fiber.join(waiting)).toBe("sent");
+      expect(yield* Fiber.join(waiting)).toBe("not sent: an earlier send is still in doubt");
+      expect(fake.bubbles).toEqual([]);
+      yield* fake.outgoing(
+        conversation.handle,
+        "in doubt",
+        yield* Clock.currentTimeMillis,
+        "failed",
+      );
+      expect(yield* recovered.send(conversation, "must wait", "call-3")).toBe("sent");
       expect(fake.bubbles).toEqual([{ handle: conversation.handle, text: "must wait" }]);
       const rows = yield* sql<{ state: string; content: string }>`SELECT state, content FROM send`;
       expect(rows).toEqual([

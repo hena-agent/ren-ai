@@ -105,6 +105,7 @@ export const makeMessagesUi = (health: {
       );
 
     const gestures: Gestures = {
+      probe: () => lock.withPermit(act("ensure", Effect.void)),
       typing: (handle, text, durationMillis) =>
         Effect.gen(function* () {
           const started = yield* Effect.clockWith((clock) => clock.currentTimeMillis);

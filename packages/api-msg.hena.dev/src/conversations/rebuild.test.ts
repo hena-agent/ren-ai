@@ -1,9 +1,6 @@
 import { rm } from "node:fs/promises";
-import {
-  messagingFixture,
-  quietTestHost,
-  runMessagingTest,
-} from "../../test/messaging-host.test-helper.ts";
+import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
+import { quietTestHost } from "../../test/messaging-host.test-helper.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option } from "effect";

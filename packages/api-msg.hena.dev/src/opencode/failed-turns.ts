@@ -3,10 +3,10 @@ import { Session } from "@opencode/schema/session";
 import { Effect, Option, Stream, type Fiber } from "effect";
 import type { SqlError } from "effect/unstable/sql/SqlError";
 import { SqlClient } from "effect/unstable/sql";
-import type { createHost } from "./host.ts";
+import type { PersonaRuntime } from "./runtime.ts";
 import type { conversations } from "../conversations/conversations.ts";
 
-type Host = Effect.Success<ReturnType<typeof createHost>>;
+type Host = PersonaRuntime;
 type Directory = Effect.Success<typeof conversations>;
 
 export interface FailureAlerts {
@@ -38,7 +38,7 @@ export const failedTurns = (host: Host, directory: Directory, alerts: FailureAle
     const resume = (id: string) =>
       directory.admit(
         id,
-        host.sessions.resume(Session.ID.make(id)).pipe(Effect.catchCause(Effect.logWarning)),
+        host.retry(Session.ID.make(id)).pipe(Effect.catchCause(Effect.logWarning)),
       );
     const startResume = (id: string) =>
       resume(id).pipe(Effect.catchCause(Effect.logWarning), Effect.forkScoped);
@@ -139,40 +139,53 @@ export const failedTurns = (host: Host, directory: Directory, alerts: FailureAle
         }
       });
 
-    yield* Stream.runForEach(
-      host.events.subscribe([SessionEvent.Execution.Failed, SessionEvent.Execution.Succeeded]),
-      (event) =>
-        event.type === "session.execution.failed"
+    const recover = Effect.gen(function* () {
+      for (const conversation of yield* directory.all()) {
+        const session = yield* host.sessions.get(Session.ID.make(conversation.sessionID)).pipe(
+          Effect.map(Option.some),
+          Effect.catchTag("Session.NotFoundError", () => Effect.succeed(Option.none())),
+        );
+        if (Option.isNone(session)) continue;
+        if (
+          session.value.outcome === "failed" ||
+          (yield* host.sessions.inbox(Session.ID.make(conversation.sessionID))).length > 0
+        ) {
+          yield* startResume(conversation.sessionID);
+          continue;
+        }
+        const id = Session.ID.make(conversation.sessionID);
+        const [assistant] = yield* host.sessions.messages({
+          sessionID: id,
+          type: "assistant",
+          limit: 1,
+        });
+        if (!(assistant?.type === "assistant" && assistant.error)) continue;
+        const sent = yield* sql`SELECT 1 FROM send WHERE conversation_id = ${conversation.id}
+        AND kind IN ('text', 'tapback') LIMIT 1`;
+        if (sent.length) {
+          yield* alerts.raise(
+            turnAlert(conversation.sessionID),
+            "Failed turn needs manual review after an outgoing attempt in this Conversation",
+          );
+          continue;
+        }
+        yield* startResume(conversation.sessionID);
+      }
+    });
+    yield* Stream.runForEach(host.outcomes, (event) =>
+      event.type === "server.connected"
+        ? recover.pipe(Effect.andThen(alerts.clear("opencode-events")))
+        : event.type === "session.execution.failed"
           ? onFailed(event)
           : onSucceeded(event.data.sessionID),
-    ).pipe(Effect.forkScoped);
-
-    for (const conversation of yield* directory.all()) {
-      const session = yield* host.sessions
-        .get(Session.ID.make(conversation.sessionID))
-        .pipe(Effect.option);
-      if (Option.isNone(session)) continue;
-      if (session.value.outcome === "failed") {
-        yield* startResume(conversation.sessionID);
-        continue;
-      }
-      const id = Session.ID.make(conversation.sessionID);
-      const [assistant] = yield* host.sessions.messages({
-        sessionID: id,
-        type: "assistant",
-        limit: 1,
-      });
-      if (!(assistant?.type === "assistant" && assistant.error)) continue;
-      const sent = yield* sql`SELECT 1 FROM send WHERE conversation_id = ${conversation.id}
-        AND kind IN ('text', 'tapback') LIMIT 1`;
-      if (sent.length) {
-        yield* alerts.raise(
-          turnAlert(conversation.sessionID),
-          "Failed turn needs manual review after an outgoing attempt in this Conversation",
-        );
-        continue;
-      }
-      yield* startResume(conversation.sessionID);
-    }
+    ).pipe(
+      Effect.catch(() =>
+        alerts.raise("opencode-events", "OpenCode event stream or reconciliation failed"),
+      ),
+      Effect.andThen(Effect.sleep("1 second")),
+      Effect.forever,
+      Effect.forkScoped,
+    );
+    yield* recover;
     return forget;
   });
