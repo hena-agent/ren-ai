@@ -42,8 +42,7 @@ test("portrait pairs require two complete safe URLs and survive serialization", 
     portraits,
   );
   for (const incomplete of [
-    { anime: portraits.anime },
-    { photo: portraits.photo },
+    {},
     { anime: "", photo: portraits.photo },
     { anime: portraits.anime, photo: "" },
     { anime: portraits.anime, photo: 12 },
@@ -59,6 +58,12 @@ test("portrait pairs require two complete safe URLs and survive serialization", 
       expect(() =>
         decodePersona({ ...persona, portraits: { ...portraits, [style]: bad } }),
       ).toThrow(/Invalid URL|HTTPS/);
+  expect(decodePersona({ ...persona, portraits: { anime: portraits.anime } }).portraits).toEqual({
+    anime: portraits.anime,
+  });
+  expect(decodePersona({ ...persona, portraits: { photo: portraits.photo } }).portraits).toEqual({
+    photo: portraits.photo,
+  });
 });
 
 test("malformed files retain actionable parse errors and cannot hide frontmatter after a prefix", () => {

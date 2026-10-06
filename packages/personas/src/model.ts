@@ -1,5 +1,7 @@
 import { Schema } from "effect";
 import { parseDocument, stringify } from "yaml";
+import { normalizePortraits } from "./portraits.ts";
+import type { PersonaImage } from "./portraits.ts";
 
 export interface Persona {
   readonly id: string;
@@ -16,7 +18,10 @@ export interface PersonaRecord extends Persona {
   readonly imageUrl: string;
   readonly published: boolean;
   readonly description?: string;
-  readonly portraits?: { readonly anime: string; readonly photo: string };
+  readonly gender?: "female" | "male";
+  readonly portraits?: { readonly anime?: string; readonly photo?: string };
+  readonly secondaryPortraits?: readonly PersonaImage[];
+  readonly portraitGallery?: readonly { readonly anime: string; readonly photo: string }[];
 }
 
 export class PersonaError extends Error {
@@ -28,6 +33,20 @@ export class PersonaError extends Error {
   }
 }
 
+const PortraitPair = Schema.Struct({
+  anime: Schema.String.check(Schema.isNonEmpty()),
+  photo: Schema.String.check(Schema.isNonEmpty()),
+});
+const MainPortraits = Schema.Struct({
+  anime: Schema.optionalKey(PortraitPair.fields.anime),
+  photo: Schema.optionalKey(PortraitPair.fields.photo),
+}).check(Schema.makeFilter((value) => Boolean(value.anime || value.photo)));
+const SecondaryPortraits = Schema.Array(
+  Schema.Struct({
+    style: Schema.Literals(["anime", "photo"]),
+    imageUrl: Schema.String.check(Schema.isNonEmpty()),
+  }),
+).check(Schema.isMaxLength(10));
 const Frontmatter = Schema.Struct({
   "time-zone": Schema.String,
   language: Schema.String,
@@ -38,11 +57,11 @@ const Frontmatter = Schema.Struct({
   "image-url": Schema.optionalKey(Schema.String),
   published: Schema.optionalKey(Schema.Boolean),
   description: Schema.optionalKey(Schema.String.check(Schema.isPattern(/\S/))),
-  portraits: Schema.optionalKey(
-    Schema.Struct({
-      anime: Schema.String.check(Schema.isNonEmpty()),
-      photo: Schema.String.check(Schema.isNonEmpty()),
-    }),
+  gender: Schema.optionalKey(Schema.Literals(["female", "male"])),
+  portraits: Schema.optionalKey(MainPortraits),
+  "secondary-portraits": Schema.optionalKey(SecondaryPortraits),
+  "portrait-gallery": Schema.optionalKey(
+    Schema.Array(PortraitPair).check(Schema.isMinLength(1), Schema.isMaxLength(6)),
   ),
 });
 
@@ -58,7 +77,10 @@ const Input = Schema.Struct({
   memory: Schema.String,
   prompt: Schema.String,
   description: Frontmatter.fields.description,
+  gender: Frontmatter.fields.gender,
   portraits: Frontmatter.fields.portraits,
+  secondaryPortraits: Frontmatter.fields["secondary-portraits"],
+  portraitGallery: Frontmatter.fields["portrait-gallery"],
 });
 
 export function validateID(id: string) {
@@ -86,11 +108,25 @@ function validateRuntime(persona: Persona) {
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrows submitted persona fields before storage
 export function decodePersona(input: unknown): PersonaRecord {
   try {
-    const persona = Schema.decodeUnknownSync(Input)(input, { onExcessProperty: "error" });
+    const persona = normalizePortraits(
+      Schema.decodeUnknownSync(Input)(input, { onExcessProperty: "error" }),
+    );
     validateID(persona.id);
     validateRuntime(persona);
     if (!persona.name.trim()) throw new Error("이름을 입력해 주세요.");
-    const images = [persona.imageUrl, ...Object.values(persona.portraits ?? {})].filter(Boolean);
+    const secondary = persona.secondaryPortraits;
+    const images = [
+      persona.imageUrl,
+      ...Object.values(persona.portraits ?? {}),
+      ...(secondary?.map((image) => image.imageUrl) ?? []),
+    ].filter(Boolean);
+    if (secondary) {
+      const counts = { anime: 0, photo: 0 };
+      for (const image of secondary) {
+        counts[image.style] += 1;
+        if (counts[image.style] > 5) throw new Error("스타일별 서브 이미지는 최대 5장입니다.");
+      }
+    }
     for (const imageUrl of images)
       if (
         !/^\/discovery\/images\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|webp)$/.test(
@@ -132,12 +168,20 @@ export function parsePersona(id: string, source: string): PersonaRecord {
     imageUrl: fields["image-url"] ?? "",
     published: fields.published ?? false,
     ...(fields.description === undefined ? {} : { description: fields.description }),
+    ...(fields.gender === undefined ? {} : { gender: fields.gender }),
     ...(fields.portraits === undefined ? {} : { portraits: fields.portraits }),
+    ...(fields["secondary-portraits"] === undefined
+      ? {}
+      : { secondaryPortraits: fields["secondary-portraits"] }),
+    ...(fields["portrait-gallery"] === undefined
+      ? {}
+      : { portraitGallery: fields["portrait-gallery"] }),
   };
   return decodePersona(persona);
 }
 
 export function serializePersona(persona: PersonaRecord): string {
+  persona = normalizePortraits(persona);
   return `---\n${stringify({
     "time-zone": persona.timeZone,
     language: persona.language,
@@ -148,6 +192,8 @@ export function serializePersona(persona: PersonaRecord): string {
     "image-url": persona.imageUrl,
     published: persona.published,
     description: persona.description,
+    gender: persona.gender,
     portraits: persona.portraits,
+    "secondary-portraits": persona.secondaryPortraits,
   })}---\n${persona.prompt}`;
 }

@@ -13,6 +13,7 @@ import {
 import type { PersonaRecord } from "./model.ts";
 import { imageResponse, saveImage } from "./images.ts";
 import type { Portrait } from "./images.ts";
+import { personaImages } from "./portraits.ts";
 
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
@@ -65,8 +66,9 @@ export async function createPersonaStore(directory: string) {
         !(await list()).some(
           (persona) =>
             persona.published &&
-            (persona.imageUrl === `/discovery/images/${filename}` ||
-              Object.values(persona.portraits ?? {}).includes(`/discovery/images/${filename}`)),
+            personaImages(persona).some(
+              (image) => image.imageUrl === `/discovery/images/${filename}`,
+            ),
         )
       )
         return new Response(null, { status: 404 });
@@ -75,12 +77,13 @@ export async function createPersonaStore(directory: string) {
     publicList: async () =>
       (await list())
         .filter((persona) => persona.published)
-        .map(({ id, name, bio, imageUrl, portraits }) => ({
+        .map(({ id, name, bio, imageUrl, portraits, secondaryPortraits }) => ({
           id,
           name,
           bio,
           imageUrl,
           ...(portraits === undefined ? {} : { portraits }),
+          ...(secondaryPortraits === undefined ? {} : { secondaryPortraits }),
         })),
   };
 }

@@ -10,6 +10,11 @@ declare global {
 function path(route: string) {
   return (import.meta.env.VITE_DISCOVERY_API_URL ?? "").replace(/\/$/, "") + route;
 }
+const imagePath = (imageUrl: string) => (imageUrl.startsWith("/") ? path(imageUrl) : imageUrl);
+const resolvePair = (pair: NonNullable<PublicPersona["portraits"]>) => ({
+  ...(pair.anime && { anime: imagePath(pair.anime) }),
+  ...(pair.photo && { photo: imagePath(pair.photo) }),
+});
 
 export type DiscoveryClient = {
   profiles: (signal: AbortSignal) => Promise<readonly PublicPersona[]>;
@@ -23,18 +28,27 @@ export const discoveryClient: DiscoveryClient = {
     return Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await response.json()).map(
       (persona) => ({
         ...persona,
-        imageUrl: persona.imageUrl.startsWith("/") ? path(persona.imageUrl) : persona.imageUrl,
+        imageUrl: imagePath(persona.imageUrl),
+        ...(persona.secondaryPortraits === undefined
+          ? {}
+          : {
+              secondaryPortraits: persona.secondaryPortraits.map((image) => ({
+                ...image,
+                imageUrl: imagePath(image.imageUrl),
+              })),
+            }),
+        ...(persona.portraitGallery === undefined
+          ? {}
+          : {
+              portraitGallery: persona.portraitGallery.map((pair) => ({
+                anime: imagePath(pair.anime),
+                photo: imagePath(pair.photo),
+              })),
+            }),
         ...(persona.portraits === undefined
           ? {}
           : {
-              portraits: {
-                anime: persona.portraits.anime.startsWith("/")
-                  ? path(persona.portraits.anime)
-                  : persona.portraits.anime,
-                photo: persona.portraits.photo.startsWith("/")
-                  ? path(persona.portraits.photo)
-                  : persona.portraits.photo,
-              },
+              portraits: resolvePair(persona.portraits),
             }),
       }),
     );

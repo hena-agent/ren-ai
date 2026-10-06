@@ -128,7 +128,10 @@ test("a case alias cannot change the stable ID of a saved persona", async () => 
   try {
     const store = await createPersonaStore(root);
     await store.create(harin);
-    await expect(store.get("MIRA")).rejects.toMatchObject({ kind: "not_found" });
+    await expect(store.get("MIRA")).rejects.toMatchObject({
+      kind: "not_found",
+      message: "페르소나를 찾을 수 없습니다.",
+    });
     await expect(store.update({ ...harin, id: "MIRA" })).rejects.toMatchObject({
       kind: "not_found",
     });

@@ -86,6 +86,26 @@ test("the standalone discovery listener accepts real HTTP and operator removal d
             expect(await catalog.json()).toEqual([
               { id: "hayeon", name: "하연", bio: "함께 요리해요.", imageUrl: photoUrl, portraits },
             ]);
+            const extraUrl = await store.saveImage({
+              bytes: Buffer.from("89504e470d0a1a0a", "hex"),
+              mimeType: "image/png",
+            });
+            const portraitGallery = [portraits, { anime: extraUrl, photo: extraUrl }];
+            await store.update({ ...(await store.get("hayeon")), portraitGallery });
+            expect(await (await fetch(`${base}/discovery/personas`)).json()).toEqual([
+              {
+                id: "hayeon",
+                name: "하연",
+                bio: "함께 요리해요.",
+                imageUrl: photoUrl,
+                portraits,
+                secondaryPortraits: [
+                  { style: "anime", imageUrl: extraUrl },
+                  { style: "photo", imageUrl: extraUrl },
+                ],
+              },
+            ]);
+            expect((await fetch(`${base}${extraUrl}`)).status).toBe(200);
             const filename = imageUrl.split("/").at(-1)!;
             await rm(join(root, "profiles", "images", filename));
             await mkdir(join(root, "profiles", "images", filename));

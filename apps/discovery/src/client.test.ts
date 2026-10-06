@@ -107,6 +107,10 @@ test("public deployment can call the configured API rather than the static site"
         bio: "공개 소개",
         imageUrl,
         portraits: { anime: imageUrl, photo: "https://photos.example.net/nari.jpg" },
+        portraitGallery: [
+          { anime: imageUrl, photo: "https://photos.example.net/nari.jpg" },
+          { anime: "https://photos.example.net/another.jpg", photo: imageUrl },
+        ],
       },
       {
         id: "legacy",
@@ -131,6 +135,13 @@ test("public deployment can call the configured API rather than the static site"
     photo: "https://photos.example.net/nari.jpg",
   });
   expect(profiles[1]?.imageUrl).toBe("https://photos.example.net/legacy.jpg");
+  expect(profiles[0]?.portraitGallery).toEqual([
+    { anime: `https://api-msg.hena.dev${imageUrl}`, photo: "https://photos.example.net/nari.jpg" },
+    {
+      anime: "https://photos.example.net/another.jpg",
+      photo: `https://api-msg.hena.dev${imageUrl}`,
+    },
+  ]);
   expect(profiles[2]?.portraits).toEqual({
     anime: "https://photos.example.net/mixed/",
     photo: `https://api-msg.hena.dev${imageUrl}`,
@@ -182,7 +193,7 @@ test("a malformed image pair cannot enter the browser catalog", async () => {
   const fetcher = vi.fn<typeof fetch>();
   vi.stubGlobal("fetch", fetcher);
   for (const portraits of [
-    { anime: "https://example.net/anime.jpg" },
+    {},
     { anime: "javascript:alert(1)", photo: "https://example.net/photo.jpg" },
     { anime: "https://example.net/anime.jpg", photo: "/private/photo.jpg" },
   ]) {

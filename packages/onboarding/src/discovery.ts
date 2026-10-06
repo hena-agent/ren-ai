@@ -21,7 +21,22 @@ export const PublicPersona = Schema.Struct({
   name: text,
   bio: text,
   imageUrl: photo,
-  portraits: Schema.optionalKey(Schema.Struct({ anime: photo, photo })),
+  portraits: Schema.optionalKey(
+    Schema.Struct({ anime: Schema.optionalKey(photo), photo: Schema.optionalKey(photo) }).check(
+      Schema.makeFilter((value) => Boolean(value.anime || value.photo)),
+    ),
+  ),
+  secondaryPortraits: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({ style: Schema.Literals(["anime", "photo"]), imageUrl: photo }),
+    ).check(Schema.isMaxLength(10)),
+  ),
+  portraitGallery: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ anime: photo, photo })).check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(6),
+    ),
+  ),
 });
 export type PublicPersona = typeof PublicPersona.Type;
 
