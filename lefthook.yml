@@ -14,10 +14,12 @@ pre-commit:
       run: bunx --no-install oxfmt --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
+# Quality checks need the Node version in .nvmrc, not the shell's default.
+# scripts/pinned-node.sh switches to it via nvm when available.
 pre-push:
   parallel: true
   jobs:
     - name: typecheck
-      run: bun run typecheck
+      run: sh scripts/pinned-node.sh bun run typecheck
     - name: test
-      run: bun run test
+      run: sh scripts/pinned-node.sh bun run test
