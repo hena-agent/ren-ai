@@ -19,10 +19,13 @@ function bindPage() {
 }
 
 function replacePage(next: Document) {
+  const focusId = document.activeElement?.id || "image-queue-title";
   destroyDocumentEditors();
   document.body.innerHTML = next.body.innerHTML;
   bindPage();
-  document.getElementById("image-queue-title")?.focus({ preventScroll: true });
+  (document.getElementById(focusId) ?? document.getElementById("image-queue-title"))?.focus({
+    preventScroll: true,
+  });
 }
 
 function installPage(next: Document) {
@@ -45,16 +48,18 @@ function updatePage(next: Document) {
     replacePage(next);
     return;
   }
+  const focused = document.activeElement;
   const progress = document.querySelector("[data-image-progress]")!;
   const updated = next.querySelector("[data-image-progress]")!;
   if (progress.innerHTML !== updated.innerHTML) progress.innerHTML = updated.innerHTML;
-  const preview = document.querySelector("aside")!;
-  const images = next.querySelector("aside")!;
-  if (preview.innerHTML !== images.innerHTML) preview.innerHTML = images.innerHTML;
-  const additions = document.querySelector("[data-add-images]");
-  const available = next.querySelector("[data-add-images]");
-  if (additions && available && !editingPrompt && additions.innerHTML !== available.innerHTML)
-    additions.innerHTML = available.innerHTML;
+  for (const region of document.querySelectorAll("[data-image-preview], [data-add-images]")) {
+    if (editingPrompt && region.hasAttribute("data-add-images")) continue;
+    const available = next.getElementById(region.id);
+    if (available && region.innerHTML !== available.innerHTML)
+      region.innerHTML = available.innerHTML;
+  }
+  if (focused?.id && !focused.isConnected)
+    document.getElementById(focused.id)?.focus({ preventScroll: true });
   for (const input of document.querySelectorAll<HTMLInputElement>('[name="draft"]'))
     input.value = next.querySelector<HTMLInputElement>('[name="draft"]')!.value;
   watchImageQueue();

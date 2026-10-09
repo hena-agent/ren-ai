@@ -20,6 +20,11 @@ export function bindPending(
       event.preventDefault();
       return;
     }
+    const confirmation = event.submitter?.getAttribute("data-confirm-delete");
+    if (confirmation && !form.ownerDocument.defaultView!.confirm(confirmation)) {
+      event.preventDefault();
+      return;
+    }
     pending = true;
     syncGender(form);
     form.setAttribute("aria-busy", "true");
