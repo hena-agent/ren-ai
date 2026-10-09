@@ -64,18 +64,17 @@ test("a failed same-image retry keeps its extra prompt and another target clears
     }),
   );
   const ui = bind(await failed.text());
-  const buttons = document.querySelectorAll<HTMLButtonElement>(".image-regenerate");
-  ui.form.requestSubmit(buttons[1]);
+  ui.form.requestSubmit(document.querySelector<HTMLButtonElement>("#portrait-regenerate-photo-0"));
   expect(ui.prompt.value).toBe("retry instruction");
   ui.cancel.click();
-  ui.form.requestSubmit(buttons[0]);
+  ui.form.requestSubmit(document.querySelector<HTMLButtonElement>("#portrait-regenerate-anime-0"));
   expect(ui.prompt.value).toBe("");
 });
 
 test("edited character definitions keep regeneration an explicit independent choice", async () => {
   const { page } = await basePreview();
   const ui = bind(page);
-  const full = ui.form.querySelector<HTMLButtonElement>('[value="generate"]')!;
+  const full = document.querySelector<HTMLButtonElement>('[value="generate"]')!;
   const name = ui.form.querySelector<HTMLInputElement>('[name="name"]')!;
   expect(full.hidden).toBe(false);
   name.value = "changed";

@@ -15,6 +15,24 @@ import {
   legacy,
 } from "../test/fixtures.ts";
 import copy from "./copy.json";
+import { renderPage } from "./page.tsx";
+
+test("incomplete list cards retain readable placeholders without image-management actions", async () => {
+  const window = new Window();
+  try {
+    window.document.body.innerHTML = renderPage({
+      personas: [{ ...legacy, name: "", bio: "", imageUrl: "" }],
+    });
+    expect(window.document.querySelector(".persona-card h3")?.textContent).toBe(copy.noName);
+    expect(window.document.querySelector(".persona-card p")?.textContent).toBe(copy.noBio);
+    expect(window.document.querySelector(".image-placeholder")?.textContent).toBe(copy.noImage);
+    expect(
+      window.document.querySelector('[value="regenerate"], [value="delete-image"]'),
+    ).toBeNull();
+  } finally {
+    await window.happyDOM.close();
+  }
+});
 
 test("both styles are saved together, survive restart and become public without operator selection", async () => {
   const portraits = vi
@@ -35,23 +53,28 @@ test("both styles are saved together, survive restart and become public without 
     );
     expect(images).toHaveLength(2);
     const comparison = window.document.querySelector("section.image-options");
-    expect(comparison?.getAttribute("aria-labelledby")).toBe("comparison-title");
-    expect(comparison?.getAttribute("aria-describedby")).toBe("comparison-hint");
-    expect(comparison?.querySelector("#comparison-title")?.textContent).toBe(copy.comparison);
+    expect(comparison?.getAttribute("aria-label")).toBe(copy.comparison);
+    expect(comparison?.querySelectorAll(".portrait-style")).toHaveLength(2);
+    for (const style of ["photo", "anime"]) {
+      const heading = comparison?.querySelector(`#portrait-${style}-title`);
+      expect(heading?.closest("section")?.getAttribute("aria-labelledby")).toBe(
+        `portrait-${style}-title`,
+      );
+    }
     expect(comparison?.querySelector("fieldset, legend")).toBeNull();
     expect(
       [...window.document.querySelectorAll(".image-option img")].map((image) =>
         image.getAttribute("alt"),
       ),
-    ).toEqual([`${character.name} ${copy.styles.anime}`, `${character.name} ${copy.styles.photo}`]);
+    ).toEqual([
+      `${character.name} ${copy.styles.photo} · 메인`,
+      `${character.name} ${copy.styles.anime} · 메인`,
+    ]);
     expect(
       [...window.document.querySelectorAll(".image-option figcaption")].map(
         (caption) => caption.textContent,
       ),
-    ).toEqual([
-      `${copy.mainImage} · ${copy.styles.anime}`,
-      `${copy.mainImage} · ${copy.styles.photo}`,
-    ]);
+    ).toEqual(["메인", "메인"]);
     expect(window.document.querySelector('[name="imageChoice"]')).toBeNull();
     expect(window.document.querySelector('input[type="radio"]')).toBeNull();
   } finally {
@@ -69,7 +92,7 @@ test("both styles are saved together, survive restart and become public without 
   expect(saved.status).toBe(303);
   const reopened = await createPersonaStore(root);
   const record = await reopened.get(idOf(saved));
-  expect(record.portraits).toEqual({ anime: images![0], photo: images![1] });
+  expect(record.portraits).toEqual({ anime: images![1], photo: images![0] });
   for (const image of images!)
     expect((await reopened.publicImage(image.split("/").at(-1)!)).status).toBe(200);
   expect(await reopened.publicList()).toEqual([
@@ -136,7 +159,7 @@ test("saved previews keep external portrait URLs intact and use authenticated ro
       [...window.document.querySelectorAll(".image-option img")].map((image) =>
         image.getAttribute("src"),
       ),
-    ).toEqual([external, owned.replace("/discovery", "")]);
+    ).toEqual([owned.replace("/discovery", ""), external]);
   } finally {
     await window.happyDOM.close();
   }

@@ -124,6 +124,7 @@ body {
 a {
   color: inherit;
   text-underline-offset: 4px;
+  touch-action: manipulation;
 }
 a:hover {
   color: var(--signal);
@@ -199,6 +200,12 @@ h1 {
   line-height: 1.3;
   letter-spacing: -0.04em;
   margin: 0 0 12px;
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  scroll-margin-top: 24px;
 }
 .description,
 .hint {
@@ -300,6 +307,7 @@ button {
   border-radius: 8px;
   cursor: pointer;
   font-weight: 700;
+  touch-action: manipulation;
 }
 button:hover {
   filter: brightness(1.08);
@@ -347,8 +355,7 @@ button:disabled {
   cursor: wait;
 }
 aside {
-  position: sticky;
-  top: 24px;
+  min-width: 0;
 }
 aside h2 {
   font-size: 13px;
@@ -627,18 +634,14 @@ aside h2 {
 }
 .persona-workbench .page-heading .eyebrow,
 .persona-workbench .page-heading .description,
-.persona-workbench .image-options > .hint,
-.persona-workbench aside .card-content {
+.persona-workbench .image-options > .hint {
   display: none;
 }
 .persona-workbench .editor-layout {
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) clamp(420px, 36%, 520px);
+  gap: 32px;
 }
 .editor-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   gap: 12px;
   padding: 10px 0;
   background: var(--terminal);
@@ -667,32 +670,83 @@ aside h2 {
   font-size: 14px;
   border-radius: 6px;
 }
-.persona-workbench aside .image-options {
-  padding: 12px;
-}
 .persona-workbench .image-option img {
-  height: 180px;
-  object-fit: cover;
-  border-radius: 4px;
+  display: block;
+  height: auto;
 }
 .persona-workbench .image-option figcaption {
   font-size: 12px;
-  padding: 6px 0;
+  padding: 8px 12px;
+  min-height: 0;
+  color: var(--muted);
 }
-.persona-workbench .image-option button {
-  margin-top: 4px;
+.portrait-manager-heading,
+.portrait-style-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.persona-workbench .persona-photo-actions,
-.persona-workbench .sub-portraits {
-  padding: 12px 0;
-  border: 0;
-  background: transparent;
-  margin-bottom: 8px;
+.portrait-manager h2,
+.portrait-manager h3 {
+  margin: 0;
+  font-size: 18px;
 }
-.persona-workbench .persona-photo-actions .hint,
-.persona-workbench .sub-portraits .hint {
+.portrait-manager .image-options {
+  display: grid;
+  gap: 24px;
+  padding: 0;
+}
+.portrait-style {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.portrait-style-description {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sub-portraits {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.portrait-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.portrait-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 8px 8px;
+  gap: 4px;
+}
+.persona-workbench .portrait-image-actions .secondary {
+  padding: 8px;
+  font-size: 12px;
+  flex: 1 0 auto;
+  border-color: transparent;
+}
+.portrait-image-actions button:hover {
+  background: var(--line);
+}
+.portrait-image-actions .image-delete {
+  color: var(--warning);
+}
+.portrait-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 24px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
   font-size: 13px;
-  margin: 6px 0;
+  text-align: center;
 }
 .persona-document-editor {
   border: 1px solid var(--line);
@@ -878,16 +932,15 @@ aside h2 {
   color: var(--muted);
   margin: 0 0 16px;
 }
-@media (max-width: 850px) {
+@media (max-width: 1100px) {
   .editor-layout,
   .persona-workbench .editor-layout {
     grid-template-columns: 1fr;
     gap: 32px;
   }
   aside {
-    position: static;
     width: 100%;
-    max-width: 420px;
+    max-width: 520px;
     margin-inline: auto;
   }
 }

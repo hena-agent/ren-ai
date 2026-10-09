@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { personaImages } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import copy from "./copy.json";
+import { SubPortraitPanel } from "./sub-portrait-panel.tsx";
 
 function ProfileContent({ persona }: { persona: PersonaRecord }) {
   return (
@@ -15,15 +16,7 @@ function ProfileContent({ persona }: { persona: PersonaRecord }) {
   );
 }
 
-export function Preview({
-  persona,
-  action,
-  locked,
-}: {
-  persona: PersonaRecord;
-  action?: string;
-  locked?: boolean;
-}) {
+export function Preview({ persona }: { persona: PersonaRecord }) {
   const portraits = persona.portraits;
   return (
     <article className="persona-card">
@@ -37,6 +30,9 @@ export function Preview({
                   <img
                     src={portraits[style]!.replace(/^\/discovery\/images\//, "/images/")}
                     alt={`${persona.name} ${copy.styles[style]}`}
+                    width={800}
+                    height={1000}
+                    loading="lazy"
                   />
                 </div>
                 <span className={`portrait-label portrait-label-${style}`} aria-hidden="true">
@@ -49,36 +45,12 @@ export function Preview({
         <img
           src={persona.imageUrl.replace(/^\/discovery\/images\//, "/images/")}
           alt={`${persona.name} 프로필`}
+          width={800}
+          height={1000}
+          loading="lazy"
         />
       ) : (
         <div className="image-placeholder">{copy.noImage}</div>
-      )}
-      {action && !portraits && persona.imageUrl && (
-        <>
-          <button
-            form="persona-editor"
-            type="submit"
-            name="intent"
-            value="regenerate"
-            data-portrait-style="photo"
-            formAction={`${action}?image=${encodeURIComponent(persona.imageUrl)}&style=photo`}
-            data-portrait-operation={`regenerate:photo:${persona.imageUrl}`}
-            data-portrait-label={copy.singleImageCost}
-          >
-            {copy.regenerateImage}
-          </button>
-          <button
-            className="secondary"
-            form="persona-editor"
-            type="submit"
-            name="intent"
-            value="delete-image"
-            disabled={locked}
-            formAction={`${action}?image=${encodeURIComponent(persona.imageUrl)}&style=photo`}
-          >
-            {copy.deleteImage}
-          </button>
-        </>
       )}
       <ProfileContent persona={persona} />
     </article>
@@ -89,66 +61,85 @@ export function Comparison({
   persona,
   action,
   locked,
+  reservations = { anime: 0, photo: 0 },
 }: {
   persona: PersonaRecord;
   action: string;
   locked: boolean;
+  reservations?: { anime: number; photo: number } | undefined;
 }) {
+  const images = personaImages(persona);
   return (
-    <article className="persona-card">
-      <section
-        className="image-options"
-        aria-labelledby="comparison-title"
-        aria-describedby="comparison-hint"
-      >
-        <h3 className="image-options-title" id="comparison-title">
-          {copy.comparison}
-        </h3>
-        <p className="hint" id="comparison-hint">
-          {copy.comparisonHint}
-        </p>
-        <div className="image-options-grid">
-          {personaImages(persona).map(({ style, imageUrl, main }) => (
-            <figure className="image-option" key={imageUrl}>
-              <img
-                src={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
-                alt={`${persona.name} ${style === "anime" ? copy.styles.anime : copy.styles.photo}`}
-              />
-              <figcaption>
-                {main ? copy.mainImage : copy.secondaryImage} · {copy.styles[style]}
-              </figcaption>
-              <button
-                className="image-regenerate"
-                form="persona-editor"
-                type="submit"
-                name="intent"
-                value="regenerate"
-                data-portrait-style={style}
-                data-image-index={personaImages(persona)
-                  .filter((image) => image.style === style)
-                  .findIndex((image) => image.imageUrl === imageUrl)}
-                formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
-                data-portrait-operation={`regenerate:${style}:${imageUrl}`}
-                data-portrait-label={`${main ? copy.mainImage : copy.secondaryImage} · ${copy.styles[style]} · ${copy.singleImageCost}`}
-              >
-                {copy.regenerateImage}
-              </button>
-              <button
-                className="secondary"
-                form="persona-editor"
-                type="submit"
-                name="intent"
-                value="delete-image"
-                disabled={locked}
-                formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
-              >
-                {copy.deleteImage}
-              </button>
-            </figure>
-          ))}
-        </div>
-      </section>
-      <ProfileContent persona={persona} />
-    </article>
+    <section className="image-options" aria-label={copy.comparison}>
+      {(["photo", "anime"] as const).map((style) => (
+        <section className="portrait-style" key={style} aria-labelledby={`portrait-${style}-title`}>
+          <div className="portrait-style-heading">
+            <h3 id={`portrait-${style}-title`} tabIndex={-1}>
+              {style === "photo" ? "실사" : "애니풍"}
+            </h3>
+            <SubPortraitPanel
+              persona={persona}
+              action={action}
+              style={style}
+              reserved={reservations[style]}
+            />
+          </div>
+          <p className="portrait-style-description">{copy.styles[style]}</p>
+          <div className="image-options-grid" data-image-preview id={`portrait-gallery-${style}`}>
+            {images
+              .filter((image) => image.style === style)
+              .map(({ imageUrl, main }, index) => (
+                <figure className="image-option" key={imageUrl}>
+                  <img
+                    src={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+                    alt={`${persona.name} ${copy.styles[style]} · ${main ? "메인" : `추가 ${index}`}`}
+                    width={800}
+                    height={1000}
+                    loading="lazy"
+                  />
+                  <figcaption>{main ? "메인" : `추가 ${index}`}</figcaption>
+                  <div className="portrait-image-actions">
+                    <button
+                      id={`portrait-regenerate-${style}-${index}`}
+                      className="image-regenerate secondary"
+                      form="persona-editor"
+                      type="submit"
+                      name="intent"
+                      value="regenerate"
+                      data-portrait-style={style}
+                      data-image-index={index}
+                      formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
+                      data-portrait-operation={`regenerate:${style}:${imageUrl}`}
+                      data-portrait-label={`${main ? copy.mainImage : copy.secondaryImage} · ${copy.styles[style]} · ${copy.singleImageCost}`}
+                      aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 다시 생성`}
+                    >
+                      다시 생성
+                    </button>
+                    <button
+                      id={`portrait-delete-${style}-${index}`}
+                      className="secondary image-delete"
+                      form="persona-editor"
+                      type="submit"
+                      name="intent"
+                      value="delete-image"
+                      disabled={locked}
+                      formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
+                      data-confirm-delete={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 사진을 삭제할까요?${main ? " 같은 스타일의 다음 사진이 메인이 됩니다. 남은 사진이 없으면 이 스타일은 빈 상태로 표시됩니다." : ""} 저장하기 전까지 공개된 사진은 유지됩니다.`}
+                      aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 삭제`}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </figure>
+              ))}
+            {!images.some((image) => image.style === style) && (
+              <p className="portrait-empty">
+                아직 {style === "photo" ? "실사" : "애니풍"} 사진이 없습니다.
+              </p>
+            )}
+          </div>
+        </section>
+      ))}
+    </section>
   );
 }

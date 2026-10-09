@@ -14,13 +14,14 @@ test("independent images have individual actions and the additional-image panel 
       record: { ...legacy, ...femaleCharacter, portraits, secondaryPortraits },
       editing: true,
       draft: "signed",
+      imageReservations: { photo: 2, anime: 1 },
     });
     expect(window.document.querySelectorAll(".image-option")).toHaveLength(3);
     expect(
       [...window.document.querySelectorAll(".image-regenerate")].map((button) =>
         button.getAttribute("data-image-index"),
       ),
-    ).toEqual(["0", "0", "1"]);
+    ).toEqual(["0", "1", "0"]);
     expect(
       window.document.querySelector(".portrait-scene-title, .sub-recommendation, .sub-scenes"),
     ).toBeNull();
@@ -32,7 +33,30 @@ test("independent images have individual actions and the additional-image panel 
       [...window.document.querySelectorAll('.sub-portraits [value="subportrait"]')].map((button) =>
         button.getAttribute("data-image-maximum"),
       ),
-    ).toEqual(["5", "4"]);
+    ).toEqual(["2", "4"]);
+    const sections = [...window.document.querySelectorAll(".portrait-style")];
+    expect(sections.map((section) => section.querySelector("h3")?.textContent)).toEqual([
+      "실사",
+      "애니풍",
+    ]);
+    expect(
+      sections.map((section) => section.querySelector(".portrait-count")?.textContent),
+    ).toEqual(["2/6장 · 대기 2장", "1/6장 · 대기 1장"]);
+    expect(sections.map((section) => section.querySelectorAll(".image-option").length)).toEqual([
+      2, 1,
+    ]);
+    for (const section of sections) {
+      const style = section
+        .querySelector('[value="subportrait"]')!
+        .getAttribute("data-portrait-style");
+      for (const button of section.querySelectorAll(".image-regenerate"))
+        expect(button.getAttribute("data-portrait-style")).toBe(style);
+      for (const image of section.querySelectorAll("img")) {
+        expect(image.getAttribute("width")).toBe("800");
+        expect(image.getAttribute("height")).toBe("1000");
+        expect(image.getAttribute("loading")).toBe("lazy");
+      }
+    }
     expect(
       window.document
         .querySelector('select[name="imageCount"] option[selected]')
@@ -48,7 +72,10 @@ test("independent images have individual actions and the additional-image panel 
       draft: "signed",
     });
     const buttons = [...window.document.querySelectorAll('.sub-portraits [value="subportrait"]')];
-    expect(buttons.map((button) => button.hasAttribute("disabled"))).toEqual([false, true]);
+    expect(buttons.map((button) => button.hasAttribute("disabled"))).toEqual([true, false]);
+    expect(
+      window.document.querySelector("#portrait-gallery-anime .portrait-empty")?.textContent,
+    ).toBe("아직 애니풍 사진이 없습니다.");
   } finally {
     await window.happyDOM.close();
   }

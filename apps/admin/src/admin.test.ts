@@ -78,10 +78,12 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(window.document.querySelector("script")?.getAttribute("src")).toBe("/pending.js");
     expect(window.document.querySelector("script")?.getAttribute("type")).toBe("module");
     expect(window.document.querySelector("aside h2")?.textContent).toBe("프로필 사진");
-    expect(window.document.querySelector(".persona-card h3")?.textContent).toBe(copy.noName);
-    expect(window.document.querySelector(".persona-card p")?.textContent).toBe(copy.noBio);
-    expect(window.document.querySelector(".image-placeholder")?.textContent).toBe(copy.noImage);
-    expect(window.document.querySelector(".badge")?.className).toBe("badge");
+    expect(window.document.querySelector(".editor-name")?.textContent).toBe(copy.new);
+    expect(
+      [...window.document.querySelectorAll(".portrait-empty")].map((entry) => entry.textContent),
+    ).toEqual(["아직 실사 사진이 없습니다.", "아직 애니풍 사진이 없습니다."]);
+    expect(window.document.querySelectorAll(".portrait-count")).toHaveLength(2);
+    expect(window.document.querySelector('[value="subportrait"]')).toBeNull();
     expect(window.document.querySelector('[role="alert"]')).toBeNull();
     expect(window.document.querySelector(".notice.success")).toBeNull();
     expect(tokenOf(page)).not.toBe("");
@@ -146,8 +148,8 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(page).not.toContain('class="notice success"');
   expect(page).toContain(introduction);
   expect(page).toContain(copy.regenerate);
-  expect(page).toContain(`alt="${character.name} ${copy.styles.anime}"`);
-  expect(page).toContain(`alt="${character.name} ${copy.styles.photo}"`);
+  expect(page).toContain(`alt="${character.name} ${copy.styles.anime} · 메인"`);
+  expect(page).toContain(`alt="${character.name} ${copy.styles.photo} · 메인"`);
   const image = /src="(\/images\/[^"]+)"/.exec(page)![1]!;
   expect(await store.list()).toEqual([]);
   expect(await (await admin(new Request("http://localhost:3729/api/personas"))).json()).toEqual([]);
@@ -167,7 +169,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(save.status).toBe(303);
   const id = idOf(save);
   const persisted = await (await createPersonaStore(root)).get(id);
-  expect(persisted.portraits?.anime).toBe(`/discovery${image}`);
+  expect(persisted.portraits?.photo).toBe(`/discovery${image}`);
   expect(persisted.portraits?.photo).toBe(persisted.imageUrl);
   expect((await store.publicImage(image.slice("/images/".length))).status).toBe(200);
   const publicResponse = await admin(new Request("http://localhost:3729/api/personas"));
@@ -190,7 +192,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(listPage).toContain(copy.edit);
   expect(listPage).not.toContain(`${id} / EDIT`);
   const editPage = await (await admin(request(`/personas/${id}`))).text();
-  expect(editPage).toContain(`alt="${character.name} ${copy.styles.anime}"`);
+  expect(editPage).toContain(`alt="${character.name} ${copy.styles.anime} · 메인"`);
   expect(editPage).toContain(`src="${image}"`);
   const editedWindow = new Window();
   try {

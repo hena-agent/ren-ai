@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PersonaRecord } from "@ren-ai/personas";
 import copy from "./copy.json";
-import { SubPortraitPanel } from "./sub-portrait-panel.tsx";
 import { ImageOptions } from "./image-options.tsx";
 import { ImageJobPanel } from "./image-job-panel.tsx";
 import type { ImageJob } from "./image-queue.ts";
@@ -43,7 +42,6 @@ function Editor({
   conversion,
   changed = true,
 }: EditorFields & { persona: PersonaRecord }) {
-  const portraits = persona.portraits;
   const action = editing ? `/personas/${persona.id}` : "/personas";
   const gender = persona.gender ?? "female";
   const locked = (imageJobs ?? [{ job: imageJob }]).some(
@@ -145,36 +143,31 @@ function Editor({
             action={action}
             conversion={conversion}
           />
-          <fieldset className="persona-photo-actions" disabled={locked}>
-            <legend>프로필 사진</legend>
-            <div className="generation-actions">
-              <button
-                type="submit"
-                name="intent"
-                value="generate"
-                disabled={locked}
-                data-portrait-label={copy.baseImageCost}
-              >
-                {persona.imageUrl && persona.bio ? copy.regenerate : copy.generate}
-              </button>
-            </div>
-            <p className="hint">{copy.generationHint}</p>
-            <output className="pending-status" data-pending aria-live="polite" />
-          </fieldset>
+          <output className="pending-status" data-pending aria-live="polite" />
         </form>
       </div>
-      <aside aria-labelledby="preview-title">
-        <h2 id="preview-title">프로필 사진</h2>
-        {portraits ? (
-          <Comparison persona={persona} action={action} locked={locked} />
-        ) : (
-          <Preview persona={persona} action={action} locked={locked} />
-        )}
-        <div data-add-images>
-          {persona.bio && (
-            <SubPortraitPanel persona={persona} action={action} reservations={imageReservations} />
-          )}
+      <aside className="portrait-manager" aria-labelledby="preview-title">
+        <div className="portrait-manager-heading">
+          <h2 id="preview-title">프로필 사진</h2>
+          <button
+            className="secondary"
+            form="persona-editor"
+            type="submit"
+            name="intent"
+            value="generate"
+            disabled={locked}
+            data-portrait-label={copy.baseImageCost}
+          >
+            {persona.imageUrl && persona.bio ? copy.regenerate : copy.generate}
+          </button>
         </div>
+        <p className="hint">스타일별 최대 6장 · 변경한 사진은 저장 후 공개됩니다.</p>
+        <Comparison
+          persona={persona}
+          action={action}
+          locked={locked}
+          reservations={imageReservations}
+        />
       </aside>
     </div>
   );

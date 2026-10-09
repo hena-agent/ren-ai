@@ -82,7 +82,8 @@ test("invalid publication keeps the description, while malformed forms and tampe
   expect(page).toContain("독립적인 성격의 도예가");
   expect(page).toContain('id="published"');
   expect(page).toContain("checked");
-  expect(page).toContain(copy.noImage);
+  expect(page).toContain("아직 실사 사진이 없습니다.");
+  expect(page).toContain("아직 애니풍 사진이 없습니다.");
   for (const broken of [
     "",
     "abc",

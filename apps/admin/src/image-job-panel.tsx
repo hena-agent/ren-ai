@@ -51,6 +51,9 @@ export function ImageJobPanel({
                   <img
                     src={task.imageUrl.replace(/^\/discovery\/images\//, "/images/")}
                     alt={`${copy.portraitLabels[task.style]} 사진 ${task.index + 1}`}
+                    width={48}
+                    height={60}
+                    loading="lazy"
                   />
                 ) : (
                   <span>{task.ordinal + 1}</span>

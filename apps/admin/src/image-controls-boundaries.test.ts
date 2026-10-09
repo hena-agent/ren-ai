@@ -45,7 +45,7 @@ test("editing source leaves independent image actions available and partial gend
   const description = form.querySelector<HTMLTextAreaElement>('[name="description"]')!;
   description.value = "New description";
   description.dispatchEvent(new Event("input"));
-  expect(form.querySelector<HTMLButtonElement>('[value="generate"]')?.hidden).toBe(false);
+  expect(document.querySelector<HTMLButtonElement>('[value="generate"]')?.hidden).toBe(false);
   expect(
     [
       ...document.querySelectorAll<HTMLButtonElement>(
@@ -102,7 +102,7 @@ test("server source state and style labels reflect independent main images accur
         button.getAttribute("data-portrait-label"),
       ),
     ).toEqual(
-      ["anime", "photo"].map(
+      ["photo", "anime"].map(
         (style) =>
           `${copy.mainImage} · ${copy.styles[style === "anime" ? "anime" : "photo"]} · ${copy.singleImageCost}`,
       ),
@@ -119,12 +119,12 @@ test("a saved partial style exposes only its remaining main image, and addition 
   const { page } = await basePreview();
   document.body.innerHTML = page;
   const buttons = document.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
-  for (const [index, style] of ["anime", "photo"].entries()) {
+  for (const [index, style] of ["photo", "anime"].entries()) {
     expect(buttons[index]?.getAttribute("formaction")).toBe(`/personas?style=${style}`);
     expect(buttons[index]?.dataset["portraitOperation"]).toBe(`subportrait:${style}`);
   }
   expect(document.querySelector('[value="introduction"]')).toBeNull();
-  const image = document.querySelector<HTMLImageElement>(".image-option img")!;
+  const image = document.querySelector<HTMLImageElement>("#portrait-gallery-anime img")!;
   const originalUrl = image.getAttribute("src")!.replace(/^\/images\//, "/discovery/images/");
   const expectedTarget = `/personas?image=${encodeURIComponent(originalUrl)}&style=anime`;
   const figure = image.closest("figure")!;

@@ -181,14 +181,13 @@ test("count and prompt are scoped to a failed target, with the next target retur
   bindPending(form);
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const count = dialog.querySelector<HTMLSelectElement>("select")!;
-  const buttons = document.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
   const cancel = dialog.querySelector<HTMLButtonElement>("[data-portrait-cancel]")!;
-  form.requestSubmit(buttons[1]);
+  form.requestSubmit(document.querySelector<HTMLButtonElement>("#portrait-add-photo"));
   expect(count.value).toBe("2");
   expect(dialog.querySelector("textarea")?.value).toBe("retry this");
   expect(dialog.querySelector("[data-portrait-target]")?.textContent).toContain("실사");
   cancel.click();
-  form.requestSubmit(buttons[0]);
+  form.requestSubmit(document.querySelector<HTMLButtonElement>("#portrait-add-anime"));
   expect(count.value).toBe("1");
   expect(dialog.querySelector("textarea")?.value).toBe("");
 });
