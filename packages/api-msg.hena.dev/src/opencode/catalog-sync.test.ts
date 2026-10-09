@@ -7,6 +7,8 @@ import { retainedSessions } from "../conversations/retained.ts";
 import { syncFolders } from "./catalog-sync.ts";
 import {
   catalogTest,
+  authoredDefinition,
+  expectRejectedCatalog,
   expectProfile,
   expectPrompt,
   catalogWithoutHarin,
@@ -26,11 +28,11 @@ test(
       yield* syncFolders(host.remote.client, fixture.personaDirectory, host.personas);
       const rules = yield* Effect.promise(loadGroundRules);
       expect((yield* host.read(active.id)).rules).toBe(rules);
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You remember the turquoise umbrella.",
-      };
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
       yield* expectPrompt(host, active.id, updated.prompt);
@@ -53,7 +55,7 @@ test(
         .pipe(Effect.timeout("5 seconds"));
       yield* host.remote.sessions.wait(active.id).pipe(Effect.timeout("5 seconds"));
       expect(JSON.stringify(yield* host.llm.requests())).toContain("turquoise umbrella");
-      const live = { ...updated, prompt: "You collect postcards from Busan." };
+      const live = authoredDefinition({ ...updated, prompt: "You collect postcards from Busan." });
       yield* host.write(active.id, {
         ...(yield* host.read(active.id)),
         rules: "Outdated rules awaiting the next edit.",
@@ -86,7 +88,11 @@ test(
       yield* Effect.promise(() =>
         writeFile(filename, source.replace("You are Persona1.", "You remember the yellow scarf.")),
       );
-      yield* expectPrompt(host, active.id, "You remember the yellow scarf.\n");
+      yield* expectPrompt(
+        host,
+        active.id,
+        "You remember the yellow scarf.\n\n## 공개 프로필\n\n24살 대학생\n",
+      );
     }),
   ),
 );
@@ -99,21 +105,25 @@ test(
       const harin = yield* host.activeSession("harin", "harin@example.com");
       const old = yield* host.read(active.id);
       const savedHarin = host.personas.get("harin")!;
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "A change that must be held back.",
-      };
+      });
       const next = yield* catalogWithoutHarin(fixture, updated);
-      expect(
-        (yield* syncFolders(host.remote.client, fixture.personaDirectory, next).pipe(Effect.flip))
-          .message,
-      ).toContain("Active persona harin is missing");
+      yield* expectRejectedCatalog(
+        host,
+        fixture.personaDirectory,
+        next,
+        "Active persona harin is missing",
+      );
       expect(yield* host.read(active.id)).toEqual(old);
       yield* host.watch();
       yield* Effect.sleep("1100 millis");
       expect((yield* host.api.list()).map((persona) => persona.name)).toEqual(["하린", "수아"]);
-      expect(yield* host.read(harin.id)).toMatchObject({ persona: { prompt: "You are Harin." } });
+      expect(yield* host.read(harin.id)).toMatchObject({
+        persona: { prompt: "You are Harin.\n\n## 공개 프로필\n\n29살 서울 사진가" },
+      });
       yield* Effect.promise(() => fixture.store.create(savedHarin));
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* expectProfile(host, "수아 수정");
@@ -132,11 +142,11 @@ test(
         await rm(filename);
         await mkdir(filename);
       });
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You like evening walks.",
-      };
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
       yield* Effect.sleep("1100 millis");
@@ -166,7 +176,10 @@ test(
         await fixture.store.update({ ...host.personas.get("persona1")!, name: "돌아온 수아" });
       });
       yield* expectProfile(host, "돌아온 수아");
-      const updated = { ...host.personas.get("persona1")!, prompt: "You like rainy afternoons." };
+      const updated = authoredDefinition({
+        ...host.personas.get("persona1")!,
+        prompt: "You like rainy afternoons.",
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* Effect.promise(() => rename(fixture.catalogDirectory, offline));

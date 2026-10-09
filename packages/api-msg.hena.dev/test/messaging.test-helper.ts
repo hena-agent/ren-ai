@@ -15,7 +15,7 @@ export const messagingFixture = async (prefix: string, opening = "Hi") => {
   await mkdir(personaDirectory);
   await writeFile(
     join(personaDirectory, "persona1.md"),
-    `---\nname: 수아\nbio: 24살 대학생\npublished: true\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: ${opening}\nmemory: Remember.\n---\nYou are Persona1.\n`,
+    `---\nname: 수아\npublished: true\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: ${opening}\nmemory: Remember.\n---\nYou are Persona1.\n\n## 공개 프로필\n\n24살 대학생\n`,
   );
   return { root, personaDirectory };
 };

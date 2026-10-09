@@ -14,10 +14,16 @@ import type { PersonaRecord } from "./model.ts";
 import { imageResponse, saveImage } from "./images.ts";
 import type { Portrait } from "./images.ts";
 import { personaImages } from "./portraits.ts";
+import { inspectPersonaFiles } from "./inspection.ts";
+import { legacyPersonaDraft } from "./legacy.ts";
 
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
   const list = async () => [...(await Effect.runPromise(readPersonas(directory))).values()];
+  const source = async (id: string) => {
+    validateID(id);
+    return readFile(join(directory, `${id}.md`), "utf8");
+  };
   const get = async (id: string) => {
     validateID(id);
     const bytes = await readdir(directory)
@@ -34,9 +40,14 @@ export async function createPersonaStore(directory: string) {
       });
     return parsePersona(id, bytes.toString());
   };
-  const write = async (input: PersonaRecord, create: boolean) => {
+  const write = async (input: PersonaRecord, create: boolean, legacySource?: string) => {
     const persona = decodePersona(input);
-    if (!create) await get(persona.id);
+    if (!create) {
+      if (legacySource !== undefined) {
+        if ((await source(persona.id)) !== legacySource)
+          throw new PersonaError("conflict", "기존 파일이 변경되었습니다. 다시 검사해 주세요.");
+      } else await get(persona.id);
+    }
     const temporary = join(directory, randomUUID());
     await writeFile(temporary, serializePersona(persona));
     try {
@@ -56,6 +67,13 @@ export async function createPersonaStore(directory: string) {
   };
   return {
     list,
+    inspect: () => inspectPersonaFiles(directory),
+    source,
+    importDraft: async (id: string) => {
+      const original = await source(id);
+      return { original, persona: legacyPersonaDraft(id, original) };
+    },
+    convertLegacy: (input: PersonaRecord, original: string) => write(input, false, original),
     get,
     create: (input: PersonaRecord) => write(input, true),
     update: (input: PersonaRecord) => write(input, false),
@@ -77,13 +95,14 @@ export async function createPersonaStore(directory: string) {
     publicList: async () =>
       (await list())
         .filter((persona) => persona.published)
-        .map(({ id, name, bio, imageUrl, portraits, secondaryPortraits }) => ({
+        .map(({ id, name, bio, imageUrl, portraits, secondaryPortraits, publicProfile }) => ({
           id,
           name,
           bio,
           imageUrl,
           ...(portraits === undefined ? {} : { portraits }),
           ...(secondaryPortraits === undefined ? {} : { secondaryPortraits }),
+          publicProfile: publicProfile!,
         })),
   };
 }

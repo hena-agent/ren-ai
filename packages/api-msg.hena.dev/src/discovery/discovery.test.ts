@@ -10,6 +10,7 @@ import { expect, test } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { migrate } from "../database.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
+import { withPublicProfile } from "@ren-ai/personas/profile";
 
 const http = HttpClient.make((request) =>
   Effect.sync(() =>
@@ -38,7 +39,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
       timeZone: "Asia/Seoul",
       openingLine: "인사해",
       memory: "기억해",
-      prompt: "Private OpenCode prompt",
+      prompt: withPublicProfile("Private OpenCode prompt", "밤에는 음악을 만들어요."),
     });
     await mkdir(join(root, "state"));
     const database = join(root, "state", "server.sqlite");
@@ -63,6 +64,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                 name: "소라",
                 bio: "밤에는 음악을 만들어요.",
                 imageUrl: "https://example.org/sora.jpg",
+                publicProfile: "밤에는 음악을 만들어요.",
               },
             ]);
             const submit = (likedPersonaIDs = ["sora"]) =>

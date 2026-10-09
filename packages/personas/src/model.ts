@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { parseDocument, stringify } from "yaml";
 import { normalizePortraits } from "./portraits.ts";
 import type { PersonaImage } from "./portraits.ts";
+import { splitPersonaMarkdown } from "./profile.ts";
 
 export interface Persona {
   readonly name?: string;
@@ -23,6 +24,8 @@ export interface PersonaRecord extends Persona {
   readonly published: boolean;
   readonly description?: string;
   readonly gender?: "female" | "male";
+  readonly descriptionVersion?: number;
+  readonly publicProfile?: string;
   readonly portraits?: { readonly anime?: string; readonly photo?: string };
   readonly secondaryPortraits?: readonly PersonaImage[];
   readonly portraitGallery?: readonly { readonly anime: string; readonly photo: string }[];
@@ -57,11 +60,12 @@ const Frontmatter = Schema.Struct({
   "opening-line": Schema.String,
   memory: Schema.String,
   name: Schema.optionalKey(Schema.String),
-  bio: Schema.optionalKey(Schema.String),
   "image-url": Schema.optionalKey(Schema.String),
   published: Schema.optionalKey(Schema.Boolean),
-  description: Schema.optionalKey(Schema.String.check(Schema.isPattern(/\S/))),
   gender: Schema.optionalKey(Schema.Literals(["female", "male"])),
+  "description-version": Schema.optionalKey(
+    Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
+  ),
   portraits: Schema.optionalKey(MainPortraits),
   "secondary-portraits": Schema.optionalKey(SecondaryPortraits),
   "portrait-gallery": Schema.optionalKey(
@@ -80,8 +84,10 @@ const Input = Schema.Struct({
   openingLine: Schema.String,
   memory: Schema.String,
   prompt: Schema.String,
-  description: Frontmatter.fields.description,
+  description: Schema.optionalKey(Schema.String.check(Schema.isPattern(/\S/))),
   gender: Frontmatter.fields.gender,
+  descriptionVersion: Frontmatter.fields["description-version"],
+  publicProfile: Schema.optionalKey(Schema.String),
   portraits: Frontmatter.fields.portraits,
   secondaryPortraits: Frontmatter.fields["secondary-portraits"],
   portraitGallery: Frontmatter.fields["portrait-gallery"],
@@ -112,9 +118,16 @@ function validateRuntime(persona: Persona) {
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrows submitted persona fields before storage
 export function decodePersona(input: unknown): PersonaRecord {
   try {
-    const persona = normalizePortraits(
-      Schema.decodeUnknownSync(Input)(input, { onExcessProperty: "error" }),
-    );
+    const fields = Schema.decodeUnknownSync(Input)(input, { onExcessProperty: "error" });
+    const markdown = fields.description ?? fields.prompt;
+    const parts = splitPersonaMarkdown(markdown);
+    const persona = normalizePortraits({
+      ...fields,
+      description: markdown,
+      prompt: markdown,
+      bio: parts.bio,
+      publicProfile: parts.publicMarkdown,
+    });
     validateID(persona.id);
     validateRuntime(persona);
     if (!persona.name.trim()) throw new Error("이름을 입력해 주세요.");
@@ -168,11 +181,14 @@ export function parsePersona(id: string, source: string): PersonaRecord {
     memory: fields.memory,
     prompt: match[2]!,
     name: fields.name ?? id,
-    bio: fields.bio ?? "",
+    bio: "",
     imageUrl: fields["image-url"] ?? "",
     published: fields.published ?? false,
-    ...(fields.description === undefined ? {} : { description: fields.description }),
+    description: match[2]!,
     ...(fields.gender === undefined ? {} : { gender: fields.gender }),
+    ...(fields["description-version"] === undefined
+      ? {}
+      : { descriptionVersion: fields["description-version"] }),
     ...(fields.portraits === undefined ? {} : { portraits: fields.portraits }),
     ...(fields["secondary-portraits"] === undefined
       ? {}
@@ -192,12 +208,11 @@ export function serializePersona(persona: PersonaRecord): string {
     "opening-line": persona.openingLine,
     memory: persona.memory,
     name: persona.name,
-    bio: persona.bio,
     "image-url": persona.imageUrl,
     published: persona.published,
-    description: persona.description,
     gender: persona.gender,
+    "description-version": persona.descriptionVersion,
     portraits: persona.portraits,
     "secondary-portraits": persona.secondaryPortraits,
-  })}---\n${persona.prompt}`;
+  })}---\n${persona.description ?? persona.prompt}`;
 }

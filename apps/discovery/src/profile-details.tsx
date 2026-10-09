@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useRef } from "react";
 import type { StyledPersona } from "./image-style.ts";
 import { GalleryControls } from "./photo-gallery.tsx";
 import copy from "./copy.json";
+import { MarkdownProfile } from "@ren-ai/personas/markdown";
 
 function DetailsGallery({
   persona,
@@ -90,8 +91,7 @@ export function ProfileDetails({
         />
         <div className="details-content">
           <span className="details-label">{copy.profileLabel}</span>
-          <h3>{copy.introductionTitle}</h3>
-          <p>{persona.bio}</p>
+          <MarkdownProfile markdown={persona.publicProfile ?? persona.bio} />
         </div>
       </div>
     </section>

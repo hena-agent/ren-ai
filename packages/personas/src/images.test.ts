@@ -5,11 +5,12 @@ import * as crypto from "node:crypto";
 import { expect, test, vi } from "vitest";
 import { createPersonaStore } from "./store.ts";
 import { decodePersona } from "./model.ts";
+import { withPublicProfile } from "./profile.ts";
 vi.mock("node:crypto", async () => ({
   ...(await vi.importActual<typeof import("node:crypto")>("node:crypto")),
 }));
 
-const persona = {
+const persona = decodePersona({
   id: "harin",
   name: "하린",
   bio: "공개 소개",
@@ -20,8 +21,11 @@ const persona = {
   openingLine: "Hello",
   memory: "Remember",
   prompt: "Private prompt",
-  description: "외모·배경·말투와 비밀을 포함하는 긴 캐릭터 설명\n두 번째 문단.",
-};
+  description: withPublicProfile(
+    "외모·배경·말투와 비밀을 포함하는 긴 캐릭터 설명\n두 번째 문단.",
+    "공개 소개",
+  ),
+});
 
 test("generated images survive restart, use immutable filenames and become public only when their character is published", async () => {
   const root = await mkdtemp(join(tmpdir(), "persona-images-"));

@@ -20,7 +20,25 @@ import { catalogAPI } from "../onboarding/catalog.test-helper.ts";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 import { remoteHost } from "./remote.ts";
-import { watchCatalog } from "./catalog-sync.ts";
+import { watchCatalog, syncFolders } from "./catalog-sync.ts";
+import { withPublicProfile } from "@ren-ai/personas/profile";
+
+export const authoredDefinition = (record: PersonaRecord) => {
+  const description = withPublicProfile(record.prompt, record.publicProfile!);
+  return { ...record, description, prompt: description };
+};
+
+export function expectRejectedCatalog(
+  host: Host,
+  root: string,
+  next: ReadonlyMap<string, PersonaRecord>,
+  message: string,
+) {
+  return Effect.gen(function* () {
+    const rejected = yield* syncFolders(host.remote.client, root, next).pipe(Effect.flip);
+    expect(rejected.message).toContain(message);
+  });
+}
 
 const catalogFixture = async () => {
   const fixture = await messagingFixture("catalog-sync-");
@@ -37,7 +55,8 @@ const catalogFixture = async () => {
     id: "harin",
     name: "하린",
     bio: "29살 서울 사진가",
-    prompt: "You are Harin.",
+    description: withPublicProfile("You are Harin.", "29살 서울 사진가"),
+    prompt: withPublicProfile("You are Harin.", "29살 서울 사진가"),
   });
   const catalogDirectory = join(fixture.root, "catalog");
   const store = await createPersonaStore(catalogDirectory);
@@ -228,7 +247,7 @@ export const pauseFolderWrite = (host: Host, prompt: string) =>
       /\/api\/rpc\/ren-ai\.session-folders\/(write|update|create)$/.test(
         new URL(request.url).pathname,
       ) &&
-      (await request.text()).includes(prompt),
+      (await request.text()).includes(JSON.stringify(prompt).slice(1, -1)),
   );
 
 export const pauseGreeting = (host: Host) =>

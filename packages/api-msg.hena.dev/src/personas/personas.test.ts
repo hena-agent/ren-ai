@@ -51,7 +51,7 @@ test("persona files fail closed on missing, extra, malformed and empty fields", 
       /must not be empty/,
     );
     await expect(load(valid.replace("You are Persona1. Speak Korean.", ""))).rejects.toThrow(
-      /must not be empty/,
+      /must not be empty|description/,
     );
     await expect(load("no frontmatter")).rejects.toThrow(/expected YAML frontmatter/);
     await expect(load(`prefix\n${valid}`)).rejects.toThrow(/expected YAML frontmatter/);

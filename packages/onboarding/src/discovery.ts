@@ -21,6 +21,7 @@ export const PublicPersona = Schema.Struct({
   id,
   name: text,
   bio: text,
+  publicProfile: Schema.optionalKey(Schema.String),
   imageUrl: photo,
   portraits: Schema.optionalKey(
     Schema.Struct({ anime: Schema.optionalKey(photo), photo: Schema.optionalKey(photo) }).check(

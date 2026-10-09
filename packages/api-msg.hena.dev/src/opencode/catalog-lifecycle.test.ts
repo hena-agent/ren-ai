@@ -5,6 +5,7 @@ import { resets } from "../conversations/reset.ts";
 import { makeOperator } from "../operator/operator.ts";
 import {
   catalogTest,
+  authoredDefinition,
   expectProfile,
   expectPrompt,
   pauseFolderWrite,
@@ -29,11 +30,11 @@ test.each(["reset", "remove"] as const)(
           () => Effect.void,
           host.api.fake.messages,
         );
-        const updated = {
+        const updated = authoredDefinition({
           ...host.personas.get("persona1")!,
           name: "수아 수정",
           prompt: "You treasure the violet notebook.",
-        };
+        });
         const gate = yield* beginCatalogEdit(host, fixture, updated);
         const mutation =
           action === "reset"
@@ -51,7 +52,9 @@ test.each(["reset", "remove"] as const)(
         const snapshot = yield* host.read(active.id);
         expect(snapshot.persona.prompt).toBe(updated.prompt);
         yield* Effect.promise(() =>
-          fixture.store.update({ ...updated, prompt: "An edit only for ongoing conversations." }),
+          fixture.store.update(
+            authoredDefinition({ ...updated, prompt: "An edit only for ongoing conversations." }),
+          ),
         );
         yield* Effect.sleep("200 millis");
         expect(yield* host.read(active.id)).toEqual(snapshot);
@@ -77,7 +80,11 @@ test(
         .rebuild("active@example.com", true)
         .pipe(Effect.forkScoped);
       yield* gate.entered;
-      const updated = { ...old, name: "수아 수정", prompt: "You saved the silver ticket." };
+      const updated = authoredDefinition({
+        ...old,
+        name: "수아 수정",
+        prompt: "You saved the silver ticket.",
+      });
       yield* editDuringAllocation(host, fixture, gate, updated);
       expect(yield* Fiber.join(rebuilding)).toBe("rebuilt");
       yield* expectProfile(host, "수아 수정");
@@ -104,11 +111,11 @@ test(
         .submit("greeting@example.com", "persona1")
         .pipe(Effect.forkScoped);
       yield* gate.entered;
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You remember the emerald bicycle.",
-      };
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
       yield* expectBoundPersona(host, "greeting@example.com", updated);
@@ -135,11 +142,11 @@ test(
         .rebuild("active@example.com", true)
         .pipe(Effect.forkScoped);
       yield* Deferred.await(entered).pipe(Effect.timeout("5 seconds"));
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You like the quiet observatory.",
-      };
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
       yield* expectBoundPersona(host, "active@example.com", updated);
@@ -222,7 +229,11 @@ test(
         .submit("joining@example.com", "persona1")
         .pipe(Effect.forkScoped);
       yield* gate.entered;
-      const updated = { ...old, name: "수아 수정", prompt: "You collect tiny ceramic birds." };
+      const updated = authoredDefinition({
+        ...old,
+        name: "수아 수정",
+        prompt: "You collect tiny ceramic birds.",
+      });
       yield* editDuringAllocation(host, fixture, gate, updated);
       expect(yield* Fiber.join(submitting)).toBe("sent");
       yield* expectProfile(host, "수아 수정");

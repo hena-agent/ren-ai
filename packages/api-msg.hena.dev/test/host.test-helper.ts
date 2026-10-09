@@ -34,13 +34,16 @@ export const expectLateResults = (messages: ReadonlyArray<Message>) => {
 
 export const valid = `---
 published: true
-bio: A Korean university student.
 time-zone: Asia/Seoul
 language: ko
 opening-line: 번호 받았으니까 먼저 연락해 봐
 memory: Remember his name.
 ---
 You are Persona1. Speak Korean.
+
+## 공개 프로필
+
+A Korean university student.
 `;
 
 const expectNativePersonaAgent = (agent: {
@@ -55,7 +58,7 @@ const expectNativePersonaAgent = (agent: {
 }) => {
   expect(agent).toMatchObject({
     id: "persona1",
-    system: "You are Persona1. Speak Korean.",
+    system: "You are Persona1. Speak Korean.\n\n## 공개 프로필\n\nA Korean university student.",
     description: "번호 받았으니까 먼저 연락해 봐",
   });
   expect(agent.permissions.slice(-5)).toEqual([
