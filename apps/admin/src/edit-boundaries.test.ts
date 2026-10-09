@@ -20,7 +20,7 @@ function openPhotoAddition(page: string) {
   const form = document.querySelector<HTMLFormElement>("#persona-editor")!;
   bindPending(form);
   form.requestSubmit(
-    form.querySelector<HTMLButtonElement>('[value="subportrait"][formaction$="photo"]'),
+    document.querySelector<HTMLButtonElement>('[value="subportrait"][formaction$="photo"]'),
   );
   return form;
 }
@@ -181,7 +181,7 @@ test("count and prompt are scoped to a failed target, with the next target retur
   bindPending(form);
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const count = dialog.querySelector<HTMLSelectElement>("select")!;
-  const buttons = form.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
+  const buttons = document.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
   const cancel = dialog.querySelector<HTMLButtonElement>("[data-portrait-cancel]")!;
   form.requestSubmit(buttons[1]);
   expect(count.value).toBe("2");

@@ -24,7 +24,7 @@ export function SubPortraitPanel({
           return (
             <button
               key={style}
-              data-source-bound
+              form="persona-editor"
               type="submit"
               name="intent"
               value="subportrait"

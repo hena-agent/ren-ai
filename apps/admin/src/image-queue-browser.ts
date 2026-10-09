@@ -1,4 +1,5 @@
 import { bindPending } from "./pending.ts";
+import { bindDocumentEditor, destroyDocumentEditors } from "./document-editor-browser.ts";
 import copy from "./copy.json";
 
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -10,11 +11,15 @@ function documentOf(markup: string) {
 }
 
 function bindPage() {
-  for (const form of document.querySelectorAll("form")) bindPending(form, submitImageForm);
+  for (const form of document.querySelectorAll("form")) {
+    bindPending(form, submitImageForm);
+    bindDocumentEditor(form);
+  }
   watchImageQueue();
 }
 
 function replacePage(next: Document) {
+  destroyDocumentEditors();
   document.body.innerHTML = next.body.innerHTML;
   bindPage();
   document.getElementById("image-queue-title")?.focus({ preventScroll: true });

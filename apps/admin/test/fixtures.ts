@@ -6,12 +6,15 @@ import { createPersonaStore } from "@ren-ai/personas";
 import { createAdmin } from "../src/admin.ts";
 import type { ProfileGenerator } from "../src/generation.ts";
 import type { LogEntry } from "../src/logging.ts";
+import { withPublicProfile } from "@ren-ai/personas/profile";
 
 export const authorization = `Basic ${Buffer.from("admin:test-password").toString("base64")}`;
 export const character = {
   name: "하린",
-  description:
+  description: withPublicProfile(
     "독립적인 성격의 도예가. 짧은 검은 머리와 차분한 분위기. 서울에서 살며, 밤 산책과 재즈를 좋아한다. 처음에는 존댓말로 천천히 이야기한다.\n비공개 설정: 쉽게 속마음을 말하지 않는다.",
+    "도자기를 만들고, 밤에는 오래 걸어요. 요즘 들은 음악 이야기부터 해볼까요?",
+  ),
 };
 export const introduction =
   "도자기를 만들고, 밤에는 오래 걸어요. 요즘 들은 음악 이야기부터 해볼까요?";
@@ -33,6 +36,12 @@ export const portraitReply = async () =>
 export const generator: ProfileGenerator = {
   character: async () => character,
   introduction: async () => introduction,
+  profile: async () => introduction,
+  convert: async (source) => ({
+    ...source,
+    description: withPublicProfile(source.description, introduction),
+    additions: [],
+  }),
   portrait: async () => ({ bytes: png, mimeType: "image/png" }),
 };
 export const portraitImage = { bytes: png, mimeType: "image/png" as const };
@@ -46,7 +55,9 @@ export const legacy = {
   timeZone: "Europe/Paris",
   openingLine: "Introduce yourself.",
   memory: "Remember the paintings.",
-  prompt: "You are Mira, a painter in Paris.",
+  prompt: withPublicProfile("You are Mira, a painter in Paris.", "파리에서 그림을 그려요."),
+  description: withPublicProfile("You are Mira, a painter in Paris.", "파리에서 그림을 그려요."),
+  publicProfile: "파리에서 그림을 그려요.",
 };
 const roots: string[] = [];
 afterEach(async () => {

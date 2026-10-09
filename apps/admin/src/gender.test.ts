@@ -16,6 +16,8 @@ import { preview, modelReply, photoPortrait } from "../test/sub-portraits.ts";
 import policy from "./policy.json";
 import { useBrowser } from "../test/browser.ts";
 import { bindPending } from "./pending.ts";
+import { sheet, acceptedReview, characterResponse } from "../test/character.ts";
+import characterPolicy from "./character-policy.json";
 
 useBrowser();
 
@@ -103,7 +105,9 @@ test("Gemini character, biography, portrait and sub-scene prompts consider male 
   const model = createProfileGenerator({ key: "key", fetcher });
   for (const gender of ["female", "male"] as const) {
     fetcher.mockClear();
-    fetcher.mockResolvedValueOnce(modelReply(JSON.stringify(character)));
+    fetcher
+      .mockResolvedValueOnce(characterResponse({ ...sheet, gender }))
+      .mockResolvedValueOnce(acceptedReview());
     await model.character("romantic lead idea", gender);
     const seed = await new Request(...fetcher.mock.calls.at(-1)!).text();
     expect(seed).toContain("Support both female and male");
@@ -150,7 +154,7 @@ test("Gemini character, biography, portrait and sub-scene prompts consider male 
   }
 });
 
-test("existing male records retain their selected gender but an identity change cannot reuse the old profile", async () => {
+test("existing male records retain their selected gender and explicit gender edits preserve photos", async () => {
   const drafting = vi.fn<typeof generator.character>().mockImplementation(generator.character);
   const introduction = vi
     .fn<typeof generator.introduction>()
@@ -168,9 +172,21 @@ test("existing male records retain their selected gender but an identity change 
   expect((await admin(request(route, fields))).status).toBe(303);
   expect((await store.get(legacy.id)).gender).toBe("male");
   const current = await (await admin(request(route))).text();
+  await store.create({ ...legacy, id: "gender-change", gender: "male" });
+  const changePage = await (await admin(request("/personas/gender-change"))).text();
   expect(
-    (await admin(request(route, { ...fields, draft: tokenOf(current), gender: "female" }))).status,
-  ).toBe(400);
+    (
+      await admin(
+        request("/personas/gender-change", {
+          ...fields,
+          draft: tokenOf(changePage),
+          gender: "female",
+        }),
+      )
+    ).status,
+  ).toBe(303);
+  expect((await store.get("gender-change")).gender).toBe("female");
+  expect((await store.get("gender-change")).imageUrl).toBe(legacy.imageUrl);
   expect(
     (
       await admin(
@@ -203,12 +219,8 @@ test("existing male records retain their selected gender but an identity change 
     )
   ).text();
   expect(preview(switched).gender).toBe("female");
-  expect(preview(switched).prompt).toContain("성별: female");
-  expect(introduction).toHaveBeenCalledWith({
-    name: legacy.name,
-    description: legacy.prompt,
-    gender: "female",
-  });
+  expect(preview(switched).prompt).toBe(legacy.description);
+  expect(introduction).not.toHaveBeenCalled();
   const femaleDraft = await (
     await admin(
       request(route, {
@@ -224,16 +236,30 @@ test("existing male records retain their selected gender but an identity change 
 });
 
 test("unspecified legacy gender keeps the seed and runtime instructions free of gender overrides", async () => {
-  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(modelReply(JSON.stringify(character)));
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(characterResponse())
+    .mockResolvedValueOnce(acceptedReview());
   const model = createProfileGenerator({ key: "key", fetcher });
   await model.character("legacy seed");
   expect(await new Request(...fetcher.mock.calls[0]!).json()).toMatchObject({
     contents: [
-      { parts: [{ text: `${policy.characterDraft}\n\n${policy.genderDirection}\n\nlegacy seed` }] },
+      {
+        parts: [
+          {
+            text: `${characterPolicy.generate}\n\n${characterPolicy.reference}\n\n${policy.genderDirection}\n\nlegacy seed`,
+          },
+        ],
+      },
     ],
   });
   const { admin, store } = await fixture();
-  await store.create({ ...legacy, bio: "", imageUrl: "" });
+  await store.create({
+    ...legacy,
+    description: "You are Mira, a painter in Paris.",
+    bio: "",
+    imageUrl: "",
+  });
   const page = await (await admin(request(`/personas/${legacy.id}`))).text();
   const response = await admin(
     request(`/personas/${legacy.id}`, {
@@ -243,7 +269,5 @@ test("unspecified legacy gender keeps the seed and runtime instructions free of 
     }),
   );
   expect(response.status).toBe(303);
-  expect((await store.get(legacy.id)).prompt).toBe(
-    `${policy.conversation}\n\n이름: New name\n언어: ${legacy.language}\n\nNew source`,
-  );
+  expect((await store.get(legacy.id)).prompt).toBe("New source");
 });

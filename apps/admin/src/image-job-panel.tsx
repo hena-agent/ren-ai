@@ -82,7 +82,6 @@ export function ImageJobPanel({
                   data-portrait-style={task.style}
                   data-image-index={task.index}
                   data-portrait-prompt={job.batch.prompts[task.ordinal]}
-                  data-source-bound
                 >
                   {copy.retryImage}
                 </button>

@@ -7,7 +7,14 @@ const Draft = Schema.Struct({
   id: Schema.String,
   // The original saved snapshot for stale-edit checks; empty for a new character.
   base: Schema.String,
+  legacySource: Schema.optionalKey(Schema.String),
   preview: Schema.String,
+  conversion: Schema.optionalKey(
+    Schema.Struct({
+      source: Schema.String,
+      additions: Schema.Array(Schema.String).check(Schema.isMaxLength(20)),
+    }),
+  ),
   seed: Schema.optionalKey(Schema.String),
   portraitInstructions: Schema.optionalKey(Schema.String),
   imageInstructions: Schema.optionalKey(Schema.String),

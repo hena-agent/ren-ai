@@ -14,7 +14,7 @@ export const emptyPersona: Omit<PersonaRecord, "id"> = {
   language: "ko",
   openingLine: policy.openingLine,
   memory: policy.memory,
-  prompt: policy.conversation,
+  prompt: "",
 };
 
 export const descriptionOf = (persona: PersonaRecord) => persona.description ?? persona.prompt;
@@ -42,7 +42,10 @@ export function readIntent(form: FormData) {
     intent === "subportrait" ||
     intent === "regenerate" ||
     intent === "delete-image" ||
-    intent === "introduction"
+    intent === "introduction" ||
+    intent === "profile" ||
+    intent === "inspect" ||
+    intent === "convert"
   )
     return intent;
   throw new PersonaError("invalid", copy.formError);
@@ -75,28 +78,8 @@ export function authorPersona(form: FormData, previous: PersonaRecord) {
       ? {
           openingLine: policy.openingLine,
           memory: policy.memory,
-          prompt: `${policy.conversation}\n\n이름: ${name}\n언어: ${previous.language}${gender ? `\n성별: ${gender}` : ""}\n\n${description}`,
+          prompt: description,
         }
       : {}),
   };
-}
-
-export function requireMatchingProfile(persona: PersonaRecord, previous: PersonaRecord) {
-  if (
-    (previous.bio || previous.imageUrl) &&
-    (persona.name !== previous.name ||
-      descriptionOf(persona) !== descriptionOf(previous) ||
-      persona.gender !== previous.gender)
-  )
-    throw new PersonaError("invalid", copy.regenerateRequired);
-}
-
-export function needsIntroduction(persona: PersonaRecord, previous: PersonaRecord) {
-  return (
-    !previous.bio ||
-    !previous.imageUrl ||
-    persona.name !== previous.name ||
-    descriptionOf(persona) !== descriptionOf(previous) ||
-    persona.gender !== previous.gender
-  );
 }

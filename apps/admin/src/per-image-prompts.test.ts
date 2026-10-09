@@ -15,7 +15,8 @@ test("two added photos have two independent prompts; count changes preserve each
   const count = dialog.querySelector<HTMLSelectElement>("select")!;
   const errors: string[] = [];
   document.defaultView!.addEventListener("error", (event) => errors.push(event.message));
-  const add = form.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
+  const add = document.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
+  expect(add[1]?.form).toBe(form);
   form.requestSubmit(add[1]);
   expect(dialog.querySelectorAll("textarea:not(:disabled)")).toHaveLength(1);
   count.value = "2";

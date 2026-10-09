@@ -39,33 +39,28 @@ test("save and reload restore only actual edits, and a replayed successful addit
   expect(portrait).toHaveBeenCalledTimes(4);
 });
 
-test("changed source blocks deletion, addition and biography-only work before provider or saved-state changes", async () => {
-  const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
-  const introduction = vi
-    .fn<typeof generator.introduction>()
-    .mockImplementation(generator.introduction);
-  const { admin, page } = await basePreview({ ...subGenerator, portrait, introduction });
-  const main = preview(page).portraits!.photo!;
-  for (const [intent, path] of [
-    ["delete-image", `/personas?style=photo&image=${encodeURIComponent(main)}`],
-    ["subportrait", "/personas?style=photo"],
-    ["introduction", "/personas"],
-  ] as const) {
-    expect(
-      (
-        await admin(
-          request(path, {
-            ...character,
-            description: "modified source",
-            draft: tokenOf(page),
-            intent,
-          }),
-        )
-      ).status,
-    ).toBe(400);
+test("edited source supports independently selected image and text actions without changing saved state", async () => {
+  for (const intent of ["delete-image", "subportrait", "introduction"] as const) {
+    const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
+    const introduction = vi
+      .fn<typeof generator.introduction>()
+      .mockImplementation(generator.introduction);
+    const { admin, page, store } = await basePreview({ ...subGenerator, portrait, introduction });
+    const main = preview(page).portraits!.photo!;
+    const path =
+      intent === "delete-image"
+        ? `/personas?style=photo&image=${encodeURIComponent(main)}`
+        : "/personas?style=photo";
+    const description = character.description.replace("짧은 검은 머리", "긴 갈색 머리");
+    const result = await admin(
+      request(path, { ...character, description, draft: tokenOf(page), intent }),
+    );
+    expect(result.status).toBe(200);
+    expect(preview(await result.text()).description).toBe(description);
+    expect(portrait).toHaveBeenCalledTimes(intent === "subportrait" ? 3 : 2);
+    expect(introduction).toHaveBeenCalledTimes(intent === "introduction" ? 1 : 0);
+    expect(await store.list()).toEqual([]);
   }
-  expect(portrait).toHaveBeenCalledTimes(2);
-  expect(introduction).toHaveBeenCalledTimes(1);
 });
 
 test("a failed multi-image addition displays recovery information, preserves successes and permits a same-input retry", async () => {

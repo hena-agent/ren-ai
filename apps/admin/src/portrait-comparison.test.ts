@@ -79,6 +79,7 @@ test("both styles are saved together, survive restart and become public without 
       bio: record.bio,
       imageUrl: record.imageUrl,
       portraits: record.portraits,
+      publicProfile: record.publicProfile,
     },
   ]);
   const edited = await (await admin(request(`/personas/${record.id}`))).text();

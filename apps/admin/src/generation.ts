@@ -1,7 +1,9 @@
 import { Schema } from "effect";
+import type { JsonSchema } from "effect";
 import type { Portrait, PersonaRecord } from "@ren-ai/personas";
 import policy from "./policy.json";
-import { GenerationError, operation, protect, safeText } from "./logging.ts";
+import { GenerationError, operation, protect, safeText, validationFailure } from "./logging.ts";
+import { generateCharacter, convertCharacter } from "./character-generation.ts";
 
 type Character = {
   readonly name: string;
@@ -14,6 +16,8 @@ type PortraitStyle = keyof typeof policy.portraits;
 export interface ProfileGenerator {
   character: (seed: string, gender?: NonNullable<PersonaRecord["gender"]>) => Promise<Character>;
   introduction: (character: Character) => Promise<string>;
+  profile: (character: Character) => Promise<string>;
+  convert: (character: Character) => Promise<Character & { additions: readonly string[] }>;
   portrait: (
     character: Character,
     style: PortraitStyle,
@@ -53,10 +57,6 @@ const ProviderError = Schema.Struct({
     message: Schema.optionalKey(Schema.String),
   }),
 });
-const CharacterDraft = Schema.Struct({
-  name: Schema.String.check(Schema.isPattern(/\S/)),
-  description: Schema.String.check(Schema.isPattern(/\S/)),
-});
 const visibleText = (parts: readonly (typeof Part.Type)[]) =>
   parts
     .map((part) => part.text ?? "")
@@ -84,11 +84,15 @@ async function readReply(response: Response, model: string, secrets: readonly st
   const reply = await response
     .json()
     .then(Schema.decodeUnknownSync(Reply))
-    .catch(() => {
-      throw new GenerationError("Invalid generation response", {
-        ...fields,
-        code: "invalid_response",
-      });
+    .catch((cause) => {
+      throw validationFailure(
+        "Invalid generation response",
+        {
+          ...fields,
+          code: "invalid_response",
+        },
+        cause,
+      );
     });
   const candidate = reply.candidates?.[0];
   const reasons = {
@@ -142,8 +146,8 @@ export function createProfileGenerator({
       responseModalities: ["TEXT", "IMAGE"],
       imageConfig: { aspectRatio: "4:5", imageSize: "1K" },
     },
-    text: { maxOutputTokens: 1024, thinkingConfig },
-    json: { maxOutputTokens: 4096, thinkingConfig, responseMimeType: "application/json" },
+    text: { maxOutputTokens: 8192, thinkingConfig },
+    json: { maxOutputTokens: 8192, thinkingConfig, responseMimeType: "application/json" },
   };
   const request = async (
     model: string,
@@ -152,6 +156,7 @@ export function createProfileGenerator({
     format: "image" | "text" | "json",
     style?: PortraitStyle,
     references: readonly Portrait[] = [],
+    responseJsonSchema?: JsonSchema.JsonSchema,
   ) =>
     operation("generation.api", { model, ...(style && { style }) }, async () => {
       const imageParts = references.map((reference) => ({
@@ -180,7 +185,10 @@ export function createProfileGenerator({
                   parts: [{ text: `${prompt}\n\n${input}` }, ...imageParts],
                 },
               ],
-              generationConfig: configurations[format],
+              generationConfig: {
+                ...configurations[format],
+                ...(responseJsonSchema && { responseJsonSchema }),
+              },
             }),
           },
         );
@@ -189,23 +197,25 @@ export function createProfileGenerator({
       }
       return readReply(response, model, secrets);
     });
+  const characterRequest = async (
+    prompt: string,
+    input: string,
+    schema?: JsonSchema.JsonSchema,
+  ) => {
+    const { parts, fields } = await request(
+      textModel,
+      prompt,
+      input,
+      schema ? "json" : "text",
+      undefined,
+      [],
+      schema,
+    );
+    return { text: visibleText(parts), fields };
+  };
   return {
-    character: async (seed, gender) => {
-      const { parts, fields } = await request(
-        textModel,
-        `${policy.characterDraft}\n\n${policy.genderDirection}`,
-        `${seed}${gender ? `\n\nSELECTED GENDER: ${gender}` : ""}`,
-        "json",
-      );
-      try {
-        return Schema.decodeUnknownSync(CharacterDraft)(JSON.parse(visibleText(parts)));
-      } catch {
-        throw new GenerationError("Invalid character draft", {
-          ...fields,
-          code: "invalid_character",
-        });
-      }
-    },
+    character: (seed, gender) => generateCharacter(characterRequest, seed, gender),
+    convert: (character) => convertCharacter(characterRequest, character),
     introduction: async (character) => {
       const { parts, fields } = await request(
         textModel,
@@ -214,12 +224,21 @@ export function createProfileGenerator({
         "text",
       );
       const text = visibleText(parts);
-      if (!text || text.length > 240)
+      if (!text || text.length > 800)
         throw new GenerationError("Invalid introduction", {
           ...fields,
           code: "invalid_introduction",
         });
       return text;
+    },
+    profile: async (character) => {
+      const { parts } = await request(
+        textModel,
+        "이 Persona가 실제 데이팅 프로필에 올릴 공개 Markdown만 작성해. 첫 문단은 짧은 1인칭 자기소개 필수. 나머지는 그 사람이 원하는 제목·문단·목록·문답을 자유롭게 고르고 ### 제목부터 써. 모든 항목을 채우지 마. 원래 공개하지 않은 취미·개인 정보는 비어 있어도 정상이며 요청 없이 보충하지 마. 내부 수치·숨겨진 특성·생성 지침·상대와의 기억은 공개하지 마. 코드 블록이나 ## 공개 프로필 경계 없이 공개 내용만 반환해.",
+        characterText(character),
+        "text",
+      );
+      return visibleText(parts);
     },
     portrait: async (character, style, instructions = "", reference, composition) => {
       const { parts, fields } = await request(

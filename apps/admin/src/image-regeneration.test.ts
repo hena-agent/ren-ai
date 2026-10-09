@@ -163,7 +163,7 @@ test("failed regeneration retains image, optional prompt, cause metadata and a s
   expect(preview(await recovered.text()).portraits?.anime).toBe(before.portraits?.anime);
 });
 
-test("invalid styles, images and changed definitions are rejected before paid work", async () => {
+test("invalid styles, image targets and missing public introductions are rejected before paid work", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, page } = await basePreview({ ...subGenerator, portrait });
   const fields = { ...character, draft: tokenOf(page), intent: "regenerate" };

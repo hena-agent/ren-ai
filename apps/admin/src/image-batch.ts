@@ -1,11 +1,6 @@
 import { decodePersona, PersonaError, personaImages, serializePersona } from "@ren-ai/personas";
 import type { createPersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
-import {
-  characterOf,
-  emptyPersona,
-  needsIntroduction,
-  requireMatchingProfile,
-} from "./authoring.ts";
+import { characterOf, emptyPersona } from "./authoring.ts";
 import type { Draft } from "./draft.ts";
 import { completedImageDraft, previewOf } from "./draft.ts";
 import type { ProfileGenerator } from "./generation.ts";
@@ -16,8 +11,10 @@ import type { ImageSlot, ImageIntent } from "./image-slots.ts";
 import { imageStyle, imageTarget, mainImage, readPortraitReference } from "./portrait-images.ts";
 import { imagePrompt } from "./image-prompts.ts";
 import { regeneratePortrait } from "./regenerate-portrait.ts";
-import { operation } from "./logging.ts";
 import copy from "./copy.json";
+import { assertSnapshot } from "./snapshot.ts";
+import { requirePublicProfile } from "@ren-ai/personas/profile";
+import { operation } from "./logging.ts";
 
 type Store = Awaited<ReturnType<typeof createPersonaStore>>;
 export interface ImageBatch {
@@ -88,11 +85,9 @@ export function createImageBatch(
   generator: ProfileGenerator,
   store: Store,
 ): ImageBatch {
+  persona = decodePersona(persona);
   const initial = intent === "generate" || intent === "portrait";
-  if (intent !== "generate") {
-    if (!persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
-    requireMatchingProfile(persona, previewOf(draft, emptyPersona));
-  }
+  if (!initial && !persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
   const slots = slotsOf(persona, draft, intent, params, key);
   const prompts = slots.map((slot, ordinal) => imagePrompt(draft, slot, ordinal, initial));
   let current = persona;
@@ -108,16 +103,25 @@ export function createImageBatch(
     return image;
   };
   const prepare = async () => {
-    if (expectedBase && serializePersona(await store.get(draft.id)) !== expectedBase)
-      throw new PersonaError("conflict", copy.stale);
+    await assertSnapshot(store, { ...latest, base: expectedBase });
     if (prepared || !initial) return;
-    const bio =
-      intent === "generate" && needsIntroduction(persona, previewOf(draft, emptyPersona))
-        ? await operation("introduction.generate", {}, () =>
-            generator.introduction(characterOf(persona)),
-          )
-        : persona.bio;
-    const fresh = { ...persona, bio, imageUrl: "" };
+    let authored = persona;
+    if (!decodePersona(persona).bio) {
+      const converted = await operation("character.complete", {}, () =>
+        generator.convert(characterOf(persona)),
+      );
+      if (converted.name !== persona.name)
+        throw new PersonaError("invalid", "생성된 문서의 이름이 원본과 다릅니다.");
+      requirePublicProfile(converted.description);
+      authored = { ...persona, description: converted.description, prompt: converted.description };
+      persona = authored;
+    }
+    const document = decodePersona(authored);
+    requirePublicProfile(document.description!);
+    const fresh = {
+      ...document,
+      imageUrl: "",
+    };
     delete fresh.portraits;
     delete fresh.secondaryPortraits;
     delete fresh.portraitGallery;
@@ -164,7 +168,9 @@ export function createImageBatch(
   return {
     intent,
     personaId: persona.id,
-    source: persona,
+    get source() {
+      return persona;
+    },
     slots,
     prompts,
     draft: () => latest,

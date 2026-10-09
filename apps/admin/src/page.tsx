@@ -1,170 +1,18 @@
-import { Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { personaImages } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
-import { descriptionOf, needsIntroduction } from "./authoring.ts";
 import copy from "./copy.json";
 import { SubPortraitPanel } from "./sub-portrait-panel.tsx";
 import { ImageOptions } from "./image-options.tsx";
 import { ImageJobPanel } from "./image-job-panel.tsx";
 import type { ImageJob } from "./image-queue.ts";
-
-function ProfileContent({ persona }: { persona: PersonaRecord }) {
-  return (
-    <div className="card-content">
-      <span className={persona.published ? "badge live" : "badge"}>
-        {persona.published ? copy.live : copy.draft}
-      </span>
-      <h3>{persona.name || copy.noName}</h3>
-      <p>{persona.bio || copy.noBio}</p>
-    </div>
-  );
-}
-
-function Preview({
-  persona,
-  action,
-  locked,
-}: {
-  persona: PersonaRecord;
-  action?: string;
-  locked?: boolean;
-}) {
-  const portraits = persona.portraits;
-  return (
-    <article className="persona-card">
-      {portraits ? (
-        <div className="portrait-split">
-          {(["anime", "photo"] as const)
-            .filter((style) => portraits[style])
-            .map((style) => (
-              <Fragment key={style}>
-                <div className={`portrait-pane portrait-${style}`}>
-                  <img
-                    src={portraits[style]!.replace(/^\/discovery\/images\//, "/images/")}
-                    alt={`${persona.name} ${copy.styles[style]}`}
-                  />
-                </div>
-                <span className={`portrait-label portrait-label-${style}`} aria-hidden="true">
-                  {copy.portraitLabels[style]}
-                </span>
-              </Fragment>
-            ))}
-        </div>
-      ) : persona.imageUrl ? (
-        <img
-          src={persona.imageUrl.replace(/^\/discovery\/images\//, "/images/")}
-          alt={`${persona.name} 프로필`}
-        />
-      ) : (
-        <div className="image-placeholder">{copy.noImage}</div>
-      )}
-      {action && !portraits && persona.imageUrl && (
-        <>
-          <button
-            data-source-bound
-            form="persona-editor"
-            type="submit"
-            name="intent"
-            value="regenerate"
-            data-portrait-style="photo"
-            formAction={`${action}?image=${encodeURIComponent(persona.imageUrl)}&style=photo`}
-            data-portrait-operation={`regenerate:photo:${persona.imageUrl}`}
-            data-portrait-label={copy.singleImageCost}
-          >
-            {copy.regenerateImage}
-          </button>
-          <button
-            data-source-bound
-            className="secondary"
-            form="persona-editor"
-            type="submit"
-            name="intent"
-            value="delete-image"
-            disabled={locked}
-            formAction={`${action}?image=${encodeURIComponent(persona.imageUrl)}&style=photo`}
-          >
-            {copy.deleteImage}
-          </button>
-        </>
-      )}
-      <ProfileContent persona={persona} />
-    </article>
-  );
-}
-
-function Comparison({
-  persona,
-  action,
-  locked,
-}: {
-  persona: PersonaRecord;
-  portraits: NonNullable<PersonaRecord["portraits"]>;
-  action: string;
-  locked: boolean;
-}) {
-  return (
-    <article className="persona-card">
-      <section
-        className="image-options"
-        aria-labelledby="comparison-title"
-        aria-describedby="comparison-hint"
-      >
-        <h3 className="image-options-title" id="comparison-title">
-          {copy.comparison}
-        </h3>
-        <p className="hint" id="comparison-hint">
-          {copy.comparisonHint}
-        </p>
-        <div className="image-options-grid">
-          {personaImages(persona).map(({ style, imageUrl, main }) => (
-            <figure className="image-option" key={imageUrl}>
-              <img
-                src={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
-                alt={`${persona.name} ${style === "anime" ? copy.styles.anime : copy.styles.photo}`}
-              />
-              <figcaption>
-                {main ? copy.mainImage : copy.secondaryImage} · {copy.styles[style]}
-              </figcaption>
-              <button
-                data-source-bound
-                className="image-regenerate"
-                form="persona-editor"
-                type="submit"
-                name="intent"
-                value="regenerate"
-                data-portrait-style={style}
-                data-image-index={personaImages(persona)
-                  .filter((image) => image.style === style)
-                  .findIndex((image) => image.imageUrl === imageUrl)}
-                formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
-                data-portrait-operation={`regenerate:${style}:${imageUrl}`}
-                data-portrait-label={`${main ? copy.mainImage : copy.secondaryImage} · ${copy.styles[style]} · ${copy.singleImageCost}`}
-              >
-                {copy.regenerateImage}
-              </button>
-              <button
-                className="secondary"
-                form="persona-editor"
-                type="submit"
-                name="intent"
-                value="delete-image"
-                disabled={locked}
-                data-source-bound
-                formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
-              >
-                {copy.deleteImage}
-              </button>
-            </figure>
-          ))}
-        </div>
-      </section>
-      <ProfileContent persona={persona} />
-    </article>
-  );
-}
+import { DocumentEditor } from "./document-editor.tsx";
+import { InspectionResults } from "./inspection-page.tsx";
+import type { InspectionRow } from "./inspection-page.tsx";
+import type { Draft } from "./draft.ts";
+import { Preview, Comparison } from "./profile-preview.tsx";
 
 interface EditorFields {
+  changed?: boolean | undefined;
   editing: boolean;
   draft: string;
   seed?: string | undefined;
@@ -177,7 +25,7 @@ interface EditorFields {
   imageReservations?: { anime: number; photo: number } | undefined;
   queuePosition?: number | undefined;
   queueObservedAt?: number | undefined;
-  profileSource?: PersonaRecord | undefined;
+  conversion?: Draft["conversion"] | undefined;
 }
 
 function Editor({
@@ -192,11 +40,10 @@ function Editor({
   imageJob,
   imageJobs,
   imageReservations,
-  profileSource,
+  conversion,
+  changed = true,
 }: EditorFields & { persona: PersonaRecord }) {
   const portraits = persona.portraits;
-  const source = profileSource ?? persona;
-  const complete = Boolean(source.bio && source.imageUrl);
   const action = editing ? `/personas/${persona.id}` : "/personas";
   const gender = persona.gender ?? "female";
   const locked = (imageJobs ?? [{ job: imageJob }]).some(
@@ -257,9 +104,6 @@ function Editor({
           data-saving={copy.saving}
           data-adding={copy.addingScene}
           data-regenerating={copy.regeneratingImage}
-          data-profile-complete={String(complete)}
-          data-source-name={source.name}
-          data-source-description={descriptionOf(source)}
           data-image-queue
           data-queue-locked={String(locked)}
         >
@@ -274,27 +118,37 @@ function Editor({
             count={imageCount}
             prompts={imagePrompts}
           />
-          <fieldset>
-            <legend>{copy.character}</legend>
-            <label htmlFor="name">이름</label>
-            <input id="name" name="name" defaultValue={persona.name} required readOnly={locked} />
-            <label htmlFor="description">캐릭터 설명</label>
-            <p className="hint" id="description-hint">
-              {copy.characterHint}
-            </p>
-            <textarea
-              id="description"
-              name="description"
-              rows={16}
-              defaultValue={descriptionOf(persona)}
-              placeholder={copy.characterPlaceholder}
-              aria-describedby="description-hint"
-              required
-              readOnly={locked}
-            />
+          <div className="editor-toolbar form-actions">
+            <h1 className="editor-name">{persona.name || copy.new}</h1>
+            <span className="editor-change-state" data-editor-change-state aria-live="polite">
+              {!persona.name ? "생성 전" : changed ? "저장 전 미리보기" : "저장됨"}
+            </span>
+            <label className="toggle" htmlFor="published" title={copy.publishHint}>
+              <input
+                id="published"
+                name="published"
+                type="checkbox"
+                defaultChecked={persona.published}
+                disabled={locked}
+              />
+              {copy.published}
+            </label>
+            <button type="submit" name="intent" value="save" disabled={locked}>
+              {copy.save}
+            </button>
+            <a href="/">{copy.list}</a>
+          </div>
+          <DocumentEditor
+            persona={persona}
+            locked={locked}
+            editing={editing}
+            action={action}
+            conversion={conversion}
+          />
+          <fieldset className="persona-photo-actions" disabled={locked}>
+            <legend>프로필 사진</legend>
             <div className="generation-actions">
               <button
-                hidden={complete && !needsIntroduction(persona, source)}
                 type="submit"
                 name="intent"
                 value="generate"
@@ -307,62 +161,20 @@ function Editor({
             <p className="hint">{copy.generationHint}</p>
             <output className="pending-status" data-pending aria-live="polite" />
           </fieldset>
-          <div data-add-images>
-            {persona.bio && (
-              <SubPortraitPanel
-                persona={persona}
-                action={action}
-                reservations={imageReservations}
-              />
-            )}
-          </div>
-          {persona.bio && (
-            <fieldset>
-              <legend>{copy.introductionTitle}</legend>
-              <p>{persona.bio}</p>
-              <button
-                data-source-bound
-                className="secondary"
-                type="submit"
-                name="intent"
-                value="introduction"
-                disabled={locked}
-              >
-                {copy.regenerateIntroduction}
-              </button>
-              <p className="hint">{copy.introductionHint}</p>
-            </fieldset>
-          )}
-          <fieldset>
-            <legend>{copy.publication}</legend>
-            <label className="toggle" htmlFor="published">
-              <input
-                id="published"
-                name="published"
-                type="checkbox"
-                defaultChecked={persona.published}
-                disabled={locked}
-              />
-              {copy.published}
-            </label>
-            <p className="hint">{copy.publishHint}</p>
-          </fieldset>
-          <div className="form-actions">
-            <button type="submit" name="intent" value="save" disabled={locked}>
-              {copy.save}
-            </button>
-            <a href="/">{copy.list}</a>
-          </div>
         </form>
       </div>
       <aside aria-labelledby="preview-title">
-        <h2 id="preview-title">{copy.preview}</h2>
-        <p className="hint">{copy.previewHint}</p>
+        <h2 id="preview-title">프로필 사진</h2>
         {portraits ? (
-          <Comparison persona={persona} portraits={portraits} action={action} locked={locked} />
+          <Comparison persona={persona} action={action} locked={locked} />
         ) : (
           <Preview persona={persona} action={action} locked={locked} />
         )}
+        <div data-add-images>
+          {persona.bio && (
+            <SubPortraitPanel persona={persona} action={action} reservations={imageReservations} />
+          )}
+        </div>
       </aside>
     </div>
   );
@@ -391,10 +203,13 @@ export function renderPage({
   imageReservations,
   queuePosition,
   queueObservedAt,
-  profileSource,
+  conversion,
+  inspections,
+  changed,
 }: PageContent & {
   error?: string;
   saved?: boolean;
+  inspections?: readonly InspectionRow[];
 }) {
   return (
     "<!doctype html>" +
@@ -405,7 +220,7 @@ export function renderPage({
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>{copy.title}</title>
           <link rel="stylesheet" href="/style.css" />
-          <script src="/pending.js" defer />
+          <script src="/pending.js" type="module" />
         </head>
         <body>
           <a className="skip-link" href="#main">
@@ -422,12 +237,21 @@ export function renderPage({
               <a className="new-link" href="/new">
                 + {copy.new}
               </a>
+              <a href="/inspection">전체 검사</a>
             </nav>
           </header>
-          <main id="main">
-            <div className="page-heading">
+          <main id="main" className={record ? "persona-workbench" : undefined}>
+            <div className="page-heading" hidden={Boolean(record)}>
               <p className="eyebrow">{copy.eyebrow}</p>
-              <h1>{record ? (editing ? record.name : copy.new) : copy.list}</h1>
+              <h1>
+                {inspections
+                  ? "Persona 형식 검사"
+                  : record
+                    ? editing
+                      ? record.name
+                      : copy.new
+                    : copy.list}
+              </h1>
               <p className="description">{copy.description}</p>
             </div>
             {error && (
@@ -451,7 +275,9 @@ export function renderPage({
                 )}
               </div>
             )}
-            {record ? (
+            {inspections ? (
+              <InspectionResults rows={inspections} />
+            ) : record ? (
               <Editor
                 persona={record}
                 editing={editing}
@@ -464,7 +290,8 @@ export function renderPage({
                 imageJob={imageJob}
                 imageJobs={imageJobs}
                 imageReservations={imageReservations}
-                profileSource={profileSource}
+                conversion={conversion}
+                changed={changed}
               />
             ) : personas.length ? (
               <div className="persona-grid">

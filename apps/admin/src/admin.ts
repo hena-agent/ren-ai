@@ -6,7 +6,6 @@ import {
   descriptionOf,
   emptyPersona,
   readIntent,
-  requireMatchingProfile,
   selectedGender,
   readPortraitInstructions,
   characterOf,
@@ -41,17 +40,24 @@ import {
   requestId,
 } from "./logging.ts";
 import type { Log } from "./logging.ts";
+import { versionedPersona } from "./character-format.ts";
+import { inspectFiles } from "./inspection-page.tsx";
+import { assertSnapshot } from "./snapshot.ts";
 
-const html = (page: string, status = 200) =>
-  new Response(page, {
-    status,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-      "Content-Security-Policy":
-        "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' https:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+const html = (page: string, status = 200) => {
+  const nonce = randomUUID();
+  return new Response(
+    page.replace("</head>", `<meta name="style-nonce" content="${nonce}"></head>`),
+    {
+      status,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": `default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'self'; connect-src 'self'; img-src 'self' https:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
+      },
     },
-  });
+  );
+};
 
 export function createAdmin(
   store: Awaited<ReturnType<typeof createPersonaStore>>,
@@ -96,7 +102,7 @@ export function createAdmin(
             portraitOperation: draft.portraitOperation,
             imageCount: draft.imageCount,
             imagePrompts: draft.imagePrompts,
-            profileSource: previewOf(draft, emptyPersona),
+            conversion: draft.conversion,
             ...(active && queueFields(queue.get(active))),
           }
         : { personas: [] };
@@ -122,7 +128,7 @@ export function createAdmin(
         draft: tokens.encode(draft),
         seed: draft.seed,
         ...retryImageInput(draft, true),
-        profileSource: previewOf(draft, emptyPersona),
+        conversion: draft.conversion,
         error: `${copy.generationUnavailable} (요청 ID: ${requestId()})`,
       }),
       503,
@@ -139,13 +145,17 @@ export function createAdmin(
       throw new PersonaError("conflict", copy.busy);
     busy.add(draft.id);
     try {
-      if (draft.base && serializePersona(await store.get(draft.id)) !== draft.base)
-        throw new PersonaError("conflict", copy.stale);
+      await assertSnapshot(store, draft);
       if (intent === "save") {
-        requireMatchingProfile(persona, previewOf(draft, emptyPersona));
-        const valid = decodePersona(persona);
+        const valid = decodePersona(versionedPersona(persona));
+        if (valid.published && !valid.imageUrl)
+          throw new PersonaError("invalid", "공개하려면 소개와 프로필 이미지가 필요합니다.");
         await operation("persona.save", {}, () =>
-          draft.base ? store.update(valid) : store.create(valid),
+          draft.legacySource
+            ? store.convertLegacy(valid, draft.legacySource)
+            : draft.base
+              ? store.update(valid)
+              : store.create(valid),
         );
         subDrafts.set(draft.id, {
           id: draft.id,
@@ -158,7 +168,6 @@ export function createAdmin(
         });
       }
       if (intent === "delete-image") {
-        requireMatchingProfile(persona, previewOf(draft, emptyPersona));
         const next = deletePortrait(persona, draft, submittedKey);
         subDrafts.set(draft.id, next);
         return html(
@@ -166,14 +175,28 @@ export function createAdmin(
             record: previewOf(next, emptyPersona),
             editing: Boolean(next.base),
             draft: tokens.encode(next),
-            profileSource: previewOf(next, emptyPersona),
           }),
         );
       }
-      if (intent === "introduction") {
-        if (!persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
-        requireMatchingProfile(persona, previewOf(draft, emptyPersona));
+      if (intent === "introduction" || intent === "profile") {
+        if (intent === "introduction" && !persona.bio)
+          throw new PersonaError("invalid", copy.regenerateRequired);
       }
+      if (intent === "inspect")
+        return html(
+          renderPage({
+            record: persona,
+            editing: Boolean(draft.base),
+            draft: tokens.encode(draft),
+            conversion: draft.conversion,
+          }),
+        );
+      if (
+        intent === "convert" &&
+        (persona.name !== previewOf(draft, emptyPersona).name ||
+          persona.gender !== previewOf(draft, emptyPersona).gender)
+      )
+        throw new PersonaError("invalid", copy.identityError);
       if (!generator) return unconfigured(persona, draft);
       const next = await generateTextDraft(persona, draft, intent, generator);
       subDrafts.set(draft.id, next);
@@ -183,7 +206,7 @@ export function createAdmin(
           editing: Boolean(draft.base),
           draft: tokens.encode(next),
           seed: next.seed,
-          profileSource: previewOf(next, emptyPersona),
+          conversion: next.conversion,
         }),
       );
     } finally {
@@ -208,7 +231,7 @@ export function createAdmin(
         seed: latest.seed,
         ...retryImageInput(latest, failed),
         imagePrompts: latest.imagePrompts,
-        profileSource: previewOf(latest, emptyPersona),
+        conversion: latest.conversion,
         ...((progress || queue.pending(job.batch.personaId)) && queueFields(job)),
         ...(failed && {
           error: `${invalid ? job.failure!.message : copy.failure} ${copy.partialGenerationFailure} (요청 ID: ${job.requestId})`,
@@ -234,8 +257,7 @@ export function createAdmin(
     if (!generator) return unconfigured(persona, draft);
     if (busy.has(draft.id)) throw new PersonaError("conflict", copy.busy);
     const known = queue.find(paidKey);
-    if (!known && draft.base && serializePersona(await store.get(draft.id)) !== draft.base)
-      throw new PersonaError("conflict", copy.stale);
+    if (!known) await assertSnapshot(store, draft);
     const job =
       known ??
       queue.enqueue(
@@ -352,10 +374,53 @@ export function createAdmin(
           portraitOperation: draft!.portraitOperation,
           imageCount: draft!.imageCount,
           imagePrompts: draft!.imagePrompts,
-          profileSource: previewOf(draft!, emptyPersona),
+          conversion: draft!.conversion,
+          changed: draft!.preview !== draft!.base,
         }
       : { personas: await operation("persona.list", {}, store.list) };
     return html(renderPage({ ...content, saved }));
+  };
+
+  const privateResource = async (pathname: string) => {
+    const document = /^\/personas\/([a-zA-Z0-9_-]+)\/persona\.md$/.exec(pathname);
+    if (document)
+      return new Response(serializePersona(await store.get(document[1]!)), {
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="persona.md"',
+          "Cache-Control": "no-store",
+        },
+      });
+    const importing = /^\/import\/([a-zA-Z0-9_-]+)$/.exec(pathname);
+    if (importing) {
+      const imported = await store.importDraft(importing[1]!);
+      const draft = {
+        id: importing[1]!,
+        base: serializePersona(imported.persona),
+        preview: serializePersona(imported.persona),
+        legacySource: imported.original,
+      };
+      return html(
+        renderPage({
+          record: imported.persona,
+          editing: true,
+          draft: tokens.encode(draft),
+        }),
+      );
+    }
+    if (pathname === "/style.css")
+      return new Response(stylesheet, { headers: { "Content-Type": "text/css; charset=utf-8" } });
+    if (pathname === "/pending.js")
+      return new Response(script, {
+        headers: { "Content-Type": "text/javascript; charset=utf-8" },
+      });
+    if (pathname === "/inspection") {
+      const files = await operation("persona.inspect", {}, store.inspect);
+      return html(renderPage({ personas: [], inspections: inspectFiles(files) }));
+    }
+    if (pathname.startsWith("/images/"))
+      return operation("image.read", {}, () => store.image(pathname.slice("/images/".length)));
+    return undefined;
   };
 
   const handle = async (request: Request): Promise<Response> => {
@@ -379,16 +444,8 @@ export function createAdmin(
         });
       if (request.method !== "GET" && request.method !== "POST")
         return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
-      if (request.method === "GET" && url.pathname === "/style.css")
-        return new Response(stylesheet, { headers: { "Content-Type": "text/css; charset=utf-8" } });
-      if (request.method === "GET" && url.pathname === "/pending.js")
-        return new Response(script, {
-          headers: { "Content-Type": "text/javascript; charset=utf-8" },
-        });
-      if (request.method === "GET" && url.pathname.startsWith("/images/"))
-        return await operation("image.read", {}, () =>
-          store.image(url.pathname.slice("/images/".length)),
-        );
+      const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
+      if (resource) return resource;
       const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/retry)?$/.exec(url.pathname);
       if (jobMatch) return await handleJob(request, url, jobMatch);
       const match = /^\/personas\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);

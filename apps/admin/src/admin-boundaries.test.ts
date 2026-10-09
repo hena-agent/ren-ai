@@ -2,6 +2,7 @@ import { rm } from "node:fs/promises";
 import { expect, test, vi } from "vitest";
 import { createAdmin } from "./admin.ts";
 import {
+  png,
   authorization,
   character,
   fixture,
@@ -140,23 +141,16 @@ test("invalid publication keeps the description, while malformed forms and tampe
   ).toBe(400);
   expect(
     (await admin(request("/personas", { ...character, draft, intent: "portrait" }))).status,
-  ).toBe(400);
+  ).toBe(200);
   expect(await store.list()).toEqual([]);
 });
 
-test("changed source must regenerate before saving or replacing an image, and invalid routes cannot change identity", async () => {
+test("invalid routes cannot change stable persona identity", async () => {
   const intro = vi.fn<typeof generator.introduction>().mockResolvedValue(introduction);
   const { admin, store } = await fixture({ ...generator, introduction: intro });
   await store.create(legacy);
   const page = await (await admin(request("/personas/legacy"))).text();
   const fields = { name: legacy.name, description: legacy.prompt, draft: tokenOf(page) };
-  for (const intent of ["save", "portrait"]) {
-    for (const changed of [{ name: "새 이름" }, { description: "새로운 캐릭터 설명" }]) {
-      const response = await admin(request("/personas/legacy", { ...fields, ...changed, intent }));
-      expect(response.status).toBe(400);
-      expect(await response.text()).toContain(copy.regenerateRequired);
-    }
-  }
   for (const path of ["/personas", "/personas/another"]) {
     const response = await admin(request(path, fields));
     expect(response.status).toBe(400);
@@ -189,7 +183,7 @@ test("changed source must regenerate before saving or replacing an image, and in
   expect(intro).not.toHaveBeenCalled();
 });
 
-test("incomplete legacy profiles cannot reuse stale generated content or offer image-only regeneration", async () => {
+test("incomplete legacy profiles can save name edits with their existing images", async () => {
   const { store, admin } = await fixture();
   for (const profile of [
     { bio: "", imageUrl: legacy.imageUrl },
@@ -207,20 +201,22 @@ test("incomplete legacy profiles cannot reuse stale generated content or offer i
         draft: tokenOf(page),
       }),
     );
-    expect(response.status).toBe(400);
-    expect(await response.text()).toContain(copy.regenerateRequired);
+    expect(response.status).toBe(303);
+    expect((await store.get("legacy")).name).toBe("새 이름");
+    expect((await store.get("legacy")).imageUrl).toBe(profile.imageUrl);
   }
 });
 
 test("simultaneous generation and stale editors cannot duplicate or overwrite a character", async () => {
   let release: () => void = vi.fn<() => void>();
-  const delayedIntroduction = vi.fn<typeof generator.introduction>().mockImplementation(
+  const delayedIntroduction = vi.fn<typeof generator.portrait>().mockImplementationOnce(
     () =>
       new Promise((resolve) => {
-        release = () => resolve("공개용 소개");
+        release = () => resolve({ bytes: png, mimeType: "image/png" });
       }),
   );
-  const { admin, store } = await fixture({ ...generator, introduction: delayedIntroduction });
+  delayedIntroduction.mockImplementation(generator.portrait);
+  const { admin, store } = await fixture({ ...generator, portrait: delayedIntroduction });
   const draft = await newToken(admin);
   const running = admin(request("/personas", { ...character, draft, intent: "generate" }));
   await vi.waitFor(() => expect(delayedIntroduction).toHaveBeenCalledTimes(1));
@@ -250,7 +246,7 @@ test("simultaneous generation and stale editors cannot duplicate or overwrite a 
   expect(rejected.status).toBe(409);
   expect(await rejected.text()).toContain(copy.stale);
   expect((await store.get("legacy")).name).toBe("변경된 이름");
-  expect(delayedIntroduction).toHaveBeenCalledTimes(1);
+  expect(delayedIntroduction).toHaveBeenCalledTimes(2);
 });
 
 test("storage outages and missing generation credentials preserve the author's work without exposing private details", async () => {

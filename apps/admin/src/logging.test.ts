@@ -69,7 +69,6 @@ test("successful generation, saving and reads emit timed lifecycle events with s
   });
   const completed = logs.filter((entry) => entry.event === "operation.completed");
   expect(completed.map(({ stage, style }) => [stage, style])).toEqual([
-    ["introduction.generate", undefined],
     ["portrait.generate", "anime"],
     ["image.save", "anime"],
     ["image.queue.task", "anime"],
@@ -183,7 +182,7 @@ test("Gemini HTTP failures identify the model and style while removing echoed se
     draft,
     "x-goog-api-key",
     png.toString("base64"),
-  ])
+  ].filter(Boolean))
     expect(output).not.toContain(secret);
   expect(output).toContain("<REDACTED>");
   expect(await response.text()).not.toContain("Quota exceeded");

@@ -72,21 +72,23 @@ test("a failed same-image retry keeps its extra prompt and another target clears
   expect(ui.prompt.value).toBe("");
 });
 
-test("changed character definitions reveal full regeneration and disable all image-only actions until restored", async () => {
+test("edited character definitions keep regeneration an explicit independent choice", async () => {
   const { page } = await basePreview();
   const ui = bind(page);
   const full = ui.form.querySelector<HTMLButtonElement>('[value="generate"]')!;
   const name = ui.form.querySelector<HTMLInputElement>('[name="name"]')!;
-  expect(full.hidden).toBe(true);
+  expect(full.hidden).toBe(false);
   name.value = "changed";
   name.dispatchEvent(new Event("input"));
   expect(full.hidden).toBe(false);
   expect(
-    [...document.querySelectorAll<HTMLButtonElement>("[data-source-bound]")].every(
-      (button) => button.disabled,
-    ),
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        '[value="regenerate"], [value="subportrait"]',
+      ),
+    ].every((button) => !button.disabled),
   ).toBe(true);
   name.value = character.name;
   name.dispatchEvent(new Event("input"));
-  expect(full.hidden).toBe(true);
+  expect(full.hidden).toBe(false);
 });

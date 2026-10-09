@@ -4,6 +4,12 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@ren-ai/personas/markdown": fileURLToPath(
+        new URL("../../packages/personas/src/markdown.tsx", import.meta.url),
+      ),
+      "@ren-ai/personas/profile": fileURLToPath(
+        new URL("../../packages/personas/src/profile.ts", import.meta.url),
+      ),
       "@ren-ai/personas": fileURLToPath(
         new URL("../../packages/personas/src/index.ts", import.meta.url),
       ),

@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
 import { bindPortraitDialog } from "./portrait-dialog.ts";
-import { syncGender, bindProfileSource } from "./editor-controls.ts";
+import { syncGender } from "./editor-controls.ts";
 import { renderPage } from "./page.tsx";
 import { useBrowser } from "../test/browser.ts";
-import { character, femaleCharacter, fixture, legacy, request, tokenOf } from "../test/fixtures.ts";
+import { femaleCharacter, fixture, legacy, request } from "../test/fixtures.ts";
 import { basePreview } from "../test/sub-portraits.ts";
 import copy from "./copy.json";
 
@@ -25,7 +25,7 @@ test("a legacy picture exposes one URL-addressed image action in the editor, nev
   document.body.innerHTML = await (await admin(request("/"))).text();
   expect(document.querySelector('[value="regenerate"]')).toBeNull();
   document.body.innerHTML = renderPage({
-    record: { ...legacy, bio: "", imageUrl: "" },
+    record: { ...legacy, description: "내부 설정", prompt: "내부 설정", bio: "", imageUrl: "" },
     editing: false,
     draft: "legacy",
   });
@@ -37,37 +37,22 @@ test("a legacy picture exposes one URL-addressed image action in the editor, nev
   expect(document.querySelector('[value="introduction"]')).toBeNull();
 });
 
-test("dirty source initializes before typing; surrounding whitespace and partial gender markup are safe", async () => {
-  const { admin, page } = await basePreview();
-  const failed = await admin(
-    request("/personas?image=0&style=photo", {
-      ...character,
-      name: "Edited",
-      draft: tokenOf(page),
-      intent: "regenerate",
-    }),
-  );
-  document.body.innerHTML = await failed.text();
+test("editing source leaves independent image actions available and partial gender markup is safe", async () => {
+  const { page } = await basePreview();
+  document.body.innerHTML = page;
   const form = document.querySelector<HTMLFormElement>("#persona-editor")!;
-  bindProfileSource(form);
-  expect(
-    [...document.querySelectorAll<HTMLButtonElement>("[data-source-bound]")].every(
-      (button) => button.disabled,
-    ),
-  ).toBe(true);
-  form.querySelector<HTMLInputElement>('[name="name"]')!.value = `  ${character.name}  `;
+  form.querySelector<HTMLInputElement>('[name="name"]')!.value = "Edited";
   const description = form.querySelector<HTMLTextAreaElement>('[name="description"]')!;
-  description.value = `  ${character.description}  `;
-  description.dispatchEvent(new Event("input"));
-  expect(form.querySelector<HTMLButtonElement>('[value="generate"]')?.hidden).toBe(true);
-  expect(
-    [...document.querySelectorAll<HTMLButtonElement>("[data-source-bound]")].every(
-      (button) => !button.disabled,
-    ),
-  ).toBe(true);
   description.value = "New description";
   description.dispatchEvent(new Event("input"));
   expect(form.querySelector<HTMLButtonElement>('[value="generate"]')?.hidden).toBe(false);
+  expect(
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        '[value="regenerate"], [value="subportrait"]',
+      ),
+    ].every((button) => !button.disabled),
+  ).toBe(true);
   document.body.innerHTML =
     '<select data-persona-gender><option value="female">Female</option></select><form></form>';
   expect(() => syncGender(document.querySelector("form")!)).not.toThrow();
@@ -99,25 +84,19 @@ test("server source state and style labels reflect independent main images accur
     portraits: { anime: "https://example.net/anime.jpg", photo: legacy.imageUrl },
   };
   const cases = [
-    { record: { ...source, bio: "", imageUrl: "" }, complete: false, hidden: false },
-    { record: { ...source, imageUrl: "" }, complete: false, hidden: false },
-    { record: { ...source, bio: "" }, complete: false, hidden: false },
-    { record: source, complete: true, hidden: true },
-    { record: { ...source, name: "Edited" }, complete: true, hidden: false },
+    { ...source, bio: "", imageUrl: "" },
+    { ...source, imageUrl: "" },
+    { ...source, bio: "" },
+    source,
+    { ...source, name: "Edited" },
   ];
-  for (const [index, current] of cases.entries()) {
+  for (const record of cases) {
     document.body.innerHTML = renderPage({
-      record: current.record,
-      profileSource: index === 4 ? source : current.record,
+      record,
       editing: true,
       draft: "signed",
     });
-    expect(document.querySelector("#persona-editor")?.getAttribute("data-profile-complete")).toBe(
-      String(current.complete),
-    );
-    expect(document.querySelector('[value="generate"]')?.hasAttribute("hidden")).toBe(
-      current.hidden,
-    );
+    expect(document.querySelector('[value="generate"]')?.hasAttribute("hidden")).toBe(false);
     expect(
       [...document.querySelectorAll(".image-regenerate")].map((button) =>
         button.getAttribute("data-portrait-label"),
@@ -144,9 +123,7 @@ test("a saved partial style exposes only its remaining main image, and addition 
     expect(buttons[index]?.getAttribute("formaction")).toBe(`/personas?style=${style}`);
     expect(buttons[index]?.dataset["portraitOperation"]).toBe(`subportrait:${style}`);
   }
-  expect(document.querySelector('[value="introduction"]')?.textContent).toBe(
-    copy.regenerateIntroduction,
-  );
+  expect(document.querySelector('[value="introduction"]')).toBeNull();
   const image = document.querySelector<HTMLImageElement>(".image-option img")!;
   const originalUrl = image.getAttribute("src")!.replace(/^\/images\//, "/discovery/images/");
   const expectedTarget = `/personas?image=${encodeURIComponent(originalUrl)}&style=anime`;
@@ -163,5 +140,5 @@ test("a saved partial style exposes only its remaining main image, and addition 
     draft: "signed",
   });
   expect(document.querySelector('[value="subportrait"]')).toBeTruthy();
-  expect(document.querySelector('[value="introduction"]')).toBeTruthy();
+  expect(document.querySelector('[value="introduction"]')).toBeNull();
 });
