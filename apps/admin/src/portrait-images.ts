@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { PersonaError, personaImages } from "@ren-ai/personas";
-import type { createPersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
+import type { PersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
 import { operation, GenerationError } from "./logging.ts";
 import copy from "./copy.json";
 
@@ -32,7 +32,7 @@ export function imageTarget(
 export async function readPortraitReference(
   url: string,
   style: "anime" | "photo",
-  store: Awaited<ReturnType<typeof createPersonaStore>>,
+  store: PersonaStore,
 ) {
   if (!url.startsWith("/discovery/images/"))
     throw new PersonaError("invalid", copy.baseOwnedRequired);

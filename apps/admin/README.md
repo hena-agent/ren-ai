@@ -1,28 +1,123 @@
-# Admin
+# Persona Admin on Cloudflare
 
-## 실패 로그 찾기
+Admin runs as a Worker. Drizzle owns the D1 schema; a private R2 bucket stores
+immutable generated images. One SQLite-backed Durable Object (`PersonaAdmin`,
+named `global`) owns private drafts, the image FIFO and submission deduplication.
+New Catalog schemas start empty. Existing saved Markdown and images can be
+explicitly imported into local D1/R2 with the one-off command below.
 
-루트 `bun run dev`는 Turbo stream UI와 stream 순서로 서비스 출력을 표시한다. TUI는
-선택하지 않은 서비스의 별도 PTY 출력을 부모 터미널에서 놓칠 수 있으므로 사용하지 않는다.
-Bun watch는 `--no-clear-screen`으로 재시작 때 이전 진단을 화면에서 지우지 않는다.
-설정을 적용하려면 이미 실행 중인 `bun run dev`를 재시작한다.
+## Local development
 
-Admin은 구조화된 JSON 이벤트를 터미널 stdout/stderr와
-`apps/admin/data/logs/admin-YYYY-MM-DD.jsonl`에 함께 기록한다. 날짜는 UTC다.
-`ADMIN_LOG_DIRECTORY`로 저장 폴더를 변경할 수 있다. 시작 이벤트에 실제 로그 폴더가
-기록된다. 로그 파일은 재시작 후에도 append되며 디렉터리 권한은 0700, 새 로그 파일은
-0600이다. 보관 기간에 도달한 파일은 운영자가 정리한다.
-
-오류 화면의 요청 ID로 요청·작업 진단을 검색한다:
+Copy `.dev.vars.example` to `.dev.vars` and set local credentials. `PORT` is a
+process environment variable; its default remains 3729.
 
 ```sh
-rg --fixed-strings '<요청 ID>' apps/admin/data/logs
+bun run --cwd apps/admin db:local
+bun run --cwd apps/admin dev
 ```
 
-`operation.failed`는 실패 단계·원인과 오류 코드·모델·upstream 상태를, 같은 요청의
-`request.completed`는 최종 HTTP 상태를 담는다. 백그라운드 이미지 진단도 등록 요청 ID를
-사용한다. Persona 내용, 프롬프트, Memory/State, 서명 draft, 자격 증명, 이미지 바이트는
-로그에 기록하지 않는다. 파일 기록이 실패하면 stderr에 `logging.persistence_failed`와
-저장 원인을 출력하며 원래 응답 결과는 바꾸지 않는다.
+Open `http://127.0.0.1:3729` using Basic authentication (`admin` and
+`ADMIN_PASSWORD`). Wrangler persists local D1, R2 and Durable Object state under
+`.wrangler/`. Browser and edge SSR bundles are built before Wrangler starts.
+Worker builds use `workerd` export conditions, avoiding browser DOM helpers.
 
-지속 파일 로거를 추가하기 전에 처리된 요청의 로그를 소급 복구할 수는 없다.
+### Import existing local Admin data
+
+Stop the local Admin while transferring data, then run:
+
+```sh
+bun run --cwd apps/admin import:local --check
+bun run --cwd apps/admin import:local
+```
+
+The default source is `apps/admin/data/personas`. Pass a source directory after
+the command to import another saved Catalog. `--check` only scans and compares;
+the command rejects `--remote` and disables remote bindings explicitly. It uses
+the same `.wrangler/state/v3` D1/R2 state as `wrangler dev`.
+
+The transfer preserves IDs, Markdown, management metadata, publication and
+per-style photo ordering. Every image original, including unreferenced
+candidates, is uploaded under its existing filename with verified SHA-256 and
+MIME metadata. Only current references become D1 photo links. The source folder
+is read and retained. No AI calls are made.
+
+Only the current initial State/Memory pair is copied. Missing pairs become
+empty columns and are listed in the report. Existing public records retain
+their publication even when they predate today's publication-readiness checks;
+normal operator saves still require all current checks. Re-running skips
+matching rows/objects and refuses conflicts instead of overwriting edits.
+Uploads are verified before all new Persona rows and links are committed in
+one D1 batch; a failed SQL statement rolls back that batch.
+
+The standalone Discovery API defaults to `PERSONA_CATALOG_URL=http://127.0.0.1:3729`.
+The messaging application also needs `PERSONA_CATALOG_TOKEN`, equal to the
+Worker's `CATALOG_TOKEN`. It refreshes revisions once a second and on native
+session events. Its selection response uses absolute Worker image URLs, which
+also work in the existing Discovery client.
+
+## Deploy
+
+From `apps/admin`, provision empty resources:
+
+```sh
+bunx wrangler d1 create persona-catalog
+bunx wrangler r2 bucket create persona-images
+```
+
+Replace the all-zero local database ID in `wrangler.jsonc` with the returned ID.
+Keep the R2 bucket private. Set secrets interactively:
+
+```sh
+bunx wrangler secret put ADMIN_PASSWORD
+bunx wrangler secret put CATALOG_TOKEN
+bunx wrangler secret put GEMINI_API_KEY
+bun run db:remote
+bun run deploy
+```
+
+Wrangler declares the Durable Object binding and initial SQLite class.
+Generate schema changes with `bun run db:generate` and apply them before code
+that needs them. The initial SQL creates an empty schema only. Check packaging
+and bindings with `bunx wrangler deploy --dry-run`.
+
+Deploy the updated session-folder plugin before the messaging application: its
+optional `documents` snapshot field initializes new Conversation folders with
+`STATE.md` and `MEMORY.md`. Catalog updates preserve evolving Conversation
+documents; session snapshots include the current pair for export/restore.
+Point both API services at the same Worker. Publish newly authored personas
+before fresh onboarding. Any configured default must be an actual published ID.
+
+## Storage and recovery
+
+- Persona, initial State and initial Memory are D1 text columns. Downloaded
+  `persona.md` is a serialized view, not another source of truth. A revision CAS
+  and atomic batch commit documents and photo links together; a losing writer
+  cannot replace the winner's links.
+- Upload to R2 before referencing a photo in a draft. Saving publishes the
+  current links. `/images/<key>` requires operator authentication;
+  `/discovery/images/<key>` requires a current published reference. Unpublishing
+  or removing a reference makes the public URL return 404. Originals remain.
+- Each alarm processes one photo. Persist `generating` before a paid call and
+  checkpoint the completed URL and preview together. An interrupted in-flight
+  photo needs an operator-confirmed retry; completed siblings and deduplication
+  survive restarts. Interrupted shared preparation blocks dependent photos.
+- Allow more batches while work runs. Completed photos plus reserved additions
+  count against six per style. Adopt the latest preview at start and reject
+  stale sources/targets before generation. Lock source editing, deletion and
+  saving until that persona has no pending work.
+- Prompts, drafts and queue identifiers stay outside Persona rows and public
+  responses. Persist drafts and batches separately to avoid one growing value.
+- Missing Catalog IDs preserve remote session snapshots privately, without
+  offering those personas for new onboarding.
+
+## Diagnostics and checks
+
+Structured JSON goes to Workers stdout/stderr. Search Workers Logs or
+`bunx wrangler tail` using the displayed request ID / `X-Request-ID`.
+Diagnostics retain stages, causes/codes and durations, excluding Persona text,
+prompts, tokens and image bytes. File logging and the Persona Lab key fallback
+are removed. Use Node 24 for `bun run ci`.
+
+Tests use real local D1/R2, the built Worker/DO entry, persistent queue recovery
+and Catalog consumer boundaries. `cloudflare:workers` is provided by the
+platform; Knip excludes that runtime import from npm dependency checks.

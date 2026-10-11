@@ -21,9 +21,13 @@ function contentType(bytes: Uint8Array) {
   return undefined;
 }
 
-export async function saveImage(directory: string, image: Portrait) {
+export function validatePortrait(image: Portrait) {
   if (image.bytes.byteLength > 20_000_000 || contentType(image.bytes) !== image.mimeType)
     throw new PersonaError("invalid", "올바른 PNG, JPEG 또는 WebP 이미지가 필요합니다.");
+}
+
+export async function saveImage(directory: string, image: Portrait) {
+  validatePortrait(image);
   const filename = `${randomUUID()}.${formats.get(image.mimeType)}`;
   const target = join(directory, "images");
   await mkdir(target, { recursive: true });

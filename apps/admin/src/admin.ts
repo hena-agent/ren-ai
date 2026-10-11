@@ -1,6 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { decodePersona, PersonaError, serializePersona } from "@ren-ai/personas";
-import type { createPersonaStore, PersonaRecord } from "@ren-ai/personas";
+import type { PersonaStore, PersonaRecord } from "@ren-ai/personas";
 import {
   authorPersona,
   descriptionOf,
@@ -19,8 +19,8 @@ import copy from "./copy.json";
 import { generateTextDraft } from "./generation-workflows.ts";
 import { deletePortrait } from "./regenerate-portrait.ts";
 import { createImageQueue } from "./image-queue.ts";
-import type { ImageJob } from "./image-queue.ts";
-import { createImageBatch } from "./image-batch.ts";
+import type { ImageJob, DurableQueue } from "./image-queue.ts";
+import { createImageBatch, restoreImageBatch } from "./image-batch.ts";
 import { isImageIntent } from "./image-slots.ts";
 import type { ImageIntent } from "./image-slots.ts";
 import {
@@ -43,21 +43,8 @@ import type { Log } from "./logging.ts";
 import { versionedPersona } from "@ren-ai/personas";
 import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
-
-const html = (page: string, status = 200) => {
-  const nonce = randomUUID();
-  return new Response(
-    page.replace("</head>", `<meta name="style-nonce" content="${nonce}"></head>`),
-    {
-      status,
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-store",
-        "Content-Security-Policy": `default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'self'; connect-src 'self'; img-src 'self' https:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
-      },
-    },
-  );
-};
+import type { AdminPersistence } from "./admin-state.ts";
+import { html } from "./html-response.ts";
 
 const documentFields = (draft: Draft) => ({
   documents: documentsOf(draft),
@@ -66,10 +53,20 @@ const documentFields = (draft: Draft) => ({
 });
 
 export function createAdmin(
-  store: Awaited<ReturnType<typeof createPersonaStore>>,
+  store: PersonaStore,
   password: string,
   stylesheet: string,
-  { generator, script, log }: { generator?: ProfileGenerator; script?: string; log?: Log } = {},
+  {
+    generator,
+    script,
+    log,
+    persistence,
+  }: {
+    generator?: ProfileGenerator;
+    script?: string;
+    log?: Log;
+    persistence?: AdminPersistence;
+  } = {},
 ) {
   if (!password.trim()) throw new Error("ADMIN_PASSWORD is required");
   const expected = createHash("sha256")
@@ -80,11 +77,19 @@ export function createAdmin(
     html(renderPage(content)),
   );
   const busy = new Set<string>();
-  // ponytail: retain the latest paid additions per persona in this process; persistent idempotency if drafts must survive restarts.
-  const subDrafts = new Map<string, Draft>();
+  const subDrafts = new Map<string, Draft>(persistence?.saved?.drafts);
+  const durable: DurableQueue | undefined = persistence
+    ? {
+        saved: persistence.saved?.queue,
+        checkpoint: () =>
+          persistence.checkpoint({ drafts: [...subDrafts], queue: queue.snapshot() }),
+        restoreBatch: (snapshot) => restoreImageBatch(snapshot, generator!, store),
+      }
+    : undefined;
   const queue = createImageQueue(
     (id, next) => subDrafts.set(id, next),
     (id) => subDrafts.get(id),
+    durable,
   );
   const queueFields = (job: ImageJob) => ({
     imageJob: job,
@@ -297,7 +302,7 @@ export function createAdmin(
         paidKey,
         createImageBatch(persona, draft, intent, params, key, generator, store),
       );
-    if (request.headers.get("x-image-queue") === "1")
+    if (persistence || request.headers.get("x-image-queue") === "1")
       return new Response(null, { status: 303, headers: { Location: `/image-jobs/${job.id}` } });
     if (known && job.state === "failed")
       queue.retryFailed(job.id, subDrafts.get(job.batch.personaId)!);
@@ -469,5 +474,21 @@ export function createAdmin(
       return failure(error);
     }
   };
-  return (request: Request) => loggedRequest(request, () => handle(request), log);
+  const fetch = (request: Request) =>
+    loggedRequest(
+      request,
+      async () => {
+        const response = await handle(request);
+        try {
+          if (durable) await operation("editing.checkpoint", {}, durable.checkpoint);
+          if (persistence && queue.next())
+            await operation("image.queue.wake", {}, persistence.wake);
+          return response;
+        } catch (error) {
+          return failure(error);
+        }
+      },
+      log,
+    );
+  return Object.assign(fetch, { runNext: queue.runNext, nextJob: queue.next });
 }

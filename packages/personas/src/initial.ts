@@ -3,6 +3,8 @@ import { parseDocument, stringify } from "yaml";
 import { PersonaError } from "./model.ts";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toString } from "mdast-util-to-string";
+import type { InitialDocuments } from "./initial-documents.ts";
+export { InitialDocuments } from "./initial-documents.ts";
 
 const Score = Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 0, maximum: 100 }));
 export const InitialScores = Schema.Struct({
@@ -23,11 +25,6 @@ export const InitialState = Schema.Struct({
     }),
   ),
 });
-export const InitialDocuments = Schema.Struct({
-  state: Schema.String.check(Schema.isMaxLength(16000)),
-  memory: Schema.String.check(Schema.isMaxLength(16000)),
-});
-export type InitialDocuments = typeof InitialDocuments.Type;
 
 export function parseInitialState(source: string) {
   try {

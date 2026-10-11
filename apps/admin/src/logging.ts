@@ -1,9 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 
 export interface LogFields {
+  operationId?: string;
   stage?: string;
   intent?: string;
   personaId?: string;
@@ -37,39 +36,11 @@ export interface LogEntry extends LogFields {
   error?: { name: string; message: string; stack: string };
 }
 export type Log = (entry: LogEntry) => void;
-const writeLog: Log = (entry) => {
+export const writeLog: Log = (entry) => {
   const output = entry.level === "info" ? process.stdout : process.stderr;
   output.write(`${JSON.stringify(entry)}\n`);
 };
 
-export function createFileLog(directory: string): Log {
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  return (entry) => {
-    writeLog(entry);
-    try {
-      appendFileSync(
-        join(directory, `admin-${entry.time.slice(0, 10)}.jsonl`),
-        `${JSON.stringify(entry)}\n`,
-        { mode: 0o600 },
-      );
-    } catch (cause) {
-      const failure = validationFailure(
-        "Failed to persist Admin diagnostics; see stderr",
-        { stage: "logging.persist", code: "log_write_failed" },
-        cause,
-      );
-      writeLog({
-        time: entry.time,
-        service: "admin",
-        level: "error",
-        event: "logging.persistence_failed",
-        ...failure.fields,
-        ...(entry.requestId && { requestId: entry.requestId }),
-        error: { name: failure.fields.causeName!, message: failure.message, stack: "" },
-      });
-    }
-  };
-}
 const scope = new AsyncLocalStorage<{
   requestId: string;
   method: string;
@@ -242,6 +213,21 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
 
 export const requestId = () => scope.getStore()!.requestId;
 export const captureLogging = () => AsyncLocalStorage.snapshot();
+
+export function loggedJob<T>(id: string, fields: LogFields, run: () => Promise<T>, log: Log) {
+  return scope.run(
+    {
+      requestId: id,
+      method: "ALARM",
+      route: "/image-jobs/:id",
+      fields,
+      secrets: [],
+      reported: new Map(),
+      log,
+    },
+    run,
+  );
+}
 
 export function reportQueueCompleted(fields: LogFields & { status: number }) {
   emit({

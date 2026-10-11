@@ -1,0 +1,1 @@
+type FormDataEntryValue = string | File;

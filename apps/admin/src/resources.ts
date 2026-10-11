@@ -1,5 +1,5 @@
 import { PersonaError, serializePersona } from "@ren-ai/personas";
-import type { createPersonaStore } from "@ren-ai/personas";
+import type { PersonaStore } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
 import { draftTokens } from "./draft.ts";
 import { inspectFiles } from "./inspection-page.tsx";
@@ -7,7 +7,7 @@ import { operation, requestFields } from "./logging.ts";
 import type { renderPage } from "./page.tsx";
 
 export function createResources(
-  store: Awaited<ReturnType<typeof createPersonaStore>>,
+  store: PersonaStore,
   tokens: ReturnType<typeof draftTokens>,
   stylesheet: string,
   script: string | undefined,

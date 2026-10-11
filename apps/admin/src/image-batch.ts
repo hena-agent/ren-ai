@@ -1,5 +1,5 @@
 import { decodePersona, PersonaError, personaImages, serializePersona } from "@ren-ai/personas";
-import type { createPersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
+import type { PersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
 import { characterOf, emptyPersona } from "./authoring.ts";
 import type { Draft } from "./draft.ts";
 import { completedImageDraft, previewOf } from "./draft.ts";
@@ -16,7 +16,19 @@ import { assertSnapshot } from "./snapshot.ts";
 import { requirePublicProfile } from "@ren-ai/personas/profile";
 import { operation } from "./logging.ts";
 
-type Store = Awaited<ReturnType<typeof createPersonaStore>>;
+type Store = PersonaStore;
+export interface ImageBatchSnapshot {
+  source: PersonaRecord;
+  original: Draft;
+  intent: ImageIntent;
+  params: string;
+  key: string;
+  current: PersonaRecord;
+  latest: Draft;
+  prompts: readonly string[];
+  expectedBase: string;
+  prepared: boolean;
+}
 export interface ImageBatch {
   readonly intent: ImageIntent;
   readonly personaId: string;
@@ -28,11 +40,12 @@ export interface ImageBatch {
   readonly prepare: () => Promise<void>;
   readonly run: (
     ordinal: number,
-    stage: (stage: ImageStage) => void,
+    stage: (stage: ImageStage) => void | Promise<void>,
   ) => Promise<string | undefined>;
   readonly setPrompt: (ordinal: number, prompt: string) => void;
   readonly finish: (failed: boolean) => Draft;
   readonly resume: (latest: Draft, ordinals: readonly number[]) => void;
+  readonly snapshot: () => ImageBatchSnapshot;
 }
 
 function appendImage(record: PersonaRecord, slot: ImageSlot, imageUrl: string) {
@@ -84,16 +97,19 @@ export function createImageBatch(
   key: string,
   generator: ProfileGenerator,
   store: Store,
+  restored?: ImageBatchSnapshot,
 ): ImageBatch {
   persona = decodePersona(persona);
   const initial = intent === "generate" || intent === "portrait";
   if (!initial && !persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
   const slots = slotsOf(persona, draft, intent, params, key);
-  const prompts = slots.map((slot, ordinal) => imagePrompt(draft, slot, ordinal, initial));
-  let current = persona;
-  let latest = draft;
-  let expectedBase = draft.base;
-  let prepared = false;
+  const prompts = restored
+    ? [...restored.prompts]
+    : slots.map((slot, ordinal) => imagePrompt(draft, slot, ordinal, initial));
+  let current = restored?.current ?? persona;
+  let latest = restored?.latest ?? draft;
+  let expectedBase = restored?.expectedBase ?? draft.base;
+  let prepared = restored?.prepared ?? false;
   const references = new Map<string, Portrait>();
   const reference = async (style: ImageSlot["style"], url: string) => {
     const cached = references.get(url);
@@ -128,7 +144,7 @@ export function createImageBatch(
     current = fresh;
     prepared = true;
   };
-  const run = async (ordinal: number, stage: (stage: ImageStage) => void) => {
+  const run = async (ordinal: number, stage: (stage: ImageStage) => void | Promise<void>) => {
     const slot = slots[ordinal]!;
     if (intent === "regenerate") {
       const target = imageTarget(current, params);
@@ -185,6 +201,18 @@ export function createImageBatch(
       latest = failed ? latest : completedImageDraft(latest);
       return latest;
     },
+    snapshot: () => ({
+      source: persona,
+      original: draft,
+      intent,
+      params: params.toString(),
+      key,
+      current,
+      latest,
+      prompts,
+      expectedBase,
+      prepared,
+    }),
     resume: (editing, ordinals) => {
       if (editing.preview !== latest.preview) {
         const next = previewOf(editing, emptyPersona);
@@ -216,4 +244,21 @@ export function createImageBatch(
       };
     },
   };
+}
+
+export function restoreImageBatch(
+  snapshot: ImageBatchSnapshot,
+  generator: ProfileGenerator,
+  store: Store,
+) {
+  return createImageBatch(
+    snapshot.source,
+    snapshot.original,
+    snapshot.intent,
+    new URLSearchParams(snapshot.params),
+    snapshot.key,
+    generator,
+    store,
+    snapshot,
+  );
 }

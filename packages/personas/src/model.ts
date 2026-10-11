@@ -3,6 +3,7 @@ import { parseDocument, stringify } from "yaml";
 import { normalizePortraits } from "./portraits.ts";
 import type { PersonaImage } from "./portraits.ts";
 import { splitPersonaMarkdown } from "./profile.ts";
+import { InitialDocuments } from "./initial-documents.ts";
 
 export interface Persona {
   readonly name?: string;
@@ -15,6 +16,8 @@ export interface Persona {
   readonly openingLine: string;
   readonly memory: string;
   readonly prompt: string;
+  /** Initial conversation documents, supplied by the private runtime Catalog. */
+  readonly initial?: InitialDocuments;
 }
 
 export interface PersonaRecord extends Persona {
@@ -91,6 +94,7 @@ const Input = Schema.Struct({
   portraits: Frontmatter.fields.portraits,
   secondaryPortraits: Frontmatter.fields["secondary-portraits"],
   portraitGallery: Frontmatter.fields["portrait-gallery"],
+  initial: Schema.optionalKey(InitialDocuments),
 });
 
 export function validateID(id: string) {

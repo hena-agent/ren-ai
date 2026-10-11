@@ -1,12 +1,9 @@
-import type { createPersonaStore } from "@ren-ai/personas";
+import type { PersonaStore } from "@ren-ai/personas";
 import { PersonaError, serializePersona } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
 import copy from "./copy.json";
 
-export async function assertSnapshot(
-  store: Awaited<ReturnType<typeof createPersonaStore>>,
-  draft: Draft,
-) {
+export async function assertSnapshot(store: PersonaStore, draft: Draft) {
   if (!draft.base) return;
   let expected = draft.base;
   let current: string;

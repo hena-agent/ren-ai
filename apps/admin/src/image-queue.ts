@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PersonaError, personaImages } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
 import type { ImageBatch } from "./image-batch.ts";
+import type { ImageBatchSnapshot } from "./image-batch.ts";
 import type { ImageSlot } from "./image-slots.ts";
 import {
   captureLogging,
@@ -9,6 +10,7 @@ import {
   requestId,
   reportQueueCompleted,
   reportFailure,
+  GenerationError,
 } from "./logging.ts";
 import copy from "./copy.json";
 
@@ -20,6 +22,7 @@ interface ImageTask extends ImageSlot {
   startedAt?: number;
   durationMs?: number;
   requestId?: string;
+  recoveryPending?: boolean;
 }
 export interface ImageJob {
   readonly id: string;
@@ -35,13 +38,102 @@ interface QueuedJob extends ImageJob {
   completion: Promise<void>;
 }
 
+function restoreJob(
+  saved: QueueSnapshot["jobs"][number],
+  restoreBatch: DurableQueue["restoreBatch"],
+): QueuedJob {
+  const tasks = saved.tasks.map((task) => ({ ...task }));
+  const interrupted = tasks.some((task) => task.state === "generating" || task.state === "saving");
+  for (const task of tasks)
+    if (task.state === "generating" || task.state === "saving") {
+      task.state = "failed";
+      task.recoveryPending = true;
+    }
+  if (interrupted && !saved.batch.prepared && !saved.batch.source.bio)
+    for (const task of tasks) if (task.state === "waiting") task.state = "blocked";
+  const { failure: detail, ...previous } = saved;
+  let failure: Error | undefined;
+  if (interrupted)
+    failure = new Error("Image result is uncertain after interruption; confirm a retry");
+  else if (detail)
+    failure = detail.kind
+      ? new PersonaError(detail.kind, detail.message)
+      : new Error(detail.message);
+  return {
+    ...previous,
+    tasks,
+    batch: restoreBatch(saved.batch),
+    ...(failure && { failure }),
+    completion: Promise.resolve(),
+  };
+}
+
+function snapshotJob({
+  completion: _completion,
+  batch,
+  failure,
+  ...job
+}: QueuedJob): QueueSnapshot["jobs"][number] {
+  return {
+    ...job,
+    batch: batch.snapshot(),
+    ...(failure && {
+      failure: {
+        message:
+          failure instanceof PersonaError
+            ? failure.message
+            : "Image generation failed; confirm a retry",
+        ...(failure instanceof PersonaError && { kind: failure.kind }),
+      },
+    }),
+  };
+}
+
+function reportRecovery(job: ImageJob) {
+  let recovered = false;
+  for (const task of job.tasks)
+    if (task.recoveryPending) {
+      reportFailure(
+        new GenerationError("Image result is uncertain after interruption; confirm a retry", {
+          code: "interrupted",
+        }),
+        {
+          stage: "image.queue.recovery",
+          jobId: job.id,
+          style: task.style,
+          imageOrdinal: task.ordinal,
+        },
+      );
+      delete task.recoveryPending;
+      recovered = true;
+    }
+  return recovered;
+}
+
+export interface QueueSnapshot {
+  jobs: readonly (Omit<ImageJob, "batch" | "failure"> & {
+    batch: ImageBatchSnapshot;
+    failure?: { message: string; kind?: PersonaError["kind"] };
+  })[];
+  keys: readonly (readonly [string, string])[];
+  pending: readonly string[];
+}
+export interface DurableQueue {
+  saved?: QueueSnapshot | undefined;
+  restoreBatch: (snapshot: ImageBatchSnapshot) => ImageBatch;
+  checkpoint: () => Promise<void>;
+}
+
 export function createImageQueue(
   updated: (personaId: string, draft: Draft) => void,
   latestDraft: (personaId: string) => Draft | undefined,
+  durable?: DurableQueue,
 ) {
-  const jobs = new Map<string, QueuedJob>();
-  const keys = new Map<string, string>();
-  const pending = new Set<string>();
+  const jobs = new Map<string, QueuedJob>(
+    durable?.saved?.jobs.map((saved) => [saved.id, restoreJob(saved, durable.restoreBatch)]),
+  );
+  const keys = new Map<string, string>(durable?.saved?.keys);
+  const pending = new Set<string>(durable?.saved?.pending);
   const active = (personaId: string) =>
     [...pending].map((id) => jobs.get(id)!).filter((job) => job.batch.personaId === personaId);
   const reservations = (personaId: string) => {
@@ -71,14 +163,21 @@ export function createImageQueue(
     const latest = latestDraft(batch.personaId);
     if (latest && latest.base === batch.draft().base) batch.resume(latest, ordinals);
   };
-  // ponytail: FIFO and completed jobs are process-local, matching editing drafts; durable recovery needs a persisted queue.
   let tail = Promise.resolve();
-  const schedule = (job: QueuedJob, ordinals: readonly number[], rebase: boolean) => {
+  const schedule = (
+    job: QueuedJob,
+    ordinals: readonly number[],
+    rebase: boolean,
+    executing = false,
+  ) => {
     const captured = captureLogging();
     pending.add(job.id);
-    job.requestId = requestId();
-    job.queuedAt = Date.now();
+    if (!executing) {
+      job.requestId = requestId();
+      job.queuedAt = Date.now();
+    }
     delete job.finishedAt;
+    if (durable && !executing) return;
     job.completion = tail
       .then(() =>
         captured(async () => {
@@ -87,6 +186,10 @@ export function createImageQueue(
           job.state = "running";
           await operation("image.queue.batch", { jobId: job.id }, async () => {
             if (rebase) adopt(job.batch, ordinals);
+            if (durable) {
+              job.tasks[ordinals[0]!]!.state = "generating";
+              await durable.checkpoint();
+            }
             await job.batch.prepare();
             prepared = true;
             for (const ordinal of ordinals) {
@@ -97,8 +200,9 @@ export function createImageQueue(
                 "image.queue.task",
                 { jobId: job.id, imageOrdinal: ordinal, style: task.style, poseIndex: task.index },
                 () =>
-                  job.batch.run(ordinal, (state) => {
+                  job.batch.run(ordinal, async (state) => {
                     task.state = state;
+                    await durable?.checkpoint();
                   }),
               ).catch((error) => {
                 task.state = "failed";
@@ -111,15 +215,20 @@ export function createImageQueue(
                 task.state = "completed";
               } else if (task.state !== "failed") task.state = "blocked";
               publish(job, job.batch.draft());
+              await durable?.checkpoint();
             }
           }).catch((error) => {
             job.failure = error instanceof Error ? error : new Error();
-            for (const ordinal of ordinals) {
+            for (const ordinal of prepared ? ordinals : job.tasks.map((task) => task.ordinal)) {
               const task = job.tasks[ordinal]!;
               if (task.state !== "completed") task.state = "blocked";
             }
           });
           const failed = job.tasks.some((task) => task.state !== "completed");
+          if (durable && job.tasks.some((task) => task.state === "waiting")) {
+            await durable.checkpoint();
+            return;
+          }
           const cached = latestDraft(job.batch.personaId);
           const preserved = !prepared && cached?.base === job.batch.draft().base && cached;
           publish(job, preserved || job.batch.finish(failed));
@@ -134,9 +243,10 @@ export function createImageQueue(
             jobId: job.id,
             status,
             outcome: failed ? "failed" : "completed",
-            durationMs: performance.now() - start,
+            durationMs: durable ? Date.now() - job.queuedAt : performance.now() - start,
           });
           pending.delete(job.id);
+          await durable?.checkpoint();
         }),
       )
       .catch((error) =>
@@ -149,6 +259,7 @@ export function createImageQueue(
             job.finishedAt = Date.now();
             pending.delete(job.id);
           }
+          if (durable) throw error;
         }),
       );
     tail = job.completion.catch(() => undefined);
@@ -170,6 +281,50 @@ export function createImageQueue(
     return job;
   };
   return {
+    snapshot: (): QueueSnapshot => ({
+      jobs: [...jobs.values()].map(snapshotJob),
+      keys: [...keys],
+      pending: [...pending],
+    }),
+    next: () => {
+      const id = [...pending][0];
+      return id ? get(id) : undefined;
+    },
+    runNext: async () => {
+      const id = [...pending][0];
+      if (!id) return;
+      const job = get(id);
+      const ordinal = job.tasks.findIndex((task) => task.state === "waiting");
+      try {
+        if (reportRecovery(job)) await durable?.checkpoint();
+        if (ordinal < 0) {
+          job.state = "failed";
+          job.finishedAt = Date.now();
+          pending.delete(id);
+          reportQueueCompleted({
+            jobId: job.id,
+            status: 503,
+            outcome: "failed",
+            durationMs: Date.now() - job.queuedAt,
+          });
+          await durable?.checkpoint();
+          return;
+        }
+        schedule(
+          job,
+          [ordinal],
+          job.batch.intent === "subportrait" || job.batch.intent === "regenerate",
+          true,
+        );
+        await job.completion;
+      } catch (cause) {
+        const waiting = [...pending];
+        pending.clear();
+        pending.add(id);
+        for (const entry of waiting) pending.add(entry);
+        throw cause;
+      }
+    },
     enqueue: (key: string, batch: ImageBatch) => {
       const known = keys.get(key);
       if (known) return get(known);
