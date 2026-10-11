@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Layer } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
@@ -12,6 +12,8 @@ import { startDiscovery } from "./server.ts";
 import { makeOperator } from "../operator/operator.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { withPublicProfile } from "@ren-ai/personas/profile";
+import { testCatalog } from "../../test/catalog.test-helper.ts";
+import { makeDiscoveryWeb } from "./discovery.ts";
 
 test("the standalone discovery listener accepts real HTTP and operator removal deletes waiting preferences", async () => {
   const root = await mkdtemp(join(tmpdir(), "discovery-server-"));
@@ -35,9 +37,10 @@ test("the standalone discovery listener accepts real HTTP and operator removal d
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
+          const remoteCatalog = yield* testCatalog(join(root, "profiles"));
           const server = yield* startDiscovery({
             port: 0,
-            personaDirectory: join(root, "profiles"),
+            catalogUrl: remoteCatalog.url,
             turnstileSecret: "secret",
           });
           const address = server.address();
@@ -158,6 +161,14 @@ test("the standalone discovery listener accepts real HTTP and operator removal d
           expect(yield* sql`SELECT id FROM discovery_registration`).toEqual([]);
           expect(yield* sql`SELECT persona_id FROM discovery_like`).toEqual([]);
           expect(yield* sql`SELECT id FROM send`).toEqual([]);
+          yield* Effect.promise(async () => {
+            await remoteCatalog.close();
+            const unavailable = await fetch(
+              `http://127.0.0.1:${address.port}/discovery/images/00000000-0000-0000-0000-000000000000.png`,
+            );
+            expect(unavailable.status).toBe(503);
+            expect(unavailable.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+          });
         }),
       ).pipe(
         Effect.provide(
@@ -171,4 +182,52 @@ test("the standalone discovery listener accepts real HTTP and operator removal d
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("the image boundary turns opaque and numeric-code failures into correlated unavailable responses", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        let failure: string | Error = "opaque private failure";
+        const web = yield* makeDiscoveryWeb({
+          catalog: async () => [],
+          turnstileSecret: "",
+          image: async () => {
+            throw failure;
+          },
+        });
+        yield* Effect.addFinalizer(() => Effect.promise(web.dispose));
+        const client = yield* HttpClient.HttpClient;
+        for (const cause of [
+          "opaque private failure",
+          new Error("private read failure"),
+          Object.assign(new Error("private read failure"), { code: 14 }),
+          Object.assign(new Error("private read failure"), { code: {} }),
+        ]) {
+          failure = cause;
+          const response = yield* Effect.promise(() =>
+            web.handler(
+              new Request("https://api.test/discovery/images/photo.png"),
+              Context.make(HttpClient.HttpClient, client),
+            ),
+          );
+          expect(response.status).toBe(503);
+          expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+          expect(yield* Effect.promise(() => response.text())).toBe("");
+        }
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            SqliteClient.layer({ filename: ":memory:" }),
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make((request) =>
+                Effect.succeed(HttpClientResponse.fromWeb(request, new Response())),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 });

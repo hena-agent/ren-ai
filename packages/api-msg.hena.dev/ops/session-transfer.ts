@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { remoteHost } from "../src/opencode/remote.ts";
 import { runSessionTransfer } from "../src/operations/session-transfer.ts";
-import { loadPersonas } from "@ren-ai/personas";
+import { catalogClient } from "../src/personas/catalog.ts";
 
 const [command, file] = process.argv.slice(2);
 const operation = Schema.decodeUnknownSync(
@@ -27,8 +27,15 @@ await Effect.runPromise(
         file,
         directory,
         confirmation: process.env["CONFIRM_BOOTSTRAP_ONLY"],
-        ...(process.env["PERSONA_DIRECTORY"]
-          ? { personas: yield* loadPersonas(process.env["PERSONA_DIRECTORY"]) }
+        ...(process.env["PERSONA_CATALOG_URL"]
+          ? {
+              personas: (yield* Effect.tryPromise(
+                catalogClient({
+                  url: process.env["PERSONA_CATALOG_URL"],
+                  token: process.env["PERSONA_CATALOG_TOKEN"] ?? "",
+                }).load,
+              )).personas,
+            }
           : {}),
       });
     }),

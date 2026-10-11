@@ -5,6 +5,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { messagingFixture } from "./messaging.test-helper.ts";
+import { startTestCatalog } from "./catalog.test-helper.ts";
 
 const listeningPort = async (server: ReturnType<typeof createServer>) => {
   server.listen(0, "127.0.0.1");
@@ -50,6 +51,7 @@ export const withServerEntry = async <A>(
     response.end("No backend calls during bootstrap");
   });
   const backendPort = await listeningPort(backend);
+  const catalog = await startTestCatalog(personaDirectory);
   const reserve = createServer();
   const port = await listeningPort(reserve);
   await new Promise<void>((resolve) => reserve.close(() => resolve()));
@@ -71,7 +73,8 @@ export const withServerEntry = async <A>(
       XDG_DATA_HOME: join(root, "data"),
       XDG_STATE_HOME: join(root, "xdg-state"),
       STATE_DIRECTORY: join(root, "state"),
-      PERSONA_DIRECTORY: personaDirectory,
+      PERSONA_CATALOG_URL: catalog.url,
+      PERSONA_CATALOG_TOKEN: catalog.token,
       PORT: String(port),
       LISTEN_HOST: "127.0.0.1",
       BOOTSTRAP_ONLY: "true",
@@ -105,6 +108,7 @@ export const withServerEntry = async <A>(
     await exited;
     clearTimeout(timer);
     await new Promise<void>((resolve) => backend.close(() => resolve()));
+    await catalog.close();
     await rm(root, { recursive: true, force: true });
   }
 };

@@ -4,7 +4,7 @@ import { Effect, type Scope } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { createHost } from "./embedded-host.test-helper.ts";
 import { remoteHost } from "../src/opencode/remote.ts";
-import { loadPersonas, type Persona } from "../src/personas/personas.ts";
+import { loadPersonas, type Persona } from "@ren-ai/personas";
 import { messagingFixture } from "./messaging.test-helper.ts";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { AbsolutePath, Agent } from "@opencode/schema";

@@ -19,8 +19,16 @@ export const loadGroundRules = () =>
   readFile(new URL("../templates/ground-rules.md", import.meta.url), "utf8");
 
 export const renderSnapshot = (persona: Persona, rules: string): typeof folderSnapshot.Type => ({
-  persona,
+  persona: {
+    id: persona.id,
+    timeZone: persona.timeZone,
+    language: persona.language,
+    openingLine: persona.openingLine,
+    memory: persona.memory,
+    prompt: persona.prompt,
+  },
   rules,
+  ...(persona.initial && { documents: persona.initial }),
   agent: `---\ndescription: ${JSON.stringify(persona.openingLine)}\nmode: primary\npermissions: ${JSON.stringify(personaPermissions)}\n---\n${persona.prompt}`,
 });
 
@@ -35,6 +43,17 @@ const absent = (error: Error & { code?: string }) => {
   if (error.code === "ENOENT") return undefined;
   throw error;
 };
+
+async function readDocuments(target: string) {
+  const [state, memory] = await Promise.all([
+    readFile(join(target, "STATE.md"), "utf8").catch(absent),
+    readFile(join(target, "MEMORY.md"), "utf8").catch(absent),
+  ]);
+  if (state === undefined && memory === undefined) return undefined;
+  if (state === undefined || memory === undefined)
+    throw new Error("Conversation documents must include both STATE.md and MEMORY.md");
+  return { state, memory };
+}
 
 const publish = async (target: string, contents: ReadonlyArray<readonly [string, string]>) => {
   const existing = await lstat(target).catch(absent);
@@ -89,10 +108,12 @@ export const folderFiles = (root: string) => {
     const persona = Schema.decodeUnknownSync(folderSnapshot.fields.persona)(
       JSON.parse(await readFile(join(target, "persona.json"), "utf8")),
     );
+    const documents = await readDocuments(target);
     return {
       persona,
       agent: await readFile(join(target, ".opencode", "agents", `${persona.id}.md`), "utf8"),
       rules: await readFile(join(target, "AGENTS.md"), "utf8"),
+      ...(documents && { documents }),
     };
   };
   return {
@@ -104,6 +125,7 @@ export const folderFiles = (root: string) => {
       const target = path(folderID);
       await directory(join(root, "sessions"));
       const prior = await readFile(join(target, "persona.json"), "utf8").catch(absent);
+      const existingDocuments = snapshot.documents ? await readDocuments(target) : undefined;
       if (
         prior &&
         Schema.decodeUnknownSync(folderSnapshot.fields.persona)(JSON.parse(prior)).id !==
@@ -123,6 +145,12 @@ export const folderFiles = (root: string) => {
             ),
           }),
         ],
+        ...(!prior && !existingDocuments && snapshot.documents
+          ? ([
+              ["STATE.md", snapshot.documents.state],
+              ["MEMORY.md", snapshot.documents.memory],
+            ] as const)
+          : []),
       ]);
       return target;
     },

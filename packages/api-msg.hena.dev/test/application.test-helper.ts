@@ -1,5 +1,5 @@
 import { Effect, Layer } from "effect";
-import { loadPersonas } from "../src/personas/personas.ts";
+import { loadPersonas } from "@ren-ai/personas";
 import { isolatedHost } from "./isolated-host.test-helper.ts";
 import type { HostOptions, PersonaHostOptions } from "./embedded-host.test-helper.ts";
 import { startMessagingApplication, type OnboardingConfig } from "../src/application.ts";

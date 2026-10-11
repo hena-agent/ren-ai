@@ -18,6 +18,7 @@ import { AbsolutePath, Agent, Model } from "@opencode/schema";
 import { remoteHost } from "../src/opencode/remote.ts";
 import type { standaloneTestHost } from "./messaging-host.test-helper.ts";
 import { listenerUrl } from "./listener.test-helper.ts";
+import { testCatalog } from "./catalog.test-helper.ts";
 
 export const localOpenCode = (
   native: Effect.Success<ReturnType<typeof standaloneTestHost>>,
@@ -106,12 +107,14 @@ export const composedTestServer = (
     const gateway = messageGateway(messages, "messaging-secret", gestures);
     yield* Effect.addFinalizer(() => Effect.promise(gateway.dispose));
     const mac = yield* servePublic(gateway.handler, 0);
+    const catalog = yield* testCatalog(personaDirectory);
     const config = yield* applicationConfig.pipe(
       Effect.provide(
         ConfigProvider.layer(
           ConfigProvider.fromUnknown({
             STATE_DIRECTORY: root,
-            PERSONA_DIRECTORY: personaDirectory,
+            PERSONA_CATALOG_URL: catalog.url,
+            PERSONA_CATALOG_TOKEN: catalog.token,
             DEFAULT_PERSONA_ID: "persona1",
             PORT: "0",
             IMSG_URL: `${listenerUrl(mac)}/rpc`,

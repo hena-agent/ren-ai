@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
-import type { Persona } from "./personas/personas.ts";
+import type { Persona } from "@ren-ai/personas";
 import type { PersonaRuntime } from "./opencode/runtime.ts";
 import { prepareMessaging, type MessagingTools } from "./application-tools.ts";
 import type { Messages } from "./messages/messages.ts";

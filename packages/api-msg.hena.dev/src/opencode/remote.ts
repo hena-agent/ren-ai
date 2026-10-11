@@ -12,7 +12,7 @@ import { Effect, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import type { Persona } from "../personas/personas.ts";
+import type { Persona } from "@ren-ai/personas";
 import { MissingSession, type PersonaRuntime } from "./runtime.ts";
 
 const recoveryID = (key: string) =>

@@ -13,6 +13,7 @@ import { expect, test } from "vitest";
 import { messagingFixture } from "../test/messaging.test-helper.ts";
 import { composeServer } from "./server.ts";
 import { applicationApi } from "./opencode/application-protocol.ts";
+import { testCatalog } from "../test/catalog.test-helper.ts";
 
 test("migration bootstrap serves the persona catalog but cannot send or start AI work", async () => {
   const { root, personaDirectory } = await messagingFixture("bootstrap-");
@@ -27,9 +28,10 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
+          const catalog = yield* testCatalog(personaDirectory);
           const server = yield* composeServer({
             stateDirectory: root,
-            personaDirectory,
+            catalog,
             defaultPersonaID: "persona1",
             publicPort: 0,
             bootstrapOnly: true,

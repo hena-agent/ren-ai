@@ -13,6 +13,7 @@ export const folderSnapshot = Schema.Struct({
   }),
   agent: Schema.String,
   rules: Schema.String,
+  documents: Schema.optionalKey(Schema.Struct({ state: Schema.String, memory: Schema.String })),
 });
 // The compiled OpenCode CLI owns a different Effect instance.
 const portable = <T>(schema: Schema.Codec<T>) => ({

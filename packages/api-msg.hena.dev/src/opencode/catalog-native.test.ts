@@ -1,6 +1,6 @@
 import { Deferred, Effect, Schema } from "effect";
 import { AbsolutePath, Agent, Session } from "@opencode/schema";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadPersonas } from "@ren-ai/personas";
 import { sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
@@ -9,7 +9,6 @@ import { expect, test } from "vitest";
 import {
   catalogTest,
   authoredDefinition,
-  expectRejectedCatalog,
   expectProfile,
   expectPrompt,
   beginRetainingParent,
@@ -181,12 +180,12 @@ test(
 );
 
 test(
-  "a native persona missing from the proposed catalog rejects the whole edit and later recovers",
+  "an absent native persona retains her snapshot without blocking valid Catalog updates",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const active = yield* host.activeSession();
       const harin = yield* host.remote.createSession("harin");
-      const original = yield* host.read(active.id);
+      const original = yield* host.read(harin.id);
       const saved = host.personas.get("harin")!;
       const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
@@ -194,16 +193,11 @@ test(
         prompt: "You grow lavender on the balcony.",
       });
       const next = yield* catalogWithoutHarin(fixture, updated);
-      yield* expectRejectedCatalog(
-        host,
-        fixture.personaDirectory,
-        next,
-        `Managed session ${harin.id} has no catalog persona`,
-      );
-      expect(yield* host.read(active.id)).toEqual(original);
+      yield* syncFolders(host.remote.client, fixture.personaDirectory, next);
+      expect(yield* host.read(harin.id)).toEqual(original);
+      expect(next.get("harin")?.published).toBe(false);
       yield* host.watch();
-      yield* Effect.sleep("200 millis");
-      expect(yield* host.profileName()).toBe("수아");
+      yield* expectProfile(host, "수아 수정");
       yield* Effect.promise(() => fixture.store.create(saved));
       yield* expectProfile(host, "수아 수정");
       yield* expectPrompt(host, active.id, updated.prompt);
@@ -243,6 +237,33 @@ test(
       yield* host.remote.sessions.wait(id);
       yield* syncFolders(host.remote.client, fixture.personaDirectory, updated);
       yield* expectPrompt(host, id, "This change requires a valid selected agent.");
+    }),
+  ),
+);
+
+test(
+  "a missing Catalog ID cannot adopt another persona's session snapshot",
+  catalogTest((host, fixture) =>
+    Effect.gen(function* () {
+      const active = yield* host.activeSession();
+      const original = yield* host.read(active.id);
+      yield* Effect.promise(async () => {
+        await writeFile(
+          join(active.location.directory, "persona.json"),
+          JSON.stringify({ ...original.persona, id: "harin" }),
+        );
+        await writeFile(
+          join(active.location.directory, ".opencode", "agents", "harin.md"),
+          original.agent,
+        );
+      });
+      const missing = new Map(host.personas);
+      missing.delete("persona1");
+      expect(
+        (yield* syncFolders(host.remote.client, fixture.personaDirectory, missing).pipe(
+          Effect.flip,
+        )).message,
+      ).toContain("snapshot persona ID does not match");
     }),
   ),
 );

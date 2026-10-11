@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
+import { NodeRuntime } from "@effect/platform-node";
 import { startDiscovery } from "./discovery/server.ts";
 
 const database =
@@ -11,16 +12,11 @@ const database =
   fileURLToPath(new URL("../data/discovery.sqlite", import.meta.url));
 await mkdir(dirname(database), { recursive: true });
 const port = Number(process.env.PORT ?? 4867);
-const stop = new AbortController();
-process.on("SIGTERM", () => stop.abort());
-process.on("SIGINT", () => stop.abort());
-await Effect.runPromise(
+NodeRuntime.runMain(
   Effect.scoped(
     startDiscovery({
       port,
-      personaDirectory:
-        process.env.PERSONA_DIRECTORY ??
-        fileURLToPath(new URL("../../../apps/admin/data/personas", import.meta.url)),
+      catalogUrl: process.env.PERSONA_CATALOG_URL ?? "http://127.0.0.1:3729",
       turnstileSecret: process.env.TURNSTILE_SECRET ?? "",
     }).pipe(
       Effect.tap(() =>
@@ -35,5 +31,4 @@ await Effect.runPromise(
       ),
     ),
   ),
-  { signal: stop.signal },
 );

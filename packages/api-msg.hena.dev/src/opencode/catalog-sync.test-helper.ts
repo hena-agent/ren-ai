@@ -4,7 +4,12 @@ import { Session } from "@opencode/schema";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { SqlClient } from "effect/unstable/sql";
 import { TestLLM } from "@opencode/ai/testing";
-import { createPersonaStore, loadPersonas, type PersonaRecord } from "@ren-ai/personas";
+import {
+  createPersonaStore,
+  loadPersonas,
+  serializePersona,
+  type PersonaRecord,
+} from "@ren-ai/personas";
 import { folderSnapshot, sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { join } from "node:path";
 import { rm } from "node:fs/promises";
@@ -20,25 +25,13 @@ import { catalogAPI } from "../onboarding/catalog.test-helper.ts";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 import { remoteHost } from "./remote.ts";
-import { watchCatalog, syncFolders } from "./catalog-sync.ts";
+import { watchCatalog } from "./catalog-sync.ts";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 
 export const authoredDefinition = (record: PersonaRecord) => {
   const description = withPublicProfile(record.prompt, record.publicProfile!);
   return { ...record, description, prompt: description };
 };
-
-export function expectRejectedCatalog(
-  host: Host,
-  root: string,
-  next: ReadonlyMap<string, PersonaRecord>,
-  message: string,
-) {
-  return Effect.gen(function* () {
-    const rejected = yield* syncFolders(host.remote.client, root, next).pipe(Effect.flip);
-    expect(rejected.message).toContain(message);
-  });
-}
 
 const catalogFixture = async () => {
   const fixture = await messagingFixture("catalog-sync-");
@@ -161,7 +154,18 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
       });
     const watch = () =>
       Effect.forkScoped(
-        watchCatalog(remote.client, fixture.personaDirectory, fixture.catalogDirectory, personas),
+        watchCatalog(
+          remote.client,
+          fixture.personaDirectory,
+          async () => {
+            const loaded = await Effect.runPromise(loadPersonas(fixture.catalogDirectory));
+            return {
+              revision: JSON.stringify([...loaded.values()].map(serializePersona)),
+              personas: loaded,
+            };
+          },
+          personas,
+        ),
       );
     const profileName = () =>
       api

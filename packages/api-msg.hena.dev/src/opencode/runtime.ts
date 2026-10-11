@@ -4,7 +4,7 @@ import type { SessionMessage } from "@opencode/schema/session-message";
 import type { SessionInbox } from "@opencode/schema/session-inbox";
 import type { SessionPromptInput } from "@opencode/client/effect/api";
 import { Data, type Effect, type Stream } from "effect";
-import type { Persona } from "../personas/personas.ts";
+import type { Persona } from "@ren-ai/personas";
 
 export class MissingSession extends Data.TaggedError("Session.NotFoundError")<{
   readonly message: string;

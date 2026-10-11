@@ -8,7 +8,6 @@ import { syncFolders } from "./catalog-sync.ts";
 import {
   catalogTest,
   authoredDefinition,
-  expectRejectedCatalog,
   expectProfile,
   expectPrompt,
   catalogWithoutHarin,
@@ -98,29 +97,26 @@ test(
 );
 
 test(
-  "deleting an active persona rejects the entire update before another active folder is changed",
+  "an absent Catalog persona preserves her session snapshot while valid Catalog changes are synchronized",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const active = yield* host.activeSession();
       const harin = yield* host.activeSession("harin", "harin@example.com");
-      const old = yield* host.read(active.id);
+      const old = yield* host.read(harin.id);
       const savedHarin = host.personas.get("harin")!;
       const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
-        prompt: "A change that must be held back.",
+        prompt: "A valid Catalog update.",
       });
       const next = yield* catalogWithoutHarin(fixture, updated);
-      yield* expectRejectedCatalog(
-        host,
-        fixture.personaDirectory,
-        next,
-        "Active persona harin is missing",
-      );
-      expect(yield* host.read(active.id)).toEqual(old);
+      yield* syncFolders(host.remote.client, fixture.personaDirectory, next);
+      expect(yield* host.read(active.id)).toMatchObject({ persona: { prompt: updated.prompt } });
+      expect(yield* host.read(harin.id)).toEqual(old);
+      expect(next.get("harin")?.published).toBe(false);
       yield* host.watch();
       yield* Effect.sleep("1100 millis");
-      expect((yield* host.api.list()).map((persona) => persona.name)).toEqual(["하린", "수아"]);
+      expect((yield* host.api.list()).map((persona) => persona.name)).toEqual(["수아 수정"]);
       expect(yield* host.read(harin.id)).toMatchObject({
         persona: { prompt: "You are Harin.\n\n## 공개 프로필\n\n29살 서울 사진가" },
       });
