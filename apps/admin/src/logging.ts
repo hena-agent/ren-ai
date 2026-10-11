@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 export interface LogFields {
   stage?: string;
@@ -28,6 +30,10 @@ export interface LogEntry extends LogFields {
   requestId?: string;
   method?: string;
   route?: string;
+  url?: string;
+  directory?: string;
+  logDirectory?: string;
+  generationConfigured?: boolean;
   error?: { name: string; message: string; stack: string };
 }
 export type Log = (entry: LogEntry) => void;
@@ -35,6 +41,35 @@ const writeLog: Log = (entry) => {
   const output = entry.level === "info" ? process.stdout : process.stderr;
   output.write(`${JSON.stringify(entry)}\n`);
 };
+
+export function createFileLog(directory: string): Log {
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  return (entry) => {
+    writeLog(entry);
+    try {
+      appendFileSync(
+        join(directory, `admin-${entry.time.slice(0, 10)}.jsonl`),
+        `${JSON.stringify(entry)}\n`,
+        { mode: 0o600 },
+      );
+    } catch (cause) {
+      const failure = validationFailure(
+        "Failed to persist Admin diagnostics; see stderr",
+        { stage: "logging.persist", code: "log_write_failed" },
+        cause,
+      );
+      writeLog({
+        time: entry.time,
+        service: "admin",
+        level: "error",
+        event: "logging.persistence_failed",
+        ...failure.fields,
+        ...(entry.requestId && { requestId: entry.requestId }),
+        error: { name: failure.fields.causeName!, message: failure.message, stack: "" },
+      });
+    }
+  };
+}
 const scope = new AsyncLocalStorage<{
   requestId: string;
   method: string;

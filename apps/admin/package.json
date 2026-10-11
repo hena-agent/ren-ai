@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./src/run.mjs",
   "scripts": {
-    "dev": "bun --watch src/run.mjs",
+    "dev": "bun --watch --no-clear-screen src/run.mjs",
     "start": "bun run src/run.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

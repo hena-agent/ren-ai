@@ -5,10 +5,14 @@ import { build, serve } from "bun";
 import { createPersonaStore } from "@ren-ai/personas";
 import { createAdmin } from "./admin.ts";
 import { createProfileGenerator } from "./generation.ts";
+import { createFileLog } from "./logging.ts";
 
 const directory =
   process.env.PERSONA_DIRECTORY ?? fileURLToPath(new URL("../data/personas", import.meta.url));
 const store = await createPersonaStore(directory);
+const logDirectory =
+  process.env.ADMIN_LOG_DIRECTORY ?? fileURLToPath(new URL("../data/logs", import.meta.url));
+const log = createFileLog(logDirectory);
 const labEnvironment = new URL("../../persona-lab/.env", import.meta.url);
 const key =
   process.env.GEMINI_API_KEY ??
@@ -29,6 +33,7 @@ const handle = createAdmin(
     .join("\n"),
   {
     script,
+    log,
     generator: createProfileGenerator({
       key,
       endpoint: process.env.GEMINI_API_URL,
@@ -41,6 +46,13 @@ const port = Number(process.env.PORT ?? 3729);
 // A gallery spans several provider calls, each independently bounded to 120 seconds.
 // Bun's default idle timeout would reset the connection before the preview is ready.
 const server = serve({ hostname: "127.0.0.1", port, idleTimeout: 0, fetch: handle });
-process.stdout.write(
-  `${JSON.stringify({ time: new Date().toISOString(), service: "admin", level: "info", event: "server.started", url: `http://127.0.0.1:${server.port}`, directory, generationConfigured: Boolean(key.trim()) })}\n`,
-);
+log({
+  time: new Date().toISOString(),
+  service: "admin",
+  level: "info",
+  event: "server.started",
+  url: `http://127.0.0.1:${server.port}`,
+  directory,
+  logDirectory,
+  generationConfigured: Boolean(key.trim()),
+});
