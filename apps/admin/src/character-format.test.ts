@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
 import { sheet } from "../test/character.ts";
 import { legacy } from "../test/fixtures.ts";
-import { renderCharacterSheet } from "./character-sheet.ts";
+import { renderCharacterSheet } from "@ren-ai/personas";
 import { withPublicProfile } from "@ren-ai/personas/profile";
-import { inspectPersona, parseCharacterDescription, versionedPersona } from "./character-format.ts";
+import { inspectPersona, parseCharacterDescription, versionedPersona } from "@ren-ai/personas";
 
 const description = renderCharacterSheet(sheet);
 test("the current description format round-trips all fixed fields, multiline reasons, traits and both genders", () => {

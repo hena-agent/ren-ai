@@ -10,7 +10,7 @@ import {
   readPortraitInstructions,
   characterOf,
 } from "./authoring.ts";
-import { restoreDraft, draftTokens, previewOf } from "./draft.ts";
+import { restoreDraft, draftTokens, previewOf, documentsOf, captureDocuments } from "./draft.ts";
 import type { Draft } from "./draft.ts";
 import type { ProfileGenerator } from "./generation.ts";
 import { renderPage } from "./page.tsx";
@@ -40,8 +40,8 @@ import {
   requestId,
 } from "./logging.ts";
 import type { Log } from "./logging.ts";
-import { versionedPersona } from "./character-format.ts";
-import { inspectFiles } from "./inspection-page.tsx";
+import { versionedPersona } from "@ren-ai/personas";
+import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
 
 const html = (page: string, status = 200) => {
@@ -59,6 +59,12 @@ const html = (page: string, status = 200) => {
   );
 };
 
+const documentFields = (draft: Draft) => ({
+  documents: documentsOf(draft),
+  tab: draft.tab,
+  showIdea: Boolean(draft.characterPending),
+});
+
 export function createAdmin(
   store: Awaited<ReturnType<typeof createPersonaStore>>,
   password: string,
@@ -70,6 +76,9 @@ export function createAdmin(
     .update(`Basic ${Buffer.from(`admin:${password}`).toString("base64")}`)
     .digest();
   const tokens = draftTokens(password);
+  const privateResource = createResources(store, tokens, stylesheet, script, (content) =>
+    html(renderPage(content)),
+  );
   const busy = new Set<string>();
   // ponytail: retain the latest paid additions per persona in this process; persistent idempotency if drafts must survive restarts.
   const subDrafts = new Map<string, Draft>();
@@ -95,6 +104,7 @@ export function createAdmin(
       record && draft
         ? {
             record,
+            ...documentFields(draft),
             draft: tokens.encode(draft),
             editing: Boolean(draft.base),
             seed: draft.seed,
@@ -124,6 +134,7 @@ export function createAdmin(
     return html(
       renderPage({
         record: persona,
+        ...documentFields(draft),
         editing: Boolean(draft.base),
         draft: tokens.encode(draft),
         seed: draft.seed,
@@ -150,21 +161,25 @@ export function createAdmin(
         const valid = decodePersona(versionedPersona(persona));
         if (valid.published && !valid.imageUrl)
           throw new PersonaError("invalid", "공개하려면 소개와 프로필 이미지가 필요합니다.");
+        const documents = documentsOf(draft);
         await operation("persona.save", {}, () =>
-          draft.legacySource
-            ? store.convertLegacy(valid, draft.legacySource)
-            : draft.base
-              ? store.update(valid)
-              : store.create(valid),
+          store.save(valid, documents, {
+            persona: draft.base,
+            ...(draft.initial?.base && { initial: draft.initial.base }),
+            ...(draft.legacySource && { legacySource: draft.legacySource }),
+          }),
         );
         subDrafts.set(draft.id, {
           id: draft.id,
           base: serializePersona(valid),
           preview: serializePersona(valid),
+          initial: { base: documents, preview: documents },
         });
         return new Response(null, {
           status: 303,
-          headers: { Location: `/personas/${valid.id}?saved=1` },
+          headers: {
+            Location: `/personas/${valid.id}?saved=1${draft.tab && draft.tab !== "persona" ? `&tab=${draft.tab}` : ""}`,
+          },
         });
       }
       if (intent === "delete-image") {
@@ -173,6 +188,7 @@ export function createAdmin(
         return html(
           renderPage({
             record: previewOf(next, emptyPersona),
+            ...documentFields(next),
             editing: Boolean(next.base),
             draft: tokens.encode(next),
           }),
@@ -186,6 +202,7 @@ export function createAdmin(
         return html(
           renderPage({
             record: persona,
+            ...documentFields(draft),
             editing: Boolean(draft.base),
             draft: tokens.encode(draft),
             conversion: draft.conversion,
@@ -199,10 +216,12 @@ export function createAdmin(
         throw new PersonaError("invalid", copy.identityError);
       if (!generator) return unconfigured(persona, draft);
       const next = await generateTextDraft(persona, draft, intent, generator);
+      await assertSnapshot(store, draft);
       subDrafts.set(draft.id, next);
       return html(
         renderPage({
           record: previewOf(next, emptyPersona),
+          ...documentFields(next),
           editing: Boolean(draft.base),
           draft: tokens.encode(next),
           seed: next.seed,
@@ -215,7 +234,7 @@ export function createAdmin(
   };
 
   const jobPage = (job: ImageJob, progress: boolean) => {
-    const latest = subDrafts.get(job.batch.personaId) ?? job.batch.draft();
+    const latest = subDrafts.get(job.batch.personaId)!;
     const failed = job.state === "failed";
     const record =
       job.state !== "completed" && latest.preview === job.batch.draft().preview
@@ -226,6 +245,7 @@ export function createAdmin(
     return html(
       renderPage({
         record,
+        ...documentFields(latest),
         editing: Boolean(latest.base),
         draft: tokens.encode(latest),
         seed: latest.seed,
@@ -257,7 +277,20 @@ export function createAdmin(
     if (!generator) return unconfigured(persona, draft);
     if (busy.has(draft.id)) throw new PersonaError("conflict", copy.busy);
     const known = queue.find(paidKey);
+    const current = subDrafts.get(draft.id);
+    const pending = queue.pending(draft.id);
+    if (
+      pending &&
+      current &&
+      (JSON.stringify(documentsOf(draft)) !== JSON.stringify(documentsOf(current)) ||
+        JSON.stringify(characterOf(persona)) !==
+          JSON.stringify(characterOf(queue.get(pending).batch.source)))
+    )
+      throw new PersonaError("conflict", copy.busy);
     if (!known) await assertSnapshot(store, draft);
+    if (!known && !queue.pending(draft.id)) {
+      subDrafts.set(draft.id, draft);
+    }
     const job =
       known ??
       queue.enqueue(
@@ -293,6 +326,7 @@ export function createAdmin(
       const submission = imageSubmission(draft, subDrafts.get(draft.id), intent, url.searchParams);
       const submittedKey = submission.key;
       draft = submission.draft;
+      draft = captureDocuments(form, draft);
       const previous = previewOf(draft, emptyPersona);
       if (intent === "character") {
         const gender = selectedGender(form, previous);
@@ -300,7 +334,7 @@ export function createAdmin(
         const seed = form.get("seed");
         if (typeof seed !== "string" || !seed.trim())
           throw new PersonaError("invalid", copy.seedRequired);
-        draft = { ...draft, seed: seed.trim() };
+        draft = { ...draft, seed: seed.trim(), characterPending: true };
       } else {
         record = authorPersona(form, previous);
         if (!record.name || !record.description)
@@ -357,16 +391,23 @@ export function createAdmin(
     record: PersonaRecord | undefined,
     editing: boolean,
     saved: boolean,
+    tab: string | null,
   ) => {
     if (record) {
       const active = queue.pending(record.id);
       if (active) return jobPage(queue.get(active), true);
     }
-    const draft = record ? restoreDraft(record, editing, subDrafts.get(record.id)) : undefined;
+    let draft = record ? restoreDraft(record, editing, subDrafts.get(record.id)) : undefined;
+    if (draft && editing && !draft.initial) {
+      const initial = await store.initial(draft.id);
+      draft = { ...draft, initial: initial ? { base: initial, preview: initial } : {} };
+    }
     if (draft) subDrafts.set(draft.id, draft);
     const content: PageContent = record
       ? {
           record: previewOf(draft!, emptyPersona),
+          ...documentFields(draft!),
+          tab: tab === "persona" || tab === "state" || tab === "memory" ? tab : draft!.tab,
           editing,
           draft: tokens.encode(draft!),
           seed: draft!.seed,
@@ -375,52 +416,12 @@ export function createAdmin(
           imageCount: draft!.imageCount,
           imagePrompts: draft!.imagePrompts,
           conversion: draft!.conversion,
-          changed: draft!.preview !== draft!.base,
+          changed:
+            draft!.preview !== draft!.base ||
+            JSON.stringify(draft!.initial?.preview) !== JSON.stringify(draft!.initial?.base),
         }
       : { personas: await operation("persona.list", {}, store.list) };
     return html(renderPage({ ...content, saved }));
-  };
-
-  const privateResource = async (pathname: string) => {
-    const document = /^\/personas\/([a-zA-Z0-9_-]+)\/persona\.md$/.exec(pathname);
-    if (document)
-      return new Response(serializePersona(await store.get(document[1]!)), {
-        headers: {
-          "Content-Type": "text/markdown; charset=utf-8",
-          "Content-Disposition": 'attachment; filename="persona.md"',
-          "Cache-Control": "no-store",
-        },
-      });
-    const importing = /^\/import\/([a-zA-Z0-9_-]+)$/.exec(pathname);
-    if (importing) {
-      const imported = await store.importDraft(importing[1]!);
-      const draft = {
-        id: importing[1]!,
-        base: serializePersona(imported.persona),
-        preview: serializePersona(imported.persona),
-        legacySource: imported.original,
-      };
-      return html(
-        renderPage({
-          record: imported.persona,
-          editing: true,
-          draft: tokens.encode(draft),
-        }),
-      );
-    }
-    if (pathname === "/style.css")
-      return new Response(stylesheet, { headers: { "Content-Type": "text/css; charset=utf-8" } });
-    if (pathname === "/pending.js")
-      return new Response(script, {
-        headers: { "Content-Type": "text/javascript; charset=utf-8" },
-      });
-    if (pathname === "/inspection") {
-      const files = await operation("persona.inspect", {}, store.inspect);
-      return html(renderPage({ personas: [], inspections: inspectFiles(files) }));
-    }
-    if (pathname.startsWith("/images/"))
-      return operation("image.read", {}, () => store.image(pathname.slice("/images/".length)));
-    return undefined;
   };
 
   const handle = async (request: Request): Promise<Response> => {
@@ -458,7 +459,12 @@ export function createAdmin(
       else if (url.pathname === "/new") record = { ...emptyPersona, id: randomUUID() };
       else if (url.pathname !== "/")
         return html(renderPage({ personas: [], error: copy.notFound }), 404);
-      return await editorPage(record, Boolean(match), url.searchParams.get("saved") === "1");
+      return await editorPage(
+        record,
+        Boolean(match),
+        url.searchParams.get("saved") === "1",
+        url.searchParams.get("tab"),
+      );
     } catch (error) {
       return failure(error);
     }

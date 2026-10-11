@@ -17,7 +17,6 @@ import policy from "./policy.json";
 import { useBrowser } from "../test/browser.ts";
 import { bindPending } from "./pending.ts";
 import { sheet, acceptedReview, characterResponse } from "../test/character.ts";
-import characterPolicy from "./character-policy.json";
 
 useBrowser();
 
@@ -242,17 +241,10 @@ test("unspecified legacy gender keeps the seed and runtime instructions free of 
     .mockResolvedValueOnce(acceptedReview());
   const model = createProfileGenerator({ key: "key", fetcher });
   await model.character("legacy seed");
-  expect(await new Request(...fetcher.mock.calls[0]!).json()).toMatchObject({
-    contents: [
-      {
-        parts: [
-          {
-            text: `${characterPolicy.generate}\n\n${characterPolicy.reference}\n\n${policy.genderDirection}\n\nlegacy seed`,
-          },
-        ],
-      },
-    ],
-  });
+  const body = await new Request(...fetcher.mock.calls[0]!).text();
+  expect(body).toContain("legacy seed");
+  expect(body).not.toContain("SELECTED GENDER: female");
+  expect(body).not.toContain("SELECTED GENDER: male");
   const { admin, store } = await fixture();
   await store.create({
     ...legacy,

@@ -3,7 +3,7 @@ import {
   CharacterFormatError,
   parseCharacterDescription,
   privateSectionTitles,
-} from "./character-format.ts";
+} from "@ren-ai/personas";
 
 type Heading = ReturnType<typeof markdownHeadings>[number];
 const issueAt = (source: string, section: string, message: string, start: number, end: number) => ({

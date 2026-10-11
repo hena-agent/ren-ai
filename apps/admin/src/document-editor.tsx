@@ -1,7 +1,7 @@
-import type { PersonaRecord } from "@ren-ai/personas";
+import { stateStatus } from "@ren-ai/personas";
+import type { InitialDocuments, PersonaRecord } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
 import { documentStatus } from "./document-diagnostics.ts";
-import { DocumentPreview } from "./document-preview.tsx";
 
 export function DocumentEditor({
   persona,
@@ -9,12 +9,16 @@ export function DocumentEditor({
   editing,
   action,
   conversion,
+  documents = { state: "", memory: "" },
+  tab = "persona",
 }: {
   persona: PersonaRecord;
   locked: boolean;
   editing: boolean;
   action: string;
   conversion?: Draft["conversion"];
+  documents?: InitialDocuments;
+  tab?: Draft["tab"];
 }) {
   const source = (persona.description ?? persona.prompt).replace(/\r\n?/g, "\n");
   const result = documentStatus(
@@ -23,6 +27,7 @@ export function DocumentEditor({
     persona.gender,
     persona.descriptionVersion === undefined,
   );
+  const stateResult = stateStatus(documents.state, source);
   return (
     <section
       className="persona-document-editor"
@@ -30,61 +35,53 @@ export function DocumentEditor({
       data-format={result.state}
       data-previous-format={String(persona.descriptionVersion === undefined)}
       data-gender={persona.gender}
-      aria-labelledby="document-title"
     >
-      <div className="document-header">
-        <h2 className="document-file" id="document-title">
-          persona.md 원본
-        </h2>
-        <span className="document-status" data-document-status>
-          {result.label}
-        </span>
+      <input type="hidden" name="tab" value={tab} />
+      <div className="document-tabs" role="tablist" aria-label="페르소나 문서">
+        {(["persona", "state", "memory"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            id={`tab-${key}`}
+            data-editor-tab={key}
+            aria-selected={tab === key}
+            aria-controls={`pane-${key}`}
+            tabIndex={tab === key ? 0 : -1}
+          >
+            {key === "persona" ? "Persona" : key === "state" ? "State" : "Memory"}
+          </button>
+        ))}
       </div>
-      <div className="document-tools">
-        <label htmlFor="name">
-          이름
-          <input id="name" name="name" defaultValue={persona.name} required readOnly={locked} />
-        </label>
-        <div className="document-actions">
-          {editing && (
-            <>
-              <button
-                type="submit"
-                name="intent"
-                value="convert"
-                data-document-convert
-                hidden={result.state === "valid" || result.state === "empty"}
-                disabled={locked}
-              >
-                현재 형식으로 정리
-              </button>
-              <a href={`${action}/persona.md`}>Markdown 내려받기</a>
-            </>
-          )}
+      <section
+        role="tabpanel"
+        id="pane-persona"
+        aria-labelledby="tab-persona"
+        hidden={tab !== "persona"}
+      >
+        <div className="document-tools">
+          <label htmlFor="name">
+            이름
+            <input id="name" name="name" defaultValue={persona.name} required readOnly={locked} />
+          </label>
+          <span className="document-status" data-document-status>
+            {result.label}
+          </span>
+          <div className="document-actions">
+            {editing && <a href={`${action}/persona.md`}>내려받기</a>}
+            <button
+              type="submit"
+              name="intent"
+              value="convert"
+              data-document-convert
+              hidden={result.state === "valid" || result.state === "empty"}
+              disabled={locked}
+            >
+              형식 정리
+            </button>
+          </div>
         </div>
-      </div>
-      <div className="document-view-controls">
-        <button
-          type="button"
-          data-document-mode="edit"
-          aria-pressed="true"
-          aria-controls="document-edit-pane"
-        >
-          편집
-        </button>
-        <button
-          type="button"
-          data-document-mode="preview"
-          aria-pressed="false"
-          aria-controls="document-preview-pane"
-          className="secondary"
-        >
-          미리보기
-        </button>
-      </div>
-      <div className="document-workspace">
-        <div className="document-source" id="document-edit-pane">
-          <h2 className="document-source-label">Markdown 원문</h2>
+        <div className="document-source">
           <div data-markdown-editor />
           <textarea
             id="description"
@@ -96,46 +93,101 @@ export function DocumentEditor({
             spellCheck={false}
             aria-invalid={result.state === "invalid"}
             aria-describedby="document-issues"
-            aria-label="persona.md Markdown 원문"
+            aria-label="Persona 원문"
           />
         </div>
-        <section
-          className="document-preview"
-          id="document-preview-pane"
-          hidden
-          aria-label="문서 미리보기"
+        <ul
+          className="document-issues"
+          id="document-issues"
+          data-document-issues
+          aria-live="polite"
         >
-          <div data-document-preview>
-            <DocumentPreview source={source} />
+          {result.issues.map((entry, index) => (
+            <li key={index}>
+              <button
+                type="button"
+                data-document-start={entry.start}
+                data-document-end={entry.end}
+                data-document-line={entry.line}
+              >
+                {entry.section}: {entry.message}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {conversion && conversion.additions.length > 0 && (
+          <section className="conversion-report" aria-label="정리 결과">
+            <h3>보강한 설정</h3>
+            <ul>
+              {conversion.additions.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </section>
+      {(["state", "memory"] as const).map((key) => (
+        <section
+          key={key}
+          role="tabpanel"
+          id={`pane-${key}`}
+          aria-labelledby={`tab-${key}`}
+          hidden={tab !== key}
+          data-state-format={key === "state" ? stateResult.state : undefined}
+        >
+          <div className="document-tools">
+            <span className="document-file">{key === "state" ? "STATE.md" : "MEMORY.md"}</span>
+            {key === "state" && (
+              <span className="document-status" data-state-status>
+                {stateResult.label}
+              </span>
+            )}
+            <div className="document-actions">
+              {editing && <a href={`${action}/${key}.md`}>내려받기</a>}
+              <button
+                className="secondary"
+                type="submit"
+                name="intent"
+                value={key}
+                disabled={locked || result.state !== "valid"}
+              >
+                Persona로 {key === "state" ? "State" : "Memory"} 다시 생성
+              </button>
+            </div>
           </div>
+          <div className="document-source" data-initial-document={key}>
+            <div data-initial-markdown-editor />
+            <textarea
+              id={`${key}-source`}
+              name={`${key}Source`}
+              defaultValue={documents[key]}
+              readOnly={locked}
+              rows={16}
+              maxLength={16000}
+              spellCheck={false}
+              aria-label={`${key === "state" ? "State" : "Memory"} 원문`}
+              aria-invalid={key === "state" && stateResult.state === "invalid"}
+              aria-describedby={key === "state" ? "state-issues" : undefined}
+            />
+          </div>
+          {key === "state" && (
+            <ul className="document-issues" id="state-issues" data-state-issues aria-live="polite">
+              {stateResult.issues.map((issue, index) => (
+                <li key={index}>
+                  <button type="button">
+                    {issue.line}행 · {issue.message}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="document-hint">
+            {key === "state"
+              ? "공통 상태 0–100 · 숨겨진 특성은 Persona와 일치해야 합니다."
+              : "현재 생활과 진행 중인 일 · 상대와의 경험이나 약속은 넣지 않습니다."}
+          </p>
         </section>
-      </div>
-      <ul className="document-issues" id="document-issues" data-document-issues aria-live="polite">
-        {result.issues.map((entry, index) => (
-          <li key={index}>
-            <button
-              type="button"
-              data-document-start={entry.start}
-              data-document-end={entry.end}
-              data-document-line={entry.line}
-            >
-              <strong>{entry.section}</strong>
-              <span>{entry.message}</span>
-              <small>{entry.line}행</small>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {conversion && conversion.additions.length > 0 && (
-        <section className="conversion-report" aria-label="정리 결과">
-          <h3>정리 결과 · 보강 {conversion.additions.length}개</h3>
-          <ul>
-            {conversion.additions.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+      ))}
     </section>
   );
 }

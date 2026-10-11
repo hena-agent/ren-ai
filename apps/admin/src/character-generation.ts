@@ -1,11 +1,13 @@
 import { Schema } from "effect";
 import type { JsonSchema } from "effect";
-import { parseCharacterDescription } from "./character-format.ts";
+import { parseCharacterDescription } from "@ren-ai/personas";
 import { requirePublicProfile } from "@ren-ai/personas/profile";
 import policy from "./character-policy.json";
 import profilePolicy from "./policy.json";
 import { GenerationError, operation, protect, validationFailure } from "./logging.ts";
 import type { LogFields } from "./logging.ts";
+import { GeneratedPersona, generatedInitial } from "./initial-generation.ts";
+import initialPolicy from "./initial-policy.json";
 
 const Review = Schema.Struct({
   issues: Schema.Array(Schema.String.check(Schema.isPattern(/\S/))).check(Schema.isMaxLength(12)),
@@ -25,15 +27,22 @@ async function author(request: Request, seed: string, gender?: "female" | "male"
   const create = (repair?: { document: string; issues: readonly string[] }) =>
     operation(repair ? "character.repair" : "character.draft", {}, async () => {
       const response = await request(
-        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${policy.reference}\n\n${profilePolicy.genderDirection}`,
+        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${policy.reference}\n\n${profilePolicy.genderDirection}${name ? "" : `\n\n${initialPolicy.generate}\n\npersona는 완성된 Persona Markdown, state는 상태 5개, memory는 초기 생활 기억인 JSON 객체를 한 요청에서 작성해. Persona 본문에는 상태·기억을 넣지 마. 보정도 이 JSON 객체 전체를 반환해.`}`,
         repair
           ? `${original}\n\nDOCUMENT:\n${repair.document}\n\nISSUES:\n${JSON.stringify(repair.issues)}`
           : original,
+        name ? undefined : Schema.toJsonSchemaDocument(GeneratedPersona).schema,
       );
       diagnostic = response.fields;
       protect(response.text);
       try {
-        const parts = requirePublicProfile(response.text);
+        const packet = name
+          ? undefined
+          : Schema.decodeUnknownSync(GeneratedPersona)(JSON.parse(response.text), {
+              onExcessProperty: "error",
+            });
+        const description = packet?.persona ?? response.text;
+        const parts = requirePublicProfile(description);
         const sheet = parseCharacterDescription(parts.privateMarkdown);
         const { base, hidden, samples, ...text } = sheet;
         protect(
@@ -52,7 +61,14 @@ async function author(request: Request, seed: string, gender?: "female" | "male"
             ...diagnostic,
             code: "character_name_mismatch",
           });
-        return { name: sheet.name, description: response.text.trim() };
+        return {
+          name: sheet.name,
+          description: description.trim(),
+          ...(packet && {
+            initial: generatedInitial(description, packet.state, packet.memory),
+            reviewDocument: JSON.stringify(packet),
+          }),
+        };
       } catch (cause) {
         if (cause instanceof GenerationError) throw cause;
         throw validationFailure(
@@ -65,7 +81,7 @@ async function author(request: Request, seed: string, gender?: "female" | "male"
   const review = (document: string) =>
     operation("character.review", {}, async () => {
       const response = await request(
-        `${policy.review}\n\n${policy.reference}\n\n${profilePolicy.genderDirection}`,
+        `${policy.review}\n\n${policy.reference}\n\n${profilePolicy.genderDirection}${name ? "" : "\n세 문서의 인물 일관성, 초기 상태와 생활 기억의 적합성도 함께 검수해. 생활 보강은 허용하지만 사용자 경험·약속은 없어야 한다."}`,
         `${original}\n\nDOCUMENT:\n${document}`,
         Schema.toJsonSchemaDocument(Review).schema,
       );
@@ -86,10 +102,13 @@ async function author(request: Request, seed: string, gender?: "female" | "male"
       }
     });
   let result = await create();
-  let inspected = await review(result.description);
+  let inspected = await review(result.reviewDocument ?? result.description);
   if (inspected.issues.length) {
-    result = await create({ document: result.description, issues: inspected.issues });
-    inspected = await review(result.description);
+    result = await create({
+      document: result.reviewDocument ?? result.description,
+      issues: inspected.issues,
+    });
+    inspected = await review(result.reviewDocument ?? result.description);
     if (inspected.issues.length)
       throw new GenerationError("Character review failed after repair", {
         ...diagnostic,
@@ -105,8 +124,8 @@ export async function generateCharacter(
   seed: string,
   gender?: "female" | "male",
 ) {
-  const { name, description } = await author(request, seed, gender);
-  return { name, description };
+  const result = await author(request, seed, gender);
+  return { name: result.name, description: result.description, initial: result.initial! };
 }
 export const convertCharacter = (
   request: Request,

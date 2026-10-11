@@ -20,9 +20,13 @@ function bindPage() {
 
 function replacePage(next: Document) {
   const focusId = document.activeElement?.id || "image-queue-title";
+  const selected = document.querySelector<HTMLButtonElement>(
+    '[data-editor-tab][aria-selected="true"]',
+  )?.id;
   destroyDocumentEditors();
   document.body.innerHTML = next.body.innerHTML;
   bindPage();
+  if (selected) document.getElementById(selected)?.click();
   (document.getElementById(focusId) ?? document.getElementById("image-queue-title"))?.focus({
     preventScroll: true,
   });
@@ -62,6 +66,12 @@ function updatePage(next: Document) {
     document.getElementById(focused.id)?.focus({ preventScroll: true });
   for (const input of document.querySelectorAll<HTMLInputElement>('[name="draft"]'))
     input.value = next.querySelector<HTMLInputElement>('[name="draft"]')!.value;
+  const preview = document.querySelector<HTMLElement>("[data-public-preview]");
+  const newPreview = next.querySelector<HTMLElement>("[data-public-preview]");
+  if (preview && newPreview) {
+    preview.dataset["images"] = newPreview.dataset["images"]!;
+    preview.closest("form")!.dispatchEvent(new document.defaultView!.Event("photos-updated"));
+  }
   watchImageQueue();
 }
 

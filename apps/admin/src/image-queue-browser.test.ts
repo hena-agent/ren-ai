@@ -23,6 +23,12 @@ const focusedPhotoPage = (active: boolean, version: string) =>
     `<div data-add-images id="portrait-additions-photo">${version} photo</div><div data-add-images id="portrait-additions-anime">${version} anime</div></aside>`,
   );
 
+const withPublicPreview = (active: boolean, data: string) =>
+  queuePage(active, "progress", "signed", "").replace(
+    "</form>",
+    `<button type="button" id="tab-memory" data-editor-tab="memory" aria-selected="true">Memory</button><div data-public-preview data-images='${data}'></div></form>`,
+  );
+
 test("polling updates each completed photo and signed preview while keeping the existing locked editor in place", async () => {
   vi.useFakeTimers();
   document.body.innerHTML = queuePage(true, "waiting", "old", "");
@@ -53,6 +59,32 @@ test("polling updates each completed photo and signed preview while keeping the 
   expect(document.querySelector<HTMLInputElement>('[name="draft"]')?.value).toBe("final");
   await vi.advanceTimersByTimeAsync(3000);
   expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+test("polling refreshes the public preview photo data and keeps the selected document tab on completion", async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = withPublicPreview(true, "[]");
+  const form = document.querySelector("form")!;
+  const updated = vi.fn<() => void>();
+  form.addEventListener("photos-updated", updated);
+  const data = JSON.stringify([{ style: "photo", imageUrl: "/images/new.jpg" }]);
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(withPublicPreview(true, data)))
+    .mockResolvedValueOnce(new Response(withPublicPreview(false, data)));
+  vi.stubGlobal("fetch", fetcher);
+  watchImageQueue();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(document.querySelector<HTMLElement>("[data-public-preview]")!.dataset["images"]).toBe(
+    data,
+  );
+  expect(updated).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(document.querySelector('[data-editor-tab="memory"]')?.getAttribute("aria-selected")).toBe(
+    "true",
+  );
+  document.body.innerHTML = "";
+  watchImageQueue();
 });
 
 test("unchanged progress avoids replacing preview nodes and a transport failure leaves a visible recovery message", async () => {

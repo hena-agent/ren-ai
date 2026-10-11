@@ -16,4 +16,9 @@ export async function assertSnapshot(
     current = await store.source(draft.id);
   }
   if (current !== expected) throw new PersonaError("conflict", copy.stale);
+  if (
+    draft.initial &&
+    JSON.stringify(await store.initial(draft.id)) !== JSON.stringify(draft.initial.base)
+  )
+    throw new PersonaError("conflict", "State 또는 Memory가 변경되었습니다. 다시 열어 주세요.");
 }

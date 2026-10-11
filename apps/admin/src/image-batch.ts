@@ -212,6 +212,7 @@ export function createImageBatch(
         ...latest,
         base: editing.base,
         preview: editing.preview,
+        ...(editing.initial && { initial: editing.initial }),
       };
     },
   };

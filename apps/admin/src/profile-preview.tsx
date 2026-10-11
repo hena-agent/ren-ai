@@ -84,19 +84,25 @@ export function Comparison({
               reserved={reservations[style]}
             />
           </div>
-          <p className="portrait-style-description">{copy.styles[style]}</p>
           <div className="image-options-grid" data-image-preview id={`portrait-gallery-${style}`}>
             {images
               .filter((image) => image.style === style)
               .map(({ imageUrl, main }, index) => (
                 <figure className="image-option" key={imageUrl}>
-                  <img
-                    src={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
-                    alt={`${persona.name} ${copy.styles[style]} · ${main ? "메인" : `추가 ${index}`}`}
-                    width={800}
-                    height={1000}
-                    loading="lazy"
-                  />
+                  <a
+                    href={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 사진 크게 보기`}
+                  >
+                    <img
+                      src={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+                      alt={`${persona.name} ${copy.styles[style]} · ${main ? "메인" : `추가 ${index}`}`}
+                      width={800}
+                      height={1000}
+                      loading="lazy"
+                    />
+                  </a>
                   <figcaption>{main ? "메인" : `추가 ${index}`}</figcaption>
                   <div className="portrait-image-actions">
                     <button

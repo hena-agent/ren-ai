@@ -704,11 +704,6 @@ aside h2 {
   border-radius: 10px;
   background: var(--panel);
 }
-.portrait-style-description {
-  margin: 4px 0 16px;
-  color: var(--muted);
-  font-size: 12px;
-}
 .sub-portraits {
   display: flex;
   align-items: center;
@@ -803,16 +798,6 @@ aside h2 {
 .document-source {
   min-width: 0;
   padding: 12px;
-}
-.document-source-label {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 6px;
-  font-size: 13px;
-}
-.document-source-label span {
-  color: var(--muted);
 }
 .document-source textarea {
   font: 14px/1.75 monospace;

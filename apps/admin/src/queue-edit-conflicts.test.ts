@@ -33,7 +33,8 @@ test("stale saved edits cannot overwrite newer persona files and biography-only 
 });
 
 test("a character-writing operation owns the edit lock before image registration", async () => {
-  const { promise: waiting, resolve: release } = deferred<typeof character>();
+  const { promise: waiting, resolve: release } =
+    deferred<Awaited<ReturnType<typeof generator.character>>>();
   const drafting = vi.fn<typeof generator.character>().mockReturnValue(waiting);
   const { admin } = await fixture({ ...subGenerator, character: drafting });
   const token = await newToken(admin);
@@ -45,7 +46,7 @@ test("a character-writing operation owns the edit lock before image registration
     (await admin(queuedRequest("/personas", { ...character, draft: token, intent: "generate" })))
       .status,
   ).toBe(409);
-  release(character);
+  release(await generator.character("idea"));
   expect((await running).status).toBe(200);
 });
 

@@ -1,9 +1,12 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { fixture, legacy, request, tokenOf } from "../test/fixtures.ts";
+import { fixture, legacy, request, tokenOf, initialDocuments } from "../test/fixtures.ts";
 import { preview } from "../test/sub-portraits.ts";
 import { assertSnapshot } from "./snapshot.ts";
+import { renderCharacterSheet } from "@ren-ai/personas";
+import { withPublicProfile, splitPersonaMarkdown } from "@ren-ai/personas/profile";
+import { sheet } from "../test/character.ts";
 
 test("explicit legacy conversion keeps original publication choices, guards stale files and writes one Markdown source", async () => {
   const { admin, store, root } = await fixture();
@@ -21,7 +24,14 @@ test("explicit legacy conversion keeps original publication choices, guards stal
   expect(draft.imageUrl).toBe(legacy.imageUrl);
   const input = {
     name: draft.name,
-    description: draft.description!,
+    description: withPublicProfile(
+      renderCharacterSheet({
+        ...sheet,
+        name: draft.name,
+        appearance: splitPersonaMarkdown(draft.description!).privateMarkdown,
+      }),
+      draft.publicProfile!,
+    ),
     draft: tokenOf(page),
     published: "on",
   };
@@ -61,6 +71,14 @@ test("legacy inspection distinguishes invalid files from minimal prior descripti
   const earlier = `---\n${JSON.stringify({ bio: "소개", "time-zone": "Asia/Seoul", language: "ko", "opening-line": "Hi", memory: "Keep", "profile-details": { interests: ["산책", "재즈"] } })}\n---\nPrivate body`;
   await writeFile(join(root, "earlier.md"), earlier);
   expect((await store.importDraft("earlier")).persona.publicProfile).toContain("- 재즈");
+  await store.create({ ...legacy, id: "withinitial" });
+  await store.saveInitial("withinitial", initialDocuments, {
+    persona: await store.source("withinitial"),
+  });
+  await writeFile(join(root, "withinitial.md"), source);
+  const withInitial = await admin(request("/import/withinitial"));
+  expect(withInitial.status).toBe(200);
+  expect(await withInitial.text()).toContain("사진전을 준비 중이다");
 });
 
 test("an existing legacy catalog must be explicitly converted before both shared listing and the Admin catalog become usable", async () => {

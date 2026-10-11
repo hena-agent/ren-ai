@@ -1,13 +1,16 @@
-import { decodePersona } from "@ren-ai/personas";
+import { decodePersona, PersonaError, inspectPersona } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import { authorPersona, characterOf, emptyPersona } from "./authoring.ts";
 import type { ProfileGenerator } from "./generation.ts";
 import { GenerationError, operation } from "./logging.ts";
 import type { Draft } from "./draft.ts";
-import { previewOf } from "./draft.ts";
+import { previewOf, documentsOf } from "./draft.ts";
 import { serializePersona } from "@ren-ai/personas";
-import { parseCharacterDescription, versionedPersona } from "./character-format.ts";
-import { renderCharacterSheet } from "./character-sheet.ts";
+import {
+  parseCharacterDescription,
+  versionedPersona,
+  renderCharacterSheet,
+} from "@ren-ai/personas";
 import {
   splitPersonaMarkdown,
   withPublicProfile,
@@ -47,7 +50,7 @@ async function characterDraft(seed: string, previous: PersonaRecord, generator: 
   delete draft.portraits;
   delete draft.portraitGallery;
   delete draft.secondaryPortraits;
-  return decodePersona(versionedPersona(draft));
+  return { persona: decodePersona(versionedPersona(draft)), initial: character.initial };
 }
 
 async function conversionDraft(persona: PersonaRecord, draft: Draft, generator: ProfileGenerator) {
@@ -99,9 +102,26 @@ async function conversionDraft(persona: PersonaRecord, draft: Draft, generator: 
 export async function generateTextDraft(
   persona: ReturnType<typeof authorPersona>,
   draft: Draft,
-  intent: "character" | "introduction" | "profile" | "convert",
+  intent: "character" | "introduction" | "profile" | "convert" | "state" | "memory",
   generator: ProfileGenerator,
 ) {
+  if (intent === "state" || intent === "memory") {
+    const source = characterOf(persona);
+    const inspected = inspectPersona(persona);
+    if (inspected.status !== "current" || inspected.profileNeeded)
+      throw new PersonaError(
+        "invalid",
+        "Persona의 형식·이름·성별·공개 자기소개를 먼저 정리해 주세요.",
+      );
+    const generated = await operation(`${intent}.generate`, {}, () => generator[intent](source));
+    return {
+      ...draft,
+      preview: serializePersona(persona),
+      tab: intent,
+      initial: { ...draft.initial, preview: { ...documentsOf(draft), [intent]: generated } },
+      imageEditing: true,
+    };
+  }
   if (intent === "introduction") return introductionDraft(persona, draft, generator);
   if (intent === "convert") return conversionDraft(persona, draft, generator);
   if (intent === "profile") {
@@ -115,10 +135,15 @@ export async function generateTextDraft(
       preview: serializePersona(decodePersona({ ...persona, description })),
     };
   }
+  const generated = await characterDraft(draft.seed!, persona, generator);
   const next = {
     ...draft,
-    preview: serializePersona(await characterDraft(draft.seed!, persona, generator)),
+    preview: serializePersona(generated.persona),
+    initial: { ...draft.initial, preview: generated.initial },
+    tab: "persona" as const,
+    imageEditing: true,
   };
   delete next.conversion;
+  delete next.characterPending;
   return next;
 }

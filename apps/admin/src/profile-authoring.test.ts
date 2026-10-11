@@ -12,7 +12,7 @@ import { createProfileGenerator } from "./generation.ts";
 import { modelReply } from "../test/sub-portraits.ts";
 import { renderPage } from "./page.tsx";
 import { descriptionOf } from "./authoring.ts";
-import { versionedPersona, inspectPersona } from "./character-format.ts";
+import { versionedPersona, inspectPersona } from "@ren-ai/personas";
 import { savedPreview, preview } from "../test/sub-portraits.ts";
 import { splitPersonaMarkdown, withPublicProfile } from "@ren-ai/personas/profile";
 import { useBrowser } from "../test/browser.ts";
@@ -33,7 +33,7 @@ test("the designer has one source input and a safe paragraph preview without blo
   expect(globalThis.document.querySelector("main details")).toBeNull();
   expect(globalThis.document.querySelector('[name="publicBlock"]')).toBeNull();
   expect(globalThis.document.querySelector('[name="publicAddition"]')).toBeNull();
-  expect(globalThis.document.querySelector(".public-document-preview")?.textContent).not.toContain(
+  expect(globalThis.document.querySelector("[data-public-preview]")?.textContent).not.toContain(
     "관심사",
   );
 });
@@ -78,7 +78,9 @@ test("saving name and private document edits preserves all photos without invoki
   });
   portrait.mockClear();
   const name = "수정한 이름";
-  const description = original.description!.replace("짧은 검은 머리", "긴 갈색 머리");
+  const description = original
+    .description!.replace("짧은 검은 머리", "긴 갈색 머리")
+    .replace(`이름: ${original.name}`, `이름: ${name}`);
   expect(description).not.toBe(original.description);
   const updated = `${description}\n\n새롭게 덧붙인 공개 문장입니다.`;
   const response = await admin(

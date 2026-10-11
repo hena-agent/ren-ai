@@ -1,9 +1,10 @@
 import { Schema } from "effect";
 import type { JsonSchema } from "effect";
-import type { Portrait, PersonaRecord } from "@ren-ai/personas";
+import type { Portrait, PersonaRecord, InitialDocuments } from "@ren-ai/personas";
 import policy from "./policy.json";
 import { GenerationError, operation, protect, safeText, validationFailure } from "./logging.ts";
 import { generateCharacter, convertCharacter } from "./character-generation.ts";
+import { generateInitialDocument } from "./initial-generation.ts";
 
 type Character = {
   readonly name: string;
@@ -14,10 +15,15 @@ const characterText = (character: Character) =>
   `${character.name}\n${character.description}${character.gender ? `\n\nSELECTED GENDER: ${character.gender}` : ""}`;
 type PortraitStyle = keyof typeof policy.portraits;
 export interface ProfileGenerator {
-  character: (seed: string, gender?: NonNullable<PersonaRecord["gender"]>) => Promise<Character>;
+  character: (
+    seed: string,
+    gender?: NonNullable<PersonaRecord["gender"]>,
+  ) => Promise<Character & { initial: InitialDocuments }>;
   introduction: (character: Character) => Promise<string>;
   profile: (character: Character) => Promise<string>;
   convert: (character: Character) => Promise<Character & { additions: readonly string[] }>;
+  state: (character: Character) => Promise<string>;
+  memory: (character: Character) => Promise<string>;
   portrait: (
     character: Character,
     style: PortraitStyle,
@@ -216,6 +222,9 @@ export function createProfileGenerator({
   return {
     character: (seed, gender) => generateCharacter(characterRequest, seed, gender),
     convert: (character) => convertCharacter(characterRequest, character),
+    state: (character) => generateInitialDocument(characterRequest, character.description, "state"),
+    memory: (character) =>
+      generateInitialDocument(characterRequest, character.description, "memory"),
     introduction: async (character) => {
       const { parts, fields } = await request(
         textModel,

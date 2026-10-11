@@ -45,7 +45,9 @@ export function readIntent(form: FormData) {
     intent === "introduction" ||
     intent === "profile" ||
     intent === "inspect" ||
-    intent === "convert"
+    intent === "convert" ||
+    intent === "state" ||
+    intent === "memory"
   )
     return intent;
   throw new PersonaError("invalid", copy.formError);

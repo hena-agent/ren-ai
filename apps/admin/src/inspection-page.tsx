@@ -1,5 +1,5 @@
 import type { createPersonaStore } from "@ren-ai/personas";
-import { inspectPersona } from "./character-format.ts";
+import { inspectPersona } from "@ren-ai/personas";
 import { GenerationError, reportFailure } from "./logging.ts";
 
 type Files = Awaited<ReturnType<Awaited<ReturnType<typeof createPersonaStore>>["inspect"]>>;

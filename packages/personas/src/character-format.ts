@@ -1,7 +1,7 @@
 import { Schema } from "effect";
-import type { PersonaRecord } from "@ren-ai/personas";
+import type { PersonaRecord } from "./model.ts";
 import { CharacterSheet, Stat } from "./character-sheet.ts";
-import { splitPersonaMarkdown, requirePublicProfile } from "@ren-ai/personas/profile";
+import { splitPersonaMarkdown, requirePublicProfile } from "./profile.ts";
 
 const descriptionVersion = 2;
 const sectionKeys = {

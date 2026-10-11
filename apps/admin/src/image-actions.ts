@@ -47,6 +47,8 @@ export function protectEditingForm(form: FormData) {
       "imagePrompts",
       "publicBlock",
       "publicAddition",
+      "stateSource",
+      "memorySource",
     ].flatMap((key) =>
       form.getAll(key).filter((value): value is string => typeof value === "string"),
     ),

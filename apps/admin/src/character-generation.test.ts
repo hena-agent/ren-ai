@@ -3,7 +3,7 @@ import { createProfileGenerator } from "./generation.ts";
 import { sheet, acceptedReview, characterResponse } from "../test/character.ts";
 import { fixture, generator, legacy, newToken, request, tokenOf } from "../test/fixtures.ts";
 import { preview, modelReply } from "../test/sub-portraits.ts";
-import { renderCharacterSheet } from "./character-sheet.ts";
+import { renderCharacterSheet } from "@ren-ai/personas";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import policy from "./character-policy.json";
 import type { LogEntry } from "./logging.ts";
@@ -76,7 +76,8 @@ test("the real authoring boundary saves only a reviewed, editable persona descri
   ])
     expect(persona.prompt).not.toContain(privateProcess);
   expect(persona).not.toHaveProperty("base");
-  expect(await new Request(...fetcher.mock.calls[0]!).text()).not.toContain("responseJsonSchema");
+  expect(await new Request(...fetcher.mock.calls[0]!).text()).toContain("responseJsonSchema");
+  expect((await store.initial(result.id))?.memory).toContain("사진전을 준비 중");
   expect(await new Request(...fetcher.mock.calls[1]!).text()).toContain(seed);
   expect(
     logs.filter((entry) => entry.event === "operation.completed").map((entry) => entry.stage),

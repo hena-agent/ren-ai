@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 import { fixture, generator, legacy, request, tokenOf } from "../test/fixtures.ts";
 import { preview } from "../test/sub-portraits.ts";
-import { sheet, characterResponse } from "../test/character.ts";
-import { renderCharacterSheet } from "./character-sheet.ts";
+import { sheet, characterResponse, acceptedReview } from "../test/character.ts";
+import { renderCharacterSheet } from "@ren-ai/personas";
 import { createProfileGenerator } from "./generation.ts";
 import { decodePersona } from "@ren-ai/personas";
 import { modelReply } from "../test/sub-portraits.ts";
@@ -299,11 +299,27 @@ test("conversion uses the real structured-generation and review boundary with ex
   expect(await new Request(...fetcher.mock.calls[0]!).text()).toContain("SAVED NAME: 하린");
   const wrong = vi
     .fn<typeof fetch>()
-    .mockResolvedValueOnce(characterResponse({ ...sheet, name: "changed" }));
+    .mockResolvedValueOnce(characterResponse({ ...sheet, name: "changed" }, true));
   await expect(
     createProfileGenerator({ key: "key", fetcher: wrong }).convert({
       name: sheet.name,
       description: original.description!,
     }),
   ).rejects.toMatchObject({ fields: { code: "character_name_mismatch" } });
+});
+
+test("conversion repair retains the Persona-only response contract and never regenerates initial siblings", async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(characterResponse(sheet, true))
+    .mockResolvedValueOnce(characterResponse({ issues: ["repair the source"] }))
+    .mockResolvedValueOnce(characterResponse(sheet, true))
+    .mockResolvedValueOnce(acceptedReview());
+  const result = await createProfileGenerator({ key: "key", fetcher }).convert({
+    name: sheet.name,
+    description: original.description!,
+  });
+  expect(result.description).toContain("## 정체성·외형");
+  expect(result).not.toHaveProperty("initial");
+  expect(fetcher).toHaveBeenCalledTimes(4);
 });

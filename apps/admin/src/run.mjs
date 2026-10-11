@@ -24,7 +24,9 @@ const script = await bundle.outputs[0].text();
 const handle = createAdmin(
   store,
   process.env.ADMIN_PASSWORD ?? "",
-  readFileSync(new URL("../public/style.css", import.meta.url), "utf8"),
+  ["style.css", "editor.css"]
+    .map((file) => readFileSync(new URL(`../public/${file}`, import.meta.url), "utf8"))
+    .join("\n"),
   {
     script,
     generator: createProfileGenerator({

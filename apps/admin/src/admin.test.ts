@@ -77,7 +77,7 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(window.document.querySelector("[data-pending]")).not.toBeNull();
     expect(window.document.querySelector("script")?.getAttribute("src")).toBe("/pending.js");
     expect(window.document.querySelector("script")?.getAttribute("type")).toBe("module");
-    expect(window.document.querySelector("aside h2")?.textContent).toBe("프로필 사진");
+    expect(window.document.querySelector("aside #preview-title")?.textContent).toBe("프로필 사진");
     expect(window.document.querySelector(".editor-name")?.textContent).toBe(copy.new);
     expect(
       [...window.document.querySelectorAll(".portrait-empty")].map((entry) => entry.textContent),
@@ -129,6 +129,7 @@ test("a draft gets an automatic stable ID and derives OpenCode settings from its
   const page = await (await reopened(request(`/personas/${id}?saved=1`))).text();
   expect(page).toContain(copy.saved);
   expect(page).toContain(`action="/personas/${id}"`);
+  expect(page).not.toContain('class="seed-form"');
   expect(page).toContain("독립적인 성격의 도예가");
   const savedAgain = await reopened(
     request(`/personas/${id}`, { ...character, draft: tokenOf(page) }),
@@ -254,7 +255,7 @@ test("a failed full image refresh preserves completed photos and can be retried 
 });
 type ProfileGeneratorPortrait = typeof generator.portrait;
 
-test("legacy IDs and runtime directives stay intact when publishing an unchanged existing character", async () => {
+test("legacy IDs and runtime directives stay intact in a private save while incomplete publication is blocked", async () => {
   const { admin, store } = await fixture();
   const imageUrl = "https://example.net/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png";
   await store.create({ ...legacy, imageUrl });
@@ -269,7 +270,18 @@ test("legacy IDs and runtime directives stay intact when publishing an unchanged
       published: "on",
     }),
   );
-  expect(saved.status).toBe(303);
+  expect(saved.status).toBe(400);
+  expect(
+    (
+      await admin(
+        request("/personas/legacy", {
+          name: legacy.name,
+          description: legacy.prompt,
+          draft: tokenOf(page),
+        }),
+      )
+    ).status,
+  ).toBe(303);
   const next = await store.get("legacy");
   expect(next.id).toBe(legacy.id);
   expect(next.prompt).toBe(legacy.prompt);
