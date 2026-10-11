@@ -17,7 +17,7 @@ EXPOSE 4700
 ENTRYPOINT ["bun", "/app/src/app.js"]
 
 FROM source AS plugin-build
-RUN for name in tools context memory title session-folder; do \
+RUN for name in tools context memory title dice session-folder; do \
       mkdir -p "/plugins/$name/src" && \
       bun build --target=bun --external '@opencode/*' --external 'effect' --external 'effect/*' \
         --outfile="/plugins/$name/src/index.js" "packages/plugins/$name/src/index.ts" && \

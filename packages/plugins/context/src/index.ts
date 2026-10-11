@@ -9,6 +9,7 @@ import {
   type PersonaPluginOptions,
 } from "@ren-ai/plugin-application";
 import { phone } from "@ren-ai/plugin-application/phone";
+import { isDiceTool } from "@ren-ai/plugin-dice";
 import { cleanContext } from "./clean.ts";
 
 export const contextPlugin = (options: PersonaPluginOptions) =>
@@ -29,11 +30,12 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
             const removed = cleanContext(
               event,
               phone(now, persona.timeZone, state),
-              new Set(
-                (["send", "read", "react", "wait"] as const).filter(
+              new Set([
+                ...(["send", "read", "react", "wait"] as const).filter(
                   (name) => options[name] && isMessagingTool(name, event.tools[name]),
                 ),
-              ),
+                ...(isDiceTool(event.tools["dice"]) ? ["dice"] : []),
+              ]),
             );
             if (options.settledSends) {
               const sends = yield* options.settledSends(event.sessionID);

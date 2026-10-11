@@ -26,6 +26,10 @@ export const locationConfig = (input: {
           },
         })),
         {
+          package: "/srv/ren-ai/plugins/dice/src",
+          options: { directory: "/srv/ren-ai" },
+        },
+        {
           package: "/srv/ren-ai/plugins/session-folder/src",
           options: { directory: "/srv/ren-ai" },
         },

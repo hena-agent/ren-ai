@@ -32,6 +32,10 @@ test("persona location uses the pinned V2 config shape without changing global c
         },
       })),
       {
+        package: "/srv/ren-ai/plugins/dice/src",
+        options: { directory: "/srv/ren-ai" },
+      },
+      {
         package: "/srv/ren-ai/plugins/session-folder/src",
         options: { directory: "/srv/ren-ai" },
       },
@@ -42,5 +46,5 @@ test("persona location uses the pinned V2 config shape without changing global c
     Schema.decodeUnknownSync(Schema.fromJsonString(Config.Info))(
       locationConfig({ callback: "https://app.test/rpc", disabledPlugins: [] }),
     ).plugins,
-  ).toHaveLength(7);
+  ).toHaveLength(8);
 });

@@ -8,7 +8,7 @@ import { sessionDirectory } from "./paths.ts";
 
 export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
-  ...["send", "read", "react", "wait"].map((action) => ({
+  ...["send", "read", "react", "wait", "dice"].map((action) => ({
     action,
     resource: "*",
     effect: "allow" as const,

@@ -119,6 +119,7 @@
         "@opencode/plugin": "2.0.19",
         "@opencode/server": "2.0.19",
         "@ren-ai/plugin-context": "workspace:*",
+        "@ren-ai/plugin-dice": "workspace:*",
         "@ren-ai/plugin-memory": "workspace:*",
         "@ren-ai/plugin-title": "workspace:*",
         "@ren-ai/plugin-tools": "workspace:*",
@@ -210,6 +211,20 @@
       "version": "0.0.0",
       "dependencies": {
         "@opencode/ai": "2.0.19",
+        "@opencode/plugin": "2.0.19",
+        "@ren-ai/plugin-application": "workspace:*",
+        "@ren-ai/plugin-dice": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+      },
+    },
+    "packages/plugins/dice": {
+      "name": "@ren-ai/plugin-dice",
+      "version": "0.0.0",
+      "dependencies": {
         "@opencode/plugin": "2.0.19",
         "@ren-ai/plugin-application": "workspace:*",
         "effect": "4.0.0-rc.112",
@@ -1061,6 +1076,8 @@
     "@ren-ai/plugin-application": ["@ren-ai/plugin-application@workspace:packages/plugins/application"],
 
     "@ren-ai/plugin-context": ["@ren-ai/plugin-context@workspace:packages/plugins/context"],
+
+    "@ren-ai/plugin-dice": ["@ren-ai/plugin-dice@workspace:packages/plugins/dice"],
 
     "@ren-ai/plugin-memory": ["@ren-ai/plugin-memory@workspace:packages/plugins/memory"],
 

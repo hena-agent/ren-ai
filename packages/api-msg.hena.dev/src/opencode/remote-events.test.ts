@@ -58,7 +58,7 @@ test("native permission requests enforce the persona session's scoped allowlist"
       expect(persisted.permissions?.filter((rule) => rule.effect === "deny")).toEqual([
         { action: "*", resource: "*", effect: "deny" },
       ]);
-      for (const action of ["send", "read", "react", "wait"]) {
+      for (const action of ["send", "read", "react", "wait", "dice"]) {
         const result = yield* remote.client.permission
           .create({
             sessionID: session.id,

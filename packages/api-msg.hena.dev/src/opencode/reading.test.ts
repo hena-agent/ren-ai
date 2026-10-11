@@ -116,6 +116,7 @@ You are Persona1.
             "wait",
             "read",
             "react",
+            "dice",
           ]);
           const row = yield* imessage.text(conversation.handle, "hey", Date.now());
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
@@ -144,7 +145,9 @@ You are Persona1.
           ).toContain("imsg unavailable");
           expect(
             (yield* llm.requests()).every((request) =>
-              request.tools.every((tool) => ["send", "wait", "read", "react"].includes(tool.name)),
+              request.tools.every((tool) =>
+                ["send", "wait", "read", "react", "dice"].includes(tool.name),
+              ),
             ),
           ).toBe(true);
           const tools = (yield* llm.requests())[0]!.tools;

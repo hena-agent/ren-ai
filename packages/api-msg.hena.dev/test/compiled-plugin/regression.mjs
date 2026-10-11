@@ -80,7 +80,7 @@ try {
   containers.push(artifact);
   docker("cp", `${artifact}:/artifact/plugins`, join(root, "plugins"));
   symlinkSync("plugins/tools/node_modules", join(root, "node_modules"), "dir");
-  const plugins = ["tools", "context", "memory", "title", "session-folder"];
+  const plugins = ["tools", "context", "memory", "title", "dice", "session-folder"];
   for (const plugin of plugins) {
     const entry = join(root, "plugins", plugin, "src", "index.js");
     if (!process.argv.includes("--artifact-only"))
@@ -387,7 +387,7 @@ try {
   process.stdout.write(
     preprovisioned
       ? "Debug only: preprovisioned folders bypass RPC/lifecycle checks; tool/title/context/Memory checks passed.\n"
-      : "Compiled OpenCode 2.0.19: cold folder RPC provisioning, idempotent creation, updates, reads/errors, deletion, and native new/fork folders work; five standalone plugins load; all four tools, titles and Memory compaction work; no catalog fetch.\n",
+      : "Compiled OpenCode 2.0.19: cold folder RPC provisioning, idempotent creation, updates, reads/errors, deletion, and native new/fork folders work; six standalone plugins load; messaging tools, titles and Memory compaction work; no catalog fetch.\n",
   );
 } catch (error) {
   if (started) process.stderr.write(docker("logs", "--tail", "20", name));

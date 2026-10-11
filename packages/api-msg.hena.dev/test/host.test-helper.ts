@@ -46,6 +46,16 @@ You are Persona1. Speak Korean.
 A Korean university student.
 `;
 
+export const expectScopedPermissions = (
+  permissions: ReadonlyArray<{ action: string; resource: string; effect: string }> | undefined,
+  actions: string[],
+) => {
+  expect(permissions).toEqual([
+    { action: "*", resource: "*", effect: "deny" },
+    ...actions.map((action) => ({ action, resource: "*", effect: "allow" })),
+  ]);
+};
+
 const expectNativePersonaAgent = (agent: {
   readonly id: string;
   readonly system: string;
@@ -61,14 +71,7 @@ const expectNativePersonaAgent = (agent: {
     system: "You are Persona1. Speak Korean.\n\n## 공개 프로필\n\nA Korean university student.",
     description: "번호 받았으니까 먼저 연락해 봐",
   });
-  expect(agent.permissions.slice(-5)).toEqual([
-    { action: "*", resource: "*", effect: "deny" },
-    ...["send", "read", "react", "wait"].map((action) => ({
-      action,
-      resource: "*",
-      effect: "allow",
-    })),
-  ]);
+  expectScopedPermissions(agent.permissions.slice(-6), ["send", "read", "react", "wait", "dice"]);
 };
 
 export const model = SessionRunnerModel.resolved(
@@ -234,7 +237,7 @@ export const expectSealedHostApi = (
     expect(yield* Effect.promise(() => get(`session/${sessionID}`))).toContain(sessionID);
     expect(yield* Effect.promise(() => get(`session/${sessionID}/message`))).toContain(messageID);
     const plugins = yield* Effect.promise(() => get("plugin"));
-    for (const id of ["tools", "context", "memory", "title"])
+    for (const id of ["tools", "context", "memory", "title", "dice"])
       expect(plugins).toContain(`"id":"ren-ai.${id}"`);
     for (const id of disabledIDs) {
       expect(config).toContain(`-${id}`);
