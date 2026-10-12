@@ -12,7 +12,7 @@ export interface AdminEnv {
   ASSETS: { fetch: (url: string) => Promise<Pick<Response, "ok" | "text">> };
   ADMIN_PASSWORD: string;
   CATALOG_TOKEN: string;
-  GEMINI_API_KEY: string;
+  GEMINI_API_KEY?: string;
   GEMINI_API_URL?: string;
   ADMIN_TEXT_MODEL?: string;
   ADMIN_IMAGE_MODEL?: string;
@@ -42,7 +42,7 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
       script,
       log: workerLog,
       generator: createProfileGenerator({
-        key: env.GEMINI_API_KEY,
+        key: env.GEMINI_API_KEY ?? "",
         ...(env.GEMINI_API_URL && { endpoint: env.GEMINI_API_URL }),
         ...(env.ADMIN_TEXT_MODEL && { textModel: env.ADMIN_TEXT_MODEL }),
         ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
