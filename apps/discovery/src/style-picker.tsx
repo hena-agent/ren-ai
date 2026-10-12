@@ -26,7 +26,7 @@ export function StylePicker({
           <span>{copy.photoStyleHint}</span>
         </button>
       </div>
-      <p className="style-picker-hint">{copy.styleChangeHint}</p>
+      {import.meta.env.DEV && <p className="style-picker-hint">{copy.styleChangeHint}</p>}
     </section>
   );
 }

@@ -217,7 +217,9 @@ function Experience({
     );
   const header = (
     <>
-      <Header>{style && <StyleSwitch style={style} onChoose={chooseStyle} />}</Header>
+      <Header>
+        {import.meta.env.DEV && style && <StyleSwitch style={style} onChoose={chooseStyle} />}
+      </Header>
       {styleStorageFailure && (
         <output className="storage-warning">{copy.styleStorageFailure}</output>
       )}
