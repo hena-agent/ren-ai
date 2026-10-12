@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { characterValidationFields } from "./generation-failure.ts";
 
 export interface LogFields {
   operationId?: string;
@@ -16,6 +17,8 @@ export interface LogFields {
   blockReason?: string;
   causeName?: string;
   causeCode?: string;
+  validationSection?: string;
+  validationRule?: string;
   durationMs?: number;
   jobId?: string;
   imageOrdinal?: number;
@@ -71,6 +74,7 @@ export function validationFailure(
   const underlying = root.cause instanceof Error ? root.cause : root;
   const error = new GenerationError(message, {
     ...fields,
+    ...characterValidationFields(underlying),
     causeName: safeText(underlying.name),
     ...("code" in underlying &&
       typeof underlying.code === "string" && { causeCode: safeText(underlying.code) }),

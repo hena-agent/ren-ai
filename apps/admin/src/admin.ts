@@ -38,6 +38,7 @@ import {
   reportFailure,
   requestFields,
   requestId,
+  GenerationError,
 } from "./logging.ts";
 import type { Log } from "./logging.ts";
 import { versionedPersona } from "@ren-ai/personas";
@@ -45,13 +46,12 @@ import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
 import type { AdminPersistence } from "./admin-state.ts";
 import { html } from "./html-response.ts";
-
+import { generationFailureMessage } from "./generation-failure.ts";
 const documentFields = (draft: Draft) => ({
   documents: documentsOf(draft),
   tab: draft.tab,
   showIdea: Boolean(draft.characterPending),
 });
-
 export function createAdmin(
   store: PersonaStore,
   password: string,
@@ -104,6 +104,12 @@ export function createAdmin(
   // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow request, generation and storage failures before responding
   const failure = (error: unknown, record?: PersonaRecord, draft?: Draft) => {
     reportFailure(error, { stage: "request" }, error instanceof PersonaError ? "warn" : "error");
+    const message =
+      error instanceof PersonaError
+        ? error.message
+        : error instanceof GenerationError
+          ? generationFailureMessage(error)
+          : undefined;
     const active = draft && queue.pending(draft.id);
     const content: PageContent =
       record && draft
@@ -124,14 +130,13 @@ export function createAdmin(
     return html(
       renderPage({
         ...content,
-        error: `${error instanceof PersonaError ? error.message : copy.failure} (요청 ID: ${requestId()})`,
+        error: `${message ?? copy.failure} (요청 ID: ${requestId()})`,
       }),
       error instanceof PersonaError
         ? { invalid: 400, not_found: 404, conflict: 409 }[error.kind]
         : 503,
     );
   };
-
   const unconfigured = (persona: PersonaRecord, draft: Draft) => {
     reportFailure(new Error("Profile generator is not configured"), {
       stage: "generation.configuration",
@@ -150,7 +155,6 @@ export function createAdmin(
       503,
     );
   };
-
   const execute = async (
     persona: ReturnType<typeof authorPersona>,
     draft: Draft,
