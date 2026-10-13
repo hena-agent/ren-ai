@@ -11,6 +11,7 @@ import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
+import { conversationTools } from "../../test/host.test-helper.ts";
 import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
 import { fakeMessages } from "../messages/messages.fake.ts";
@@ -110,14 +111,9 @@ You are Persona1.
             personaID: "persona1",
             sessionID: session.id,
           });
-          expect(session.permissions?.map((rule) => rule.action)).toEqual([
-            "*",
-            "send",
-            "wait",
-            "read",
-            "react",
-            "dice",
-          ]);
+          expect(session.permissions?.map((rule) => rule.action)).toEqual(
+            conversationTools(["*", "send", "wait", "read", "react", "dice"]),
+          );
           const row = yield* imessage.text(conversation.handle, "hey", Date.now());
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(ui.reads).toEqual([conversation.handle]);
@@ -146,7 +142,7 @@ You are Persona1.
           expect(
             (yield* llm.requests()).every((request) =>
               request.tools.every((tool) =>
-                ["send", "wait", "read", "react", "dice"].includes(tool.name),
+                conversationTools(["send", "wait", "read", "react", "dice"]).includes(tool.name),
               ),
             ),
           ).toBe(true);

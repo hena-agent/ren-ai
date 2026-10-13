@@ -40,7 +40,7 @@ export async function generateInitialDocument(
   parseCharacterDescription(source);
   const schema = target === "state" ? Schema.toJsonSchemaDocument(InitialScores).schema : undefined;
   const response = await request(
-    policy[target],
+    `${policy[target]}${target === "state" ? `\n\n${policy.affection}` : ""}`,
     splitPersonaMarkdown(source).privateMarkdown,
     schema,
   );

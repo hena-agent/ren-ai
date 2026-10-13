@@ -36,6 +36,7 @@ export const initialDocuments = {
     stress: 35,
     connection: 55,
     solitude: 60,
+    affection: 18,
     traits: initialTraits(character.description),
   }),
   memory: "# 현재 생활\n\n- 사진전을 준비 중이다.\n",

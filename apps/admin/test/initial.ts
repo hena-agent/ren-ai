@@ -5,7 +5,14 @@ import { sheet } from "./character.ts";
 import { fixture, generator, legacy } from "./fixtures.ts";
 import type { ProfileGenerator } from "../src/generation.ts";
 
-export const scores = { mood: 55, energy: 60, stress: 35, connection: 55, solitude: 60 };
+export const scores = {
+  mood: 55,
+  energy: 60,
+  stress: 35,
+  connection: 55,
+  solitude: 60,
+  affection: 18,
+};
 export const initialDocs = {
   state: serializeInitialState({
     ...scores,

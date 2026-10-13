@@ -19,9 +19,11 @@ export { initialTraits, checkInitialPersona, publicationIssues } from "./publica
 export { stateStatus } from "./state-diagnostics.ts";
 export {
   InitialState,
+  ConversationState,
   InitialScores,
   InitialDocuments,
   parseInitialState,
+  parseConversationState,
   serializeInitialState,
   validateInitialDocuments,
   validateInitialMemory,

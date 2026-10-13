@@ -13,6 +13,7 @@ export const InitialScores = Schema.Struct({
   stress: Score,
   connection: Score,
   solitude: Score,
+  affection: Score,
 });
 export const InitialState = Schema.Struct({
   ...InitialScores.fields,
@@ -26,20 +27,28 @@ export const InitialState = Schema.Struct({
   ),
 });
 
-export function parseInitialState(source: string) {
+export const ConversationState = Schema.Struct({
+  ...InitialState.fields,
+  affection: Schema.optionalKey(InitialScores.fields.affection),
+});
+
+function parseState<T>(source: string, schema: Schema.Codec<T>) {
   try {
     const match = /^---\r?\n([\s\S]*?)\r?\n---\s*$/.exec(source.trim());
     if (!match) throw new Error("Expected STATE frontmatter only");
     const document = parseDocument(match[1]!, { logLevel: "silent" });
     if (document.errors.length) throw new Error("Invalid STATE YAML");
-    return Schema.decodeUnknownSync(InitialState)(document.toJS(), { onExcessProperty: "error" });
+    return Schema.decodeUnknownSync(schema)(document.toJS(), { onExcessProperty: "error" });
   } catch {
     throw new PersonaError(
       "invalid",
-      "STATE.md는 현재 상태 5개(정수 0–100)와 traits만 포함한 YAML frontmatter여야 합니다.",
+      "STATE.md의 컨디션·호감도는 정수 0–100이어야 하며 traits와 함께 YAML frontmatter로 작성해야 합니다.",
     );
   }
 }
+
+export const parseInitialState = (source: string) => parseState(source, InitialState);
+export const parseConversationState = (source: string) => parseState(source, ConversationState);
 
 export const serializeInitialState = (state: typeof InitialState.Type) =>
   `---\n${stringify(state)}---\n`;

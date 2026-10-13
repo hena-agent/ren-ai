@@ -4,7 +4,7 @@ import { Schema } from "effect";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import { sheet as sampleSheet } from "./sheet.ts";
 export const sheet = sampleSheet;
-const scores = { mood: 55, energy: 60, stress: 35, connection: 55, solitude: 60 };
+const scores = { mood: 55, energy: 60, stress: 35, connection: 55, solitude: 60, affection: 18 };
 export const characterResponse = (value: object = sheet, conversion = false) =>
   modelReply(
     Schema.is(CharacterSheet)(value)

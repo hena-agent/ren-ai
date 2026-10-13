@@ -7,6 +7,8 @@ import { renderCharacterSheet } from "@ren-ai/personas";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import policy from "./character-policy.json";
 import type { LogEntry } from "./logging.ts";
+import { parseInitialState } from "@ren-ai/personas";
+import initialPolicy from "./initial-policy.json";
 
 function failureOf(logs: readonly LogEntry[], response: Response) {
   const failures = logs.filter((entry) => entry.event === "operation.failed");
@@ -78,6 +80,9 @@ test("the real authoring boundary saves only a reviewed, editable persona descri
   expect(persona).not.toHaveProperty("base");
   expect(await new Request(...fetcher.mock.calls[0]!).text()).toContain("responseJsonSchema");
   expect((await store.initial(result.id))?.memory).toContain("사진전을 준비 중");
+  expect(parseInitialState((await store.initial(result.id))!.state).affection).toBe(18);
+  expect(await new Request(...fetcher.mock.calls[0]!).text()).toContain(initialPolicy.affection);
+  expect(await new Request(...fetcher.mock.calls[1]!).text()).toContain(initialPolicy.affection);
   expect(await new Request(...fetcher.mock.calls[1]!).text()).toContain(seed);
   expect(
     logs.filter((entry) => entry.event === "operation.completed").map((entry) => entry.stage),

@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./protocol": "./src/protocol.ts",
     "./files": "./src/files.ts",
-    "./paths": "./src/paths.ts"
+    "./paths": "./src/paths.ts",
+    "./memory": "./src/memory.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -16,7 +17,8 @@
     "@opencode/plugin": "2.0.19",
     "@opencode/schema": "2.0.19",
     "@ren-ai/personas": "workspace:*",
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.0-rc.112",
+    "yaml": "2.8.2"
   },
   "devDependencies": {
     "@types/node": "26.6.2",

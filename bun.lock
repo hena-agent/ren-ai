@@ -205,6 +205,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@opencode/plugin": "2.0.19",
+        "@opencode/schema": "2.0.19",
         "@ren-ai/plugin-session-folder": "workspace:*",
         "effect": "4.0.0-rc.112",
       },
@@ -221,6 +222,7 @@
         "@opencode/plugin": "2.0.19",
         "@ren-ai/plugin-application": "workspace:*",
         "@ren-ai/plugin-dice": "workspace:*",
+        "@ren-ai/plugin-session-folder": "workspace:*",
         "effect": "4.0.0-rc.112",
       },
       "devDependencies": {
@@ -234,6 +236,7 @@
       "dependencies": {
         "@opencode/plugin": "2.0.19",
         "@ren-ai/plugin-application": "workspace:*",
+        "@ren-ai/plugin-session-folder": "workspace:*",
         "effect": "4.0.0-rc.112",
       },
       "devDependencies": {
@@ -247,6 +250,7 @@
       "dependencies": {
         "@opencode/plugin": "2.0.19",
         "@ren-ai/plugin-application": "workspace:*",
+        "@ren-ai/plugin-session-folder": "workspace:*",
         "effect": "4.0.0-rc.112",
       },
       "devDependencies": {
@@ -262,6 +266,7 @@
         "@opencode/schema": "2.0.19",
         "@ren-ai/personas": "workspace:*",
         "effect": "4.0.0-rc.112",
+        "yaml": "2.8.2",
       },
       "devDependencies": {
         "@types/node": "26.6.2",
