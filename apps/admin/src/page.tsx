@@ -11,6 +11,8 @@ import type { InspectionRow } from "./inspection-page.tsx";
 import type { Draft } from "./draft.ts";
 import { Preview, Comparison } from "./profile-preview.tsx";
 import { PublicPersonaPreview } from "./public-persona-preview.tsx";
+import { ContactPage } from "./contact-page.tsx";
+import type { ContactView } from "./contact-page.tsx";
 
 interface EditorFields {
   documents?: InitialDocuments | undefined;
@@ -226,6 +228,11 @@ export type PageContent =
       [Field in keyof EditorFields]?: never;
     });
 
+function heading(view: ContactView | undefined, inspections: readonly InspectionRow[] | undefined) {
+  if (view) return view.tab === "waitlist" ? "대기자 관리" : "첫 연락 현황";
+  return inspections ? "Persona 형식 검사" : copy.list;
+}
+
 export function renderPage({
   personas,
   record,
@@ -249,10 +256,12 @@ export function renderPage({
   documents,
   tab,
   showIdea,
+  contactView,
 }: PageContent & {
   error?: string;
   saved?: boolean;
   inspections?: readonly InspectionRow[];
+  contactView?: ContactView;
 }) {
   return (
     "<!doctype html>" +
@@ -274,19 +283,31 @@ export function renderPage({
               {copy.brand}
             </a>
             <nav aria-label={copy.navigation}>
-              <a href="/" aria-current={record ? undefined : "page"}>
+              <a href="/" aria-current={record || contactView ? undefined : "page"}>
                 {copy.list}
               </a>
               <a className="new-link" href="/new">
                 + {copy.new}
               </a>
               <a href="/inspection">전체 검사</a>
+              <a
+                href="/waitlist"
+                aria-current={contactView?.tab === "waitlist" ? "page" : undefined}
+              >
+                대기자
+              </a>
+              <a
+                href="/first-contacts"
+                aria-current={contactView?.tab === "first-contacts" ? "page" : undefined}
+              >
+                첫 연락
+              </a>
             </nav>
           </header>
           <main id="main" className={record ? "persona-workbench" : undefined}>
             <div className="page-heading" hidden={Boolean(record)}>
               <p className="eyebrow">{copy.eyebrow}</p>
-              <h1>{inspections ? "Persona 형식 검사" : copy.list}</h1>
+              <h1>{heading(contactView, inspections)}</h1>
               <p className="description">{copy.description}</p>
             </div>
             {error && (
@@ -310,7 +331,9 @@ export function renderPage({
                 )}
               </div>
             )}
-            {inspections ? (
+            {contactView ? (
+              <ContactPage view={contactView} />
+            ) : inspections ? (
               <InspectionResults rows={inspections} />
             ) : record ? (
               <Editor

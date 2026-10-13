@@ -55,7 +55,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* host.sessions.prompt({ sessionID: old.id, text: "fail this turn" });
           yield* host.sessions.wait(old.id);
           if (kind.startsWith("other-")) {
-            const other = yield* bindTestHandle(host, "other@example.com");
+            const other = yield* bindTestHandle(host, "other@example.com", "persona2");
             yield* host.sessions.prompt({ sessionID: other.id, text: "other failure" });
             yield* host.sessions.wait(other.id);
           }
@@ -72,7 +72,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
             yield* Effect.sleep("10 millis");
           if (kind === "quota") {
             failing = true;
-            const subsequent = yield* bindTestHandle(host, "subsequent@example.com");
+            const subsequent = yield* bindTestHandle(host, "subsequent@example.com", "persona2");
             yield* host.sessions.prompt({
               sessionID: subsequent.id,
               text: "subsequent quota failure",

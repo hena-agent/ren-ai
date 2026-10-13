@@ -86,6 +86,18 @@ _Avoid_: Memory
 People waiting to start a conversation. Discovery registrations include a handle, liked personas and web consent; selection has no promised order or time. The legacy waitlist contains emails from people whose handle can't receive iMessage or for whom the service is full.
 _Avoid_: queue, signup list
 
+**Selection**:
+The operator's choice to admit up to N randomly chosen eligible waiting people, each with one randomly chosen available persona from their Likes.
+_Avoid_: matching, approval, first-come-first-served
+
+**Assignment**:
+An exclusive pairing of one persona with one handle, including the time before the first Greeting is sent. A persona and a handle can each have only one current assignment; a failed or uncertain first contact keeps the assignment.
+_Avoid_: Like, session, recommendation
+
+**First contact reservation**:
+The selected persona's planned first Greeting, scheduled once between five minutes and one hour after selection. It is distinct from both selection and successful delivery.
+_Avoid_: Notice, immediate onboarding, automatic selection
+
 **Reset**:
 Returning a test handle to before onboarding, so its next conversation starts as a first meeting. The persona's previous memory is kept for review.
 _Avoid_: clear, restart, new conversation

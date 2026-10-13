@@ -28,6 +28,8 @@ export const resets = (
             Effect.gen(function* () {
               // Also finish resets recorded by the previous memory-only implementation.
               yield* sql`DELETE FROM user WHERE id IN (SELECT user_id FROM conversation WHERE reset_guid = ${guid})`;
+              yield* sql`DELETE FROM persona_assignment WHERE handle = (SELECT handle FROM reset WHERE guid = ${guid})`;
+              yield* sql`DELETE FROM discovery_registration WHERE handle = (SELECT handle FROM reset WHERE guid = ${guid})`;
               yield* sql`UPDATE reset SET complete = 1 WHERE guid = ${guid}`;
             }),
           ),

@@ -149,6 +149,9 @@ test("an upgrade finishes a legacy memory-only reset and excludes its previous N
         yield* sql`UPDATE conversation SET session_id = ${allocated.id}, reset_guid = 'legacy-reset'`;
         yield* sql`ALTER TABLE reset DROP COLUMN notice_id`;
         yield* sql`ALTER TABLE user DROP COLUMN persona_id`;
+        yield* sql`DROP TABLE discovery_contact`;
+        yield* sql`DROP TABLE discovery_selection`;
+        yield* sql`DROP TABLE persona_assignment`;
         yield* sql`DROP TABLE discovery_like`;
         yield* sql`DROP TABLE discovery_registration`;
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 16`;

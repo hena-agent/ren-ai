@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { rm, copyFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
@@ -11,6 +11,10 @@ import { fakeMessages } from "../src/messages/messages.fake.ts";
 
 export const resetFixture = async (prefix: string) => {
   const fixture = await messagingFixture(prefix);
+  await copyFile(
+    join(fixture.personaDirectory, "persona1.md"),
+    join(fixture.personaDirectory, "persona2.md"),
+  );
   const fake = fakeMessages();
   const start = Effect.gen(function* () {
     const host = yield* quietTestHost(
@@ -88,10 +92,10 @@ export const onboardTestHandle = (
       ),
     );
 
-export const bindTestHandle = (host: Host, handle: string) =>
+export const bindTestHandle = (host: Host, handle: string, personaID = "persona1") =>
   Effect.gen(function* () {
-    const session = yield* host.createSession("persona1");
-    yield* host.conversations.create(registration(handle, session.id));
+    const session = yield* host.createSession(personaID);
+    yield* host.conversations.create({ ...registration(handle, session.id), personaID });
     yield* host.operator.testHandle(handle, true);
     return session;
   });

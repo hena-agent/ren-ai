@@ -32,6 +32,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
           const server = yield* composeServer({
             stateDirectory: root,
             catalog,
+            adminToken: "admin-test-token",
             defaultPersonaID: "persona1",
             publicPort: 0,
             bootstrapOnly: true,

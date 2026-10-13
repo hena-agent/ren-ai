@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { cloudflareAdmin } from "./cloudflare-admin.ts";
 import { memoryStorage } from "../test/memory-storage.ts";
 import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
@@ -94,4 +94,43 @@ test("alarms execute one photo, re-arm remaining work and restore safe failed di
   expect(diagnostics).toContain('"code":"missing_key"');
   stdout.mockRestore();
   stderr.mockRestore();
+});
+
+test("the Worker connects authenticated management pages without exposing its service token", async () => {
+  const { db, bucket } = await cloudflareFixture();
+  const { storage } = memoryStorage();
+  const { stdout, stderr } = captureWorkerLogs();
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ entries: [], eligibleCount: 0 }))
+    .mockResolvedValueOnce(new Response("private@example.net messaging-secret", { status: 503 }));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const admin = await cloudflareAdmin(
+      {
+        DB: db,
+        IMAGES: bucket,
+        ASSETS: { fetch: async () => new Response("asset") },
+        ADMIN_PASSWORD: "test-password",
+        CATALOG_TOKEN: "catalog",
+        MESSAGING_API_URL: "https://api-msg.hena.dev",
+        MESSAGING_API_TOKEN: "messaging-secret",
+      },
+      storage,
+    );
+    expect((await admin.fetch(request("/waitlist"))).status).toBe(200);
+    expect(new Headers(fetcher.mock.calls[0]![1]!.headers).get("authorization")).toBe(
+      "Bearer messaging-secret",
+    );
+    expect((await admin.fetch(request("/first-contacts"))).status).toBe(503);
+    const output = [...stdout.mock.calls, ...stderr.mock.calls]
+      .map(([line]) => String(line))
+      .join("");
+    expect(output).not.toContain("messaging-secret");
+    expect(output).not.toContain("private@example.net");
+  } finally {
+    vi.unstubAllGlobals();
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
 });

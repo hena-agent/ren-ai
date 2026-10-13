@@ -12,7 +12,6 @@ import {
 } from "./authoring.ts";
 import { restoreDraft, draftTokens, previewOf, documentsOf, captureDocuments } from "./draft.ts";
 import type { Draft } from "./draft.ts";
-import type { ProfileGenerator } from "./generation.ts";
 import { renderPage } from "./page.tsx";
 import type { PageContent } from "./page.tsx";
 import copy from "./copy.json";
@@ -40,11 +39,11 @@ import {
   requestId,
   GenerationError,
 } from "./logging.ts";
-import type { Log } from "./logging.ts";
 import { versionedPersona } from "@ren-ai/personas";
 import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
-import type { AdminPersistence } from "./admin-state.ts";
+import type { AdminOptions } from "./admin-options.ts";
+import { contactRoutes } from "./contact-routes.ts";
 import { html } from "./html-response.ts";
 import { generationFailureMessage } from "./generation-failure.ts";
 const documentFields = (draft: Draft) => ({
@@ -56,17 +55,7 @@ export function createAdmin(
   store: PersonaStore,
   password: string,
   stylesheet: string,
-  {
-    generator,
-    script,
-    log,
-    persistence,
-  }: {
-    generator?: ProfileGenerator;
-    script?: string;
-    log?: Log;
-    persistence?: AdminPersistence;
-  } = {},
+  { generator, script, log, persistence, management }: AdminOptions = {},
 ) {
   if (!password.trim()) throw new Error("ADMIN_PASSWORD is required");
   const expected = createHash("sha256")
@@ -454,6 +443,8 @@ export function createAdmin(
         });
       if (request.method !== "GET" && request.method !== "POST")
         return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
+      if (["/waitlist", "/first-contacts"].includes(url.pathname))
+        return contactRoutes(request, management);
       const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
       if (resource) return resource;
       const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/retry)?$/.exec(url.pathname);

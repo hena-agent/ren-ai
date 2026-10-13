@@ -198,6 +198,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
     join(personaDirectory, "persona1.md"),
     valid.replace("Asia/Seoul", "Pacific/Honolulu"),
   );
+  await writeFile(join(personaDirectory, "persona2.md"), valid);
   const events: string[] = [];
   const alerts: string[] = [];
   const imessage = fakeMessages(events);
@@ -462,7 +463,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             yield* host
               .onboard({
                 handle: "+821033333333",
-                personaID: "persona1",
+                personaID: "persona2",
                 locale: "ko",
                 privacyNoticeVersion: "v1",
                 turnstileToken: "human",

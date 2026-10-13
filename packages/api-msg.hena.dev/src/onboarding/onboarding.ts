@@ -20,6 +20,7 @@ import type { Persona } from "@ren-ai/personas";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { submissionLimit } from "./rate-limit.ts";
 import { withLifecycle } from "../conversations/lifecycle.ts";
+import { claimPersona } from "../discovery/assignment.ts";
 
 export const noticeCopy = { ko: localeNotice.ko.text };
 
@@ -207,6 +208,9 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
             if (yield* unavailable(input.handle)) return "unknown" as const;
             const [existing] = yield* user(input.handle);
             if (existing?.joined_at != null) return "sent" as const;
+            const reserved = yield* sql`SELECT 1 FROM discovery_contact c
+              JOIN discovery_registration r ON r.id = c.registration_id WHERE r.handle = ${input.handle}`;
+            if (reserved.length) return "try_later" as const;
             const selected = personas.get(
               existing
                 ? (existing.persona_id ?? defaultPersonaID)
@@ -224,10 +228,18 @@ export const onboarding = <SessionError, PromptError, NoticeError>({
               const answer = yield* oldNotice(input.handle, existing, previous, now);
               if (answer) return answer;
             }
-            yield* sql`DELETE FROM user WHERE handle = ${input.handle} AND joined_at IS NULL`;
-            const inserted =
-              yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at, persona_id)
-      VALUES (${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${input.locale}, ${now}, ${selected.id}) RETURNING id`;
+            const inserted = yield* Effect.gen(function* () {
+              if (
+                !(yield* claimPersona(selected.id, input.handle).pipe(
+                  Effect.provideService(SqlClient.SqlClient, sql),
+                ))
+              )
+                return undefined;
+              yield* sql`DELETE FROM user WHERE handle = ${input.handle} AND joined_at IS NULL`;
+              return yield* sql`INSERT OR IGNORE INTO user (handle, locale, consent_version, consent_language, consent_at, persona_id)
+                VALUES (${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${input.locale}, ${now}, ${selected.id}) RETURNING id`;
+            }).pipe(sql.withTransaction, withLifecycle);
+            if (!inserted) return "persona_unavailable" as const;
             if (inserted.length) {
               yield* sendNotice(input.handle, notice[input.locale]).pipe(
                 Effect.catchCause(Effect.logError),

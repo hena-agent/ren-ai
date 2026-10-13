@@ -22,7 +22,7 @@ exactly `discovery-ambivalent-dev` in **Settings → Builds**:
 | Build command                            | `bun install --cwd ../.. --frozen-lockfile && bun run build` |
 | Deploy command                           | `bun run deploy`                                             |
 | Build variable `BUN_VERSION`             | `1.4.2`                                                      |
-| Build variable `VITE_DISCOVERY_API_URL`  | `https://api-msg.ambivalent.dev`                             |
+| Build variable `VITE_DISCOVERY_API_URL`  | `https://api-msg.hena.dev`                                   |
 | Build variable `VITE_TURNSTILE_SITE_KEY` | `0x4AAAAAAFE4vOGM-bENVmad` (existing production widget)      |
 
 Initially watch the whole repository so shared-package and lockfile changes
@@ -58,7 +58,7 @@ does not create the Git integration. Repeat the production build from this
 directory with:
 
 ```sh
-VITE_DISCOVERY_API_URL=https://api-msg.ambivalent.dev VITE_TURNSTILE_SITE_KEY=0x4AAAAAAFE4vOGM-bENVmad bun run build
+VITE_DISCOVERY_API_URL=https://api-msg.hena.dev VITE_TURNSTILE_SITE_KEY=0x4AAAAAAFE4vOGM-bENVmad bun run build
 bun run deploy
 ```
 
@@ -66,9 +66,9 @@ The API is being deployed separately. Until it is reachable, the frontend's
 catalog error is expected. The API operator must:
 
 - Serve `GET /discovery/personas` and `POST /discovery/waitlist` at
-  `https://api-msg.ambivalent.dev`. Current `src/server.ts` does not compose the
-  Discovery routes; integrate `makeDiscoveryWeb` with the messaging server's
-  database and public listener, including disposal, instead of just adding DNS.
+  `https://api-msg.hena.dev`. The updated `src/server.ts` composes the Discovery
+  routes and first-contact reservations with the messaging server's persistent
+  database. Deploy that updated application before enabling selection.
 - Read published profiles from `https://admin.ambivalent.dev`. Configure the
   private Catalog token for the messaging runtime and retain the waitlist in
   persistent storage.

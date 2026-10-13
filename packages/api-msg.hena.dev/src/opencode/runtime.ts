@@ -13,7 +13,10 @@ type RuntimeError = Error | MissingSession;
 
 export interface PersonaRuntime {
   readonly personas: ReadonlyMap<string, Persona>;
-  readonly createSession: (personaID: string) => Effect.Effect<Session.Info, RuntimeError>;
+  readonly createSession: (
+    personaID: string,
+    sessionID?: Session.ID,
+  ) => Effect.Effect<Session.Info, RuntimeError>;
   readonly outcomes: Stream.Stream<
     | SessionEvent.Execution.Failed
     | SessionEvent.Execution.Succeeded

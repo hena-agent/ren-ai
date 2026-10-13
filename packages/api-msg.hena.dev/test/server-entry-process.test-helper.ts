@@ -75,6 +75,7 @@ export const withServerEntry = async <A>(
       STATE_DIRECTORY: join(root, "state"),
       PERSONA_CATALOG_URL: catalog.url,
       PERSONA_CATALOG_TOKEN: catalog.token,
+      DISCOVERY_ADMIN_TOKEN: "management-test-token",
       PORT: String(port),
       LISTEN_HOST: "127.0.0.1",
       BOOTSTRAP_ONLY: "true",

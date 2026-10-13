@@ -115,6 +115,7 @@ export const composedTestServer = (
             STATE_DIRECTORY: root,
             PERSONA_CATALOG_URL: catalog.url,
             PERSONA_CATALOG_TOKEN: catalog.token,
+            DISCOVERY_ADMIN_TOKEN: "management-test-token",
             DEFAULT_PERSONA_ID: "persona1",
             PORT: "0",
             IMSG_URL: `${listenerUrl(mac)}/rpc`,

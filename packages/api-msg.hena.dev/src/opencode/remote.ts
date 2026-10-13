@@ -118,11 +118,11 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
             })
             .pipe(Effect.mapError(remoteError));
         }),
-      createSession: (personaID: string) =>
+      createSession: (personaID: string, sessionID?: Session.ID) =>
         Effect.gen(function* () {
           if (!personas.has(personaID))
             return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
-          const id = Session.ID.create();
+          const id = sessionID ?? Session.ID.create();
           const rules = yield* Effect.tryPromise(loadGroundRules);
           yield* folders
             .create(

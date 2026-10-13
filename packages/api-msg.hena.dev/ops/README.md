@@ -23,6 +23,39 @@ The generated route file's three exception paths move with the package; their re
 
 ## Service deployment and relocation
 
+### Discovery selection and first contact
+
+The normal application listener serves `/discovery/personas` and
+`/discovery/waitlist` alongside the existing onboarding and plugin callback.
+The management routes `/management/discovery` (GET) and
+`/management/discovery/select` (POST) require `DISCOVERY_ADMIN_TOKEN`, matching
+Admin's `MESSAGING_API_TOKEN`. Keep this credential separate from the Catalog,
+messaging and plugin tokens. Configure the Admin Catalog at
+`https://admin.ambivalent.dev` and retain the application SQLite volume.
+
+Before rollout, inspect live `user`/`conversation` persona assignments. The new
+one-persona/one-user policy also applies to legacy onboarding; duplicate live
+assignments stop application startup and need explicit operator resolution.
+No conversations are automatically deleted. Migration 019 creates the durable
+assignment/selection/contact tables. Operator removal and test reset release
+assignments. Failed, blocked, unreachable and uncertain first contacts keep
+their reservation until the operator resolves/removes them.
+
+Selection and its 5–60 minute schedule commit together. The worker records a
+session ID before creating its native folder, and records the Conversation
+before enqueueing the Greeting with a stable inbox ID. It sends no separate
+Notice. Restart continues untouched due reservations and observes existing
+preparations/sends without submitting a second Greeting. An interrupted or
+uncertain attempt requires inspection; send failures and iMessage absence are
+distinct from observed success. Request/task diagnostics are JSON with request
+IDs and sanitized causes, excluding handles, tokens, private persona text and
+message content.
+
+Deploy the updated API, set the matching Admin secret, deploy Admin, then
+rebuild Discovery with `VITE_DISCOVERY_API_URL=https://api-msg.hena.dev`.
+Retain the existing site's CORS origin and add `discovery.ambivalent.dev` to the
+existing production Turnstile widget.
+
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
 ## Services and credentials

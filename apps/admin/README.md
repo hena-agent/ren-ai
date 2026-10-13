@@ -114,6 +114,37 @@ editing works, and only published current image references are public.
 
 ## Storage and recovery
 
+### Waiting people and first contact
+
+`/waitlist` lists registrations from the messaging API, not Admin D1. Enter
+1–100 people and confirm **N명 선정하기**. The server randomly chooses people
+with currently public, unassigned Likes, then assigns one available liked
+persona to each. The result may contain fewer than N people. A persona belongs
+to one handle from reservation onward, including failed/uncertain attempts.
+Each selected Greeting is scheduled once 5–60 minutes later.
+
+`/first-contacts` shows reservations, session preparation, Greeting processing,
+confirmed first sends, failures, unreachable iMessage contacts and results
+requiring inspection. Refresh to observe progress. Network/response loss keeps
+the selection key for confirmed re-submission; it does not select another batch.
+Opening a fresh selection form and confirming it is a new operator action with
+a new key; prior selection keys remain durable for transport retries.
+An unavailable API is an error, not an empty list. Uncertain sends and interrupted
+preparation are never automatically repeated. Inspect the API's recorded
+session/send before recovery; deleting a user through the operator removes the
+registration and releases the assignment.
+
+Set Worker `MESSAGING_API_URL=https://api-msg.hena.dev` (declared in Wrangler)
+and runtime secret `MESSAGING_API_TOKEN`, matching the application's new
+`DISCOVERY_ADMIN_TOKEN`. These are separate from `CATALOG_TOKEN`. Tokens remain
+server-side; Admin authenticates the operator and enforces same-origin POSTs.
+The application serves Bearer-authenticated `GET /management/discovery` and
+`POST /management/discovery/select`. Deploy the API before Admin; the old API's
+404 or missing credentials are displayed as connection failures. SQL schema
+019 adds assignment, selection deduplication and durable contact records. On
+startup, conflicting existing live assignments stop admission rather than
+silently removing conversations. Resolve those records on the API host first.
+
 - Persona, initial State and initial Memory are D1 text columns. Downloaded
   `persona.md` is a serialized view, not another source of truth. A revision CAS
   and atomic batch commit documents and photo links together; a losing writer
