@@ -109,7 +109,10 @@ test("legacy archives require a supplied catalog and render folders before impor
       const folder = yield* remote.client
         .rpc(sessionFolders)
         .read({ folderID: session.id }, { location: { directory: root } });
-      expect(folder.persona).toMatchObject({ id: "persona1", prompt: "You are Persona1.\n" });
+      expect(folder.persona).toMatchObject({
+        id: "persona1",
+        prompt: "You are Persona1.\n\n## 공개 프로필\n\n24살 대학생\n",
+      });
       expect(folder.rules).toContain("<conversation-started>");
       expect((yield* remote.sessions.inbox(session.id)).map((item) => item.id)).toEqual(
         saved.sessions[0]!.pending.map((item) => item.id),

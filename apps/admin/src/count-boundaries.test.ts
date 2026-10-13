@@ -113,9 +113,9 @@ test("whole initial failure returns a correlated recovery page while an explicit
   expect(html).toContain(`value="${character.name}"`);
 });
 
-test("a completely failed whole-profile batch cannot validate changed source against an old public profile", async () => {
+test("a failed optional whole-photo batch still permits saving the edited source with retained photos", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
-  const { admin, page } = await basePreview({ ...subGenerator, portrait });
+  const { admin, page, store } = await basePreview({ ...subGenerator, portrait });
   portrait.mockRejectedValue(new Error("outage"));
   const changed = {
     ...character,
@@ -132,7 +132,9 @@ test("a completely failed whole-profile batch cannot validate changed source aga
   expect(
     (await admin(request("/personas", { ...changed, draft: tokenOf(html), intent: "save" })))
       .status,
-  ).toBe(400);
+  ).toBe(303);
+  expect((await store.get(preview(page).id)).name).toBe("Changed source");
+  expect((await store.get(preview(page).id)).portraits).toEqual(preview(page).portraits);
 });
 
 test("modal count caps, totals and updates respect initial, additional and one-image regeneration contexts", () => {

@@ -126,12 +126,17 @@ test("a saved source changed while waiting is rejected at worker start and the n
 
 test("non-Error preparation and image failures are diagnosed before becoming recoverable job results", async () => {
   const introduction = vi
-    .fn<typeof generator.introduction>()
+    .fn<typeof generator.convert>()
     .mockRejectedValueOnce("private unexpected text failure")
-    .mockImplementation(generator.introduction);
-  const { admin, logs } = await fixture({ ...subGenerator, introduction });
+    .mockImplementation(generator.convert);
+  const { admin, logs } = await fixture({ ...subGenerator, convert: introduction });
   const accepted = await admin(
-    queuedRequest("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),
+    queuedRequest("/personas", {
+      ...character,
+      description: "내부 인물 설명",
+      draft: await newToken(admin),
+      intent: "generate",
+    }),
   );
   const path = jobUrl(accepted);
   const failed = await finishedJob(admin, path);
@@ -145,6 +150,7 @@ test("non-Error preparation and image failures are diagnosed before becoming rec
       await admin(
         queuedRequest(`${path}/retry?image=0`, {
           ...character,
+          description: "내부 인물 설명",
           draft: tokenOf(failed),
           portraitInstructions: "",
         }),

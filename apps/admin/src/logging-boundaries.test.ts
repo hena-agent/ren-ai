@@ -2,10 +2,57 @@ import { afterEach, expect, test, vi } from "vitest";
 import { character, fixture, generator, legacy, newToken, png, request } from "../test/fixtures.ts";
 import { createAdmin } from "./admin.ts";
 import { createProfileGenerator } from "./generation.ts";
-import { loggedRequest, operation, protect, reportFailure, safeText } from "./logging.ts";
+import {
+  loggedRequest,
+  operation,
+  protect,
+  reportFailure,
+  safeText,
+  validationFailure,
+} from "./logging.ts";
 import type { LogEntry } from "./logging.ts";
 
 afterEach(() => vi.restoreAllMocks());
+
+test("validation diagnostics preserve original causes and codes while replacing payload-bearing messages", async () => {
+  const logs: LogEntry[] = [];
+  const cause = Object.assign(new SyntaxError("private unregistered model payload"), {
+    code: "EJSON",
+  });
+  const wrapped = validationFailure(
+    "Invalid character draft",
+    { code: "invalid_character" },
+    new Error("wrapper payload", { cause }),
+  );
+  expect(wrapped.cause).toBeInstanceOf(Error);
+  expect(wrapped.cause instanceof Error && wrapped.cause.cause).toBe(cause);
+  await loggedRequest(
+    request("/personas"),
+    async () => {
+      reportFailure(wrapped, { stage: "character.draft" });
+      reportFailure(validationFailure("Invalid review", { code: "invalid_review" }, null), {
+        stage: "review",
+      });
+      reportFailure(
+        validationFailure(
+          "Invalid input",
+          { code: "invalid_input" },
+          Object.assign(new Error("private input payload"), { code: 42 }),
+        ),
+        { stage: "input" },
+      );
+      return new Response(null, { status: 503 });
+    },
+    (entry) => logs.push(entry),
+  );
+  expect(logs.find((entry) => entry.stage === "character.draft")).toMatchObject({
+    code: "invalid_character",
+    causeName: "SyntaxError",
+    causeCode: "EJSON",
+    error: { message: "Invalid character draft" },
+  });
+  expect(JSON.stringify(logs)).not.toContain("payload");
+});
 
 test("input failures are warnings and uninstrumented unexpected failures are errors", async () => {
   const { admin, logs } = await fixture();
@@ -46,12 +93,14 @@ test("raw generation errors redact every submitted private field, including seed
   await admin(request("/personas", { ...character, seed, draft, intent: "character" }));
   const failure = logs.find((entry) => entry.event === "operation.failed")!;
   expect(failure).toMatchObject({ stage: "character.generate", level: "error" });
-  for (const secret of [seed, draft, character.name, ...character.description.split("\n")])
+  for (const secret of [seed, draft, character.name, ...character.description.split("\n")].filter(
+    Boolean,
+  ))
     expect(failure.error?.message).not.toContain(secret);
   expect(failure.error?.message).toContain("Stryker was here!");
   const absent = await fixture({
     ...generator,
-    introduction: async () => {
+    portrait: async () => {
       throw new Error("Stryker was here!");
     },
   });

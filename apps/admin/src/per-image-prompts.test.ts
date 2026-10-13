@@ -15,8 +15,9 @@ test("two added photos have two independent prompts; count changes preserve each
   const count = dialog.querySelector<HTMLSelectElement>("select")!;
   const errors: string[] = [];
   document.defaultView!.addEventListener("error", (event) => errors.push(event.message));
-  const add = form.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
-  form.requestSubmit(add[1]);
+  const add = document.querySelector<HTMLButtonElement>("#portrait-add-photo")!;
+  expect(add.form).toBe(form);
+  form.requestSubmit(add);
   expect(dialog.querySelectorAll("textarea:not(:disabled)")).toHaveLength(1);
   count.value = "2";
   count.dispatchEvent(new Event("change"));
@@ -45,7 +46,7 @@ test("two added photos have two independent prompts; count changes preserve each
   count.dispatchEvent(new Event("change"));
   expect(dialog.querySelectorAll("textarea")[1]?.value).toBe("friend-taken full-body travel");
   dialog.querySelector<HTMLButtonElement>("[data-portrait-cancel]")!.click();
-  form.requestSubmit(add[0]);
+  form.requestSubmit(document.querySelector<HTMLButtonElement>("#portrait-add-anime"));
   expect(count.value).toBe("1");
   expect([...dialog.querySelectorAll("textarea")].every((input) => !input.value)).toBe(true);
   expect(dialog.querySelector("[data-image-prompt-field] label")?.textContent).toContain(
@@ -59,7 +60,7 @@ test("initial count is per style, but prompts are per actual photo and ordered t
   document.body.innerHTML = await (await admin(request("/new"))).text();
   const form = fillCharacterForm(character);
   bindPending(form);
-  form.requestSubmit(form.querySelector<HTMLButtonElement>('[value="generate"]'));
+  form.requestSubmit(document.querySelector<HTMLButtonElement>('[value="generate"]'));
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const count = dialog.querySelector<HTMLSelectElement>("select")!;
   expect(dialog.querySelectorAll("textarea")).toHaveLength(2);
@@ -88,7 +89,7 @@ test("single-image regeneration always has one prompt labeled for the selected e
   document.body.innerHTML = page;
   const form = document.querySelector<HTMLFormElement>("#persona-editor")!;
   bindPending(form);
-  form.requestSubmit(document.querySelectorAll<HTMLButtonElement>('[value="regenerate"]')[1]);
+  form.requestSubmit(document.querySelector<HTMLButtonElement>("#portrait-regenerate-photo-0"));
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   expect(dialog.querySelectorAll("textarea:not(:disabled)")).toHaveLength(1);
   expect(dialog.querySelector("[data-image-prompt-field] label")?.textContent).toContain(

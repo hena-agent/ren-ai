@@ -26,7 +26,12 @@
       ]
     },
     "apps/admin": {
-      "entry": ["src/run.mjs!", "src/pending-entry.mjs!"]
+      "entry": [
+        "worker/entry.mjs!",
+        "src/pending-entry.mjs!",
+        "scripts/build.mjs!",
+        "scripts/import-local.mjs!"
+      ]
     },
     "apps/discovery": {
       "entry": ["index.html"]
@@ -42,5 +47,5 @@
     "apps/*/test/**",
     "packages/api-msg.hena.dev/test/offline.setup.ts"
   ],
-  "ignoreDependencies": ["jscpd"]
+  "ignoreDependencies": ["jscpd", "cloudflare"]
 }

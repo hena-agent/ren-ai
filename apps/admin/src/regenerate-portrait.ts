@@ -1,5 +1,5 @@
 import { decodePersona, serializePersona, PersonaError, personaImages } from "@ren-ai/personas";
-import type { PersonaRecord, createPersonaStore, Portrait } from "@ren-ai/personas";
+import type { PersonaRecord, PersonaStore, Portrait } from "@ren-ai/personas";
 import { emptyPersona, characterOf } from "./authoring.ts";
 import { previewOf, completedImageDraft } from "./draft.ts";
 import type { Draft } from "./draft.ts";
@@ -30,8 +30,8 @@ export async function regeneratePortrait(
   params: URLSearchParams,
   submittedKey: string,
   generator: ProfileGenerator,
-  store: Awaited<ReturnType<typeof createPersonaStore>>,
-  stage: (stage: ImageStage) => void,
+  store: PersonaStore,
+  stage: (stage: ImageStage) => void | Promise<void>,
 ) {
   const active = personaImages(persona).find(
     (image) => `${image.style}:${image.imageUrl}` === submittedKey,
@@ -47,7 +47,7 @@ export async function regeneratePortrait(
     reference = await readPortraitReference(mainImage(persona, target.style)!, target.style, store);
     composition = await readPortraitReference(target.url, target.style, store);
   }
-  stage("generating");
+  await stage("generating");
   const image = await operation("portrait.generate", fields, () =>
     generator.portrait(
       characterOf(persona),
@@ -57,7 +57,7 @@ export async function regeneratePortrait(
       composition,
     ),
   );
-  stage("saving");
+  await stage("saving");
   const imageUrl = await operation("image.save", fields, () => store.saveImage(image));
   const record = decodePersona({
     ...persona,

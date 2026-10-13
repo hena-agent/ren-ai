@@ -21,7 +21,7 @@ test("count defaults to one and the modal displays the actual initial two-style 
   const form = fillCharacterForm(character);
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const count = form.querySelector<HTMLSelectElement>('[name="imageCount"]')!;
-  const button = form.querySelector<HTMLButtonElement>('[value="generate"]')!;
+  const button = document.querySelector<HTMLButtonElement>('[value="generate"]')!;
   bindPending(form);
   const sent: (FormDataEntryValue | null)[] = [];
   form.addEventListener("submit", (event) => {

@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 
 export interface LogFields {
+  operationId?: string;
   stage?: string;
   intent?: string;
   personaId?: string;
@@ -28,13 +29,18 @@ export interface LogEntry extends LogFields {
   requestId?: string;
   method?: string;
   route?: string;
+  url?: string;
+  directory?: string;
+  logDirectory?: string;
+  generationConfigured?: boolean;
   error?: { name: string; message: string; stack: string };
 }
 export type Log = (entry: LogEntry) => void;
-const writeLog: Log = (entry) => {
+export const writeLog: Log = (entry) => {
   const output = entry.level === "info" ? process.stdout : process.stderr;
   output.write(`${JSON.stringify(entry)}\n`);
 };
+
 const scope = new AsyncLocalStorage<{
   requestId: string;
   method: string;
@@ -53,6 +59,24 @@ export class GenerationError extends Error {
     super(message);
     this.name = "GenerationError";
   }
+}
+
+export function validationFailure(
+  message: string,
+  fields: LogFields,
+  // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow untrusted model parsing failures while preserving their original cause for payload-safe diagnostics
+  cause: unknown,
+) {
+  const root = cause instanceof Error ? cause : new Error("Non-Error validation failure");
+  const underlying = root.cause instanceof Error ? root.cause : root;
+  const error = new GenerationError(message, {
+    ...fields,
+    causeName: safeText(underlying.name),
+    ...("code" in underlying &&
+      typeof underlying.code === "string" && { causeCode: safeText(underlying.code) }),
+  });
+  error.cause = root;
+  return error;
 }
 
 export function protect(...secrets: string[]) {
@@ -110,12 +134,14 @@ export function reportFailure(
   emit({
     ...fields,
     ...(error instanceof GenerationError && error.fields),
-    ...("code" in root && typeof root.code === "string" && { code: root.code }),
+    ...(!(error instanceof GenerationError) &&
+      "code" in root &&
+      typeof root.code === "string" && { code: root.code }),
     level,
     event: "operation.failed",
     error: {
       name: safeText(root.name),
-      message: safeText(root.message),
+      message: safeText(error instanceof GenerationError ? error.message : root.message),
       // Schema errors can embed whole inputs; stack frames retain call sites without that payload.
       stack: root.stack
         ? safeText(
@@ -155,7 +181,7 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
   const path = new URL(request.url).pathname;
   const route = /^\/personas\/[a-zA-Z0-9_-]+$/.test(path)
     ? "/personas/:id"
-    : ["/", "/new", "/personas", "/api/personas"].includes(path)
+    : ["/", "/new", "/personas", "/api/personas", "/inspection"].includes(path)
       ? path
       : "/other";
   return scope.run(
@@ -187,6 +213,21 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
 
 export const requestId = () => scope.getStore()!.requestId;
 export const captureLogging = () => AsyncLocalStorage.snapshot();
+
+export function loggedJob<T>(id: string, fields: LogFields, run: () => Promise<T>, log: Log) {
+  return scope.run(
+    {
+      requestId: id,
+      method: "ALARM",
+      route: "/image-jobs/:id",
+      fields,
+      secrets: [],
+      reported: new Map(),
+      log,
+    },
+    run,
+  );
+}
 
 export function reportQueueCompleted(fields: LogFields & { status: number }) {
   emit({

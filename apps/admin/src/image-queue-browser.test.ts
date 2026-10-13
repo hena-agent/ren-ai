@@ -10,7 +10,24 @@ afterEach(() => {
 });
 
 const queuePage = (active: boolean, state: string, draft: string, images: string) =>
-  `<section data-image-job="batch" data-job-active="${active}"><div data-image-progress><output data-queue-status>${state}</output></div></section><form id="persona-editor"><input name="draft" value="${draft}"><output data-pending></output></form><aside>${images}</aside>`;
+  `<section data-image-job="batch" data-job-active="${active}"><div data-image-progress><output data-queue-status>${state}</output></div></section><form id="persona-editor"><input name="draft" value="${draft}"><output data-pending></output></form><aside><div data-image-preview id="portrait-gallery-photo">${images}</div></aside>`;
+
+const focusedPhotoPage = (active: boolean, version: string) =>
+  queuePage(
+    active,
+    version,
+    version,
+    `<button id="portrait-regenerate-photo-0">${version}</button>`,
+  ).replace(
+    "</aside>",
+    `<div data-add-images id="portrait-additions-photo">${version} photo</div><div data-add-images id="portrait-additions-anime">${version} anime</div></aside>`,
+  );
+
+const withPublicPreview = (active: boolean, data: string) =>
+  queuePage(active, "progress", "signed", "").replace(
+    "</form>",
+    `<button type="button" id="tab-memory" data-editor-tab="memory" aria-selected="true">Memory</button><div data-public-preview data-images='${data}'></div></form>`,
+  );
 
 test("polling updates each completed photo and signed preview while keeping the existing locked editor in place", async () => {
   vi.useFakeTimers();
@@ -44,6 +61,32 @@ test("polling updates each completed photo and signed preview while keeping the 
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
+test("polling refreshes the public preview photo data and keeps the selected document tab on completion", async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = withPublicPreview(true, "[]");
+  const form = document.querySelector("form")!;
+  const updated = vi.fn<() => void>();
+  form.addEventListener("photos-updated", updated);
+  const data = JSON.stringify([{ style: "photo", imageUrl: "/images/new.jpg" }]);
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(withPublicPreview(true, data)))
+    .mockResolvedValueOnce(new Response(withPublicPreview(false, data)));
+  vi.stubGlobal("fetch", fetcher);
+  watchImageQueue();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(document.querySelector<HTMLElement>("[data-public-preview]")!.dataset["images"]).toBe(
+    data,
+  );
+  expect(updated).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(document.querySelector('[data-editor-tab="memory"]')?.getAttribute("aria-selected")).toBe(
+    "true",
+  );
+  document.body.innerHTML = "";
+  watchImageQueue();
+});
+
 test("unchanged progress avoids replacing preview nodes and a transport failure leaves a visible recovery message", async () => {
   vi.useFakeTimers();
   const markup = queuePage(true, "waiting", "old", "unchanged");
@@ -67,6 +110,48 @@ test("unchanged progress avoids replacing preview nodes and a transport failure 
   watchImageQueue();
   await vi.advanceTimersByTimeAsync(2000);
   expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+test("polling restores focused photo actions and updates both style capacities without replacing the panel", async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = focusedPhotoPage(true, "before");
+  const panel = document.querySelector("aside");
+  document.getElementById("portrait-regenerate-photo-0")!.focus();
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(focusedPhotoPage(true, "partial")));
+  vi.stubGlobal("fetch", fetcher);
+  watchImageQueue();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(document.querySelector("aside")).toBe(panel);
+  expect(document.activeElement?.id).toBe("portrait-regenerate-photo-0");
+  expect(document.activeElement?.textContent).toBe("partial");
+  expect(
+    [...document.querySelectorAll("[data-add-images]")].map((region) => region.textContent),
+  ).toEqual(["partial photo", "partial anime"]);
+  fetcher.mockResolvedValue(new Response(focusedPhotoPage(false, "completed")));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(document.activeElement?.id).toBe("portrait-regenerate-photo-0");
+  expect(document.activeElement?.textContent).toBe("completed");
+});
+
+test("a disappearing focused image falls back to the progress title when the queue finishes", async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = queuePage(
+    true,
+    "before",
+    "before",
+    '<button id="removed-photo">Image</button>',
+  );
+  document.getElementById("removed-photo")!.focus();
+  const finished = queuePage(false, "done", "done", "").replace(
+    "<div data-image-progress>",
+    '<h2 id="image-queue-title" tabindex="-1">Progress</h2><div data-image-progress>',
+  );
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(finished)));
+  watchImageQueue();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(document.activeElement?.id).toBe("image-queue-title");
 });
 
 test("confirmed image submissions use the queue header and transport failures allow a same-target retry", async () => {
@@ -186,7 +271,7 @@ test("a successful polling response without queue markup replaces the page rathe
 const promptPage = (active: boolean, token: string, maximum: string) =>
   queuePage(active, "progress", token, "photo").replace(
     "<output data-pending>",
-    `<div data-add-images><button data-image-maximum="${maximum}">Add</button></div><dialog data-portrait-dialog><textarea></textarea><select><option value="1">One</option><option value="2">Two</option></select></dialog><output data-pending>`,
+    `<div data-add-images id="portrait-additions-photo"><button data-image-maximum="${maximum}">Add</button></div><dialog data-portrait-dialog><textarea></textarea><select><option value="1">One</option><option value="2">Two</option></select></dialog><output data-pending>`,
   );
 
 test("polling keeps the operator's open prompt and selection even when the last queued photo finishes", async () => {
@@ -235,13 +320,13 @@ test("a registration acknowledgement keeps the active editor reusable and ignore
   document.body.innerHTML = queuePage(true, "first", "original", "old image");
   const form = document.querySelector("form")!;
   form.innerHTML +=
-    '<button name="intent" value="subportrait">Add another</button><div data-add-images>old capacity</div>';
+    '<button name="intent" value="subportrait">Add another</button><div data-add-images id="portrait-additions-photo">old capacity</div>';
   bindPending(form, submitImageForm);
   const { deferred } = await import("../test/queue.ts");
   const oldPoll = deferred<Response>();
   const accepted = queuePage(true, "next queued", "current", "updated image").replace(
     "<output data-pending>",
-    "<div data-add-images>new capacity</div><output data-pending>",
+    '<div data-add-images id="portrait-additions-photo">new capacity</div><output data-pending>',
   );
   const fetcher = vi
     .fn<typeof fetch>()

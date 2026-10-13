@@ -92,3 +92,43 @@ test("preflight read failures never publish part of an update and canonical path
     expect(managedFolder(directory, directory)).toBeUndefined();
     expect(() => sessionDirectory(directory, "ses_../../escape")).toThrow(/Expected/);
   }));
+
+test("initial Catalog documents seed new Conversations; updates and snapshot transfers preserve evolving documents", () =>
+  withFiles(async (files) => {
+    const initial = { state: "initial private State", memory: "initial private Memory" };
+    const seeded = renderSnapshot({ ...snapshot.persona, initial }, snapshot.rules);
+    const target = await files.write("ses_seeded", seeded);
+    expect((await files.read("ses_seeded")).documents).toEqual(initial);
+    await expect(
+      files.write("ses_seeded", { ...seeded, persona: { ...seeded.persona, id: "different" } }),
+    ).rejects.toThrow("persona cannot change");
+    const current = { state: "current State", memory: "current Memory".repeat(2000) };
+    await fs.writeFile(join(target, "STATE.md"), current.state);
+    await fs.writeFile(join(target, "MEMORY.md"), current.memory);
+    await files.write(
+      "ses_seeded",
+      renderSnapshot(
+        { ...snapshot.persona, initial: { state: "new template", memory: "new template" } },
+        "new rules",
+      ),
+    );
+    const preserved = await files.read("ses_seeded");
+    expect(preserved.documents).toEqual(current);
+    await files.write("ses_restored", preserved);
+    expect((await files.read("ses_restored")).documents).toEqual(current);
+    const unbound = files.path("ses_unbound");
+    await fs.mkdir(unbound);
+    await fs.writeFile(join(unbound, "STATE.md"), current.state);
+    await fs.writeFile(join(unbound, "MEMORY.md"), current.memory);
+    await files.write("ses_unbound", seeded);
+    expect((await files.read("ses_unbound")).documents).toEqual(current);
+    await fs.rm(join(target, "STATE.md"));
+    await expect(files.read("ses_seeded")).rejects.toThrow("both STATE.md and MEMORY.md");
+    await fs.writeFile(join(target, "STATE.md"), current.state);
+    await fs.rm(join(target, "MEMORY.md"));
+    await expect(files.read("ses_seeded")).rejects.toThrow("both STATE.md and MEMORY.md");
+    await fs.writeFile(join(target, "MEMORY.md"), current.memory);
+    await fs.rm(join(target, "STATE.md"));
+    await fs.mkdir(join(target, "STATE.md"));
+    await expect(files.read("ses_seeded")).rejects.toMatchObject({ code: "EISDIR" });
+  }));

@@ -16,7 +16,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { onboardingApi } from "./api.ts";
 import { SqlClient } from "effect/unstable/sql";
 import type { Messages } from "../messages/messages.ts";
-import type { Persona } from "../personas/personas.ts";
+import type { Persona } from "@ren-ai/personas";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { submissionLimit } from "./rate-limit.ts";
 import { withLifecycle } from "../conversations/lifecycle.ts";

@@ -8,7 +8,7 @@ import { dirname } from "node:path";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import type { Persona } from "../personas/personas.ts";
+import type { Persona } from "@ren-ai/personas";
 
 type Client = Effect.Success<ReturnType<typeof OpenCode.make>>;
 type RestorableSession = Omit<(typeof sessionArchive.Type)["sessions"][number], "pending"> & {

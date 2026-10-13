@@ -2,12 +2,19 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": { "entry": ["scripts/*.ts"] },
-    "apps/admin": { "entry": ["src/pending-entry.mjs"] },
+    "apps/admin": {
+      "entry": [
+        "worker/entry.mjs",
+        "src/pending-entry.mjs",
+        "scripts/build.mjs",
+        "scripts/import-local.mjs"
+      ]
+    },
     "packages/discovery.hena.dev": { "entry": ["src/routeTree.gen.ts"] },
     "packages/api-msg.hena.dev": {
       "entry": ["test/compiled-plugin/regression.mjs"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],
-  "ignoreDependencies": ["jscpd"]
+  "ignoreDependencies": ["jscpd", "cloudflare"]
 }

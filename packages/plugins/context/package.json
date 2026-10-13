@@ -11,6 +11,7 @@
     "@opencode/ai": "2.0.19",
     "@opencode/plugin": "2.0.19",
     "@ren-ai/plugin-application": "workspace:*",
+    "@ren-ai/plugin-dice": "workspace:*",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {

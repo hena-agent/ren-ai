@@ -34,7 +34,6 @@ const lab = createLab(
   script,
 );
 
-// oxlint-disable-next-line typescript/no-unsafe-call, typescript/no-unsafe-member-access -- thin Bun entry shim; request and decision logic live in tested modules
 Bun.serve({ hostname: "127.0.0.1", port, fetch: lab.handle });
 process.stdout.write(
   `[persona-lab] http://127.0.0.1:${port} · Jev ${process.env.AI_GATEWAY_API_KEY ? "ready" : "key missing"} · Gemini ${process.env.GEMINI_API_KEY ? "ready" : "key missing"} · model=${model}\n`,

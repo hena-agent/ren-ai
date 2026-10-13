@@ -1,14 +1,29 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Schema } from "effect";
-import { parsePersona, PersonaError, serializePersona } from "@ren-ai/personas";
+import { InitialDocuments, parsePersona, PersonaError, serializePersona } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import copy from "./copy.json";
 const Draft = Schema.Struct({
   id: Schema.String,
   // The original saved snapshot for stale-edit checks; empty for a new character.
   base: Schema.String,
+  legacySource: Schema.optionalKey(Schema.String),
   preview: Schema.String,
+  initial: Schema.optionalKey(
+    Schema.Struct({
+      base: Schema.optionalKey(InitialDocuments),
+      preview: Schema.optionalKey(InitialDocuments),
+    }),
+  ),
+  tab: Schema.optionalKey(Schema.Literals(["persona", "state", "memory"])),
+  conversion: Schema.optionalKey(
+    Schema.Struct({
+      source: Schema.String,
+      additions: Schema.Array(Schema.String).check(Schema.isMaxLength(20)),
+    }),
+  ),
   seed: Schema.optionalKey(Schema.String),
+  characterPending: Schema.optionalKey(Schema.Boolean),
   portraitInstructions: Schema.optionalKey(Schema.String),
   imageInstructions: Schema.optionalKey(Schema.String),
   portraitOperation: Schema.optionalKey(Schema.String),
@@ -20,6 +35,27 @@ const Draft = Schema.Struct({
   ),
 });
 export type Draft = typeof Draft.Type;
+export const documentsOf = (draft: Draft) =>
+  draft.initial?.preview ?? draft.initial?.base ?? { state: "", memory: "" };
+
+export function captureDocuments(form: FormData, draft: Draft): Draft {
+  const previous = documentsOf(draft);
+  const read = (key: "state" | "memory") => {
+    const value = form.get(`${key}Source`);
+    if (value === null) return previous[key];
+    if (typeof value !== "string" || value.length > 16000)
+      throw new PersonaError("invalid", "문서는 16,000자 이하의 원문이어야 합니다.");
+    return value.replace(/\r\n?/g, "\n");
+  };
+  const tab = form.get("tab") ?? draft.tab ?? "persona";
+  if (tab !== "persona" && tab !== "state" && tab !== "memory")
+    throw new PersonaError("invalid", copy.formError);
+  return {
+    ...draft,
+    tab,
+    initial: { ...draft.initial, preview: { state: read("state"), memory: read("memory") } },
+  };
+}
 
 function draftFor(persona: PersonaRecord, editing: boolean): Draft {
   const source = editing ? serializePersona(persona) : "";

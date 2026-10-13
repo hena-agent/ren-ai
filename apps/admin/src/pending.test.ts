@@ -1,8 +1,44 @@
 import { expect, test, vi } from "vitest";
 import { bindPending } from "./pending.ts";
 import { useBrowser } from "../test/browser.ts";
+import { renderPage } from "./page.tsx";
+import { femaleCharacter, legacy } from "../test/fixtures.ts";
 
 useBrowser();
+
+test("photo deletion confirms its style and main-image promotion, cancellation leaves the editor reusable", () => {
+  document.body.innerHTML = renderPage({
+    record: {
+      ...legacy,
+      ...femaleCharacter,
+      secondaryPortraits: [{ style: "photo", imageUrl: "https://example.net/extra.jpg" }],
+    },
+    editing: true,
+    draft: "signed",
+  });
+  const form = document.querySelector<HTMLFormElement>("#persona-editor")!;
+  const main = document.querySelector<HTMLButtonElement>("#portrait-delete-photo-0")!;
+  const secondary = document.querySelector<HTMLButtonElement>("#portrait-delete-photo-1")!;
+  const confirm = vi.fn<(message: string) => boolean>().mockReturnValue(false);
+  Object.defineProperty(document.defaultView!, "confirm", { value: confirm, configurable: true });
+  const sent: string[] = [];
+  bindPending(form);
+  form.addEventListener("submit", (event) => {
+    if (!event.defaultPrevented) sent.push(event.submitter!.getAttribute("formaction")!);
+    event.preventDefault();
+  });
+  form.requestSubmit(main);
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 메인"));
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("다음 사진이 메인"));
+  expect(sent).toEqual([]);
+  expect(form.hasAttribute("aria-busy")).toBe(false);
+  confirm.mockReturnValue(true);
+  form.requestSubmit(secondary);
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 추가 1"));
+  expect(confirm).toHaveBeenLastCalledWith(expect.not.stringContaining("다음 사진이 메인"));
+  expect(sent).toEqual([secondary.getAttribute("formaction")]);
+  expect(document.querySelectorAll(".image-option")).toHaveLength(2);
+});
 
 test("every image intent prevents native navigation and invokes the queued submission transport, while saving stays native", () => {
   document.body.innerHTML =

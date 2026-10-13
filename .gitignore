@@ -7,6 +7,9 @@ dist/
 .stryker-tmp/
 reports/mutation/
 .env
+.dev.vars
+.wrangler/
+apps/admin/public/pending.js
 apps/persona-lab/data/
 apps/admin/data/
 packages/api-msg.hena.dev/data/

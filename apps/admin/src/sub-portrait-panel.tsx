@@ -5,41 +5,40 @@ import copy from "./copy.json";
 export function SubPortraitPanel({
   persona,
   action,
-  reservations = { anime: 0, photo: 0 },
+  style,
+  reserved,
 }: {
   persona: PersonaRecord;
   action: string;
-  reservations?: { anime: number; photo: number } | undefined;
+  style: "anime" | "photo";
+  reserved: number;
 }) {
+  const count = personaImages(persona).filter((image) => image.style === style).length;
+  const remaining = 6 - count - reserved;
   return (
-    <fieldset className="sub-portraits">
-      <legend>{copy.additionalImages}</legend>
-      <p className="hint">{copy.additionalImagesHint}</p>
-      <div className="generation-actions">
-        {(["anime", "photo"] as const).map((style) => {
-          const remaining =
-            6 -
-            personaImages(persona).filter((image) => image.style === style).length -
-            reservations[style];
-          return (
-            <button
-              key={style}
-              data-source-bound
-              type="submit"
-              name="intent"
-              value="subportrait"
-              formAction={`${action}?style=${style}`}
-              data-portrait-operation={`subportrait:${style}`}
-              data-portrait-style={style}
-              data-portrait-label={copy.styles[style]}
-              data-image-maximum={remaining}
-              disabled={remaining <= 0}
-            >
-              {copy.addImage} · {copy.portraitLabels[style]}
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
+    <div className="sub-portraits" data-add-images={style} id={`portrait-additions-${style}`}>
+      <span className="portrait-count">
+        {count}/6장{reserved > 0 && ` · 대기 ${reserved}장`}
+      </span>
+      {persona.bio && (
+        <button
+          id={`portrait-add-${style}`}
+          className="secondary"
+          form="persona-editor"
+          type="submit"
+          name="intent"
+          value="subportrait"
+          formAction={`${action}?style=${style}`}
+          data-portrait-operation={`subportrait:${style}`}
+          data-portrait-style={style}
+          data-portrait-label={copy.styles[style]}
+          data-image-maximum={remaining}
+          disabled={remaining <= 0}
+          aria-label={`${copy.portraitLabels[style]} ${copy.addImage}`}
+        >
+          + 추가
+        </button>
+      )}
+    </div>
   );
 }

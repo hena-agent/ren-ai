@@ -1,11 +1,6 @@
 import { decodePersona, PersonaError, personaImages, serializePersona } from "@ren-ai/personas";
-import type { createPersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
-import {
-  characterOf,
-  emptyPersona,
-  needsIntroduction,
-  requireMatchingProfile,
-} from "./authoring.ts";
+import type { PersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
+import { characterOf, emptyPersona } from "./authoring.ts";
 import type { Draft } from "./draft.ts";
 import { completedImageDraft, previewOf } from "./draft.ts";
 import type { ProfileGenerator } from "./generation.ts";
@@ -16,10 +11,24 @@ import type { ImageSlot, ImageIntent } from "./image-slots.ts";
 import { imageStyle, imageTarget, mainImage, readPortraitReference } from "./portrait-images.ts";
 import { imagePrompt } from "./image-prompts.ts";
 import { regeneratePortrait } from "./regenerate-portrait.ts";
-import { operation } from "./logging.ts";
 import copy from "./copy.json";
+import { assertSnapshot } from "./snapshot.ts";
+import { requirePublicProfile } from "@ren-ai/personas/profile";
+import { operation } from "./logging.ts";
 
-type Store = Awaited<ReturnType<typeof createPersonaStore>>;
+type Store = PersonaStore;
+export interface ImageBatchSnapshot {
+  source: PersonaRecord;
+  original: Draft;
+  intent: ImageIntent;
+  params: string;
+  key: string;
+  current: PersonaRecord;
+  latest: Draft;
+  prompts: readonly string[];
+  expectedBase: string;
+  prepared: boolean;
+}
 export interface ImageBatch {
   readonly intent: ImageIntent;
   readonly personaId: string;
@@ -31,11 +40,12 @@ export interface ImageBatch {
   readonly prepare: () => Promise<void>;
   readonly run: (
     ordinal: number,
-    stage: (stage: ImageStage) => void,
+    stage: (stage: ImageStage) => void | Promise<void>,
   ) => Promise<string | undefined>;
   readonly setPrompt: (ordinal: number, prompt: string) => void;
   readonly finish: (failed: boolean) => Draft;
   readonly resume: (latest: Draft, ordinals: readonly number[]) => void;
+  readonly snapshot: () => ImageBatchSnapshot;
 }
 
 function appendImage(record: PersonaRecord, slot: ImageSlot, imageUrl: string) {
@@ -87,18 +97,19 @@ export function createImageBatch(
   key: string,
   generator: ProfileGenerator,
   store: Store,
+  restored?: ImageBatchSnapshot,
 ): ImageBatch {
+  persona = decodePersona(persona);
   const initial = intent === "generate" || intent === "portrait";
-  if (intent !== "generate") {
-    if (!persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
-    requireMatchingProfile(persona, previewOf(draft, emptyPersona));
-  }
+  if (!initial && !persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
   const slots = slotsOf(persona, draft, intent, params, key);
-  const prompts = slots.map((slot, ordinal) => imagePrompt(draft, slot, ordinal, initial));
-  let current = persona;
-  let latest = draft;
-  let expectedBase = draft.base;
-  let prepared = false;
+  const prompts = restored
+    ? [...restored.prompts]
+    : slots.map((slot, ordinal) => imagePrompt(draft, slot, ordinal, initial));
+  let current = restored?.current ?? persona;
+  let latest = restored?.latest ?? draft;
+  let expectedBase = restored?.expectedBase ?? draft.base;
+  let prepared = restored?.prepared ?? false;
   const references = new Map<string, Portrait>();
   const reference = async (style: ImageSlot["style"], url: string) => {
     const cached = references.get(url);
@@ -108,23 +119,32 @@ export function createImageBatch(
     return image;
   };
   const prepare = async () => {
-    if (expectedBase && serializePersona(await store.get(draft.id)) !== expectedBase)
-      throw new PersonaError("conflict", copy.stale);
+    await assertSnapshot(store, { ...latest, base: expectedBase });
     if (prepared || !initial) return;
-    const bio =
-      intent === "generate" && needsIntroduction(persona, previewOf(draft, emptyPersona))
-        ? await operation("introduction.generate", {}, () =>
-            generator.introduction(characterOf(persona)),
-          )
-        : persona.bio;
-    const fresh = { ...persona, bio, imageUrl: "" };
+    let authored = persona;
+    if (!decodePersona(persona).bio) {
+      const converted = await operation("character.complete", {}, () =>
+        generator.convert(characterOf(persona)),
+      );
+      if (converted.name !== persona.name)
+        throw new PersonaError("invalid", "생성된 문서의 이름이 원본과 다릅니다.");
+      requirePublicProfile(converted.description);
+      authored = { ...persona, description: converted.description, prompt: converted.description };
+      persona = authored;
+    }
+    const document = decodePersona(authored);
+    requirePublicProfile(document.description!);
+    const fresh = {
+      ...document,
+      imageUrl: "",
+    };
     delete fresh.portraits;
     delete fresh.secondaryPortraits;
     delete fresh.portraitGallery;
     current = fresh;
     prepared = true;
   };
-  const run = async (ordinal: number, stage: (stage: ImageStage) => void) => {
+  const run = async (ordinal: number, stage: (stage: ImageStage) => void | Promise<void>) => {
     const slot = slots[ordinal]!;
     if (intent === "regenerate") {
       const target = imageTarget(current, params);
@@ -164,7 +184,9 @@ export function createImageBatch(
   return {
     intent,
     personaId: persona.id,
-    source: persona,
+    get source() {
+      return persona;
+    },
     slots,
     prompts,
     draft: () => latest,
@@ -179,6 +201,18 @@ export function createImageBatch(
       latest = failed ? latest : completedImageDraft(latest);
       return latest;
     },
+    snapshot: () => ({
+      source: persona,
+      original: draft,
+      intent,
+      params: params.toString(),
+      key,
+      current,
+      latest,
+      prompts,
+      expectedBase,
+      prepared,
+    }),
     resume: (editing, ordinals) => {
       if (editing.preview !== latest.preview) {
         const next = previewOf(editing, emptyPersona);
@@ -206,7 +240,25 @@ export function createImageBatch(
         ...latest,
         base: editing.base,
         preview: editing.preview,
+        ...(editing.initial && { initial: editing.initial }),
       };
     },
   };
+}
+
+export function restoreImageBatch(
+  snapshot: ImageBatchSnapshot,
+  generator: ProfileGenerator,
+  store: Store,
+) {
+  return createImageBatch(
+    snapshot.source,
+    snapshot.original,
+    snapshot.intent,
+    new URLSearchParams(snapshot.params),
+    snapshot.key,
+    generator,
+    store,
+    snapshot,
+  );
 }

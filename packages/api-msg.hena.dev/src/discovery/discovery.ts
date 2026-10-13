@@ -122,9 +122,28 @@ export const makeDiscoveryWeb = ({
       if (image && pathname.startsWith("/discovery/images/")) {
         if (request.method !== "GET")
           return Promise.resolve(new Response(null, { status: 405, headers: { Allow: "GET" } }));
-        return image(pathname.slice("/discovery/images/".length)).catch(
-          () => new Response(null, { status: 503 }),
-        );
+        const start = performance.now();
+        return image(pathname.slice("/discovery/images/".length)).catch(async (cause) => {
+          const id = randomUUID();
+          const error = cause instanceof Error ? cause : new Error("Image read failed");
+          const root = error.cause instanceof Error ? error.cause : error;
+          const code =
+            "code" in root && (typeof root.code === "string" || typeof root.code === "number")
+              ? String(root.code).slice(0, 100)
+              : undefined;
+          await Effect.runPromise(
+            Effect.logError({
+              operation: "discovery.image",
+              stage: "catalog.image",
+              outcome: "failed",
+              requestId: id,
+              causeName: root.name.slice(0, 100),
+              ...(code && { code }),
+              durationMs: performance.now() - start,
+            }),
+          );
+          return new Response(null, { status: 503, headers: { "X-Request-ID": id } });
+        });
       }
       return web.handler(request, context);
     };

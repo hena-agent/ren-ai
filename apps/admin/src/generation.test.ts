@@ -54,7 +54,7 @@ test("the Gemini adapter sends the complete character to text and portrait model
   const introductionBody = await new Request(...fetcher.mock.calls[0]!).text();
   expect(introductionBody).not.toContain("responseMimeType");
   expect(JSON.parse(introductionBody)).toMatchObject({
-    generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: "LOW" } },
+    generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "LOW" } },
     contents: [{ role: "user" }],
   });
   expect(await new Request(...fetcher.mock.calls[1]!).json()).toMatchObject({
@@ -107,7 +107,7 @@ test("missing credentials, provider outages, refusals and malformed content neve
     Response.json({ candidates: [{ content: { parts: [{ thought: "yes", text: "wrong" }] } }] }),
     reply([]),
     reply([{ text: " " }]),
-    reply([{ text: "x".repeat(241) }]),
+    reply([{ text: "x".repeat(801) }]),
   ];
   for (const response of bad) {
     await expect(
@@ -142,7 +142,7 @@ test("missing credentials, provider outages, refusals and malformed content neve
 });
 
 test("an introduction at the public-profile limit remains valid", async () => {
-  const text = "가".repeat(240);
+  const text = "가".repeat(800);
   const client = createProfileGenerator({ key: "key", fetcher: async () => reply([{ text }]) });
   expect(await client.introduction(character)).toBe(text);
 });

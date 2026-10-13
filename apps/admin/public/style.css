@@ -124,6 +124,7 @@ body {
 a {
   color: inherit;
   text-underline-offset: 4px;
+  touch-action: manipulation;
 }
 a:hover {
   color: var(--signal);
@@ -200,6 +201,12 @@ h1 {
   letter-spacing: -0.04em;
   margin: 0 0 12px;
 }
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  scroll-margin-top: 24px;
+}
 .description,
 .hint {
   color: var(--muted);
@@ -255,10 +262,6 @@ textarea {
 fieldset > input:not([type="checkbox"]):not([type="radio"]) {
   margin-bottom: 24px;
 }
-#description {
-  min-height: 360px;
-  line-height: 1.8;
-}
 .generation-actions {
   display: flex;
   flex-wrap: wrap;
@@ -304,6 +307,7 @@ button {
   border-radius: 8px;
   cursor: pointer;
   font-weight: 700;
+  touch-action: manipulation;
 }
 button:hover {
   filter: brightness(1.08);
@@ -351,8 +355,7 @@ button:disabled {
   cursor: wait;
 }
 aside {
-  position: sticky;
-  top: 24px;
+  min-width: 0;
 }
 aside h2 {
   font-size: 13px;
@@ -525,6 +528,72 @@ aside h2 {
   color: var(--muted);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.profile-tags span {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-size: 12px;
+}
+.profile-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}
+.public-profile-editor details {
+  margin: 18px 0;
+}
+.public-profile-editor summary {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.profile-answer-fields + .profile-answer-fields {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.persona-maintenance pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.6;
+}
+.conversion-report {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.conversion-report li {
+  margin: 8px 0;
+}
+.inspection-results > ul {
+  padding: 0;
+  margin: 20px 0;
+  list-style: none;
+  display: grid;
+  gap: 16px;
+}
+.inspection-results li {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.inspection-results li > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 .badge {
   display: inline-block;
@@ -557,6 +626,281 @@ aside h2 {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+.persona-workbench .page-heading {
+  margin-bottom: 16px;
+}
+.persona-workbench .page-heading h1 {
+  font-size: 24px;
+}
+.persona-workbench .page-heading .eyebrow,
+.persona-workbench .page-heading .description,
+.persona-workbench .image-options > .hint {
+  display: none;
+}
+.persona-workbench .editor-layout {
+  grid-template-columns: minmax(0, 1fr) clamp(420px, 36%, 520px);
+  gap: 32px;
+}
+.editor-toolbar {
+  gap: 12px;
+  padding: 10px 0;
+  background: var(--terminal);
+  border-block: 1px solid var(--line);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.editor-toolbar .toggle {
+  margin: 0 0 0 auto;
+  gap: 6px;
+  font-size: 14px;
+}
+.editor-toolbar .editor-name {
+  margin: 0;
+  font-size: 16px;
+  max-width: 180px;
+  overflow-wrap: anywhere;
+}
+.editor-change-state {
+  font-size: 13px;
+  color: var(--muted);
+}
+.persona-workbench button:not(.portrait-dialog button) {
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 6px;
+}
+.persona-workbench .image-option img {
+  display: block;
+  height: auto;
+}
+.persona-workbench .image-option figcaption {
+  font-size: 12px;
+  padding: 8px 12px;
+  min-height: 0;
+  color: var(--muted);
+}
+.portrait-manager-heading,
+.portrait-style-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.portrait-manager h2,
+.portrait-manager h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.portrait-manager .image-options {
+  display: grid;
+  gap: 24px;
+  padding: 0;
+}
+.portrait-style {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.sub-portraits {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.portrait-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.portrait-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 8px 8px;
+  gap: 4px;
+}
+.persona-workbench .portrait-image-actions .secondary {
+  padding: 8px;
+  font-size: 12px;
+  flex: 1 0 auto;
+  border-color: transparent;
+}
+.portrait-image-actions button:hover {
+  background: var(--line);
+}
+.portrait-image-actions .image-delete {
+  color: var(--warning);
+}
+.portrait-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 24px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.persona-document-editor {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0;
+}
+.document-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+}
+.document-file {
+  font-family: monospace;
+  font-size: 16px;
+  margin: 0;
+}
+.document-status {
+  color: var(--signal);
+  font-size: 13px;
+}
+[data-format="invalid"] .document-status {
+  color: var(--warning);
+}
+.persona-document-editor[data-format="legacy"] .document-status {
+  color: #edc77f;
+}
+.persona-document-editor[data-format="legacy"] .document-issues button {
+  color: #edc77f;
+}
+.document-tools {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 0 12px 12px;
+  flex-wrap: wrap;
+}
+.document-tools > label {
+  flex: 1;
+  margin: 0;
+  min-width: 180px;
+}
+.document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.document-workspace {
+  display: block;
+  border-top: 1px solid var(--line);
+}
+.document-source {
+  min-width: 0;
+  padding: 12px;
+}
+.document-source textarea {
+  font: 14px/1.75 monospace;
+  white-space: pre-wrap;
+  field-sizing: content;
+  min-height: 240px;
+  margin: 0;
+  tab-size: 2;
+}
+.persona-workbench {
+  max-width: 1680px;
+}
+.document-source,
+.document-preview {
+  min-width: 0;
+}
+[data-markdown-editor] .cm-editor {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.document-preview {
+  padding: 12px 20px;
+}
+.document-view-controls {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.document-workspace > [hidden] {
+  display: none;
+}
+.document-preview > h2 {
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+.document-preview-content {
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.document-preview-content p {
+  margin: 0 0 20px;
+  white-space: pre-line;
+}
+.document-preview-content h2,
+.document-preview-content h3 {
+  font-size: 16px;
+  margin: 24px 0 12px;
+}
+.document-preview-content .preview-boundary {
+  font-size: 12px;
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+.document-preview-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.document-preview-content table {
+  width: 100%;
+  table-layout: fixed;
+}
+.document-preview-content th,
+.document-preview-content td {
+  overflow-wrap: anywhere;
+}
+.document-preview-content img {
+  max-width: 100%;
+  height: auto;
+}
+.public-document-preview {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 2px solid var(--signal);
+}
+.public-document-preview .preview-boundary {
+  color: var(--signal);
+}
+.document-issues {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  padding-inline: 12px;
+}
+.document-issues button {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--warning);
+  font-weight: 400;
+}
+.document-issues small {
+  margin-left: auto;
+}
+.persona-document-editor .conversion-report {
+  margin: 0;
+  padding: 12px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
 .error {
   color: var(--warning);
 }
@@ -573,15 +917,15 @@ aside h2 {
   color: var(--muted);
   margin: 0 0 16px;
 }
-@media (max-width: 850px) {
-  .editor-layout {
+@media (max-width: 1100px) {
+  .editor-layout,
+  .persona-workbench .editor-layout {
     grid-template-columns: 1fr;
     gap: 32px;
   }
   aside {
-    position: static;
     width: 100%;
-    max-width: 420px;
+    max-width: 520px;
     margin-inline: auto;
   }
 }
@@ -599,5 +943,13 @@ aside h2 {
   }
   fieldset {
     padding: 16px;
+  }
+  .editor-toolbar {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .document-tools {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

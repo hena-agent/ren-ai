@@ -49,7 +49,9 @@ test("independent regeneration emits generating and saving stages and maintains 
         `photo:${original.portraits!.photo!}`,
         subGenerator,
         store,
-        (stage) => stages.push(stage),
+        (stage) => {
+          stages.push(stage);
+        },
       );
       return new Response();
     },

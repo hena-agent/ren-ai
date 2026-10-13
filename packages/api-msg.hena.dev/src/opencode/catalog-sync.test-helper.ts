@@ -4,7 +4,12 @@ import { Session } from "@opencode/schema";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { SqlClient } from "effect/unstable/sql";
 import { TestLLM } from "@opencode/ai/testing";
-import { createPersonaStore, loadPersonas, type PersonaRecord } from "@ren-ai/personas";
+import {
+  createPersonaStore,
+  loadPersonas,
+  serializePersona,
+  type PersonaRecord,
+} from "@ren-ai/personas";
 import { folderSnapshot, sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { join } from "node:path";
 import { rm } from "node:fs/promises";
@@ -21,6 +26,12 @@ import { messagingFixture, runMessagingTest } from "../../test/messaging.test-he
 import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 import { remoteHost } from "./remote.ts";
 import { watchCatalog } from "./catalog-sync.ts";
+import { withPublicProfile } from "@ren-ai/personas/profile";
+
+export const authoredDefinition = (record: PersonaRecord) => {
+  const description = withPublicProfile(record.prompt, record.publicProfile!);
+  return { ...record, description, prompt: description };
+};
 
 const catalogFixture = async () => {
   const fixture = await messagingFixture("catalog-sync-");
@@ -37,7 +48,8 @@ const catalogFixture = async () => {
     id: "harin",
     name: "하린",
     bio: "29살 서울 사진가",
-    prompt: "You are Harin.",
+    description: withPublicProfile("You are Harin.", "29살 서울 사진가"),
+    prompt: withPublicProfile("You are Harin.", "29살 서울 사진가"),
   });
   const catalogDirectory = join(fixture.root, "catalog");
   const store = await createPersonaStore(catalogDirectory);
@@ -142,7 +154,18 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
       });
     const watch = () =>
       Effect.forkScoped(
-        watchCatalog(remote.client, fixture.personaDirectory, fixture.catalogDirectory, personas),
+        watchCatalog(
+          remote.client,
+          fixture.personaDirectory,
+          async () => {
+            const loaded = await Effect.runPromise(loadPersonas(fixture.catalogDirectory));
+            return {
+              revision: JSON.stringify([...loaded.values()].map(serializePersona)),
+              personas: loaded,
+            };
+          },
+          personas,
+        ),
       );
     const profileName = () =>
       api
@@ -228,7 +251,7 @@ export const pauseFolderWrite = (host: Host, prompt: string) =>
       /\/api\/rpc\/ren-ai\.session-folders\/(write|update|create)$/.test(
         new URL(request.url).pathname,
       ) &&
-      (await request.text()).includes(prompt),
+      (await request.text()).includes(JSON.stringify(prompt).slice(1, -1)),
   );
 
 export const pauseGreeting = (host: Host) =>

@@ -1,22 +1,22 @@
 import { Context, Effect } from "effect";
 import { HttpClient } from "effect/unstable/http";
-import { createPersonaStore } from "@ren-ai/personas";
+import { catalogClient } from "../personas/catalog.ts";
 import { migrate } from "../database.ts";
 import { servePublic } from "../public-listener.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
 
 export const startDiscovery = ({
-  personaDirectory,
+  catalogUrl,
   turnstileSecret,
   port,
 }: {
-  personaDirectory: string;
+  catalogUrl: string;
   turnstileSecret: string;
   port: number;
 }) =>
   Effect.gen(function* () {
     yield* migrate;
-    const store = yield* Effect.tryPromise(() => createPersonaStore(personaDirectory));
+    const store = catalogClient({ url: catalogUrl, token: "" });
     const client = yield* HttpClient.HttpClient;
     const web = yield* makeDiscoveryWeb({
       catalog: store.publicList,

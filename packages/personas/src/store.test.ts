@@ -6,12 +6,13 @@ import { fileURLToPath } from "node:url";
 import { expect, test, vi } from "vitest";
 import { createPersonaStore } from "./store.ts";
 import { decodePersona } from "./model.ts";
+import { withPublicProfile } from "./profile.ts";
 
 vi.mock("node:fs/promises", async () => ({
   ...(await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises")),
 }));
 
-const harin = {
+const harin = decodePersona({
   id: "mira",
   name: "미라",
   bio: "그림을 그리며 파리에서 살아요.",
@@ -21,8 +22,38 @@ const harin = {
   language: "fr",
   openingLine: "Introduce yourself to the new user.",
   memory: "Remember the paintings we discussed.",
-  prompt: "You are Mira, a painter in Paris.\n",
-};
+  prompt: withPublicProfile("You are Mira, a painter in Paris.", "그림을 그리며 파리에서 살아요."),
+});
+
+test("inspection diagnostics retain transport causes without payload-bearing messages or stack headers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "persona-inspection-"));
+  try {
+    const store = await createPersonaStore(root);
+    await store.create(harin);
+    const underlying = Object.assign(new Error("private underlying payload"), { code: "EIO" });
+    const withoutStack = Object.assign(new Error("private payload"), { code: 42 });
+    delete withoutStack.stack;
+    for (const cause of [
+      new Error("private wrapper payload", { cause: underlying }),
+      withoutStack,
+      null,
+    ]) {
+      const read = vi.spyOn(files, "readFile").mockRejectedValueOnce(cause);
+      const rows = await store.inspect();
+      read.mockRestore();
+      expect(rows).toMatchObject([
+        { id: "mira", error: "invalid_persona_file", causeName: "Error" },
+      ]);
+      expect(JSON.stringify(rows)).not.toContain("private");
+    }
+    const read = vi.spyOn(files, "readFile").mockRejectedValueOnce(underlying);
+    expect(await store.inspect()).toMatchObject([{ causeCode: "EIO" }]);
+    read.mockRestore();
+  } finally {
+    vi.restoreAllMocks();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("the shipped catalog offers 수아, 하린 and 서연 without requiring photos", async () => {
   const store = await createPersonaStore(fileURLToPath(new URL("../catalog/", import.meta.url)));
@@ -65,10 +96,11 @@ test("publishing exposes only card fields, editing persists, and unpublishing re
         name: "미라 수정",
         bio: "그림을 그리며 파리에서 살아요.",
         imageUrl: "https://example.net/mira.png",
+        publicProfile: harin.publicProfile,
       },
     ]);
     expect((await (await createPersonaStore(root)).get("mira")).published).toBe(true);
-    await store.update({ ...harin, prompt: "바뀐 내부 프롬프트" });
+    await store.update({ ...harin, description: "바뀐 내부 프롬프트" });
     expect(await store.publicList()).toEqual([]);
     expect((await store.get("mira")).prompt).toBe("바뀐 내부 프롬프트");
   } finally {
@@ -85,8 +117,10 @@ test("invalid definitions fail before writing and IDs cannot traverse the person
       await expect(store.get(id)).rejects.toThrow(/ID는/);
       await expect(store.get(id)).rejects.toMatchObject({ kind: "invalid" });
     }
-    for (const field of ["language", "openingLine", "memory", "prompt"]) {
-      await expect(store.create({ ...harin, [field]: "  " })).rejects.toThrow(/must not be empty/);
+    for (const field of ["language", "openingLine", "memory", "description"]) {
+      await expect(store.create({ ...harin, [field]: "  " })).rejects.toThrow(
+        /must not be empty|description/,
+      );
     }
     await expect(store.create({ ...harin, name: " " })).rejects.toThrow(/이름/);
     await expect(store.create({ ...harin, timeZone: "No/SuchZone" })).rejects.toThrow(
@@ -95,9 +129,9 @@ test("invalid definitions fail before writing and IDs cannot traverse the person
     for (const imageUrl of ["invalid", "javascript:alert(1)", "http://example.com/photo"]) {
       await expect(store.create({ ...harin, imageUrl })).rejects.toThrow(/Invalid URL|HTTPS/);
     }
-    await expect(store.create({ ...harin, published: true, bio: "  " })).rejects.toThrow(
-      /소개가 필요/,
-    );
+    await expect(
+      store.create({ ...harin, published: true, description: "소개 없는 내부 설정" }),
+    ).rejects.toThrow(/소개가 필요/);
     expect(() => decodePersona({ ...harin, published: "yes" })).toThrow(/published/);
     expect(() => decodePersona({ ...harin, extra: true })).toThrow(/extra/);
     expect(await store.list()).toEqual([]);
@@ -114,7 +148,13 @@ test("a published persona needs a bio but not a profile photo", async () => {
     const store = await createPersonaStore(root);
     await store.create({ ...harin, published: true, imageUrl: "" });
     expect(await store.publicList()).toEqual([
-      { id: "mira", name: "미라", bio: "그림을 그리며 파리에서 살아요.", imageUrl: "" },
+      {
+        id: "mira",
+        name: "미라",
+        bio: "그림을 그리며 파리에서 살아요.",
+        imageUrl: "",
+        publicProfile: harin.publicProfile,
+      },
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -182,6 +222,8 @@ test("existing OpenCode markdown is editable without a second metadata store", a
       openingLine: "Say hi",
       memory: "Remember",
       prompt: "A legacy prompt",
+      description: "A legacy prompt",
+      publicProfile: "",
       name: "legacy",
       bio: "",
       imageUrl: "",
@@ -190,11 +232,13 @@ test("existing OpenCode markdown is editable without a second metadata store", a
     await store.update({
       ...legacy,
       name: "옛 인물",
-      bio: "다시 만나요",
+      description: withPublicProfile("A legacy prompt", "다시 만나요"),
       imageUrl: "https://example.org/legacy.jpg",
       published: true,
     });
-    expect((await store.get("legacy")).prompt).toBe("A legacy prompt");
+    expect((await store.get("legacy")).prompt).toBe(
+      withPublicProfile("A legacy prompt", "다시 만나요"),
+    );
     expect(await store.list()).toHaveLength(1);
     await writeFile(
       join(root, "legacy.md"),

@@ -42,6 +42,7 @@
     "@opencode/plugin": "2.0.19",
     "@opencode/server": "2.0.19",
     "@ren-ai/plugin-context": "workspace:*",
+    "@ren-ai/plugin-dice": "workspace:*",
     "@ren-ai/plugin-memory": "workspace:*",
     "@ren-ai/plugin-title": "workspace:*",
     "@ren-ai/plugin-tools": "workspace:*",

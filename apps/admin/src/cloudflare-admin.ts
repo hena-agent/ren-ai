@@ -1,0 +1,67 @@
+import type { D1Database, DurableObjectStorage } from "@cloudflare/workers-types";
+import { createAdmin } from "./admin.ts";
+import { databaseStore } from "./database-store.ts";
+import { createProfileGenerator } from "./generation.ts";
+import { loggedJob, writeLog as workerLog } from "./logging.ts";
+import { editingStorage } from "./editing-storage.ts";
+import type { ImageBucket } from "./r2-images.ts";
+
+export interface AdminEnv {
+  DB: D1Database;
+  IMAGES: ImageBucket;
+  ASSETS: { fetch: (url: string) => Promise<Pick<Response, "ok" | "text">> };
+  ADMIN_PASSWORD: string;
+  CATALOG_TOKEN: string;
+  GEMINI_API_KEY: string;
+  GEMINI_API_URL?: string;
+  ADMIN_TEXT_MODEL?: string;
+  ADMIN_IMAGE_MODEL?: string;
+}
+
+export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStorage) {
+  const asset = async (name: string) => {
+    const response = await env.ASSETS.fetch(`https://assets/${name}`);
+    if (!response.ok) throw new Error("Admin static asset is unavailable");
+    return response.text();
+  };
+  const editing = editingStorage(storage);
+  const [saved, css, editorCss, script] = await Promise.all([
+    editing.load(),
+    asset("style.css"),
+    asset("editor.css"),
+    asset("pending.js"),
+  ]);
+  const wake = async () => {
+    if ((await storage.getAlarm()) === null) await storage.setAlarm(Date.now() + 1);
+  };
+  const handle = createAdmin(
+    databaseStore(env.DB, env.IMAGES),
+    env.ADMIN_PASSWORD,
+    `${css}\n${editorCss}`,
+    {
+      script,
+      log: workerLog,
+      generator: createProfileGenerator({
+        key: env.GEMINI_API_KEY,
+        ...(env.GEMINI_API_URL && { endpoint: env.GEMINI_API_URL }),
+        ...(env.ADMIN_TEXT_MODEL && { textModel: env.ADMIN_TEXT_MODEL }),
+        ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
+      }),
+      persistence: { saved, checkpoint: editing.save, wake },
+    },
+  );
+  return {
+    fetch: handle,
+    alarm: async () => {
+      const job = handle.nextJob();
+      if (!job) return;
+      await loggedJob(
+        job.requestId,
+        { personaId: job.batch.personaId, jobId: job.id },
+        handle.runNext,
+        workerLog,
+      );
+      if (handle.nextJob()) await wake();
+    },
+  };
+}

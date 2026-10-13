@@ -1,6 +1,6 @@
 import { Deferred, Effect, Schema } from "effect";
 import { AbsolutePath, Agent, Session } from "@opencode/schema";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadPersonas } from "@ren-ai/personas";
 import { sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
@@ -8,6 +8,7 @@ import { retainedSessions } from "../conversations/retained.ts";
 import { expect, test } from "vitest";
 import {
   catalogTest,
+  authoredDefinition,
   expectProfile,
   expectPrompt,
   beginRetainingParent,
@@ -27,11 +28,11 @@ test(
       yield* host.ensure(fork.id);
       expect(yield* host.directory.bySession(native.id)).toBeUndefined();
       expect(yield* host.directory.bySession(fork.id)).toBeUndefined();
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You remember the orange telescope.",
-      };
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
       yield* expectProfile(host, "수아 수정");
@@ -48,11 +49,11 @@ test.each(["new", "fork"] as const)(
     catalogTest((host, fixture) =>
       Effect.gen(function* () {
         const retained = yield* beginRetainingParent(host);
-        const updated = {
+        const updated = authoredDefinition({
           ...host.personas.get("persona1")!,
           name: "수아 수정",
           prompt: "You keep the red lighthouse postcard.",
-        };
+        });
         yield* Effect.promise(() => fixture.store.update(updated));
         yield* host.watch();
         yield* expectProfile(host, "수아 수정");
@@ -76,11 +77,11 @@ test(
       const retained = yield* beginRetainingParent(host);
       yield* retained.finish;
       yield* host.activeSession("persona1", "current@example.com");
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You remember the indigo street sign.",
-      };
+      });
       const gate = yield* beginCatalogEdit(host, fixture, updated);
       const child = yield* host.nativeChild(retained.parent);
       yield* host.ensure(child.id);
@@ -107,7 +108,10 @@ test(
         directory: AbsolutePath.make(parent.location.directory),
       });
       yield* host.remote.sessions.wait(child.id);
-      const updated = { ...host.personas.get("persona1")!, prompt: "You like the river ferry." };
+      const updated = authoredDefinition({
+        ...host.personas.get("persona1")!,
+        prompt: "You like the river ferry.",
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       const next = yield* loadPersonas(fixture.catalogDirectory);
       yield* syncFolders(host.remote.client, fixture.personaDirectory, next);
@@ -133,11 +137,11 @@ test(
         model: retained.parent.model,
         location: { directory: AbsolutePath.make(directory) },
       });
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You collect green sea glass.",
-      };
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
       yield* expectProfile(host, "수아 수정");
@@ -176,27 +180,24 @@ test(
 );
 
 test(
-  "a native persona missing from the proposed catalog rejects the whole edit and later recovers",
+  "an absent native persona retains her snapshot without blocking valid Catalog updates",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const active = yield* host.activeSession();
       const harin = yield* host.remote.createSession("harin");
-      const original = yield* host.read(active.id);
+      const original = yield* host.read(harin.id);
       const saved = host.personas.get("harin")!;
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You grow lavender on the balcony.",
-      };
+      });
       const next = yield* catalogWithoutHarin(fixture, updated);
-      expect(
-        (yield* syncFolders(host.remote.client, fixture.personaDirectory, next).pipe(Effect.flip))
-          .message,
-      ).toContain(`Managed session ${harin.id} has no catalog persona`);
-      expect(yield* host.read(active.id)).toEqual(original);
+      yield* syncFolders(host.remote.client, fixture.personaDirectory, next);
+      expect(yield* host.read(harin.id)).toEqual(original);
+      expect(next.get("harin")?.published).toBe(false);
       yield* host.watch();
-      yield* Effect.sleep("200 millis");
-      expect(yield* host.profileName()).toBe("수아");
+      yield* expectProfile(host, "수아 수정");
       yield* Effect.promise(() => fixture.store.create(saved));
       yield* expectProfile(host, "수아 수정");
       yield* expectPrompt(host, active.id, updated.prompt);
@@ -241,6 +242,33 @@ test(
 );
 
 test(
+  "a missing Catalog ID cannot adopt another persona's session snapshot",
+  catalogTest((host, fixture) =>
+    Effect.gen(function* () {
+      const active = yield* host.activeSession();
+      const original = yield* host.read(active.id);
+      yield* Effect.promise(async () => {
+        await writeFile(
+          join(active.location.directory, "persona.json"),
+          JSON.stringify({ ...original.persona, id: "harin" }),
+        );
+        await writeFile(
+          join(active.location.directory, ".opencode", "agents", "harin.md"),
+          original.agent,
+        );
+      });
+      const missing = new Map(host.personas);
+      missing.delete("persona1");
+      expect(
+        (yield* syncFolders(host.remote.client, fixture.personaDirectory, missing).pipe(
+          Effect.flip,
+        )).message,
+      ).toContain("snapshot persona ID does not match");
+    }),
+  ),
+);
+
+test(
   "a closed native event connection reconnects and reconciles sessions created during the gap",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
@@ -261,11 +289,11 @@ test(
           headers: response.headers,
         });
       };
-      const updated = {
+      const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
         prompt: "You have the cobalt blue notebook.",
-      };
+      });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
       yield* Deferred.await(disconnected).pipe(Effect.timeout("5 seconds"));

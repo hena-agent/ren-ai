@@ -159,6 +159,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           "Persona1 · +821012345678",
         );
         expect((yield* llm.requests())[0]!.tools.map((tool) => tool.name).toSorted()).toEqual([
+          "dice",
           "react",
           "read",
           "send",
@@ -191,7 +192,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         const plugins = yield* application.client.plugin.list({
           location: { directory: otherDirectory },
         });
-        for (const id of ["tools", "context", "memory", "title"]) {
+        for (const id of ["tools", "context", "memory", "title", "dice"]) {
           expect(plugins.data.find((plugin) => plugin.id === `ren-ai.${id}`)?.state.status).toBe(
             "active",
           );

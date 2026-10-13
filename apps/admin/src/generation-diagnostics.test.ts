@@ -178,11 +178,11 @@ test("validation failures are payload-free and valid responses can carry complet
   await expect(
     modelReply([{ text: "private malformed JSON" }]).character("idea"),
   ).rejects.toMatchObject({
-    message: "Invalid character draft",
+    message: "Invalid persona Markdown",
     fields: { code: "invalid_character", finishReason: "STOP" },
   });
   await expect(
-    modelReply([{ text: "x".repeat(241) }]).introduction(character),
+    modelReply([{ text: "x".repeat(801) }]).introduction(character),
   ).rejects.toMatchObject({
     fields: { code: "invalid_introduction", finishReason: "STOP" },
   });

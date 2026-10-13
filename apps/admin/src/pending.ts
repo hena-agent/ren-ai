@@ -1,5 +1,5 @@
 import { bindPortraitDialog } from "./portrait-dialog.ts";
-import { syncGender, bindProfileSource } from "./editor-controls.ts";
+import { syncGender } from "./editor-controls.ts";
 const messages: Readonly<Record<string, string>> = {
   subportrait: "adding",
   regenerate: "regenerating",
@@ -12,12 +12,16 @@ export function bindPending(
   submitImage?: (form: HTMLFormElement, submitter: HTMLElement | null) => void,
 ) {
   bindPortraitDialog(form);
-  bindProfileSource(form);
   let pending = false;
   const status = form.querySelector<HTMLOutputElement>("[data-pending]");
   form.addEventListener("submit", (event) => {
     if (event.defaultPrevented) return;
     if (pending) {
+      event.preventDefault();
+      return;
+    }
+    const confirmation = event.submitter?.getAttribute("data-confirm-delete");
+    if (confirmation && !form.ownerDocument.defaultView!.confirm(confirmation)) {
       event.preventDefault();
       return;
     }

@@ -3,7 +3,7 @@ import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { Gestures } from "../gestures/gestures.ts";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
-import type { Persona } from "../personas/personas.ts";
+import type { Persona } from "@ren-ai/personas";
 import { notReacted, notSent, sent } from "../transcript/transcript.ts";
 import type { timing } from "../timing/timing.ts";
 import type { Tapback } from "@ren-ai/plugin-application/protocol";

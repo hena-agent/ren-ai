@@ -137,7 +137,7 @@ test("default entries skip root and unrelated locations without opening their to
             plugins.data
               .filter((entry) => installedPlugins.some((plugin) => plugin.id === entry.id))
               .map((entry) => entry.state.status),
-          ).toEqual(["active", "active", "active", "active"]);
+          ).toEqual(installedPlugins.map(() => "active"));
         }
       }),
     );

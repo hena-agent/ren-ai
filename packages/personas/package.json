@@ -4,17 +4,24 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./profile": "./src/profile.ts",
+    "./markdown": "./src/markdown.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "effect": "4.0.0-rc.112",
+    "mdast-util-from-markdown": "2.1.0",
+    "mdast-util-to-string": "4.0.0",
+    "react": "19.2.4",
+    "react-markdown": "10.1.0",
     "yaml": "2.8.2"
   },
   "devDependencies": {
     "@types/node": "26.6.2",
+    "@types/react": "19.2.14",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
   }

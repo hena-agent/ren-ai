@@ -132,6 +132,7 @@ export const createHost = (options: HostOptions) =>
               ...(options.react
                 ? [{ action: "react", resource: "*", effect: "allow" } as const]
                 : []),
+              { action: "dice", resource: "*", effect: "allow" },
             ],
           });
         }),

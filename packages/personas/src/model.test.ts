@@ -1,7 +1,8 @@
 import { expect, test } from "vitest";
 import { decodePersona, parsePersona, serializePersona } from "./model.ts";
+import { withPublicProfile } from "./profile.ts";
 
-const persona = {
+const persona = decodePersona({
   id: "mira",
   name: "미라",
   bio: "공개 소개",
@@ -11,8 +12,29 @@ const persona = {
   timeZone: "Asia/Seoul",
   openingLine: "인사해",
   memory: "기억해",
-  prompt: "가상 인물의 내부 프롬프트",
-};
+  prompt: withPublicProfile("가상 인물의 내부 프롬프트", "공개 소개"),
+});
+
+test("one Markdown source survives storage and derives public values without duplicate frontmatter", () => {
+  const record = decodePersona({
+    ...persona,
+    descriptionVersion: 2,
+    description: withPublicProfile(
+      persona.description!,
+      "안녕하세요.\n\n### 내가 편해지는 순간\n말없이 걷는 시간.",
+    ),
+  });
+  expect(parsePersona(record.id, serializePersona(record))).toEqual(record);
+  expect(record.bio).toBe("안녕하세요.");
+  const { description: _description, ...runtime } = record;
+  expect(parsePersona(record.id, serializePersona(runtime)).bio).toBe(record.bio);
+  const metadata = serializePersona(record).split("---")[1]!;
+  for (const duplicate of ["bio:", "description:", "profile-details:"])
+    expect(metadata).not.toContain(duplicate);
+  expect(() => decodePersona({ ...record, profileDetails: { memory: "private" } })).toThrow(
+    "profileDetails",
+  );
+});
 
 test("frontmatter rejects unknown keys and incorrect types before producing a persona", () => {
   const source = serializePersona(persona);

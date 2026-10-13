@@ -1,7 +1,7 @@
 import { createPersonaStore, loadPersonas } from "@ren-ai/personas";
 import { Effect } from "effect";
 import { Window } from "happy-dom";
-import type { HTMLInputElement, HTMLTextAreaElement } from "happy-dom";
+import type { HTMLInputElement, HTMLTextAreaElement, HTMLMetaElement } from "happy-dom";
 import { expect, test, vi } from "vitest";
 import { createAdmin } from "./admin.ts";
 import {
@@ -32,9 +32,16 @@ test("the authoring form asks for name and a long description, with no internal 
     const emptyPage = await empty.text();
     expect(emptyPage).toContain(copy.empty);
     expect(emptyPage).toContain('aria-current="page"');
-    const page = await (await admin(request("/new"))).text();
+    const editorResponse = await admin(request("/new"));
+    const page = await editorResponse.text();
     expect(page).toMatch(/^<!doctype html>/);
     window.document.write(page);
+    const nonce = window.document.querySelector<HTMLMetaElement>(
+      'meta[name="style-nonce"]',
+    )!.content;
+    expect(nonce).not.toBe("");
+    expect(editorResponse.headers.get("content-security-policy")).toContain(`'nonce-${nonce}'`);
+    expect(editorResponse.headers.get("content-security-policy")).not.toContain("unsafe-inline");
     expect(window.document.title).toBe("Ren AI / Admin");
     expect(window.document.querySelector("form")?.getAttribute("action")).toBe("/personas");
     expect(window.document.querySelector("#persona-editor")?.getAttribute("action")).toBe(
@@ -44,7 +51,6 @@ test("the authoring form asks for name and a long description, with no internal 
     for (const name of [
       "id",
       "imageUrl",
-      "bio",
       "openingLine",
       "memory",
       "prompt",
@@ -55,25 +61,29 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(window.document.querySelector<HTMLInputElement>("#name")?.required).toBe(true);
     const description = window.document.querySelector<HTMLTextAreaElement>("#description")!;
     expect(description.value).toBe("");
-    expect(description.getAttribute("rows")).toBe("16");
+    expect(description.getAttribute("wrap")).not.toBe("off");
     expect(description.required).toBe(true);
-    expect(description.getAttribute("aria-describedby")).toBe("description-hint");
+    expect(description.getAttribute("aria-describedby")).toBe("document-issues");
     expect(
-      [...window.document.querySelectorAll("fieldset label")].map((label) =>
-        label.textContent?.trim(),
-      ),
-    ).toEqual(["성별 선택", "간단한 설명", "이름", "캐릭터 설명", "프로필 공개"]);
+      [...window.document.querySelectorAll("label")].map((label) => label.textContent?.trim()),
+    ).toEqual(expect.arrayContaining(["성별 선택", "간단한 설명", "프로필 공개"]));
+    expect(window.document.querySelector('[name="bio"]')).toBeNull();
+    expect(window.document.querySelector(".persona-document-editor")?.tagName).toBe("SECTION");
+    expect(window.document.querySelector("main details")).toBeNull();
     for (const label of window.document.querySelectorAll("label"))
       expect(window.document.getElementById(label.getAttribute("for")!)).not.toBeNull();
     expect(window.document.querySelector<HTMLInputElement>("#published")?.checked).toBe(false);
     expect(window.document.querySelector('[value="portrait"]')).toBeNull();
     expect(window.document.querySelector("[data-pending]")).not.toBeNull();
     expect(window.document.querySelector("script")?.getAttribute("src")).toBe("/pending.js");
-    expect(window.document.querySelector("aside h2")?.textContent).toBe(copy.preview);
-    expect(window.document.querySelector(".persona-card h3")?.textContent).toBe(copy.noName);
-    expect(window.document.querySelector(".persona-card p")?.textContent).toBe(copy.noBio);
-    expect(window.document.querySelector(".image-placeholder")?.textContent).toBe(copy.noImage);
-    expect(window.document.querySelector(".badge")?.className).toBe("badge");
+    expect(window.document.querySelector("script")?.getAttribute("type")).toBe("module");
+    expect(window.document.querySelector("aside #preview-title")?.textContent).toBe("프로필 사진");
+    expect(window.document.querySelector(".editor-name")?.textContent).toBe(copy.new);
+    expect(
+      [...window.document.querySelectorAll(".portrait-empty")].map((entry) => entry.textContent),
+    ).toEqual(["아직 실사 사진이 없습니다.", "아직 애니풍 사진이 없습니다."]);
+    expect(window.document.querySelectorAll(".portrait-count")).toHaveLength(2);
+    expect(window.document.querySelector('[value="subportrait"]')).toBeNull();
     expect(window.document.querySelector('[role="alert"]')).toBeNull();
     expect(window.document.querySelector(".notice.success")).toBeNull();
     expect(tokenOf(page)).not.toBe("");
@@ -108,8 +118,7 @@ test("a draft gets an automatic stable ID and derives OpenCode settings from its
   const persisted = await store.get(id);
   expect(persisted.description).toBe(character.description);
   expect(persisted.prompt).toContain(character.description);
-  expect(persisted.prompt).toContain(character.name);
-  expect(persisted.prompt).toContain("언어: ko");
+  expect(persisted.prompt).toBe(character.description);
   expect(persisted.prompt).not.toContain("injected");
   expect(persisted.openingLine).not.toBe("injected");
   expect(persisted.memory).not.toBe("injected");
@@ -120,6 +129,7 @@ test("a draft gets an automatic stable ID and derives OpenCode settings from its
   const page = await (await reopened(request(`/personas/${id}?saved=1`))).text();
   expect(page).toContain(copy.saved);
   expect(page).toContain(`action="/personas/${id}"`);
+  expect(page).not.toContain('class="seed-form"');
   expect(page).toContain("독립적인 성격의 도예가");
   const savedAgain = await reopened(
     request(`/personas/${id}`, { ...character, draft: tokenOf(page) }),
@@ -139,8 +149,8 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(page).not.toContain('class="notice success"');
   expect(page).toContain(introduction);
   expect(page).toContain(copy.regenerate);
-  expect(page).toContain(`alt="${character.name} ${copy.styles.anime}"`);
-  expect(page).toContain(`alt="${character.name} ${copy.styles.photo}"`);
+  expect(page).toContain(`alt="${character.name} ${copy.styles.anime} · 메인"`);
+  expect(page).toContain(`alt="${character.name} ${copy.styles.photo} · 메인"`);
   const image = /src="(\/images\/[^"]+)"/.exec(page)![1]!;
   expect(await store.list()).toEqual([]);
   expect(await (await admin(new Request("http://localhost:3729/api/personas"))).json()).toEqual([]);
@@ -160,7 +170,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(save.status).toBe(303);
   const id = idOf(save);
   const persisted = await (await createPersonaStore(root)).get(id);
-  expect(persisted.portraits?.anime).toBe(`/discovery${image}`);
+  expect(persisted.portraits?.photo).toBe(`/discovery${image}`);
   expect(persisted.portraits?.photo).toBe(persisted.imageUrl);
   expect((await store.publicImage(image.slice("/images/".length))).status).toBe(200);
   const publicResponse = await admin(new Request("http://localhost:3729/api/personas"));
@@ -173,6 +183,7 @@ test("generation is a private preview until saving; publishing exposes only the 
       bio: introduction,
       imageUrl: persisted.imageUrl,
       portraits: persisted.portraits,
+      publicProfile: introduction,
     },
   ]);
   expect(listed).not.toContain("비공개 설정");
@@ -182,7 +193,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(listPage).toContain(copy.edit);
   expect(listPage).not.toContain(`${id} / EDIT`);
   const editPage = await (await admin(request(`/personas/${id}`))).text();
-  expect(editPage).toContain(`alt="${character.name} ${copy.styles.anime}"`);
+  expect(editPage).toContain(`alt="${character.name} ${copy.styles.anime} · 메인"`);
   expect(editPage).toContain(`src="${image}"`);
   const editedWindow = new Window();
   try {
@@ -235,7 +246,7 @@ test("a failed full image refresh preserves completed photos and can be retried 
   ).text();
   expect(retried).toContain(introduction);
   expect(retried).not.toContain(originalImage);
-  expect(intro).toHaveBeenCalledTimes(1);
+  expect(intro).not.toHaveBeenCalled();
   expect(portrait).toHaveBeenCalledTimes(6);
   expect(portrait).toHaveBeenCalledWith(femaleCharacter, "anime");
   expect(portrait).toHaveBeenCalledWith(femaleCharacter, "photo");
@@ -244,7 +255,7 @@ test("a failed full image refresh preserves completed photos and can be retried 
 });
 type ProfileGeneratorPortrait = typeof generator.portrait;
 
-test("legacy IDs and runtime directives stay intact when publishing an unchanged existing character", async () => {
+test("legacy IDs and runtime directives stay intact in a private save while incomplete publication is blocked", async () => {
   const { admin, store } = await fixture();
   const imageUrl = "https://example.net/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png";
   await store.create({ ...legacy, imageUrl });
@@ -259,7 +270,18 @@ test("legacy IDs and runtime directives stay intact when publishing an unchanged
       published: "on",
     }),
   );
-  expect(saved.status).toBe(303);
+  expect(saved.status).toBe(400);
+  expect(
+    (
+      await admin(
+        request("/personas/legacy", {
+          name: legacy.name,
+          description: legacy.prompt,
+          draft: tokenOf(page),
+        }),
+      )
+    ).status,
+  ).toBe(303);
   const next = await store.get("legacy");
   expect(next.id).toBe(legacy.id);
   expect(next.prompt).toBe(legacy.prompt);
@@ -272,9 +294,14 @@ test("legacy IDs and runtime directives stay intact when publishing an unchanged
 
 test("renaming or changing the description of a profile-less draft updates its runtime settings", async () => {
   const { store, admin } = await fixture();
-  await store.create({ ...legacy, bio: "", imageUrl: "" });
+  await store.create({
+    ...legacy,
+    description: "You are Mira, a painter in Paris.",
+    bio: "",
+    imageUrl: "",
+  });
   for (const changes of [
-    { name: "새 이름", description: legacy.prompt },
+    { name: "새 이름", description: "You are Mira, a painter in Paris." },
     { name: "새 이름", description: "  새로운 긴 캐릭터 설정\n비공개 대사 예시  " },
   ]) {
     const token = tokenOf(await (await admin(request("/personas/legacy"))).text());
@@ -283,7 +310,7 @@ test("renaming or changing the description of a profile-less draft updates its r
     const record = await store.get("legacy");
     expect(record.name).toBe(changes.name);
     expect(record.description).toBe(changes.description.trim());
-    expect(record.prompt).toContain(`이름: ${changes.name}`);
+    expect(record.prompt).toBe(changes.description.trim());
     expect(record.prompt).toContain(changes.description.trim());
     expect(record.openingLine).not.toBe(legacy.openingLine);
     expect(record.memory).not.toBe(legacy.memory);

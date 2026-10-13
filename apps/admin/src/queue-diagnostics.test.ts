@@ -109,7 +109,6 @@ test("queue summaries classify exact success, input and unexpected status bounda
 test("text-only edits keep the latest unsaved images on reload and configuration errors retain every separate input", async () => {
   const introduction = vi
     .fn<typeof subGenerator.introduction>()
-    .mockImplementationOnce(subGenerator.introduction)
     .mockResolvedValue("Changed introduction for recovery.");
   const { admin, route, editing, logs } = await savedPreview({ ...subGenerator, introduction });
   const images = await admin(

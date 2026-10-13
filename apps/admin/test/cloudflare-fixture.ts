@@ -1,0 +1,86 @@
+import { readFile } from "node:fs/promises";
+import { Miniflare } from "miniflare";
+import { afterEach } from "vitest";
+import { decodePersona } from "@ren-ai/personas";
+import { databaseStore } from "../src/database-store.ts";
+import { femaleCharacter, legacy } from "./fixtures.ts";
+
+const runtimes: Miniflare[] = [];
+afterEach(async () => {
+  await Promise.all(runtimes.splice(0).map((runtime) => runtime.dispose()));
+});
+
+export const databasePersona = decodePersona({
+  ...legacy,
+  ...femaleCharacter,
+  id: "harin",
+  prompt: femaleCharacter.description,
+  imageUrl: "",
+});
+
+export async function cloudflareFixture(
+  workerSource?: string,
+  assetsSource = "export default {fetch(){return new Response('asset')}}",
+) {
+  const runtime = new Miniflare({
+    workers: [
+      {
+        config: {
+          name: "test",
+          compatibilityDate: "2026-10-11",
+          compatibilityFlags: ["nodejs_compat"],
+          ...(workerSource && {
+            exports: {
+              PersonaAdmin: { type: "durable-object" as const, storage: "sqlite" as const },
+            },
+          }),
+          manifest: {
+            mainModule: "index.js",
+            modules: {
+              "index.js": {
+                type: "esm",
+                contents: workerSource ?? "export default {fetch(){return new Response('ok')}}",
+              },
+            },
+          },
+          env: {
+            DB: { type: "d1", id: "test" },
+            IMAGES: { type: "r2", name: "test" },
+            ...(workerSource && {
+              ADMIN: {
+                type: "durable-object" as const,
+                worker: "test",
+                exportName: "PersonaAdmin",
+              },
+              ASSETS: { type: "worker" as const, worker: "assets" },
+              ADMIN_PASSWORD: { type: "text" as const, value: "test-password" },
+              CATALOG_TOKEN: { type: "text" as const, value: "catalog-test" },
+              GEMINI_API_KEY: { type: "text" as const, value: "" },
+            }),
+          },
+        },
+      },
+      {
+        config: {
+          name: "assets",
+          compatibilityDate: "2026-10-11",
+          manifest: {
+            mainModule: "index.js",
+            modules: { "index.js": { type: "esm", contents: assetsSource } },
+          },
+        },
+      },
+    ],
+  });
+  runtimes.push(runtime);
+  const db = await runtime.getD1Database("DB");
+  const bucket = await runtime.getR2Bucket("IMAGES");
+  const ddl = await readFile(
+    new URL("../drizzle/0000_chilly_warpath.sql", import.meta.url),
+    "utf8",
+  );
+  await db.batch(
+    ddl.split("--> statement-breakpoint").map((statement) => db.prepare(statement.trim())),
+  );
+  return { runtime, db, bucket, store: databaseStore(db, bucket) };
+}

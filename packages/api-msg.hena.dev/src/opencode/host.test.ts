@@ -24,6 +24,7 @@ import {
   valid,
   expectLateResults,
   expectSealedHostApi,
+  expectScopedPermissions,
 } from "../../test/host.test-helper.ts";
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
 const xdg = await vi.hoisted(async () => {
@@ -118,7 +119,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           }
           expect((yield* Effect.promise(() => stat(configDirectory))).isDirectory()).toBe(true);
           expect(session.agent).toBe("persona1");
-          expect(session.permissions).toEqual([{ action: "*", resource: "*", effect: "deny" }]);
+          expectScopedPermissions(session.permissions, ["dice"]);
           yield* host.sessions.prompt({
             sessionID: session.id,
             id: SessionMessage.ID.make("msg_persona_1"),
@@ -128,8 +129,8 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           expect(registeredTools).not.toContain("send");
           expect(personaTools).toEqual([]);
           const requests = yield* llm.requests();
-          expect(requests).toHaveLength(1); // The title hook must skip a second model request.
-          expect(requests.every((request) => request.tools.length === 0)).toBe(true);
+          // The title hook must skip a second model request.
+          expect(requests.map((r) => r.tools.map((t) => t.name))).toEqual([["dice"]]);
           expect(JSON.stringify(requests)).toContain("You are Persona1. Speak Korean.");
           expect(JSON.stringify(requests)).not.toMatch(/PLANTED|planted instruction|malicious/);
           const messages = yield* host.sessions.messages({
@@ -143,7 +144,10 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
             text: "test backstop",
           });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
-          expect((yield* llm.requests()).every((request) => request.tools.length === 0)).toBe(true);
+          expect((yield* llm.requests()).flatMap((r) => r.tools.map((t) => t.name))).toEqual([
+            "dice",
+            "dice",
+          ]);
           expect((yield* host.sessions.get(permissive.id)).title).not.toContain("undefined");
           const nonPersona = yield* host.sessions.create({
             agent: Agent.ID.make("build"),
@@ -292,13 +296,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(yield* host.conversations.byHandle(first.handle)).toEqual(first);
           expect(yield* host.conversations.bySession(session.id)).toEqual(first);
           expect(yield* host.conversations.bySession("missing")).toBeUndefined();
-          expect(session.permissions).toEqual([
-            { action: "*", resource: "*", effect: "deny" },
-            { action: "send", resource: "*", effect: "allow" },
-            { action: "wait", resource: "*", effect: "allow" },
-            { action: "read", resource: "*", effect: "allow" },
-            { action: "react", resource: "*", effect: "allow" },
-          ]);
+          expectScopedPermissions(session.permissions, ["send", "wait", "read", "react", "dice"]);
           const signals: number[] = [];
           host.intake.onNew((conversation) => signals.push(conversation.id));
           yield* imessage.text(first.handle, "안녕", Date.parse("2026-09-25T11:52:00Z"));
@@ -310,7 +308,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
           expect(
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
-          ).toEqual(Array.from({ length: 4 }, () => ["react", "read", "send", "wait"]));
+          ).toEqual(Array.from({ length: 4 }, () => ["dice", "react", "read", "send", "wait"]));
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
           const initialRequests = yield* llm.requests();
           expect(initialRequests[0]?.tools.find((tool) => tool.name === "read")).toMatchObject({
@@ -412,6 +410,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual([
+            "dice",
             "react",
             "read",
             "send",

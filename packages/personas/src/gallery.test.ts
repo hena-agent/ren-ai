@@ -6,8 +6,9 @@ import { createPersonaStore } from "./store.ts";
 import { decodePersona, parsePersona, serializePersona } from "./model.ts";
 import { personaImages } from "./portraits.ts";
 import { stringify } from "yaml";
+import { withPublicProfile } from "./profile.ts";
 
-const persona = {
+const persona = decodePersona({
   id: "gallery",
   name: "인물",
   bio: "공개 소개",
@@ -17,8 +18,8 @@ const persona = {
   timeZone: "Asia/Seoul",
   openingLine: "Hi",
   memory: "Remember",
-  prompt: "Private source",
-};
+  prompt: withPublicProfile("Private source", "공개 소개"),
+});
 const pair = { anime: "https://example.net/anime.jpg", photo: "https://example.net/photo.jpg" };
 
 test("legacy grouped images migrate losslessly to independent mains and secondary pictures", () => {

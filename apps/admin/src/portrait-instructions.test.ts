@@ -17,6 +17,7 @@ import {
 import { createAdmin } from "./admin.ts";
 import { draftTokens } from "./draft.ts";
 import { createProfileGenerator } from "./generation.ts";
+import { withPublicProfile } from "@ren-ai/personas/profile";
 import copy from "./copy.json";
 import policy from "./policy.json";
 
@@ -84,12 +85,10 @@ test("a closed prompt dialog supports first generation and regeneration without 
       [femaleCharacter, "anime", instructions],
       [femaleCharacter, "photo", instructions],
     ]);
-    expect(intro).toHaveBeenCalledWith(femaleCharacter);
+    expect(intro).not.toHaveBeenCalled();
     expect(window.document.querySelector('[name="intent"][value="portrait"]')).toBeNull();
     expect(window.document.querySelectorAll('[value="generate"]')).toHaveLength(1);
-    expect(window.document.querySelector(".generation-actions button")?.textContent).toBe(
-      copy.regenerate,
-    );
+    expect(window.document.querySelector('[value="generate"]')?.textContent).toBe(copy.regenerate);
     portrait.mockClear();
     const response = await admin(
       request("/personas", {
@@ -110,7 +109,7 @@ test("a closed prompt dialog supports first generation and regeneration without 
       [femaleCharacter, "anime", instructions],
       [femaleCharacter, "photo", instructions],
     ]);
-    expect(intro).toHaveBeenCalledTimes(1);
+    expect(intro).not.toHaveBeenCalled();
     expect(page).toContain(introduction);
     expect(draftTokens("test-password").decode(tokenOf(page))).not.toHaveProperty(
       "portraitInstructions",
@@ -226,8 +225,22 @@ test("old forms can omit extra instructions and uploaded files cannot become ima
   );
   expect(response.status).toBe(200);
   expect(portrait.mock.calls).toEqual([
-    [{ ...source, gender: "female" }, "anime"],
-    [{ ...source, gender: "female" }, "photo"],
+    [
+      {
+        ...source,
+        description: withPublicProfile(source.description, introduction),
+        gender: "female",
+      },
+      "anime",
+    ],
+    [
+      {
+        ...source,
+        description: withPublicProfile(source.description, introduction),
+        gender: "female",
+      },
+      "photo",
+    ],
   ]);
   const form = new FormData();
   for (const [field, value] of Object.entries({
@@ -253,8 +266,8 @@ test("one action preserves the introduction until the name or description change
     .mockImplementation(generator.introduction);
   const { admin } = await fixture({ ...generator, introduction: introductionModel });
   let page = await profilePreview(admin);
-  expect(introductionModel).toHaveBeenCalledTimes(1);
-  for (const [fields, count] of [
+  expect(introductionModel).not.toHaveBeenCalled();
+  for (const [fields] of [
     [{ ...character, portraitInstructions: "새 의상" }, 1],
     [{ ...character, name: "새 이름" }, 2],
     [{ ...character, name: "새 이름", description: "새로운 캐릭터 설명" }, 3],
@@ -264,7 +277,7 @@ test("one action preserves the introduction until the name or description change
     );
     expect(response.status).toBe(200);
     page = await response.text();
-    expect(introductionModel).toHaveBeenCalledTimes(count);
+    expect(introductionModel).not.toHaveBeenCalled();
     expect(page).toContain(introduction);
   }
 });
@@ -279,7 +292,11 @@ test("incomplete legacy profiles regenerate their introduction even when the cha
     { bio: "", imageUrl: legacy.imageUrl },
     { bio: legacy.bio, imageUrl: "" },
   ]) {
-    await store.update({ ...legacy, ...profile });
+    await store.update({
+      ...legacy,
+      ...profile,
+      description: profile.bio ? legacy.description : "You are Mira, a painter in Paris.",
+    });
     const page = await (await admin(request("/personas/legacy"))).text();
     expect(page).toContain(copy.generate);
     expect(page).not.toContain(copy.regenerate);
@@ -292,9 +309,9 @@ test("incomplete legacy profiles regenerate their introduction even when the cha
       }),
     );
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain(introduction);
+    expect(await response.text()).toContain(legacy.bio);
   }
-  expect(introductionModel).toHaveBeenCalledTimes(2);
+  expect(introductionModel).not.toHaveBeenCalled();
   await store.update({ ...legacy, imageUrl: "" });
   introductionModel.mockClear();
   const restarted = createAdmin(store, "test-password", "", {

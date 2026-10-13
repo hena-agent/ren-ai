@@ -18,7 +18,8 @@ async function editor(preview = false) {
   const form = fillCharacterForm(character);
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const input = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
-  const button = (selector: string) => form.querySelector<HTMLButtonElement>(selector)!;
+  const button = (selector: string) =>
+    form.ownerDocument.querySelector<HTMLButtonElement>(selector)!;
   const submissions: { intent: string | null; prompt: string | null; busy: string | null }[] = [];
   const buttons = form.ownerDocument.querySelectorAll("button").length;
   const transports: {
@@ -93,7 +94,8 @@ test("one generating action changes its label after a preview and saving bypasse
   const { form, dialog, button, submissions } = await editor(true);
   const generate = button('[value="generate"]');
   expect(generate.textContent).toBe(copy.regenerate);
-  expect(form.querySelectorAll('[value="generate"]')).toHaveLength(1);
+  expect(document.querySelectorAll('[value="generate"]')).toHaveLength(1);
+  expect(generate.form).toBe(form);
   form.requestSubmit(generate);
   expect(dialog.open).toBe(true);
   button("[data-portrait-confirm]").click();
@@ -165,4 +167,23 @@ test("image-options context remains empty for a legacy button without a target l
   form.requestSubmit(generate);
   expect(dialog.open).toBe(true);
   expect(dialog.querySelector("[data-portrait-target]")?.textContent).toBe("");
+});
+
+test("closing options restores focus to the current photo action after a preview update", async () => {
+  const { form, dialog, button, submissions } = await editor(true);
+  const image = button("#portrait-regenerate-photo-0");
+  form.requestSubmit(image);
+  image.outerHTML = image.outerHTML.replace("다시 생성", "업데이트된 사진 다시 생성");
+  const replacement = document.querySelector<HTMLButtonElement>(`#${image.id}`)!;
+  button("[data-portrait-cancel]").click();
+  expect(document.activeElement).toBe(replacement);
+  form.requestSubmit(replacement);
+  button("[data-portrait-confirm]").click();
+  expect(submissions.at(-1)?.intent).toBe("regenerate");
+  expect(document.querySelectorAll("#portrait-regenerate-photo-0")).toHaveLength(1);
+  document.defaultView!.dispatchEvent(new Event("pageshow"));
+  form.requestSubmit(replacement);
+  replacement.remove();
+  button("[data-portrait-cancel]").click();
+  expect(dialog.open).toBe(false);
 });

@@ -4,7 +4,8 @@ import { applicationConfig } from "./configuration.ts";
 
 const required = {
   STATE_DIRECTORY: "/state",
-  PERSONA_DIRECTORY: "/personas",
+  PERSONA_CATALOG_URL: "https://admin.test",
+  PERSONA_CATALOG_TOKEN: "catalog-token",
   IMSG_URL: "https://imsg.hena.dev/rpc",
   IMSG_TOKEN: "messaging",
   OPENCODE_URL: "https://oc.hena.dev",
@@ -22,7 +23,7 @@ test("deployment defaults select the persona location and normal Docker listener
   );
   expect(config).toEqual({
     stateDirectory: "/state",
-    personaDirectory: "/personas",
+    catalog: { url: "https://admin.test", token: "catalog-token" },
     defaultPersonaID: "Persona1",
     publicPort: 4700,
     hostname: "0.0.0.0",

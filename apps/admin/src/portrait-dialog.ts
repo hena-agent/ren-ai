@@ -31,13 +31,16 @@ export function bindPortraitDialog(form: HTMLFormElement) {
     input.focus();
   });
   dialog.querySelector("[data-portrait-cancel]")!.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => submitter?.focus());
+  dialog.addEventListener("close", () => {
+    const target = submitter?.id ? form.ownerDocument.getElementById(submitter.id) : submitter;
+    target?.focus({ preventScroll: true });
+  });
   dialog.querySelector("[data-portrait-confirm]")!.addEventListener("click", () => {
     dialog.close();
     confirmed = true;
     const target = form.ownerDocument.createElement("button");
     for (const attribute of submitter!.attributes)
-      target.setAttribute(attribute.name, attribute.value);
+      if (attribute.name !== "id") target.setAttribute(attribute.name, attribute.value);
     target.hidden = true;
     form.append(target);
     try {

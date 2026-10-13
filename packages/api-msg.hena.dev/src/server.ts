@@ -7,7 +7,7 @@ import { makeHealth } from "./health/health.ts";
 import { makeBackup } from "./backup/backup.ts";
 import { startMessagingApplication } from "./application.ts";
 import { prepareMessaging, type MessagingTools } from "./application-tools.ts";
-import { loadPersonas } from "./personas/personas.ts";
+import { catalogClient, type CatalogConnection } from "./personas/catalog.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { operatorHandler } from "./operator/api.ts";
 import { serveOperatorSocket } from "./operator/socket.ts";
@@ -20,7 +20,7 @@ import { syncFolders, watchCatalog } from "./opencode/catalog-sync.ts";
 
 export interface ServerConfig {
   readonly stateDirectory: string;
-  readonly personaDirectory: string;
+  readonly catalog: CatalogConnection;
   readonly defaultPersonaID: string;
   readonly publicPort: number;
   readonly hostname?: string;
@@ -44,7 +44,8 @@ export const composeServer = (config: ServerConfig) =>
     const client = yield* HttpClient.HttpClient;
     const sql = yield* SqlClient.SqlClient;
     const messages = yield* remoteMessages(config.messaging);
-    const personas = yield* loadPersonas(config.personaDirectory);
+    const catalog = catalogClient(config.catalog);
+    const { personas } = yield* Effect.tryPromise(catalog.load);
     let callbackWeb: (request: Request) => Promise<Response> = starting;
     let onboardingWeb: (request: Request) => Promise<Response> = starting;
     const publicWeb = (request: Request) =>
@@ -88,12 +89,9 @@ export const composeServer = (config: ServerConfig) =>
       health,
     );
     yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
-    yield* watchCatalog(
-      host.client,
-      config.opencode.directory,
-      config.personaDirectory,
-      personas,
-    ).pipe(Effect.forkScoped);
+    yield* watchCatalog(host.client, config.opencode.directory, catalog.load, personas).pipe(
+      Effect.forkScoped,
+    );
     onboardingWeb = (request) =>
       host.onboardingWeb(request, Context.make(HttpClient.HttpClient, client));
     yield* Effect.forkScoped(health.monitor);

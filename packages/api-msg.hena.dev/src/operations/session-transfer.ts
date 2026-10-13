@@ -3,7 +3,7 @@ import { AbsolutePath } from "@opencode/schema";
 import { Effect } from "effect";
 import { readFile, writeFile } from "node:fs/promises";
 import { exportSessions, restoreSessions } from "../opencode/transfer.ts";
-import type { Persona } from "../personas/personas.ts";
+import type { Persona } from "@ren-ai/personas";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { managedSessions } from "../opencode/managed-sessions.ts";
 import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
