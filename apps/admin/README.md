@@ -57,15 +57,13 @@ also work in the existing Discovery client.
 
 ## Deploy
 
-From `apps/admin`, provision empty resources:
+The production domain is `admin.ambivalent.dev`, using the `persona-admin` Worker
+in the `Ambivalent Co.` account. Wrangler references the remote `persona-catalog`
+D1 database in that account. A new remote Catalog starts empty;
+`import:local` does not populate remote resources.
 
-```sh
-bunx wrangler d1 create persona-catalog
-bunx wrangler r2 bucket create persona-images
-```
-
-Replace the all-zero local database ID in `wrangler.jsonc` with the returned ID.
-Keep the R2 bucket private. Set secrets interactively:
+The D1 schema and private R2 bucket `persona-images` are provisioned.
+Set separate production secrets interactively from `apps/admin`:
 
 ```sh
 bunx wrangler secret put ADMIN_PASSWORD
@@ -86,6 +84,33 @@ optional `documents` snapshot field initializes new Conversation folders with
 documents; session snapshots include the current pair for export/restore.
 Point both API services at the same Worker. Publish newly authored personas
 before fresh onboarding. Any configured default must be an actual published ID.
+
+### Workers Builds
+
+After provisioning and setting runtime secrets, connect this repository to
+`persona-admin` under **Settings → Builds**:
+
+| Setting                      | Value                                                        |
+| ---------------------------- | ------------------------------------------------------------ |
+| Production branch            | `main`                                                       |
+| Root directory               | `apps/admin`                                                 |
+| Build command                | `bun install --cwd ../.. --frozen-lockfile && bun run build` |
+| Deploy command               | `bun run db:remote && bun run deploy`                        |
+| Build variable `BUN_VERSION` | `1.4.2`                                                      |
+
+Use a deployment token with Workers, D1 migration and domain-routing access.
+Initially watch the entire repository to include shared-package/schema changes.
+Workers Builds needs the explicit build command even though local Wrangler
+declares a custom build. Disable previews until isolated data and secrets are
+configured. Keep GitHub's `Quality gates` check required before merging into
+`main`; Cloudflare does not wait for it before deploying.
+
+Set `ADMIN_PASSWORD`, `CATALOG_TOKEN` and `GEMINI_API_KEY` as Worker runtime
+secrets, not browser/build variables. Set the messaging application's
+`PERSONA_CATALOG_URL=https://admin.ambivalent.dev` and its private
+`PERSONA_CATALOG_TOKEN` to match `CATALOG_TOKEN`. Deploy that application
+configuration separately. Verify unauthenticated `/` returns 401, authenticated
+editing works, and only published current image references are public.
 
 ## Storage and recovery
 

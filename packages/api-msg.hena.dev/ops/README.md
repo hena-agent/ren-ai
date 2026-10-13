@@ -2,6 +2,17 @@
 
 ## Discovery domain cutover
 
+`discovery.ambivalent.dev` is an additional swipe/waitlist app in `apps/discovery`,
+deployed with Cloudflare Workers Builds. `admin.ambivalent.dev` is the Catalog and
+authoring Worker in `apps/admin`. The existing `discovery.hena.dev` site and its
+GitHub Actions deployment remain active. See the [Discover setup](../../../apps/discovery/README.md)
+and [Admin setup](../../../apps/admin/README.md#workers-builds).
+Deploy the `/discovery/` API's additional CORS origin and allow the new hostname
+in Turnstile before deploying Discover. Retain the old widget hostname and
+onboarding API origin. Point the application at `https://admin.ambivalent.dev` with
+the matching private Catalog token; changing the website does not redeploy the
+application.
+
 The site is `discovery.hena.dev` in `packages/discovery.hena.dev`, served by the `discovery-hena-dev` Worker. The former `msg-hena-dev` Worker and its `msg.hena.dev` domain are retired without a redirect. The existing Turnstile widget now permits only `discovery.hena.dev`.
 
 For a future domain move, deploy the API's new CORS origin and update Turnstile before deploying the website. Verify HTTPS, `/`, `/privacy`, and browser access to `/onboarding` and `/waitlist` before retiring the old Worker, custom-domain/DNS binding, and CORS origin. Build with the production `VITE_TURNSTILE_SITE_KEY`; main auto-deploys the site. `ops/deploy.sh` is for bootstrap-only migration, not a routine API update.

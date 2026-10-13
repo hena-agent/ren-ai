@@ -24,6 +24,12 @@ bun run ci
 
 ## Persona discovery and Admin
 
+Production hosting: `discovery.ambivalent.dev` serves `apps/discovery` and
+`admin.ambivalent.dev` serves `apps/admin`, each through Cloudflare Workers Builds.
+The existing `discovery.hena.dev` onboarding site keeps its GitHub Actions
+deployment. Setup and prerequisites are in the [Discover runbook](apps/discovery/README.md)
+and [Admin runbook](apps/admin/README.md).
+
 Admin creates OpenCode personas from a name and detailed private character description. A brief idea can generate an editable AI character draft. AI writes a first-person dating-profile introduction and creates self-chosen profile photos in LovePlus-inspired Japanese 2D anime and near-photorealistic styles. Operators choose the image count, then add, regenerate or delete independent photos. IDs and runtime instructions are managed internally. `apps/discovery` supports style selection, swipe, Like / Pass and web-consented waiting registration. `packages/discovery.hena.dev` lets a visitor select a published persona and continue through handle/consent onboarding into a conversation.
 
 Start Admin with a password:

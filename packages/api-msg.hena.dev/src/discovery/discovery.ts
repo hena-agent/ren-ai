@@ -114,7 +114,11 @@ export const makeDiscoveryWeb = ({
         Layer.provide(handlers),
         Layer.provideMerge(HttpRouter.layer),
         Layer.provide(HttpServer.layerServices),
-        Layer.provide(HttpRouter.cors({ allowedOrigins: ["https://discovery.hena.dev"] })),
+        Layer.provide(
+          HttpRouter.cors({
+            allowedOrigins: ["https://discovery.hena.dev", "https://discovery.ambivalent.dev"],
+          }),
+        ),
       ),
     );
     const handler: typeof web.handler = (request, context) => {
