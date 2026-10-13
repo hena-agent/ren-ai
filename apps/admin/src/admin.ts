@@ -12,7 +12,6 @@ import {
 } from "./authoring.ts";
 import { restoreDraft, draftTokens, previewOf, documentsOf, captureDocuments } from "./draft.ts";
 import type { Draft } from "./draft.ts";
-import type { ProfileGenerator } from "./generation.ts";
 import { renderPage } from "./page.tsx";
 import type { PageContent } from "./page.tsx";
 import copy from "./copy.json";
@@ -38,35 +37,25 @@ import {
   reportFailure,
   requestFields,
   requestId,
+  GenerationError,
 } from "./logging.ts";
-import type { Log } from "./logging.ts";
 import { versionedPersona } from "@ren-ai/personas";
 import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
-import type { AdminPersistence } from "./admin-state.ts";
+import type { AdminOptions } from "./admin-options.ts";
+import { contactRoutes } from "./contact-routes.ts";
 import { html } from "./html-response.ts";
-
+import { generationFailureMessage } from "./generation-failure.ts";
 const documentFields = (draft: Draft) => ({
   documents: documentsOf(draft),
   tab: draft.tab,
   showIdea: Boolean(draft.characterPending),
 });
-
 export function createAdmin(
   store: PersonaStore,
   password: string,
   stylesheet: string,
-  {
-    generator,
-    script,
-    log,
-    persistence,
-  }: {
-    generator?: ProfileGenerator;
-    script?: string;
-    log?: Log;
-    persistence?: AdminPersistence;
-  } = {},
+  { generator, script, log, persistence, management }: AdminOptions = {},
 ) {
   if (!password.trim()) throw new Error("ADMIN_PASSWORD is required");
   const expected = createHash("sha256")
@@ -104,6 +93,12 @@ export function createAdmin(
   // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow request, generation and storage failures before responding
   const failure = (error: unknown, record?: PersonaRecord, draft?: Draft) => {
     reportFailure(error, { stage: "request" }, error instanceof PersonaError ? "warn" : "error");
+    const message =
+      error instanceof PersonaError
+        ? error.message
+        : error instanceof GenerationError
+          ? generationFailureMessage(error)
+          : undefined;
     const active = draft && queue.pending(draft.id);
     const content: PageContent =
       record && draft
@@ -124,14 +119,13 @@ export function createAdmin(
     return html(
       renderPage({
         ...content,
-        error: `${error instanceof PersonaError ? error.message : copy.failure} (요청 ID: ${requestId()})`,
+        error: `${message ?? copy.failure} (요청 ID: ${requestId()})`,
       }),
       error instanceof PersonaError
         ? { invalid: 400, not_found: 404, conflict: 409 }[error.kind]
         : 503,
     );
   };
-
   const unconfigured = (persona: PersonaRecord, draft: Draft) => {
     reportFailure(new Error("Profile generator is not configured"), {
       stage: "generation.configuration",
@@ -150,7 +144,6 @@ export function createAdmin(
       503,
     );
   };
-
   const execute = async (
     persona: ReturnType<typeof authorPersona>,
     draft: Draft,
@@ -450,6 +443,8 @@ export function createAdmin(
         });
       if (request.method !== "GET" && request.method !== "POST")
         return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
+      if (["/waitlist", "/first-contacts"].includes(url.pathname))
+        return contactRoutes(request, management);
       const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
       if (resource) return resource;
       const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/retry)?$/.exec(url.pathname);

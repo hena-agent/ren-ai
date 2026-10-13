@@ -10,6 +10,7 @@ import { fakeVerification } from "../test/turnstile.ts";
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   localStorage.clear();
   delete window.turnstile;
 });
@@ -29,6 +30,30 @@ const client: DiscoveryClient = {
 };
 const comparisonImages = () =>
   [...document.querySelectorAll(".style-previews img")].map((image) => image.getAttribute("src"));
+
+test.each(["anime", "photo"] as const)(
+  "production keeps the first %s choice and restores it without the header switch",
+  async (style) => {
+    vi.stubEnv("DEV", false);
+    const first = render(<App client={client} />);
+    await screen.findByRole("heading", { name: "어떤 느낌으로 만나볼까요?" });
+    expect(document.querySelector(".style-picker-hint")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: style === "anime" ? /애니메/ : /실사/ }));
+    expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
+      people[0]!.portraits[style],
+    );
+    expect(localStorage.getItem("ren-ai.discovery.image-style")).toBe(style);
+    expect(document.querySelector(".style-switch")).toBeNull();
+    first.unmount();
+    render(<App client={client} />);
+    await screen.findByRole("heading", { name: "하린" });
+    expect(screen.queryByRole("heading", { name: "어떤 느낌으로 만나볼까요?" })).toBeNull();
+    expect(document.querySelector(".style-switch")).toBeNull();
+    expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
+      people[0]!.portraits[style],
+    );
+  },
+);
 
 test("first-time visitors select a style before browsing and can change the whole deck", async () => {
   render(<App client={client} />);

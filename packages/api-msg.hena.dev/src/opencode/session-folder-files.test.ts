@@ -4,6 +4,8 @@ import { folderFiles, renderSnapshot } from "@ren-ai/plugin-session-folder/files
 import { managedFolder, sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { expect, test, vi } from "vitest";
 import { messagingFixture } from "../../test/messaging.test-helper.ts";
+import { conversationMemory } from "@ren-ai/plugin-session-folder/memory";
+import { parseConversationState, serializeInitialState } from "@ren-ai/personas";
 
 vi.mock("node:fs/promises", async (original) => ({
   ...(await original<typeof import("node:fs/promises")>()),
@@ -131,4 +133,91 @@ test("initial Catalog documents seed new Conversations; updates and snapshot tra
     await fs.rm(join(target, "STATE.md"));
     await fs.mkdir(join(target, "STATE.md"));
     await expect(files.read("ses_seeded")).rejects.toMatchObject({ code: "EISDIR" });
+  }));
+
+test("starting affection seeds only new Conversations and never resets current or unspecified affection", () =>
+  withFiles(async (files) => {
+    const state = serializeInitialState({
+      mood: 55,
+      energy: 60,
+      stress: 35,
+      connection: 55,
+      solitude: 60,
+      affection: 27,
+      traits: {},
+    });
+    const initial = { state, memory: "# 현재 생활\n\n사진전을 준비 중이다." };
+    const seeded = renderSnapshot({ ...snapshot.persona, initial }, snapshot.rules);
+    const path = await files.write("ses_affection", seeded);
+    expect(
+      parseConversationState((await files.read("ses_affection")).documents!.state).affection,
+    ).toBe(27);
+    const memory = conversationMemory(path);
+    await memory.run(
+      "update_state",
+      {
+        scores: { affection: 58 },
+        additions: {},
+        remove: [],
+        reason: "대화를 나누며 조금 가까워졌다.",
+      },
+      "affection-update",
+      "message-1",
+    );
+    const next = renderSnapshot(
+      {
+        ...snapshot.persona,
+        initial: { ...initial, state: state.replace("affection: 27", "affection: 90") },
+      },
+      "new rules",
+    );
+    await files.write("ses_affection", next);
+    const current = await files.read("ses_affection");
+    expect(current.runtime?.state?.affection).toBe(58);
+    expect(await memory.context()).toContain("affection: 58");
+    await files.write("ses_new_affection", next);
+    expect(
+      parseConversationState((await files.read("ses_new_affection")).documents!.state).affection,
+    ).toBe(90);
+    await files.write("ses_restored_affection", current);
+    expect((await files.read("ses_restored_affection")).runtime?.state?.affection).toBe(58);
+    const prior = renderSnapshot(
+      { ...snapshot.persona, initial: { ...initial, state: state.replace("affection: 27\n", "") } },
+      snapshot.rules,
+    );
+    const oldPath = await files.write("ses_existing_affection", prior);
+    const existing = conversationMemory(oldPath);
+    await existing.run(
+      "update_state",
+      { scores: { stress: 20 }, additions: {}, remove: [], reason: "휴식을 취했다." },
+      "condition-update",
+      "message-2",
+    );
+    await files.write("ses_existing_affection", next);
+    const preserved = (await files.read("ses_existing_affection")).runtime!.state!;
+    expect(preserved).not.toHaveProperty("affection");
+    expect(preserved.stress).toBe(20);
+    for (const value of [-1, 101, 1.5])
+      await expect(
+        memory.run(
+          "update_state",
+          { scores: { affection: value }, additions: {}, remove: [], reason: "invalid" },
+          `invalid-${value}`,
+          "message-3",
+        ),
+      ).rejects.toThrow("tool input");
+    await expect(
+      memory.run(
+        "update_state",
+        {
+          scores: {},
+          additions: { affection: { value: 50, meaning: "호감도", reason: "중복" } },
+          remove: [],
+          reason: "중복 항목",
+        },
+        "duplicate-affection",
+        "message-3",
+      ),
+    ).rejects.toThrow("built-in");
+    expect((await files.read("ses_affection")).runtime?.state?.affection).toBe(58);
   }));

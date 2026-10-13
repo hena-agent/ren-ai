@@ -41,6 +41,9 @@ export const makeOperator = (
               yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
               SELECT user.handle, conversation.session_id FROM user
               JOIN conversation ON conversation.user_id = user.id WHERE user.handle = ${handle}`;
+              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
+                SELECT r.handle, c.session_id FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
+                WHERE r.handle = ${handle} AND c.session_id IS NOT NULL`;
               if (!keep)
                 yield* sql`INSERT OR IGNORE INTO removal SELECT handle, session_id
               FROM retained_session WHERE handle = ${handle}`;
@@ -50,6 +53,7 @@ export const makeOperator = (
               yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
               yield* sql`DELETE FROM waitlist WHERE email = ${handle}`;
               yield* sql`DELETE FROM discovery_registration WHERE handle = ${handle}`;
+              yield* sql`DELETE FROM persona_assignment WHERE handle = ${handle}`;
               yield* sql`DELETE FROM user WHERE handle = ${handle}`;
               yield* sql`DELETE FROM reset WHERE handle = ${handle}`;
               const pending =

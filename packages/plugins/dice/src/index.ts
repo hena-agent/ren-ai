@@ -1,5 +1,7 @@
 import { Plugin } from "@opencode/plugin/effect";
-import { inPersonaLocation } from "@ren-ai/plugin-application";
+import { inPersonaLocation, conversationTool } from "@ren-ai/plugin-application";
+import { conversationMemory } from "@ren-ai/plugin-session-folder/memory";
+import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 import { Effect, Schema, type JsonSchema } from "effect";
 import { isDeepStrictEqual } from "node:util";
 
@@ -21,6 +23,7 @@ export const dicePlugin = (options: { readonly personaDirectory: string }) =>
     effect: (ctx) =>
       Effect.gen(function* () {
         if (!inPersonaLocation(ctx.location.directory, options.personaDirectory)) return;
+        if (!managedFolder(options.personaDirectory, ctx.location.directory)) return;
         yield* ctx.tool.transform((editor) =>
           editor.add({
             name: "dice",
@@ -28,10 +31,17 @@ export const dicePlugin = (options: { readonly personaDirectory: string }) =>
             input: { "~standard": input },
             output: Schema.String,
             options: { codemode: false },
-            execute: () =>
-              Effect.sync(() => {
-                const output = String(Math.floor(Math.random() * 10001));
-                return { output, content: output };
+            execute: (_, context) =>
+              conversationTool("dice", context.sessionID, context.id, async () => {
+                if (
+                  managedFolder(options.personaDirectory, ctx.location.directory) !==
+                  context.sessionID
+                )
+                  throw new Error("Conversation dice binding mismatch");
+                return conversationMemory(ctx.location.directory).roll(
+                  context.id,
+                  context.messageID,
+                );
               }),
           }),
         );

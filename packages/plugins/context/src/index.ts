@@ -7,10 +7,17 @@ import {
   inPersonaLocation,
   isMessagingTool,
   type PersonaPluginOptions,
+  conversationOperation,
 } from "@ren-ai/plugin-application";
 import { phone } from "@ren-ai/plugin-application/phone";
 import { isDiceTool } from "@ren-ai/plugin-dice";
 import { cleanContext } from "./clean.ts";
+import {
+  conversationMemory,
+  memoryToolNames,
+  isMemoryTool,
+} from "@ren-ai/plugin-session-folder/memory";
+import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 
 export const contextPlugin = (options: PersonaPluginOptions) =>
   Plugin.define({
@@ -35,8 +42,17 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                   (name) => options[name] && isMessagingTool(name, event.tools[name]),
                 ),
                 ...(isDiceTool(event.tools["dice"]) ? ["dice"] : []),
+                ...memoryToolNames.filter((name) => isMemoryTool(name, event.tools[name])),
               ]),
             );
+            if (
+              managedFolder(options.personaDirectory, ctx.location.directory) === event.sessionID
+            ) {
+              const memory = yield* conversationOperation("memory.context", event.sessionID, () =>
+                conversationMemory(ctx.location.directory).context(),
+              );
+              event.system.push({ type: "text", text: memory });
+            }
             if (options.settledSends) {
               const sends = yield* options.settledSends(event.sessionID);
               for (const [index, entry] of event.messages.entries()) {

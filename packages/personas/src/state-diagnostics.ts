@@ -36,12 +36,15 @@ function location(
 
 function fieldMessage(path: readonly PropertyKey[]) {
   const field = String(path.at(-1) ?? "State");
-  if (["mood", "energy", "stress", "connection", "solitude", "strength"].includes(field))
+  if (
+    ["mood", "energy", "stress", "connection", "solitude", "affection", "strength"].includes(field)
+  )
     return `${field}: 정수 0–100이 필요합니다.`;
   if (field === "active") return "active: true 또는 false만 사용할 수 있습니다.";
   if (field === "persistence") return "persistence: lasting이어야 합니다.";
   if (field === "traits") return "traits: 특성 이름을 key로 가진 객체가 필요합니다.";
-  if (path.length === 0) return "State는 상태 5개와 traits를 포함한 YAML 객체여야 합니다.";
+  if (path.length === 0)
+    return "State는 컨디션 5개·초기 호감도 affection·traits를 포함한 YAML 객체여야 합니다.";
   return `${path.map(String).join(".")}: 필수 항목 또는 허용된 필드인지 확인해 주세요.`;
 }
 

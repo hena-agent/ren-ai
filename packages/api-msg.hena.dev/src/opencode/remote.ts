@@ -113,16 +113,16 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
             .synthetic({
               sessionID,
               id: recoveryID(checkpoint?.id ?? latest?.id ?? sessionID),
-              text: "Continue the interrupted Conversation. Check the recorded tool results and do not repeat completed sends or reactions.",
+              text: "Continue the interrupted Conversation. Check the recorded tool results and do not repeat completed sends or reactions. Keep completed memory updates and reuse existing dice decisions.",
               delivery: "queue",
             })
             .pipe(Effect.mapError(remoteError));
         }),
-      createSession: (personaID: string) =>
+      createSession: (personaID: string, sessionID?: Session.ID) =>
         Effect.gen(function* () {
           if (!personas.has(personaID))
             return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
-          const id = Session.ID.create();
+          const id = sessionID ?? Session.ID.create();
           const rules = yield* Effect.tryPromise(loadGroundRules);
           yield* folders
             .create(

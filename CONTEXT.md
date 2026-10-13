@@ -59,12 +59,44 @@ The 1:1 iMessage thread between one user and one persona.
 _Avoid_: chat, thread, session (a session is OpenCode's)
 
 **Memory**:
-What a persona remembers of one conversation: the latest messages word for word and a summary of everything older. Nothing in it carries over to another conversation.
+What a persona remembers of her life and one conversation. It includes short-term and long-term memory; neither carries over to another conversation.
 _Avoid_: context, history, session
+
+**Short-term memory**:
+What is currently on the persona's mind: current life, relevant facts, ongoing topics and unfinished plans or promises.
+_Avoid_: transcript, summary of every message
+
+**Long-term memory**:
+Lasting facts and experiences recalled when relevant, with their provenance and current clarity. A clear memory retains detail, a faded memory retains only its remaining gist, and a forgotten memory has lost its content.
+_Avoid_: complete conversation archive
+
+**State**:
+The persona's current condition and other current values needed for her choices within one conversation. State changes with events and time; it is distinct from her fixed identity and the facts she remembers.
+_Avoid_: personality, memory, probability
+
+**Affection**:
+The persona's positive interest in getting to know one conversation's user. A persona-specific starting value describes her interest on first meeting; subsequent affection reflects that conversation's experience. It is distinct from familiarity, trust, desire to chat and intent to date.
+_Avoid_: action probability, relationship stage
+
+**Conversation history**:
+The actual sequence of messages and actions, including any checkpoint summarising older exchanges. History records what happened; it is distinct from what the persona currently remembers.
+_Avoid_: Memory
 
 **Waitlist**:
 People waiting to start a conversation. Discovery registrations include a handle, liked personas and web consent; selection has no promised order or time. The legacy waitlist contains emails from people whose handle can't receive iMessage or for whom the service is full.
 _Avoid_: queue, signup list
+
+**Selection**:
+The operator's choice to admit up to N randomly chosen eligible waiting people, each with one randomly chosen available persona from their Likes.
+_Avoid_: matching, approval, first-come-first-served
+
+**Assignment**:
+An exclusive pairing of one persona with one handle, including the time before the first Greeting is sent. A persona and a handle can each have only one current assignment; a failed or uncertain first contact keeps the assignment.
+_Avoid_: Like, session, recommendation
+
+**First contact reservation**:
+The selected persona's planned first Greeting, scheduled once between five minutes and one hour after selection. It is distinct from both selection and successful delivery.
+_Avoid_: Notice, immediate onboarding, automatic selection
 
 **Reset**:
 Returning a test handle to before onboarding, so its next conversation starts as a first meeting. The persona's previous memory is kept for review.

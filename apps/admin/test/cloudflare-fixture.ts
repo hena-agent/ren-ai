@@ -54,7 +54,7 @@ export async function cloudflareFixture(
               },
               ASSETS: { type: "worker" as const, worker: "assets" },
               ADMIN_PASSWORD: { type: "text" as const, value: "test-password" },
-              CATALOG_TOKEN: { type: "text" as const, value: "catalog-test" },
+              TOKEN_CATALOG: { type: "text" as const, value: "catalog-test" },
               GEMINI_API_KEY: { type: "text" as const, value: "" },
             }),
           },

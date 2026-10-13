@@ -78,9 +78,12 @@ test("only a complete command from a marked, active User resets and unrelated ha
       Effect.gen(function* () {
         const host = yield* start;
         const old = yield* host.createSession("persona1");
-        const other = yield* host.createSession("persona1");
+        const other = yield* host.createSession("persona2");
         yield* host.conversations.create(registration(handle, old.id));
-        yield* host.conversations.create(registration("other@example.com", other.id));
+        yield* host.conversations.create({
+          ...registration("other@example.com", other.id),
+          personaID: "persona2",
+        });
         yield* fake.text(handle, "/reset", Date.now());
         expect((yield* host.conversations.byHandle(handle))!.sessionID).toBe(old.id);
         yield* host.operator.testHandle("unknown@example.com", true);

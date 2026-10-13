@@ -120,6 +120,24 @@ export const migrate = Effect.gen(function* () {
           PRIMARY KEY (registration_id, persona_id)
         )`;
       }),
+      "019_discovery_contacts": Effect.gen(function* () {
+        yield* sql`CREATE TABLE persona_assignment (
+          persona_id TEXT PRIMARY KEY, handle TEXT NOT NULL UNIQUE
+        )`;
+        yield* sql`CREATE TABLE discovery_selection (
+          request_id TEXT PRIMARY KEY, requested INTEGER NOT NULL, created_at INTEGER NOT NULL
+        )`;
+        yield* sql`CREATE TABLE discovery_contact (
+          registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
+          selection_id TEXT NOT NULL REFERENCES discovery_selection(request_id),
+          persona_id TEXT NOT NULL UNIQUE,
+          scheduled_at INTEGER NOT NULL,
+          state TEXT NOT NULL CHECK(state IN ('scheduled','preparing','greeting','active','failed','review','blocked','unreachable')),
+          session_id TEXT,
+          started_at INTEGER,
+          request_id TEXT NOT NULL
+        )`;
+      }),
     }),
   });
 });

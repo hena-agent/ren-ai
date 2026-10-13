@@ -24,6 +24,7 @@ import {
   expectLateResults,
   expectSealedHostApi,
   expectScopedPermissions,
+  conversationTools,
 } from "../../test/host.test-helper.ts";
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
 const xdg = await vi.hoisted(async () => {
@@ -126,10 +127,12 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(registeredTools).not.toContain("send");
-          expect(personaTools).toEqual([]);
+          expect(personaTools).toEqual(["update_memory", "remember", "search_memory"]);
           const requests = yield* llm.requests();
           // The title hook must skip a second model request.
-          expect(requests.map((r) => r.tools.map((t) => t.name))).toEqual([["dice"]]);
+          expect(requests.map((r) => r.tools.map((t) => t.name))).toEqual([
+            conversationTools(["dice"]).toSorted(),
+          ]);
           expect(JSON.stringify(requests)).toContain("You are Persona1. Speak Korean.");
           expect(JSON.stringify(requests)).not.toMatch(/PLANTED|planted instruction|malicious/);
           const messages = yield* host.sessions.messages({
@@ -144,8 +147,8 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).flatMap((r) => r.tools.map((t) => t.name))).toEqual([
-            "dice",
-            "dice",
+            ...conversationTools(["dice"]).toSorted(),
+            ...conversationTools(["dice"]).toSorted(),
           ]);
           expect((yield* host.sessions.get(permissive.id)).title).not.toContain("undefined");
           const nonPersona = yield* host.sessions.create({
@@ -194,6 +197,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
     join(personaDirectory, "persona1.md"),
     valid.replace("Asia/Seoul", "Pacific/Honolulu"),
   );
+  await writeFile(join(personaDirectory, "persona2.md"), valid);
   const events: string[] = [];
   const alerts: string[] = [];
   const imessage = fakeMessages(events);
@@ -307,7 +311,11 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
           expect(
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
-          ).toEqual(Array.from({ length: 4 }, () => ["dice", "react", "read", "send", "wait"]));
+          ).toEqual(
+            Array.from({ length: 4 }, () =>
+              conversationTools(["dice", "react", "read", "send", "wait"]).toSorted(),
+            ),
+          );
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
           const initialRequests = yield* llm.requests();
           expect(initialRequests[0]?.tools.find((tool) => tool.name === "read")).toMatchObject({
@@ -408,13 +416,9 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             text: "check tool backstop",
           });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
-          expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual([
-            "dice",
-            "react",
-            "read",
-            "send",
-            "wait",
-          ]);
+          expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual(
+            conversationTools(["dice", "react", "read", "send", "wait"]).toSorted(),
+          );
           expect(alerts).toContain("unexpected-tool: OpenCode offered disallowed tool: intruder");
           step = 0;
           const orphan = yield* host.createSession("persona1");
@@ -458,7 +462,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             yield* host
               .onboard({
                 handle: "+821033333333",
-                personaID: "persona1",
+                personaID: "persona2",
                 locale: "ko",
                 privacyNoticeVersion: "v1",
                 turnstileToken: "human",

@@ -183,7 +183,7 @@ export function DocumentEditor({
           )}
           <p className="document-hint">
             {key === "state"
-              ? "공통 상태 0–100 · 숨겨진 특성은 Persona와 일치해야 합니다."
+              ? "상태값은 정수 0–100 · affection은 처음 만난 상대에 대한 출발 호감도로 직접 수정할 수 있습니다. 친숙함·신뢰·행동 확률이 아니며, 기존 대화에는 다시 적용하지 않습니다. 숨겨진 특성은 Persona와 일치해야 합니다."
               : "현재 생활과 진행 중인 일 · 상대와의 경험이나 약속은 넣지 않습니다."}
           </p>
         </section>

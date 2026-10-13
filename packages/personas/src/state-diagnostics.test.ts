@@ -12,6 +12,7 @@ const source = serializeInitialState({
   stress: 24,
   connection: 46,
   solitude: 57,
+  affection: 18,
   traits: initialTraits(persona),
 });
 
@@ -54,6 +55,7 @@ test("valid State shares the schema and trait validation with publication, inclu
         stress: 0,
         connection: 100,
         solitude: 0,
+        affection: 0,
         traits: {},
       }),
       renderCharacterSheet({ ...sheet, hidden: [] }),

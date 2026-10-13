@@ -50,26 +50,25 @@ Uploads are verified before all new Persona rows and links are committed in
 one D1 batch; a failed SQL statement rolls back that batch.
 
 The standalone Discovery API defaults to `PERSONA_CATALOG_URL=http://127.0.0.1:3729`.
-The messaging application also needs `PERSONA_CATALOG_TOKEN`, equal to the
-Worker's `CATALOG_TOKEN`. It refreshes revisions once a second and on native
+The messaging application and Worker both use `TOKEN_CATALOG` with the same
+value for private Catalog access. The application refreshes revisions once a second and on native
 session events. Its selection response uses absolute Worker image URLs, which
 also work in the existing Discovery client.
 
 ## Deploy
 
-From `apps/admin`, provision empty resources:
+The production domain is `admin.ambivalent.dev`, using the `persona-admin` Worker
+in the `Ambivalent Co.` account. Wrangler references the remote `persona-catalog`
+D1 database in that account. A new remote Catalog starts empty;
+`import:local` does not populate remote resources.
 
-```sh
-bunx wrangler d1 create persona-catalog
-bunx wrangler r2 bucket create persona-images
-```
-
-Replace the all-zero local database ID in `wrangler.jsonc` with the returned ID.
-Keep the R2 bucket private. Set secrets interactively:
+The D1 schema and private R2 bucket `persona-images` are provisioned.
+Set separate production secrets interactively from `apps/admin`:
 
 ```sh
 bunx wrangler secret put ADMIN_PASSWORD
-bunx wrangler secret put CATALOG_TOKEN
+bunx wrangler secret put TOKEN_CATALOG
+bunx wrangler secret put TOKEN_MANAGEMENT
 bunx wrangler secret put GEMINI_API_KEY
 bun run db:remote
 bun run deploy
@@ -87,7 +86,105 @@ documents; session snapshots include the current pair for export/restore.
 Point both API services at the same Worker. Publish newly authored personas
 before fresh onboarding. Any configured default must be an actual published ID.
 
+### Workers Builds
+
+After provisioning and setting runtime secrets, connect this repository to
+`persona-admin` under **Settings → Builds**:
+
+| Setting                      | Value                                                        |
+| ---------------------------- | ------------------------------------------------------------ |
+| Production branch            | `main`                                                       |
+| Root directory               | `apps/admin`                                                 |
+| Build command                | `bun install --cwd ../.. --frozen-lockfile && bun run build` |
+| Deploy command               | `bun run db:remote && bun run deploy`                        |
+| Build variable `BUN_VERSION` | `1.4.2`                                                      |
+
+Use a deployment token with Workers, D1 migration and domain-routing access.
+Initially watch the entire repository to include shared-package/schema changes.
+Workers Builds needs the explicit build command even though local Wrangler
+declares a custom build. Disable previews until isolated data and secrets are
+configured. Keep GitHub's `Quality gates` check required before merging into
+`main`; Cloudflare does not wait for it before deploying.
+
+Set `ADMIN_PASSWORD`, `TOKEN_CATALOG`, `TOKEN_MANAGEMENT` and `GEMINI_API_KEY` as Worker runtime
+secrets, not browser/build variables. Set the messaging application's
+`PERSONA_CATALOG_URL=https://admin.ambivalent.dev` and its private
+`TOKEN_CATALOG` to match the Worker's `TOKEN_CATALOG`. Deploy that application
+configuration separately. Verify unauthenticated `/` returns 401, authenticated
+editing works, and only published current image references are public.
+
 ## Storage and recovery
+
+### Waiting people and first contact
+
+`/waitlist` lists registrations from the messaging API, not Admin D1. Enter
+1–100 people and confirm **N명 선정하기**. The server randomly chooses people
+with currently public, unassigned Likes, then assigns one available liked
+persona to each. The result may contain fewer than N people. A persona belongs
+to one handle from reservation onward, including failed/uncertain attempts.
+Each selected Greeting is scheduled once 5–60 minutes later.
+
+`/first-contacts` shows reservations, session preparation, Greeting processing,
+confirmed first sends, failures, unreachable iMessage contacts and results
+requiring inspection. Refresh to observe progress. Network/response loss keeps
+the selection key for confirmed re-submission; it does not select another batch.
+Opening a fresh selection form and confirming it is a new operator action with
+a new key; prior selection keys remain durable for transport retries.
+An unavailable API is an error, not an empty list. Uncertain sends and interrupted
+preparation are never automatically repeated. Inspect the API's recorded
+session/send before recovery; deleting a user through the operator removes the
+registration and releases the assignment.
+
+Set Worker `MESSAGING_API_URL=https://api-msg.hena.dev` (declared in Wrangler)
+and runtime secret `TOKEN_MANAGEMENT`, matching the application's
+`TOKEN_MANAGEMENT`. Use a different value from `TOKEN_CATALOG`. Tokens remain
+server-side; Admin authenticates the operator and enforces same-origin POSTs.
+The application serves Bearer-authenticated `GET /management/discovery` and
+`POST /management/discovery/select`. Deploy the API before Admin; the old API's
+404 or missing credentials are displayed as connection failures. SQL schema
+019 adds assignment, selection deduplication and durable contact records. On
+startup, conflicting existing live assignments stop admission rather than
+silently removing conversations. Resolve those records on the API host first.
+
+### Token names and removal of old settings
+
+Both applications now use the same names for each purpose, with two distinct
+values:
+
+| Setting            | Direction                     | Purpose                                       |
+| ------------------ | ----------------------------- | --------------------------------------------- |
+| `TOKEN_CATALOG`    | Messaging application → Admin | Read private Persona/State/Memory Catalog     |
+| `TOKEN_MANAGEMENT` | Admin → Messaging application | List waiting people and select first contacts |
+
+Keep value A for `TOKEN_CATALOG` identical in both apps, and value B for
+`TOKEN_MANAGEMENT` identical in both apps. A and B are different. Existing
+values can be retained; changing the names does not require generating new
+credentials. If management has not been configured, create only value B.
+
+Replace these settings in local `.dev.vars`, protected application environment
+files, deployment/secret-manager settings and any local setup files:
+
+| App                   | Remove old name         | Set new name with its existing value |
+| --------------------- | ----------------------- | ------------------------------------ |
+| Admin                 | `CATALOG_TOKEN`         | `TOKEN_CATALOG`                      |
+| Admin                 | `MESSAGING_API_TOKEN`   | `TOKEN_MANAGEMENT`                   |
+| Messaging application | `PERSONA_CATALOG_TOKEN` | `TOKEN_CATALOG`                      |
+| Messaging application | `DISCOVERY_ADMIN_TOKEN` | `TOKEN_MANAGEMENT`                   |
+
+Set the new names first, deploy/restart the renamed code on both sides, and
+verify private Catalog reads plus Admin waiting-list operations. The new code
+does not read old names. Once both deployments have switched, delete obsolete
+Worker secrets from `apps/admin`:
+
+```sh
+bunx wrangler secret delete CATALOG_TOKEN
+bunx wrangler secret delete MESSAGING_API_TOKEN
+```
+
+Delete only secrets that exist. Leave `ADMIN_PASSWORD`, `GEMINI_API_KEY`,
+`IMSG_TOKEN`, `REN_AI_APPLICATION_TOKEN` and `OPENCODE_AUTHORIZATION` in place;
+they serve other authentication/provider purposes. Public `MESSAGING_API_URL`
+and `PERSONA_CATALOG_URL` settings are unchanged.
 
 - Persona, initial State and initial Memory are D1 text columns. Downloaded
   `persona.md` is a serialized view, not another source of truth. A revision CAS

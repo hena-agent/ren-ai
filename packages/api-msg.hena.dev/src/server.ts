@@ -17,10 +17,17 @@ import { applicationGateway } from "./opencode/application-gateway.ts";
 import { remoteHost, type RemoteConfig } from "./opencode/remote.ts";
 import { exportSessions } from "./opencode/transfer.ts";
 import { syncFolders, watchCatalog } from "./opencode/catalog-sync.ts";
+import { makeDiscoveryWeb } from "./discovery/discovery.ts";
+import { contacts } from "./discovery/contacts.ts";
+import { checkAssignments } from "./discovery/assignment.ts";
+import { contactManagement } from "./discovery/management.ts";
+import { firstContacts } from "./discovery/first-contact.ts";
+import { migrate } from "./database.ts";
 
 export interface ServerConfig {
   readonly stateDirectory: string;
   readonly catalog: CatalogConnection;
+  readonly managementToken: string;
   readonly defaultPersonaID: string;
   readonly publicPort: number;
   readonly hostname?: string;
@@ -43,15 +50,28 @@ export const composeServer = (config: ServerConfig) =>
     );
     const client = yield* HttpClient.HttpClient;
     const sql = yield* SqlClient.SqlClient;
+    yield* migrate;
     const messages = yield* remoteMessages(config.messaging);
     const catalog = catalogClient(config.catalog);
     const { personas } = yield* Effect.tryPromise(catalog.load);
+    yield* checkAssignments;
+    const discovery = yield* makeDiscoveryWeb({
+      catalog: catalog.publicList,
+      image: catalog.publicImage,
+      turnstileSecret: config.secrets.TURNSTILE_SECRET,
+    });
+    yield* Effect.addFinalizer(() => Effect.promise(discovery.dispose));
     let callbackWeb: (request: Request) => Promise<Response> = starting;
     let onboardingWeb: (request: Request) => Promise<Response> = starting;
-    const publicWeb = (request: Request) =>
-      new URL(request.url).pathname.startsWith("/rpc")
-        ? callbackWeb(request)
-        : onboardingWeb(request);
+    let managementWeb: (request: Request) => Promise<Response> = starting;
+    const publicWeb = (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.startsWith("/rpc")) return callbackWeb(request);
+      if (path.startsWith("/management/")) return managementWeb(request);
+      if (path.startsWith("/discovery/"))
+        return discovery.handler(request, Context.make(HttpClient.HttpClient, client));
+      return onboardingWeb(request);
+    };
     const listener = yield* servePublic(publicWeb, config.publicPort, config.hostname);
     const registerCallback = (tools: MessagingTools, actionsEnabled: boolean) =>
       Effect.gen(function* () {
@@ -94,6 +114,14 @@ export const composeServer = (config: ServerConfig) =>
     );
     onboardingWeb = (request) =>
       host.onboardingWeb(request, Context.make(HttpClient.HttpClient, client));
+    managementWeb = contactManagement(yield* contacts(catalog.publicList), config.managementToken);
+    const scheduled = yield* firstContacts(
+      host,
+      messages,
+      host.conversations,
+      config.opencode.model,
+    );
+    yield* Effect.forkScoped(scheduled.monitor);
     yield* Effect.forkScoped(health.monitor);
     const backup = yield* makeBackup(
       {

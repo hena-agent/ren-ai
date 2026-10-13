@@ -181,48 +181,54 @@ test("legacy gender metadata and an already published invalid draft still allow 
   await vi.waitFor(() => expect(published.disabled).toBe(true));
 });
 
-test("State errors are live, block publication, select the exact value, and clear after correction", async () => {
-  const form = workspace();
-  form.querySelector<HTMLButtonElement>('[data-editor-tab="state"]')!.click();
-  const field = form.querySelector<HTMLTextAreaElement>('[name="stateSource"]')!;
-  const pane = form.querySelector<HTMLElement>("#pane-state")!;
-  const view = EditorView.findFromDOM(pane.querySelector<HTMLElement>(".cm-editor")!)!;
-  const offset = field.value.indexOf("mood: 55") + "mood: ".length;
-  view.dispatch({ changes: { from: offset, to: offset + 2, insert: "101" } });
-  await vi.waitFor(() =>
-    expect(pane.querySelector("[data-state-status]")?.textContent).toContain("오류"),
-  );
-  expect(diagnosticCount(view.state)).toBe(1);
-  expect(view.contentDOM.getAttribute("aria-invalid")).toBe("true");
-  expect(form.querySelector<HTMLInputElement>("#published")!.disabled).toBe(true);
-  const error = pane.querySelector<HTMLButtonElement>("[data-state-issues] button")!;
-  expect(error.textContent).toContain("정수 0–100");
-  form.querySelector<HTMLButtonElement>('[data-editor-tab="memory"]')!.click();
-  error.click();
-  expect(pane.hidden).toBe(false);
-  expect(view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)).toBe(
-    "mood: 101",
-  );
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: initialDocs.state } });
-  await vi.waitFor(() =>
-    expect(pane.querySelector("[data-state-status]")?.textContent).toBe("형식 정상"),
-  );
-  expect(diagnosticCount(view.state)).toBe(0);
-  expect(pane.querySelector("[data-state-issues]")?.children).toHaveLength(0);
-  expect(pane.querySelector("[data-state-status]")?.textContent).toBe("형식 정상");
-  expect(form.querySelector<HTMLInputElement>("#published")!.disabled).toBe(false);
-  view.dispatch({
-    changes: {
-      from: 0,
-      to: view.state.doc.length,
-      insert: initialDocs.state.replace("strength: 80", "strength: 70"),
-    },
-  });
-  await vi.waitFor(() =>
-    expect(pane.querySelector("[data-state-issues]")?.textContent).toContain("강도 80"),
-  );
-  const stale = pane.querySelector<HTMLButtonElement>("[data-state-issues] button")!;
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" } });
-  stale.click();
-  expect(view.state.selection.main.from).toBe(0);
-});
+test.each([
+  { field: "mood", value: 55 },
+  { field: "affection", value: 18 },
+])(
+  "$field errors are live, block publication, select the exact value, and clear after correction",
+  async ({ field: name, value }) => {
+    const form = workspace();
+    form.querySelector<HTMLButtonElement>('[data-editor-tab="state"]')!.click();
+    const field = form.querySelector<HTMLTextAreaElement>('[name="stateSource"]')!;
+    const pane = form.querySelector<HTMLElement>("#pane-state")!;
+    const view = EditorView.findFromDOM(pane.querySelector<HTMLElement>(".cm-editor")!)!;
+    const offset = field.value.indexOf(`${name}: ${value}`) + `${name}: `.length;
+    view.dispatch({ changes: { from: offset, to: offset + 2, insert: "101" } });
+    await vi.waitFor(() =>
+      expect(pane.querySelector("[data-state-status]")?.textContent).toContain("오류"),
+    );
+    expect(diagnosticCount(view.state)).toBe(1);
+    expect(view.contentDOM.getAttribute("aria-invalid")).toBe("true");
+    expect(form.querySelector<HTMLInputElement>("#published")!.disabled).toBe(true);
+    const error = pane.querySelector<HTMLButtonElement>("[data-state-issues] button")!;
+    expect(error.textContent).toContain("정수 0–100");
+    form.querySelector<HTMLButtonElement>('[data-editor-tab="memory"]')!.click();
+    error.click();
+    expect(pane.hidden).toBe(false);
+    expect(view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)).toBe(
+      `${name}: 101`,
+    );
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: initialDocs.state } });
+    await vi.waitFor(() =>
+      expect(pane.querySelector("[data-state-status]")?.textContent).toBe("형식 정상"),
+    );
+    expect(diagnosticCount(view.state)).toBe(0);
+    expect(pane.querySelector("[data-state-issues]")?.children).toHaveLength(0);
+    expect(pane.querySelector("[data-state-status]")?.textContent).toBe("형식 정상");
+    expect(form.querySelector<HTMLInputElement>("#published")!.disabled).toBe(false);
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: initialDocs.state.replace("strength: 80", "strength: 70"),
+      },
+    });
+    await vi.waitFor(() =>
+      expect(pane.querySelector("[data-state-issues]")?.textContent).toContain("강도 80"),
+    );
+    const stale = pane.querySelector<HTMLButtonElement>("[data-state-issues] button")!;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" } });
+    stale.click();
+    expect(view.state.selection.main.from).toBe(0);
+  },
+);

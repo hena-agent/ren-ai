@@ -2,6 +2,7 @@ import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Clock, Context, Effect, Layer } from "effect";
 import { HttpClient, HttpClientResponse, HttpRouter } from "effect/unstable/http";
 import { onboarding, noticeCopy } from "./onboarding.ts";
+import { onboardingPersonas } from "../../test/onboarding.test-helper.ts";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { migrate } from "../database.ts";
@@ -35,7 +36,7 @@ const database = SqliteClient.layer({ filename: ":memory:" });
 const runWithDatabase = <A, E>(
   effect: Effect.Effect<A, E, SqlClient.SqlClient | HttpClient.HttpClient>,
 ) => Effect.runPromise(Effect.provide(Effect.provide(effect, dependencies), database));
-const setup = (deadline = 30, noticeVersion = "v1") =>
+const setup = (deadline = 30, noticeVersion = "v1", userCap = 10) =>
   Effect.gen(function* () {
     yield* migrate;
     const fake = fakeMessages();
@@ -58,7 +59,7 @@ const setup = (deadline = 30, noticeVersion = "v1") =>
     const api = yield* onboarding({
       messages: fake.messages,
       notice: noticeCopy,
-      personas: new Map([[persona.id, persona]]),
+      personas: onboardingPersonas(persona),
       defaultPersonaID: persona.id,
       createSession: () => Effect.sync(() => ({ id: `session-${++sessions}` })),
       prompt: (_, text) =>
@@ -69,6 +70,7 @@ const setup = (deadline = 30, noticeVersion = "v1") =>
       turnstileSecret: "secret",
       deadlineMillis: deadline,
       noticeVersion,
+      userCap,
     });
     return { sql, fake, api, prompts };
   });
@@ -92,7 +94,10 @@ test("the per-IP window expires exactly after an hour", async () => {
       const shifted = shiftedClock(clock, () => now);
       const submitAt = (index: number) =>
         api
-          .submit({ ...input, handle: `person${index}@example.com` }, "1.2.3.4")
+          .submit(
+            { ...input, personaID: `candidate${index}`, handle: `person${index}@example.com` },
+            "1.2.3.4",
+          )
           .pipe(Effect.provideService(Clock.Clock, shifted));
       for (let index = 0; index < 5; index++) expect(yield* submitAt(index)).toBe("sent");
       expect(yield* submitAt(5)).toBe("try_later");
@@ -251,9 +256,12 @@ test("a phone number and an email become separate Users", async () => {
     Effect.gen(function* () {
       const { sql, fake, api } = yield* setup(2000);
       expect(yield* api.submit(input, "phone-ip")).toBe("sent");
-      expect(yield* api.submit({ ...input, handle: "person@example.com" }, "email-ip")).toBe(
-        "sent",
-      );
+      expect(
+        yield* api.submit(
+          { ...input, personaID: "candidate0", handle: "person@example.com" },
+          "email-ip",
+        ),
+      ).toBe("sent");
       expect(yield* sql`SELECT handle FROM user ORDER BY handle`).toEqual([
         { handle: input.handle },
         { handle: "person@example.com" },
@@ -306,7 +314,11 @@ test("HTTP submissions are grouped by CF-Connecting-IP, not by Handle", async ()
               "content-type": "application/json",
               ...(ip ? { "cf-connecting-ip": ip } : {}),
             },
-            body: JSON.stringify({ ...input, handle: `person${index}@example.com` }),
+            body: JSON.stringify({
+              ...input,
+              personaID: `candidate${index}`,
+              handle: `person${index}@example.com`,
+            }),
           }),
           Context.make(HttpClient.HttpClient, client),
         );
@@ -341,7 +353,13 @@ test("requests without a CF IP share the same in-memory limit", async () => {
     Effect.gen(function* () {
       const { api, fake } = yield* setup(2000);
       for (let index = 0; index < 5; index++) {
-        expect(yield* api.submit({ ...input, handle: `person${index}@example.com` })).toBe("sent");
+        expect(
+          yield* api.submit({
+            ...input,
+            personaID: `candidate${index}`,
+            handle: `person${index}@example.com`,
+          }),
+        ).toBe("sent");
       }
       const { handler, dispose } = HttpRouter.toWebHandler(
         api.routes.pipe(Layer.provide(dependencies)),
@@ -391,6 +409,45 @@ test("an ignored User insert never sends a Notice", async () => {
       yield* sql`CREATE TRIGGER ignore_admission BEFORE INSERT ON user BEGIN SELECT RAISE(IGNORE); END`;
       expect(yield* api.submit(input)).toBe("unknown");
       expect(yield* sql`SELECT id FROM send`).toEqual([]);
+    }),
+  );
+});
+
+test("legacy onboarding respects exclusive reservations and another user's assignment", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, api, fake } = yield* setup(2000);
+      yield* sql`INSERT INTO persona_assignment VALUES ('persona1', 'other@example.com')`;
+      expect(yield* api.submit(input, "exclusive")).toBe("persona_unavailable");
+      yield* sql`DELETE FROM persona_assignment`;
+      yield* sql`INSERT INTO discovery_registration VALUES ('registration', ${input.handle}, 'ko', 'v1', 1)`;
+      yield* sql`INSERT INTO discovery_selection VALUES ('selection', 1, 1)`;
+      yield* sql`INSERT INTO discovery_contact (registration_id, selection_id, persona_id, scheduled_at, state, request_id)
+      VALUES ('registration', 'selection', 'persona1', 1, 'scheduled', 'request')`;
+      expect(yield* api.submit(input, "reserved")).toBe("try_later");
+      expect(fake.bubbles).toEqual([]);
+    }),
+  );
+});
+
+test("the User cap counts replies, not Notices, and returns full for existing and new Handles", async () => {
+  await runWithDatabase(
+    Effect.gen(function* () {
+      const { sql, fake, api } = yield* setup(2000, "v1", 1);
+      expect(yield* api.submit(input, "a")).toBe("sent");
+      expect(
+        yield* api.submit({ ...input, personaID: "candidate0", handle: "second@example.com" }, "b"),
+      ).toBe("sent");
+      expect(yield* sql`SELECT replied_at FROM user`).toEqual([
+        { replied_at: null },
+        { replied_at: null },
+      ]);
+      yield* sql`UPDATE user SET replied_at = ${yield* Clock.currentTimeMillis} WHERE handle = ${input.handle}`;
+      expect(yield* api.submit(input, "c")).toBe("full");
+      yield* sql`UPDATE send SET recorded_at = 1 WHERE handle = ${input.handle}`;
+      expect(yield* api.submit(input, "old-notice")).toBe("full");
+      expect(yield* api.submit({ ...input, handle: "new@example.com" }, "d")).toBe("full");
+      expect(fake.bubbles).toHaveLength(2);
     }),
   );
 });

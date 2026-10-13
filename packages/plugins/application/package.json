@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@opencode/plugin": "2.0.19",
+    "@opencode/schema": "2.0.19",
     "@ren-ai/imsg.hena.dev": "workspace:*",
     "@ren-ai/plugin-session-folder": "workspace:*",
     "@ren-ai/transport": "workspace:*",

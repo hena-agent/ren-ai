@@ -4,6 +4,7 @@ energy: 45
 stress: 70
 connection: 80
 solitude: 25
+affection: 20
 traits:
   disappoint:
     strength: 75

@@ -66,7 +66,7 @@ test("automatic compaction writes persona Memory and keeps his name through two 
                 `memory-${summaries}`,
               );
             }
-            return TestLLM.textWithUsage("Je t'écoute", "reply", 2_000);
+            return TestLLM.textWithUsage("Je t'écoute", "reply", 20_000);
           });
           const host = yield* startPersonaHost(join(root, "isolated"), {
             configDirectory: join(root, "config"),
@@ -74,7 +74,7 @@ test("automatic compaction writes persona Memory and keeps his name through two 
             personaDirectory,
             providers: {},
             model: "test/probe",
-            memory: { contextTokens: 100_000, budgetTokens: 1_000, recentTokens: 100 },
+            memory: { contextTokens: 100_000, budgetTokens: 10_000, recentTokens: 100 },
             handleForSession: () => Effect.succeed("+821012345678"),
             health: { raise: () => Effect.void },
             overrides: scriptedOverrides(llm),
@@ -111,7 +111,7 @@ test("automatic compaction writes persona Memory and keeps his name through two 
           yield* llm.serve((request) =>
             JSON.stringify(request.messages).includes("Write her Memory")
               ? TestLLM.text(" ", "empty")
-              : TestLLM.textWithUsage("Je t'écoute", "reply", 2_000),
+              : TestLLM.textWithUsage("Je t'écoute", "reply", 20_000),
           );
           const empty = yield* host.createSession("amar");
           yield* host.sessions.prompt({ sessionID: empty.id, text: "Bonjour" });
@@ -126,7 +126,7 @@ test("automatic compaction writes persona Memory and keeps his name through two 
           let otherStep = 0;
           yield* llm.serve(() =>
             ++otherStep === 1
-              ? TestLLM.textWithUsage("ordinary reply", "reply", 2_000)
+              ? TestLLM.textWithUsage("ordinary reply", "reply", 20_000)
               : TestLLM.text("## Objective\nOrdinary memory", "answer"),
           );
           const other = yield* host.sessions.create({

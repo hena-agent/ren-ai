@@ -2,6 +2,17 @@
 
 ## Discovery domain cutover
 
+`discovery.ambivalent.dev` is an additional swipe/waitlist app in `apps/discovery`,
+deployed with Cloudflare Workers Builds. `admin.ambivalent.dev` is the Catalog and
+authoring Worker in `apps/admin`. The existing `discovery.hena.dev` site and its
+GitHub Actions deployment remain active. See the [Discover setup](../../../apps/discovery/README.md)
+and [Admin setup](../../../apps/admin/README.md#workers-builds).
+Deploy the `/discovery/` API's additional CORS origin and allow the new hostname
+in Turnstile before deploying Discover. Retain the old widget hostname and
+onboarding API origin. Point the application at `https://admin.ambivalent.dev` with
+the matching private Catalog token; changing the website does not redeploy the
+application.
+
 The site is `discovery.hena.dev` in `packages/discovery.hena.dev`, served by the `discovery-hena-dev` Worker. The former `msg-hena-dev` Worker and its `msg.hena.dev` domain are retired without a redirect. The existing Turnstile widget now permits only `discovery.hena.dev`.
 
 For a future domain move, deploy the API's new CORS origin and update Turnstile before deploying the website. Verify HTTPS, `/`, `/privacy`, and browser access to `/onboarding` and `/waitlist` before retiring the old Worker, custom-domain/DNS binding, and CORS origin. Build with the production `VITE_TURNSTILE_SITE_KEY`; main auto-deploys the site. `ops/deploy.sh` is for bootstrap-only migration, not a routine API update.
@@ -11,6 +22,39 @@ For persona selection, deploy the API/catalog before the site when possible. If 
 The generated route file's three exception paths move with the package; their reasons and dates stay unchanged. Changes to `quality-exceptions.json` require the human CODEOWNER's review.
 
 ## Service deployment and relocation
+
+### Discovery selection and first contact
+
+The normal application listener serves `/discovery/personas` and
+`/discovery/waitlist` alongside the existing onboarding and plugin callback.
+The management routes `/management/discovery` (GET) and
+`/management/discovery/select` (POST) require `TOKEN_MANAGEMENT`, matching
+Admin's `TOKEN_MANAGEMENT`. Keep this credential separate from `TOKEN_CATALOG`,
+messaging and plugin tokens. Configure the Admin Catalog at
+`https://admin.ambivalent.dev` and retain the application SQLite volume.
+
+Before rollout, inspect live `user`/`conversation` persona assignments. The new
+one-persona/one-user policy also applies to legacy onboarding; duplicate live
+assignments stop application startup and need explicit operator resolution.
+No conversations are automatically deleted. Migration 019 creates the durable
+assignment/selection/contact tables. Operator removal and test reset release
+assignments. Failed, blocked, unreachable and uncertain first contacts keep
+their reservation until the operator resolves/removes them.
+
+Selection and its 5–60 minute schedule commit together. The worker records a
+session ID before creating its native folder, and records the Conversation
+before enqueueing the Greeting with a stable inbox ID. It sends no separate
+Notice. Restart continues untouched due reservations and observes existing
+preparations/sends without submitting a second Greeting. An interrupted or
+uncertain attempt requires inspection; send failures and iMessage absence are
+distinct from observed success. Request/task diagnostics are JSON with request
+IDs and sanitized causes, excluding handles, tokens, private persona text and
+message content.
+
+Deploy the updated API, set the matching Admin secret, deploy Admin, then
+rebuild Discovery with `VITE_DISCOVERY_API_URL=https://api-msg.hena.dev`.
+Retain the existing site's CORS origin and add `discovery.ambivalent.dev` to the
+existing production Turnstile widget.
 
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
@@ -32,8 +76,8 @@ Copy `application.env.example` to a protected path outside Git. Set its secrets 
 Compose variables: `REN_AI_APP_ENV` (absolute protected env file), `REN_AI_TUNNEL_TOKEN` (application tunnel), `REN_AI_LOCATION_INPUT` (absolute reviewed plugin config/token staging directory). Volume names are overridable through `REN_AI_STATE_VOLUME`, `REN_AI_LOCATION_VOLUME`, `REN_AI_SESSION_VOLUME`. The application never mounts either OpenCode volume; session-folder writes use authenticated public plugin RPC.
 
 The Catalog is the Admin Worker's Drizzle/D1 database and starts empty. Set
-`PERSONA_CATALOG_URL` and `PERSONA_CATALOG_TOKEN` in the protected application
-env file; the token matches the Worker's `CATALOG_TOKEN`. There is no file mount
+`PERSONA_CATALOG_URL` and `TOKEN_CATALOG` in the protected application
+env file; the token matches the Worker's `TOKEN_CATALOG`. There is no file mount
 or seed-copy step. See [Admin deployment](../../../apps/admin/README.md).
 The application polls revisions and synchronizes native folders. Publish new
 personas before onboarding; any default must be an actual published ID.
@@ -75,8 +119,8 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
    At the approved deployment step, use those same arguments with `up -d --no-deps opencode-upstream`. Keep using the overlay on later starts/recreates. Verify the root mount is read-only and the sessions submount is writable; existing whole-home, compatibility image, proxy and tunnel settings must be unchanged. The application has neither mount. Start its callback in bootstrap mode before migration.
 
-6. With old intake stopped and bootstrap confirmed, **interrupt/drain active execution and queued inbox work** for all sessions to move. Run `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts folders /absolute/private/NEW-pre-cutover-archive.json` using protected `OPENCODE_URL`, `OPENCODE_AUTHORIZATION` and `OPENCODE_DIRECTORY=/srv/ren-ai`. If source definitions are needed, supply `PERSONA_CATALOG_URL` and `PERSONA_CATALOG_TOKEN`; missing IDs fail rather than loading files. The command exclusively creates the archive and skips already-moved sessions. Review partial results and use a new archive path before retrying. Exports include persona/agent/rules and current Conversation documents; restore recreates folders before importing. Preserve rollback archives and never enable a second intake.
-7. Inspect root and session-location inventories. Verify obsolete `personas` is absent, no unrelated inherited plugin remains, native agent/instruction loaders are enabled, and each session has `.opencode/agents/<id>.md`, `AGENTS.md`, `persona.json`, and `opencode.json` with `default_agent` and disabled `build`/`plan`/`general`/`explore`. Verify only send/read/react/wait/dice, compaction, ordinary project writes, native UI features and retained-session history. Active snapshots refresh at startup/catalog change; retained snapshots do not. A dedicated location is **not** a security sandbox.
+6. With old intake stopped and bootstrap confirmed, **interrupt/drain active execution and queued inbox work** for all sessions to move. Run `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts folders /absolute/private/NEW-pre-cutover-archive.json` using protected `OPENCODE_URL`, `OPENCODE_AUTHORIZATION` and `OPENCODE_DIRECTORY=/srv/ren-ai`. If source definitions are needed, supply `PERSONA_CATALOG_URL` and `TOKEN_CATALOG`; missing IDs fail rather than loading files. The command exclusively creates the archive and skips already-moved sessions. Review partial results and use a new archive path before retrying. Exports include persona/agent/rules and current Conversation documents; restore recreates folders before importing. Preserve rollback archives and never enable a second intake.
+7. Inspect root and session-location inventories. Verify obsolete `personas` is absent, no unrelated inherited plugin remains, native agent/instruction loaders are enabled, and each session has `.opencode/agents/<id>.md`, `AGENTS.md`, `persona.json`, and `opencode.json` with `default_agent` and disabled `build`/`plan`/`general`/`explore`. Verify only send/read/react/wait/dice and update_state/update_memory/remember/search_memory, compaction, ordinary project writes, native UI features and retained-session history. Runtime memory writes publish `.memory/current`; include hidden revisions and symlinks in volume backups. Active Persona/ground-rule snapshots refresh at startup/catalog change; current State/Memory and retained snapshots do not reset. A dedicated location is **not** a security sandbox.
 
 ## Messages Mac
 

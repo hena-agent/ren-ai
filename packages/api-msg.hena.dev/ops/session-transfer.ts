@@ -32,7 +32,7 @@ await Effect.runPromise(
               personas: (yield* Effect.tryPromise(
                 catalogClient({
                   url: process.env["PERSONA_CATALOG_URL"],
-                  token: process.env["PERSONA_CATALOG_TOKEN"] ?? "",
+                  token: process.env["TOKEN_CATALOG"] ?? "",
                 }).load,
               )).personas,
             }

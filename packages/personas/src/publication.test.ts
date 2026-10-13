@@ -35,6 +35,7 @@ const documents = {
     stress: 50,
     connection: 30,
     solitude: 65,
+    affection: 18,
     traits: initialTraits(source),
   }),
   memory: "# 현재 생활\n\n- 인화 작업을 준비하고 있다.\n",

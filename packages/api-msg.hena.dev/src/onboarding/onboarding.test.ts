@@ -10,6 +10,7 @@ import { outbox } from "../outbox/outbox.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { onboarding, noticeCopy } from "./onboarding.ts";
 import { onboardingApi } from "./api.ts";
+import { onboardingPersonas } from "../../test/onboarding.test-helper.ts";
 
 const input = {
   handle: "+821012345678",
@@ -71,19 +72,14 @@ const setup = (
       messages: fake.messages,
       notice: noticeCopy,
       defaultPersonaID: "persona1",
-      personas: new Map([
-        [
-          "persona1",
-          {
-            id: "persona1",
-            timeZone: "Asia/Seoul",
-            language: "ko",
-            openingLine: "번호 받았으니까 먼저 연락해 봐",
-            memory: "Remember",
-            prompt: "Persona1",
-          },
-        ],
-      ]),
+      personas: onboardingPersonas({
+        id: "persona1",
+        timeZone: "Asia/Seoul",
+        language: "ko",
+        openingLine: "번호 받았으니까 먼저 연락해 봐",
+        memory: "Remember",
+        prompt: "Persona1",
+      }),
       createSession: () =>
         Effect.sync(() => {
           const id = `session-${sessions.length + 1}`;
@@ -442,7 +438,10 @@ test("a sixth submission from one IP is refused before looking at its Handle", a
       const { fake, api } = yield* setup(false, 2000);
       for (let index = 0; index < 5; index++) {
         expect(
-          yield* api.submit({ ...input, handle: `person${index}@example.com` }, "1.2.3.4"),
+          yield* api.submit(
+            { ...input, personaID: `candidate${index}`, handle: `person${index}@example.com` },
+            "1.2.3.4",
+          ),
         ).toBe("sent");
       }
       expect(yield* api.submit({ ...input, handle: "another@example.com" }, "1.2.3.4")).toBe(
@@ -462,7 +461,10 @@ test("30 Notice attempts per hour block new and existing Handles, including conc
       yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
       VALUES ('old@example.com', 'notice', 'old', 'failed', ${now - 3_600_001}, ${now})`;
       const requests = Array.from({ length: 31 }, (_, index) =>
-        api.submit({ ...input, handle: `person${index}@example.com` }, `ip-${index}`),
+        api.submit(
+          { ...input, personaID: `candidate${index}`, handle: `person${index}@example.com` },
+          `ip-${index}`,
+        ),
       );
       const answers = yield* Effect.all(requests, { concurrency: "unbounded" });
       expect(answers.filter((answer) => answer === "sent")).toHaveLength(30);
@@ -472,26 +474,6 @@ test("30 Notice attempts per hour block new and existing Handles, including conc
       );
       expect(fake.bubbles).toHaveLength(30);
       expect(yield* sql`SELECT id FROM send`).toHaveLength(31);
-    }),
-  );
-});
-
-test("the User cap counts replies, not Notices, and returns full for existing and new Handles", async () => {
-  await runWithDatabase(
-    Effect.gen(function* () {
-      const { sql, fake, api } = yield* setup(false, 2000, 1);
-      expect(yield* api.submit(input, "a")).toBe("sent");
-      expect(yield* api.submit({ ...input, handle: "second@example.com" }, "b")).toBe("sent");
-      expect(yield* sql`SELECT replied_at FROM user`).toEqual([
-        { replied_at: null },
-        { replied_at: null },
-      ]);
-      yield* sql`UPDATE user SET replied_at = ${yield* Clock.currentTimeMillis} WHERE handle = ${input.handle}`;
-      expect(yield* api.submit(input, "c")).toBe("full");
-      yield* sql`UPDATE send SET recorded_at = 1 WHERE handle = ${input.handle}`;
-      expect(yield* api.submit(input, "old-notice")).toBe("full");
-      expect(yield* api.submit({ ...input, handle: "new@example.com" }, "d")).toBe("full");
-      expect(fake.bubbles).toHaveLength(2);
     }),
   );
 });

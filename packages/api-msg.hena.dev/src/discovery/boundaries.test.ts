@@ -104,30 +104,40 @@ test("the current web disclosure must be available and matching", async () => {
   }
 });
 
-test("the public API allows only the documented browser origin", async () => {
+test("the public API allows both Discovery origins and rejects unrelated origins", async () => {
   await run(
     Effect.gen(function* () {
       const { web } = yield* setup();
       yield* Effect.tryPromise(async () => {
         try {
-          const allowed = await web.handler(
-            new Request("http://localhost/discovery/personas", {
-              headers: { Origin: "https://discovery.hena.dev" },
-            }),
-            Context.make(HttpClient.HttpClient, verified),
-          );
-          expect(allowed.headers.get("access-control-allow-origin")).toBe(
-            "https://discovery.hena.dev",
-          );
+          for (const origin of ["https://discovery.hena.dev", "https://discovery.ambivalent.dev"]) {
+            const allowed = await web.handler(
+              new Request("http://localhost/discovery/personas", { headers: { Origin: origin } }),
+              Context.make(HttpClient.HttpClient, verified),
+            );
+            expect(allowed.headers.get("access-control-allow-origin")).toBe(origin);
+            const preflight = await web.handler(
+              new Request("http://localhost/discovery/waitlist", {
+                method: "OPTIONS",
+                headers: {
+                  Origin: origin,
+                  "Access-Control-Request-Method": "POST",
+                  "Access-Control-Request-Headers": "content-type",
+                },
+              }),
+              Context.make(HttpClient.HttpClient, verified),
+            );
+            expect(preflight.status).toBe(204);
+            expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
+            expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
+          }
           const denied = await web.handler(
             new Request("http://localhost/discovery/personas", {
               headers: { Origin: "https://unrelated.example" },
             }),
             Context.make(HttpClient.HttpClient, verified),
           );
-          expect(denied.headers.get("access-control-allow-origin")).toBe(
-            "https://discovery.hena.dev",
-          );
+          expect(denied.headers.get("access-control-allow-origin")).toBeNull();
         } finally {
           await web.dispose();
         }

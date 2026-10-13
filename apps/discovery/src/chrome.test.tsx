@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { App } from "./app.tsx";
@@ -32,7 +32,7 @@ test("the app navigation exposes liked profiles and full details without turning
   await screen.findByRole("heading", { name: "하린" });
   expect(screen.getByText("아직 비어 있어요")).toBeTruthy();
   const surface = screen.getByRole("button", { name: "하린 소개 전체 보기" });
-  expect(document.activeElement).toBe(surface);
+  await waitFor(() => expect(document.activeElement).toBe(surface));
   expect(currentTabs()).toEqual(["page", null, null]);
   fireEvent.click(surface);
   const dialog = screen.getByRole("region", { name: "하린" });

@@ -29,10 +29,10 @@ export function catalogHandler(request: Request, env: AdminEnv) {
             store.publicImage(pathname.slice("/discovery/images/".length)),
           );
         if (
-          !env.CATALOG_TOKEN ||
+          !env.TOKEN_CATALOG ||
           !timingSafeEqual(
             digest(request.headers.get("authorization") ?? ""),
-            digest(`Bearer ${env.CATALOG_TOKEN}`),
+            digest(`Bearer ${env.TOKEN_CATALOG}`),
           )
         )
           return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });

@@ -5,17 +5,20 @@ import { createProfileGenerator } from "./generation.ts";
 import { loggedJob, writeLog as workerLog } from "./logging.ts";
 import { editingStorage } from "./editing-storage.ts";
 import type { ImageBucket } from "./r2-images.ts";
+import { managementClient } from "./contact-client.ts";
 
 export interface AdminEnv {
   DB: D1Database;
   IMAGES: ImageBucket;
   ASSETS: { fetch: (url: string) => Promise<Pick<Response, "ok" | "text">> };
   ADMIN_PASSWORD: string;
-  CATALOG_TOKEN: string;
-  GEMINI_API_KEY: string;
+  TOKEN_CATALOG: string;
+  GEMINI_API_KEY?: string;
   GEMINI_API_URL?: string;
   ADMIN_TEXT_MODEL?: string;
   ADMIN_IMAGE_MODEL?: string;
+  MESSAGING_API_URL?: string;
+  TOKEN_MANAGEMENT?: string;
 }
 
 export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStorage) {
@@ -42,12 +45,13 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
       script,
       log: workerLog,
       generator: createProfileGenerator({
-        key: env.GEMINI_API_KEY,
+        key: env.GEMINI_API_KEY ?? "",
         ...(env.GEMINI_API_URL && { endpoint: env.GEMINI_API_URL }),
         ...(env.ADMIN_TEXT_MODEL && { textModel: env.ADMIN_TEXT_MODEL }),
         ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
       }),
       persistence: { saved, checkpoint: editing.save, wake },
+      management: managementClient(env.MESSAGING_API_URL ?? "", env.TOKEN_MANAGEMENT ?? ""),
     },
   );
   return {

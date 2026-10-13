@@ -4,6 +4,7 @@ import { Deferred, Effect } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
+import { conversationTools } from "../../test/host.test-helper.ts";
 import { startMessagingApplication } from "../application.ts";
 import { applicationGateway } from "./application-gateway.ts";
 import { remotePersonaPlugins } from "../../test/persona-plugins.test-helper.ts";
@@ -160,13 +161,9 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         expect((yield* application.sessions.get(session.id)).title).toBe(
           "Persona1 · +821012345678",
         );
-        expect((yield* llm.requests())[0]!.tools.map((tool) => tool.name).toSorted()).toEqual([
-          "dice",
-          "react",
-          "read",
-          "send",
-          "wait",
-        ]);
+        expect((yield* llm.requests())[0]!.tools.map((tool) => tool.name).toSorted()).toEqual(
+          conversationTools(["dice", "react", "read", "send", "wait"]).toSorted(),
+        );
         let orphanAttempt = false;
         yield* llm.serve((request) => {
           if (request.tools.some((tool) => tool.name === "send") && !orphanAttempt) {

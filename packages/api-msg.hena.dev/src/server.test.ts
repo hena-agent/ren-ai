@@ -2,13 +2,15 @@ import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { TestLLM } from "@opencode/ai/testing";
-import { Effect, Layer, Sink, Stream } from "effect";
+import { Effect, Layer, Sink, Stream, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { Session } from "@opencode/schema/session";
 import { expect, test, vi } from "vitest";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg.hena.dev/testing";
-import { notice } from "@ren-ai/onboarding";
+import { notice, discoveryNotice, ContactSelection } from "@ren-ai/onboarding";
+import { SqlClient } from "effect/unstable/sql";
+import { randomUUID } from "node:crypto";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { runOperatorCli } from "./operator/cli.ts";
 import { valid, personaFixture } from "../test/host.test-helper.ts";
@@ -143,6 +145,53 @@ test("composed HTTP, remote OpenCode, messaging API and operator socket complete
         );
         expect(yield* server.host.conversations.byHandle(conversation!.handle)).toBeUndefined();
         expect(fake.bubbles).toHaveLength(3);
+        greeted = false;
+        const sql = yield* SqlClient.SqlClient;
+        const registration = yield* Effect.promise(() =>
+          server.publicWeb(
+            new Request("http://local/discovery/waitlist", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                origin: "https://discovery.ambivalent.dev",
+              },
+              body: JSON.stringify({
+                handle: "new@example.net",
+                likedPersonaIDs: ["persona1"],
+                locale: "ko",
+                privacyNoticeVersion: discoveryNotice.version,
+                turnstileToken: "human",
+              }),
+            }),
+          ),
+        );
+        expect(registration.status).toBe(200);
+        expect(registration.headers.get("access-control-allow-origin")).toBe(
+          "https://discovery.ambivalent.dev",
+        );
+        const key = randomUUID();
+        const selected = yield* Effect.promise(() =>
+          server.publicWeb(
+            new Request("http://local/management/discovery/select", {
+              method: "POST",
+              headers: { Authorization: "Bearer management-test-token" },
+              body: JSON.stringify({ requestId: key, count: 1 }),
+            }),
+          ),
+        );
+        expect(selected.status).toBe(200);
+        const selection = Schema.decodeUnknownSync(ContactSelection)(
+          yield* Effect.promise(() => selected.json()),
+        );
+        expect(selection.requestId).toBe(key);
+        expect(selection.entries).toHaveLength(1);
+        yield* sql`UPDATE discovery_contact SET scheduled_at = 0`;
+        yield* waitForBubbles(4);
+        expect(fake.bubbles.at(-1)).toEqual({ handle: "new@example.net", text: "안녕 🙂" });
+        expect(fake.bubbles.filter((b) => b.handle === "new@example.net")).toHaveLength(1);
+        const discovered = yield* server.host.conversations.byHandle("new@example.net");
+        expect(discovered).toBeDefined();
+        yield* server.host.sessions.wait(Session.ID.make(discovered!.sessionID));
       }).pipe(
         Effect.provide(platform),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, processes),

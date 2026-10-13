@@ -5,7 +5,12 @@ import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { createPersonaStore } from "./store.ts";
 import { parsePersona, serializePersona } from "./model.ts";
-import { parseInitialState, serializeInitialState, validateInitialDocuments } from "./initial.ts";
+import {
+  parseInitialState,
+  parseConversationState,
+  serializeInitialState,
+  validateInitialDocuments,
+} from "./initial.ts";
 import { readInitialFiles } from "./initial-files.ts";
 
 vi.mock("node:fs/promises", async () => ({
@@ -34,7 +39,7 @@ async function setup() {
   return { root, store, persona, expected: { persona: serializePersona(persona) } };
 }
 
-test("Harin and Jiwoo common state and memory samples round-trip without relationship fields", async () => {
+test("Harin and Jiwoo initial State includes starting affection without invented relationship history", async () => {
   for (const name of ["harin", "jiwoo"]) {
     const source = await sample(name, "STATE.md");
     const state = parseInitialState(source);
@@ -45,6 +50,7 @@ test("Harin and Jiwoo common state and memory samples round-trip without relatio
       "stress",
       "connection",
       "solitude",
+      "affection",
       "traits",
     ]);
     expect(
@@ -56,10 +62,12 @@ test("Harin and Jiwoo common state and memory samples round-trip without relatio
   }
   expect(parseInitialState(await sample("harin", "STATE.md"))).toMatchObject({
     mood: 55,
+    affection: 15,
     traits: { help: { strength: 80 } },
   });
   expect(parseInitialState(await sample("jiwoo", "STATE.md"))).toMatchObject({
     energy: 45,
+    affection: 20,
     stress: 70,
   });
 });
@@ -91,6 +99,24 @@ test("invalid YAML, fields, traits, ranges and oversized documents fail with pay
     /MEMORY.md/,
   );
   expect(validateInitialDocuments({ ...docs, memory: "# 현재 생활" })).toBeDefined();
+});
+
+test("initial affection is required, editable and bounded independently of connection", async () => {
+  const docs = await initial();
+  const source = docs.state
+    .replace(/affection: \d+\n/, "")
+    .replace("traits:", "affection: 27\ntraits:");
+  expect(parseInitialState(source)).toMatchObject({ affection: 27, connection: 55 });
+  expect(parseInitialState(source.replace("affection: 27", "affection: 73")).affection).toBe(73);
+  for (const value of ["-1", "101", "1.5", "high"])
+    expect(() => parseInitialState(source.replace("affection: 27", `affection: ${value}`))).toThrow(
+      /STATE.md/,
+    );
+  expect(() => parseInitialState(source.replace("affection: 27\n", ""))).toThrow(/STATE.md/);
+  const existing = parseConversationState(source.replace("affection: 27\n", ""));
+  expect(existing).not.toHaveProperty("affection");
+  expect(existing).toMatchObject({ mood: 55, connection: 55 });
+  expect(parseConversationState(source).affection).toBe(27);
 });
 
 test("saving exposes two independent Markdown files together and survives a store restart", async () => {

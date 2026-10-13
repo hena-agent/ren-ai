@@ -5,7 +5,8 @@ import { initialDocs, initialFixture, scores } from "../test/initial.ts";
 import { generator, request, tokenOf } from "../test/fixtures.ts";
 import { modelReply } from "../test/sub-portraits.ts";
 import { deferred, queuedRequest, jobUrl, finishedJob } from "../test/queue.ts";
-import { checkInitialPersona } from "@ren-ai/personas";
+import { checkInitialPersona, parseInitialState } from "@ren-ai/personas";
+import policy from "./initial-policy.json";
 
 const path = "/personas/harin";
 const token = async (admin: Awaited<ReturnType<typeof initialFixture>>["admin"]) =>
@@ -53,6 +54,43 @@ test("three documents save together and both initial downloads require authentic
     );
   }
   expect((await setup.admin(request(`${path}/initial`))).status).toBe(404);
+});
+
+test("AI proposes starting affection and an operator can edit and save it without changing photos or Memory", async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(modelReply(JSON.stringify({ ...scores, affection: 27 })));
+  const setup = await initialFixture(createProfileGenerator({ key: "private-key", fetcher }));
+  const original = await setup.store.get("harin");
+  const submitted = await fields(setup);
+  const generated = await setup.admin(request(path, { ...submitted, intent: "state" }));
+  expect(generated.status).toBe(200);
+  const page = await generated.text();
+  expect(page).toContain("출발 호감도");
+  const draft = draftTokens("test-password").decode(tokenOf(page));
+  const documents = documentsOf(draft);
+  expect(parseInitialState(documents.state).affection).toBe(27);
+  const payload = await new Request(...fetcher.mock.calls[0]!).text();
+  expect(payload).toContain(policy.affection);
+  expect(payload).toContain('"affection"');
+  const edited = documents.state.replace("affection: 27", "affection: 73");
+  const saved = await setup.admin(
+    request(path, {
+      ...submitted,
+      draft: tokenOf(page),
+      stateSource: edited,
+      memorySource: documents.memory,
+      published: "on",
+      intent: "save",
+    }),
+  );
+  expect(saved.status).toBe(303);
+  expect(parseInitialState((await setup.store.initial("harin"))!.state).affection).toBe(73);
+  expect((await setup.store.initial("harin"))!.memory).toBe(initialDocs.memory);
+  expect((await setup.store.get("harin")).portraits).toEqual(original.portraits);
+  expect(await (await setup.admin(request(path))).text()).toContain("affection: 73");
+  expect(JSON.stringify(await setup.store.publicList())).not.toContain("affection");
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
 test("each regeneration returns only its document, uses private Persona only, and preserves siblings and photos", async () => {
@@ -104,6 +142,8 @@ test("future public saves require actual Persona, State and nonempty Memory whil
     { name: "다른 이름" },
     { stateSource: "" },
     { stateSource: initialDocs.state.replace("mood: 55", "mood: 101") },
+    { stateSource: initialDocs.state.replace("affection: 18\n", "") },
+    { stateSource: initialDocs.state.replace("affection: 18", "affection: 101") },
     { stateSource: initialDocs.state.replace("strength: 80", "strength: 40") },
     { memorySource: "" },
     { memorySource: "# 현재 생활\n" },

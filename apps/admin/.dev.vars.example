@@ -1,5 +1,7 @@
 ADMIN_PASSWORD=replace-with-a-local-password
-CATALOG_TOKEN=replace-with-a-private-catalog-token
+TOKEN_CATALOG=replace-with-a-private-catalog-token
 GEMINI_API_KEY=replace-with-a-gemini-key
 ADMIN_TEXT_MODEL=gemini-3.8-flash
 ADMIN_IMAGE_MODEL=gemini-3.1-flash-image
+MESSAGING_API_URL=http://127.0.0.1:4700
+TOKEN_MANAGEMENT=replace-with-a-private-management-token

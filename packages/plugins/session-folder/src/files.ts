@@ -5,10 +5,12 @@ import { Schema } from "effect";
 import type { Persona } from "@ren-ai/personas";
 import { folderSnapshot } from "./protocol.ts";
 import { sessionDirectory } from "./paths.ts";
+import { conversationMemory, readRuntime, runtimeDocuments, memoryToolNames } from "./memory.ts";
+import { lockedMemory } from "./memory-files.ts";
 
 export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
-  ...["send", "read", "react", "wait", "dice"].map((action) => ({
+  ...["send", "read", "react", "wait", "dice", ...memoryToolNames].map((action) => ({
     action,
     resource: "*",
     effect: "allow" as const,
@@ -108,19 +110,22 @@ export const folderFiles = (root: string) => {
     const persona = Schema.decodeUnknownSync(folderSnapshot.fields.persona)(
       JSON.parse(await readFile(join(target, "persona.json"), "utf8")),
     );
-    const documents = await readDocuments(target);
+    const runtime = await readRuntime(target);
+    const documents = runtime ? runtimeDocuments(runtime) : await readDocuments(target);
     return {
       persona,
       agent: await readFile(join(target, ".opencode", "agents", `${persona.id}.md`), "utf8"),
       rules: await readFile(join(target, "AGENTS.md"), "utf8"),
       ...(documents && { documents }),
+      ...(runtime && { runtime }),
     };
   };
   return {
     path,
     exists: async (folderID: string) => (await lstat(path(folderID)).catch(absent)) !== undefined,
     read,
-    remove: (folderID: string) => rm(path(folderID), { recursive: true, force: true }),
+    remove: (folderID: string) =>
+      lockedMemory(path(folderID), () => rm(path(folderID), { recursive: true, force: true })),
     write: async (folderID: string, snapshot: typeof folderSnapshot.Type) => {
       const target = path(folderID);
       await directory(join(root, "sessions"));
@@ -152,6 +157,7 @@ export const folderFiles = (root: string) => {
             ] as const)
           : []),
       ]);
+      if (!prior && snapshot.runtime) await conversationMemory(target).restore(snapshot.runtime);
       return target;
     },
   };

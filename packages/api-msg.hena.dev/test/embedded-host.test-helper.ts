@@ -133,6 +133,11 @@ export const createHost = (options: HostOptions) =>
                 ? [{ action: "react", resource: "*", effect: "allow" } as const]
                 : []),
               { action: "dice", resource: "*", effect: "allow" },
+              ...["update_state", "update_memory", "remember", "search_memory"].map((action) => ({
+                action,
+                resource: "*",
+                effect: "allow" as const,
+              })),
             ],
           });
         }),
