@@ -108,7 +108,7 @@ For the messaging services, use the [application deployment and relocation runbo
 
 ### CI execution
 
-`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. `verify-gates` plants deliberate violations and confirms that each gate rejects them.
+`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys discovery.hena.dev and publishes an attested imsg.hena.dev bundle, which the Messages Mac pulls itself ([runbook](packages/imsg.hena.dev/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
 
 ## Design decisions worth knowing
 

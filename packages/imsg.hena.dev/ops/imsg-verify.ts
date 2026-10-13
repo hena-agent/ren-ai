@@ -11,7 +11,12 @@ await Effect.runPromise(
         url: process.env["IMSG_URL"] ?? "http://127.0.0.1:4702/rpc",
         token,
       });
-      yield* service.probe();
+      yield* service.probe().pipe(
+        Effect.timeoutOrElse({
+          duration: "60 seconds",
+          orElse: () => Effect.fail(new Error("Probe timed out after 60 seconds")),
+        }),
+      );
     }),
   ).pipe(Effect.provide(FetchHttpClient.layer)),
 );

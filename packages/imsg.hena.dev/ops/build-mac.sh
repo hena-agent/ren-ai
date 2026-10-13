@@ -15,18 +15,16 @@ for binary in "$imsg" "$(command -v bun)" "$resources/imsg-bridge-helper.dylib";
   lipo "$binary" -verify_arch "$(uname -m)"
 done
 otool -L "$imsg" "$(command -v bun)" "$resources/imsg-bridge-helper.dylib" | awk '/^[[:space:]]/ && $1 !~ /^\/(usr\/lib|System\/Library)\// && $1 != "@rpath/imsg-bridge-helper.dylib" {bad=1; print "Nonportable dylib: " $1 > "/dev/stderr"} END {exit bad}'
+bash "$ops/build-bundle.sh" "$output"
 mkdir -p "$output/bin"
 output="$(cd "$output" && pwd)"
 chmod 700 "$output" "$output/bin"
-bun build --target=bun --outfile="$output/imsg.js" --metafile="$output/imsg.graph.json" "$ops/imsg-entry.ts"
-bun build --target=bun --outfile="$output/verify.js" --metafile="$output/verify.graph.json" "$ops/imsg-verify.ts"
-bun "$ops/verify-mac-graph.ts" "$output/imsg.graph.json" "$output/verify.graph.json"
 cp "$(command -v bun)" "$output/bin/bun"
 cp "$imsg" "$output/bin/imsg"
 cp -R "$resources/imsg-bridge-helper.dylib" "$resources/PhoneNumberKit_PhoneNumberKit.bundle" "$resources/SQLite.swift_SQLite.bundle" "$output/bin/"
-cp "$ops/../src/gestures/messages-ui.applescript" "$output/messages-ui.applescript"
 cp "$ops/install.sh" "$output/install.sh"
 cp "$ops/install-mac-tunnel.sh" "$ops/write-tunnel-plist.sh" "$ops/export-mac.sh" "$ops/restore-mac.sh" "$output/"
+cp "$ops/install-deploy-agent.sh" "$ops/write-deploy-plist.sh" "$ops/update.sh" "$output/"
 chmod 700 "$output/bin/bun" "$output/bin/imsg"
 (
   cd "$output"
