@@ -86,30 +86,23 @@ documents; session snapshots include the current pair for export/restore.
 Point both API services at the same Worker. Publish newly authored personas
 before fresh onboarding. Any configured default must be an actual published ID.
 
-### Workers Builds
+### Automatic deployment
 
-After provisioning and setting runtime secrets, connect this repository to
-`persona-admin` under **Settings → Builds**:
-
-| Setting                      | Value                                                        |
-| ---------------------------- | ------------------------------------------------------------ |
-| Production branch            | `main`                                                       |
-| Root directory               | `apps/admin`                                                 |
-| Build command                | `bun install --cwd ../.. --frozen-lockfile && bun run build` |
-| Deploy command               | `bun run db:remote && bun run deploy`                        |
-| Build variable `BUN_VERSION` | `1.4.2`                                                      |
-
-Use a deployment token with Workers, D1 migration and domain-routing access.
-Initially watch the entire repository to include shared-package/schema changes.
-Workers Builds needs the explicit build command even though local Wrangler
-declares a custom build. Disable previews until isolated data and secrets are
-configured. Keep GitHub's `Quality gates` check required before merging into
-`main`; Cloudflare does not wait for it before deploying.
+After the quality gates pass on `main`, the `Deploy admin.ambivalent.dev` job in
+[`ci.yml`](../../.github/workflows/ci.yml) applies D1 migrations with `bun run db:remote`,
+deploys with `bun run deploy` and checks the public `/api/personas`. Each Worker
+version's message names the commit it came from. The job authenticates with the
+`CLOUDFLARE_API_TOKEN_AMBIVALENT` repository secret, an `Ambivalent Co.` account API
+token with Workers Scripts, D1 and Workers R2 Storage (Write), Account Settings
+(Read) and Workers Routes (Write) on `ambivalent.dev`. Do not also connect Workers
+Builds: it would deploy every push a second time, without waiting for the gates.
+Every deploy restarts the Durable Object, so an image being generated at that
+moment needs an operator-confirmed retry.
 
 Set `ADMIN_PASSWORD`, `TOKEN_CATALOG`, `TOKEN_MANAGEMENT` and `GEMINI_API_KEY` as Worker runtime
 secrets, not browser/build variables. Set the messaging application's
-`PERSONA_CATALOG_URL=https://admin.ambivalent.dev` and its private
-`TOKEN_CATALOG` to match the Worker's `TOKEN_CATALOG`. Deploy that application
+`PERSONA_CATALOG_URL=https://admin.ambivalent.dev` and its private `TOKEN_CATALOG`
+and `TOKEN_MANAGEMENT` to match the Worker's. Deploy that application
 configuration separately. Verify unauthenticated `/` returns 401, authenticated
 editing works, and only published current image references are public.
 

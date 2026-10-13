@@ -10,30 +10,19 @@ Run `bun run --cwd apps/discovery dev` from the repository root. The default
 frontend is `http://127.0.0.1:3867`; its `/discovery/` proxy targets the standalone
 API on port 4867. See `.env.example` for overrides.
 
-## Workers Builds
+## Automatic deployment
 
-Use the `Ambivalent Co.` Cloudflare account. Connect this repository to a Worker named
-exactly `discovery-ambivalent-dev` in **Settings → Builds**:
-
-| Setting                                  | Value                                                        |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| Production branch                        | `main`                                                       |
-| Root directory                           | `apps/discovery`                                             |
-| Build command                            | `bun install --cwd ../.. --frozen-lockfile && bun run build` |
-| Deploy command                           | `bun run deploy`                                             |
-| Build variable `BUN_VERSION`             | `1.4.2`                                                      |
-| Build variable `VITE_DISCOVERY_API_URL`  | `https://api-msg.hena.dev`                                   |
-| Build variable `VITE_TURNSTILE_SITE_KEY` | `0x4AAAAAAFE4vOGM-bENVmad` (existing production widget)      |
-
-Initially watch the whole repository so shared-package and lockfile changes
-also trigger builds. Use GitHub's required `Quality gates` check and branch
-protection to prevent unverified commits reaching `main`: Cloudflare builds do
-not wait for GitHub Actions. Keep previews disabled until their API/CORS and
-Turnstile settings are configured.
+After the quality gates pass on `main`, the `Deploy discovery.ambivalent.dev` job in
+[`ci.yml`](../../.github/workflows/ci.yml) builds with `VITE_DISCOVERY_API_URL=https://api-msg.hena.dev`
+and `VITE_TURNSTILE_SITE_KEY` from the `TURNSTILE_SITE_KEY` repository variable (the existing
+production widget), deploys the `discovery-ambivalent-dev` Worker in the `Ambivalent Co.` account,
+and checks that the site answers. It uses the same `CLOUDFLARE_API_TOKEN_AMBIVALENT` secret as the
+[Admin deployment](../admin/README.md#automatic-deployment). Do not also connect Workers Builds: it
+would deploy every push a second time, without waiting for the gates.
 
 Wrangler binds `discovery.ambivalent.dev` as a custom domain and serves `dist/` with
-SPA navigation. Build variables are compiled into browser assets; set them in
-Builds, not Worker runtime variables. Never put a private token in a `VITE_` key.
+SPA navigation. Build variables are compiled into browser assets, not Worker runtime
+variables. Never put a private token in a `VITE_` key.
 
 Before the first production build:
 
@@ -52,10 +41,8 @@ For a local packaging check, run `bun run build` and
 
 ## Initial frontend deployment and API handoff
 
-The frontend was deployed manually to `discovery.ambivalent.dev`. Connect
-Workers Builds separately for automatic deployment; uploading with Wrangler
-does not create the Git integration. Repeat the production build from this
-directory with:
+The frontend was first deployed manually to `discovery.ambivalent.dev`; CI now
+deploys it from `main`. To repeat a production build by hand from this directory:
 
 ```sh
 VITE_DISCOVERY_API_URL=https://api-msg.hena.dev VITE_TURNSTILE_SITE_KEY=0x4AAAAAAFE4vOGM-bENVmad bun run build
