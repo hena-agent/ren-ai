@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
-import type { IncomingMessage, Messages } from "../messages/messages.ts";
+import type { IncomingMessage, Messages } from "@ren-ai/imsg.hena.dev";
 import { edited, unsent } from "../transcript/transcript.ts";
 
 const editWindow = 15 * 60_000;

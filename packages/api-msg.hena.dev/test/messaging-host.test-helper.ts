@@ -5,8 +5,8 @@ import { Effect } from "effect";
 import { scriptedOverrides } from "./host.test-helper.ts";
 import { startMessagingHost, startPersonaHost } from "./application.test-helper.ts";
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
-import type { Messages } from "../src/messages/messages.ts";
-import { fakeGestures } from "../src/gestures/gestures.fake.ts";
+import type { Messages } from "@ren-ai/imsg.hena.dev";
+import { fakeGestures } from "@ren-ai/imsg.hena.dev/testing";
 import { noticeCopy } from "../src/onboarding/onboarding.ts";
 import { silentAlerts } from "./messaging.test-helper.ts";
 

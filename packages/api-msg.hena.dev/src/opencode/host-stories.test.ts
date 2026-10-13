@@ -2,8 +2,7 @@ import { TestLLM } from "@opencode/ai/testing";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, Layer } from "effect";
 import { expect, test } from "vitest";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeGestures, fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import {
   bindConversation,
   personaFixture,

@@ -68,6 +68,39 @@ jobs:
           test "$CHECKS" = success
           test "$VERIFY" = success
 
+  # The Messages Mac pulls this attested bundle itself (packages/imsg.hena.dev/ops/update.sh);
+  # nothing here can reach the Mac.
+  mac-bundle:
+    name: Build imsg.hena.dev bundle
+    needs: gates
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # The bundle runs on the Bun installed on the Mac, not the toolchain the gates use.
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bash packages/imsg.hena.dev/ops/build-bundle.sh "$RUNNER_TEMP/imsg-bundle"
+      - run: tar -czf imsg-bundle.tar.gz -C "$RUNNER_TEMP/imsg-bundle" .
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: imsg-bundle.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: imsg-bundle
+          path: imsg-bundle.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
   deploy:
     name: Deploy discovery.hena.dev
     needs: gates

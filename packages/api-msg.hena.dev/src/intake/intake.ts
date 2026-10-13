@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
-import type { IncomingMessage, Messages } from "../messages/messages.ts";
+import type { IncomingMessage, Messages } from "@ren-ai/imsg.hena.dev";
 import {
   gap,
   message,
@@ -13,7 +13,7 @@ import {
   tapback,
 } from "../transcript/transcript.ts";
 import { watchEdits } from "./edits.ts";
-import { imageMime } from "./images.ts";
+import { imageMime } from "@ren-ai/imsg.hena.dev";
 import { resetBoundary } from "../conversations/reset-boundary.ts";
 
 export interface PromptImage {

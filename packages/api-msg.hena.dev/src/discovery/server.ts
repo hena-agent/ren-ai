@@ -2,7 +2,7 @@ import { Context, Effect } from "effect";
 import { HttpClient } from "effect/unstable/http";
 import { catalogClient } from "../personas/catalog.ts";
 import { migrate } from "../database.ts";
-import { servePublic } from "../public-listener.ts";
+import { servePublic } from "@ren-ai/transport/listener";
 import { makeDiscoveryWeb } from "./discovery.ts";
 
 export const startDiscovery = ({

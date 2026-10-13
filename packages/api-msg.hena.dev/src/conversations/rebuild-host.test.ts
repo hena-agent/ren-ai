@@ -8,7 +8,7 @@ import { quietTestHost } from "../../test/messaging-host.test-helper.ts";
 import { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 import { setupRebuilding } from "./rebuild.ts";
 

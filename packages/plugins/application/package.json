@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./protocol": "./src/protocol.ts",
-    "./rpc": "./src/rpc.ts",
     "./phone": "./src/phone.ts"
   },
   "scripts": {
@@ -15,7 +14,9 @@
   "dependencies": {
     "@opencode/plugin": "2.0.19",
     "@opencode/schema": "2.0.19",
+    "@ren-ai/imsg.hena.dev": "workspace:*",
     "@ren-ai/plugin-session-folder": "workspace:*",
+    "@ren-ai/transport": "workspace:*",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {

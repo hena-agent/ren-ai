@@ -11,8 +11,7 @@ import { join } from "node:path";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { startMessagingHost, type startPersonaHost } from "./application.test-helper.ts";
-import type { Messages } from "../src/messages/messages.ts";
-import type { Gestures } from "../src/gestures/gestures.ts";
+import type { Messages, Gestures } from "@ren-ai/imsg.hena.dev";
 import { noticeCopy } from "../src/onboarding/onboarding.ts";
 import { silentAlerts } from "./messaging.test-helper.ts";
 

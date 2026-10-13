@@ -6,10 +6,9 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test, vi } from "vitest";
 import { migrate } from "./database.ts";
-import { fakeGestures } from "./gestures/gestures.fake.ts";
+import { fakeGestures, fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { startMessagingServer } from "../test/application.test-helper.ts";
-import { fakeMessages } from "./messages/messages.fake.ts";
 import { silentAlerts } from "../test/messaging.test-helper.ts";
 
 vi.mock("@effect/sql-sqlite-bun", async () => ({

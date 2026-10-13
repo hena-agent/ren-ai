@@ -5,7 +5,7 @@ import { SessionInbox } from "@opencode/schema/session-inbox";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { expect, test, vi } from "vitest";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
-import type { Messages } from "../messages/messages.ts";
+import type { Messages } from "@ren-ai/imsg.hena.dev";
 import { conversations } from "../conversations/conversations.ts";
 import { firstContacts } from "./first-contact.ts";
 import type { ContactDiagnostic } from "./diagnostics.ts";

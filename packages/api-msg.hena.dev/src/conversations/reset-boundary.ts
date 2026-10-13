@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import type { IncomingMessage, Messages } from "../messages/messages.ts";
+import type { IncomingMessage, Messages } from "@ren-ai/imsg.hena.dev";
 
 /** Applied to live intake and replay, including reactions to the old Memory. */
 export const resetBoundary = (messages: Messages) =>

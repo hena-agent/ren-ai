@@ -4,7 +4,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
-import type { Messages } from "../messages/messages.ts";
+import type { Messages } from "@ren-ai/imsg.hena.dev";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import type { conversations } from "../conversations/conversations.ts";

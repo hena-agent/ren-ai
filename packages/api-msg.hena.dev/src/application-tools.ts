@@ -6,8 +6,7 @@ import { outbox, type Tapback } from "./outbox/outbox.ts";
 import { timing } from "./timing/timing.ts";
 import { notReacted } from "./transcript/transcript.ts";
 import type { Persona } from "@ren-ai/personas";
-import type { Messages } from "./messages/messages.ts";
-import type { Gestures } from "./gestures/gestures.ts";
+import type { Messages, Gestures } from "@ren-ai/imsg.hena.dev";
 import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
 
 export type MessagingTools = {

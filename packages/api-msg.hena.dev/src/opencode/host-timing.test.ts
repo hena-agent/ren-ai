@@ -2,8 +2,7 @@ import { SqliteClient } from "@effect/sql-sqlite-node";
 import { TestLLM } from "@opencode/ai/testing";
 import { Effect, Fiber } from "effect";
 import { expect, test } from "vitest";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeGestures, fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { checkedPhone } from "../transcript/transcript.ts";
 import {
   bindConversation,

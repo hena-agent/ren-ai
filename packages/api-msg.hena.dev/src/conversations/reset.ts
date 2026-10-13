@@ -3,7 +3,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
 import type { conversations } from "./conversations.ts";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
-import type { IncomingMessage, Messages } from "../messages/messages.ts";
+import type { IncomingMessage, Messages } from "@ren-ai/imsg.hena.dev";
 import { timestamp } from "../transcript/transcript.ts";
 import { retainedSessions } from "./retained.ts";
 import { resetBoundary } from "./reset-boundary.ts";

@@ -7,7 +7,7 @@ import { Session } from "@opencode/schema/session";
 import { expect } from "vitest";
 import { messagingFixture, registration, runMessagingTest } from "./messaging.test-helper.ts";
 import { quietTestHost, startTestHost } from "./messaging-host.test-helper.ts";
-import { fakeMessages } from "../src/messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 
 export const resetFixture = async (prefix: string) => {
   const fixture = await messagingFixture(prefix);

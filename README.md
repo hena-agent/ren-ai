@@ -1,6 +1,6 @@
 # ren-ai
 
-An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo includes persona discovery, persona Admin, the discovery.hena.dev site, the Mac messaging API and remote OpenCode plugins, a local Persona Lab, and a standalone persona engine. Seven quality gates block CI.
+An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo includes persona discovery, persona Admin, the discovery.hena.dev site, the messaging application with its separately deployed Mac messaging gateway and remote OpenCode plugins, a local Persona Lab, and a standalone persona engine. Seven quality gates block CI.
 
 The premise is that when agents write most of the code, review does not scale but gates do.
 
@@ -86,15 +86,17 @@ packages/personas/     Shared OpenCode persona loader, validation and file store
 packages/persona-engine/  Relationship state engine (not wired into iMessage runtime).
 packages/onboarding/   Shared browser-safe Handle, disclosure, persona catalog and registration shapes.
 packages/discovery.hena.dev/   Prerendered Korean persona selection and onboarding site.
-packages/api-msg.hena.dev/  Mac messaging API, portable application, deployment tooling, and operator CLI.
-packages/plugins/    OpenCode runtime plugins and shared application RPC client.
+packages/api-msg.hena.dev/  Portable messaging application, Docker deployment tooling, and operator CLI.
+packages/imsg.hena.dev/     Mac Messages gateway, its client and test doubles, Mac artifact and MDM tooling.
+packages/transport/         Bearer-authenticated RPC client/server and HTTP listener shared by the services.
+packages/plugins/    OpenCode runtime plugins and the shared application RPC protocol.
 scripts/                Repo tooling: exceptions report and gate verification.
 quality-exceptions.json  The only place file-level gate exceptions may live.
 ```
 
 ## The gates
 
-For the messaging services, use the [deployment and relocation runbook](packages/api-msg.hena.dev/ops/README.md). The [service boundary decision](docs/adr/0010-separate-the-messages-mac-from-opencode.md) records the Mac/Docker split and the native OpenCode interface at `oc.hena.dev`; [ADR-0012](docs/adr/0012-each-session-runs-in-its-own-opencode-folder-written-by-a-plugin.md) adds per-session native agent/instruction folders and their separate persistent volume.
+For the messaging services, use the [application deployment and relocation runbook](packages/api-msg.hena.dev/ops/README.md) and the [Messages Mac runbook](packages/imsg.hena.dev/ops/README.md). The [service boundary decision](docs/adr/0010-separate-the-messages-mac-from-opencode.md) records the Mac/Docker split and the native OpenCode interface at `oc.hena.dev`; [ADR-0012](docs/adr/0012-each-session-runs-in-its-own-opencode-folder-written-by-a-plugin.md) adds per-session native agent/instruction folders and their separate persistent volume.
 
 | Gate                  | Threshold      | Command                |
 | --------------------- | -------------- | ---------------------- |
@@ -112,7 +114,7 @@ For the messaging services, use the [deployment and relocation runbook](packages
 
 ### CI execution
 
-`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. `verify-gates` plants deliberate violations and confirms that each gate rejects them.
+`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys discovery.hena.dev and publishes an attested imsg.hena.dev bundle, which the Messages Mac pulls itself ([runbook](packages/imsg.hena.dev/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
 
 ## Design decisions worth knowing
 

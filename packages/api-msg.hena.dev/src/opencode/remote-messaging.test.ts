@@ -9,8 +9,8 @@ import { startMessagingApplication } from "../application.ts";
 import { applicationGateway } from "./application-gateway.ts";
 import { remotePersonaPlugins } from "../../test/persona-plugins.test-helper.ts";
 import { remoteHost } from "./remote.ts";
-import { remoteMessages } from "../gateway/client.ts";
-import { gatewayFixture } from "../../test/gateway.test-helper.ts";
+import { remoteMessages } from "@ren-ai/imsg.hena.dev/client";
+import { fakeGestures, fakeMessages, messageGateway } from "@ren-ai/imsg.hena.dev/testing";
 import {
   messagingFixture,
   registration,
@@ -31,7 +31,9 @@ const unavailable = (_request: Request) =>
 
 test("an incoming message reaches Docker's persona plugin and replies through the authorized Mac API", async () => {
   const { root, personaDirectory } = await messagingFixture("distributed-messaging-");
-  const mac = gatewayFixture();
+  const local = fakeMessages();
+  const gestures = fakeGestures();
+  const mac = messageGateway(local.messages, "secret", gestures.gestures);
   try {
     await runMessagingTest(
       Effect.gen(function* () {
@@ -68,7 +70,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           const response = await (hostname === "oc.test"
             ? native.web(request)
             : hostname === "imsg.test"
-              ? mac.server.handler(request)
+              ? mac.handler(request)
               : applicationWeb(request));
           if (waitingRequest) Effect.runSync(Deferred.succeed(waiting, undefined));
           return response;
@@ -122,17 +124,17 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         );
         const session = yield* application.createSession("persona1");
         yield* application.conversations.create(registration("+821012345678", session.id));
-        mac.local.status("+821012345678", {
+        local.status("+821012345678", {
           delivered: true,
           readAt: Date.parse("2026-09-25T12:04:00Z"),
         });
         yield* allowAllSessionTools(application, session.id);
-        yield* mac.local.text("+821012345678", "hello", Date.now());
+        yield* local.text("+821012345678", "hello", Date.now());
         yield* Deferred.await(waiting).pipe(Effect.timeout("3 seconds"));
         yield* Effect.sleep("20 millis");
-        yield* mac.local.text("+821012345678", "wake the wait", Date.now());
+        yield* local.text("+821012345678", "wake the wait", Date.now());
         yield* Effect.gen(function* () {
-          while (!mac.local.bubbles.length) yield* Effect.sleep("10 millis");
+          while (!local.bubbles.length) yield* Effect.sleep("10 millis");
         }).pipe(Effect.timeout("5 seconds"));
         yield* application.sessions.wait(session.id);
         const modelRequests = yield* llm.requests();
@@ -151,9 +153,9 @@ test("an incoming message reaches Docker's persona plugin and replies through th
               /^paused \d+s, cut short by something new$/.test(result.value),
           ),
         ).toBe(true);
-        expect(mac.local.bubbles).toEqual([{ handle: "+821012345678", text: "hello from Docker" }]);
-        expect(mac.gestures.reads).toEqual(["+821012345678"]);
-        expect(mac.gestures.reactions).toEqual([{ handle: "+821012345678", tapback: "love" }]);
+        expect(local.bubbles).toEqual([{ handle: "+821012345678", text: "hello from Docker" }]);
+        expect(gestures.reads).toEqual(["+821012345678"]);
+        expect(gestures.reactions).toEqual([{ handle: "+821012345678", tapback: "love" }]);
         expect(alerts[0]).toMatch(/^unexpected-tool: OpenCode offered disallowed tool:/);
         expect(alertRequests).toBeGreaterThan(1);
         expect((yield* application.sessions.get(session.id)).title).toBe(
@@ -179,7 +181,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         expect(
           JSON.stringify(yield* application.sessions.messages({ sessionID: orphan.id })),
         ).toContain("No Conversation for session");
-        expect(mac.local.bubbles).toHaveLength(1);
+        expect(local.bubbles).toHaveLength(1);
         disconnected = true;
         const otherDirectory = join(root, "other-project");
         yield* Effect.promise(() => mkdir(otherDirectory));
@@ -198,7 +200,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
       }),
     );
   } finally {
-    await mac.server.dispose();
+    await mac.dispose();
     await rm(root, { recursive: true, force: true });
   }
 });

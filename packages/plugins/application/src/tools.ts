@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { Schema, type JsonSchema } from "effect";
-import { tapbacks } from "./protocol.ts";
+import { tapbacks } from "@ren-ai/imsg.hena.dev/protocol";
 
 const definition = <A>(description: string, schema: Schema.Codec<A>) => {
   // Every input is portable across the compiled CLI's separate Effect instance.

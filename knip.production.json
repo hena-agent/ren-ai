@@ -13,16 +13,20 @@
       "entry": [
         "src/server-entry.ts!",
         "src/operator-entry.ts!",
-        "ops/imsg-entry.ts!",
-        "ops/imsg-verify.ts!",
         "ops/location-config.ts!",
-        "ops/mdm/enrollment-entry.ts!",
-        "ops/mdm/profile-entry.ts!",
         "ops/offline-export.ts!",
         "ops/patch-opencode-proxy.ts!",
         "ops/session-transfer.ts!",
-        "ops/verify-mac-graph.ts!",
         "test/compiled-plugin/regression.mjs!"
+      ]
+    },
+    "packages/imsg.hena.dev": {
+      "entry": [
+        "ops/imsg-entry.ts!",
+        "ops/imsg-verify.ts!",
+        "ops/mdm/enrollment-entry.ts!",
+        "ops/mdm/profile-entry.ts!",
+        "ops/verify-mac-graph.ts!"
       ]
     },
     "apps/admin": {

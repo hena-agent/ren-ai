@@ -6,8 +6,7 @@ import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
 import { registration } from "../../test/messaging.test-helper.ts";
 import { providerUnavailable } from "../../test/messaging-host.test-helper.ts";
 import { startMessagingApplication } from "../application.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { fakeMessages, fakeGestures } from "@ren-ai/imsg.hena.dev/testing";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 
 test.each([

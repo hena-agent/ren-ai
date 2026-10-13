@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 import { intake } from "./intake.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 
 test("replay preserves send outcomes, first reply, follow-up order and removal fencing", async () => {
   await Effect.runPromise(
