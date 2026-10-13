@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 ops="$(cd "$(dirname "$0")" && pwd)"
-repo="$(cd "$ops/../../.." && pwd)"
 output="${1:?Usage: build-mac.sh NEW-ARTIFACT-DIRECTORY IMSG-BINARY}"
 imsg="${2:?Supply the reviewed native imsg executable, not a Homebrew shell wrapper}"
 resources="${3:-$(dirname "$imsg")}"
@@ -25,7 +24,7 @@ bun "$ops/verify-mac-graph.ts" "$output/imsg.graph.json" "$output/verify.graph.j
 cp "$(command -v bun)" "$output/bin/bun"
 cp "$imsg" "$output/bin/imsg"
 cp -R "$resources/imsg-bridge-helper.dylib" "$resources/PhoneNumberKit_PhoneNumberKit.bundle" "$resources/SQLite.swift_SQLite.bundle" "$output/bin/"
-cp "$repo/packages/api-msg.hena.dev/src/gestures/messages-ui.applescript" "$output/messages-ui.applescript"
+cp "$ops/../src/gestures/messages-ui.applescript" "$output/messages-ui.applescript"
 cp "$ops/install.sh" "$output/install.sh"
 cp "$ops/install-mac-tunnel.sh" "$ops/write-tunnel-plist.sh" "$ops/export-mac.sh" "$ops/restore-mac.sh" "$output/"
 chmod 700 "$output/bin/bun" "$output/bin/imsg"

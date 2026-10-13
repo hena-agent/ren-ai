@@ -16,10 +16,9 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
-import { fakeMessages } from "../messages/messages.fake.ts";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { fakeMessages, fakeGestures } from "@ren-ai/imsg.hena.dev/testing";
 import { outbox } from "../outbox/outbox.ts";
-import { servePublic } from "../public-listener.ts";
+import { servePublic } from "@ren-ai/transport/listener";
 
 const reopen = (
   open: (llm: TestLLM.TestInterface) => ReturnType<typeof startTestHost>,

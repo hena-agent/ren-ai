@@ -15,7 +15,7 @@ import {
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { onboardingApi } from "./api.ts";
 import { SqlClient } from "effect/unstable/sql";
-import type { Messages } from "../messages/messages.ts";
+import type { Messages } from "@ren-ai/imsg.hena.dev";
 import type { Persona } from "@ren-ai/personas";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { submissionLimit } from "./rate-limit.ts";

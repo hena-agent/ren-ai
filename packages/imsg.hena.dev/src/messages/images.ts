@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { Effect, FileSystem, Option } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import type { IncomingMessage } from "../messages/messages.ts";
+import type { IncomingMessage } from "./messages.ts";
 
 export type Attachment = NonNullable<IncomingMessage["attachments"]>[number];
 

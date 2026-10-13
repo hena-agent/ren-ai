@@ -5,7 +5,7 @@ import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { bindTestHandle, onboardTestHandle } from "../../test/reset.test-helper.ts";
 
 test("sending the reset Greeting does not schedule a follow-up until the User replies", async () => {

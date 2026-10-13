@@ -2,7 +2,7 @@ import { Deferred, Effect } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { expect, test } from "vitest";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
-import { servePublic } from "../public-listener.ts";
+import { servePublic } from "@ren-ai/transport/listener";
 import { remoteMessages } from "./client.ts";
 import { listenerUrl } from "../../test/listener.test-helper.ts";
 

@@ -7,15 +7,14 @@ import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { Session } from "@opencode/schema/session";
 import { expect, test, vi } from "vitest";
-import { fakeMessages } from "./messages/messages.fake.ts";
+import { fakeMessages, fakeGestures } from "@ren-ai/imsg.hena.dev/testing";
 import { notice } from "@ren-ai/onboarding";
-import { fakeGestures } from "./gestures/gestures.fake.ts";
 import { noticeCopy } from "./onboarding/onboarding.ts";
 import { runOperatorCli } from "./operator/cli.ts";
 import { valid, personaFixture } from "../test/host.test-helper.ts";
 import { composedTestServer, unrelatedSession } from "../test/server.test-helper.ts";
 import { listenerUrl } from "../test/listener.test-helper.ts";
-import { servePublic } from "./public-listener.ts";
+import { servePublic } from "@ren-ai/transport/listener";
 import { runMessagingTest } from "../test/messaging.test-helper.ts";
 
 const platform = Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer);

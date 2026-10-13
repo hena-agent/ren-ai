@@ -1,7 +1,7 @@
 import { Config, Effect } from "effect";
 import { makeImsgMessages } from "../messages/imsg.ts";
 import { makeMessagesUi } from "../gestures/messages-ui.ts";
-import { servePublic } from "../public-listener.ts";
+import { servePublic } from "@ren-ai/transport/listener";
 import { messageGateway } from "./server.ts";
 
 export const startMessagingGateway = Effect.gen(function* () {

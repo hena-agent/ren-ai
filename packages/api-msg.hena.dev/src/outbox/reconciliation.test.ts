@@ -9,8 +9,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeGestures, fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 
 const registration = (handle: string, sessionID: string) => ({
   handle,

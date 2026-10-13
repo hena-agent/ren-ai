@@ -9,7 +9,7 @@ import {
   runMessagingTest,
 } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { remoteHost } from "./remote.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";

@@ -1,6 +1,6 @@
 import { Deferred, Effect } from "effect";
 import { expect, test } from "vitest";
-import { servePublic } from "./public-listener.ts";
+import { servePublic } from "./listener.ts";
 import { listenerUrl } from "../test/listener.test-helper.ts";
 
 test("a disconnected HTTP caller aborts its pending application request", async () => {

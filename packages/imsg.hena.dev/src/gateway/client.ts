@@ -1,5 +1,5 @@
 import { Effect, Schema, Scope, Stream } from "effect";
-import { rpcClient } from "../transport/rpc.ts";
+import { rpcClient } from "@ren-ai/transport/client";
 import { messagingApi, tapback as tapbackSchema } from "./protocol.ts";
 import type { IncomingMessage } from "../messages/messages.ts";
 

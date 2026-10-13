@@ -28,4 +28,4 @@ printf '%s\n' "${volumes[@]}" > "$output/source-volumes.txt"
   cd "$output"
   find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} \; > SHA256SUMS
 )
-echo 'Stopped Docker state/config/credentials exported. Fleet uses ops/mdm backup tooling; encrypt and copy this private archive off-host.'
+echo 'Stopped Docker state/config/credentials exported. Fleet uses packages/imsg.hena.dev/ops/mdm backup tooling; encrypt and copy this private archive off-host.'

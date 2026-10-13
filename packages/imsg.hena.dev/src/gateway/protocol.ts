@@ -1,14 +1,22 @@
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 
+export const tapbacks = ["love", "like", "dislike", "laugh", "emphasis", "question"] as const;
+export type Tapback = (typeof tapbacks)[number];
+export const tapback = Schema.Literals(tapbacks);
+
+export const outgoingStatus = Schema.Struct({
+  delivered: Schema.Boolean,
+  readAt: Schema.NullOr(Schema.Number),
+});
+export type OutgoingStatus = typeof outgoingStatus.Type;
+
 const handle = { handle: Schema.String };
 const guid = { guid: Schema.String };
 const since = { ...handle, since: Schema.Number };
 const cursor = {
   rowID: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
 };
-import { tapback, outgoingStatus } from "@ren-ai/plugin-application/protocol";
-export { tapback };
 const message = Schema.Struct({
   id: Schema.Number,
   guid: Schema.String,

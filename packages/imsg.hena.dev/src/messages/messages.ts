@@ -1,5 +1,5 @@
 import type { Effect } from "effect";
-import type { OutgoingStatus } from "@ren-ai/plugin-application/protocol";
+import type { OutgoingStatus } from "../gateway/protocol.ts";
 
 /** The adapter must force iMessage and must never fall back to SMS. */
 export interface Messages {

@@ -5,10 +5,9 @@ import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeGestures, fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { outbox } from "./outbox.ts";
-import { tapbacks } from "@ren-ai/plugin-application/protocol";
+import { tapbacks } from "@ren-ai/imsg.hena.dev/protocol";
 import { timing } from "../timing/timing.ts";
 
 const personas = new Map([["persona1", { timeZone: "Asia/Seoul" }]]);

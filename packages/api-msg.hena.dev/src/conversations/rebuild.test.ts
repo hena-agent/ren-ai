@@ -8,7 +8,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { conversations } from "./conversations.ts";
 import { migrate } from "../database.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { intake } from "../intake/intake.ts";
 import { rebuilder } from "./rebuild-session.ts";
 import { noticeCopy } from "../onboarding/onboarding.ts";

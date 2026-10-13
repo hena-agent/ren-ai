@@ -3,7 +3,7 @@ import type { Conversation, conversations } from "./conversations.ts";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
-import type { Messages, IncomingMessage } from "../messages/messages.ts";
+import type { Messages, IncomingMessage } from "@ren-ai/imsg.hena.dev";
 import { intake } from "../intake/intake.ts";
 import { rebuilder } from "./rebuild-session.ts";
 import { resets } from "./reset.ts";

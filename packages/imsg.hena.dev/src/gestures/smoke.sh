@@ -3,7 +3,7 @@
 # Automation (Messages and System Events), and Full Disk Access grants.
 # Arrange a consenting test Conversation on a DIFFERENT Apple Account; send it a
 # new inbound message first. Set Messages > Settings > iMessage > Send read receipts.
-# Usage: bash packages/api-msg.hena.dev/src/gestures/smoke.sh <test-handle> <chat-id> <tapback>
+# Usage: bash packages/imsg.hena.dev/src/gestures/smoke.sh <test-handle> <chat-id> <tapback>
 # The tapback WILL be sent on the latest bubble; never use a personal chat.
 set -euo pipefail
 if [[ $# != 3 ]]; then echo "Usage: $0 <test-handle> <chat-id> <love|like|dislike|laugh|emphasis|question>" >&2; exit 2; fi

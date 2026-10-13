@@ -9,7 +9,7 @@ import { TestLLM } from "@opencode/ai/testing";
 import { Deferred, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 
 test("an interrupted send is shown to her with its real outcome after Messages settles it", async () => {
   const { root, personaDirectory } = await messagingFixture("interrupted-send-");

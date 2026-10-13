@@ -5,7 +5,7 @@ import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { intake } from "./intake.ts";
 
 const user = (handle: string) => ({

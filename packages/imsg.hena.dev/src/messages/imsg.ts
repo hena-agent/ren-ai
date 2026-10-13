@@ -9,7 +9,7 @@ import {
   subscription,
 } from "./imsg-protocol.ts";
 import { imsgRpc } from "./imsg-rpc.ts";
-import { imageData } from "../intake/images.ts";
+import { imageData } from "./images.ts";
 
 interface Alerts {
   raise(name: string, detail?: string): Effect.Effect<void>;

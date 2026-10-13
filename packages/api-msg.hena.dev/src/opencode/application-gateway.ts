@@ -1,6 +1,6 @@
 import { Effect, Layer, Stream } from "effect";
 import { RpcServer } from "effect/unstable/rpc";
-import { rpcRouter } from "../transport/rpc.ts";
+import { rpcRouter } from "@ren-ai/transport/server";
 import type { MessagingTools } from "../application-tools.ts";
 import type { FailureAlerts } from "./failed-turns.ts";
 import { applicationApi } from "./application-protocol.ts";

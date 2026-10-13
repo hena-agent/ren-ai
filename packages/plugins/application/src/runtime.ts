@@ -5,7 +5,7 @@ import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 import { Effect, Option, Schema, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { applicationApi, persona } from "./protocol.ts";
-import { rpcClient } from "./rpc.ts";
+import { rpcClient } from "@ren-ai/transport/client";
 import type { PersonaPluginOptions } from "./options.ts";
 
 export const inPersonaLocation = (directory: string, root: string) => {

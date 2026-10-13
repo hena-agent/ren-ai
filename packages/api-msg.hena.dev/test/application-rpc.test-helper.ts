@@ -1,11 +1,10 @@
 import { Effect, Schema } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { prepareMessaging } from "../src/application-tools.ts";
-import { fakeMessages } from "../src/messages/messages.fake.ts";
-import { fakeGestures } from "../src/gestures/gestures.fake.ts";
+import { fakeMessages, fakeGestures } from "@ren-ai/imsg.hena.dev/testing";
 import { applicationGateway } from "../src/opencode/application-gateway.ts";
 import { applicationApi } from "../src/opencode/application-protocol.ts";
-import { rpcClient } from "../src/transport/rpc.ts";
+import { rpcClient } from "@ren-ai/transport/client";
 import { registration, silentAlerts } from "./messaging.test-helper.ts";
 
 export const malformedRpcReply = async (request: Request, value: object): Promise<Response> => {

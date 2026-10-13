@@ -13,8 +13,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { fakeMessages, fakeGestures } from "@ren-ai/imsg.hena.dev/testing";
 import { noticeCopy } from "../onboarding/onboarding.ts";
 
 test("a real persona session reads and reacts only to its own User's latest message", async () => {

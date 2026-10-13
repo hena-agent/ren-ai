@@ -1,6 +1,6 @@
 import { Effect, Layer, Queue, Stream } from "effect";
 import { RpcServer } from "effect/unstable/rpc";
-import { rpcRouter } from "../transport/rpc.ts";
+import { rpcRouter } from "@ren-ai/transport/server";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
 import type { Gestures } from "../gestures/gestures.ts";
 import { messagingApi } from "./protocol.ts";

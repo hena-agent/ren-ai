@@ -14,7 +14,7 @@ Nothing here bypasses TCC, edits its database, changes SIP or grants permissions
 ## 1. Start Fleet locally
 
 ```sh
-packages/api-msg.hena.dev/ops/mdm/setup.sh
+packages/imsg.hena.dev/ops/mdm/setup.sh
 ```
 
 This creates a local mode-0600 `.env` once, generates database/encryption secrets, starts the pinned images and waits for health checks. Re-running preserves keys. Volumes persist MySQL (including Fleet's APNs/MDM certificate material), Redis and Fleet filesystem data. MySQL/Redis publish no ports; Fleet publishes loopback port 8081 only. amd64 Fleet/MySQL match Fleet's official Compose deployment on Apple Silicon.
@@ -37,7 +37,7 @@ Verify public HTTPS is working before generating enrollment profiles. During ini
 Run the repeatable [four-stage wizard](attended-setup.sh) **on the target Mac**:
 
 ```sh
-packages/api-msg.hena.dev/ops/mdm/attended-setup.sh
+packages/imsg.hena.dev/ops/mdm/attended-setup.sh
 ```
 
 It guides Fleet administrator sign-in/API-token retrieval (`My account > Get API token`, `/profile`), APNs CSR exchange, user-approved enrollment, then Messages sign-in/history checks. It saves only `FLEET_URL` and the hidden `FLEET_API_TOKEN` to the local mode-0600 setup `.env`. `FLEET_SETUP_ENV` selects another setup file. Do not run the wizard unattended.
@@ -52,7 +52,7 @@ In Fleet: Settings > Integrations > MDM > Turn on Apple MDM > Download CSR; at [
 
 ## 3. Install the gateway, then deliver PPPC automatically
 
-Use the separate Mac gateway installer first. Its launchd `ProgramArguments[0]` must be the installed Bun, and imsg must be the installed executable, **not** executables in a checkout or Homebrew symlinks that change unexpectedly. Default layout:
+Use the separate [Mac gateway installer](../README.md) first. Its launchd `ProgramArguments[0]` must be the installed Bun, and imsg must be the installed executable, **not** executables in a checkout or Homebrew symlinks that change unexpectedly. Default layout:
 
 ```text
 /usr/local/lib/ren-ai-messaging/bin/bun
@@ -61,7 +61,7 @@ Use the separate Mac gateway installer first. Its launchd `ProgramArguments[0]` 
 
 Set `MESSAGING_HOME` in the setup `.env` if the installer uses a different stable location. Provisioning resolves actual filesystem paths, verifies signatures, reads `codesign -dr -` designated requirements, locates Messages/System Events using the target Mac's application lookup, and reads their **actual** bundle IDs and requirements. Ad-hoc signatures are supported, but their cdhash requirement changes on upgrade; regenerate/reapply policy after replacing either binary. Unsigned/invalid binaries or missing receiver identities fail closed.
 
-From `packages/api-msg.hena.dev`:
+From `packages/imsg.hena.dev`:
 
 ```sh
 # Inspection and local generation only; no Fleet mutation:
@@ -82,7 +82,7 @@ The verification CLI calls the authenticated gateway, so permission-sensitive ac
 
 ```sh
 # Use the gateway's mode-0600 env file containing IMSG_TOKEN, not the Fleet token.
-# Run from packages/api-msg.hena.dev; replace the env path with the installer's path.
+# Run from packages/imsg.hena.dev; replace the env path with the installer's path.
 bun --env-file /absolute/path/to/gateway.env run ops/imsg-verify.ts
 ```
 
@@ -93,9 +93,9 @@ If delivery or the probe fails, inspect Fleet's profile status and the gateway l
 ## Export and restore Fleet on another Docker host
 
 ```sh
-packages/api-msg.hena.dev/ops/mdm/fleet-data.sh export /absolute/protected/fleet-snapshot
+packages/imsg.hena.dev/ops/mdm/fleet-data.sh export /absolute/protected/fleet-snapshot
 # On a fresh checkout/deployment directory with no .env and empty volumes:
-packages/api-msg.hena.dev/ops/mdm/fleet-data.sh restore /absolute/protected/fleet-snapshot
+packages/imsg.hena.dev/ops/mdm/fleet-data.sh restore /absolute/protected/fleet-snapshot
 ```
 
 Export briefly stops Fleet/MySQL/Redis for a consistent cold snapshot, archives all three named volumes, and saves the setup `.env`, exact pinned Compose file and SHA-256 checksums. An exit trap restarts the stack even if export fails. The output directory must be new and is mode 0700; contents are mode 0600. **Encrypt and protect the snapshot**, including the Fleet API token/encryption key and all MDM certificate/private-key material; this is not a sanitized diagnostic artifact. Also preserve the Cloudflare Tunnel configuration/credentials and your protected APNs renewal records.

@@ -4,7 +4,7 @@ import { HttpClient, HttpClientResponse, HttpRouter } from "effect/unstable/http
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { migrate } from "../database.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
+import { fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { onboarding, noticeCopy } from "./onboarding.ts";
 
 const client = HttpClient.make((request) =>

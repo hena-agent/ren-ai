@@ -1,5 +1,6 @@
+import type { OutgoingStatus, Tapback } from "@ren-ai/imsg.hena.dev/protocol";
 import type { Effect } from "effect";
-import type { Persona, Tapback, OutgoingStatus } from "./protocol.ts";
+import type { Persona } from "./protocol.ts";
 
 interface PluginConfig {
   readonly personaDirectory: string;

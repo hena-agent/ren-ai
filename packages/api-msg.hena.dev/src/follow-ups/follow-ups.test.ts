@@ -6,9 +6,8 @@ import { expect, test } from "vitest";
 import { followUps } from "./follow-ups.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
-import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { fakeGestures, fakeMessages } from "@ren-ai/imsg.hena.dev/testing";
 import { intake } from "../intake/intake.ts";
-import { fakeMessages } from "../messages/messages.fake.ts";
 import { outbox } from "../outbox/outbox.ts";
 
 interface State {

@@ -1,9 +1,6 @@
+import { outgoingStatus, tapback } from "@ren-ai/imsg.hena.dev/protocol";
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
-
-export const tapbacks = ["love", "like", "dislike", "laugh", "emphasis", "question"] as const;
-export type Tapback = (typeof tapbacks)[number];
-export const tapback = Schema.Literals(tapbacks);
 
 const session = { sessionID: Schema.String };
 export const persona = Schema.Struct({
@@ -16,11 +13,6 @@ export const persona = Schema.Struct({
 });
 
 export type Persona = typeof persona.Type;
-export const outgoingStatus = Schema.Struct({
-  delivered: Schema.Boolean,
-  readAt: Schema.NullOr(Schema.Number),
-});
-export type OutgoingStatus = typeof outgoingStatus.Type;
 
 export const applicationApi = RpcGroup.make(
   Rpc.make("catalog", { success: Schema.Array(persona), error: Schema.String }),

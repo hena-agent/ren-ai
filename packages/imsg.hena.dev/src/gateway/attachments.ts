@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, Schema } from "effect";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
-import { imageMime } from "../intake/images.ts";
+import { imageMime } from "../messages/images.ts";
 
 const reference = Schema.fromJsonString(
   Schema.Struct({
