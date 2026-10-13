@@ -11,7 +11,7 @@ test("Catalog HTTP separates public profiles and images from the authenticated a
     IMAGES: bucket,
     ASSETS: { fetch: async () => new Response("") },
     ADMIN_PASSWORD: "password",
-    CATALOG_TOKEN: "catalog-secret",
+    TOKEN_CATALOG: "catalog-secret",
     GEMINI_API_KEY: "",
   };
   const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
@@ -28,7 +28,7 @@ test("Catalog HTTP separates public profiles and images from the authenticated a
       await call(
         "/api/catalog",
         { headers: { authorization: "Bearer " } },
-        { ...env, CATALOG_TOKEN: "" },
+        { ...env, TOKEN_CATALOG: "" },
       )
     ).status,
   ).toBe(401);

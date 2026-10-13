@@ -50,8 +50,8 @@ Uploads are verified before all new Persona rows and links are committed in
 one D1 batch; a failed SQL statement rolls back that batch.
 
 The standalone Discovery API defaults to `PERSONA_CATALOG_URL=http://127.0.0.1:3729`.
-The messaging application also needs `PERSONA_CATALOG_TOKEN`, equal to the
-Worker's `CATALOG_TOKEN`. It refreshes revisions once a second and on native
+The messaging application and Worker both use `TOKEN_CATALOG` with the same
+value for private Catalog access. The application refreshes revisions once a second and on native
 session events. Its selection response uses absolute Worker image URLs, which
 also work in the existing Discovery client.
 
@@ -67,7 +67,8 @@ Set separate production secrets interactively from `apps/admin`:
 
 ```sh
 bunx wrangler secret put ADMIN_PASSWORD
-bunx wrangler secret put CATALOG_TOKEN
+bunx wrangler secret put TOKEN_CATALOG
+bunx wrangler secret put TOKEN_MANAGEMENT
 bunx wrangler secret put GEMINI_API_KEY
 bun run db:remote
 bun run deploy
@@ -105,10 +106,10 @@ declares a custom build. Disable previews until isolated data and secrets are
 configured. Keep GitHub's `Quality gates` check required before merging into
 `main`; Cloudflare does not wait for it before deploying.
 
-Set `ADMIN_PASSWORD`, `CATALOG_TOKEN` and `GEMINI_API_KEY` as Worker runtime
+Set `ADMIN_PASSWORD`, `TOKEN_CATALOG`, `TOKEN_MANAGEMENT` and `GEMINI_API_KEY` as Worker runtime
 secrets, not browser/build variables. Set the messaging application's
 `PERSONA_CATALOG_URL=https://admin.ambivalent.dev` and its private
-`PERSONA_CATALOG_TOKEN` to match `CATALOG_TOKEN`. Deploy that application
+`TOKEN_CATALOG` to match the Worker's `TOKEN_CATALOG`. Deploy that application
 configuration separately. Verify unauthenticated `/` returns 401, authenticated
 editing works, and only published current image references are public.
 
@@ -135,8 +136,8 @@ session/send before recovery; deleting a user through the operator removes the
 registration and releases the assignment.
 
 Set Worker `MESSAGING_API_URL=https://api-msg.hena.dev` (declared in Wrangler)
-and runtime secret `MESSAGING_API_TOKEN`, matching the application's new
-`DISCOVERY_ADMIN_TOKEN`. These are separate from `CATALOG_TOKEN`. Tokens remain
+and runtime secret `TOKEN_MANAGEMENT`, matching the application's
+`TOKEN_MANAGEMENT`. Use a different value from `TOKEN_CATALOG`. Tokens remain
 server-side; Admin authenticates the operator and enforces same-origin POSTs.
 The application serves Bearer-authenticated `GET /management/discovery` and
 `POST /management/discovery/select`. Deploy the API before Admin; the old API's
@@ -144,6 +145,46 @@ The application serves Bearer-authenticated `GET /management/discovery` and
 019 adds assignment, selection deduplication and durable contact records. On
 startup, conflicting existing live assignments stop admission rather than
 silently removing conversations. Resolve those records on the API host first.
+
+### Token names and removal of old settings
+
+Both applications now use the same names for each purpose, with two distinct
+values:
+
+| Setting            | Direction                     | Purpose                                       |
+| ------------------ | ----------------------------- | --------------------------------------------- |
+| `TOKEN_CATALOG`    | Messaging application → Admin | Read private Persona/State/Memory Catalog     |
+| `TOKEN_MANAGEMENT` | Admin → Messaging application | List waiting people and select first contacts |
+
+Keep value A for `TOKEN_CATALOG` identical in both apps, and value B for
+`TOKEN_MANAGEMENT` identical in both apps. A and B are different. Existing
+values can be retained; changing the names does not require generating new
+credentials. If management has not been configured, create only value B.
+
+Replace these settings in local `.dev.vars`, protected application environment
+files, deployment/secret-manager settings and any local setup files:
+
+| App                   | Remove old name         | Set new name with its existing value |
+| --------------------- | ----------------------- | ------------------------------------ |
+| Admin                 | `CATALOG_TOKEN`         | `TOKEN_CATALOG`                      |
+| Admin                 | `MESSAGING_API_TOKEN`   | `TOKEN_MANAGEMENT`                   |
+| Messaging application | `PERSONA_CATALOG_TOKEN` | `TOKEN_CATALOG`                      |
+| Messaging application | `DISCOVERY_ADMIN_TOKEN` | `TOKEN_MANAGEMENT`                   |
+
+Set the new names first, deploy/restart the renamed code on both sides, and
+verify private Catalog reads plus Admin waiting-list operations. The new code
+does not read old names. Once both deployments have switched, delete obsolete
+Worker secrets from `apps/admin`:
+
+```sh
+bunx wrangler secret delete CATALOG_TOKEN
+bunx wrangler secret delete MESSAGING_API_TOKEN
+```
+
+Delete only secrets that exist. Leave `ADMIN_PASSWORD`, `GEMINI_API_KEY`,
+`IMSG_TOKEN`, `REN_AI_APPLICATION_TOKEN` and `OPENCODE_AUTHORIZATION` in place;
+they serve other authentication/provider purposes. Public `MESSAGING_API_URL`
+and `PERSONA_CATALOG_URL` settings are unchanged.
 
 - Persona, initial State and initial Memory are D1 text columns. Downloaded
   `persona.md` is a serialized view, not another source of truth. A revision CAS

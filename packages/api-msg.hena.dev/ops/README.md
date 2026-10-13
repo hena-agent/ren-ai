@@ -28,8 +28,8 @@ The generated route file's three exception paths move with the package; their re
 The normal application listener serves `/discovery/personas` and
 `/discovery/waitlist` alongside the existing onboarding and plugin callback.
 The management routes `/management/discovery` (GET) and
-`/management/discovery/select` (POST) require `DISCOVERY_ADMIN_TOKEN`, matching
-Admin's `MESSAGING_API_TOKEN`. Keep this credential separate from the Catalog,
+`/management/discovery/select` (POST) require `TOKEN_MANAGEMENT`, matching
+Admin's `TOKEN_MANAGEMENT`. Keep this credential separate from `TOKEN_CATALOG`,
 messaging and plugin tokens. Configure the Admin Catalog at
 `https://admin.ambivalent.dev` and retain the application SQLite volume.
 
@@ -76,8 +76,8 @@ Copy `application.env.example` to a protected path outside Git. Set its secrets 
 Compose variables: `REN_AI_APP_ENV` (absolute protected env file), `REN_AI_TUNNEL_TOKEN` (application tunnel), `REN_AI_LOCATION_INPUT` (absolute reviewed plugin config/token staging directory). Volume names are overridable through `REN_AI_STATE_VOLUME`, `REN_AI_LOCATION_VOLUME`, `REN_AI_SESSION_VOLUME`. The application never mounts either OpenCode volume; session-folder writes use authenticated public plugin RPC.
 
 The Catalog is the Admin Worker's Drizzle/D1 database and starts empty. Set
-`PERSONA_CATALOG_URL` and `PERSONA_CATALOG_TOKEN` in the protected application
-env file; the token matches the Worker's `CATALOG_TOKEN`. There is no file mount
+`PERSONA_CATALOG_URL` and `TOKEN_CATALOG` in the protected application
+env file; the token matches the Worker's `TOKEN_CATALOG`. There is no file mount
 or seed-copy step. See [Admin deployment](../../../apps/admin/README.md).
 The application polls revisions and synchronizes native folders. Publish new
 personas before onboarding; any default must be an actual published ID.
@@ -119,7 +119,7 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
    At the approved deployment step, use those same arguments with `up -d --no-deps opencode-upstream`. Keep using the overlay on later starts/recreates. Verify the root mount is read-only and the sessions submount is writable; existing whole-home, compatibility image, proxy and tunnel settings must be unchanged. The application has neither mount. Start its callback in bootstrap mode before migration.
 
-6. With old intake stopped and bootstrap confirmed, **interrupt/drain active execution and queued inbox work** for all sessions to move. Run `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts folders /absolute/private/NEW-pre-cutover-archive.json` using protected `OPENCODE_URL`, `OPENCODE_AUTHORIZATION` and `OPENCODE_DIRECTORY=/srv/ren-ai`. If source definitions are needed, supply `PERSONA_CATALOG_URL` and `PERSONA_CATALOG_TOKEN`; missing IDs fail rather than loading files. The command exclusively creates the archive and skips already-moved sessions. Review partial results and use a new archive path before retrying. Exports include persona/agent/rules and current Conversation documents; restore recreates folders before importing. Preserve rollback archives and never enable a second intake.
+6. With old intake stopped and bootstrap confirmed, **interrupt/drain active execution and queued inbox work** for all sessions to move. Run `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts folders /absolute/private/NEW-pre-cutover-archive.json` using protected `OPENCODE_URL`, `OPENCODE_AUTHORIZATION` and `OPENCODE_DIRECTORY=/srv/ren-ai`. If source definitions are needed, supply `PERSONA_CATALOG_URL` and `TOKEN_CATALOG`; missing IDs fail rather than loading files. The command exclusively creates the archive and skips already-moved sessions. Review partial results and use a new archive path before retrying. Exports include persona/agent/rules and current Conversation documents; restore recreates folders before importing. Preserve rollback archives and never enable a second intake.
 7. Inspect root and session-location inventories. Verify obsolete `personas` is absent, no unrelated inherited plugin remains, native agent/instruction loaders are enabled, and each session has `.opencode/agents/<id>.md`, `AGENTS.md`, `persona.json`, and `opencode.json` with `default_agent` and disabled `build`/`plan`/`general`/`explore`. Verify only send/read/react/wait/dice and update_state/update_memory/remember/search_memory, compaction, ordinary project writes, native UI features and retained-session history. Runtime memory writes publish `.memory/current`; include hidden revisions and symlinks in volume backups. Active Persona/ground-rule snapshots refresh at startup/catalog change; current State/Memory and retained snapshots do not reset. A dedicated location is **not** a security sandbox.
 
 ## Standalone Messages Mac

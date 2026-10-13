@@ -4,8 +4,8 @@ export const applicationConfig = Effect.gen(function* () {
   const env = yield* Config.all({
     stateDirectory: Config.string("STATE_DIRECTORY"),
     catalogUrl: Config.string("PERSONA_CATALOG_URL"),
-    catalogToken: Config.string("PERSONA_CATALOG_TOKEN"),
-    adminToken: Config.string("DISCOVERY_ADMIN_TOKEN"),
+    catalogToken: Config.string("TOKEN_CATALOG"),
+    managementToken: Config.string("TOKEN_MANAGEMENT"),
     defaultPersonaID: Config.string("DEFAULT_PERSONA_ID").pipe(Config.withDefault("Persona1")),
     publicPort: Config.int("PORT").pipe(Config.withDefault(4700)),
     hostname: Config.string("LISTEN_HOST").pipe(Config.withDefault("0.0.0.0")),
@@ -25,7 +25,7 @@ export const applicationConfig = Effect.gen(function* () {
   return {
     stateDirectory: env.stateDirectory,
     catalog: { url: env.catalogUrl, token: env.catalogToken },
-    adminToken: env.adminToken,
+    managementToken: env.managementToken,
     defaultPersonaID: env.defaultPersonaID,
     publicPort: env.publicPort,
     hostname: env.hostname,

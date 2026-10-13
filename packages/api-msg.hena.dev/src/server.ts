@@ -27,7 +27,7 @@ import { migrate } from "./database.ts";
 export interface ServerConfig {
   readonly stateDirectory: string;
   readonly catalog: CatalogConnection;
-  readonly adminToken: string;
+  readonly managementToken: string;
   readonly defaultPersonaID: string;
   readonly publicPort: number;
   readonly hostname?: string;
@@ -114,7 +114,7 @@ export const composeServer = (config: ServerConfig) =>
     );
     onboardingWeb = (request) =>
       host.onboardingWeb(request, Context.make(HttpClient.HttpClient, client));
-    managementWeb = contactManagement(yield* contacts(catalog.publicList), config.adminToken);
+    managementWeb = contactManagement(yield* contacts(catalog.publicList), config.managementToken);
     const scheduled = yield* firstContacts(
       host,
       messages,
