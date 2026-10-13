@@ -14,6 +14,7 @@ import { expect, it } from "vitest";
 
 const script = resolve(import.meta.dirname, "../../ops/update.sh");
 const sha = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+const gateway = `gui/${process.getuid?.()}/dev.hena.ren-ai-imsg`;
 const payload = [
   "imsg.js",
   "verify.js",
@@ -23,17 +24,43 @@ const payload = [
 ];
 const executable = { mode: 0o700 };
 
-/** A deployable bundle whose gateway identifies itself by the content of imsg.js. */
-const bundle = (directory: string, version: string, files = payload) => {
-  const contents = join(directory, `bundle-${version}`);
+/** A deployable bundle whose gateway identifies itself by its code; graphs are metadata. */
+const bundle = (directory: string, version: string, files = payload, graphs = version) => {
+  const name = `bundle-${version}-${graphs}-${files.length}`;
+  const contents = join(directory, name);
   mkdirSync(contents);
-  for (const name of files) writeFileSync(join(contents, name), `${version}\n`);
-  const archive = join(directory, `bundle-${version}.tar.gz`);
+  for (const file of files)
+    writeFileSync(join(contents, file), `${file.endsWith(".graph.json") ? graphs : version}\n`);
+  const archive = join(directory, `${name}.tar.gz`);
   execFileSync("tar", ["-czf", archive, "-C", contents, "."]);
   return archive;
 };
 
-/** An installed Messages home with fake gh, launchctl and a probe that passes for `healthy`. */
+/** Whether each step occurs after the previous one. */
+const inOrder = (text: string, ...steps: string[]) => {
+  let from = 0;
+  for (const step of steps) {
+    const at = text.indexOf(step, from);
+    if (at < 0) return false;
+    from = at + step.length;
+  }
+  return true;
+};
+
+const restarts = (commands: string) =>
+  commands.match(new RegExp(`^launchctl kickstart -k ${gateway}$`, "gm"))?.length ?? 0;
+
+interface Fake {
+  readonly run?: string;
+  readonly bundle?: string;
+  readonly attested?: boolean;
+  /** Gateway versions whose probe passes. */
+  readonly healthy?: string;
+  /** Instead of `healthy`: only the first N probes pass. */
+  readonly passes?: number;
+}
+
+/** An installed Messages home with fake gh, launchctl and probe. */
 function mac() {
   const directory = mkdtempSync(join(tmpdir(), "imsg-deploy-"));
   const root = join(directory, "home");
@@ -47,7 +74,13 @@ function mac() {
     `#!/bin/bash
 version="$(cat "$(dirname "$0")/../imsg.js")"
 printf 'probe %s %s\\n' "$version" "$*" >> "$COMMAND_LOG"
-[[ " $FAKE_HEALTHY " == *" $version "* ]] || { echo "probe refused $version" >&2; exit 1; }
+if [[ -n "$FAKE_PASSES" ]]; then
+  (( $(grep -c '^probe ' "$COMMAND_LOG") <= FAKE_PASSES )) && exit 0
+elif [[ " $FAKE_HEALTHY " == *" $version "* ]]; then
+  exit 0
+fi
+printf 'source context\\nerror: probe refused %s\\n    at stack\\n' "$version" >&2
+exit 1
 `,
     executable,
   );
@@ -80,7 +113,7 @@ esac
     `#!/bin/bash\nprintf 'launchctl %s\\n' "$*" >> "$COMMAND_LOG"\n`,
     executable,
   );
-  const update = (fake: { run?: string; bundle?: string; attested?: boolean; healthy: string }) =>
+  const update = (fake: Fake) =>
     spawnSync("/bin/bash", [script, root], {
       encoding: "utf8",
       env: {
@@ -90,7 +123,8 @@ esac
         FAKE_RUN: fake.run ?? `12345 ${sha} completed`,
         FAKE_BUNDLE: fake.bundle ?? "",
         FAKE_ATTESTED: fake.attested === false ? "0" : "1",
-        FAKE_HEALTHY: fake.healthy,
+        FAKE_HEALTHY: fake.healthy ?? "",
+        FAKE_PASSES: fake.passes === undefined ? "" : String(fake.passes),
         DEPLOY_PROBE_ATTEMPTS: "2",
         DEPLOY_PROBE_DELAY: "0",
       },
@@ -119,9 +153,7 @@ esac
   return { directory, root, update, commands, installed, state, checksums, leftovers };
 }
 
-const gateway = `launchctl kickstart -k gui/${process.getuid?.()}/dev.hena.ren-ai-imsg`;
-
-it("deploys an attested main bundle once, keeping the binaries and a restorable checksum list", () => {
+it("deploys an attested main bundle once, keeping the binaries and restorable checksums", () => {
   const fixture = mac();
   const result = fixture.update({ bundle: bundle(fixture.directory, "new"), healthy: "new old" });
   expect(result).toMatchObject({ status: 0 });
@@ -143,7 +175,15 @@ it("deploys an attested main bundle once, keeping the binaries and a restorable 
   expect(commands).toContain(
     `token=github_pat_read_only config=${join(fixture.root, "deploy/gh")}`,
   );
-  expect(commands).toContain(`${gateway}\nprobe new --env-file=${join(fixture.root, "imsg.env")}`);
+  expect(
+    inOrder(
+      commands,
+      "probe old",
+      `launchctl kickstart -k ${gateway}`,
+      `probe new --env-file=${join(fixture.root, "imsg.env")}`,
+    ),
+  ).toBe(true);
+  expect(restarts(commands)).toBe(1);
   const first = commands.length;
   expect(
     fixture.update({ bundle: bundle(fixture.directory, "again"), healthy: "new" }).status,
@@ -155,14 +195,14 @@ it("waits for a running build and skips one without a bundle, so a passing re-ru
   const fixture = mac();
   const archive = bundle(fixture.directory, "new");
   expect(
-    fixture.update({ run: `12345 ${sha} in_progress`, bundle: archive, healthy: "new" }).status,
+    fixture.update({ run: `12345 ${sha} in_progress`, bundle: archive, healthy: "new old" }).status,
   ).toBe(0);
-  expect(fixture.update({ run: "", bundle: archive, healthy: "new" }).status).toBe(0);
-  expect(fixture.update({ healthy: "new" }).status).toBe(0);
-  expect(fixture.commands()).not.toMatch(/download|kickstart/);
+  expect(fixture.update({ run: "", bundle: archive, healthy: "new old" }).status).toBe(0);
+  expect(fixture.update({ healthy: "new old" }).status).toBe(0);
+  expect(fixture.commands()).not.toMatch(/download|probe|launchctl/);
   expect(fixture.installed("imsg.js")).toBe("old\n");
   expect(fixture.state("deployed")).toBeNull();
-  expect(fixture.update({ bundle: archive, healthy: "new" }).status).toBe(0);
+  expect(fixture.update({ bundle: archive, healthy: "new old" }).status).toBe(0);
   expect(fixture.installed("imsg.js")).toBe("new\n");
 });
 
@@ -181,11 +221,23 @@ it("refuses an unattested or incomplete bundle before replacing anything", () =>
   expect(incomplete.status).not.toBe(0);
   expect(incomplete.stdout).toContain("lacks messages-ui.applescript");
   for (const name of payload) expect(fixture.installed(name)).toBe("old\n");
-  expect(fixture.commands()).not.toContain("kickstart");
-  expect(fixture.state("deployed")).toBeNull();
-  expect(fixture.state("rejected")).toBeNull();
+  expect(fixture.commands()).not.toMatch(/probe|launchctl/);
+  for (const marker of ["deployed", "rejected", "deferred"])
+    expect(fixture.state(marker)).toBeNull();
   expect(fixture.checksums()).toBe(true);
   expect(fixture.leftovers()).toEqual([]);
+});
+
+it("installs a bundle whose code is unchanged without probing or restarting the gateway", () => {
+  const fixture = mac();
+  const result = fixture.update({ bundle: bundle(fixture.directory, "old", payload, "rebuilt") });
+  expect(result).toMatchObject({ status: 0 });
+  expect(result.stdout).toContain(`${sha} leaves the gateway's code unchanged`);
+  expect(fixture.installed("imsg.js")).toBe("old\n");
+  expect(fixture.installed("imsg.graph.json")).toBe("rebuilt\n");
+  expect(fixture.checksums()).toBe(true);
+  expect(fixture.state("deployed")).toBe(`${sha}\n`);
+  expect(fixture.commands()).not.toMatch(/probe|launchctl/);
 });
 
 it("rolls back a gateway that fails its probe and never retries that commit", () => {
@@ -193,27 +245,58 @@ it("rolls back a gateway that fails its probe and never retries that commit", ()
   const archive = bundle(fixture.directory, "broken");
   const result = fixture.update({ bundle: archive, healthy: "old" });
   expect(result.status).toBe(1);
-  expect(result.stdout).toContain("Probe failed: probe refused broken");
+  expect(result.stdout).toContain("Probe failed: error: probe refused broken");
   expect(result.stdout).toContain(`Rolled back ${sha}: its gateway failed the probe`);
   for (const name of payload) expect(fixture.installed(name)).toBe("old\n");
   expect(fixture.checksums()).toBe(true);
   expect(fixture.state("rejected")).toBe(`${sha}\n`);
   expect(fixture.state("deployed")).toBeNull();
-  expect(fixture.commands().split(gateway)).toHaveLength(3);
+  expect(restarts(fixture.commands())).toBe(2);
   const first = fixture.commands().length;
   expect(fixture.update({ bundle: archive, healthy: "old" }).status).toBe(0);
-  expect(fixture.commands().slice(first)).not.toMatch(/download|kickstart/);
+  expect(fixture.commands().slice(first)).not.toMatch(/download|probe|launchctl/);
 });
 
-it("keeps retrying a commit when the previous gateway fails its probe too", () => {
+it("tries a commit once while the Mac fails the probe, then waits without restarts until it recovers", () => {
   const fixture = mac();
   const archive = bundle(fixture.directory, "new");
-  const result = fixture.update({ bundle: archive, healthy: "" });
+  const result = fixture.update({ bundle: archive });
   expect(result.status).toBe(1);
-  expect(result.stdout).toContain("previous gateway fails the probe too");
+  expect(result.stdout).toContain(
+    `The running gateway fails the probe (error: probe refused old); trying ${sha} once`,
+  );
+  expect(result.stdout).toContain("the Mac fails the probe with either bundle");
   expect(fixture.installed("imsg.js")).toBe("old\n");
+  expect(fixture.checksums()).toBe(true);
+  expect(fixture.state("deferred")).toBe(`${sha}\n`);
   expect(fixture.state("rejected")).toBeNull();
-  expect(fixture.update({ bundle: archive, healthy: "new" }).status).toBe(0);
+  expect(restarts(fixture.commands())).toBe(2);
+  // The old gateway already failed, so nothing probes it again after the rollback.
+  expect(fixture.commands().match(/^probe /gm)).toHaveLength(3);
+  const first = fixture.commands().length;
+  expect(fixture.update({ bundle: archive })).toMatchObject({ status: 0, stdout: "" });
+  expect(fixture.commands().slice(first)).not.toMatch(/download|launchctl/);
+  expect(fixture.update({ bundle: archive, healthy: "new old" }).status).toBe(0);
   expect(fixture.installed("imsg.js")).toBe("new\n");
   expect(fixture.state("deployed")).toBe(`${sha}\n`);
+  expect(fixture.state("deferred")).toBeNull();
+});
+
+it("deploys a commit that fixes a gateway failing its probe", () => {
+  const fixture = mac();
+  const result = fixture.update({ bundle: bundle(fixture.directory, "fixed"), healthy: "fixed" });
+  expect(result).toMatchObject({ status: 0 });
+  expect(result.stdout).toContain(`trying ${sha} once`);
+  expect(fixture.installed("imsg.js")).toBe("fixed\n");
+  expect(fixture.state("deployed")).toBe(`${sha}\n`);
+});
+
+it("defers rather than rejects a commit when the Mac starts failing the probe mid-deploy", () => {
+  const fixture = mac();
+  const result = fixture.update({ bundle: bundle(fixture.directory, "new"), passes: 1 });
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain("the Mac fails the probe with either bundle");
+  expect(fixture.installed("imsg.js")).toBe("old\n");
+  expect(fixture.state("deferred")).toBe(`${sha}\n`);
+  expect(fixture.state("rejected")).toBeNull();
 });

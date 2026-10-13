@@ -32,8 +32,12 @@ Every push to `main` that passes the gates builds the gateway's JavaScript paylo
 
 1. It considers only the newest push run of `ci.yml` on `main` and waits until that run completes. A run whose gates failed has no bundle and is skipped; a re-run that passes still deploys.
 2. `gh attestation verify` must confirm that this repository's `ci.yml` built the bundle from `refs/heads/main` at that exact commit on a GitHub-hosted runner. An artifact from a fork, another workflow or a self-hosted runner stops here.
-3. It keeps the current payload in `deploy/previous`, swaps in the new one, refreshes `SHA256SUMS` so exports still restore, restarts the gateway with `launchctl kickstart` and runs the no-send probe.
-4. If the probe fails, it restores the previous payload and restarts again. The commit goes to `deploy/rejected` and is never retried. If the previous gateway fails the probe as well, the environment is at fault: nothing is rejected and the next run tries again.
+3. If `imsg.js`, `verify.js` and `messages-ui.applescript` match the installed ones, only metadata changed: it installs the bundle without probing or restarting the gateway.
+4. Otherwise it probes the running gateway first, keeps the current payload in `deploy/previous`, swaps in the new one, refreshes `SHA256SUMS` so exports still restore, restarts the gateway with `launchctl kickstart -k` and runs the no-send probe.
+5. If the probe fails, it restores the previous payload and restarts again. When the running gateway passed the first probe and passes again after the rollback, the bundle is at fault: the commit goes to `deploy/rejected` and is never retried.
+6. When the running gateway already failed the first probe, or fails it after the rollback, the Mac is at fault: for example, Messages cannot come to the front. The agent still tries each new commit once, in case it is the fix, then records it in `deploy/deferred` and waits without restarting anything until the running gateway passes the probe.
+
+The restart is forced on purpose. On SIGTERM the gateway stops accepting requests and waits up to 20 seconds for the application's open message stream to drain. During that time every send, typing indicator and read receipt fails, while a forced restart answers again within a second. A typing draft cut off by a restart is cleared before the next typing.
 
 Only the payload changes. Bun, imsg, `imsg.env`, the tunnel and Fleet's permission profile stay untouched, so upgrading the binaries remains the attended build and install above. Because the Mac now deploys on its own schedule, keep changes to `@ren-ai/imsg.hena.dev/protocol` compatible with the running application.
 
@@ -43,7 +47,7 @@ Install the agent once, after the gateway probe passes:
 2. From `packages/imsg.hena.dev`, run `MESSAGING_HOME=… bash ops/install-deploy-agent.sh /opt/homebrew/bin/gh /absolute/private/raw-token`. It verifies the native `gh` and the token format, copies them and `update.sh` into `deploy/`, and writes `~/Library/LaunchAgents/dev.hena.ren-ai-imsg-deploy.plist` **without loading it** (`IMSG_DEPLOY_LAUNCH_AGENT` changes the path).
 3. `launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/dev.hena.ren-ai-imsg-deploy.plist`. Its first run deploys the head of `main` once CI has attested a bundle for it.
 
-The deployed commit is in `deploy/deployed` and the agent's output in `deploy/logs`. When the token expires, deployments stop with authentication errors in `deploy/logs/stderr.log` while the gateway keeps running: issue a new one the same way and overwrite `deploy/token` (owner-only); the next run uses it. Pause deployments with `launchctl bootout "gui/$(id -u)/dev.hena.ren-ai-imsg-deploy"`. The agent never replaces its own `update.sh`: after reviewing a change to it, copy `ops/update.sh` over `deploy/update.sh`.
+The deployed commit is in `deploy/deployed`, a commit waiting for the Mac to recover in `deploy/deferred`, and the agent's output in `deploy/logs`. When the token expires, deployments stop with authentication errors in `deploy/logs/stderr.log` while the gateway keeps running: issue a new one the same way and overwrite `deploy/token` (owner-only); the next run uses it. Pause deployments with `launchctl bootout "gui/$(id -u)/dev.hena.ren-ai-imsg-deploy"`. The agent never replaces its own `update.sh`: after reviewing a change to it, copy `ops/update.sh` over `deploy/update.sh`.
 
 ## Relocate to another Mac
 
