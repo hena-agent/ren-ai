@@ -174,7 +174,7 @@ test.each(["sent", "uncertain"] as const)(
               // Registration and selection completed while execution was unavailable.
               expect(attempts).toBe(0);
               await expect(executionState(runtime, "/__fixture/alarm")).rejects.toThrow(
-                "ClientError",
+                "Application is unavailable",
               );
               expect((await runtime.dispatchFetch("https://app/discovery/personas")).status).toBe(
                 200,
