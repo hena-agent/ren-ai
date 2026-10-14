@@ -1,4 +1,4 @@
-import { Clock, Effect, Queue, Random } from "effect";
+import { Clock, Effect, Random } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import { checkedPhone } from "../transcript/transcript.ts";
@@ -24,8 +24,6 @@ export const followUps = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const changed = yield* Queue.unbounded<void>();
-    const signal = Queue.offer(changed, undefined).pipe(Effect.asVoid);
     const received = (conversation: Conversation, at: number) =>
       Effect.gen(function* () {
         const wake = yield* next(at, false);
@@ -33,7 +31,6 @@ export const followUps = (
           VALUES (${conversation.id}, ${at}, ${wake})
           ON CONFLICT(conversation_id) DO UPDATE SET last_sent_at = excluded.last_sent_at,
             next_wake_at = excluded.next_wake_at, unanswered = 0, wake_pending = 0, followed_up = 0`;
-        yield* signal;
       });
     const sent = (conversation: Conversation, at?: number) =>
       Effect.gen(function* () {
@@ -51,7 +48,6 @@ export const followUps = (
           unanswered = ${unanswered}, followed_up = ${row.wakePending === 1 ? 1 : 0}
           WHERE conversation_id = ${conversation.id} AND EXISTS (SELECT 1 FROM conversation
             WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID})`;
-        yield* signal;
       });
     // Upgrade existing Conversations without requiring him to text again.
     yield* Effect.gen(function* () {
@@ -68,46 +64,35 @@ export const followUps = (
           VALUES (${row.id}, ${row.at}, ${wake})`;
       }
     }).pipe(sql.withTransaction);
-    const monitor = Effect.forever(
-      Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis;
-        const [due] = yield* sql<Due>`SELECT follow_up.conversation_id AS conversationID,
+    const tick = Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      const [due] = yield* sql<Due>`SELECT follow_up.conversation_id AS conversationID,
           follow_up.next_wake_at AS nextWakeAt, conversation.session_id AS sessionID,
           user.handle, conversation.persona_id AS personaID FROM follow_up
           JOIN conversation ON conversation.id = follow_up.conversation_id
           JOIN user ON user.id = conversation.user_id
           WHERE follow_up.next_wake_at IS NOT NULL AND user.replied_at IS NOT NULL
+            AND follow_up.next_wake_at <= ${now}
             AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)
           ORDER BY follow_up.next_wake_at LIMIT 1`;
-        if (!due) {
-          yield* Queue.take(changed);
-          return;
-        }
-        if (due.nextWakeAt > now) {
-          yield* Effect.race(Effect.sleep(due.nextWakeAt - now), Queue.take(changed));
-          return;
-        }
-        const conversation: Conversation = {
-          id: due.conversationID,
-          sessionID: due.sessionID,
-          handle: due.handle,
-          personaID: due.personaID,
-        };
-        if (!(yield* active(conversation))) {
-          yield* Effect.sleep("1 second");
-          return;
-        }
-        // The ID is stable if prompt admission fails and the server restarts.
-        yield* prompt(
-          due.sessionID,
-          `msg_checked_${due.conversationID}_${due.nextWakeAt}`,
-          checkedPhone(now, timeZone(due.personaID)),
-        );
-        const wake = yield* next(now, true);
-        yield* sql`UPDATE follow_up SET next_wake_at = ${wake}, wake_pending = 1,
-          followed_up = 0 WHERE conversation_id = ${due.conversationID}
-          AND next_wake_at = ${due.nextWakeAt}`;
-      }),
-    );
-    return { received, sent, monitor };
+      if (!due) return;
+      const conversation: Conversation = {
+        id: due.conversationID,
+        sessionID: due.sessionID,
+        handle: due.handle,
+        personaID: due.personaID,
+      };
+      if (!(yield* active(conversation))) return;
+      // The ID is stable if prompt admission fails and the server restarts.
+      yield* prompt(
+        due.sessionID,
+        `msg_checked_${due.conversationID}_${due.nextWakeAt}`,
+        checkedPhone(now, timeZone(due.personaID)),
+      );
+      const wake = yield* next(now, true);
+      yield* sql`UPDATE follow_up SET next_wake_at = ${wake}, wake_pending = 1,
+        followed_up = 0 WHERE conversation_id = ${due.conversationID}
+        AND next_wake_at = ${due.nextWakeAt}`;
+    });
+    return { received, sent, tick };
   });

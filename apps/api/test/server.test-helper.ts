@@ -134,6 +134,16 @@ export const composedTestServer = (
       ...(model ? { noticeVersion: "v1" } : {}),
     });
     if (server.mode !== "running") throw new Error("Expected running application");
+    const stop = yield* messages.follow(0, () => server.heartbeat);
+    yield* Effect.addFinalizer(() => Effect.sync(stop));
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Effect.sleep("1 second").pipe(
+          Effect.andThen(server.heartbeat),
+          Effect.catchCause(Effect.logError),
+        ),
+      ),
+    );
     const tokenFile = join(root, "application-token");
     yield* Effect.promise(() => writeFile(tokenFile, "\napplication-secret\n", { mode: 0o600 }));
     yield* Effect.forEach(installedPlugins, (installedPlugin) =>

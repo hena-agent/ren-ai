@@ -50,6 +50,6 @@ export const setupRebuilding = (
     yield* incoming.resetPending;
     yield* recovery.missing;
     yield* reset.resume;
-    yield* incoming.start;
+    yield* incoming.poll;
     return { incoming, recovery };
   });

@@ -50,20 +50,27 @@ test("Intake quotes targets, admits media and placeholders, ignores removed tapb
         const signals: number[] = [];
         incoming.onNew((conversation) => signals.push(conversation.id));
         const hers = yield* fake.outgoing(handle, '헐 "맛" <photo', at);
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 60_000, {
           tapback: { emoji: "😂", targetGuid: hers.guid, added: true },
         });
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 120_000, {
           tapback: { emoji: "😂", targetGuid: hers.guid, added: false },
         });
+        yield* incoming.poll;
         yield* fake.text(handle, '봐 "여기" <tapback', at + 180_000, { replyToGuid: hers.guid });
+        yield* incoming.poll;
         const his = yield* fake.text(handle, "hi", at + 240_000);
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 300_000, {
           tapback: { emoji: "❤️", targetGuid: his.guid, added: true },
         });
+        yield* incoming.poll;
         yield* fake.text(handle, "caption", at + 360_000, {
           attachments: [attachment("image/heic"), attachment("image/gif")],
         });
+        yield* incoming.poll;
         const photos = yield* fake.text(handle, "", at + 420_000, {
           attachments: [
             attachment("image/png"),
@@ -71,6 +78,7 @@ test("Intake quotes targets, admits media and placeholders, ignores removed tapb
             attachment("image/jpeg"),
           ],
         });
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 480_000, {
           attachments: [
             attachment("audio/m4a"),
@@ -80,10 +88,15 @@ test("Intake quotes targets, admits media and placeholders, ignores removed tapb
             attachment(null),
           ],
         });
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 540_000, { payload: "location" });
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 600_000, { payload: "app" });
+        yield* incoming.poll;
         yield* fake.text(handle, "https://example.com", at + 660_000);
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 720_000);
+        yield* incoming.poll;
         expect(prompts.map((item) => item.text)).toEqual([
           '<tapback at="2026-09-25 Fri 21:01" emoji="😂" on="your message: 헐 ”맛” ‹photo"/>',
           '<message at="2026-09-25 Fri 21:03" reply-to="your message: 헐 ”맛” ‹photo">봐 "여기" ‹tapback</message>',
@@ -106,33 +119,40 @@ test("Intake quotes targets, admits media and placeholders, ignores removed tapb
         yield* fake.text(handle, "", at + 780_000, {
           tapback: { emoji: "?", targetGuid: "absent", added: true },
         });
+        yield* incoming.poll;
         yield* fake.text(handle, "", at + 840_000, { replyToGuid: "absent" });
+        yield* incoming.poll;
         expect(prompts.at(-2)?.text).toContain('on="message unavailable"');
         expect(prompts.at(-1)?.text).toContain('reply-to="message unavailable"');
         yield* fake.text(handle, "", at + 900_000, {
           tapback: { emoji: "👍", targetGuid: photos.guid, added: true },
         });
+        yield* incoming.poll;
         expect(prompts.at(-1)?.text).toContain('on="his message: photo"');
         const empty = yield* fake.text(handle, "", at + 960_000);
         yield* fake.text(handle, "", at + 1_020_000, {
           tapback: { emoji: "👍", targetGuid: empty.guid, added: true },
         });
+        yield* incoming.poll;
         expect(prompts.at(-1)?.text).toContain('on="his message: message unavailable"');
         yield* fake.text(handle, "", at + 1_080_000, {
           replyToGuid: photos.guid,
           attachments: [attachment("image/jpeg")],
         });
+        yield* incoming.poll;
         expect(prompts.at(-1)?.text).toContain(
           '<message at="2026-09-25 Fri 21:18" reply-to="his message: photo"></message>\n<photo at="2026-09-25 Fri 21:18"/>',
         );
         const count = prompts.length;
-        yield* fake.redeliver({
+        const removed = {
           ...photos,
           id: 999,
           guid: "removed-outgoing-tapback",
           fromMe: true,
           tapback: { emoji: "👍", targetGuid: photos.guid, added: false },
-        });
+        };
+        yield* fake.replace([...(yield* fake.messages.after(0)), removed]);
+        yield* incoming.poll;
         expect(prompts).toHaveLength(count);
         expect(
           (yield* sql<{ rowID: number }>`SELECT row_id AS rowID FROM bookmark`)[0]?.rowID,

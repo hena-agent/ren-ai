@@ -61,7 +61,6 @@ test("wakes after quiet, stops after two unanswered follow-ups, and restarts onl
             (rows) => rows[0],
           );
         let follow = yield* create();
-        yield* Effect.forkScoped(follow.monitor);
         expect(yield* state(ignored.id)).toBeUndefined();
         yield* follow.sent(ignored);
         yield* sql`UPDATE user SET replied_at = ${yield* Clock.currentTimeMillis} WHERE handle IN
@@ -86,7 +85,7 @@ test("wakes after quiet, stops after two unanswered follow-ups, and restarts onl
         yield* TestClock.setTime(due - 1);
         expect(prompts).toEqual([]);
         yield* TestClock.adjust(1);
-        yield* Effect.yieldNow;
+        yield* follow.tick;
         expect(prompts).toHaveLength(1);
         expect(prompts[0]).toMatchObject({
           session: first.sessionID,
@@ -110,7 +109,7 @@ test("wakes after quiet, stops after two unanswered follow-ups, and restarts onl
           7 * 24 * 60 * 60 * 1000,
         );
         yield* TestClock.setTime(next);
-        yield* Effect.yieldNow;
+        yield* follow.tick;
         expect(prompts).toHaveLength(2);
         yield* follow.sent(first);
         expect(yield* state(first.id)).toMatchObject({ unanswered: 2, nextWakeAt: null });
@@ -119,7 +118,7 @@ test("wakes after quiet, stops after two unanswered follow-ups, and restarts onl
         yield* follow.received(first, yield* Clock.currentTimeMillis);
         expect((yield* state(first.id))!.unanswered).toBe(0);
         yield* TestClock.setTime((yield* state(first.id))!.nextWakeAt!);
-        yield* Effect.yieldNow;
+        yield* follow.tick;
         expect(prompts).toHaveLength(3);
       }).pipe(
         Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
@@ -183,10 +182,11 @@ test("restores existing replied Conversations and their persisted wake on restar
           due: number;
         }>`SELECT next_wake_at AS due FROM follow_up WHERE conversation_id = ${existing.id}`;
         expect(saved?.due).toBe(row?.due);
-        yield* Effect.forkScoped(restarted.monitor);
         yield* TestClock.setTime(row!.due);
+        expect(checked).toBe(false);
+        yield* restarted.tick;
         expect(checked).toBe(true);
-        yield* TestClock.adjust("1 second");
+        yield* restarted.tick;
         expect(prompts).toEqual([`msg_checked_${existing.id}_${row!.due}`]);
         expect(allowedAtPrompt).toEqual([true]);
         expect(original).toBeDefined();
@@ -224,7 +224,7 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
           directory.active,
         );
         sends.onSent(follow.sent);
-        yield* intake(
+        const incoming = yield* intake(
           fake.messages,
           directory.byHandle,
           () => Effect.void,
@@ -237,11 +237,13 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
         );
         const at = yield* Clock.currentTimeMillis;
         const first = yield* fake.text(conversation.handle, "hi", at);
+        yield* incoming.poll;
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(at);
         yield* sql`UPDATE follow_up SET unanswered = 1 WHERE conversation_id = ${conversation.id}`;
         yield* TestClock.adjust("1 hour");
         const manualAt = yield* Clock.currentTimeMillis;
         yield* fake.outgoing(conversation.handle, "by hand", manualAt);
+        yield* incoming.poll;
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(manualAt);
         expect((yield* state(sql, conversation.id))?.unanswered).toBe(1);
         yield* TestClock.adjust("1 hour");
@@ -251,20 +253,24 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
           yield* Clock.currentTimeMillis,
           "unknown",
         );
+        yield* incoming.poll;
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(manualAt);
         yield* TestClock.adjust("1 hour");
         const deliveredAt = yield* Clock.currentTimeMillis;
         yield* fake.outgoing(conversation.handle, "delivered", deliveredAt, "delivered");
+        yield* incoming.poll;
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(deliveredAt);
         yield* TestClock.adjust("1 hour");
         const failedAt = yield* Clock.currentTimeMillis;
         yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
           VALUES (${conversation.handle}, ${conversation.id}, 'text', 'failed text', 'failed-call', 'recorded', ${failedAt}, ${failedAt})`;
         yield* fake.outgoing(conversation.handle, "failed text", failedAt, "failed");
+        yield* incoming.poll;
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(deliveredAt);
         yield* TestClock.adjust("1 hour");
         const toolAt = yield* Clock.currentTimeMillis;
         expect(yield* sends.send(conversation, "hello", "tool-send")).toBe("sent");
+        yield* incoming.poll;
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(toolAt);
         yield* TestClock.adjust("1 hour");
         const [alreadySent] = (yield* fake.messages.after(0)).filter(
@@ -278,6 +284,7 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
         );
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(toolAt);
         const latest = yield* fake.text(conversation.handle, "hi again", toolAt);
+        yield* incoming.poll;
         expect(yield* sends.react(conversation, "like", "tool-react", latest.guid)).toBe(
           "reacted like",
         );
@@ -288,6 +295,7 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
         yield* fake.text(conversation.handle, "", replyAt, {
           tapback: { emoji: "😂", targetGuid: first.guid, added: true },
         });
+        yield* incoming.poll;
         expect(yield* state(sql, conversation.id)).toMatchObject({
           lastSentAt: replyAt,
           unanswered: 0,
@@ -296,6 +304,7 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
         yield* fake.text(conversation.handle, "", yield* Clock.currentTimeMillis, {
           tapback: { emoji: "😂", targetGuid: first.guid, added: false },
         });
+        yield* incoming.poll;
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(replyAt);
       }).pipe(
         Effect.provide(SqliteClient.layer({ filename: ":memory:" })),

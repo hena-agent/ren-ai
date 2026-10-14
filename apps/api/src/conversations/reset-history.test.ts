@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { expect, test } from "vitest";
 import { currentMemory, resetFixture, startTestHandle } from "../../test/reset.test-helper.ts";
+import { resets } from "./reset.ts";
 
 test.each(["renumbered", "missing"])(
   "reset cutoffs survive %s Messages rows and equal timestamps",
@@ -11,14 +12,21 @@ test.each(["renumbered", "missing"])(
         Effect.gen(function* () {
           const host = yield* f.startMarked;
           const at = Date.now();
-          yield* f.fake.text(f.handle, "first old fact", at);
+          const old = yield* f.fake.text(f.handle, "first old fact", at);
           yield* f.fake.text(f.handle, "second old fact", at);
           const command = yield* f.fake.text(f.handle, "/reset", at);
           yield* startTestHandle(host, f.fake.messages, f.handle);
+          const reset = yield* resets(host.conversations, host, () => Effect.void, f.fake.messages);
+          yield* reset.receive({ ...old, text: "/reset" });
+          yield* reset.receive({ ...old, guid: "unseen-old-command", text: "/reset" });
+          expect((yield* host.conversations.byHandle(f.handle))?.sessionID).toBe(
+            (yield* currentMemory(host, f.handle)).id,
+          );
           const history = yield* f.fake.messages.after(0);
           yield* mode === "renumbered"
             ? f.fake.replace(history.map((row) => ({ ...row, id: row.id + 1000 })))
             : f.fake.remove(command.guid);
+          yield* host.heartbeat.intake;
           yield* host.operator.rebuild(f.handle);
           const restored = yield* currentMemory(host, f.handle);
           expect(restored.text).not.toContain("old fact");
@@ -34,7 +42,8 @@ test.each(["renumbered", "missing"])(
             createdAt: Date.now() + 1000,
             fromMe: false,
           };
-          yield* f.fake.redeliver(later);
+          yield* f.fake.replace([later]);
+          yield* host.heartbeat.intake;
           const memory = yield* currentMemory(host, f.handle);
           expect(memory.text).toContain("new equal timestamp");
           expect(memory.text).toContain("new lower rowid");
