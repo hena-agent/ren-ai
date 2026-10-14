@@ -109,6 +109,7 @@ test("a pending registration cannot repeat, and failure retains the form for a f
     true,
   );
   expect(screen.getByRole("status").textContent).toBe("관심을 전하고 있어요.");
+  expect(screen.getByRole("status").classList.contains("sr-only")).toBe(true);
   expect(
     screen.getByRole("button", { name: "관심을 전하고 있어요." }).hasAttribute("disabled"),
   ).toBe(true);

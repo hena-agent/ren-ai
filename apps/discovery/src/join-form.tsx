@@ -142,7 +142,7 @@ export function JoinForm({
         >
           {pending ? copy.pending : copy.submit}
         </button>
-        {pending && <output>{copy.pending}</output>}
+        {pending && <output className="sr-only">{copy.pending}</output>}
       </form>
     </section>
   );
