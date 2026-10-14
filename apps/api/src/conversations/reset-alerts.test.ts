@@ -1,4 +1,4 @@
-import { Clock, Duration, Effect } from "effect";
+import { Clock, Effect } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
 import { AIError, QuotaExceededError } from "@opencode/ai/schema/errors";
 import { Session } from "@opencode/schema/session";
@@ -15,6 +15,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
   async (kind) => {
     const f = await resetFixture("reset-alerts-");
     const clock = Effect.runSync(Clock.Clock);
+    let elapsed = 0;
     const alerts: string[] = [];
     try {
       await f.run(
@@ -53,10 +54,12 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           const old = yield* bindTestHandle(host, f.handle);
           yield* host.sessions.prompt({ sessionID: old.id, text: "fail this turn" });
           yield* host.sessions.wait(old.id);
+          yield* host.heartbeat.failedTurns;
           if (kind.startsWith("other-")) {
             const other = yield* bindTestHandle(host, "other@example.com", "persona2");
             yield* host.sessions.prompt({ sessionID: other.id, text: "other failure" });
             yield* host.sessions.wait(other.id);
+            yield* host.heartbeat.failedTurns;
           }
           yield* Effect.sleep("20 millis");
           failing = false;
@@ -77,6 +80,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
               text: "subsequent quota failure",
             });
             yield* host.sessions.wait(subsequent.id);
+            yield* host.heartbeat.failedTurns;
           }
           const requestsFor = (text: string) =>
             llm
@@ -89,6 +93,8 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
               );
           const requests = yield* requestsFor("fail this turn");
           const otherRequests = yield* requestsFor("other failure");
+          elapsed += kind.includes("quota") ? 900_000 : 600_000;
+          yield* host.heartbeat.failedTurns;
           yield* Effect.sleep("600 millis");
           expect(yield* requestsFor("fail this turn")).toBe(requests);
           if (kind === "other-provider") expect(alerts).toContain("provider-failing");
@@ -107,18 +113,13 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* host.sessions.wait(fresh);
         }).pipe(
           Effect.provideService(Clock.Clock, {
-            currentTimeMillis: clock.currentTimeMillis,
-            currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
+            currentTimeMillis: Effect.map(clock.currentTimeMillis, (now) => now + elapsed),
+            currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe() + elapsed,
             currentTimeNanos: clock.currentTimeNanos,
             currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
             monotonicTimeNanos: clock.monotonicTimeNanos,
             monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
-            sleep: (duration) =>
-              clock.sleep(
-                [600_000, 900_000].includes(Duration.toMillis(duration))
-                  ? Duration.millis(500)
-                  : duration,
-              ),
+            sleep: (duration) => clock.sleep(duration),
           }),
         ),
       );

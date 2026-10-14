@@ -144,6 +144,17 @@ export const migrate = Effect.gen(function* () {
         yield* sql`DELETE FROM send WHERE kind = 'notice'`;
         yield* sql`DELETE FROM user WHERE joined_at IS NULL`;
       }),
+      "021_failed_turns": sql`CREATE TABLE failed_turn (
+        session_id TEXT PRIMARY KEY,
+        fingerprint TEXT NOT NULL,
+        failures INTEGER NOT NULL,
+        quota INTEGER NOT NULL,
+        failed_at INTEGER NOT NULL,
+        retry_at INTEGER NOT NULL,
+        last_retry_at INTEGER NOT NULL DEFAULT 0,
+        review INTEGER NOT NULL DEFAULT 0,
+        provider_alerted INTEGER NOT NULL DEFAULT 0
+      )`,
     }),
   });
 });
