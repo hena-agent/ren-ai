@@ -13,6 +13,8 @@ import type { ApplicationStore } from "./application-store.ts";
 import type { CloudflareBindings, CloudflareConfiguration } from "./cloudflare-config.ts";
 import type { SqlClient } from "effect/unstable/sql";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -99,7 +101,24 @@ export async function createExecutionRuntime(
     };
   });
   let ready: Promise<Effect.Success<typeof boot>> | undefined;
-  const open = () => (ready ??= run(boot));
+  const open = () => {
+    if (ready) return ready;
+    const started = performance.now();
+    const requestId = randomUUID();
+    ready = run(boot).catch((cause) => {
+      contactLog({
+        requestId,
+        operation: "api-app.execution",
+        stage: "execution.startup",
+        outcome: "failed",
+        durationMs: performance.now() - started,
+        level: "error",
+        ...contactCause(cause),
+      });
+      throw cause;
+    });
+    return ready;
+  };
   return {
     tick: async () => {
       const runtime = await open();
@@ -109,6 +128,7 @@ export async function createExecutionRuntime(
       const url = new URL(request.url);
       if (url.pathname.startsWith("/rpc")) {
         if (callback) return callback.handler(request);
+        // open observes startup failure once; this catch prevents an unhandled detached rejection.
         void open().catch(() => {});
         return new Response("Execution is starting", { status: 503 });
       }

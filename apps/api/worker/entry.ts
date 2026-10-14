@@ -24,7 +24,10 @@ export class ApiApplication extends DurableObject<Environment> {
       this.ctx.storage,
       this.env,
       groundRules,
-    );
+    ).catch((cause) => {
+      this.applicationPromise = undefined;
+      throw cause;
+    });
     return this.applicationPromise;
   }
 
@@ -38,10 +41,10 @@ export class ApiApplication extends DurableObject<Environment> {
   async alarm() {
     const start = performance.now();
     const requestId = randomUUID();
-    const application = await this.application();
-    if (application.configuration.bootstrapOnly) return;
+    if (this.env.BOOTSTRAP_ONLY !== "false") return;
     await this.ctx.storage.setAlarm(Date.now() + 2000);
     try {
+      const application = await this.application();
       await application.tick();
       contactLog({
         requestId,
