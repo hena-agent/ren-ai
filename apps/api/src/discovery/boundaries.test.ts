@@ -110,7 +110,7 @@ test("the public API allows the Discovery origin and rejects unrelated origins",
       const { web } = yield* setup();
       yield* Effect.tryPromise(async () => {
         try {
-          for (const origin of ["https://discovery.ambivalent.dev"]) {
+          for (const origin of ["https://renai.im"]) {
             const allowed = await web.handler(
               new Request("http://localhost/discovery/personas", { headers: { Origin: origin } }),
               Context.make(HttpClient.HttpClient, verified),

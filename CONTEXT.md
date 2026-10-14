@@ -35,7 +35,7 @@ An iMessage address: a phone number in international format or an Apple ID email
 _Avoid_: contact, number, address
 
 **Service handle**:
-The handle every persona texts from, currently hi@hena.dev.
+The handle every persona texts from.
 _Avoid_: persona handle, sender, bot account
 
 **Discovery**:

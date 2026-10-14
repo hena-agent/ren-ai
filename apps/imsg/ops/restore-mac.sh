@@ -3,8 +3,8 @@ set -euo pipefail
 ops="$(cd "$(dirname "$0")" && pwd)"
 backup="${1:?Usage: restore-mac.sh BACKUP-DIRECTORY NEW-STAGING-DIRECTORY}"
 staging="${2:?Use a new staging directory}"
-plist="${IMSG_TUNNEL_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/dev.hena.ren-ai-imsg-tunnel.plist}"
-deploy_plist="${IMSG_DEPLOY_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/dev.hena.ren-ai-imsg-deploy.plist}"
+plist="${IMSG_TUNNEL_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/im.renai.imsg-tunnel.plist}"
+deploy_plist="${IMSG_DEPLOY_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/im.renai.imsg-deploy.plist}"
 [[ ! -e "$staging" && ! -e "$plist" && ! -e "$deploy_plist" ]] || { echo 'Use new staging, tunnel and deploy plist destinations' >&2; exit 1; }
 (
   cd "$backup"
@@ -23,4 +23,4 @@ if [[ -e "$root/deploy" ]]; then
   bash "$ops/write-deploy-plist.sh" "$root/bin/bun" "$root" "$deploy_plist"
   /usr/bin/plutil -lint "$deploy_plist"
 fi
-echo 'Restored WITHOUT STARTING. Complete Apple sign-in, history sync, Fleet enrollment/PPPC verification before switching imsg.hena.dev.'
+echo 'Restored WITHOUT STARTING. Complete Apple sign-in, history sync, Fleet enrollment/PPPC verification before switching imsg.renai.im.'

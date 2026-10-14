@@ -8,7 +8,7 @@ umask 077
 "$bun" -e '
 const root = process.argv[1];
 process.stdout.write(JSON.stringify({
-  Label: "dev.hena.ren-ai-imsg-tunnel",
+  Label: "im.renai.imsg-tunnel",
   ProgramArguments: [root + "/bin/cloudflared", "tunnel", "--no-autoupdate", "run", "--token-file", root + "/token"],
   WorkingDirectory: root,
   StandardOutPath: root + "/logs/stdout.log",

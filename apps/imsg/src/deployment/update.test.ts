@@ -14,7 +14,7 @@ import { expect, it } from "vitest";
 
 const script = resolve(import.meta.dirname, "../../ops/update.sh");
 const sha = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-const gateway = `gui/${process.getuid?.()}/dev.hena.ren-ai-imsg`;
+const gateway = `gui/${process.getuid?.()}/im.renai.imsg`;
 const payload = [
   "imsg.js",
   "verify.js",

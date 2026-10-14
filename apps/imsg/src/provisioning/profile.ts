@@ -80,7 +80,7 @@ export async function discoverPermissionProfile(
     ],
   ]);
   const digest = createHash("sha256").update(services).digest("hex");
-  const identifier = `dev.hena.messaging.pppc.${digest}`;
+  const identifier = `im.renai.messaging.pppc.${digest}`;
   const payload = dict([
     ["PayloadType", string("com.apple.TCC.configuration-profile-policy")],
     ["PayloadVersion", "<integer>1</integer>"],

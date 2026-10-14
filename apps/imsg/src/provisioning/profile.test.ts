@@ -31,7 +31,7 @@ describe("Mac permission provisioning", () => {
         run,
       ),
     );
-    expect(profile.identifier).toMatch(/^dev\.hena\.messaging\.pppc\.[a-f0-9]{64}$/);
+    expect(profile.identifier).toMatch(/^im\.renai\.messaging\.pppc\.[a-f0-9]{64}$/);
     expect(profile.xml).toContain("com.apple.TCC.configuration-profile-policy");
     expect(profile.xml).toContain("<key>SystemPolicyAllFiles</key>");
     expect(profile.xml).toContain("<key>Accessibility</key>");

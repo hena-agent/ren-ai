@@ -3,7 +3,7 @@ set -euo pipefail
 artifact="${1:-$(cd "$(dirname "$0")" && pwd)}"
 root="${MESSAGING_HOME:-${IMSG_INSTALL_ROOT:-/usr/local/lib/ren-ai-messaging}}"
 config="${2:?Usage: install.sh ARTIFACT-DIRECTORY IMSG-ONLY.env}"
-plist="${IMSG_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/dev.hena.ren-ai-imsg.plist}"
+plist="${IMSG_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/im.renai.imsg.plist}"
 [[ "$(uname -s)" == Darwin ]] || { echo 'macOS GUI user required' >&2; exit 1; }
 [[ "$(id -u)" != 0 ]] || { echo 'Run as the intended GUI user, not root; the installer requests sudo only for its new identity directory if necessary' >&2; exit 1; }
 [[ "$root" == /* && "$plist" == /* && ! -e "$root" && ! -e "$plist" ]] || { echo 'Use new absolute install/plist paths; existing installations are never overwritten' >&2; exit 1; }
@@ -30,7 +30,7 @@ chmod 600 "$root/imsg.env"
 "$root/bin/bun" -e '
 const root = process.argv[1];
 process.stdout.write(JSON.stringify({
-  Label: "dev.hena.ren-ai-imsg",
+  Label: "im.renai.imsg",
   ProgramArguments: [root + "/bin/bun", "--env-file=" + root + "/imsg.env", root + "/imsg.js"],
   WorkingDirectory: root,
   EnvironmentVariables: { PATH: root + "/bin:/usr/bin:/bin" },

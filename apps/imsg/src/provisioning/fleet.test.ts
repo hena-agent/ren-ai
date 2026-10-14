@@ -6,7 +6,7 @@ it("uploads one free unassigned profile using native Bearer auth, without replac
   const result = await deliverPermissionProfile(
     "https://fleet.example",
     "fleet-secret",
-    { identifier: "dev.hena.test", xml: "<plist/>" },
+    { identifier: "im.renai.test", xml: "<plist/>" },
     async (url, init) => {
       calls.push({ url: url.toString(), init });
       return new Response("{}");
@@ -66,7 +66,7 @@ it("checks all pages and downloads an identical conflicting profile rather than 
       meta: { has_next_results: true },
     }),
     Response.json({
-      profiles: [{ identifier: "dev.hena.test", profile_uuid: "uuid/with?characters" }],
+      profiles: [{ identifier: "im.renai.test", profile_uuid: "uuid/with?characters" }],
       meta: { has_next_results: false },
     }),
     new Response("<plist/>"),
@@ -74,7 +74,7 @@ it("checks all pages and downloads an identical conflicting profile rather than 
   const result = await deliverPermissionProfile(
     "https://fleet.example",
     "fleet-secret",
-    { identifier: "dev.hena.test", xml: "<plist/>" },
+    { identifier: "im.renai.test", xml: "<plist/>" },
     async (url, init) => {
       calls.push(`${init.method} ${url.toString()}`);
       expect(init.headers).toEqual({ Authorization: "Bearer fleet-secret" });

@@ -4,7 +4,7 @@ ops="$(cd "$(dirname "$0")" && pwd)"
 root="${MESSAGING_HOME:-${IMSG_INSTALL_ROOT:-/usr/local/lib/ren-ai-messaging}}"
 binary="${1:?Usage: install-deploy-agent.sh REVIEWED-GH-BINARY PROTECTED-RAW-TOKEN-FILE}"
 token="${2:?Supply a raw read-only GitHub token file, not an env file}"
-plist="${IMSG_DEPLOY_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/dev.hena.ren-ai-imsg-deploy.plist}"
+plist="${IMSG_DEPLOY_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/im.renai.imsg-deploy.plist}"
 [[ "$(uname -s)" == Darwin && "$root" == /* && "$plist" == /* && -s "$root/imsg.env" && -x "$binary" && ! -e "$root/deploy" && ! -e "$plist" ]] || { echo 'Installed messaging gateway, executable gh and new absolute deploy/plist destinations required' >&2; exit 1; }
 file -b "$binary" | grep -q 'Mach-O' || { echo 'Supply the native gh binary, not a package-manager wrapper' >&2; exit 1; }
 lipo "$binary" -verify_arch "$(uname -m)"
