@@ -13,8 +13,11 @@ Status: implementation contract approved in the operator conversation.
   evolving without being reset to initial documents.
 - `api-msg` is a DB-free authenticated Mac execution gateway. It performs
   OpenCode/imsg operations, but owns no user/admission policy or durable journal.
-- Move the existing stateful application and behavioral tests to `apps/api-app`;
-  replace `packages/api-msg.hena.dev` with the executor. Do not tunnel SQL over
+- The current `main` has moved the application to `apps/api` and the native
+  gateway to `apps/imsg`, and Discovery is now the only onboarding site.
+  Keep `apps/api` as the central application workspace, name it `@ren-ai/api-app`,
+  and add the DB-free executor in `apps/api-msg`. Preserve the behavioral tests.
+  Do not tunnel SQL over
   HTTP, introduce a local compatibility database, or weaken quality gates.
 
 ## Execution interface
@@ -35,8 +38,9 @@ Status: implementation contract approved in the operator conversation.
 
 - Browser registration and Turnstile verification terminate at api-app.
 - Admin calls api-app for listing and confirmed idempotent selection.
-- New registrations wait for operator selection, including the legacy client;
-  both clients continue handling every older answer they already accept.
+- New registrations wait for operator selection. Preserve Discovery and Admin
+  handling of every answer the running API can give, including the current
+  confirmed immediate-start operation for a waiting test handle.
 - Preserve exclusive Persona/Handle assignment and the once-only 5–60 minute
   first-contact reservation, failed/uncertain-send fences, intake replay,
   edits/unsends, test resets, retained sessions, removals and follow-ups.
@@ -54,7 +58,9 @@ Status: implementation contract approved in the operator conversation.
   reject conflicts. Never assume the running Mac database is empty.
 - Initial Cloudflare application deployment is bootstrap-only. The old intake
   must be paused and state verified before one new intake is enabled.
-- Public default application domain: `api-app.ambivalent.dev` in Ambivalent Co.
+- Public default application domain: `api-app.renai.im` in Ambivalent Co.
+  The DB-free Mac execution domain is `api-msg.renai.im`; current upstreams
+  remain `oc.renai.im` and `imsg.renai.im`. Do not restore retired hostnames.
 - Runtime secrets are server-only; browser Site key remains the GitHub variable.
 - Logs correlate requests/operations and record safe stage/cause/outcome metadata,
   excluding handles, conversation/Persona text, prompts and credentials.
