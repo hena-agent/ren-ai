@@ -26,7 +26,7 @@ Deploy through a PR merged into `main`, after the quality gates pass. The
 `Deploy discovery.ambivalent.dev` job in
 [`ci.yml`](../../.github/workflows/ci.yml) builds with
 `VITE_DISCOVERY_API_URL=https://api-msg.hena.dev` and `VITE_TURNSTILE_SITE_KEY`
-from the `TURNSTILE_SITE_KEY` repository variable, then deploys the
+from the `TURNSTILE_SITE_KEY` repository variable, then deploys and verifies the
 `discovery-ambivalent-dev` Worker in the `Ambivalent Co.` account. It uses the
 same `CLOUDFLARE_API_TOKEN_AMBIVALENT` secret as
 [Admin deployment](../admin/README.md#automatic-deployment).
