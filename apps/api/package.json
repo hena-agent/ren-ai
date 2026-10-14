@@ -1,5 +1,5 @@
 {
-  "name": "@ren-ai/api",
+  "name": "@ren-ai/api-app",
   "version": "0.0.0",
   "private": true,
   "bin": {
@@ -22,6 +22,7 @@
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
     "@effect/sql-sqlite-bun": "4.0.0-rc.112",
+    "@effect/sql-sqlite-do": "4.0.0-rc.112",
     "@opencode/client": "2.0.19",
     "@opencode/schema": "2.0.19",
     "@ren-ai/imsg": "workspace:*",
@@ -33,6 +34,7 @@
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261011.1",
     "@effect/sql-sqlite-node": "4.0.0-rc.112",
     "@opencode/ai": "2.0.19",
     "@opencode/core": "2.0.19",
@@ -45,6 +47,8 @@
     "@ren-ai/plugin-tools": "workspace:*",
     "@total-typescript/shoehorn": "0.1.2",
     "@types/node": "26.6.2",
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261006.1-alpha",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
   }
