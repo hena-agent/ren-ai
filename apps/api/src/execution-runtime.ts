@@ -1,5 +1,5 @@
 import { Context, Effect, Exit, Layer, Scope } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { remoteMessages } from "@ren-ai/imsg/client";
 import { startMessagingApplication } from "./application.ts";
 import { applicationGateway } from "./opencode/application-gateway.ts";
@@ -42,10 +42,23 @@ export async function createExecutionRuntime(
   let operator: ReturnType<typeof operatorHandler> | undefined;
   const boot = Effect.gen(function* () {
     const { personas } = yield* Effect.tryPromise(catalog.load);
+    const httpClient = yield* HttpClient.HttpClient;
     const messages = yield* remoteMessages({
       url: execution.imsgRpcUrl,
       token: execution.executorToken,
-    });
+    }).pipe(
+      // RPC's HTTP transport appends '/'; the executor exposes one exact endpoint.
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.makeWith(
+          (request) =>
+            httpClient.postprocess(
+              Effect.map(request, HttpClientRequest.setUrl(execution.imsgRpcUrl)),
+            ),
+          httpClient.preprocess,
+        ),
+      ),
+    );
     const health = yield* createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher);
     const host = yield* startMessagingApplication(
       personas,

@@ -87,8 +87,11 @@ export const createCloudflareApplication = async (
       },
       close: async () => {
         try {
-          if (runtime) await (await runtime).close();
-          await store.close();
+          try {
+            if (runtime) await (await runtime).close();
+          } finally {
+            await store.close();
+          }
         } finally {
           await Effect.runPromise(Scope.close(httpScope, Exit.succeed(undefined)));
         }
