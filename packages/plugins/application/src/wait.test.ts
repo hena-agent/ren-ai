@@ -32,11 +32,20 @@ test("application rejection is not retried", async () => {
 });
 
 test("wait does not retry after its deadline expires", async () => {
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValueOnce(1000)
+    .mockReturnValueOnce(1000)
+    .mockReturnValue(1010);
   const wait = vi.fn<WaitClient["wait"]>(() => Stream.fail(new Error("socket closed")));
-  await expect(Effect.runPromise(waitForResult({ wait }, "session", 0.01))).rejects.toThrow(
-    "Wait stream ended without a result",
-  );
-  expect(wait).toHaveBeenCalledOnce();
+  try {
+    await expect(Effect.runPromise(waitForResult({ wait }, "session", 0.01))).rejects.toThrow(
+      "Wait stream ended without a result",
+    );
+    expect(wait).toHaveBeenCalledOnce();
+  } finally {
+    clock.mockRestore();
+  }
 });
 
 test("an EOF arriving after the deadline does not open another wait request", async () => {

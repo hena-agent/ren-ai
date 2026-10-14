@@ -66,12 +66,17 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* f.fake.text(f.handle, "/reset", Date.now());
           yield* startTestHandle(host, f.fake.messages, f.handle);
           const fresh = Session.ID.make((yield* host.conversations.byHandle(f.handle))!.sessionID);
-          while (
-            !JSON.stringify(yield* host.sessions.messages({ sessionID: fresh })).includes(
-              '"status":"running"',
-            )
-          )
-            yield* Effect.sleep("10 millis");
+          yield* Effect.promise(async () => {
+            await expect
+              .poll(
+                async () =>
+                  JSON.stringify(
+                    await Effect.runPromise(host.sessions.messages({ sessionID: fresh })),
+                  ),
+                { timeout: 5000 },
+              )
+              .toContain('"status":"running"');
+          });
           if (kind === "quota") {
             failing = true;
             const subsequent = yield* bindTestHandle(host, "subsequent@example.com", "persona2");
