@@ -73,6 +73,9 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
   });
   expect(health.headers.get("cache-control")).toBe("no-store");
   expect(
+    (await app.fetch(new Request("https://api-app.example/management/state/export"))).status,
+  ).toBe(401);
+  expect(
     (await app.fetch(new Request("https://api-app.example/discovery/waitlist", { method: "POST" })))
       .status,
   ).toBe(503);
