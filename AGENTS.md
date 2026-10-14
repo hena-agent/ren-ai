@@ -67,7 +67,7 @@ Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no bu
 
 Changes to the shapes in `packages/onboarding` must keep both discovery clients working with the API still running: new fields stay optional until the API deploys, and clients continue handling every answer the old API can give.
 
-The Messages Mac deploys itself from `main` on its own schedule (`packages/imsg.hena.dev/ops/README.md`). Changes to `@ren-ai/imsg.hena.dev/protocol` keep the running application working, and the application keeps handling every answer the deployed Mac can give.
+The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/README.md`). Changes to `@ren-ai/imsg/protocol` keep the running application working, and the application keeps handling every answer the deployed Mac can give.
 
 ## Persona authoring
 

@@ -1,12 +1,12 @@
 {
   "coverage": [
     {
-      "path": "packages/api-msg.hena.dev/src/server-entry.ts",
+      "path": "apps/api/src/server-entry.ts",
       "reason": "Bun-only live platform and login Keychain bootstrap; all composition is tested",
       "added": "2026-09-27"
     },
     {
-      "path": "packages/api-msg.hena.dev/src/operator-entry.ts",
+      "path": "apps/api/src/operator-entry.ts",
       "reason": "Bun CLI process shim; typed operator command is tested through its socket",
       "added": "2026-09-27"
     },

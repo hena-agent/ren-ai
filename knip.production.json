@@ -9,7 +9,7 @@
         "scripts/verify-gates.ts!"
       ]
     },
-    "packages/api-msg.hena.dev": {
+    "apps/api": {
       "entry": [
         "src/server-entry.ts!",
         "src/operator-entry.ts!",
@@ -20,7 +20,7 @@
         "test/compiled-plugin/regression.mjs!"
       ]
     },
-    "packages/imsg.hena.dev": {
+    "apps/imsg": {
       "entry": [
         "ops/imsg-entry.ts!",
         "ops/imsg-verify.ts!",
@@ -45,11 +45,6 @@
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],
-  "ignoreFiles": [
-    "**/*.fake.ts",
-    "**/*.test-helper.ts",
-    "apps/*/test/**",
-    "packages/api-msg.hena.dev/test/offline.setup.ts"
-  ],
+  "ignoreFiles": ["**/*.fake.ts", "**/*.test-helper.ts", "apps/*/test/**"],
   "ignoreDependencies": ["jscpd", "cloudflare"]
 }

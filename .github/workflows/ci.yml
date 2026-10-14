@@ -68,10 +68,10 @@ jobs:
           test "$CHECKS" = success
           test "$VERIFY" = success
 
-  # The Messages Mac pulls this attested bundle itself (packages/imsg.hena.dev/ops/update.sh);
+  # The Messages Mac pulls this attested bundle itself (apps/imsg/ops/update.sh);
   # nothing here can reach the Mac.
   mac-bundle:
-    name: Build imsg.hena.dev bundle
+    name: Build imsg bundle
     needs: gates
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -89,7 +89,7 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - run: bash packages/imsg.hena.dev/ops/build-bundle.sh "$RUNNER_TEMP/imsg-bundle"
+      - run: bash apps/imsg/ops/build-bundle.sh "$RUNNER_TEMP/imsg-bundle"
       - run: tar -czf imsg-bundle.tar.gz -C "$RUNNER_TEMP/imsg-bundle" .
       - uses: actions/attest-build-provenance@v4
         with:

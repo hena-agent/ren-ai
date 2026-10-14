@@ -1,6 +1,6 @@
 # Workers re-platform research: api-msg
 
-Platform facts for moving `packages/api-msg.hena.dev` from a long-lived Bun process onto Cloudflare Workers, Durable Objects (DOs) and/or D1. Sections 1–8 contain only what the cited source says. The analysis is kept to the second-to-last section.
+Platform facts for moving `apps/api` from a long-lived Bun process onto Cloudflare Workers, Durable Objects (DOs) and/or D1. Sections 1–8 contain only what the cited source says. The analysis is kept to the second-to-last section.
 
 - **Checked:** 2026-10-13. The Cloudflare pages are quoted as they appeared on that day; each page shows its own "Last updated" date.
 - **Repo versions:** `effect` 4.0.0-rc.112, `@opencode/client` 2.0.19, `wrangler` 4.149.0 (`apps/admin/package.json`) and 4.141.0 (`packages/discovery.hena.dev/package.json`), `@cloudflare/workers-types` 5.20261011.1 (`apps/admin/package.json`).
@@ -210,8 +210,8 @@ Sources: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1
 ## 6. `@opencode/client` 2.0.19
 
 - **What api-msg uses:**
-  - It imports `@opencode/client/effect`, plus types from `@opencode/client/effect/api` (`<client>/dist/effect/api.js` is empty), for example in `packages/api-msg.hena.dev/src/opencode/remote.ts:1-8`.
-  - Its production `HttpClient` is `FetchHttpClient.layer` (`packages/api-msg.hena.dev/src/server-entry.ts:22`).
+  - It imports `@opencode/client/effect`, plus types from `@opencode/client/effect/api` (`<client>/dist/effect/api.js` is empty), for example in `apps/api/src/opencode/remote.ts:1-8`.
+  - Its production `HttpClient` is `FetchHttpClient.layer` (`apps/api/src/server-entry.ts:22`).
   - The client depends on `@opencode/schema` and `@opencode/protocol` 2.0.19. `effect` 4.0.0-rc.112 and `solid-js` are optional peers (`<client>/package.json`).
 - **No Node-only APIs on the `./effect` path.** The static import graph of `<client>/dist/effect/index.js` reaches nine chunks (`7f0py9js`, `vmytr4q8`, `0fn08bwv`, `6mptkzbc`, `frbwqjmf`, `t1xa31vm`, `mnyft54j`, `qnqb2tyr`, `9rqn6x4v`).
   - Their only bare imports are `effect`, `effect/unstable/{http,httpapi,encoding}`, `@opencode/protocol/*` and `@opencode/schema/*`.
