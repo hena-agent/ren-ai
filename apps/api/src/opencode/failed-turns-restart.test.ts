@@ -33,6 +33,9 @@ const reopen = (
       yield* llm.serve(() => TestLLM.text("recovered", "answer"));
       const gate = pending ? yield* llm.gate() : undefined;
       const host = yield* open(llm).pipe(Effect.timeout("3 seconds"));
+      yield* host.heartbeat.failedTurns;
+      yield* Effect.sleep("1100 millis");
+      yield* host.heartbeat.failedTurns.pipe(Effect.forkScoped);
       if (gate) {
         yield* gate.started;
         const publicServer = yield* servePublic(() => Promise.resolve(new Response("ready")), 0);

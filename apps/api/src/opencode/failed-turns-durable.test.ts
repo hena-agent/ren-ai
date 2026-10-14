@@ -46,11 +46,11 @@ const fixture = () => {
           const state = states.get(sessionID.slice(4))!;
           return state.user
             ? [fromPartial<SessionMessage.Info>({ type: "user" })]
-            : state.error
+            : state.error !== undefined
               ? [
                   fromPartial<SessionMessage.Info>({
                     type: "assistant",
-                    error: { type: state.error },
+                    error: state.error ? { type: state.error } : undefined,
                   }),
                 ]
               : [];
@@ -212,7 +212,8 @@ test("the ten-minute provider alert retains its deadline and deduplication acros
   const { root } = await messagingFixture("provider-deadline-");
   const filename = join(root, "application.sqlite");
   const f = fixture();
-  f.states.set("provider", { idle: 1, outcome: "failed" });
+  // A terminal context failure can retain an assistant row without an error payload.
+  f.states.set("provider", { idle: 1, outcome: "failed", error: "" });
   try {
     await f.run(
       Effect.gen(function* () {

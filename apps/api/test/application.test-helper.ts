@@ -1,4 +1,4 @@
-import { Clock, Effect, Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { loadPersonas } from "@ren-ai/personas";
 import { isolatedHost } from "./isolated-host.test-helper.ts";
 import type { HostOptions, PersonaHostOptions } from "./embedded-host.test-helper.ts";
@@ -45,16 +45,6 @@ export const startMessagingHost = (
               ),
             ),
           );
-          // Real cadence for the fixture; fake-clock scheduler tests invoke
-          // individual beats explicitly rather than replaying every missed beat.
-          const clock = Effect.runSync(Clock.Clock);
-          yield* Effect.forever(
-            Effect.sleep("1 second").pipe(
-              Effect.provideService(Clock.Clock, clock),
-              Effect.andThen(host.heartbeat.failedTurns),
-              Effect.catchCause(Effect.logError),
-            ),
-          ).pipe(Effect.forkScoped);
         }),
       ),
     ),
