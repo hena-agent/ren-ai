@@ -103,6 +103,84 @@ test("authenticated management validates, lists, selects and safely correlates f
   );
 });
 
+test("management starts a test handle now, refusing other handles with a correlated conflict", async () => {
+  await withContactDatabase(
+    Effect.gen(function* () {
+      const f = yield* contactFixture;
+      const tester = yield* f.register("tester@example.net");
+      const stranger = yield* f.register("stranger@example.net", ["harin"]);
+      yield* f.sql`INSERT INTO test_handle VALUES ('tester@example.net')`;
+      const logs: ContactDiagnostic[] = [];
+      const handler = contactManagement(f.store, "private-admin-token", (entry) =>
+        logs.push(entry),
+      );
+      const start = (body: object | string) =>
+        handler(
+          new Request("https://api.test/management/discovery/start", {
+            method: "POST",
+            headers: { Authorization: "Bearer private-admin-token" },
+            body: typeof body === "string" ? body : JSON.stringify(body),
+          }),
+        );
+      yield* Effect.promise(async () => {
+        const unknown = await handler(
+          new Request("https://api.test/management/discovery/other", {
+            method: "POST",
+            headers: { Authorization: "Bearer private-admin-token" },
+          }),
+        );
+        expect(unknown.status).toBe(404);
+        expect((await start("not-json")).status).toBe(400);
+        expect((await start({ requestId: randomUUID(), registrationID: tester })).status).toBe(400);
+        const refused = await start({
+          requestId: randomUUID(),
+          registrationID: stranger,
+          personaID: "harin",
+        });
+        expect(refused.status).toBe(409);
+        expect(await refused.json()).toEqual({
+          error: "start_unavailable",
+          requestId: refused.headers.get("x-request-id"),
+        });
+        const started = await start({
+          requestId: randomUUID(),
+          registrationID: tester,
+          personaID: "luna",
+        });
+        expect(started.status).toBe(200);
+        expect(await started.json()).toMatchObject({
+          requested: 1,
+          entries: [{ id: tester, state: "scheduled", testHandle: true }],
+        });
+      });
+      yield* f.sql`CREATE TRIGGER fail_selection BEFORE INSERT ON discovery_selection BEGIN SELECT RAISE(ABORT, 'fail'); END`;
+      yield* f.sql`DELETE FROM discovery_contact`;
+      yield* f.sql`DELETE FROM persona_assignment`;
+      yield* Effect.promise(async () => {
+        const failed = await start({
+          requestId: randomUUID(),
+          registrationID: tester,
+          personaID: "luna",
+        });
+        expect(failed.status).toBe(503);
+        expect(await failed.json()).toHaveProperty("error", "start_failed");
+      });
+      expect(
+        logs
+          .filter((entry) => entry.outcome === "failed")
+          .map((entry) => [entry.stage, entry.code]),
+      ).toEqual([
+        ["authorization", "not_found"],
+        ["start.input", "invalid_request"],
+        ["start.input", "invalid_request"],
+        ["start.commit", "start_unavailable"],
+        ["start.commit", "start_failed"],
+      ]);
+      expect(JSON.stringify(logs)).not.toContain("tester@example.net");
+    }),
+  );
+});
+
 test("runtime diagnostics emit JSON and narrow non-Error and unsafe provider metadata", () => {
   expect(contactCause("private payload").causeName).toBe("Error");
   expect(typeof contactCause("private payload").stack).toBe("string");

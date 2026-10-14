@@ -38,6 +38,77 @@ test("selection reserves exclusive personas, bounded times and durable deduplica
   );
 });
 
+test("a waiting test handle starts now with its chosen available Like, once per request", async () => {
+  await withContactDatabase(
+    Effect.gen(function* () {
+      const { store, register, sql } = yield* contactFixture;
+      const tester = yield* register("tester@example.net", ["luna", "harin"]);
+      const stranger = yield* register("stranger@example.net", ["jiwoo"]);
+      yield* sql`INSERT INTO test_handle VALUES ('tester@example.net')`;
+      const marks = (yield* store.list).entries.map((row) => [row.handle, row.testHandle]);
+      expect(marks).toContainEqual(["tester@example.net", true]);
+      expect(marks).toContainEqual(["stranger@example.net", false]);
+      const start = (registrationID: string, personaID: string) =>
+        store.start({ requestId: randomUUID(), registrationID, personaID }, "refused");
+      expect(yield* start(stranger, "jiwoo")).toBeNull();
+      expect(yield* start(tester, "jiwoo")).toBeNull();
+      expect(yield* start(randomUUID(), "luna")).toBeNull();
+      yield* sql`INSERT INTO persona_assignment VALUES ('harin', 'other@example.net')`;
+      expect(yield* start(tester, "harin")).toBeNull();
+      expect(yield* sql`SELECT * FROM discovery_selection`).toEqual([]);
+      const input = { requestId: randomUUID(), registrationID: tester, personaID: "luna" };
+      const before = Date.now();
+      const started = yield* store.start(input, "server-request");
+      expect(started).toMatchObject({
+        requestId: input.requestId,
+        requested: 1,
+        entries: [
+          {
+            id: tester,
+            state: "scheduled",
+            persona: { id: "luna", name: "luna" },
+            requestId: "server-request",
+          },
+        ],
+      });
+      expect(started!.entries[0]!.scheduledAt).toBeGreaterThanOrEqual(before);
+      expect(started!.entries[0]!.scheduledAt).toBeLessThanOrEqual(Date.now());
+      expect(yield* store.start(input, "retry")).toEqual(started);
+      expect(yield* start(tester, "luna")).toBeNull();
+      expect(yield* sql`SELECT persona_id FROM persona_assignment ORDER BY persona_id`).toEqual([
+        { persona_id: "harin" },
+        { persona_id: "luna" },
+      ]);
+    }),
+  );
+});
+
+test("a test start that loses its persona to a concurrent claim leaves no reservation", async () => {
+  await withContactDatabase(
+    Effect.gen(function* () {
+      const { store, register, sql } = yield* contactFixture;
+      const tester = yield* register("tester@example.net");
+      yield* sql`INSERT INTO test_handle VALUES ('tester@example.net')`;
+      yield* sql`CREATE TRIGGER concurrent_claim AFTER INSERT ON discovery_selection
+      BEGIN INSERT INTO persona_assignment VALUES ('luna', 'winner@example.net'); END`;
+      expect(
+        yield* store.start(
+          { requestId: randomUUID(), registrationID: tester, personaID: "luna" },
+          "racing",
+        ),
+      ).toBeNull();
+      expect(yield* sql`SELECT * FROM discovery_selection`).toEqual([]);
+      expect(yield* sql`SELECT * FROM discovery_contact`).toEqual([]);
+      yield* sql`DROP TRIGGER concurrent_claim`;
+      yield* sql`CREATE TRIGGER fail_contact BEFORE INSERT ON discovery_contact BEGIN SELECT RAISE(ABORT, 'fail'); END`;
+      yield* store
+        .start({ requestId: randomUUID(), registrationID: tester, personaID: "luna" }, "failed")
+        .pipe(Effect.flip);
+      expect(yield* sql`SELECT * FROM persona_assignment`).toEqual([]);
+    }),
+  );
+});
+
 test("concurrent selections cannot allocate a persona or handle twice", async () => {
   await withContactDatabase(
     Effect.gen(function* () {

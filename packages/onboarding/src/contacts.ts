@@ -26,6 +26,7 @@ export const ContactEntry = Schema.Struct({
   persona: Schema.NullOr(candidate),
   scheduledAt: Schema.NullOr(Schema.Number),
   requestId: Schema.NullOr(Schema.String),
+  testHandle: Schema.optionalKey(Schema.Boolean),
 });
 export const ContactSnapshot = Schema.Struct({
   entries: Schema.Array(ContactEntry),
@@ -34,6 +35,11 @@ export const ContactSnapshot = Schema.Struct({
 export const SelectContacts = Schema.Struct({
   requestId: identifier,
   count: Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 100 })),
+});
+export const StartContact = Schema.Struct({
+  requestId: identifier,
+  registrationID: identifier,
+  personaID: Schema.String.check(Schema.isNonEmpty()),
 });
 export const ContactSelection = Schema.Struct({
   requestId: identifier,

@@ -8,6 +8,7 @@ import type {
 export interface ContactView {
   tab: "waitlist" | "first-contacts";
   requestId: string;
+  startRequestId: string;
   count: number;
   attempted?: boolean;
   snapshot?: typeof ContactSnapshot.Type;
@@ -55,6 +56,7 @@ function Rows({ entries }: { entries: readonly (typeof ContactEntry.Type)[] }) {
             <tr key={entry.id}>
               <th scope="row">
                 <span className="contact-handle">{entry.handle}</span>
+                {entry.testHandle && <small>테스트 연락처</small>}
                 <small>{time(entry.createdAt)}</small>
               </th>
               <td>{entry.likedPersonas.map((p) => p.name).join(", ") || "없음"}</td>
@@ -80,6 +82,44 @@ function Rows({ entries }: { entries: readonly (typeof ContactEntry.Type)[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+function TestStarts({
+  entries,
+  requestId,
+}: {
+  entries: readonly (typeof ContactEntry.Type)[];
+  requestId: string;
+}) {
+  const ready = entries.filter((entry) => entry.testHandle && entry.eligible);
+  if (!ready.length) return null;
+  return (
+    <section className="contact-test-start" aria-label="테스트 연락처 바로 시작">
+      <h2>테스트 연락처 바로 시작</h2>
+      <p className="hint">
+        무작위 선정과 대기 시간 없이, 고른 Like 페르소나가 지금 첫 연락을 시작합니다.
+      </p>
+      {ready.map((entry) => (
+        <form key={entry.id} action="/waitlist" method="post" className="contact-selection">
+          <input type="hidden" name="action" value="start" />
+          <input type="hidden" name="requestId" value={requestId} />
+          <input type="hidden" name="registrationID" value={entry.id} />
+          <label htmlFor={`start-${entry.id}`}>{entry.handle}</label>
+          <select id={`start-${entry.id}`} name="personaID" required>
+            {entry.likedPersonas.map((persona) => (
+              <option key={persona.id} value={persona.id}>
+                {persona.name}
+              </option>
+            ))}
+          </select>
+          <label className="contact-confirm">
+            <input type="checkbox" name="confirm" value="yes" required /> 고른 페르소나로 지금 첫
+            연락을 시작합니다.
+          </label>
+          <button type="submit">지금 시작</button>
+        </form>
+      ))}
+    </section>
   );
 }
 export function ContactPage({ view }: { view: ContactView }) {
@@ -123,6 +163,9 @@ export function ContactPage({ view }: { view: ContactView }) {
             선정하지 않습니다.
           </p>
         </form>
+      )}
+      {view.tab === "waitlist" && view.snapshot && (
+        <TestStarts entries={view.snapshot.entries} requestId={view.startRequestId} />
       )}
       {view.selection && (
         <section aria-label="이번 선정 결과">

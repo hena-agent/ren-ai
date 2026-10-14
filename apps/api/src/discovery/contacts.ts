@@ -1,10 +1,12 @@
 import { randomInt } from "node:crypto";
-import { Clock, Effect, Schema } from "effect";
+import { Clock, Data, Effect, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { ContactEntry, SelectContacts } from "@ren-ai/onboarding";
+import { ContactEntry, SelectContacts, StartContact } from "@ren-ai/onboarding";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { claimPersona } from "./assignment.ts";
+
+class StartUnavailable extends Data.TaggedError("StartUnavailable") {}
 
 export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
   Effect.gen(function* () {
@@ -25,12 +27,14 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
         unavailable: number;
         admitted: number;
         occupied: number;
+        testHandle: number;
       }>`SELECT r.id, r.handle, r.created_at AS createdAt, c.state, c.persona_id AS personaID,
       c.scheduled_at AS scheduledAt, c.request_id AS requestId,
       EXISTS(SELECT 1 FROM blocked WHERE handle = r.handle) OR EXISTS(SELECT 1 FROM removal WHERE handle = r.handle)
         OR EXISTS(SELECT 1 FROM reset WHERE handle = r.handle AND complete = 0) AS unavailable,
       EXISTS(SELECT 1 FROM user WHERE handle = r.handle AND joined_at IS NOT NULL) AS admitted,
-      EXISTS(SELECT 1 FROM user WHERE handle = r.handle) OR EXISTS(SELECT 1 FROM persona_assignment WHERE handle = r.handle) AS occupied
+      EXISTS(SELECT 1 FROM user WHERE handle = r.handle) OR EXISTS(SELECT 1 FROM persona_assignment WHERE handle = r.handle) AS occupied,
+      EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle
       FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id ORDER BY r.created_at, r.id`;
       const likes = yield* sql<{
         registrationID: string;
@@ -74,6 +78,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
             : null,
           scheduledAt: row.scheduledAt,
           requestId: row.requestId,
+          testHandle: row.testHandle === 1,
         } satisfies typeof ContactEntry.Type;
       });
       return {
@@ -83,12 +88,45 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       };
     });
     const list = Effect.map(snapshot, ({ entries, eligibleCount }) => ({ entries, eligibleCount }));
+    const recorded = (selectionID: string) =>
+      sql<{
+        requested: number;
+      }>`SELECT requested FROM discovery_selection WHERE request_id = ${selectionID}`;
+    const reserve = (
+      row: typeof ContactEntry.Type,
+      personaID: string,
+      at: number,
+      selectionID: string,
+      requestId: string,
+    ) =>
+      Effect.gen(function* () {
+        if (
+          !(yield* claimPersona(personaID, row.handle).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          ))
+        )
+          return false;
+        yield* sql`INSERT INTO discovery_contact
+          (registration_id, selection_id, persona_id, scheduled_at, state, request_id)
+          VALUES (${row.id}, ${selectionID}, ${personaID}, ${at}, 'scheduled', ${requestId})`;
+        return true;
+      });
+    const outcome = (selectionID: string, requested: number) =>
+      Effect.gen(function* () {
+        const selected = yield* sql<{
+          id: string;
+        }>`SELECT registration_id AS id FROM discovery_contact WHERE selection_id = ${selectionID}`;
+        const { entries } = yield* list;
+        return {
+          requestId: selectionID,
+          requested,
+          entries: entries.filter((row) => selected.some((p) => p.id === row.id)),
+        };
+      });
     const select = (input: typeof SelectContacts.Type, requestId: string) =>
       Effect.gen(function* () {
         const decoded = Schema.decodeUnknownSync(SelectContacts)(input);
-        const [previous] = yield* sql<{
-          requested: number;
-        }>`SELECT requested FROM discovery_selection WHERE request_id = ${decoded.requestId}`;
+        const [previous] = yield* recorded(decoded.requestId);
         if (previous && previous.requested !== decoded.count)
           return yield* Effect.fail(new Error("Selection request conflict"));
         if (!previous) {
@@ -102,29 +140,42 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
             const candidates = row.likedPersonas.filter((p) => available.has(p.id));
             if (!candidates.length) continue;
             const persona = candidates[randomInt(candidates.length)]!;
-            if (
-              !(yield* claimPersona(persona.id, row.handle).pipe(
-                Effect.provideService(SqlClient.SqlClient, sql),
-              ))
-            )
-              continue;
-            available.delete(persona.id);
             const at = now + randomInt(300_000, 3_600_001);
-            yield* sql`INSERT INTO discovery_contact
-          (registration_id, selection_id, persona_id, scheduled_at, state, request_id)
-          VALUES (${row.id}, ${decoded.requestId}, ${persona.id}, ${at}, 'scheduled', ${requestId})`;
+            if (!(yield* reserve(row, persona.id, at, decoded.requestId, requestId))) continue;
+            available.delete(persona.id);
             count++;
           }
         }
-        const selected = yield* sql<{
-          id: string;
-        }>`SELECT registration_id AS id FROM discovery_contact WHERE selection_id = ${decoded.requestId}`;
-        const { entries } = yield* list;
-        return {
-          requestId: decoded.requestId,
-          requested: decoded.count,
-          entries: entries.filter((row) => selected.some((p) => p.id === row.id)),
-        };
+        return yield* outcome(decoded.requestId, decoded.count);
       }).pipe(sql.withTransaction, withLifecycle);
-    return { list, select };
+    /** A waiting test handle skips random Selection and its delay; null when it cannot start. */
+    const start = (input: typeof StartContact.Type, requestId: string) =>
+      Effect.gen(function* () {
+        const decoded = Schema.decodeUnknownSync(StartContact)(input);
+        const [previous] = yield* recorded(decoded.requestId);
+        if (!previous) {
+          const now = yield* Clock.currentTimeMillis;
+          const { entries, available } = yield* snapshot;
+          const row = entries.find((entry) => entry.id === decoded.registrationID);
+          if (
+            !row?.testHandle ||
+            !row.eligible ||
+            !available.has(decoded.personaID) ||
+            !row.likedPersonas.some((p) => p.id === decoded.personaID)
+          )
+            return yield* Effect.fail(new StartUnavailable());
+          yield* sql`INSERT INTO discovery_selection VALUES (${decoded.requestId}, 1, ${now})`;
+          if (!(yield* reserve(row, decoded.personaID, now, decoded.requestId, requestId)))
+            return yield* Effect.fail(new StartUnavailable());
+        }
+        return yield* outcome(decoded.requestId, 1);
+      }).pipe(
+        sql.withTransaction,
+        withLifecycle,
+        Effect.catchIf(
+          (error) => error instanceof StartUnavailable,
+          () => Effect.succeed(null),
+        ),
+      );
+    return { list, select, start };
   });
