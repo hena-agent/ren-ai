@@ -6,7 +6,7 @@
   "main": "./worker/entry.mjs",
   "scripts": {
     "build": "bun scripts/build.mjs",
-    "dev": "wrangler dev --port ${PORT:-3729}",
+    "dev": "wrangler dev --port ${PORT:-3729} --var ADMIN_JURISDICTION:local",
     "deploy": "wrangler deploy",
     "db:generate": "drizzle-kit generate",
     "db:local": "wrangler d1 migrations apply DB --local",
@@ -27,6 +27,7 @@
     "@ren-ai/personas": "workspace:*",
     "drizzle-orm": "0.45.4",
     "effect": "4.0.0-rc.112",
+    "image-size": "2.0.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

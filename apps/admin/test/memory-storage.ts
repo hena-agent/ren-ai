@@ -15,6 +15,7 @@ export function memoryStorage() {
     put: async (key: string, value: object) => {
       values.set(key, structuredClone(value));
     },
+    delete: async (key: string) => values.delete(key),
     getAlarm: async () => alarm,
     setAlarm: async (timestamp: number) => {
       alarm = timestamp;

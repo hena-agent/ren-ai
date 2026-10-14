@@ -1,12 +1,44 @@
 import { expect, test, vi } from "vitest";
 import { CharacterFormatError, renderCharacterSheet } from "@ren-ai/personas";
 import { withPublicProfile } from "@ren-ai/personas/profile";
-import { fixture, legacy, request, tokenOf } from "../test/fixtures.ts";
+import {
+  fixture,
+  legacy,
+  request,
+  tokenOf,
+  generator,
+  character,
+  newToken,
+} from "../test/fixtures.ts";
 import { sheet } from "../test/character.ts";
 import { modelReply, preview } from "../test/sub-portraits.ts";
 import { createProfileGenerator } from "./generation.ts";
 import { GenerationError, validationFailure } from "./logging.ts";
 import { characterValidationFields, generationFailureMessage } from "./generation-failure.ts";
+
+test("image failure responses explain Google's location rejection and preserve correlation", async () => {
+  const error = new GenerationError("User location is not supported for the API use.", {
+    status: 400,
+    providerStatus: "FAILED_PRECONDITION",
+  });
+  const { admin, logs } = await fixture({
+    ...generator,
+    portrait: async () => {
+      throw error;
+    },
+  });
+  const response = await admin(
+    request("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),
+  );
+  expect(response.status).toBe(503);
+  expect(await response.text()).toContain("서버의 요청 지역을 지원하지 않아");
+  expect(logs.some((entry) => entry.providerStatus === "FAILED_PRECONDITION")).toBe(true);
+  expect(
+    generationFailureMessage(
+      new GenerationError("Other precondition", { providerStatus: "FAILED_PRECONDITION" }),
+    ),
+  ).toBeUndefined();
+});
 
 test("conversion reports the rejected section and rule without leaking generated content", async () => {
   const secret = "private generated invalid sample";

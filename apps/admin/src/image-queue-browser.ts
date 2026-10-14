@@ -1,6 +1,7 @@
 import { bindPending } from "./pending.ts";
 import { bindDocumentEditor, destroyDocumentEditors } from "./document-editor-browser.ts";
 import copy from "./copy.json";
+import { bindUploads } from "./upload-browser.ts";
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 let revision = Symbol();
@@ -14,6 +15,7 @@ function bindPage() {
   for (const form of document.querySelectorAll("form")) {
     bindPending(form, submitImageForm);
     bindDocumentEditor(form);
+    bindUploads(form, installPage);
   }
   watchImageQueue();
 }
@@ -32,7 +34,7 @@ function replacePage(next: Document) {
   });
 }
 
-function installPage(next: Document) {
+export function installPage(next: Document) {
   if (document.querySelector("[data-image-progress]")) updatePage(next);
   else {
     replacePage(next);

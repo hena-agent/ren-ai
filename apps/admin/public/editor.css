@@ -2,6 +2,34 @@
   max-width: 1440px;
   padding-top: 24px;
 }
+.upload-drop {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--muted);
+}
+.upload-drop.drag-over {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.upload-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+.upload-dialog canvas {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: min(40dvh, 400px);
+  margin: 16px auto;
+}
+.upload-dialog label {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  align-items: center;
+  gap: 12px;
+}
 .persona-workbench .editor-layout {
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 24px;

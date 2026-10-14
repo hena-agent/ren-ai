@@ -352,6 +352,17 @@ export function createImageQueue(
       return job;
     },
     get,
+    remove: (id: string, all = false) => {
+      const job = get(id);
+      if (!all && pending.has(id)) throw new PersonaError("conflict", copy.busy);
+      for (const entry of jobs.values())
+        if (
+          !pending.has(entry.id) &&
+          (all ? entry.batch.personaId === job.batch.personaId : entry.id === id)
+        )
+          jobs.delete(entry.id);
+      // Keep submission receipts: replaying a dismissed paid request must not generate again.
+    },
     find: (key: string) => {
       const id = keys.get(key);
       return id ? get(id) : undefined;
@@ -361,7 +372,10 @@ export function createImageQueue(
       [...jobs.values()].filter(
         (job) =>
           job.batch.personaId === personaId &&
-          (pending.has(job.id) || job.id === selectedId || job.state === "failed"),
+          (pending.has(job.id) ||
+            job.id === selectedId ||
+            selectedId === "" ||
+            job.state === "failed"),
       ),
     reservations,
     position: (id: string) => [...pending].indexOf(id),

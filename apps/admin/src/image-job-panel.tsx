@@ -41,8 +41,30 @@ export function ImageJobPanel({
             ? `${copy.queueWaiting} · ${position + 1}번째`
             : active
               ? copy.queueRunning
-              : copy.queueFinished}
+              : job.state === "failed"
+                ? "이미지 생성이 끝났지만 실패한 사진이 있습니다. 재시도하거나 기록을 삭제하세요."
+                : copy.queueFinished}
         </output>
+        {!active && (
+          <div className="form-actions">
+            <button
+              type="submit"
+              form="persona-editor"
+              formAction={`/image-jobs/${job.id}/delete`}
+              className="secondary"
+            >
+              기록 삭제
+            </button>
+            <button
+              type="submit"
+              form="persona-editor"
+              formAction={`/image-jobs/${job.id}/clear`}
+              className="secondary"
+            >
+              종료된 기록 모두 삭제
+            </button>
+          </div>
+        )}
         <ol className="queue-items">
           {job.tasks.map((task) => (
             <li className="queue-item" key={task.ordinal} data-state={task.state}>
