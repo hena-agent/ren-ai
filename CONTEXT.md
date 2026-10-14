@@ -43,7 +43,7 @@ Choosing a published persona, providing a handle, and consenting to start receiv
 _Avoid_: signup, registration
 
 **Test handle**:
-A handle the operator marks for trying the service as a user would. Only a test handle's conversation can be reset.
+A handle the operator marks for trying the service as a user would. Only a test handle's conversation can be reset, and only a test handle can skip Selection to start with a chosen persona right away.
 _Avoid_: developer handle, dev number, allowlist
 
 **Greeting**:

@@ -126,6 +126,15 @@ persona to each. The result may contain fewer than N people. A persona belongs
 to one handle from reservation onward, including failed/uncertain attempts.
 Each selected Greeting is scheduled once 5–60 minutes later.
 
+Handles marked with the API operator's `test-handle` command show **테스트 연락처**.
+A waiting test handle with an available Like also appears under **테스트 연락처
+바로 시작**: choose one of its liked personas and confirm **지금 시작** to reserve
+that persona and schedule the first Greeting immediately, without random
+selection. The API refuses other handles, unliked or taken personas and handles
+that are no longer waiting with `409`. This is how a test handle starts a new
+conversation after `/reset`: register again through Discovery, then start it here.
+Deploy the API before Admin; an older API answers the start with `404`.
+
 `/first-contacts` shows reservations, session preparation, Greeting processing,
 confirmed first sends, failures, unreachable iMessage contacts and results
 requiring inspection. Refresh to observe progress. Network/response loss keeps

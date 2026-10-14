@@ -1,6 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { Effect, Result, Schema } from "effect";
-import { SelectContacts } from "@ren-ai/onboarding";
+import { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import type { contacts } from "./contacts.ts";
 import { contactCause, contactLog } from "./diagnostics.ts";
 import type { ContactLog, ContactDiagnostic } from "./diagnostics.ts";
@@ -54,6 +54,24 @@ export const contactManagement =
       });
       return respond({ error: code, requestId }, status);
     };
+    /** Selection and test starts commit the same way; a null result is a refused start. */
+    const commit = async <I, A extends object, E extends Error>(
+      name: "selection" | "start",
+      schema: Schema.Decoder<I>,
+      run: (input: I) => Effect.Effect<A | null, E>,
+    ) => {
+      stage = `${name}.input`;
+      let input: I;
+      try {
+        input = Schema.decodeUnknownSync(schema)(await request.json());
+      } catch {
+        return failure("invalid_request", 400);
+      }
+      stage = `${name}.commit`;
+      const result = await Effect.runPromise(Effect.result(run(input)));
+      if (Result.isFailure(result)) return failure(`${name}_failed`, 503, result.failure);
+      return result.success ? respond(result.success, 200) : failure(`${name}_unavailable`, 409);
+    };
     if (
       !token ||
       !timingSafeEqual(
@@ -70,18 +88,10 @@ export const contactManagement =
         ? failure("unavailable", 503, result.failure)
         : respond(result.success, 200);
     }
-    if (path !== "/management/discovery/select" || request.method !== "POST")
-      return failure("not_found", 404);
-    stage = "selection.input";
-    let input: typeof SelectContacts.Type;
-    try {
-      input = Schema.decodeUnknownSync(SelectContacts)(await request.json());
-    } catch {
-      return failure("invalid_request", 400);
-    }
-    stage = "selection.commit";
-    const result = await Effect.runPromise(Effect.result(store.select(input, requestId)));
-    return Result.isFailure(result)
-      ? failure("selection_failed", 503, result.failure)
-      : respond(result.success, 200);
+    if (request.method !== "POST") return failure("not_found", 404);
+    if (path === "/management/discovery/select")
+      return commit("selection", SelectContacts, (input) => store.select(input, requestId));
+    if (path === "/management/discovery/start")
+      return commit("start", StartContact, (input) => store.start(input, requestId));
+    return failure("not_found", 404);
   };
