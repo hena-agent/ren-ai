@@ -45,6 +45,7 @@ test.each([false, true])(
               authorization: "Basic test",
               directory: personaDirectory,
               model: "test/probe",
+              groundRules: "",
             },
             source.personas,
           ).pipe(

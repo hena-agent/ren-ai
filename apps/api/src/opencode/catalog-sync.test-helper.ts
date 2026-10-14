@@ -11,6 +11,7 @@ import {
   type PersonaRecord,
 } from "@ren-ai/personas";
 import { folderSnapshot, sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
+import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 import { join } from "node:path";
 import { rm } from "node:fs/promises";
 import { expect } from "vitest";
@@ -26,7 +27,7 @@ import { fakeMessages } from "@ren-ai/imsg/testing";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 import { remoteHost } from "./remote.ts";
-import { watchCatalog } from "./catalog-sync.ts";
+import { catalogRefresher } from "./catalog-sync.ts";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 
 export const authoredDefinition = (record: PersonaRecord) => {
@@ -36,6 +37,7 @@ export const authoredDefinition = (record: PersonaRecord) => {
 
 const catalogFixture = async () => {
   const fixture = await messagingFixture("catalog-sync-");
+  const groundRules = await loadGroundRules();
   const definitions = await createPersonaStore(fixture.personaDirectory);
   const persona = {
     ...(await definitions.get("persona1")),
@@ -55,7 +57,7 @@ const catalogFixture = async () => {
   const catalogDirectory = join(fixture.root, "catalog");
   const store = await createPersonaStore(catalogDirectory);
   for (const record of await definitions.list()) await store.create(record);
-  return { ...fixture, catalogDirectory, store };
+  return { ...fixture, catalogDirectory, store, groundRules };
 };
 
 const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
@@ -79,6 +81,7 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
         authorization: "Basic test",
         directory: fixture.personaDirectory,
         model: "test/probe",
+        groundRules: fixture.groundRules,
       },
       personas,
     ).pipe(
@@ -149,21 +152,28 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
         });
         return session;
       });
-    const watch = () =>
-      Effect.forkScoped(
-        watchCatalog(
-          remote.client,
-          fixture.personaDirectory,
-          async () => {
-            const loaded = await Effect.runPromise(loadPersonas(fixture.catalogDirectory));
-            return {
-              revision: JSON.stringify([...loaded.values()].map(serializePersona)),
-              personas: loaded,
-            };
-          },
-          personas,
-        ),
+    const watch = () => {
+      const refresher = catalogRefresher(
+        remote.client,
+        fixture.personaDirectory,
+        async () => {
+          const loaded = await Effect.runPromise(loadPersonas(fixture.catalogDirectory));
+          return {
+            revision: JSON.stringify([...loaded.values()].map(serializePersona)),
+            personas: loaded,
+          };
+        },
+        personas,
       );
+      return Effect.forkScoped(
+        Effect.gen(function* () {
+          while (true) {
+            yield* refresher.refresh(fixture.groundRules).pipe(Effect.catchCause(Effect.logError));
+            yield* Effect.sleep("1 second");
+          }
+        }),
+      );
+    };
     const profileName = () => Effect.sync(() => personas.get("persona1")?.name);
     /** A reserved first contact that is due now, started the way the scheduler starts it. */
     const firstContact = (handle: string, personaID = "persona1") =>

@@ -60,6 +60,7 @@ export const withTransferClient = async <A, E>(
               authorization: "Basic workflow",
               directory: root,
               model: "test/probe",
+              groundRules: "",
             },
             personas,
           ).pipe(

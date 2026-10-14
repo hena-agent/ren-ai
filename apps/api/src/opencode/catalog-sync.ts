@@ -1,9 +1,9 @@
 import type { OpenCode } from "@opencode/client/effect";
 import { Session } from "@opencode/schema";
-import { Effect, Schedule, Stream } from "effect";
+import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { decodePersona, type PersonaRecord } from "@ren-ai/personas";
-import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
+import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { managedFolder, sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { withLifecycle } from "../conversations/lifecycle.ts";
@@ -49,6 +49,7 @@ const synchronize = Effect.fn("synchronize")(function* (
   client: Client,
   root: string,
   personas: Map<string, PersonaRecord>,
+  groundRules: string,
 ) {
   const sql = yield* SqlClient.SqlClient;
   const active = yield* sql<{
@@ -59,7 +60,6 @@ const synchronize = Effect.fn("synchronize")(function* (
     (yield* sql<{ session_id: string }>`SELECT session_id FROM retained_session
     UNION SELECT session_id FROM removal`).map((row) => row.session_id),
   );
-  const rules = yield* Effect.tryPromise(loadGroundRules);
   const updates = new Map<string, PersonaRecord>();
   for (const row of active) {
     const session = yield* client.session
@@ -93,59 +93,41 @@ const synchronize = Effect.fn("synchronize")(function* (
     yield* client
       .rpc(sessionFolders)
       .update(
-        { folderID, snapshot: renderSnapshot(persona, rules) },
+        { folderID, snapshot: renderSnapshot(persona, groundRules) },
         { location: { directory: root } },
       );
   return undefined;
 });
 
-export const syncFolders = (client: Client, root: string, personas: Map<string, PersonaRecord>) =>
-  withLifecycle(synchronize(client, root, personas));
+export const syncFolders = (
+  client: Client,
+  root: string,
+  personas: Map<string, PersonaRecord>,
+  groundRules: string,
+) => withLifecycle(synchronize(client, root, personas, groundRules));
 
-export const watchCatalog = Effect.fn("watchCatalog")(function* (
+export const catalogRefresher = (
   client: Client,
   root: string,
   load: () => Promise<{ revision: string; personas: Map<string, PersonaRecord> }>,
   personas: Map<string, PersonaRecord>,
-) {
+) => {
   let revision: string | undefined;
-  const refresh = (force: boolean) =>
-    Effect.gen(function* () {
+  return {
+    refresh: Effect.fn("refreshCatalog")(function* (groundRules: string) {
       const snapshot = yield* Effect.tryPromise(load);
-      if (!force && snapshot.revision === revision) return;
-      const next = snapshot.personas;
-      yield* withLifecycle(
-        Effect.gen(function* () {
-          yield* synchronize(client, root, next);
-          personas.clear();
-          for (const [id, persona] of next) personas.set(id, persona);
-          revision = snapshot.revision;
-        }),
-      );
-    });
-  const watchOnce = Effect.gen(function* () {
-    yield* Stream.tick("1 second").pipe(
-      Stream.map(() => false),
-      Stream.merge(
-        client.event.subscribe().pipe(
-          Stream.filter(
-            (event) =>
-              event.type === "session.created" ||
-              event.type === "session.forked" ||
-              event.type === "session.moved" ||
-              event.type === "server.connected",
-          ),
-          Stream.map(() => true),
-        ),
-        { haltStrategy: "either" },
-      ),
-      Stream.merge(Stream.succeed(true)),
-      Stream.runForEach(refresh),
-    );
-  });
-  // A failed fetch or event subscription must retain the previous Catalog and retry.
-  yield* watchOnce.pipe(
-    Effect.catchCause(Effect.logError),
-    Effect.repeat(Schedule.spaced("1 second")),
-  );
-});
+      const changed = snapshot.revision !== revision;
+      const next = new Map(snapshot.personas);
+      for (const [id, persona] of next) {
+        const current = personas.get(id);
+        if (current && current.description === persona.description)
+          next.set(id, { ...persona, memory: current.memory });
+      }
+      yield* withLifecycle(synchronize(client, root, next, groundRules));
+      if (!changed) return;
+      personas.clear();
+      for (const [id, persona] of next) personas.set(id, persona);
+      revision = snapshot.revision;
+    }),
+  };
+};

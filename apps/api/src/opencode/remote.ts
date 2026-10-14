@@ -11,7 +11,7 @@ import { SessionMessage } from "@opencode/schema/session-message";
 import { Effect, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
-import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
+import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import type { Persona } from "@ren-ai/personas";
 import { MissingSession, type PersonaRuntime } from "./runtime.ts";
 
@@ -28,6 +28,7 @@ export interface RemoteConfig {
   readonly authorization: string;
   readonly directory: string;
   readonly model: string;
+  readonly groundRules: string;
 }
 
 export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, Persona>) =>
@@ -123,12 +124,11 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
           if (!personas.has(personaID))
             return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
           const id = sessionID ?? Session.ID.create();
-          const rules = yield* Effect.tryPromise(loadGroundRules);
           yield* folders
             .create(
               {
                 folderID: id,
-                snapshot: renderSnapshot(personas.get(personaID)!, rules),
+                snapshot: renderSnapshot(personas.get(personaID)!, config.groundRules),
                 model: config.model,
               },
               location,
