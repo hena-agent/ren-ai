@@ -12,7 +12,7 @@ reports/mutation/
 apps/admin/public/pending.js
 apps/persona-lab/data/
 apps/admin/data/
-packages/api-msg.hena.dev/data/
+apps/api/data/
 lefthook-local.yml
 .opencode/
 .DS_Store

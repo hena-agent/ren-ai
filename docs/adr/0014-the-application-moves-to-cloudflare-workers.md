@@ -4,7 +4,7 @@ status: accepted
 
 # The application moves to Cloudflare Workers, with its state in one Durable Object
 
-The application (`packages/api-msg.hena.dev`, served at `api-msg.hena.dev`) runs as a long-lived Bun process in Docker on the Messages Mac and is deployed by hand (ADR-0010). The owner wants it on Cloudflare Workers, deployed automatically on every push to `main`. Workers has no long-lived processes. A Durable Object restarts on every deploy, and each outbound connection keeps it alive for at most 15 minutes ([research](../specs/workers-replatform-research.md)). The move therefore changes how the application waits, not what it does. This revises ADR-0010's Docker application service and ADR-0006's SQLite file and nightly backups.
+The application (`apps/api`, served at `api-msg.hena.dev`) runs as a long-lived Bun process in Docker on the Messages Mac and is deployed by hand (ADR-0010). The owner wants it on Cloudflare Workers, deployed automatically on every push to `main`. Workers has no long-lived processes. A Durable Object restarts on every deploy, and each outbound connection keeps it alive for at most 15 minutes ([research](../specs/workers-replatform-research.md)). The move therefore changes how the application waits, not what it does. This revises ADR-0010's Docker application service and ADR-0006's SQLite file and nightly backups.
 
 ## Decision
 

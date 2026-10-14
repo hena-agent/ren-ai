@@ -1,4 +1,4 @@
-import type { OutgoingStatus, Tapback } from "@ren-ai/imsg.hena.dev/protocol";
+import type { OutgoingStatus, Tapback } from "@ren-ai/imsg/protocol";
 import type { Effect } from "effect";
 import type { Persona } from "./protocol.ts";
 

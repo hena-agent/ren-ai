@@ -52,14 +52,14 @@ Generation and image-save failures preserve the published profile. Every batch, 
 
 Admin stores optional `portraits` (style-specific mains) and `secondaryPortraits` (independent `{ style, imageUrl }` photos, stored as `secondary-portraits` in Markdown). `imageUrl` remains for older clients. Legacy `portraitGallery` / `portrait-gallery` pairs migrate to these fields on read without regenerating images; new files and public responses contain no scene IDs, recommendation plans or completion records. Discovery displays only the selected style's available photos, with previous/next controls on cards and profile details. A style with no photos displays a placeholder. Photo navigation does not create a Like or Pass. Deploy API readers for the optional image and gender fields first, then Discovery, before Admin saves the new format. Existing paired, single-image and old API responses remain usable.
 
-The API's local `TURNSTILE_SECRET` is set in `packages/api-msg.hena.dev/.env.example`. Run the apps with the root `bun run dev`; `packages/api-msg.hena.dev` also offers `dev:discovery` for the standalone swipe-registration API. For that API and `apps/discovery`, use separate terminals:
+The API's local `TURNSTILE_SECRET` is set in `apps/api/.env.example`. Run the apps with the root `bun run dev`; `apps/api` also offers `dev:discovery` for the standalone swipe-registration API. For that API and `apps/discovery`, use separate terminals:
 
 ```sh
-TURNSTILE_SECRET=1x0000000000000000000000000000000AA bun run --cwd packages/api-msg.hena.dev dev:discovery
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA bun run --cwd apps/api dev:discovery
 bun run --cwd apps/discovery dev
 ```
 
-Open http://127.0.0.1:3867 and choose anime or realistic display for the whole catalog. The style is restored across reloads and can be switched while browsing or entering contact details without resetting choices or inputs. Use the up-arrow to expand the profile in the same browsing area. Photo/text taps do not open it; the down-arrow or Escape collapses it while preserving the selected photo. The name/collapse header stays accessible while photos and the public introduction scroll. Shared floating Pass/Like circles sit above the content, with a soft bottom fade and enough reading/safe-area padding to reveal the last introduction line. Desktop retains the sidebar; mobile reading uses the full screen. Outside clicks leave the reading profile open. Reading liked profiles preserves the current card and any typed contact details. Its Vite proxy calls the API on port 4867, including every generated gallery image. The frontend and backend use Cloudflare's public test keys locally. Defaults share Admin's `apps/admin/data/personas` directory and store registrations in `packages/api-msg.hena.dev/data/discovery.sqlite`. Generated portraits live in the persona directory's `images/` subdirectory; include it with the Markdown files in persona backups. All images referenced by a published persona are served publicly; unpublished and unreferenced images remain private. `PERSONA_DIRECTORY` and `DISCOVERY_DATABASE` override the API's paths. Use `PORT` per process to change its default port and `DISCOVERY_API_URL` to change the frontend proxy target. Vite reports busy ports instead of switching silently.
+Open http://127.0.0.1:3867 and choose anime or realistic display for the whole catalog. The style is restored across reloads and can be switched while browsing or entering contact details without resetting choices or inputs. Use the up-arrow to expand the profile in the same browsing area. Photo/text taps do not open it; the down-arrow or Escape collapses it while preserving the selected photo. The name/collapse header stays accessible while photos and the public introduction scroll. Shared floating Pass/Like circles sit above the content, with a soft bottom fade and enough reading/safe-area padding to reveal the last introduction line. Desktop retains the sidebar; mobile reading uses the full screen. Outside clicks leave the reading profile open. Reading liked profiles preserves the current card and any typed contact details. Its Vite proxy calls the API on port 4867, including every generated gallery image. The frontend and backend use Cloudflare's public test keys locally. Defaults share Admin's `apps/admin/data/personas` directory and store registrations in `apps/api/data/discovery.sqlite`. Generated portraits live in the persona directory's `images/` subdirectory; include it with the Markdown files in persona backups. All images referenced by a published persona are served publicly; unpublished and unreferenced images remain private. `PERSONA_DIRECTORY` and `DISCOVERY_DATABASE` override the API's paths. Use `PORT` per process to change its default port and `DISCOVERY_API_URL` to change the frontend proxy target. Vite reports busy ports instead of switching silently.
 
 For public hosting, configure the browser app's `VITE_DISCOVERY_API_URL` and real `VITE_TURNSTILE_SITE_KEY`, and the API's matching `TURNSTILE_SECRET`. The standalone swipe API serves `/discovery/personas` and `/discovery/waitlist`; the messaging API also serves `/personas` and `/onboarding` for the prerendered `discovery.hena.dev` site. Both use the messaging service database and permit the canonical `https://discovery.hena.dev` origin. Deployment and domain cutover are tracked in the [MVP spec](docs/specs/persona-discovery-admin.md). See the site and API `.env.example` files for configuration.
 
@@ -80,14 +80,14 @@ Discovery uses a viewport-filling swipe layout on mobile, with round Pass / Like
 
 ```
 apps/admin/            Password-protected OpenCode persona editor; server-rendered HTML.
+apps/api/              Portable messaging application, Docker deployment tooling, and operator CLI.
 apps/discovery/        Browser persona cards, Like / Pass and waiting registration.
+apps/imsg/             Mac Messages gateway, its client and test doubles, Mac artifact and MDM tooling.
 apps/persona-lab/     Local simulation app for the standalone persona engine.
 packages/personas/     Shared OpenCode persona loader, validation and file store.
 packages/persona-engine/  Relationship state engine (not wired into iMessage runtime).
 packages/onboarding/   Shared browser-safe Handle, disclosure, persona catalog and registration shapes.
 packages/discovery.hena.dev/   Prerendered Korean persona selection and onboarding site.
-packages/api-msg.hena.dev/  Portable messaging application, Docker deployment tooling, and operator CLI.
-packages/imsg.hena.dev/     Mac Messages gateway, its client and test doubles, Mac artifact and MDM tooling.
 packages/transport/         Bearer-authenticated RPC client/server and HTTP listener shared by the services.
 packages/plugins/    OpenCode runtime plugins and the shared application RPC protocol.
 scripts/                Repo tooling: exceptions report and gate verification.
@@ -96,7 +96,7 @@ quality-exceptions.json  The only place file-level gate exceptions may live.
 
 ## The gates
 
-For the messaging services, use the [application deployment and relocation runbook](packages/api-msg.hena.dev/ops/README.md) and the [Messages Mac runbook](packages/imsg.hena.dev/ops/README.md). The [service boundary decision](docs/adr/0010-separate-the-messages-mac-from-opencode.md) records the Mac/Docker split and the native OpenCode interface at `oc.hena.dev`; [ADR-0012](docs/adr/0012-each-session-runs-in-its-own-opencode-folder-written-by-a-plugin.md) adds per-session native agent/instruction folders and their separate persistent volume.
+For the messaging services, use the [application deployment and relocation runbook](apps/api/ops/README.md) and the [Messages Mac runbook](apps/imsg/ops/README.md). The [service boundary decision](docs/adr/0010-separate-the-messages-mac-from-opencode.md) records the Mac/Docker split and the native OpenCode interface at `oc.hena.dev`; [ADR-0012](docs/adr/0012-each-session-runs-in-its-own-opencode-folder-written-by-a-plugin.md) adds per-session native agent/instruction folders and their separate persistent volume.
 
 | Gate                  | Threshold      | Command                |
 | --------------------- | -------------- | ---------------------- |
@@ -114,7 +114,7 @@ For the messaging services, use the [application deployment and relocation runbo
 
 ### CI execution
 
-`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys discovery.hena.dev, admin.ambivalent.dev and discovery.ambivalent.dev, and publishes an attested imsg.hena.dev bundle, which the Messages Mac pulls itself ([runbook](packages/imsg.hena.dev/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
+`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys discovery.hena.dev, admin.ambivalent.dev and discovery.ambivalent.dev, and publishes an attested imsg.hena.dev bundle, which the Messages Mac pulls itself ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
 
 ## Design decisions worth knowing
 

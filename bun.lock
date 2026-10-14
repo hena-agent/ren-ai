@@ -56,6 +56,43 @@
         "wrangler": "4.149.0",
       },
     },
+    "apps/api": {
+      "name": "@ren-ai/api",
+      "version": "0.0.0",
+      "bin": {
+        "ren-ai-discovery": "./src/discovery-entry.mjs",
+        "ren-ai-operator": "./src/operator-entry.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.0-rc.112",
+        "@effect/sql-sqlite-bun": "4.0.0-rc.112",
+        "@opencode/client": "2.0.19",
+        "@opencode/schema": "2.0.19",
+        "@ren-ai/imsg": "workspace:*",
+        "@ren-ai/onboarding": "workspace:*",
+        "@ren-ai/personas": "workspace:*",
+        "@ren-ai/plugin-application": "workspace:*",
+        "@ren-ai/plugin-session-folder": "workspace:*",
+        "@ren-ai/transport": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@effect/sql-sqlite-node": "4.0.0-rc.112",
+        "@opencode/ai": "2.0.19",
+        "@opencode/core": "2.0.19",
+        "@opencode/plugin": "2.0.19",
+        "@opencode/server": "2.0.19",
+        "@ren-ai/plugin-context": "workspace:*",
+        "@ren-ai/plugin-dice": "workspace:*",
+        "@ren-ai/plugin-memory": "workspace:*",
+        "@ren-ai/plugin-title": "workspace:*",
+        "@ren-ai/plugin-tools": "workspace:*",
+        "@total-typescript/shoehorn": "0.1.2",
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+        "vitest": "5.0.1",
+      },
+    },
     "apps/discovery": {
       "name": "@ren-ai/discovery",
       "version": "0.0.0",
@@ -81,6 +118,20 @@
         "vite": "7.3.6",
         "vitest": "5.0.1",
         "wrangler": "4.149.0",
+      },
+    },
+    "apps/imsg": {
+      "name": "@ren-ai/imsg",
+      "version": "0.0.0",
+      "dependencies": {
+        "@effect/platform-node": "4.0.0-rc.112",
+        "@ren-ai/transport": "workspace:*",
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
+        "vitest": "5.0.1",
       },
     },
     "apps/persona-lab": {
@@ -109,43 +160,6 @@
         "vitest": "5.0.1",
       },
     },
-    "packages/api-msg.hena.dev": {
-      "name": "@ren-ai/api-msg.hena.dev",
-      "version": "0.0.0",
-      "bin": {
-        "ren-ai-discovery": "./src/discovery-entry.mjs",
-        "ren-ai-operator": "./src/operator-entry.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.112",
-        "@effect/sql-sqlite-bun": "4.0.0-rc.112",
-        "@opencode/client": "2.0.19",
-        "@opencode/schema": "2.0.19",
-        "@ren-ai/imsg.hena.dev": "workspace:*",
-        "@ren-ai/onboarding": "workspace:*",
-        "@ren-ai/personas": "workspace:*",
-        "@ren-ai/plugin-application": "workspace:*",
-        "@ren-ai/plugin-session-folder": "workspace:*",
-        "@ren-ai/transport": "workspace:*",
-        "effect": "4.0.0-rc.112",
-      },
-      "devDependencies": {
-        "@effect/sql-sqlite-node": "4.0.0-rc.112",
-        "@opencode/ai": "2.0.19",
-        "@opencode/core": "2.0.19",
-        "@opencode/plugin": "2.0.19",
-        "@opencode/server": "2.0.19",
-        "@ren-ai/plugin-context": "workspace:*",
-        "@ren-ai/plugin-dice": "workspace:*",
-        "@ren-ai/plugin-memory": "workspace:*",
-        "@ren-ai/plugin-title": "workspace:*",
-        "@ren-ai/plugin-tools": "workspace:*",
-        "@total-typescript/shoehorn": "0.1.2",
-        "@types/node": "26.6.2",
-        "typescript": "7.0.2",
-        "vitest": "5.0.1",
-      },
-    },
     "packages/discovery.hena.dev": {
       "name": "@ren-ai/discovery.hena.dev",
       "version": "0.0.0",
@@ -169,20 +183,6 @@
         "vite": "7.3.6",
         "vitest": "5.0.1",
         "wrangler": "4.141.0",
-      },
-    },
-    "packages/imsg.hena.dev": {
-      "name": "@ren-ai/imsg.hena.dev",
-      "version": "0.0.0",
-      "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.112",
-        "@ren-ai/transport": "workspace:*",
-        "effect": "4.0.0-rc.112",
-      },
-      "devDependencies": {
-        "@types/node": "26.6.2",
-        "typescript": "7.0.2",
-        "vitest": "5.0.1",
       },
     },
     "packages/onboarding": {
@@ -232,7 +232,7 @@
       "dependencies": {
         "@opencode/plugin": "2.0.19",
         "@opencode/schema": "2.0.19",
-        "@ren-ai/imsg.hena.dev": "workspace:*",
+        "@ren-ai/imsg": "workspace:*",
         "@ren-ai/plugin-session-folder": "workspace:*",
         "@ren-ai/transport": "workspace:*",
         "effect": "4.0.0-rc.112",
@@ -1120,13 +1120,13 @@
 
     "@ren-ai/admin": ["@ren-ai/admin@workspace:apps/admin"],
 
-    "@ren-ai/api-msg.hena.dev": ["@ren-ai/api-msg.hena.dev@workspace:packages/api-msg.hena.dev"],
+    "@ren-ai/api": ["@ren-ai/api@workspace:apps/api"],
 
     "@ren-ai/discovery": ["@ren-ai/discovery@workspace:apps/discovery"],
 
     "@ren-ai/discovery.hena.dev": ["@ren-ai/discovery.hena.dev@workspace:packages/discovery.hena.dev"],
 
-    "@ren-ai/imsg.hena.dev": ["@ren-ai/imsg.hena.dev@workspace:packages/imsg.hena.dev"],
+    "@ren-ai/imsg": ["@ren-ai/imsg@workspace:apps/imsg"],
 
     "@ren-ai/onboarding": ["@ren-ai/onboarding@workspace:packages/onboarding"],
 
