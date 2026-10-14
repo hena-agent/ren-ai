@@ -965,6 +965,9 @@ aside h2 {
 .contact-selection input[type="number"] {
   max-width: 160px;
 }
+.contact-selection select {
+  max-width: 320px;
+}
 .contact-confirm {
   display: flex;
   align-items: baseline;

@@ -66,7 +66,7 @@ also work in the existing Discovery client.
 
 ## Deploy
 
-The production domain is `admin.ambivalent.dev`, using the `persona-admin` Worker
+The production domain is `admin.renai.im`, using the `persona-admin` Worker
 in the `Ambivalent Co.` account. Wrangler references the remote `persona-catalog`
 D1 database in that account. A new remote Catalog starts empty;
 `import:local` does not populate remote resources.
@@ -93,24 +93,24 @@ optional `documents` snapshot field initializes new Conversation folders with
 `STATE.md` and `MEMORY.md`. Catalog updates preserve evolving Conversation
 documents; session snapshots include the current pair for export/restore.
 Point both API services at the same Worker. Publish newly authored personas
-before fresh onboarding. Any configured default must be an actual published ID.
+before Discovery offers them.
 
 ### Automatic deployment
 
-After the quality gates pass on `main`, the `Deploy admin.ambivalent.dev` job in
+After the quality gates pass on `main`, the `Deploy admin.renai.im` job in
 [`ci.yml`](../../.github/workflows/ci.yml) applies D1 migrations with `bun run db:remote`,
 deploys with `bun run deploy` and checks the public `/api/personas`. Each Worker
 version's message names the commit it came from. The job authenticates with the
-`CLOUDFLARE_API_TOKEN_AMBIVALENT` repository secret, an `Ambivalent Co.` account API
+`CLOUDFLARE_API_TOKEN` repository secret, an `Ambivalent Co.` account API
 token with Workers Scripts, D1 and Workers R2 Storage (Write), Account Settings
-(Read) and Workers Routes (Write) on `ambivalent.dev`. Do not also connect Workers
+(Read) and Workers Routes (Write) on `renai.im`. Do not also connect Workers
 Builds: it would deploy every push a second time, without waiting for the gates.
 Every deploy restarts the Durable Object, so an image being generated at that
 moment needs an operator-confirmed retry.
 
 Set `ADMIN_PASSWORD`, `TOKEN_CATALOG`, `TOKEN_MANAGEMENT` and `GEMINI_API_KEY` as Worker runtime
 secrets, not browser/build variables. Set the messaging application's
-`PERSONA_CATALOG_URL=https://admin.ambivalent.dev` and its private `TOKEN_CATALOG`
+`PERSONA_CATALOG_URL=https://admin.renai.im` and its private `TOKEN_CATALOG`
 and `TOKEN_MANAGEMENT` to match the Worker's. Deploy that application
 configuration separately. Verify unauthenticated `/` returns 401, authenticated
 editing works, and only published current image references are public.
@@ -126,6 +126,15 @@ persona to each. The result may contain fewer than N people. A persona belongs
 to one handle from reservation onward, including failed/uncertain attempts.
 Each selected Greeting is scheduled once 5–60 minutes later.
 
+Handles marked with the API operator's `test-handle` command show **테스트 연락처**.
+A waiting test handle with an available Like also appears under **테스트 연락처
+바로 시작**: choose one of its liked personas and confirm **지금 시작** to reserve
+that persona and schedule the first Greeting immediately, without random
+selection. The API refuses other handles, unliked or taken personas and handles
+that are no longer waiting with `409`. This is how a test handle starts a new
+conversation after `/reset`: register again through Discovery, then start it here.
+Deploy the API before Admin; an older API answers the start with `404`.
+
 `/first-contacts` shows reservations, session preparation, Greeting processing,
 confirmed first sends, failures, unreachable iMessage contacts and results
 requiring inspection. Refresh to observe progress. Network/response loss keeps
@@ -137,12 +146,12 @@ preparation are never automatically repeated. Inspect the API's recorded
 session/send before recovery; deleting a user through the operator removes the
 registration and releases the assignment.
 
-Set Worker `MESSAGING_API_URL=https://api-msg.hena.dev` (declared in Wrangler)
+Set Worker `MESSAGING_API_URL=https://api.renai.im` (declared in Wrangler)
 and runtime secret `TOKEN_MANAGEMENT`, matching the application's
 `TOKEN_MANAGEMENT`. Use a different value from `TOKEN_CATALOG`. Tokens remain
 server-side; Admin authenticates the operator and enforces same-origin POSTs.
-The application serves Bearer-authenticated `GET /management/discovery` and
-`POST /management/discovery/select`. Deploy the API before Admin; the old API's
+The application serves Bearer-authenticated `GET /management/discovery`,
+`POST /management/discovery/select` and `POST /management/discovery/start`. Deploy the API before Admin; the old API's
 404 or missing credentials are displayed as connection failures. SQL schema
 019 adds assignment, selection deduplication and durable contact records. On
 startup, conflicting existing live assignments stop admission rather than

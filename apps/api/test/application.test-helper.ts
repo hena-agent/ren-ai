@@ -1,0 +1,52 @@
+import { Effect, Layer } from "effect";
+import { loadPersonas } from "@ren-ai/personas";
+import { isolatedHost } from "./isolated-host.test-helper.ts";
+import type { HostOptions, PersonaHostOptions } from "./embedded-host.test-helper.ts";
+import { startMessagingApplication } from "../src/application.ts";
+import type { Messages, Gestures } from "@ren-ai/imsg";
+import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
+
+type MessagingOptions = Omit<
+  HostOptions,
+  "personas" | "send" | "wait" | "read" | "react" | "onContext" | "handleForSession"
+>;
+
+export const startPersonaHost = (root: string, options: PersonaHostOptions) =>
+  Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
+    isolatedHost(root, { ...options, personas }),
+  );
+
+export const startMessagingHost = (
+  root: string,
+  options: MessagingOptions,
+  messages: Messages,
+  gestures: Gestures,
+  alerts: FailureAlerts,
+) =>
+  Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
+    startMessagingApplication(
+      personas,
+      (tools) => isolatedHost(root, { ...options, ...tools }),
+      messages,
+      gestures,
+      alerts,
+    ),
+  );
+
+export const startMessagingServer = (
+  root: string,
+  options: MessagingOptions,
+  databaseFile: string,
+  messages: Messages,
+  gestures: Gestures,
+  alerts: FailureAlerts,
+) =>
+  Effect.gen(function* () {
+    const { SqliteClient } = yield* Effect.promise(() => import("@effect/sql-sqlite-bun"));
+    const database = yield* Layer.build(
+      SqliteClient.layer({ filename: databaseFile, busyTimeout: "5 seconds" }),
+    );
+    return yield* startMessagingHost(root, options, messages, gestures, alerts).pipe(
+      Effect.provide(database),
+    );
+  });

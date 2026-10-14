@@ -8,12 +8,12 @@
 
 사용자가 틴더처럼 페르소나를 스와이프하고 Like하면, 그중 한 명이 나중에 iMessage로 먼저 연락한다. 운영자는 Admin에서 페르소나를 저장·관리하고, 초대 링크를 발급하며, 대기자 중 연락할 N명을 선정한다.
 
-사용자 웹사이트는 기존 패키지를 `packages/discovery.hena.dev`로 이름을 바꾸고 `discovery.hena.dev`에 배포한다. Admin은 `apps/admin`에 둔다.
+사용자 웹사이트는 `apps/discovery`다. 즉시 대화를 시작하던 이전 테스트 사이트 `packages/discovery.hena.dev`는 삭제했다([ADR-0015](../adr/0015-discovery-is-the-only-onboarding.md)). Admin은 `apps/admin`에 둔다.
 
-| 앱              | 경로                          | 역할                                                                           |
-| --------------- | ----------------------------- | ------------------------------------------------------------------------------ |
-| 사용자 웹사이트 | `packages/discovery.hena.dev` | 페르소나 탐색, Like / Pass, 연락처 등록, 초대 적용, 등록 상태 확인·연락처 수정 |
-| Admin           | `apps/admin`                  | 페르소나 저장·관리, 초대 링크 관리, 대기자 선정, 첫 연락 상태 확인             |
+| 앱              | 경로             | 역할                                                                           |
+| --------------- | ---------------- | ------------------------------------------------------------------------------ |
+| 사용자 웹사이트 | `apps/discovery` | 페르소나 탐색, Like / Pass, 연락처 등록, 초대 적용, 등록 상태 확인·연락처 수정 |
+| Admin           | `apps/admin`     | 페르소나 저장·관리, 초대 링크 관리, 대기자 선정, 첫 연락 상태 확인             |
 
 공개 페르소나 목록과 운영자 편집 화면은 같은 저장된 페르소나를 참조한다. 선정·초대 사용·발송 예약의 판단은 서버에서 수행하며, 두 웹 앱이 서로 다른 규칙을 구현하지 않는다.
 
@@ -62,13 +62,13 @@ Admin과 저장 API에는 비밀번호 인증과 동일 출처 폼 제출 검사
 로컬에서 Admin에 페르소나를 저장·공개한 다음 두 터미널에서 실행한다:
 
 ```sh
-TURNSTILE_SECRET=1x0000000000000000000000000000000AA bun run --cwd packages/api-msg.hena.dev dev:discovery
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA bun run --cwd apps/api dev:discovery
 bun run --cwd apps/discovery dev
 ```
 
-프런트엔드는 `http://127.0.0.1:3867`, API는 `http://127.0.0.1:4867`이다. 각 프로세스의 `PORT`로 포트를 바꾸고 프런트엔드의 `DISCOVERY_API_URL`로 프록시를 맞춘다. API의 기본 파일 경로는 Admin의 페르소나 디렉터리와 `packages/api-msg.hena.dev/data/discovery.sqlite`이며 `PERSONA_DIRECTORY`·`DISCOVERY_DATABASE`로 변경할 수 있다. 실행 명령의 Turnstile secret은 로컬용 공개 테스트 키다.
+프런트엔드는 `http://127.0.0.1:3867`, API는 `http://127.0.0.1:4867`이다. 각 프로세스의 `PORT`로 포트를 바꾸고 프런트엔드의 `DISCOVERY_API_URL`로 프록시를 맞춘다. API의 기본 파일 경로는 Admin의 페르소나 디렉터리와 `apps/api/data/discovery.sqlite`이며 `PERSONA_DIRECTORY`·`DISCOVERY_DATABASE`로 변경할 수 있다. 실행 명령의 Turnstile secret은 로컬용 공개 테스트 키다.
 
-실제 iMessage API에도 같은 경로를 연결하고 기존 `server.sqlite`에 새 테이블을 추가했다. 공개 배포에서는 실제 Turnstile 키, API URL과 CORS origin을 맞춰야 한다. 새 사이트의 도메인·기존 사이트 전환은 아직 미결정이다.
+실제 iMessage API에도 같은 경로를 연결하고 기존 `server.sqlite`에 새 테이블을 추가했다. 공개 배포에서는 실제 Turnstile 키, API URL과 CORS origin을 맞춰야 한다. 기존 사이트는 이후 삭제했다(ADR-0015).
 
 검증 결과:
 
@@ -421,12 +421,12 @@ Persona 검사·변환의 현재 계약은 [Persona 작성·상세 프로필](pe
 
 ## 현재 저장소와 연결할 작업
 
-- `packages/discovery.hena.dev`: 현재 단일 연락처 등록 사이트다. 도메인 전환 후 기존 `msg.hena.dev`는 리다이렉트 없이 종료한다. 탐색 기능은 이 패키지에 확장한다.
+- `packages/discovery.hena.dev`: 삭제했다. 탐색과 등록은 `apps/discovery`가 맡는다(ADR-0015).
 - `packages/onboarding`: Handle 검증과 요청·응답 형식을 재사용·확장한다. API가 별도로 배포되므로 신규 필드는 배포 전까지 선택적으로 두고 구 API의 응답도 처리한다.
-- `packages/api-msg.hena.dev/src/onboarding/onboarding.ts`: 현재 고정 페르소나·즉시 Notice·Greeting 흐름을 새 등록·선정·예약 흐름으로 변경해야 한다.
-- `packages/api-msg.hena.dev/src/personas/personas.ts`: `packages/personas`의 공용 OpenCode 로더를 재사용한다. 런타임 실시간 반영이 필요해지면 별도 적용 정책을 정한다.
-- `packages/api-msg.hena.dev/src/database.ts`: 현재 이메일 기반 대기 리스트를 새 Handle·Like·상태 기반 등록과 어떻게 이관할지 결정해야 한다. 과거 항목에 없는 Like를 임의로 만들어 선정하지 않는다.
-- `packages/api-msg.hena.dev/src/follow-ups/follow-ups.ts`: 기존 대화의 후속 연락 기능이다. 새 첫 연락 예약과 역할을 구분해 연결한다.
+- `apps/api/src/onboarding/onboarding.ts`: 고정 페르소나·즉시 Notice·Greeting 흐름과 함께 삭제했다. 테스트 연락처는 Admin에서 바로 시작한다.
+- `apps/api/src/personas/personas.ts`: `packages/personas`의 공용 OpenCode 로더를 재사용한다. 런타임 실시간 반영이 필요해지면 별도 적용 정책을 정한다.
+- `apps/api/src/database.ts`: 현재 이메일 기반 대기 리스트를 새 Handle·Like·상태 기반 등록과 어떻게 이관할지 결정해야 한다. 과거 항목에 없는 Like를 임의로 만들어 선정하지 않는다.
+- `apps/api/src/follow-ups/follow-ups.ts`: 기존 대화의 후속 연락 기능이다. 새 첫 연락 예약과 역할을 구분해 연결한다.
 - `apps/persona-lab`과 `packages/persona-engine`: 별도의 인물 모델 실험 도구다. 새 Admin과 서비스의 페르소나 기준은 OpenCode로 결정했다.
 - 앱 추가·사이트 이동에 맞춰 워크스페이스, 타입 검사, 품질 게이트 대상, CI 빌드, 배포 경로와 API CORS를 갱신한다. 라이브러리는 기존 JIT 형태를 유지한다.
 
@@ -436,13 +436,13 @@ Persona 검사·변환의 현재 계약은 [Persona 작성·상세 프로필](pe
 
 배정 정책은 **사용자당 한 페르소나·페르소나당 한 사용자**로 확정했다. 첫 연락 예약부터 독점하며 실패·불확실 상태에서도 배정을 유지한다. 기존 중복 배정은 운영자가 배포 전에 확인한다.
 
-`CONTEXT.md`의 Onboarding·Greeting·Waitlist·Notice 정의와 사이트 구성에 관한 ADR-0008은 기존 흐름을 설명한다. 실제 전환 시 용어와 배포 결정을 함께 갱신한다. 서버 자체 저장소를 사용하는 ADR-0006과 대화별 도구·세션 경계를 다루는 ADR-0001·0002는 새 흐름에서도 검토 기준으로 삼는다.
+`CONTEXT.md`의 용어는 탐색 흐름 기준으로 갱신했고, 사이트 구성에 관한 ADR-0008은 ADR-0015로 대체했다. 서버 자체 저장소를 사용하는 ADR-0006과 대화별 도구·세션 경계를 다루는 ADR-0001·0002는 새 흐름에서도 검토 기준으로 삼는다.
 
 ## 구현 전 정할 세부 사항
 
 제품 흐름을 다시 인터뷰하기 위한 목록이 아니라 구현 시 해소할 결정 목록이다. 추가 사용자 결정이 필요하면 question tool을 사용한다.
 
-- [x] 사용자 사이트는 `packages/discovery.hena.dev`, 도메인은 `discovery.hena.dev`로 정한다. 새 사이트 검증 후 기존 `msg.hena.dev`는 리다이렉트 없이 종료한다. [배포 순서](../../packages/api-msg.hena.dev/ops/README.md#discovery-domain-cutover)를 따른다.
+- [x] 사용자 사이트는 `apps/discovery`다. 기존 `discovery.hena.dev`와 `msg.hena.dev`는 리다이렉트 없이 종료한다. [기존 테스트 사이트 종료](../../apps/api/ops/README.md#retire-the-old-test-site) 순서를 따른다.
 - [ ] Admin의 공개 도메인과 배포 방식.
 - [x] 페르소나는 OpenCode Markdown + YAML frontmatter 단일 파일로 저장한다. 이미지는 HTTPS URL 또는 서비스 소유 `/discovery/images/` URL을 사용하고, 스타일별 메인과 독립 추가 사진을 선택적으로 기록한다. 구 `portraitGallery`는 읽을 때 독립 사진으로 정규화한다.
 - [x] Admin 편집 모델은 OpenCode로 정하고 기존 런타임과 로더를 공유한다. 현재 설정 변경은 API 재시작 후 반영한다.

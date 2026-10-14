@@ -1,4 +1,4 @@
-import { outgoingStatus, tapback } from "@ren-ai/imsg.hena.dev/protocol";
+import { outgoingStatus, tapback } from "@ren-ai/imsg/protocol";
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 

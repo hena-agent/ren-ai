@@ -19,6 +19,7 @@ const entry = (state: typeof ContactState.Type = "waiting"): typeof ContactEntry
   scheduledAt: null,
   requestId: null,
 });
+const idle = { start: vi.fn<ManagementClient["start"]>() };
 const setup = async (client?: ManagementClient) => {
   const f = await fixture();
   const logs: LogEntry[] = [];
@@ -46,7 +47,7 @@ test("authenticated Admin lists, confirms and displays exclusive selection and r
     requested: input.count,
     entries: [scheduled],
   }));
-  const { admin } = await setup({ list, select });
+  const { admin } = await setup({ list, select, ...idle });
   expect((await admin(new Request("http://localhost:3729/waitlist"))).status).toBe(401);
   const page = await (await admin(request("/waitlist"))).text();
   expect(page).toContain("대기자 관리");
@@ -65,13 +66,103 @@ test("authenticated Admin lists, confirms and displays exclusive selection and r
   expect(progress).toContain("결과 확인 필요·실패 건은 자동 재발송하지 않습니다");
 });
 
+test("a waiting test handle starts now with a chosen liked persona", async () => {
+  const tester = {
+    ...entry(),
+    handle: "tester@example.net",
+    likedPersonas: [
+      { id: "luna", name: "루나" },
+      { id: "harin", name: "하린" },
+    ],
+    testHandle: true,
+  };
+  const scheduled = {
+    ...tester,
+    state: "scheduled" as const,
+    eligible: false,
+    reason: "reserved" as const,
+    persona: { id: "harin", name: "하린" },
+    scheduledAt: 1234,
+    requestId: "server-request",
+  };
+  const start = vi.fn<ManagementClient["start"]>(async (input) => ({
+    requestId: input.requestId,
+    requested: 1,
+    entries: [scheduled],
+  }));
+  const { admin } = await setup({
+    list: async () => ({ entries: [entry(), tester], eligibleCount: 2 }),
+    select: async (input) => ({ ...input, requested: input.count, entries: [] }),
+    start,
+  });
+  const page = await (await admin(request("/waitlist"))).text();
+  expect(page).toContain("테스트 연락처 바로 시작");
+  expect(page).toContain("테스트 연락처</small>");
+  expect(page.match(/name="action" value="start"/g)).toHaveLength(1);
+  expect(page).toContain('<option value="harin">하린</option>');
+  const key =
+    /name="action" value="start"\/><input type="hidden" name="requestId" value="([^"]+)"/.exec(
+      page,
+    )![1]!;
+  const fields = { action: "start", requestId: key, registrationID: tester.id, personaID: "harin" };
+  const started = await admin(request("/waitlist", { ...fields, confirm: "yes" }));
+  expect(started.status).toBe(200);
+  expect(await started.text()).toContain("실제 선정 1명");
+  expect(start).toHaveBeenCalledWith({
+    requestId: key,
+    registrationID: tester.id,
+    personaID: "harin",
+  });
+  for (const invalid of [fields, { ...fields, confirm: "yes", registrationID: "private" }])
+    expect((await admin(request("/waitlist", invalid))).status).toBe(400);
+  expect(start).toHaveBeenCalledTimes(1);
+});
+
+test("a refused or unsupported test start explains the outcome", async () => {
+  const input = {
+    action: "start",
+    requestId: randomUUID(),
+    registrationID: randomUUID(),
+    personaID: "luna",
+    confirm: "yes",
+  };
+  const refused = await setup(
+    managementClient("https://api.test", "secret-token", async (url) =>
+      url instanceof URL && url.pathname.endsWith("/start")
+        ? Response.json({ error: "start_unavailable" }, { status: 409 })
+        : Response.json({ entries: [], eligibleCount: 0 }),
+    ),
+  );
+  const conflict = await refused.admin(request("/waitlist", input));
+  expect(conflict.status).toBe(400);
+  expect(await conflict.text()).toContain("지금 고른 페르소나로 시작할 수 없습니다");
+  const older = await setup(
+    managementClient("https://api.test", "secret-token", async () =>
+      Response.json({ error: "not_found" }, { status: 404 }),
+    ),
+  );
+  const unsupported = await older.admin(request("/waitlist", input));
+  expect(unsupported.status).toBe(503);
+  expect(await unsupported.text()).toContain("메시징 API 요청이 실패했습니다");
+  const malformed = await setup(
+    managementClient("https://api.test", "secret-token", async () =>
+      Response.json({ private: "payload" }),
+    ),
+  );
+  expect((await malformed.admin(request("/waitlist", input))).status).toBe(503);
+});
+
 test("invalid and cross-origin confirmations never select users", async () => {
   const select = vi.fn<ManagementClient["select"]>(async (input) => ({
     requestId: input.requestId,
     requested: input.count,
     entries: [],
   }));
-  const { admin } = await setup({ list: async () => ({ entries: [], eligibleCount: 0 }), select });
+  const { admin } = await setup({
+    list: async () => ({ entries: [], eligibleCount: 0 }),
+    select,
+    ...idle,
+  });
   for (const fields of [
     { count: "0", confirm: "yes" },
     { count: "1.5", confirm: "yes" },
@@ -162,6 +253,7 @@ test("management client narrows configuration, status and JSON failures at the r
       throw new Error("Unexpected failure");
     },
     select: async (input) => ({ ...input, requested: input.count, entries: [] }),
+    ...idle,
   });
   expect((await unexpected.admin(request("/waitlist"))).status).toBe(503);
 });
@@ -186,6 +278,7 @@ test("empty lists and all first-contact states render without losing status dist
   const { admin } = await setup({
     list: async () => ({ entries: rows, eligibleCount: 0 }),
     select: async (input) => ({ ...input, requested: input.count, entries: [] }),
+    ...idle,
   });
   const page = await (await admin(request("/first-contacts"))).text();
   for (const label of [
@@ -202,6 +295,7 @@ test("empty lists and all first-contact states render without losing status dist
   const empty = await setup({
     list: async () => ({ entries: [], eligibleCount: 0 }),
     select: async (input) => ({ ...input, requested: input.count, entries: [] }),
+    ...idle,
   });
   expect(await (await empty.admin(request("/waitlist"))).text()).toContain("대기 등록이 없습니다");
   expect(await (await empty.admin(request("/first-contacts"))).text()).toContain(

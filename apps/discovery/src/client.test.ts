@@ -95,11 +95,11 @@ test("choices survive a reload and corrupt or inaccessible browser storage is sa
 });
 
 test("profiles use the same-origin Worker even when registration uses a separate API", async () => {
-  vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api-msg.hena.dev/");
+  vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api.renai.im/");
   vi.resetModules();
   const { discoveryClient: deployed } = await import("./client.ts");
   const imageUrl =
-    "https://admin.ambivalent.dev/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png";
+    "https://admin.renai.im/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png";
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
     Response.json([
       {
@@ -158,7 +158,7 @@ test("profiles use the same-origin Worker even when registration uses a separate
       turnstileToken: "verified",
     }),
   ).toEqual({ status: "waiting" });
-  expect(fetcher.mock.calls[1]?.[0]).toBe("https://api-msg.hena.dev/discovery/waitlist");
+  expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.renai.im/discovery/waitlist");
   vi.unstubAllEnvs();
   vi.resetModules();
 });

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { OnboardingRequest } from "./shapes.ts";
+import { Handle } from "./shapes.ts";
 import disclosure from "./discovery-notice.json";
 
 export const discoveryNotice = disclosure;
@@ -43,7 +43,10 @@ export const PublicPersona = Schema.Struct({
 export type PublicPersona = typeof PublicPersona.Type;
 
 export const DiscoveryRequest = Schema.Struct({
-  ...OnboardingRequest.fields,
+  handle: Handle,
+  locale: Schema.Literal("ko"),
+  privacyNoticeVersion: text,
+  turnstileToken: text,
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;

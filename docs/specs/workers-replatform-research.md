@@ -1,9 +1,9 @@
-# Workers re-platform research: api-msg
+# Workers re-platform research: the messaging application
 
-Platform facts for moving `packages/api-msg.hena.dev` from a long-lived Bun process onto Cloudflare Workers, Durable Objects (DOs) and/or D1. Sections 1–8 contain only what the cited source says. The analysis is kept to the second-to-last section.
+Platform facts for moving `apps/api` from a long-lived Bun process onto Cloudflare Workers, Durable Objects (DOs) and/or D1. Sections 1–8 contain only what the cited source says. The analysis is kept to the second-to-last section.
 
 - **Checked:** 2026-10-13. The Cloudflare pages are quoted as they appeared on that day; each page shows its own "Last updated" date.
-- **Repo versions:** `effect` 4.0.0-rc.112, `@opencode/client` 2.0.19, `wrangler` 4.149.0 (`apps/admin/package.json`) and 4.141.0 (`packages/discovery.hena.dev/package.json`), `@cloudflare/workers-types` 5.20261011.1 (`apps/admin/package.json`).
+- **Repo versions:** `effect` 4.0.0-rc.112, `@opencode/client` 2.0.19, `wrangler` 4.149.0 (`apps/admin/package.json`), `@cloudflare/workers-types` 5.20261011.1 (`apps/admin/package.json`).
 - **npm on the same day:** `effect` `latest` = 4.0.4 and `rc` = 4.0.0-rc.118 ([registry](https://registry.npmjs.org/effect)); `wrangler` `latest` = 4.149.0 ([registry](https://registry.npmjs.org/wrangler)).
 - **Path shorthand:** `<client>` = `node_modules/.bun/@opencode+client@2.0.19+11eac7cfbf53fc55/node_modules/@opencode/client`. `<effect>` = `node_modules/.bun/effect@4.0.0-rc.112/node_modules/effect`.
 
@@ -209,16 +209,16 @@ Sources: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1
 
 ## 6. `@opencode/client` 2.0.19
 
-- **What api-msg uses:**
-  - It imports `@opencode/client/effect`, plus types from `@opencode/client/effect/api` (`<client>/dist/effect/api.js` is empty), for example in `packages/api-msg.hena.dev/src/opencode/remote.ts:1-8`.
-  - Its production `HttpClient` is `FetchHttpClient.layer` (`packages/api-msg.hena.dev/src/server-entry.ts:22`).
+- **What the application uses:**
+  - It imports `@opencode/client/effect`, plus types from `@opencode/client/effect/api` (`<client>/dist/effect/api.js` is empty), for example in `apps/api/src/opencode/remote.ts:1-8`.
+  - Its production `HttpClient` is `FetchHttpClient.layer` (`apps/api/src/server-entry.ts:22`).
   - The client depends on `@opencode/schema` and `@opencode/protocol` 2.0.19. `effect` 4.0.0-rc.112 and `solid-js` are optional peers (`<client>/package.json`).
 - **No Node-only APIs on the `./effect` path.** The static import graph of `<client>/dist/effect/index.js` reaches nine chunks (`7f0py9js`, `vmytr4q8`, `0fn08bwv`, `6mptkzbc`, `frbwqjmf`, `t1xa31vm`, `mnyft54j`, `qnqb2tyr`, `9rqn6x4v`).
   - Their only bare imports are `effect`, `effect/unstable/{http,httpapi,encoding}`, `@opencode/protocol/*` and `@opencode/schema/*`.
   - They contain no `node:` imports and no use of `process`, `Bun`, `EventSource` or `WebSocket`.
   - The dist folders of `@opencode/protocol` and `@opencode/schema` import only `effect`, `effect/unstable/{httpapi,rpc}`, `@standard-schema/spec` and each other.
   - There is no `eval` or `new Function` in this path. In `effect` they appear only inside the embedded Swagger and Scalar UI assets (`<effect>/dist/unstable/httpapi/internal/httpApi{Swagger,Scalar}.js`).
-- **Node-only code exists, but only behind the `./service` and `./effect/service` exports**, which api-msg does not import:
+- **Node-only code exists, but only behind the `./service` and `./effect/service` exports**, which the application does not import:
 
   ```js
   // <client>/dist/effect/service.js:22-24
@@ -262,9 +262,9 @@ Sources: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1
   try: () => fetch(url, { ...options, method: request.method, headers, body, duplex: ..., signal })
   ```
 
-- The shared subscription (`<client>/dist/chunks/rpc-runtime-frbwqjmf.js`) uses `AbortController` and `Promise.withResolvers`, and fails a subscriber after 4,096 queued events. The promise client, which api-msg does not use, reads SSE with `response.body.getReader()` and `TextDecoder` (`<client>/dist/chunks/rpc-runtime-h9cy5hnk.js:77-85`). A browser `WebSocket` appears only in the Solid PTY client (`<client>/dist/chunks/rpc-runtime-gne7h7mq.js:20`).
+- The shared subscription (`<client>/dist/chunks/rpc-runtime-frbwqjmf.js`) uses `AbortController` and `Promise.withResolvers`, and fails a subscriber after 4,096 queued events. The promise client, which the application does not use, reads SSE with `response.body.getReader()` and `TextDecoder` (`<client>/dist/chunks/rpc-runtime-h9cy5hnk.js:77-85`). A browser `WebSocket` appears only in the Solid PTY client (`<client>/dist/chunks/rpc-runtime-gne7h7mq.js:20`).
 - The Workers runtime is updated at least weekly to at least the V8 version in stable Chrome, and supports the standard built-ins except `eval` and `new Function` ([web standards](https://developers.cloudflare.com/workers/runtime-apis/web-standards/)).
-- **Inference:** from the source alone, the code api-msg reaches uses only `fetch`, web streams, `AbortController` and `effect`, so it plausibly runs on workerd with or without `nodejs_compat`. **This was not run on workerd or Miniflare.**
+- **Inference:** from the source alone, the code the application reaches uses only `fetch`, web streams, `AbortController` and `effect`, so it plausibly runs on workerd with or without `nodejs_compat`. **This was not run on workerd or Miniflare.**
 
 ## 7. Reaching tunnel hostnames on the same zone
 
@@ -300,7 +300,7 @@ Sources: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1
   - CI needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The suggested token template is "Edit Cloudflare Workers", and the official action is `cloudflare/wrangler-action@v4`.
   - That template grants Workers Routes, Scripts, KV Storage and R2 Storage write; Workers Tail read; Account Settings read; and User Details/Memberships read. **It has no D1 permission** ([token templates](https://developers.cloudflare.com/fundamentals/api/reference/template/)).
   - Since 2025-05-02, "`D1:Edit` permission is required for any database writes via HTTP API" ([D1 release notes](https://developers.cloudflare.com/d1/platform/release-notes/)).
-  - This repo's `deploy` job already passes both secrets to `bun run --cwd packages/discovery.hena.dev deploy` (`.github/workflows/ci.yml`).
+  - This repo's Worker deploy jobs pass the account's token as `CLOUDFLARE_API_TOKEN` and pin the account ID in each `wrangler.jsonc` (`.github/workflows/ci.yml`).
 - **D1 migrations in CI:** `wrangler d1 migrations apply <DATABASE> --remote`. In CI or other non-interactive runs, the confirmation step is skipped and a backup is still captured. A migration that errors is rolled back, and earlier successful migrations stay applied ([Wrangler D1 commands](https://developers.cloudflare.com/workers/wrangler/commands/d1/#d1-migrations-apply)). Applied migrations are recorded in `d1_migrations`. `migrations_dir`, `migrations_table` and `migrations_pattern` are configurable ([D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)).
 - **Durable Object class lifecycle:**
   - The declarative `exports` field (Wrangler ≥ 4.107.0 per the [CHANGELOG](https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/CHANGELOG.md); announced 2026-07-04 in the [changelog](https://developers.cloudflare.com/changelog/post/2026-06-30-declarative-do-class-exports/)) replaces the legacy `migrations` array. Example: `"exports": { "MyDO": { "type": "durable-object", "storage": "sqlite" } }`.
@@ -317,18 +317,18 @@ Sources: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1
   - Rollbacks and gradual deployments can use only the last 100 versions. A rollback leaves bound resources such as D1 and DO data unchanged. It is refused across a DO lifecycle change, or when the target version binds an R2 bucket, KV namespace or queue that no longer exists ([rollbacks](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/), [gradual deployments](https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/)).
 - **Gradual deployments with DOs:** each object is pinned to one version for the life of a deployment and resets only when it is assigned a different version. Changes between the Worker and the DO must stay forward- and backward-compatible ([with Durable Objects](https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/with-durable-objects/)). The code update strategy flags are covered in §1.
 
-## Implications for api-msg (analysis, not sourced fact)
+## Implications for the application (analysis, not sourced fact)
 
 - **An always-open `follow` stream or OpenCode SSE in a DO is not guaranteed by any documented rule.** Each outbound connection keeps the object alive for at most 15 minutes. After that, the object survives only while requests or events, such as alarms, keep arriving. Deploys, runtime updates and placement moves restart it anyway. Both streams therefore need to resume from a persisted cursor; the existing inbox bookmark fits this. OpenCode events missed during a gap are lost by contract, so the current reconciliation must stay.
 - **One always-resident object at 128 MB costs about 0.128 GB × 2,592,000 s = 331,776 GB-s per month.** That fits inside the Paid allowance of 400,000 GB-s/month and the Free allowance of 13,000 GB-s/day (11,059 GB-s/day). A second always-resident object would exceed both.
 - **The 55-minute `wait` stream and the 20 s heartbeat are within documented wall-time rules.** However, every deploy restarts the object and cuts the stream, so the plugin must treat reconnecting as normal. Hibernatable inbound WebSockets would remove idle duration cost, but only if the plugin protocol changed.
 - **Timers map to one alarm per object plus a schedule table.** Handlers must be idempotent because alarms run at least once with limited retries.
-- **api-msg calls `sql.withTransaction` in eight places.** They are in `onboarding/onboarding.ts`, `operator/operator.ts`, `conversations/reset.ts` (two, run one after the other), `conversations/conversations.ts`, `discovery/discovery.ts`, `follow-ups/follow-ups.ts` and `intake/intake.ts`.
+- **The application calls `sql.withTransaction` in `operator/operator.ts`, `conversations/reset.ts` (two, run one after the other), `conversations/conversations.ts`, `discovery/contacts.ts`, `discovery/discovery.ts`, `discovery/first-contact.ts`, `follow-ups/follow-ups.ts` and `intake/intake.ts`.** The legacy onboarding call sites were deleted after this research (ADR-0015).
   - `@effect/sql-sqlite-do` supports them only if none are nested. The two in `reset.ts` were checked and are not; the others were not audited.
   - `@effect/sql-d1` would need each one rewritten as a `batch`.
   - This favours DO SQLite over D1 for the core state.
 - **The operator CLI and backups need new forms.** The Unix-socket operator CLI (`node:http` `createServer` in `src/operator/socket.ts`) has no Workers equivalent, so it would become an authenticated HTTP or RPC surface. Nightly file backups would become DO PITR (30 days) or a D1 export.
-- **Reaching `imsg.hena.dev` and `oc.hena.dev`:**
+- **Reaching `imsg.renai.im` and `oc.renai.im`:**
   - Same-zone `fetch` most likely reaches the tunnel as the zone origin, but this is undocumented. Without the strictly-public flag it also bypasses "Cloudflare security settings".
   - Workers VPC is the documented private path, but it is beta and needs `cloudflared` running over QUIC.
 - **CI changes:** the token needs D1 Edit if D1 is used. New DO classes should use `exports`, deployed with `wrangler deploy`.
@@ -343,7 +343,7 @@ Sources: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1
 - The runtime-update grace period for DO requests is 30 s on the DO lifecycle page and 20 min for Workers requests and connections on the limits page. It is unclear which applies to a stream served by a DO.
 - `code_update_strategy: deferred` (the default since Wrangler 4.141.0) is described only by Wrangler's schema and CHANGELOG as waiting for DOs to hibernate. The platform behaviour is not documented on developers.cloudflare.com, and it conflicts with the statement that "Deploying a new version restarts every Durable Object".
 - `wrangler versions upload` with `exports`: the DO docs say it "fails fast" if `exports` entries are present. The Wrangler 4.107.0 CHANGELOG says `versions upload` forwards `exports`. Wrangler 4.149.0's `cli.js:181263` throws only for a pending legacy migration.
-- A Worker fetching a same-zone hostname served by a Cloudflare Tunnel (for example `imsg.hena.dev`) is not explicitly documented. It is also unclear whether Cloudflare Access on such a hostname is enforced or bypassed by a same-zone subrequest without `global_fetch_strictly_public`.
+- A Worker fetching a same-zone hostname served by a Cloudflare Tunnel (for example `imsg.renai.im`) is not explicitly documented. It is also unclear whether Cloudflare Access on such a hostname is enforced or bypassed by a same-zone subrequest without `global_fetch_strictly_public`.
 - Whether long-lived streaming responses work through a Workers VPC Service binding (beta) is not documented beyond "standard Workers limits".
 - Whether the 125 s Proxy Read Timeout applies to gaps inside a streamed response body, or only to the wait for response headers, is not specified.
 - Binding one D1 database from two Workers has no explicit statement; only the indirect `migrations_dir` remark above.

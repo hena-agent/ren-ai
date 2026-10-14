@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Schema } from "effect";
-import { SelectContacts } from "@ren-ai/onboarding";
+import { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import type { ManagementClient } from "./contact-client.ts";
 import type { ContactView } from "./contact-page.tsx";
@@ -8,11 +8,43 @@ import { html } from "./html-response.ts";
 import { renderPage } from "./page.tsx";
 import { GenerationError, operation, reportFailure, requestId } from "./logging.ts";
 
+const select = (form: FormData, view: ContactView, client: ManagementClient) => {
+  let input: typeof SelectContacts.Type;
+  try {
+    input = Schema.decodeUnknownSync(SelectContacts)({
+      requestId: form.get("requestId"),
+      count: Number(form.get("count")),
+    });
+  } catch {
+    throw new PersonaError("invalid", "선정 인원은 1~100 사이 정수여야 합니다.");
+  }
+  view.requestId = input.requestId;
+  view.count = input.count;
+  view.attempted = true;
+  return operation("management.select", {}, () => client.select(input));
+};
+
+/** Unlike a selection, a start keeps no retry key: a started handle is no longer eligible. */
+const start = (form: FormData, client: ManagementClient) => {
+  let input: typeof StartContact.Type;
+  try {
+    input = Schema.decodeUnknownSync(StartContact)({
+      requestId: form.get("requestId"),
+      registrationID: form.get("registrationID"),
+      personaID: form.get("personaID"),
+    });
+  } catch {
+    throw new PersonaError("invalid", "시작할 테스트 연락처와 페르소나를 다시 골라 주세요.");
+  }
+  return operation("management.start", {}, () => client.start(input));
+};
+
 export async function contactRoutes(request: Request, client?: ManagementClient) {
   const url = new URL(request.url);
   const view: ContactView = {
     tab: url.pathname === "/waitlist" ? "waitlist" : "first-contacts",
     requestId: randomUUID(),
+    startRequestId: randomUUID(),
     count: 1,
   };
   const render = (error = "", status = 200) =>
@@ -28,19 +60,9 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
       const form = await request.formData();
       if (form.get("confirm") !== "yes")
         throw new PersonaError("invalid", "선정과 첫 연락 예약을 확인해 주세요.");
-      let input: typeof SelectContacts.Type;
-      try {
-        input = Schema.decodeUnknownSync(SelectContacts)({
-          requestId: form.get("requestId"),
-          count: Number(form.get("count")),
-        });
-      } catch {
-        throw new PersonaError("invalid", "선정 인원은 1~100 사이 정수여야 합니다.");
-      }
-      view.requestId = input.requestId;
-      view.count = input.count;
-      view.attempted = true;
-      view.selection = await operation("management.select", {}, () => client.select(input));
+      view.selection = await (form.get("action") === "start"
+        ? start(form, client)
+        : select(form, view, client));
     }
     view.snapshot = await operation("management.list", {}, client.list);
     return render();

@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0015
+---
+
 # The discovery registration site is prerendered by TanStack Start
 
 discovery.hena.dev is a TanStack Start app, in React, that Vite prerenders into static files. Cloudflare Workers serves them as static assets with no Worker code, and the browser calls api-msg.hena.dev directly. Libraries are Just-in-Time, and AGENTS.md forbids a library build step, because a library whose compiled output hasn't been built makes type-aware lint and knip pass while checking nothing. Browser applications build JavaScript. They can't cause that failure: nothing imports their build output, `dist/` is ignored by git and by every gate, and every gate runs on their source, `.tsx` files included.
@@ -16,4 +20,4 @@ discovery.hena.dev is a TanStack Start app, in React, that Vite prerenders into 
 - Styling uses Tailwind in plain `className` attributes.
 - The copy is JSON, one file per locale, so interface text stays separate from component logic. On static hosting only a script can read the browser's languages, so a second locale gets its own URL prefix.
 - The API answers CORS only for discovery.hena.dev. The former msg.hena.dev hostname is retired without a redirect.
-- GitHub Actions deploys the site on every push to `main`, while the API is deployed by hand. Changes to `packages/onboarding` keep both discovery clients working while the API is deployed independently. The domain cutover requires deploying the API's new CORS origin first; see the [cutover steps](../../packages/api-msg.hena.dev/ops/README.md#discovery-domain-cutover).
+- GitHub Actions deploys the site on every push to `main`, while the API is deployed by hand. Changes to `packages/onboarding` keep both discovery clients working while the API is deployed independently. The domain cutover requires deploying the API's new CORS origin first; see the [cutover steps](../../apps/api/ops/README.md#discovery-domain-cutover).
