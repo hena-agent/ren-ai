@@ -1,14 +1,9 @@
-import { chmod, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { request as httpRequest } from "node:http";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, Random, Result } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { HttpClientError } from "effect/unstable/http";
+import { FetchHttpClient, HttpClientError } from "effect/unstable/http";
 import { OpenApi } from "effect/unstable/httpapi";
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
@@ -17,7 +12,8 @@ import { outbox } from "../outbox/outbox.ts";
 import { operatorApi, operatorHandler } from "./api.ts";
 import { runOperatorCli } from "./cli.ts";
 import { makeOperator } from "./operator.ts";
-import { operatorClient, serveOperatorSocket } from "./socket.ts";
+import { operatorClient } from "./clientHttp.ts";
+import { serveTestOperator } from "../../test/operator-http.test-helper.ts";
 
 const input = {
   handle: "user@example.com",
@@ -216,249 +212,174 @@ test("the rebuild route handles an unavailable operation", async () => {
   }
 });
 
-test("HTTP API, typed CLI and owner-only Unix socket run together", async () => {
-  const root = await mkdtemp(join(tmpdir(), "operator-"));
-  const path = join(root, "state", "operator.sock");
-  try {
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          yield* migrate;
-          const directory = yield* conversations;
-          yield* directory.create(input);
-          const removed: string[] = [];
-          let attempts = 0;
-          const operations = yield* makeOperator(
-            directory,
-            (sessionID) =>
-              Effect.gen(function* () {
-                attempts++;
-                if (attempts === 1)
-                  return yield* Effect.fail(new Error("OpenCode temporarily unavailable"));
-                removed.push(sessionID);
-                return undefined;
-              }),
-            (handle) =>
-              Effect.succeed(
-                handle === input.handle ? ("rebuilt" as const) : ("not_found" as const),
-              ),
-          );
-          const { handler, dispose } = operatorHandler(operations);
-          yield* Effect.addFinalizer(() => Effect.promise(dispose));
-          const stop = yield* Effect.promise(() =>
-            serveOperatorSocket(path, async (request) => {
-              expect(request.headers.get("content-type")).toContain("application/json");
-              const response = await handler(request);
-              response.headers.set("x-operator", "local-only");
-              return response;
+test("HTTP API and typed CLI run over authenticated port-zero HTTP", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* migrate;
+        const directory = yield* conversations;
+        yield* directory.create(input);
+        const removed: string[] = [];
+        let attempts = 0;
+        const operations = yield* makeOperator(
+          directory,
+          (sessionID) =>
+            Effect.gen(function* () {
+              attempts++;
+              if (attempts === 1)
+                return yield* Effect.fail(new Error("OpenCode temporarily unavailable"));
+              removed.push(sessionID);
+              return undefined;
+            }),
+          (handle) =>
+            Effect.succeed(handle === input.handle ? ("rebuilt" as const) : ("not_found" as const)),
+        );
+        const { handler, dispose } = operatorHandler(operations);
+        yield* Effect.addFinalizer(() => Effect.promise(dispose));
+        const path = yield* serveTestOperator(async (request) => {
+          expect(request.headers.get("content-type")).toContain("application/json");
+          const response = await handler(request);
+          response.headers.set("x-operator", "authenticated");
+          return response;
+        });
+        for (const token of [undefined, "wrong-token"]) {
+          const response = yield* Effect.promise(() =>
+            fetch(`${path.url}/operator/block`, {
+              method: "POST",
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
             }),
           );
-          yield* Effect.addFinalizer(() => Effect.promise(stop));
-          expect((yield* Effect.promise(() => stat(path))).mode & 0o777).toBe(0o600);
-          expect((yield* Effect.promise(() => stat(join(root, "state")))).mode & 0o777).toBe(0o700);
-          const client = yield* operatorClient(path);
-          const [answer, wire] = yield* client.operator.block({
-            payload: { handle: " USER@EXAMPLE.COM " },
-            responseMode: "decoded-and-response",
-          });
-          expect(answer).toEqual({ blocked: true });
-          expect(yield* runOperatorCli(["rebuild", "USER@EXAMPLE.COM"], path)).toBe(
-            "Rebuilt USER@EXAMPLE.COM",
-          );
-          expect(yield* runOperatorCli(["rebuild", "other@example.com"], path)).toBe(
-            "No User for other@example.com",
-          );
-          expect(wire.headers["x-operator"]).toBe("local-only");
-          expect(yield* directory.byHandle(input.handle)).toBeUndefined();
-          expect(yield* runOperatorCli(["remove", "USER@EXAMPLE.COM"], path)).toBe(
-            "Removed USER@EXAMPLE.COM",
-          );
-          expect(removed).toEqual([input.sessionID]);
-          expect(attempts).toBe(2);
-          expect(yield* runOperatorCli(["remove", input.handle], path)).toBe(
-            `No User for ${input.handle}`,
-          );
-          for (const args of [
-            [],
-            ["remove"],
-            ["other", input.handle],
-            ["block", ""],
-            ["remove", input.handle, "extra"],
-          ]) {
-            expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
-              new Error("Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE"),
-            );
-          }
-          expect(yield* runOperatorCli(["block", "other@example.com"], path)).toBe(
-            "Blocked other@example.com",
-          );
-          const invalid = yield* client.operator
-            .block({ payload: { handle: "bad" } })
-            .pipe(Effect.flip);
-          expect(invalid).toEqual({ reason: "Error: Invalid Handle" });
-          const rawInvalid = yield* client.operator.block({
-            payload: { handle: "bad" },
-            responseMode: "response-only",
-          });
-          expect(rawInvalid.status).toBe(503);
-          expect(yield* runOperatorCli(["test-handle", "bad"], path).pipe(Effect.flip)).toEqual({
-            reason: "Error: Invalid Handle",
-          });
-          const retainedHandle = "retention@example.com";
-          yield* directory.create({ ...input, handle: retainedHandle, sessionID: "retention" });
-          yield* runOperatorCli(["test-handle", retainedHandle], path);
-          expect(yield* runOperatorCli(["remove", retainedHandle], path).pipe(Effect.flip)).toEqual(
-            { reason: "Error: Session retention unavailable" },
-          );
-          yield* runOperatorCli(["untest-handle", retainedHandle], path);
-          expect(yield* runOperatorCli(["remove", retainedHandle], path)).toBe(
-            `Removed ${retainedHandle}`,
-          );
-          let failedCalls = 0;
-          const failed = operatorHandler({
-            testHandle: () => Effect.fail(new Error("database offline")),
-            block: () => Effect.fail(new Error("database offline")),
-            remove: () =>
-              Effect.gen(function* () {
-                failedCalls++;
-                return yield* Effect.fail(new Error("OpenCode offline"));
-              }),
-            rebuild: () => Effect.fail(new Error("rebuild offline")),
-          });
-          const rebuildFailure = yield* Effect.promise(() =>
-            failed.handler(
-              new Request("http://operator/rebuild", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ handle: input.handle }),
-              }),
-            ),
-          );
-          expect(rebuildFailure.status).toBe(503);
-          expect(yield* Effect.promise(() => rebuildFailure.json())).toEqual({
-            reason: "Error: rebuild offline",
-          });
-          const failedResponse = yield* Effect.promise(() =>
-            failed.handler(
-              new Request("http://operator/block", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ handle: input.handle }),
-              }),
-            ),
-          );
-          expect(failedResponse.status).toBe(503);
-          expect(yield* Effect.promise(() => failedResponse.json())).toEqual({
-            reason: "Error: database offline",
-          });
-          const failureSocket = join(root, "state", "failed.sock");
-          const stopFailures = yield* Effect.promise(() =>
-            serveOperatorSocket(failureSocket, failed.handler),
-          );
-          expect(
-            Result.isFailure(
-              yield* Effect.result(runOperatorCli(["remove", input.handle], failureSocket)),
-            ),
-          ).toBe(true);
-          expect(failedCalls).toBe(3);
-          const failureClient = yield* operatorClient(failureSocket);
-          expect(
-            (yield* failureClient.operator.remove({
-              payload: { handle: input.handle },
-              responseMode: "response-only",
-            })).status,
-          ).toBe(503);
-          yield* Effect.promise(stopFailures);
-          yield* Effect.promise(failed.dispose);
-          const connectionFailure = yield* operatorClient(join(root, "missing.sock")).pipe(
-            Effect.flatMap((missing) =>
-              missing.operator.block({ payload: { handle: input.handle } }),
-            ),
-            Effect.flip,
-          );
-          expect(connectionFailure).toBeInstanceOf(HttpClientError.HttpClientError);
-          if (!HttpClientError.isHttpClientError(connectionFailure))
-            throw new Error("Not a transport error");
-          expect(connectionFailure.reason).toBeInstanceOf(HttpClientError.TransportError);
-          expect(connectionFailure.request.url).toBe("http://operator/block");
-        }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
-      ),
-    );
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("the socket translates HTTP failures and refuses a second listener on the same path", async () => {
-  const root = await mkdtemp(join(tmpdir(), "operator-failure-"));
-  const path = join(root, "state", "operator.sock");
-  try {
-    const close = await serveOperatorSocket(path, async () => {
-      throw new Error("handler failed");
-    });
-    try {
-      await expect(
-        serveOperatorSocket(path, async () => new Response("unreachable")),
-      ).rejects.toThrow("Operator socket already in use");
-      const status = await new Promise<number>((resolve, reject) => {
-        const request = httpRequest({ socketPath: path, path: "/", method: "GET" }, (response) => {
-          response.resume();
-          response.on("end", () => resolve(response.statusCode!));
+          expect(response.status).toBe(401);
+          expect(yield* directory.byHandle(input.handle)).toBeDefined();
+        }
+        const client = yield* operatorClient(path);
+        const [answer, wire] = yield* client.operator.block({
+          payload: { handle: " USER@EXAMPLE.COM " },
+          responseMode: "decoded-and-response",
         });
-        request.on("error", reject);
-        request.end();
-      });
-      expect(status).toBe(500);
-    } finally {
-      await close();
-      await expect(close()).rejects.toThrow("Server is not running");
-    }
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-const staleHandler = async () => new Response("ok");
-
-test("operator socket only reclaims a stale, owner-owned socket, never a file or live listener", async () => {
-  const root = await mkdtemp(join(tmpdir(), "operator-stale-"));
-  try {
-    const file = join(root, "file.sock");
-    await writeFile(file, "do not unlink");
-    await expect(serveOperatorSocket(file, staleHandler)).rejects.toThrow(
-      "non-owned or non-socket",
-    );
-    const link = join(root, "link.sock");
-    await symlink(file, link);
-    await expect(serveOperatorSocket(link, staleHandler)).rejects.toThrow(
-      "non-owned or non-socket",
-    );
-    await expect(
-      serveOperatorSocket(join(root, "x".repeat(260)), staleHandler),
-    ).rejects.toBeInstanceOf(Error);
-    const stale = join(root, "stale.sock");
-    const child = spawnSync(process.execPath, [
-      "-e",
-      "require('node:net').createServer().listen(process.argv[1],()=>process.exit(0))",
-      stale,
-    ]);
-    expect(child.status).toBe(0);
-    expect((await stat(stale)).isSocket()).toBe(true);
-    const uid = vi.spyOn(process, "getuid").mockReturnValue(process.getuid!() + 1);
-    try {
-      await expect(serveOperatorSocket(stale, staleHandler)).rejects.toThrow(
-        "non-owned or non-socket",
-      );
-    } finally {
-      uid.mockRestore();
-    }
-    await chmod(stale, 0);
-    await expect(serveOperatorSocket(stale, staleHandler)).rejects.toBeInstanceOf(Error);
-    await chmod(stale, 0o600);
-    const stop = await serveOperatorSocket(stale, staleHandler);
-    await expect(serveOperatorSocket(stale, staleHandler)).rejects.toThrow("already in use");
-    await stop();
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+        expect(answer).toEqual({ blocked: true });
+        expect(yield* runOperatorCli(["rebuild", "USER@EXAMPLE.COM"], path)).toBe(
+          "Rebuilt USER@EXAMPLE.COM",
+        );
+        expect(yield* runOperatorCli(["rebuild", "other@example.com"], path)).toBe(
+          "No User for other@example.com",
+        );
+        expect(wire.headers["x-operator"]).toBe("authenticated");
+        expect(yield* directory.byHandle(input.handle)).toBeUndefined();
+        expect(yield* runOperatorCli(["remove", "USER@EXAMPLE.COM"], path)).toBe(
+          "Removed USER@EXAMPLE.COM",
+        );
+        expect(removed).toEqual([input.sessionID]);
+        expect(attempts).toBe(2);
+        expect(yield* runOperatorCli(["remove", input.handle], path)).toBe(
+          `No User for ${input.handle}`,
+        );
+        for (const args of [
+          [],
+          ["remove"],
+          ["other", input.handle],
+          ["block", ""],
+          ["remove", input.handle, "extra"],
+        ]) {
+          expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
+            new Error("Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE"),
+          );
+        }
+        expect(yield* runOperatorCli(["block", "other@example.com"], path)).toBe(
+          "Blocked other@example.com",
+        );
+        const invalid = yield* client.operator
+          .block({ payload: { handle: "bad" } })
+          .pipe(Effect.flip);
+        expect(invalid).toEqual({ reason: "Error: Invalid Handle" });
+        const rawInvalid = yield* client.operator.block({
+          payload: { handle: "bad" },
+          responseMode: "response-only",
+        });
+        expect(rawInvalid.status).toBe(503);
+        expect(yield* runOperatorCli(["test-handle", "bad"], path).pipe(Effect.flip)).toEqual({
+          reason: "Error: Invalid Handle",
+        });
+        const retainedHandle = "retention@example.com";
+        yield* directory.create({ ...input, handle: retainedHandle, sessionID: "retention" });
+        yield* runOperatorCli(["test-handle", retainedHandle], path);
+        expect(yield* runOperatorCli(["remove", retainedHandle], path).pipe(Effect.flip)).toEqual({
+          reason: "Error: Session retention unavailable",
+        });
+        yield* runOperatorCli(["untest-handle", retainedHandle], path);
+        expect(yield* runOperatorCli(["remove", retainedHandle], path)).toBe(
+          `Removed ${retainedHandle}`,
+        );
+        let failedCalls = 0;
+        const failed = operatorHandler({
+          testHandle: () => Effect.fail(new Error("database offline")),
+          block: () => Effect.fail(new Error("database offline")),
+          remove: () =>
+            Effect.gen(function* () {
+              failedCalls++;
+              return yield* Effect.fail(new Error("OpenCode offline"));
+            }),
+          rebuild: () => Effect.fail(new Error("rebuild offline")),
+        });
+        const rebuildFailure = yield* Effect.promise(() =>
+          failed.handler(
+            new Request("http://operator/rebuild", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ handle: input.handle }),
+            }),
+          ),
+        );
+        expect(rebuildFailure.status).toBe(503);
+        expect(yield* Effect.promise(() => rebuildFailure.json())).toEqual({
+          reason: "Error: rebuild offline",
+        });
+        const failedResponse = yield* Effect.promise(() =>
+          failed.handler(
+            new Request("http://operator/block", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ handle: input.handle }),
+            }),
+          ),
+        );
+        expect(failedResponse.status).toBe(503);
+        expect(yield* Effect.promise(() => failedResponse.json())).toEqual({
+          reason: "Error: database offline",
+        });
+        const failureConnection = yield* serveTestOperator(failed.handler);
+        expect(
+          Result.isFailure(
+            yield* Effect.result(runOperatorCli(["remove", input.handle], failureConnection)),
+          ),
+        ).toBe(true);
+        expect(failedCalls).toBe(3);
+        const failureClient = yield* operatorClient(failureConnection);
+        expect(
+          (yield* failureClient.operator.remove({
+            payload: { handle: input.handle },
+            responseMode: "response-only",
+          })).status,
+        ).toBe(503);
+        yield* Effect.promise(failed.dispose);
+        const connectionFailure = yield* operatorClient({ url: path.url, token: path.token }).pipe(
+          Effect.flatMap((missing) =>
+            missing.operator
+              .block({ payload: { handle: input.handle } })
+              .pipe(
+                Effect.provideService(FetchHttpClient.Fetch, () =>
+                  Promise.reject(new Error("offline")),
+                ),
+              ),
+          ),
+          Effect.flip,
+        );
+        expect(connectionFailure).toBeInstanceOf(HttpClientError.HttpClientError);
+        if (!HttpClientError.isHttpClientError(connectionFailure))
+          throw new Error("Not a transport error");
+        expect(connectionFailure.reason).toBeInstanceOf(HttpClientError.TransportError);
+        expect(connectionFailure.request.url).toBe(`${path.url}/operator/block`);
+      }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+    ),
+  );
 });

@@ -8,14 +8,14 @@ import { SqlClient } from "effect/unstable/sql";
 import { createPersonaStore } from "@ren-ai/personas";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { expect, test } from "vitest";
-import { startDiscovery } from "./server.ts";
+import { startDiscovery } from "../../test/discovery-server.test-helper.ts";
 import { makeOperator } from "../operator/operator.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { withPublicProfile } from "@ren-ai/personas/profile";
-import { testCatalog } from "../../test/catalog.test-helper.ts";
+import { startTestCatalog } from "../../test/catalog.test-helper.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
 
-test("the standalone discovery listener accepts real HTTP and operator removal deletes waiting preferences", async () => {
+test("the discovery HTTP adapter accepts real HTTP and operator removal deletes waiting preferences", async () => {
   const root = await mkdtemp(join(tmpdir(), "discovery-server-"));
   try {
     const store = await createPersonaStore(join(root, "profiles"));
@@ -37,7 +37,10 @@ test("the standalone discovery listener accepts real HTTP and operator removal d
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const remoteCatalog = yield* testCatalog(join(root, "profiles"));
+          const remoteCatalog = yield* Effect.acquireRelease(
+            Effect.promise(() => startTestCatalog(join(root, "profiles"))),
+            (catalog) => Effect.promise(catalog.close),
+          );
           const server = yield* startDiscovery({
             port: 0,
             catalogUrl: remoteCatalog.url,

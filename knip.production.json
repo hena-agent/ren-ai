@@ -10,6 +10,7 @@
     },
     "apps/api": {
       "entry": [
+        "worker/entry.ts!",
         "src/server-entry.ts!",
         "src/operator-entry.ts!",
         "ops/location-config.ts!",
