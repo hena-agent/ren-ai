@@ -25,6 +25,8 @@ export function editingStorage(storage: DurableObjectStorage) {
       const oldJobs = new Map(previous?.queue.jobs.map((job) => [job.id, job]));
       const oldKeys = new Map(previous?.queue.keys);
       await storage.transaction(async (transaction) => {
+        const ids = new Set(snapshot.queue.jobs.map((job) => job.id));
+        for (const id of oldJobs.keys()) if (!ids.has(id)) await transaction.delete(`job:${id}`);
         for (const [id, draft] of snapshot.drafts)
           if (!same(oldDrafts.get(id), draft)) await transaction.put(`draft:${id}`, draft);
         for (const job of snapshot.queue.jobs)

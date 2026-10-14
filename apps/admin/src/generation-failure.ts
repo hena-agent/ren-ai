@@ -28,6 +28,11 @@ export function characterValidationFields(cause: Error) {
 }
 
 export function generationFailureMessage(error: GenerationError) {
+  if (
+    error.fields.providerStatus === "FAILED_PRECONDITION" &&
+    error.message === "User location is not supported for the API use."
+  )
+    return "Google 생성 API가 서버의 요청 지역을 지원하지 않아 거부했습니다. 실행 지역을 확인해 주세요. 기존 사진은 유지됩니다.";
   const { code, validationSection } = error.fields;
   if (code === "invalid_character") {
     const section =

@@ -21,6 +21,15 @@ Open `http://127.0.0.1:3729` using Basic authentication (`admin` and
 `.wrangler/`. Browser and edge SSR bundles are built before Wrangler starts.
 Worker builds use `workerd` export conditions, avoiding browser DOM helpers.
 
+The D1 `preview_database_id` is the stable local identifier used before remote
+provisioning. Keep it unchanged: local SQLite files are keyed by database ID,
+so changing the production `database_id` without a fixed preview ID opens a
+different local database. Production deployment uses `database_id`; local
+development uses the preview ID and the existing `.wrangler/state/v3` Catalog.
+Back up `.wrangler/state` with the local Admin stopped before changing storage
+configuration. An empty Catalog after an ID change may mean another local DB
+was opened, not that the original data was deleted.
+
 ### Import existing local Admin data
 
 Stop the local Admin while transferring data, then run:
@@ -201,6 +210,27 @@ and `PERSONA_CATALOG_URL` settings are unchanged.
   offering those personas for new onboarding.
 
 ## Diagnostics and checks
+
+### US execution and image editing
+
+Production uses `ADMIN_JURISDICTION=us` and the US-restricted `PersonaAdmin`
+object named `global`. This is a different object from the former unrestricted
+`global`: saved D1 documents and R2 photos remain, but its private unsaved drafts
+and queue are not carried over. Alarms on the former object stop without making
+new generation calls. Already submitted upstream requests cannot be cancelled.
+Do not set `ADMIN_JURISDICTION=local` in production. The `dev` command explicitly
+sets it for workerd, which does not implement jurisdiction restrictions.
+
+Finished image jobs have **기록 삭제** and **종료된 기록 모두 삭제** actions.
+There is no automatic expiry. These actions remove finished task records, not
+photos or the latest draft; pending/running work remains. Submission receipts
+remain so replaying a deleted paid submission cannot create more images.
+
+Drop one PNG, JPEG or WebP (up to 20 MB) into a style's upload area, or select
+**사진 업로드** / **파일로 교체**. Every upload requires a 4:5 crop confirmation;
+position and zoom controls produce a 1024×1280 JPEG. Uploads use the private R2
+preview and become public only after **저장하기**. Each style still allows six
+photos. Upload/replace is locked while that persona has queued generation.
 
 Structured JSON goes to Workers stdout/stderr. Search Workers Logs or
 `bunx wrangler tail` using the displayed request ID / `X-Request-ID`.

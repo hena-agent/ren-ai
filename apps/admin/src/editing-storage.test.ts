@@ -33,4 +33,9 @@ test("private draft and batch rows are restored independently and changed task s
   restored.queue.jobs[0]!.tasks[0]!.state = "saving";
   await persistence.save(restored);
   expect((await editingStorage(storage).load()).queue.jobs[0]!.tasks[0]!.state).toBe("saving");
+  await persistence.save({ ...restored, queue: { ...restored.queue, jobs: [], pending: [] } });
+  const deleted = await editingStorage(storage).load();
+  expect(deleted.queue.jobs).toEqual([]);
+  expect(deleted.queue.keys).toHaveLength(1);
+  expect([...values.keys()].some((key) => key.startsWith("job:"))).toBe(false);
 });

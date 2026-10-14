@@ -13,6 +13,7 @@ import { Preview, Comparison } from "./profile-preview.tsx";
 import { PublicPersonaPreview } from "./public-persona-preview.tsx";
 import { ContactPage } from "./contact-page.tsx";
 import type { ContactView } from "./contact-page.tsx";
+import { UploadDialog } from "./upload-controls.tsx";
 
 interface EditorFields {
   documents?: InitialDocuments | undefined;
@@ -217,6 +218,7 @@ function Editor({
           </aside>
         </div>
         <output className="pending-status" data-pending aria-live="polite" />
+        <UploadDialog />
       </form>
     </div>
   );

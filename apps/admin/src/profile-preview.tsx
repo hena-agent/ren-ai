@@ -3,6 +3,7 @@ import { personaImages } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import copy from "./copy.json";
 import { SubPortraitPanel } from "./sub-portrait-panel.tsx";
+import { UploadControls } from "./upload-controls.tsx";
 
 function ProfileContent({ persona }: { persona: PersonaRecord }) {
   return (
@@ -84,6 +85,11 @@ export function Comparison({
               reserved={reservations[style]}
             />
           </div>
+          <UploadControls
+            portraitStyle={style}
+            locked={locked}
+            full={images.filter((image) => image.style === style).length + reservations[style] >= 6}
+          />
           <div className="image-options-grid" data-image-preview id={`portrait-gallery-${style}`}>
             {images
               .filter((image) => image.style === style)
@@ -105,6 +111,15 @@ export function Comparison({
                   </a>
                   <figcaption>{main ? "메인" : `추가 ${index}`}</figcaption>
                   <div className="portrait-image-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      data-upload-style={style}
+                      data-upload-image={imageUrl}
+                      disabled={locked}
+                    >
+                      파일로 교체
+                    </button>
                     <button
                       id={`portrait-regenerate-${style}-${index}`}
                       className="image-regenerate secondary"

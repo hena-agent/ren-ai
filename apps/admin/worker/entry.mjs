@@ -16,6 +16,10 @@ export class PersonaAdmin extends DurableObject {
   }
   /** @override */
   async alarm() {
+    if (this.env.ADMIN_JURISDICTION !== "local" && this.ctx.id.jurisdiction !== "us") {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
     return (await this.ready).alarm();
   }
 }
@@ -30,6 +34,10 @@ export default {
       path.startsWith("/discovery/images/")
     )
       return catalogHandler(request, env);
-    return adminRequest(request, () => env.ADMIN.getByName("global").fetch(request));
+    return adminRequest(request, () => {
+      const namespace =
+        env.ADMIN_JURISDICTION === "local" ? env.ADMIN : env.ADMIN.jurisdiction("us");
+      return namespace.getByName("global").fetch(request);
+    });
   },
 };

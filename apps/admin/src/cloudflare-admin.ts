@@ -8,6 +8,7 @@ import type { ImageBucket } from "./r2-images.ts";
 import { managementClient } from "./contact-client.ts";
 
 export interface AdminEnv {
+  ADMIN_JURISDICTION?: "us" | "local";
   DB: D1Database;
   IMAGES: ImageBucket;
   ASSETS: { fetch: (url: string) => Promise<Pick<Response, "ok" | "text">> };

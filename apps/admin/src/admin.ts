@@ -7,7 +7,6 @@ import {
   emptyPersona,
   readIntent,
   selectedGender,
-  readPortraitInstructions,
   characterOf,
 } from "./authoring.ts";
 import { restoreDraft, draftTokens, previewOf, documentsOf, captureDocuments } from "./draft.ts";
@@ -33,7 +32,6 @@ import {
 import {
   loggedRequest,
   operation,
-  protect,
   reportFailure,
   requestFields,
   requestId,
@@ -46,6 +44,8 @@ import type { AdminOptions } from "./admin-options.ts";
 import { contactRoutes } from "./contact-routes.ts";
 import { html } from "./html-response.ts";
 import { generationFailureMessage } from "./generation-failure.ts";
+import { imageJobRoute } from "./image-job-routes.ts";
+import { uploadRoute } from "./upload-route.ts";
 const documentFields = (draft: Draft) => ({
   documents: documentsOf(draft),
   tab: draft.tab,
@@ -240,6 +240,11 @@ export function createAdmin(
         : previewOf(latest, emptyPersona);
     const cause = job.failure;
     const invalid = cause instanceof PersonaError;
+    const detail = invalid
+      ? cause.message
+      : cause instanceof GenerationError
+        ? generationFailureMessage(cause)
+        : undefined;
     return html(
       renderPage({
         record,
@@ -252,7 +257,7 @@ export function createAdmin(
         conversion: latest.conversion,
         ...((progress || queue.pending(job.batch.personaId)) && queueFields(job)),
         ...(failed && {
-          error: `${invalid ? job.failure!.message : copy.failure} ${copy.partialGenerationFailure} (요청 ID: ${job.requestId})`,
+          error: `${detail ?? copy.failure} ${copy.partialGenerationFailure} (요청 ID: ${job.requestId})`,
         }),
       }),
       progress || !failed
@@ -356,35 +361,6 @@ export function createAdmin(
     }
   };
 
-  const handleJob = async (request: Request, url: URL, match: RegExpExecArray) => {
-    const job = queue.get(match[1]!);
-    requestFields({ personaId: job.batch.personaId, jobId: job.id });
-    if (request.method === "GET" && !match[2]) return jobPage(job, true);
-    if (request.method !== "POST" || !match[2])
-      return html(renderPage({ personas: [], error: copy.notFound }), 404);
-    if (request.headers.get("origin") !== url.origin)
-      throw new PersonaError("invalid", copy.originError);
-    const form = await request.formData();
-    protectEditingForm(form);
-    const token = tokens.decode(form.get("draft"));
-    if (token.id !== job.batch.personaId) throw new PersonaError("invalid", copy.identityError);
-    const submitted = authorPersona(form, previewOf(token, emptyPersona));
-    if (JSON.stringify(characterOf(submitted)) !== JSON.stringify(characterOf(job.batch.source)))
-      throw new PersonaError("invalid", copy.regenerateRequired);
-    const ordinal = url.searchParams.get("image");
-    if (!ordinal || !/^\d{1,2}$/.test(ordinal))
-      throw new PersonaError("invalid", copy.imageTargetRequired);
-    const prompt = readPortraitInstructions(form);
-    protect(prompt);
-    const retried = queue.retry(
-      job.id,
-      Number(ordinal),
-      prompt,
-      subDrafts.get(job.batch.personaId)!,
-    );
-    return new Response(null, { status: 303, headers: { Location: `/image-jobs/${retried.id}` } });
-  };
-
   const editorPage = async (
     record: PersonaRecord | undefined,
     editing: boolean,
@@ -414,6 +390,9 @@ export function createAdmin(
           imageCount: draft!.imageCount,
           imagePrompts: draft!.imagePrompts,
           conversion: draft!.conversion,
+          imageJobs: queue
+            .list(record.id, "")
+            .map((job) => ({ job, position: queue.position(job.id) })),
           changed:
             draft!.preview !== draft!.base ||
             JSON.stringify(draft!.initial?.preview) !== JSON.stringify(draft!.initial?.base),
@@ -445,10 +424,13 @@ export function createAdmin(
         return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
       if (["/waitlist", "/first-contacts"].includes(url.pathname))
         return contactRoutes(request, management);
+      if (url.pathname === "/upload-image")
+        return await uploadRoute(request, url, store, tokens, subDrafts, busy, queue.pending);
       const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
       if (resource) return resource;
-      const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/retry)?$/.exec(url.pathname);
-      if (jobMatch) return await handleJob(request, url, jobMatch);
+      const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/(?:retry|delete|clear))?$/.exec(url.pathname);
+      if (jobMatch)
+        return await imageJobRoute(request, url, jobMatch, queue, tokens, subDrafts, jobPage);
       const match = /^\/personas\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
       if (request.method === "POST") return submit(request, url, match?.[1]);
       let record: PersonaRecord | undefined;

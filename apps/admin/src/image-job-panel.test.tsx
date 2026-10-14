@@ -111,7 +111,7 @@ test("queued and finished displays use truthful waiting time and only retry fail
   expect(document.querySelector("[data-job-active]")?.getAttribute("data-job-active")).toBe(
     "false",
   );
-  expect(document.querySelector("[data-queue-status]")?.textContent).toBe(copy.queueFinished);
+  expect(document.querySelector("[data-queue-status]")?.textContent).toContain("실패한 사진");
   expect(document.querySelector(".queue-totals small")?.textContent).toBe("7초 경과");
   expect(document.querySelector("img")?.getAttribute("src")).toBe("/images/owned.jpg");
   const buttons = document.querySelectorAll<HTMLButtonElement>('[value="retry-image"]');
