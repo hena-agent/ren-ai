@@ -5,6 +5,7 @@ await build({
   absWorkingDir: fileURLToPath(new URL("..", import.meta.url)),
   entryPoints: ["worker/entry.ts"],
   bundle: true,
+  loader: { ".md": "text" },
   format: "esm",
   platform: "neutral",
   conditions: ["workerd", "worker"],

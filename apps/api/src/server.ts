@@ -15,7 +15,7 @@ import { remoteMessages } from "@ren-ai/imsg/client";
 import { applicationGateway } from "./opencode/application-gateway.ts";
 import { remoteHost, type RemoteConfig } from "./opencode/remote.ts";
 import { exportSessions } from "./opencode/transfer.ts";
-import { syncFolders, watchCatalog } from "./opencode/catalog-sync.ts";
+import { syncFolders, catalogRefresher } from "./opencode/catalog-sync.ts";
 import { makeDiscoveryWeb } from "./discovery/discovery.ts";
 import { contacts } from "./discovery/contacts.ts";
 import { checkAssignments } from "./discovery/assignment.ts";
@@ -92,15 +92,23 @@ export const composeServer = (config: ServerConfig) =>
         Effect.gen(function* () {
           yield* registerCallback(tools, true);
           const runtime = yield* remoteHost(config.opencode, personas);
-          yield* syncFolders(runtime.client, config.opencode.directory, personas);
+          yield* syncFolders(
+            runtime.client,
+            config.opencode.directory,
+            personas,
+            config.opencode.groundRules,
+          );
           return runtime;
         }),
       messages,
       messages.gestures,
       health,
     );
-    yield* watchCatalog(host.client, config.opencode.directory, catalog.load, personas).pipe(
-      Effect.forkScoped,
+    const refresh = catalogRefresher(
+      host.client,
+      config.opencode.directory,
+      catalog.load,
+      personas,
     );
     managementWeb = contactManagement(yield* contacts(catalog.publicList), config.managementToken);
     const scheduled = yield* firstContacts(
@@ -110,10 +118,16 @@ export const composeServer = (config: ServerConfig) =>
       config.opencode.model,
     );
     const heartbeat = Effect.all([
+      refresh.refresh(config.opencode.groundRules),
       host.heartbeat.intake,
       host.heartbeat.followUps,
+      host.heartbeat.failedTurns,
       scheduled.tick,
-    ]).pipe(Effect.asVoid);
+    ]).pipe(
+      Effect.asVoid,
+      Effect.provideService(SqlClient.SqlClient, sql),
+      Effect.mapError((cause) => new Error("Application heartbeat failed", { cause })),
+    );
     yield* heartbeat;
     yield* Effect.forkScoped(health.monitor);
     const backup = yield* makeBackup(

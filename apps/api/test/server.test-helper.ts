@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 import { writeFile } from "node:fs/promises";
 import type { TestLLM } from "@opencode/ai/testing";
 import type { Session } from "@opencode/core/session";
@@ -132,6 +133,7 @@ export const composedTestServer = (
     );
     const server = yield* composeServer({
       ...config,
+      opencode: { ...config.opencode, groundRules: yield* Effect.tryPromise(loadGroundRules) },
       ...(model ? { noticeVersion: "v1" } : {}),
     });
     if (server.mode !== "running") throw new Error("Expected running application");

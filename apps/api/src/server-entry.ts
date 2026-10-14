@@ -5,6 +5,7 @@ import { Effect, FileSystem, Layer } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { applicationConfig } from "./configuration.ts";
 import { composeServer } from "./server.ts";
+import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 
 NodeRuntime.runMain(
   Effect.scoped(
@@ -12,7 +13,10 @@ NodeRuntime.runMain(
       const config = yield* applicationConfig;
       const files = yield* FileSystem.FileSystem;
       yield* files.makeDirectory(config.stateDirectory, { recursive: true, mode: 0o700 });
-      yield* composeServer(config).pipe(
+      yield* composeServer({
+        ...config,
+        opencode: { ...config.opencode, groundRules: yield* Effect.tryPromise(loadGroundRules) },
+      }).pipe(
         Effect.andThen(Effect.never),
         Effect.provide(
           SqliteClient.layer({ filename: join(config.stateDirectory, "server.sqlite") }),

@@ -1,0 +1,115 @@
+import { Context, Effect, Exit, Layer, Scope } from "effect";
+import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { remoteMessages } from "@ren-ai/imsg/client";
+import { startMessagingApplication } from "./application.ts";
+import { applicationGateway } from "./opencode/application-gateway.ts";
+import { remoteHost } from "./opencode/remote.ts";
+import { catalogRefresher, syncFolders } from "./opencode/catalog-sync.ts";
+import { catalogClient } from "./personas/catalog.ts";
+import { firstContacts } from "./discovery/first-contact.ts";
+import { operatorHandler } from "./operator/api.ts";
+import { createExecutionHealth } from "./execution-health.ts";
+import type { ApplicationStore } from "./application-store.ts";
+import type { CloudflareBindings, CloudflareConfiguration } from "./cloudflare-config.ts";
+import type { SqlClient } from "effect/unstable/sql";
+import { createHash, timingSafeEqual } from "node:crypto";
+
+type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
+const digest = (value: string) => createHash("sha256").update(value).digest();
+
+export async function createExecutionRuntime(
+  store: ApplicationStore,
+  configuration: CloudflareConfiguration,
+  bindings: CloudflareBindings,
+  groundRules: string,
+  fetcher: typeof fetch,
+) {
+  const scope = await Effect.runPromise(Scope.make());
+  const http = await Effect.runPromise(
+    Layer.buildWithScope(FetchHttpClient.layer, scope).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, fetcher),
+    ),
+  );
+  const services = Context.add(Context.merge(store.context, http), Scope.Scope, scope);
+  const run = <A, E>(effect: Effect.Effect<A, E, RuntimeServices>) =>
+    Effect.runPromise(Effect.provideContext(effect, services));
+  const execution = configuration.execution;
+  const catalog = catalogClient(
+    { url: bindings.PERSONA_CATALOG_URL, token: bindings.TOKEN_CATALOG },
+    fetcher,
+  );
+  let callback: ReturnType<typeof applicationGateway> | undefined;
+  let operator: ReturnType<typeof operatorHandler> | undefined;
+  const boot = Effect.gen(function* () {
+    const { personas } = yield* Effect.tryPromise(catalog.load);
+    const messages = yield* remoteMessages({
+      url: execution.imsgRpcUrl,
+      token: execution.executorToken,
+    });
+    const health = yield* createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher);
+    const host = yield* startMessagingApplication(
+      personas,
+      (tools) =>
+        Effect.gen(function* () {
+          callback = applicationGateway(tools, health, execution.applicationToken);
+          yield* Effect.addFinalizer(() => Effect.promise(callback!.dispose));
+          const remote = yield* remoteHost(
+            {
+              baseUrl: execution.openCodeUrl,
+              authorization: `Bearer ${execution.executorToken}`,
+              directory: execution.directory,
+              model: execution.model,
+              groundRules,
+            },
+            personas,
+          );
+          yield* syncFolders(remote.client, execution.directory, personas, groundRules);
+          return remote;
+        }),
+      messages,
+      messages.gestures,
+      health,
+    );
+    operator = operatorHandler(host.operator);
+    yield* Effect.addFinalizer(() => Effect.promise(operator!.dispose));
+    const contacts = yield* firstContacts(host, messages, host.conversations, execution.model);
+    const catalogSync = catalogRefresher(host.client, execution.directory, catalog.load, personas);
+    return {
+      tick: Effect.gen(function* () {
+        yield* catalogSync.refresh(groundRules);
+        yield* host.heartbeat.intake;
+        yield* contacts.tick;
+        yield* host.heartbeat.followUps;
+        yield* host.heartbeat.failedTurns;
+        yield* health.tick;
+      }),
+    };
+  });
+  let ready: Promise<Effect.Success<typeof boot>> | undefined;
+  const open = () => (ready ??= run(boot));
+  return {
+    tick: async () => {
+      const runtime = await open();
+      await run(runtime.tick);
+    },
+    fetch: async (request: Request) => {
+      const url = new URL(request.url);
+      if (url.pathname.startsWith("/rpc")) {
+        if (callback) return callback.handler(request);
+        void open().catch(() => {});
+        return new Response("Execution is starting", { status: 503 });
+      }
+      if (
+        !timingSafeEqual(
+          digest(request.headers.get("authorization") ?? ""),
+          digest(`Bearer ${bindings.TOKEN_MANAGEMENT}`),
+        )
+      )
+        return new Response("Unauthorized", { status: 401 });
+      await open();
+      url.pathname = url.pathname.slice("/operator".length);
+      return operator!.handler(new Request(url, request));
+    },
+    close: () => Effect.runPromise(Scope.close(scope, Exit.succeed(undefined))),
+  };
+}

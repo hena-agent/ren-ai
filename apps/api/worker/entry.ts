@@ -1,10 +1,14 @@
 import { DurableObject } from "cloudflare:workers";
 import { createCloudflareApplication } from "../src/cloudflare-app.ts";
 import type { CloudflareBindings } from "../src/cloudflare-config.ts";
+import groundRules from "@ren-ai/plugin-session-folder/ground-rules";
+import { contactCause, contactLog } from "../src/discovery/diagnostics.ts";
+import { randomUUID } from "node:crypto";
+import type { DurableObjectId } from "@cloudflare/workers-types";
 
 interface ApplicationNamespace {
-  idFromName: (name: string) => string;
-  get: (id: string) => { fetch: (request: Request) => Promise<Response> };
+  idFromName: (name: string) => DurableObjectId;
+  get: (id: DurableObjectId) => { fetch: (request: Request) => Promise<Response> };
 }
 
 interface Environment extends CloudflareBindings {
@@ -15,12 +19,49 @@ export class ApiApplication extends DurableObject<Environment> {
   private applicationPromise: ReturnType<typeof createCloudflareApplication> | undefined;
 
   private application() {
-    this.applicationPromise ??= createCloudflareApplication(this.ctx.storage, this.env);
+    this.applicationPromise ??= createCloudflareApplication(
+      this.ctx.storage,
+      this.env,
+      groundRules,
+    );
     return this.applicationPromise;
   }
 
   override async fetch(request: Request) {
-    return (await this.application()).fetch(request);
+    const application = await this.application();
+    if (!application.configuration.bootstrapOnly && (await this.ctx.storage.getAlarm()) === null)
+      await this.ctx.storage.setAlarm(Date.now() + 1);
+    return application.fetch(request);
+  }
+
+  async alarm() {
+    const start = performance.now();
+    const requestId = randomUUID();
+    const application = await this.application();
+    if (application.configuration.bootstrapOnly) return;
+    await this.ctx.storage.setAlarm(Date.now() + 2000);
+    try {
+      await application.tick();
+      contactLog({
+        requestId,
+        operation: "api-app.heartbeat",
+        stage: "heartbeat",
+        outcome: "completed",
+        durationMs: performance.now() - start,
+        level: "info",
+      });
+    } catch (cause) {
+      contactLog({
+        requestId,
+        operation: "api-app.heartbeat",
+        stage: "heartbeat",
+        outcome: "failed",
+        durationMs: performance.now() - start,
+        level: "error",
+        ...contactCause(cause),
+      });
+      throw cause;
+    }
   }
 }
 

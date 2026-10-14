@@ -12,6 +12,7 @@ export interface CloudflareBindings {
   readonly PERSONA_MODEL?: string;
   readonly OPENCODE_DIRECTORY?: string;
   readonly BOOTSTRAP_ONLY?: string;
+  readonly DISCORD_WEBHOOK_URL?: string;
 }
 
 export interface CloudflareConfiguration {

@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 test("serves safe health, holds registry writes in bootstrap and closes its scopes", async () => {
-  const app = await createCloudflareApplication(storage, bindings, fetcher);
+  const app = await createCloudflareApplication(storage, bindings, "rules", fetcher);
   expect(app.store).toBeDefined();
   expect(app.configuration.bootstrapOnly).toBe(true);
   const health = await app.fetch(new Request("https://api-app.example/health"));
@@ -97,6 +97,7 @@ test("passes writes after explicit activation and closes HTTP resources after a 
   const app = await createCloudflareApplication(
     storage,
     { ...bindings, BOOTSTRAP_ONLY: "false" },
+    "rules",
     fetcher,
   );
   expect(
@@ -105,7 +106,7 @@ test("passes writes after explicit activation and closes HTTP resources after a 
   await app.close();
 
   controls.failStore = true;
-  await expect(createCloudflareApplication(storage, bindings, fetcher)).rejects.toThrow(
+  await expect(createCloudflareApplication(storage, bindings, "rules", fetcher)).rejects.toThrow(
     "registry startup failed",
   );
 });

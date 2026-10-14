@@ -201,8 +201,8 @@ describe("authenticated execution gateway", () => {
       outcome: "network_failure",
       cause: "Error",
       code: "ECONNRESET",
-      stackFrames: expect.any(Array),
     });
+    expect(Array.isArray(logs.at(-1)?.["stackFrames"])).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 

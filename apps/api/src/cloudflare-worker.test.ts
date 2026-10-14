@@ -11,6 +11,7 @@ let bundledWorker: Promise<string> | undefined;
 const workerSource = () => {
   bundledWorker ??= build({
     entryPoints: [new URL("../test/cloudflare-worker-entry.ts", import.meta.url).pathname],
+    loader: { ".md": "text" },
     bundle: true,
     format: "esm",
     platform: "neutral",
