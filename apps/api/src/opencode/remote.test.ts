@@ -23,6 +23,7 @@ test("persona sessions are operated through the public OpenCode API", async () =
           const llm = yield* scriptedPersona();
           yield* llm.serve(() => TestLLM.text("remote reply", "answer"));
           const native = yield* standaloneTestHost(root, personaDirectory, llm);
+          let failFolderRpc = false;
           const remote = yield* remoteHost(
             {
               baseUrl: "https://oc.test",
@@ -37,6 +38,8 @@ test("persona sessions are operated through the public OpenCode API", async () =
             Effect.provideService(FetchHttpClient.Fetch, (input, init) => {
               const request = new Request(input, init);
               expect(request.headers.get("authorization")).toBe("Basic machine");
+              if (failFolderRpc && request.method === "POST" && request.url.includes("/api/rpc/"))
+                return Promise.resolve(Response.json({ error: "failed" }, { status: 500 }));
               return native.web(request);
             }),
           );
@@ -53,6 +56,10 @@ test("persona sessions are operated through the public OpenCode API", async () =
           expect((yield* remote.createSession("missing").pipe(Effect.flip)).message).toContain(
             "Unknown persona",
           );
+          failFolderRpc = true;
+          const createError = yield* remote.createSession("persona1").pipe(Effect.flip);
+          failFolderRpc = false;
+          expect(createError).toBeInstanceOf(Error);
           const session = yield* remote.createSession("persona1");
           expect(session.location.directory).toBe(join(personaDirectory, "sessions", session.id));
           expect(
@@ -98,6 +105,10 @@ test("persona sessions are operated through the public OpenCode API", async () =
           expect(yield* remote.sessions.inbox(session.id)).toEqual([]);
           yield* remote.sessions.interrupt(session.id);
           yield* remote.sessions.remove(session.id);
+          failFolderRpc = true;
+          const removalError = yield* remote.sessions.remove(session.id).pipe(Effect.flip);
+          failFolderRpc = false;
+          expect(removalError).toBeInstanceOf(Error);
           yield* remote.sessions.remove(session.id);
           expect(
             yield* remote.sessions
