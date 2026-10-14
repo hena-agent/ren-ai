@@ -34,6 +34,29 @@ test("an empty D1 Catalog accepts an atomic document save and rejects stale snap
   ).rejects.toMatchObject({ kind: "conflict" });
 });
 
+test("private Admin listing retains unpublished documents, version metadata and each persona's own photos", async () => {
+  const { store } = await cloudflareFixture();
+  await store.save({ ...databasePersona, descriptionVersion: 1 }, initialDocuments, {
+    persona: "",
+  });
+  const imageUrl = await store.saveImage(portraitImage);
+  await store.save(
+    { ...databasePersona, id: "with-photo", imageUrl, portraits: { photo: imageUrl } },
+    initialDocuments,
+    { persona: "" },
+  );
+  const records = await store.list();
+  expect(records.map((record) => record.id)).toEqual([databasePersona.id, "with-photo"]);
+  expect(records[0]).toMatchObject({
+    descriptionVersion: 1,
+    imageUrl: "",
+    description: databasePersona.description,
+  });
+  expect(records[0]).not.toHaveProperty("portraits");
+  expect(records[1]!.portraits).toEqual({ photo: imageUrl });
+  expect(await store.publicList()).toEqual([]);
+});
+
 test("R2 previews become public only when referenced by the current published save", async () => {
   const { store } = await cloudflareFixture();
   const imageUrl = await store.saveImage(portraitImage);

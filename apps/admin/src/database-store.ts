@@ -9,6 +9,7 @@ import type { ImageBucket } from "./r2-images.ts";
 import { recordOf } from "./database-record.ts";
 import { validationFailure } from "./logging.ts";
 import { personaValues, photoValues } from "./catalog-values.ts";
+import { readPublicCatalog } from "@ren-ai/personas/catalog";
 
 async function databaseOperation<T>(run: () => Promise<T>) {
   try {
@@ -103,18 +104,7 @@ export function databaseStore(
         .get();
       return referenced ? images.image(filename) : new Response(null, { status: 404 });
     },
-    publicList: async () =>
-      (await list())
-        .filter((record) => record.published)
-        .map(({ id, name, bio, imageUrl, portraits, secondaryPortraits, publicProfile }) => ({
-          id,
-          name,
-          bio,
-          imageUrl,
-          ...(portraits && { portraits }),
-          ...(secondaryPortraits && { secondaryPortraits }),
-          publicProfile: publicProfile!,
-        })),
+    publicList: () => databaseOperation(() => readPublicCatalog(binding)),
     save: async (input, documents, expected) => {
       const record = decodePersona(input);
       if (record.published) {

@@ -3,7 +3,26 @@
   "name": "discovery-ambivalent-dev",
   "account_id": "b1e7a34d896345430d5982b9baecd07c",
   "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "dist/worker/entry.js",
+  "build": { "command": "bun scripts/build-worker.mjs" },
+  "no_bundle": true,
   "workers_dev": false,
   "route": { "pattern": "discovery.ambivalent.dev", "custom_domain": true },
-  "assets": { "directory": "./dist", "not_found_handling": "single-page-application" },
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/personas"],
+  },
+  "vars": { "PERSONA_CATALOG_URL": "https://admin.ambivalent.dev" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "persona-catalog",
+      "database_id": "da5c6ee3-7ea6-49b3-8e6f-6ceff12d3f7f",
+      "preview_database_id": "00000000-0000-0000-0000-000000000000",
+    },
+  ],
+  "observability": { "enabled": true },
 }

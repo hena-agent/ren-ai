@@ -1,82 +1,84 @@
 # Discover on Cloudflare
 
-`discovery.ambivalent.dev` serves this Vite browser app through the `discovery-ambivalent-dev`
-Worker's static assets. `discovery.hena.dev` remains the separate selection and
-iMessage onboarding site in `packages/discovery.hena.dev`.
+`discovery.ambivalent.dev` serves this Vite browser app through the
+`discovery-ambivalent-dev` Worker's static assets and same-origin
+`GET /api/personas`. That endpoint reads the Admin Catalog D1 directly through
+`@ren-ai/personas/catalog`; it does not call the messaging API or Admin HTTP API.
+Only published profiles are returned, and image URLs point at Admin's
+publication-checked image endpoint. `discovery.hena.dev` remains the separate
+selection and iMessage onboarding site in `packages/discovery.hena.dev`.
 
 ## Local development
 
 Run `bun run --cwd apps/discovery dev` from the repository root. The default
-frontend is `http://127.0.0.1:3867`; its `/discovery/` proxy targets the standalone
-API on port 4867. See `.env.example` for overrides.
+frontend is `http://127.0.0.1:3867`. Run `bun run --cwd apps/discovery dev:worker`
+alongside it: this builds the app and starts the D1 catalog listener at
+`http://127.0.0.1:4873`. Vite proxies `/api/personas` there. The Worker shares
+Admin's local `.wrangler/state` and fixed preview database ID. Apply Admin's
+local D1 schema and run local Admin on port 3729 for its photos.
+The `/discovery/` registration proxy still targets the messaging API on port 4867. See `.env.example` for overrides (`DISCOVERY_WORKER_URL`,
+`DISCOVERY_WORKER_PORT`, `DISCOVERY_PERSIST_PATH`, `PERSONA_CATALOG_URL`).
+Tests bind port 0.
 
-## Workers Builds
+## Automatic deployment
 
-Use the `Ambivalent Co.` Cloudflare account. Connect this repository to a Worker named
-exactly `discovery-ambivalent-dev` in **Settings → Builds**:
+Deploy through a PR merged into `main`, after the quality gates pass. The
+`Deploy discovery.ambivalent.dev` job in
+[`ci.yml`](../../.github/workflows/ci.yml) builds with
+`VITE_DISCOVERY_API_URL=https://api-msg.hena.dev` and `VITE_TURNSTILE_SITE_KEY`
+from the `TURNSTILE_SITE_KEY` repository variable, then deploys the
+`discovery-ambivalent-dev` Worker in the `Ambivalent Co.` account. It uses the
+same `CLOUDFLARE_API_TOKEN_AMBIVALENT` secret as
+[Admin deployment](../admin/README.md#automatic-deployment).
+Do not deploy manually or also connect Workers Builds.
 
-| Setting                                  | Value                                                        |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| Production branch                        | `main`                                                       |
-| Root directory                           | `apps/discovery`                                             |
-| Build command                            | `bun install --cwd ../.. --frozen-lockfile && bun run build` |
-| Deploy command                           | `bun run deploy`                                             |
-| Build variable `BUN_VERSION`             | `1.4.2`                                                      |
-| Build variable `VITE_DISCOVERY_API_URL`  | `https://api-msg.hena.dev`                                   |
-| Build variable `VITE_TURNSTILE_SITE_KEY` | `0x4AAAAAAFE4vOGM-bENVmad` (existing production widget)      |
+`bun run build` builds both browser assets and the Worker. Wrangler's custom
+build compiles only the Worker, preserving the browser assets and their
+production API/Turnstile values from the preceding CI build.
 
-Initially watch the whole repository so shared-package and lockfile changes
-also trigger builds. Use GitHub's required `Quality gates` check and branch
-protection to prevent unverified commits reaching `main`: Cloudflare builds do
-not wait for GitHub Actions. Keep previews disabled until their API/CORS and
-Turnstile settings are configured.
-
-Wrangler binds `discovery.ambivalent.dev` as a custom domain and serves `dist/` with
-SPA navigation. Build variables are compiled into browser assets; set them in
-Builds, not Worker runtime variables. Never put a private token in a `VITE_` key.
+Wrangler binds `discovery.ambivalent.dev` as a custom domain, serves
+`dist/client/` with SPA navigation, and routes `/api/personas` to
+`dist/worker/entry.js`. The runtime D1 binding points at the same
+`persona-catalog` as Admin. `PERSONA_CATALOG_URL` supplies the image origin.
+The read-only Worker does not own schema migrations.
+`VITE_DISCOVERY_API_URL` is used only for waiting registration. Build variables
+are compiled into browser assets, not Worker runtime variables.
+Never put a private token in a `VITE_` key.
 
 Before the first production build:
 
-1. Deploy the API change allowing `https://discovery.ambivalent.dev` on `/discovery/`
-   while keeping the existing `https://discovery.hena.dev` origin.
-2. Allow `discovery.ambivalent.dev` in the Invisible Turnstile widget. If using the
-   existing widget, retain `discovery.hena.dev`; its API secret stays unchanged.
-3. Publish personas in the Admin Catalog used by the API. See
+1. Allow `https://discovery.ambivalent.dev` in the messaging API's `/discovery/`
+   CORS configuration while retaining `https://discovery.hena.dev`.
+2. Allow `discovery.ambivalent.dev` in the Invisible Turnstile widget. If using
+   the existing widget, retain `discovery.hena.dev`; its API secret stays unchanged.
+3. Publish personas in the Admin Catalog bound to this Worker. See
    [Admin deployment](../admin/README.md).
-4. Build and deploy, then verify HTTPS, style selection, public photos and
-   waiting registration. The existing site's `/personas` and `/onboarding`
-   remain separate.
+4. Merge the PR and verify HTTPS, style selection, public photos and waiting
+   registration after CI deploys. The existing site's `/personas` and
+   `/onboarding` remain separate.
 
 For a local packaging check, run `bun run build` and
 `bunx wrangler deploy --dry-run` from this directory.
 
-## Initial frontend deployment and API handoff
+## API handoff
 
-The frontend was deployed manually to `discovery.ambivalent.dev`. Connect
-Workers Builds separately for automatic deployment; uploading with Wrangler
-does not create the Git integration. Repeat the production build from this
-directory with:
+The messaging API is deployed separately. Its availability does not block
+profile browsing; waiting registration still requires it. The API operator must:
 
-```sh
-VITE_DISCOVERY_API_URL=https://api-msg.hena.dev VITE_TURNSTILE_SITE_KEY=0x4AAAAAAFE4vOGM-bENVmad bun run build
-bun run deploy
-```
-
-The API is being deployed separately. Until it is reachable, the frontend's
-catalog error is expected. The API operator must:
-
-- Serve `GET /discovery/personas` and `POST /discovery/waitlist` at
-  `https://api-msg.hena.dev`. The updated `src/server.ts` composes the Discovery
-  routes and first-contact reservations with the messaging server's persistent
-  database. Deploy that updated application before enabling selection.
-- Read published profiles from `https://admin.ambivalent.dev`. Configure the
-  private Catalog token for the messaging runtime and retain the waitlist in
-  persistent storage.
+- Serve `POST /discovery/waitlist` at `https://api-msg.hena.dev`. The
+  `src/server.ts` composition uses the messaging server's persistent database
+  for Discovery registrations and first-contact reservations.
+- Read published profiles from `https://admin.ambivalent.dev` to validate Likes.
+  Configure the private Catalog token for the messaging runtime and retain the
+  waitlist in persistent storage.
 - Permit `https://discovery.ambivalent.dev` in CORS, including JSON POST
   preflight. The existing `discovery.hena.dev` onboarding origin stays active.
 - Add `discovery.ambivalent.dev` to the existing Turnstile widget's allowed
-  hostnames and use that widget's matching secret for API verification. The
-  site's current key came from the existing site's GitHub repository variable;
-  a different widget requires rebuilding with its site key.
-- Publish personas in the new Admin Catalog and verify profile/image retrieval
-  and waiting registration through the deployed frontend.
+  hostnames and use that widget's matching secret for API verification.
+- Publish personas in the Admin Catalog and verify profile/image retrieval and
+  waiting registration through the deployed frontend.
+
+Workers Observability is enabled. Catalog responses expose `X-Request-ID`; the
+Worker logs operation, outcome and duration with that ID. Catalog failures are
+503 errors rather than empty lists. Private Persona text, State, Memory and
+database-error payloads are excluded from responses and logs.
