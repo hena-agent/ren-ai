@@ -12,6 +12,9 @@
     },
     "apps/api": {
       "entry": ["test/compiled-plugin/regression.mjs"]
+    },
+    "apps/api-msg": {
+      "entry": ["ops/probe-entry.mjs"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],

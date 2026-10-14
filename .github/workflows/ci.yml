@@ -101,6 +101,36 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  api-msg-bundle:
+    name: Build api-msg bundle
+    needs: gates
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bash apps/api-msg/ops/build-bundle.sh "$RUNNER_TEMP/api-msg-bundle"
+      - run: tar -czf api-msg-bundle.tar.gz -C "$RUNNER_TEMP/api-msg-bundle" .
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: api-msg-bundle.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: api-msg-bundle
+          path: api-msg-bundle.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
   # The Workers pin the Ambivalent Co. account in wrangler.jsonc; the token belongs to it.
   deploy-admin:
     name: Deploy admin.renai.im

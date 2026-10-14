@@ -44,10 +44,16 @@ Only the payload changes. Bun, imsg, `imsg.env`, the tunnel and Fleet's permissi
 Install the agent once, after the gateway probe passes:
 
 1. Create a fine-grained GitHub token for the `hena-agent` organization, limited to `hena-agent/ren-ai`, with read-only **Actions** and **Attestations** permissions and nothing else. [This link](https://github.com/settings/personal-access-tokens/new?name=imsg.renai.im+deploy+agent&description=Messages+Mac+deploy+agent%3A+downloads+and+verifies+imsg+bundles+from+CI&target_name=hena-agent&expires_in=366&actions=read&attestations=read) pre-fills everything except the repository. The organization approves tokens from its owners automatically; others wait for an owner's approval. Copy the token and save it with `umask 077; pbpaste > ~/imsg-deploy-token`, so it never appears on screen or in shell history.
-2. From `apps/imsg`, run `MESSAGING_HOME=… bash ops/install-deploy-agent.sh /opt/homebrew/bin/gh /absolute/private/raw-token`. It verifies the native `gh` and the token format, copies them and `update.sh` into `deploy/`, and writes `~/Library/LaunchAgents/im.renai.imsg-deploy.plist` **without loading it** (`IMSG_DEPLOY_LAUNCH_AGENT` changes the path).
+2. From `apps/imsg`, run `MESSAGING_HOME=… bash ops/install-deploy-agent.sh /opt/homebrew/bin/gh /absolute/private/raw-token`. It verifies the native `gh` and token format, copies them with `update.sh`, the shared `deploy-helper.sh` and the api-msg artifact verifier into `deploy/`, and writes `~/Library/LaunchAgents/im.renai.imsg-deploy.plist` **without loading it** (`IMSG_DEPLOY_LAUNCH_AGENT` changes the path).
 3. `launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/im.renai.imsg-deploy.plist`. Its first run deploys the head of `main` once CI has attested a bundle for it.
 
-The deployed commit is in `deploy/deployed`, a commit waiting for the Mac to recover in `deploy/deferred`, and the agent's output in `deploy/logs`. When the token expires, deployments stop with authentication errors in `deploy/logs/stderr.log` while the gateway keeps running: issue a new one the same way and overwrite `deploy/token` (owner-only); the next run uses it. Pause deployments with `launchctl bootout "gui/$(id -u)/im.renai.imsg-deploy"`. The agent never replaces its own `update.sh`: after reviewing a change to it, copy `ops/update.sh` over `deploy/update.sh`.
+The deployed commit is in `deploy/deployed`, a commit waiting for the Mac to recover in `deploy/deferred`, and the agent's output in `deploy/logs`. When the token expires, deployments stop with authentication errors in `deploy/logs/stderr.log` while the gateway keeps running: issue a new one the same way and overwrite `deploy/token` (owner-only); the next run uses it. Pause deployments with `launchctl bootout "gui/$(id -u)/im.renai.imsg-deploy"`. The agent never replaces its own updater files. Existing installations stay on their current updater unless an operator deliberately installs the shared helper. To do so from `apps/imsg`, review the files, set `IMSG_HOME` to the installed home, and copy them without restarting the gateway:
+
+```sh
+cp ops/update.sh "$IMSG_HOME/deploy/update.sh"
+cp ops/deploy-helper.sh "$IMSG_HOME/deploy/deploy-helper.sh"
+cp ../../api-msg/ops/verify-artifact.sh "$IMSG_HOME/deploy/verify-artifact.sh"
+```
 
 ## Relocate to another Mac
 
