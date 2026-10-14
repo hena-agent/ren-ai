@@ -3,12 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "bin": {
+    "ren-ai-api-worker-build": "./scripts/build-worker.mjs",
     "ren-ai-discovery": "./src/discovery-entry.mjs",
     "ren-ai-operator": "./src/operator-entry.ts"
   },
   "type": "module",
   "main": "./src/server-entry.ts",
+  "exports": "./worker/entry.ts",
   "scripts": {
+    "build:worker": "bun scripts/build-worker.mjs",
     "start": "bun run src/server-entry.ts",
     "dev": "bun run dev:discovery",
     "dev:discovery": "bun --watch src/discovery-entry.mjs",

@@ -2,16 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { discoveryNotice } from "@ren-ai/onboarding";
-import { Schema } from "effect";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
-import { afterEach, expect, test } from "vitest";
-
-const runtimes: Miniflare[] = [];
-const stopRuntimes = async () => {
-  await Promise.all(runtimes.splice(0).map((runtime) => runtime.dispose()));
-};
-afterEach(stopRuntimes);
+import { expect, test } from "vitest";
+import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
 
 const workerSource = async () => {
   const buildResult = await build({
@@ -53,8 +47,7 @@ const openRuntime = async (resourcePersistencePath: string) => {
       },
     ],
   });
-  runtimes.push(runtime);
-  return runtime;
+  return trackRuntime(runtime);
 };
 
 const call = (runtime: Miniflare, path: string, init?: Parameters<Miniflare["dispatchFetch"]>[1]) =>
@@ -92,11 +85,7 @@ test("registry persists state on the Durable Object across recreation", async ()
     const listing = await call(runtime, "/management/discovery", {
       headers: { Authorization: "Bearer management-test" },
     });
-    const listed = Schema.decodeUnknownSync(
-      Schema.Struct({
-        entries: Schema.Array(Schema.Struct({ id: Schema.String, handle: Schema.String })),
-      }),
-    )(await listing.json());
+    const listed = await contactEntries(() => listing.text());
     expect(listed.entries).toHaveLength(2);
     const registrationID = listed.entries.find(
       (entry) => entry.handle === "person1@example.com",
@@ -168,11 +157,7 @@ test("registry persists state on the Durable Object across recreation", async ()
     const restored = await call(runtime, "/management/discovery", {
       headers: { Authorization: "Bearer management-test" },
     });
-    const restoredList = Schema.decodeUnknownSync(
-      Schema.Struct({
-        entries: Schema.Array(Schema.Struct({ id: Schema.String, handle: Schema.String })),
-      }),
-    )(await restored.json());
+    const restoredList = await contactEntries(() => restored.text());
     expect(restoredList.entries).toHaveLength(2);
     expect(restoredList.entries.some((entry) => entry.id === registrationID)).toBe(true);
     expect(
