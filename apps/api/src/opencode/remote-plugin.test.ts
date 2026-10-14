@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import {
   ordinaryProjectHost,
@@ -31,6 +31,9 @@ test.each([false, true])(
     const { root, personaDirectory } = await messagingFixture("plugin-wait-result-");
     const tokenFile = join(root, "application-token");
     await writeFile(tokenFile, "\napplication-secret\n");
+    const now = Date.now.bind(Date);
+    let elapsed = 0;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now() + elapsed);
     try {
       await runMessagingTest(
         Effect.gen(function* () {
@@ -53,6 +56,8 @@ test.each([false, true])(
             if (payload.tag === "catalog" && ++catalogs)
               return new Response("Starting", { status: 503 });
             if (payload.tag !== "wait") return fixture.web.handler(request);
+            // The empty terminal reply represents the full requested wait, not a deploy cut.
+            elapsed += 60_000;
             return new Response(
               `${JSON.stringify({ _tag: "Chunk", requestId: payload.id, values: [""] })}\n${JSON.stringify({ _tag: "Exit", requestId: payload.id, exit: { _tag: "Success", value: null } })}\n`,
             );
@@ -103,6 +108,7 @@ test.each([false, true])(
         }),
       );
     } finally {
+      clock.mockRestore();
       await rm(root, { recursive: true, force: true });
     }
   },

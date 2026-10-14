@@ -66,14 +66,18 @@ test("bookmark, redelivery, strangers, replacement, per-conversation gaps and fi
         const signalled: number[] = [];
         const off = first.onNew((item) => signalled.push(item.id));
         const a = yield* fake.text(input.handle, "안녕", baseline + 60_000);
+        yield* first.poll;
         expect(prompts[0]?.id).toBe(
           `msg_${createHash("sha256").update(`${input.sessionID}\0${a.guid}`).digest("hex")}`,
         );
         const beforeRedelivery = lookups;
         yield* fake.redeliver(a);
+        yield* first.poll;
         expect(lookups).toBe(beforeRedelivery);
         yield* fake.text("stranger@example.com", "stranger", baseline + 120_000);
+        yield* first.poll;
         const b = yield* fake.text(input.handle, "또", baseline + 3_660_000);
+        yield* first.poll;
         expect(prompts).toHaveLength(2);
         expect(prompts[0]).toEqual({
           session: input.sessionID,
@@ -87,6 +91,7 @@ test("bookmark, redelivery, strangers, replacement, per-conversation gaps and fi
         expect(signalled).toEqual([conversation.id, conversation.id]);
         off();
         yield* fake.text(input.handle, "third", baseline + 3_720_000);
+        yield* first.poll;
         const beforeOldRow = lookups;
         yield* fake.redeliver(a);
         expect(lookups).toBe(beforeOldRow);
@@ -154,6 +159,7 @@ test("bookmark, redelivery, strangers, replacement, per-conversation gaps and fi
           { ...b, id: 1, guid: "before-live-reset", createdAt: baseline + 4_500_000 },
         ]);
         yield* fake.text(input.handle, "live replacement", baseline + 5_000_000);
+        yield* second.poll;
         expect(prompts.at(-1)?.text).toContain("live replacement");
         expect(
           (yield* sql<{ rowID: number }>`SELECT row_id AS rowID FROM bookmark`)[0]?.rowID,
@@ -175,8 +181,9 @@ test("restart replays only messages missed while stopped from the same SQLite fi
         yield* migrate;
         const directory = yield* conversations;
         if (create) yield* directory.create(input);
-        yield* admit(fake, directory, delivered);
+        const incoming = yield* admit(fake, directory, delivered);
         if (create) yield* fake.text(input.handle, "first", 1000);
+        if (create) yield* incoming.poll;
       }).pipe(Effect.provide(SqliteClient.layer({ filename: join(root, "server.sqlite") }))),
     );
   try {
@@ -203,7 +210,8 @@ test("an active Intake accepts a newer dated row after Messages replaces its dat
         const fake = fakeMessages();
         for (let id = 1; id <= 3; id++) yield* fake.text(input.handle, `old ${id}`, id * 1_000);
         const delivered: string[] = [];
-        yield* admit(fake, directory, delivered);
+        const incoming = yield* admit(fake, directory, delivered);
+        yield* incoming.poll;
         yield* fake.replace([
           {
             id: 1,
@@ -215,7 +223,9 @@ test("an active Intake accepts a newer dated row after Messages replaces its dat
           },
         ]);
         yield* fake.text(input.handle, "new after replacement", 5_000);
+        yield* incoming.poll;
         expect(delivered).toEqual([
+          '<message at="1970-01-01 Thu 09:00">old</message>',
           '<message at="1970-01-01 Thu 09:00">new after replacement</message>',
         ]);
       }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
@@ -238,8 +248,12 @@ test("a manual Service-handle bubble reaches Memory once, but a recorded send do
           new Map([["persona1", { timeZone: "Asia/Seoul" }]]),
         );
         const prompts: { id: string; text: string }[] = [];
+        let stale = false;
         const incoming = yield* intake(
-          fake.messages,
+          {
+            ...fake.messages,
+            after: (cursor) => fake.messages.after(stale && cursor > 0 ? 0 : cursor),
+          },
           (handle) => directory.byHandle(handle),
           (_session, id, text) =>
             Effect.sync(() => {
@@ -251,15 +265,30 @@ test("a manual Service-handle bubble reaches Memory once, but a recorded send do
         const signals: number[] = [];
         incoming.onNew((item) => signals.push(item.id));
         const manual = yield* fake.outgoing(input.handle, "by hand <message", 0);
+        yield* incoming.poll;
         const pending = yield* fake.outgoing(input.handle, "still sending", 1, "unknown");
+        yield* incoming.poll;
         expect([manual.id, pending.id, yield* fake.messages.sendStatus(manual.guid)]).toEqual([
           1,
           2,
           "sent",
         ]);
         yield* fake.redeliver(manual);
+        yield* incoming.poll;
+        stale = true;
+        yield* incoming.poll;
+        stale = false;
+        const duplicate = { ...manual, id: 3 };
+        yield* fake.replace([manual, pending, duplicate]);
+        yield* incoming.poll;
+        stale = true;
+        yield* incoming.poll;
+        stale = false;
+        expect(prompts).toHaveLength(2);
         yield* fake.outgoing("stranger@example.com", "not ours", 0);
+        yield* incoming.poll;
         yield* fake.outgoing(input.handle, "failed", 0, "failed");
+        yield* incoming.poll;
         expect(prompts).toEqual([
           {
             id: `msg_${createHash("sha256").update(`${input.sessionID}\0${manual.guid}`).digest("hex")}`,

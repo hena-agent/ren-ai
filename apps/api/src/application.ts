@@ -45,7 +45,6 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       follow.sent,
       forget,
     );
-    yield* Effect.forkScoped(follow.monitor);
     incoming.onNew((conversation) => pace.onNew(conversation.sessionID));
     const operator = yield* makeOperator(
       directory,
@@ -57,5 +56,11 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       (sessionID, handle) =>
         retained.retainRemoved(sessionID, handle).pipe(Effect.tap(() => forget(sessionID))),
     );
-    return { ...host, conversations: directory, intake: incoming, operator };
+    return {
+      ...host,
+      conversations: directory,
+      intake: incoming,
+      operator,
+      heartbeat: { intake: incoming.poll, followUps: follow.tick },
+    };
   });

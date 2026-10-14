@@ -79,6 +79,13 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
         const error = yield* host.operator.rebuild(handle).pipe(Effect.flip);
         expect(String(error)).toContain("Unknown persona");
         yield* sql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
+        const history = yield* fake.messages.after(0);
+        yield* fake.replace([
+          ...history,
+          { ...history.at(-1)!, id: 999, guid: "missing-persona-incoming", fromMe: false },
+        ]);
+        expect(String(yield* host.heartbeat.intake.pipe(Effect.flip))).toContain("Unknown persona");
+        yield* fake.replace(history);
         expect(String(yield* recovery.rebuild(handle).pipe(Effect.flip))).toContain(
           "Unknown persona",
         );
@@ -145,7 +152,7 @@ test("replay stops admitting rows when the User is blocked mid-replay", async ()
         });
         yield* fake.text(pending.handle, "queued", Date.now() + 1);
         expect(prompts).toHaveLength(2);
-        yield* incoming.start;
+        yield* incoming.poll;
         expect(prompts[2]).toContain("queued");
       }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
     ),

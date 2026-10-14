@@ -202,11 +202,9 @@ export const firstContacts = (
             });
         }
       }
-    });
-    const monitor = Effect.gen(function* () {
-      while (true) {
-        const result = yield* Effect.result(tick);
-        if (Result.isFailure(result))
+    }).pipe(
+      Effect.tapError((failure) =>
+        Effect.sync(() =>
           log({
             requestId: randomUUID(),
             operation: "discovery.firstContact",
@@ -215,10 +213,10 @@ export const firstContacts = (
             outcome: "failed",
             level: "error",
             durationMs: 0,
-            ...contactCause(result.failure),
-          });
-        yield* Effect.sleep("1 second");
-      }
-    });
-    return { tick, monitor };
+            ...contactCause(failure),
+          }),
+        ),
+      ),
+    );
+    return { tick };
   });

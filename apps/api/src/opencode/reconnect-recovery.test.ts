@@ -63,6 +63,10 @@ test.each([
           fakeGestures().gestures,
           health,
         );
+        const stopHeartbeat = yield* messages.messages.follow(0, () =>
+          Effect.all([app.heartbeat.intake, app.heartbeat.followUps]),
+        );
+        yield* Effect.addFinalizer(() => Effect.sync(stopHeartbeat));
         yield* Deferred.await(lost).pipe(Effect.timeout("2 seconds"));
         const session = yield* app.createSession("persona1");
         yield* app.conversations.create(registration("restart@example.com", session.id));

@@ -109,7 +109,12 @@ export const composeServer = (config: ServerConfig) =>
       host.conversations,
       config.opencode.model,
     );
-    yield* Effect.forkScoped(scheduled.monitor);
+    const heartbeat = Effect.all([
+      host.heartbeat.intake,
+      host.heartbeat.followUps,
+      scheduled.tick,
+    ]).pipe(Effect.asVoid);
+    yield* heartbeat;
     yield* Effect.forkScoped(health.monitor);
     const backup = yield* makeBackup(
       {
@@ -132,5 +137,5 @@ export const composeServer = (config: ServerConfig) =>
     const socket = join(config.stateDirectory, "operator", "operator.sock");
     const stop = yield* Effect.promise(() => serveOperatorSocket(socket, operator.handler));
     yield* Effect.addFinalizer(() => Effect.promise(stop));
-    return { mode: "running" as const, host, backup, socket, publicWeb, listener };
+    return { mode: "running" as const, host, heartbeat, backup, socket, publicWeb, listener };
   });
