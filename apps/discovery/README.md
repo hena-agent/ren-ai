@@ -31,6 +31,7 @@ from the `TURNSTILE_SITE_KEY` repository variable, then deploys and verifies the
 same `CLOUDFLARE_API_TOKEN_AMBIVALENT` secret as
 [Admin deployment](../admin/README.md#automatic-deployment).
 Do not deploy manually or also connect Workers Builds.
+The deployment job checks both the page and `/api/personas` before succeeding.
 
 `bun run build` builds both browser assets and the Worker. Wrangler's custom
 build compiles only the Worker, preserving the browser assets and their
