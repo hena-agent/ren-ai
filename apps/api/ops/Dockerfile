@@ -7,6 +7,7 @@ RUN bun install --frozen-lockfile --ignore-scripts
 FROM source AS app-build
 RUN mkdir -p /artifact/src /artifact/templates && \
     bun build --target=bun --outfile=/artifact/src/app.js apps/api/src/server-entry.ts && \
+    bun build --target=bun --outfile=/artifact/src/operator.js apps/api/src/operator-entry.ts && \
     cp packages/plugins/session-folder/templates/ground-rules.md /artifact/templates/ground-rules.md
 
 FROM oven/bun:1.4.2 AS application
