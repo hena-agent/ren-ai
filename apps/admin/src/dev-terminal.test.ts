@@ -16,6 +16,8 @@ test("development launches Workers on the established port with Turbo TUI", asyn
   );
   expect(turbo.ui).toBe("tui");
   expect(workspace.scripts["dev"]).toBe("turbo run dev");
-  expect(admin.scripts["dev"]).toBe("wrangler dev --port ${PORT:-3729}");
+  expect(admin.scripts["dev"]).toBe(
+    "wrangler dev --port ${PORT:-3729} --var ADMIN_JURISDICTION:local",
+  );
   expect(admin.scripts["deploy"]).toBe("wrangler deploy");
 });
