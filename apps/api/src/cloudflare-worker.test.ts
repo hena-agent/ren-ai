@@ -6,6 +6,7 @@ import { Miniflare } from "miniflare";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { expect, test } from "vitest";
 import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
+import { readStateSnapshot } from "./state-snapshot.ts";
 
 let bundledWorker: Promise<string> | undefined;
 const workerSource = () => {
@@ -138,6 +139,76 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
     const restoredContacts = await contactEntries(() => restored.text());
     expect(restoredContacts.entries[0]?.handle).toBe("person@example.com");
     expect(restoredContacts.entries[0]?.id).toBe(waiting.entries[0]?.id);
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
+
+test("compiled SQLite DO imports linked private state atomically and recognizes a repeated archive", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "api-app-state-transfer-"));
+  try {
+    const runtime = await openWorker(persistence, true);
+    const headers = {
+      Authorization: "Bearer management-secret",
+      "Content-Type": "application/json",
+    };
+    const exported = await send(runtime, "/management/state/export", { headers });
+    expect(exported.status).toBe(200);
+    const empty = readStateSnapshot(await exported.json());
+    const user: Record<string, string | number | null> = {
+      id: 7,
+      handle: "source-marker@example.test",
+      locale: "ko",
+      consent_version: "v1",
+      consent_language: "ko",
+      consent_at: 1,
+      joined_at: 2,
+      replied_at: null,
+      persona_id: "sora",
+    };
+    const conversation: Record<string, string | number | null> = {
+      id: 9,
+      user_id: 7,
+      persona_id: "sora",
+      session_id: "ses_preserved",
+      started_at: 3,
+      rebuilding: 0,
+      last_received_at: 4,
+      reset_guid: null,
+    };
+    const snapshot = {
+      ...empty,
+      tables: empty.tables.map((table) => ({
+        ...table,
+        rows:
+          table.name === "user"
+            ? [table.columns.map((column) => user[column] ?? null)]
+            : table.name === "conversation"
+              ? [table.columns.map((column) => conversation[column] ?? null)]
+              : table.rows,
+      })),
+    };
+    const imported = await send(runtime, "/management/state/import", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(snapshot),
+    });
+    expect(imported.status).toBe(200);
+    expect(await imported.text()).not.toContain("source-marker@example.test");
+    const repeated = await send(runtime, "/management/state/import", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(snapshot),
+    });
+    expect(await repeated.json()).toMatchObject({ repeated: true });
+    const restored = readStateSnapshot(
+      await (await send(runtime, "/management/state/export", { headers })).json(),
+    );
+    expect(restored.tables.find((table) => table.name === "conversation")?.rows[0]).toContain(
+      "ses_preserved",
+    );
+    expect((await send(runtime, "/management/state/export")).status).toBe(401);
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });

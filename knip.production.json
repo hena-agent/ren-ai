@@ -17,6 +17,8 @@
         "ops/offline-export.ts!",
         "ops/patch-opencode-proxy.ts!",
         "ops/session-transfer.ts!",
+        "ops/export-application-state.ts!",
+        "ops/import-application-state.ts!",
         "test/compiled-plugin/regression.mjs!"
       ]
     },
@@ -28,6 +30,9 @@
         "ops/mdm/profile-entry.ts!",
         "ops/verify-mac-graph.ts!"
       ]
+    },
+    "apps/api-msg": {
+      "entry": ["ops/api-msg-entry.mjs!", "ops/probe-entry.mjs!"]
     },
     "apps/admin": {
       "entry": [

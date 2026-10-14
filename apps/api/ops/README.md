@@ -16,9 +16,31 @@ pause, stop old intake/scheduling, settle or record uncertain sends, take a
 read-only export of the old SQLite state, and import it into an empty Worker
 store. Verify IDs, assignments, bookmarks, pending work and uncertain sends
 before enabling the new intake. Preserve the stopped container and volume for
-rollback. The import endpoint/format is coordinated with the api-app owner;
-do not invent an alternate transfer path. No script here changes live ingress,
-stops a service, imports state or enables intake.
+rollback. No script changes live ingress, stops a service or enables intake.
+
+After old intake and scheduling are stopped, create an owner-only private archive:
+
+```sh
+CONFIRM_APPLICATION_STOPPED=yes bun run state:export /private/path/server.sqlite /private/path/new-state.json
+API_APP_URL=https://api-app.renai.im bun run state:import /private/path/new-state.json
+```
+
+Load `TOKEN_MANAGEMENT` from a protected environment. The exporter opens the
+source read-only and exclusively creates a mode-0600 JSON archive. Import is
+authenticated at `POST /management/state/import`, works only in bootstrap mode,
+and atomically restores into an empty application database. Repeating the same
+archive is idempotent; a different archive, incompatible columns or nonempty
+target is rejected. `GET /management/state/export` is an authenticated private
+verification snapshot. Archives contain handles and conversation text: keep
+them out of Git/logs and preserve IDs, bookmarks and uncertain sends.
+
+Copy `apps/api/.dev.vars.example` to `.dev.vars` for local Worker development.
+`bun run dev` listens on `API_APP_PORT` (default 4879). Local state belongs to
+Wrangler's DO persistence, never a running Mac `server.sqlite`. Bootstrap is
+enabled by default; after the explicit import and native executor verification,
+change `BOOTSTRAP_ONLY` to `false` through a reviewed PR. SQLite DO point-in-time
+recovery replaces the retired local nightly database snapshots; OpenCode's
+session documents remain in the existing OpenCode storage and exports.
 
 Configure api-app's private `TOKEN_EXECUTOR` secret and
 `API_MSG_URL=https://api-msg.renai.im`. Provision the Mac executor once through

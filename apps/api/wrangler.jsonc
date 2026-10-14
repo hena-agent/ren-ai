@@ -8,6 +8,7 @@
   "build": { "command": "bun scripts/build-worker.mjs" },
   "no_bundle": true,
   "workers_dev": false,
+  "dev": { "port": 4879 },
   "route": { "pattern": "api-app.renai.im", "custom_domain": true },
   "vars": {
     "PERSONA_CATALOG_URL": "https://admin.renai.im",
@@ -19,6 +20,6 @@
   "durable_objects": {
     "bindings": [{ "name": "APPLICATION", "class_name": "ApiApplication" }],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ApiApplication"] }],
+  "exports": { "ApiApplication": { "type": "durable-object", "storage": "sqlite" } },
   "observability": { "enabled": true },
 }

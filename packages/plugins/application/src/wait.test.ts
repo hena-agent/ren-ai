@@ -38,3 +38,16 @@ test("wait does not retry after its deadline expires", async () => {
   );
   expect(wait).toHaveBeenCalledOnce();
 });
+
+test("an EOF arriving after the deadline does not open another wait request", async () => {
+  const clock = vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValue(2000);
+  const wait = vi.fn<WaitClient["wait"]>(() => Stream.empty);
+  try {
+    await expect(Effect.runPromise(waitForResult({ wait }, "session", 0.5))).rejects.toThrow(
+      "Wait stream ended without a result",
+    );
+    expect(wait).toHaveBeenCalledOnce();
+  } finally {
+    clock.mockRestore();
+  }
+});

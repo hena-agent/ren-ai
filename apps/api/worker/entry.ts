@@ -5,6 +5,7 @@ import groundRules from "@ren-ai/plugin-session-folder/ground-rules";
 import { contactCause, contactLog } from "../src/discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import type { DurableObjectId } from "@cloudflare/workers-types";
+import { applicationTransport } from "../src/application-transport.ts";
 
 interface ApplicationNamespace {
   idFromName: (name: string) => DurableObjectId;
@@ -67,7 +68,9 @@ export class ApiApplication extends DurableObject<Environment> {
 
 export default {
   fetch(request: Request, env: Environment) {
-    const id = env.APPLICATION.idFromName("ren-ai-application");
-    return env.APPLICATION.get(id).fetch(request);
+    return applicationTransport(request, () => {
+      const id = env.APPLICATION.idFromName("ren-ai-application");
+      return env.APPLICATION.get(id).fetch(request);
+    });
   },
 };

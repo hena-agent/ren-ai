@@ -5,6 +5,7 @@ import { expect, test } from "vitest";
 import { migrate } from "./database.ts";
 import {
   exportApplicationState,
+  exportReadOnlyApplicationState,
   importApplicationState,
   readStateSnapshot,
 } from "./state-snapshot.ts";
@@ -63,6 +64,19 @@ test("application state transfers identities, links, cursors, uncertainty and bl
       );
     }),
   );
+});
+
+test("deferred source snapshots commit successful reads and rollback schema failures", async () => {
+  expect((await run(exportReadOnlyApplicationState)).version).toBe(1);
+  await expect(
+    run(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql.unsafe('CREATE TABLE "invalid-name" (id INTEGER)');
+        return yield* exportReadOnlyApplicationState;
+      }),
+    ),
+  ).rejects.toThrow("Invalid state identifier");
 });
 
 test("restore refuses nonempty targets, unknown schemas, incomplete rows and conflicting archives", async () => {
