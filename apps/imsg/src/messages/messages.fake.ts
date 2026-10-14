@@ -7,43 +7,33 @@ export const fakeMessages = (events: string[] = []) => {
   const bubbles: { handle: string; text: string }[] = [];
   const lastStatuses = new Map<string, OutgoingStatus>();
   let rows = Array.of<IncomingMessage>();
+  // One Messages database never reuses a ROWID; only a replaced database restarts its numbering.
+  let lastID = 0;
   const sendStatuses = new Map<string, "sent" | "delivered" | "failed" | "unknown">();
   const watchers = new Set<(row: IncomingMessage) => Effect.Effect<void, Error>>();
   const statuses = new Map<string, "sent" | "no_imessage" | "unknown">();
-  const rejected = new Set<string>();
-  const statusFailures = new Set<string>();
-  const statusChecks: string[] = [];
   const messages: Messages = {
     image: imageData,
     sendText: (handle, text) =>
-      Effect.suspend(() =>
-        rejected.has(handle)
-          ? Effect.fail(new Error("imsg send timed out"))
-          : Effect.gen(function* () {
-              events.push("send");
-              bubbles.push({ handle, text });
-              lastStatuses.set(handle, { delivered: false, readAt: null });
-              const row = yield* outgoing(
-                handle,
-                text,
-                yield* Clock.currentTimeMillis,
-                "sent",
-                `fake-${bubbles.length}`,
-              );
-              return { guid: row.guid };
-            }),
-      ),
-    textStatus: (handle) =>
-      Effect.suspend(() => {
-        statusChecks.push(handle);
-        return statusFailures.has(handle)
-          ? Effect.fail(new Error("Messages status temporarily unavailable"))
-          : Effect.sync(
-              () =>
-                statuses.get(handle) ??
-                (bubbles.some((bubble) => bubble.handle === handle) ? "sent" : "unknown"),
-            );
+      Effect.gen(function* () {
+        events.push("send");
+        bubbles.push({ handle, text });
+        lastStatuses.set(handle, { delivered: false, readAt: null });
+        const row = yield* outgoing(
+          handle,
+          text,
+          yield* Clock.currentTimeMillis,
+          "sent",
+          `fake-${bubbles.length}`,
+        );
+        return { guid: row.guid };
       }),
+    textStatus: (handle) =>
+      Effect.sync(
+        () =>
+          statuses.get(handle) ??
+          (bubbles.some((bubble) => bubble.handle === handle) ? "sent" : "unknown"),
+      ),
     lastOutgoingStatus: (handle) => Effect.sync(() => lastStatuses.get(handle)),
     status: (guid) =>
       Effect.sync(() => {
@@ -76,7 +66,7 @@ export const fakeMessages = (events: string[] = []) => {
   ) =>
     Effect.gen(function* () {
       const row: IncomingMessage = {
-        id: (rows.at(-1)?.id ?? 0) + 1,
+        id: ++lastID,
         guid: `incoming-${crypto.randomUUID()}`,
         handle,
         createdAt,
@@ -97,7 +87,7 @@ export const fakeMessages = (events: string[] = []) => {
   ) =>
     Effect.gen(function* () {
       const row: IncomingMessage = {
-        id: (rows.at(-1)?.id ?? 0) + 1,
+        id: ++lastID,
         guid,
         handle,
         createdAt,
@@ -114,9 +104,6 @@ export const fakeMessages = (events: string[] = []) => {
     bubbles,
     events,
     statuses,
-    rejected,
-    statusFailures,
-    statusChecks,
     status: (handle: string, status: OutgoingStatus) => lastStatuses.set(handle, status),
     text,
     outgoing,
@@ -131,7 +118,14 @@ export const fakeMessages = (events: string[] = []) => {
       Effect.sync(() => {
         rows = rows.map((row) => (row.guid === guid ? { ...row, text: "" } : row));
       }),
+    remove: (guid: string) =>
+      Effect.sync(() => {
+        rows = rows.filter((row) => row.guid !== guid);
+      }),
     replace: (replacement: ReadonlyArray<IncomingMessage>) =>
-      Effect.sync(() => (rows = [...replacement])),
+      Effect.sync(() => {
+        rows = [...replacement];
+        lastID = Math.max(0, ...replacement.map((row) => row.id));
+      }),
   };
 };

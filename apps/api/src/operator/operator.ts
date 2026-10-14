@@ -51,7 +51,6 @@ export const makeOperator = (
               (SELECT session_id FROM removal WHERE handle = ${handle})`;
               yield* sql`DELETE FROM send WHERE handle = ${handle}`;
               yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
-              yield* sql`DELETE FROM waitlist WHERE email = ${handle}`;
               yield* sql`DELETE FROM discovery_registration WHERE handle = ${handle}`;
               yield* sql`DELETE FROM persona_assignment WHERE handle = ${handle}`;
               yield* sql`DELETE FROM user WHERE handle = ${handle}`;
@@ -71,12 +70,5 @@ export const makeOperator = (
             return "removed" as const;
           }),
         ),
-      removeWaitlist: (email: string) =>
-        Effect.gen(function* () {
-          const rows = yield* sql`DELETE FROM waitlist WHERE email = ${email} RETURNING id`;
-          if (!rows.length) return "not_found" as const;
-          yield* sql`VACUUM`;
-          return "removed" as const;
-        }),
     };
   });

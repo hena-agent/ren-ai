@@ -39,7 +39,6 @@ test.each([false, true])(
             ),
           );
           const source = yield* startTestHost(root, personaDirectory, llm, messages.messages);
-          yield* Effect.addFinalizer(() => Effect.promise(source.disposeOnboarding));
           const remote = yield* remoteHost(
             {
               baseUrl: "https://oc.test",

@@ -19,7 +19,7 @@ The name, image and introduction shown to people choosing personas. It is distin
 _Avoid_: persona definition, prompt
 
 **Catalog**:
-Every persona the service can play. Only published personas are offered at onboarding; editing a persona changes her in every ongoing conversation.
+Every persona the service can play. Only published personas appear in Discovery; editing a persona changes her in every ongoing conversation.
 _Avoid_: roster, lineup, persona list
 
 **Ground rules**:
@@ -38,8 +38,12 @@ _Avoid_: contact, number, address
 The handle every persona texts from, currently hi@hena.dev.
 _Avoid_: persona handle, sender, bot account
 
+**Discovery**:
+Browsing published personas' public profiles, Liking or Passing each, and joining the waitlist with a handle and web consent.
+_Avoid_: discovery page, swipe app
+
 **Onboarding**:
-Choosing a published persona, providing a handle, and consenting to start receiving her iMessages. Discovery may also record Likes before a persona is selected for the conversation.
+Becoming a user: joining the waitlist through Discovery, being selected, and receiving the assigned persona's first Greeting.
 _Avoid_: signup, registration
 
 **Test handle**:
@@ -49,10 +53,6 @@ _Avoid_: developer handle, dev number, allowlist
 **Greeting**:
 The first message a persona sends a new user.
 _Avoid_: welcome message, intro
-
-**Notice**:
-A fixed message the service sends from the service handle in its own voice, not a persona's. Legacy onboarding sends one before the greeting. Discovery obtains AI-service consent on the web rather than sending a separate notice.
-_Avoid_: disclaimer, system message
 
 **Conversation**:
 The 1:1 iMessage thread between one user and one persona.
@@ -83,7 +83,7 @@ The actual sequence of messages and actions, including any checkpoint summarisin
 _Avoid_: Memory
 
 **Waitlist**:
-People waiting to start a conversation. Discovery registrations include a handle, liked personas and web consent; selection has no promised order or time. The legacy waitlist contains emails from people whose handle can't receive iMessage or for whom the service is full.
+People waiting to start a conversation. Each registration includes a handle, liked personas and web consent; selection has no promised order or time.
 _Avoid_: queue, signup list
 
 **Selection**:

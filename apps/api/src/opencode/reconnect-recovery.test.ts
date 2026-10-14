@@ -7,7 +7,6 @@ import { registration } from "../../test/messaging.test-helper.ts";
 import { providerUnavailable } from "../../test/messaging-host.test-helper.ts";
 import { startMessagingApplication } from "../application.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
-import { noticeCopy } from "../onboarding/onboarding.ts";
 
 test.each([
   { failInventory: false, pending: false },
@@ -62,10 +61,8 @@ test.each([
           () => Effect.succeed(remote),
           messages.messages,
           fakeGestures().gestures,
-          { turnstileSecret: "test", notice: noticeCopy },
           health,
         );
-        yield* Effect.addFinalizer(() => Effect.promise(app.disposeOnboarding));
         yield* Deferred.await(lost).pipe(Effect.timeout("2 seconds"));
         const session = yield* app.createSession("persona1");
         yield* app.conversations.create(registration("restart@example.com", session.id));

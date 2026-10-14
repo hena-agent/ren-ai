@@ -6,7 +6,7 @@ import { expect, test } from "vitest";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
-import { bindTestHandle, onboardTestHandle } from "../../test/reset.test-helper.ts";
+import { bindTestHandle, startTestHandle } from "../../test/reset.test-helper.ts";
 
 test("sending the reset Greeting does not schedule a follow-up until the User replies", async () => {
   const { root, personaDirectory } = await messagingFixture("reset-follow-");
@@ -25,13 +25,12 @@ test("sending the reset Greeting does not schedule a follow-up until the User re
           return TestLLM.tool("greeting", "send", { text: "Hello stranger" });
         });
         const host = yield* startTestHost(root, personaDirectory, llm, fake.messages);
-        yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
         const old = yield* bindTestHandle(host, handle);
         yield* fake.text(handle, "old reply", yield* Clock.currentTimeMillis);
         yield* host.sessions.wait(old.id);
         greet = true;
         yield* fake.text(handle, "/reset", yield* Clock.currentTimeMillis);
-        yield* onboardTestHandle(host, handle);
+        yield* startTestHandle(host, fake.messages, handle);
         const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
         yield* host.sessions.wait(id);
         expect(fake.bubbles).toContainEqual({ handle, text: "Hello stranger" });

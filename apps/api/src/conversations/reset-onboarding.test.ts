@@ -4,7 +4,7 @@ import { expect, test, vi } from "vitest";
 import {
   bindTestHandle,
   currentMemory,
-  onboardTestHandle,
+  startTestHandle,
   resetFixture,
 } from "../../test/reset.test-helper.ts";
 
@@ -18,30 +18,33 @@ test.each(["i@ysm.dev", "+821092836686"])(
           const host = yield* f.start;
           const sql = yield* SqlClient.SqlClient;
           yield* host.operator.testHandle(handle, true);
-          expect(yield* onboardTestHandle(host, handle)).toBe("sent");
+          expect(yield* startTestHandle(host, f.fake.messages, handle)).toBe("started");
           yield* f.fake.text(handle, "old memory", Date.now());
           const old = yield* currentMemory(host, handle);
           const command = yield* f.fake.text(handle, " /RESET ", Date.now());
           expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
           expect(yield* sql`SELECT id FROM user WHERE handle = ${handle}`).toEqual([]);
-          expect(f.fake.bubbles).toHaveLength(1);
+          expect(
+            yield* sql`SELECT id FROM discovery_registration WHERE handle = ${handle}`,
+          ).toEqual([]);
+          expect(yield* sql`SELECT * FROM persona_assignment`).toEqual([]);
           expect((yield* host.sessions.get(old.id)).title).toContain(" · reset ");
           expect((yield* host.sessions.list()).data).toHaveLength(1);
           yield* f.fake.redeliver(command);
-          expect(yield* onboardTestHandle(host, handle)).toBe("sent");
+          expect(yield* startTestHandle(host, f.fake.messages, handle)).toBe("started");
           const fresh = yield* currentMemory(host, handle);
           expect(fresh.id).not.toBe(old.id);
           expect(fresh.text).toContain("<conversation-started");
           expect(fresh.text).not.toContain("old memory");
           expect(fresh.text).not.toContain("/RESET");
-          expect(f.fake.bubbles).toHaveLength(2);
+          expect(f.fake.bubbles).toEqual([]);
           expect(yield* sql`SELECT replied_at FROM user WHERE handle = ${handle}`).toEqual([
             { replied_at: null },
           ]);
           yield* f.fake.redeliver(command);
           expect((yield* currentMemory(host, handle)).id).toBe(fresh.id);
-          expect(yield* onboardTestHandle(host, handle)).toBe("sent");
-          expect(f.fake.bubbles).toHaveLength(2);
+          expect(yield* startTestHandle(host, f.fake.messages, handle)).toBe("unavailable");
+          expect((yield* currentMemory(host, handle)).id).toBe(fresh.id);
         }),
       );
     } finally {
@@ -70,11 +73,11 @@ test("redelivery completes interrupted retention once and leaves later operator 
         yield* Deferred.await(entered);
         rename.mockRestore();
         yield* Fiber.interrupt(resetting);
-        expect(yield* onboardTestHandle(host, f.handle)).toBe("unknown");
+        expect(yield* startTestHandle(host, f.fake.messages, f.handle)).toBe("unavailable");
         const [command] = yield* f.fake.messages.after(0);
         yield* f.fake.redeliver(command!);
         expect(yield* sql`SELECT complete FROM reset`).toEqual([{ complete: 1 }]);
-        expect(yield* onboardTestHandle(host, f.handle)).toBe("sent");
+        expect(yield* startTestHandle(host, f.fake.messages, f.handle)).toBe("started");
         const fresh = yield* currentMemory(host, f.handle);
         const review = yield* host.sessions.prompt({
           sessionID: old.id,
@@ -85,7 +88,7 @@ test("redelivery completes interrupted retention once and leaves later operator 
         yield* f.fake.redeliver({ ...command!, id: rows.at(-1)!.id + 1 });
         expect((yield* currentMemory(host, f.handle)).id).toBe(fresh.id);
         expect((yield* host.sessions.inbox(old.id)).map((item) => item.id)).toEqual([review.id]);
-        expect(f.fake.bubbles).toHaveLength(1);
+        expect(f.fake.bubbles).toEqual([]);
       }),
     );
   } finally {
@@ -106,7 +109,7 @@ test.each(["late-guid", null])(
           yield* sql`INSERT INTO send (handle, conversation_id, kind, content, state, guid, recorded_at, updated_at)
         VALUES (${f.handle}, ${old.id}, 'text', 'retired bubble', 'uncertain', ${guid}, 1, 1)`;
           yield* f.fake.text(f.handle, "/reset", Date.now());
-          yield* onboardTestHandle(host, f.handle);
+          yield* startTestHandle(host, f.fake.messages, f.handle);
           yield* f.fake.outgoing(
             f.handle,
             guid ? "retired bubble edited" : "retired bubble",

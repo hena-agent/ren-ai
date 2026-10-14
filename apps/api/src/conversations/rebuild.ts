@@ -12,7 +12,6 @@ export const setupRebuilding = (
   directory: Effect.Success<typeof conversations>,
   host: PersonaRuntime,
   messages: Messages,
-  notice: Readonly<Record<"ko", string>>,
   reconcile: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,
   received: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
   sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
@@ -42,7 +41,7 @@ export const setupRebuilding = (
       sent,
       reset.receive,
     );
-    const recovery = yield* rebuilder(directory, host, notice, incoming.replay);
+    const recovery = yield* rebuilder(directory, host, incoming.replay);
     restore = (handle) =>
       recovery.rebuild(handle).pipe(
         Effect.asVoid,

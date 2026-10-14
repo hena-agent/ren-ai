@@ -20,8 +20,9 @@ import { rebuilder } from "../conversations/rebuild-session.ts";
 import { retainedSessions } from "../conversations/retained.ts";
 import { makeOperator } from "../operator/operator.ts";
 import { intake } from "../intake/intake.ts";
-import { noticeCopy } from "../onboarding/onboarding.ts";
-import { catalogAPI } from "../onboarding/catalog.test-helper.ts";
+import { firstContacts } from "../discovery/first-contact.ts";
+import { dueContact } from "../discovery/contact.test-helper.ts";
+import { fakeMessages } from "@ren-ai/imsg/testing";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 import { remoteHost } from "./remote.ts";
@@ -88,13 +89,9 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
         return transport.after(request, await native.web(request));
       }),
     );
-    const api = yield* catalogAPI(personas, "persona1", {
-      createSession: remote.createSession,
-      prompt: (sessionID, text) =>
-        remote.sessions.prompt({ sessionID: Session.ID.make(sessionID), text }).pipe(Effect.asVoid),
-    });
+    const fake = fakeMessages();
     const incoming = yield* intake(
-      api.fake.messages,
+      fake.messages,
       directory.byHandle,
       (sessionID, id, text, files) =>
         directory.admit(
@@ -114,7 +111,7 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
       undefined,
       false,
     );
-    const recovery = yield* rebuilder(directory, remote, noticeCopy, incoming.replay);
+    const recovery = yield* rebuilder(directory, remote, incoming.replay);
     const rpc = remote.client.rpc(sessionFolders);
     const location = { location: { directory: fixture.personaDirectory } };
     const read = (folderID: string) => rpc.read({ folderID }, location);
@@ -167,14 +164,25 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
           personas,
         ),
       );
-    const profileName = () =>
-      api
-        .list()
-        .pipe(Effect.map((list) => list.find((persona) => persona.id === "persona1")?.name));
+    const profileName = () => Effect.sync(() => personas.get("persona1")?.name);
+    /** A reserved first contact that is due now, started the way the scheduler starts it. */
+    const firstContact = (handle: string, personaID = "persona1") =>
+      Effect.gen(function* () {
+        yield* dueContact(handle, personaID);
+        const contacts = yield* firstContacts(
+          remote,
+          fake.messages,
+          directory,
+          "test/probe",
+          () => {},
+        );
+        yield* contacts.tick;
+      });
     return {
       remote,
       personas,
-      api,
+      fake,
+      firstContact,
       llm,
       read,
       write,

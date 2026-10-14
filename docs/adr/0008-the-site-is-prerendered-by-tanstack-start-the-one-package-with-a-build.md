@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0015
+---
+
 # The discovery registration site is prerendered by TanStack Start
 
 discovery.hena.dev is a TanStack Start app, in React, that Vite prerenders into static files. Cloudflare Workers serves them as static assets with no Worker code, and the browser calls api-msg.hena.dev directly. Libraries are Just-in-Time, and AGENTS.md forbids a library build step, because a library whose compiled output hasn't been built makes type-aware lint and knip pass while checking nothing. Browser applications build JavaScript. They can't cause that failure: nothing imports their build output, `dist/` is ignored by git and by every gate, and every gate runs on their source, `.tsx` files included.

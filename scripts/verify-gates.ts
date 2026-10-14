@@ -241,11 +241,11 @@ const verifyGateInputs = (): readonly string[] => {
   const failures: string[] = [];
   const lint = qualityCommand("lint") ?? [];
   const duplication = qualityCommand("duplication") ?? [];
-  for (const { path } of exceptions.lint) {
+  for (const { path } of exceptions.lint as readonly { path: string }[]) {
     if (!lint.some((arg, index) => arg === path && lint[index - 1] === "--ignore-pattern"))
       failures.push(`lint exception missing from command: ${path}`);
   }
-  for (const { path } of exceptions.duplication) {
+  for (const { path } of exceptions.duplication as readonly { path: string }[]) {
     if (
       !duplication.some(
         (arg, index) => duplication[index - 1] === "--ignore" && arg.split(",").includes(path),

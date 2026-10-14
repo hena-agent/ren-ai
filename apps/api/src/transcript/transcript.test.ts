@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { edited, message, notSent, sent, unsent } from "./transcript.ts";
+import { conversationStarted, edited, message, notSent, sent, unsent } from "./transcript.ts";
 
 test("the transcript uses her local date, marks silence, and leaves his words intact", () => {
   const zone = "Asia/Seoul";
@@ -29,4 +29,11 @@ test("the transcript uses her local date, marks silence, and leaves his words in
     '<edited was="”hi” ‹photo/>" at="2026-09-25 Fri 20:52">new >_< ‹unsent></edited>',
   );
   expect(unsent(first, zone)).toBe('<unsent at="2026-09-25 Fri 20:52"/>');
+});
+
+test("every Conversation opens in her time zone with the web consent note", () => {
+  expect(conversationStarted(0, "opening", "Asia/Seoul")).toBe(
+    '<conversation-started at="1970-01-01 Thu 09:00"/>\nopening\n<notice>The user consented on the website. Send your own first greeting; do not send a separate service notice.</notice>',
+  );
+  expect(conversationStarted(0, "hello", "UTC")).toContain('at="1970-01-01 Thu 00:00"');
 });

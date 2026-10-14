@@ -61,7 +61,6 @@ const reopen = (
       expect((yield* host.sessions.get(Session.ID.make(sessionID))).outcome).toBe("succeeded");
       const observed = yield* llm.requests();
       expect(observed).toHaveLength(requests);
-      yield* Effect.promise(host.disposeOnboarding);
       return observed;
     }),
     databaseFile,
@@ -88,7 +87,6 @@ test("a failed Conversation resumes after closing and reopening both persisted d
         expect((yield* host.sessions.get(session.id)).outcome).toBe("failed");
         const empty = yield* host.createSession("persona1");
         yield* host.conversations.create(registration("empty@example.com", empty.id));
-        yield* Effect.promise(host.disposeOnboarding);
       }),
       databaseFile,
     );
@@ -155,7 +153,6 @@ test.each([false, true])(
             yield* sends.send(conversation, "already sent", "call-1");
             expect(fake.bubbles).toHaveLength(1);
           }
-          yield* Effect.promise(host.disposeOnboarding);
         }),
         databaseFile,
       );
@@ -199,7 +196,6 @@ test("a failure before an assistant response still resumes after restart", async
             (message) => message.type === "assistant" && message.error,
           ),
         ).toBe(false);
-        yield* Effect.promise(host.disposeOnboarding);
       }),
       databaseFile,
     );

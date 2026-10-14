@@ -62,7 +62,6 @@ test("blocking silences Intake, Outbox and session lookup but preserves User row
         expect(yield* sends.react(conversation, "like", "call-2")).toBe(
           "not reacted: this Conversation is unavailable",
         );
-        yield* sends.notice(input.handle, "blocked notice");
         expect(gestures.typing).toEqual([]);
         expect(gestures.reactions).toEqual([]);
         expect(fake.bubbles).toEqual([]);
@@ -115,15 +114,14 @@ test("blocking silences Intake, Outbox and session lookup but preserves User row
   );
 });
 
-test("removal of a pending Notice also deletes its User without a session", async () => {
+test("removal of a waiting registration deletes it and its Likes without a session", async () => {
   await Effect.runPromise(
     Effect.gen(function* () {
       yield* migrate;
       const sql = yield* SqlClient.SqlClient;
-      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at)
-        VALUES (${input.handle}, 'ko', 'v1', 'ko', 1)`;
-      yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
-        VALUES (${input.handle}, 'notice', 'private', 'recorded', 1, 1)`;
+      const registration = "00000000-0000-4000-8000-000000000001";
+      yield* sql`INSERT INTO discovery_registration VALUES (${registration}, ${input.handle}, 'ko', 'v1', 1)`;
+      yield* sql`INSERT INTO discovery_like VALUES (${registration}, 'persona1')`;
       const directory = yield* conversations;
       const removed: string[] = [];
       const operator = yield* makeOperator(directory, (sessionID) =>
@@ -134,8 +132,8 @@ test("removal of a pending Notice also deletes its User without a session", asyn
       expect(yield* operator.rebuild(input.handle)).toBe("not_found");
       expect(yield* operator.remove(input.handle)).toBe("removed");
       expect(removed).toEqual([]);
-      expect(yield* sql`SELECT * FROM user`).toEqual([]);
-      expect(yield* sql`SELECT * FROM send`).toEqual([]);
+      expect(yield* sql`SELECT * FROM discovery_registration`).toEqual([]);
+      expect(yield* sql`SELECT * FROM discovery_like`).toEqual([]);
       expect(yield* operator.remove(input.handle)).toBe("not_found");
       const freePages = yield* sql<{ freelist_count: number }>`PRAGMA freelist_count`;
       expect(freePages[0]?.freelist_count).toBe(0);
@@ -151,9 +149,7 @@ test("removal deletes all User data atomically, keeps a retry marker on failure 
       const directory = yield* conversations;
       const conversation = yield* directory.create(input);
       yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
-      VALUES (${input.handle}, 'notice', 'private', 'sent', 1, 1)`;
-      yield* sql`INSERT INTO waitlist (email, locale, answer, created_at)
-        VALUES (${input.handle}, 'ko', 'full', 1)`;
+      VALUES (${input.handle}, 'text', 'private', 'sent', 1, 1)`;
       yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${input.sessionID}, 'guid')`;
       yield* sql`UPDATE conversation SET last_received_at = 1 WHERE id = ${conversation.id}`;
       yield* directory.block(input.handle);
@@ -168,7 +164,7 @@ test("removal deletes all User data atomically, keeps a retry marker on failure 
         }),
       );
       expect(Result.isFailure(yield* Effect.result(operator.remove(input.handle)))).toBe(true);
-      for (const table of ["user", "conversation", "send", "intake_seen", "blocked", "waitlist"]) {
+      for (const table of ["user", "conversation", "send", "intake_seen", "blocked"]) {
         expect((yield* sql`SELECT * FROM ${sql(table)}`).length).toBe(0);
       }
       expect(yield* sql`SELECT session_id FROM removal`).toEqual([{ session_id: input.sessionID }]);
@@ -188,12 +184,8 @@ test("the operator HTTP API documents its typed request, result and error contra
   expect(spec.paths).toHaveProperty("/remove");
   expect(spec.paths).toHaveProperty("/block");
   expect(spec.paths).toHaveProperty("/rebuild");
-  expect(spec.paths).toHaveProperty("/remove-waitlist");
   expect(spec.paths).toHaveProperty("/test-handle");
   expect(JSON.stringify(spec.paths["/test-handle"])).toContain('"required":["handle","enabled"]');
-  const waitlist = JSON.stringify(spec.paths["/remove-waitlist"]);
-  expect(waitlist).toContain('"required":["email"]');
-  expect(waitlist).toContain('"required":["result"]');
   expect(JSON.stringify(spec.paths["/remove"])).toContain('"required":["result"]');
   const rebuild = JSON.stringify(spec.paths["/rebuild"]);
   expect(rebuild).toContain('"required":["result"]');
@@ -208,7 +200,6 @@ test("the rebuild route handles an unavailable operation", async () => {
     testHandle: () => Effect.void,
     block: () => Effect.void,
     remove: () => Effect.succeed("not_found"),
-    removeWaitlist: () => Effect.succeed("not_found"),
   });
   try {
     const answer = await api.handler(
@@ -234,8 +225,6 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
         Effect.gen(function* () {
           yield* migrate;
           const directory = yield* conversations;
-          const sql = yield* SqlClient.SqlClient;
-          yield* sql`INSERT INTO waitlist (email, locale, answer, created_at) VALUES ('only@example.com', 'ko', 'full', 1)`;
           yield* directory.create(input);
           const removed: string[] = [];
           let attempts = 0;
@@ -279,12 +268,6 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
           expect(yield* runOperatorCli(["rebuild", "other@example.com"], path)).toBe(
             "No User for other@example.com",
           );
-          expect(yield* runOperatorCli(["remove-waitlist", "only@example.com"], path)).toBe(
-            "Removed Waitlist only@example.com",
-          );
-          expect(yield* runOperatorCli(["remove-waitlist", "only@example.com"], path)).toBe(
-            "No Waitlist email for only@example.com",
-          );
           expect(wire.headers["x-operator"]).toBe("local-only");
           expect(yield* directory.byHandle(input.handle)).toBeUndefined();
           expect(yield* runOperatorCli(["remove", "USER@EXAMPLE.COM"], path)).toBe(
@@ -303,9 +286,7 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
             ["remove", input.handle, "extra"],
           ]) {
             expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
-              new Error(
-                "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | remove-waitlist EMAIL",
-              ),
+              new Error("Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE"),
             );
           }
           expect(yield* runOperatorCli(["block", "other@example.com"], path)).toBe(
@@ -342,7 +323,6 @@ test("HTTP API, typed CLI and owner-only Unix socket run together", async () => 
                 failedCalls++;
                 return yield* Effect.fail(new Error("OpenCode offline"));
               }),
-            removeWaitlist: () => Effect.fail(new Error("database offline")),
             rebuild: () => Effect.fail(new Error("rebuild offline")),
           });
           const rebuildFailure = yield* Effect.promise(() =>

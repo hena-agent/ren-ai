@@ -12,7 +12,6 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { startMessagingHost, type startPersonaHost } from "./application.test-helper.ts";
 import type { Messages, Gestures } from "@ren-ai/imsg";
-import { noticeCopy } from "../src/onboarding/onboarding.ts";
 import { silentAlerts } from "./messaging.test-helper.ts";
 
 export const expectLateResults = (messages: ReadonlyArray<Message>) => {
@@ -151,11 +150,6 @@ export const startScriptedMessagingHost = (
     },
     messages,
     gestures,
-    {
-      turnstileSecret: "test-secret",
-      notice: noticeCopy,
-      defaultPersonaID: "persona1",
-    },
     silentAlerts,
   );
 

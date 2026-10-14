@@ -97,12 +97,7 @@ export const firstContacts = (
           yield* host.sessions.prompt({
             sessionID: session.id,
             id: SessionMessage.ID.make(`msg_discovery_${row.id}`),
-            text: conversationStarted(
-              now,
-              persona!.openingLine,
-              "The user consented on the website. Send your own first greeting; do not send a separate service notice.",
-              persona!.timeZone,
-            ),
+            text: conversationStarted(now, persona!.openingLine, persona!.timeZone),
           });
         });
         const outcome = yield* Effect.result(execution);

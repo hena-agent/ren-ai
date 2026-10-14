@@ -1,10 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { rm, copyFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Effect } from "effect";
+import { Context, Effect } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { notice } from "@ren-ai/onboarding";
+import { SqlClient } from "effect/unstable/sql";
+import { discoveryNotice } from "@ren-ai/onboarding";
+import type { Messages } from "@ren-ai/imsg";
 import { Session } from "@opencode/schema/session";
 import { expect } from "vitest";
+import { contacts } from "../src/discovery/contacts.ts";
+import { makeDiscoveryWeb } from "../src/discovery/discovery.ts";
+import { firstContacts } from "../src/discovery/first-contact.ts";
 import { messagingFixture, registration, runMessagingTest } from "./messaging.test-helper.ts";
 import { quietTestHost, startTestHost } from "./messaging-host.test-helper.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
@@ -16,16 +22,12 @@ export const resetFixture = async (prefix: string) => {
     join(fixture.personaDirectory, "persona2.md"),
   );
   const fake = fakeMessages();
-  const start = Effect.gen(function* () {
-    const host = yield* quietTestHost(
-      fixture.root,
-      fixture.personaDirectory,
-      fake.messages,
-      join(fixture.root, "opencode.sqlite"),
-    );
-    yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
-    return host;
-  });
+  const start = quietTestHost(
+    fixture.root,
+    fixture.personaDirectory,
+    fake.messages,
+    join(fixture.root, "opencode.sqlite"),
+  );
   return {
     ...fixture,
     fake,
@@ -40,57 +42,59 @@ export const resetFixture = async (prefix: string) => {
 
 type Host = Effect.Success<ReturnType<typeof startTestHost>>;
 
-export const onboardTestHandle = (
-  host: Pick<Host, "onboard" | "conversations" | "sessions">,
+const verified = HttpClient.make((request) =>
+  Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ success: true }))),
+);
+
+/** How a test handle starts over after `/reset`: register through Discovery, then start it directly. */
+export const startTestHandle = (
+  host: Host,
+  messages: Pick<Messages, "textStatus">,
   handle: string,
+  personaID = "persona1",
 ) =>
-  host
-    .onboard({
-      handle,
-      locale: "ko",
-      privacyNoticeVersion: notice.ko.version,
-      turnstileToken: "test",
-    })
-    .pipe(
-      // A sent Notice precedes asynchronous greeting admission; session.wait cannot wait for it yet.
-      Effect.tap((result) =>
-        result === "sent"
-          ? Effect.promise(async () => {
-              await expect
-                .poll(
-                  async () => {
-                    const conversation = await Effect.runPromise(
-                      host.conversations.byHandle(handle),
-                    );
-                    if (!conversation) return "";
-                    return JSON.stringify(
-                      await Effect.runPromise(
-                        host.sessions.messages({
-                          sessionID: Session.ID.make(conversation.sessionID),
-                        }),
-                      ),
-                    );
-                  },
-                  { timeout: 5000 },
-                )
-                .toContain("<conversation-started");
-            })
-          : Effect.void,
-      ),
-      Effect.provideService(
-        HttpClient.HttpClient,
-        HttpClient.make((request) =>
-          Effect.succeed(
-            HttpClientResponse.fromWeb(
-              request,
-              new Response('{"success":true}', {
-                headers: { "content-type": "application/json" },
-              }),
-            ),
-          ),
-        ),
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const catalog = async () =>
+      [...host.personas.values()].map((persona) => ({
+        id: persona.id,
+        name: persona.id,
+        bio: "public",
+        imageUrl: "",
+      }));
+    const discovery = yield* makeDiscoveryWeb({ catalog, turnstileSecret: "test" });
+    yield* Effect.addFinalizer(() => Effect.promise(discovery.dispose));
+    const joined = yield* Effect.promise(() =>
+      discovery.handler(
+        new Request("http://api.test/discovery/waitlist", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            handle,
+            locale: "ko",
+            privacyNoticeVersion: discoveryNotice.version,
+            turnstileToken: "human",
+            likedPersonaIDs: [personaID],
+          }),
+        }),
+        Context.make(HttpClient.HttpClient, verified),
       ),
     );
+    expect(joined.status).toBe(200);
+    const [registered] = yield* sql<{
+      id: string;
+    }>`SELECT id FROM discovery_registration WHERE handle = ${handle}`;
+    if (!registered) return "unavailable" as const;
+    const store = yield* contacts(catalog);
+    const started = yield* store.start(
+      { requestId: randomUUID(), registrationID: registered.id, personaID },
+      randomUUID(),
+    );
+    if (!started) return "unavailable" as const;
+    const first = yield* firstContacts(host, messages, host.conversations, "test/probe", () => {});
+    yield* first.tick;
+    return "started" as const;
+  });
 
 export const bindTestHandle = (host: Host, handle: string, personaID = "persona1") =>
   Effect.gen(function* () {

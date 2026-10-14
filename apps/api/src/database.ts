@@ -138,6 +138,12 @@ export const migrate = Effect.gen(function* () {
           request_id TEXT NOT NULL
         )`;
       }),
+      "020_retire_legacy_onboarding": Effect.gen(function* () {
+        yield* sql`DROP TABLE waitlist`;
+        yield* sql`ALTER TABLE reset DROP COLUMN notice_id`;
+        yield* sql`DELETE FROM send WHERE kind = 'notice'`;
+        yield* sql`DELETE FROM user WHERE joined_at IS NULL`;
+      }),
     }),
   });
 });

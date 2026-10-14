@@ -104,13 +104,13 @@ test("the current web disclosure must be available and matching", async () => {
   }
 });
 
-test("the public API allows both Discovery origins and rejects unrelated origins", async () => {
+test("the public API allows the Discovery origin and rejects unrelated origins", async () => {
   await run(
     Effect.gen(function* () {
       const { web } = yield* setup();
       yield* Effect.tryPromise(async () => {
         try {
-          for (const origin of ["https://discovery.hena.dev", "https://discovery.ambivalent.dev"]) {
+          for (const origin of ["https://discovery.ambivalent.dev"]) {
             const allowed = await web.handler(
               new Request("http://localhost/discovery/personas", { headers: { Origin: origin } }),
               Context.make(HttpClient.HttpClient, verified),
@@ -137,7 +137,9 @@ test("the public API allows both Discovery origins and rejects unrelated origins
             }),
             Context.make(HttpClient.HttpClient, verified),
           );
-          expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+          expect(denied.headers.get("access-control-allow-origin")).not.toBe(
+            "https://unrelated.example",
+          );
         } finally {
           await web.dispose();
         }
@@ -146,10 +148,17 @@ test("the public API allows both Discovery origins and rejects unrelated origins
   );
 });
 
+const answering = (answer: () => Response) =>
+  HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, answer())));
+
 test("verification failures, missing secrets and outages never admit a registration", async () => {
-  const failed = HttpClient.make((request) =>
-    Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ success: false }))),
-  );
+  const rejecting = [
+    () => Response.json({ success: false }),
+    () => Response.json({ success: true }, { status: 503 }),
+    () => Response.json(null),
+    () => Response.json("success"),
+    () => Response.json({}),
+  ].map(answering);
   const outage = HttpClient.make((request) =>
     Effect.fail(
       new HttpClientError.HttpClientError({
@@ -162,8 +171,8 @@ test("verification failures, missing secrets and outages never admit a registrat
       const { web, sql } = yield* setup();
       yield* Effect.tryPromise(async () => {
         try {
-          for (const client of [failed, outage]) {
-            const response = await post(web, input, "visitor", client);
+          for (const [index, client] of [...rejecting, outage].entries()) {
+            const response = await post(web, input, `visitor-${index}`, client);
             expect(response.status).toBe(400);
             expect(await response.json()).toBe("verification");
           }

@@ -19,7 +19,6 @@ import {
 } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, standaloneTestHost } from "../../test/messaging-host.test-helper.ts";
 import { intruder } from "../../test/host.test-helper.ts";
-import { noticeCopy } from "../onboarding/onboarding.ts";
 import {
   unrelatedSession,
   registerApplicationPlugin,
@@ -115,7 +114,6 @@ test("an incoming message reaches Docker's persona plugin and replies through th
               }),
             messages,
             messages.gestures,
-            { notice: noticeCopy, turnstileSecret: "test" },
             silentAlerts,
           );
         }).pipe(
@@ -196,7 +194,6 @@ test("an incoming message reaches Docker's persona plugin and replies through th
             "active",
           );
         }
-        yield* Effect.promise(application.disposeOnboarding);
       }),
     );
   } finally {

@@ -149,9 +149,6 @@ export const intake = (
       Effect.gen(function* () {
         const active = yield* byHandle(conversation.handle);
         if (active?.sessionID !== conversation.sessionID) return;
-        const notices = yield* sql<{ guid: string | null }>`SELECT guid FROM send
-          WHERE handle = ${conversation.handle} AND kind = 'notice'`;
-        const noticeGUIDs = new Set(notices.map((row) => row.guid));
         const started = yield* sql<{ startedAt: number }>`SELECT started_at AS startedAt
           FROM conversation WHERE id = ${conversation.id}`;
         const [followUp] = yield* sql<{ lastSentAt: number }>`SELECT last_sent_at AS lastSentAt
@@ -172,7 +169,6 @@ export const intake = (
         for (const row of rows) {
           if (
             (yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID ||
-            noticeGUIDs.has(row.guid) ||
             (yield* beforeReset(row))
           )
             continue;

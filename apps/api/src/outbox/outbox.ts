@@ -143,23 +143,6 @@ export const outbox = (
           JOIN conversation ON conversation.id = send.conversation_id
           WHERE conversation.session_id = ${sessionID} AND send.late = 1
           AND send.state IN ('sent', 'delivered', 'failed') ORDER BY send.id`,
-      notice: (handle: string, text: string) =>
-        Effect.gen(function* () {
-          const blocked = yield* sql`SELECT 1 FROM blocked WHERE handle = ${handle}`;
-          if (blocked.length) return;
-          const now = yield* Clock.currentTimeMillis;
-          yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
-            VALUES (${handle}, 'notice', ${text}, 'recorded', ${now}, ${now})`;
-          const [record] = yield* sql<{ id: number }>`SELECT id FROM send
-            WHERE handle = ${handle} AND kind = 'notice' ORDER BY id DESC LIMIT 1`;
-          const outcome = yield* Effect.result(messages.sendText(handle, text));
-          const updated = yield* Clock.currentTimeMillis;
-          if (Result.isFailure(outcome)) {
-            yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${updated} WHERE id = ${record!.id}`;
-          } else {
-            yield* sql`UPDATE send SET state = 'uncertain', guid = ${outcome.success.guid}, updated_at = ${updated} WHERE id = ${record!.id}`;
-          }
-        }),
       react: (conversation: Conversation, tapback: Tapback, callID: string, seenGUID?: string) =>
         PartitionedSemaphore.withPermit(
           locks,

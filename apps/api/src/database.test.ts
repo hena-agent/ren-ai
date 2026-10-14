@@ -7,7 +7,6 @@ import { SqlClient } from "effect/unstable/sql";
 import { expect, test, vi } from "vitest";
 import { migrate } from "./database.ts";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
-import { noticeCopy } from "./onboarding/onboarding.ts";
 import { startMessagingServer } from "../test/application.test-helper.ts";
 import { silentAlerts } from "../test/messaging.test-helper.ts";
 
@@ -45,9 +44,13 @@ test("forward migration leaves exactly the PRD app tables", async () => {
         "send",
         "test_handle",
         "user",
-        "waitlist",
       ]);
       expect(appTables).not.toContain("intake_last");
+      expect(
+        (yield* sql<{ name: string }>`SELECT name FROM pragma_table_info('reset')`).map(
+          (column) => column.name,
+        ),
+      ).not.toContain("notice_id");
     }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
   );
 });
@@ -81,7 +84,6 @@ test("the production entry keeps a separate server database open for its host li
             join(root, "server.sqlite"),
             messages.messages,
             ui.gestures,
-            { turnstileSecret: "test-secret", notice: noticeCopy },
             silentAlerts,
           );
           const session = yield* host.createSession("persona1");

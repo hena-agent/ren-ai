@@ -5,8 +5,7 @@
 `GET /api/personas`. That endpoint reads the Admin Catalog D1 directly through
 `@ren-ai/personas/catalog`; it does not call the messaging API or Admin HTTP API.
 Only published profiles are returned, and image URLs point at Admin's
-publication-checked image endpoint. `discovery.hena.dev` remains the separate
-selection and iMessage onboarding site in `packages/discovery.hena.dev`.
+publication-checked image endpoint.
 
 ## Local development
 
@@ -49,14 +48,13 @@ Never put a private token in a `VITE_` key.
 Before the first production build:
 
 1. Allow `https://discovery.ambivalent.dev` in the messaging API's `/discovery/`
-   CORS configuration while retaining `https://discovery.hena.dev`.
+   CORS configuration.
 2. Allow `discovery.ambivalent.dev` in the Invisible Turnstile widget. If using
-   the existing widget, retain `discovery.hena.dev`; its API secret stays unchanged.
+   the existing widget, its API secret stays unchanged.
 3. Publish personas in the Admin Catalog bound to this Worker. See
    [Admin deployment](../admin/README.md).
 4. Merge the PR and verify HTTPS, style selection, public photos and waiting
-   registration after CI deploys. The existing site's `/personas` and
-   `/onboarding` remain separate.
+   registration after CI deploys.
 
 For a local packaging check, run `bun run build` and
 `bunx wrangler deploy --dry-run` from this directory.
@@ -73,7 +71,7 @@ profile browsing; waiting registration still requires it. The API operator must:
   Configure the private Catalog token for the messaging runtime and retain the
   waitlist in persistent storage.
 - Permit `https://discovery.ambivalent.dev` in CORS, including JSON POST
-  preflight. The existing `discovery.hena.dev` onboarding origin stays active.
+  preflight.
 - Add `discovery.ambivalent.dev` to the existing Turnstile widget's allowed
   hostnames and use that widget's matching secret for API verification.
 - Publish personas in the Admin Catalog and verify profile/image retrieval and

@@ -8,7 +8,6 @@ import { makeBackup } from "./backup/backup.ts";
 import { startMessagingApplication } from "./application.ts";
 import { prepareMessaging, type MessagingTools } from "./application-tools.ts";
 import { catalogClient, type CatalogConnection } from "./personas/catalog.ts";
-import { noticeCopy } from "./onboarding/onboarding.ts";
 import { operatorHandler } from "./operator/api.ts";
 import { serveOperatorSocket } from "./operator/socket.ts";
 import { servePublic } from "@ren-ai/transport/listener";
@@ -28,10 +27,8 @@ export interface ServerConfig {
   readonly stateDirectory: string;
   readonly catalog: CatalogConnection;
   readonly managementToken: string;
-  readonly defaultPersonaID: string;
   readonly publicPort: number;
   readonly hostname?: string;
-  readonly noticeVersion?: string;
   readonly bootstrapOnly?: boolean;
   readonly messaging: { readonly url: string; readonly token: string };
   readonly opencode: RemoteConfig;
@@ -41,6 +38,7 @@ export interface ServerConfig {
 }
 
 const starting = () => Promise.resolve(new Response("Starting", { status: 503 }));
+const notFound = () => Promise.resolve(new Response("Not Found", { status: 404 }));
 
 /** Start the callback listener before recovery can load the remote persona plugin. */
 export const composeServer = (config: ServerConfig) =>
@@ -62,7 +60,6 @@ export const composeServer = (config: ServerConfig) =>
     });
     yield* Effect.addFinalizer(() => Effect.promise(discovery.dispose));
     let callbackWeb: (request: Request) => Promise<Response> = starting;
-    let onboardingWeb: (request: Request) => Promise<Response> = starting;
     let managementWeb: (request: Request) => Promise<Response> = starting;
     const publicWeb = (request: Request) => {
       const path = new URL(request.url).pathname;
@@ -70,7 +67,7 @@ export const composeServer = (config: ServerConfig) =>
       if (path.startsWith("/management/")) return managementWeb(request);
       if (path.startsWith("/discovery/"))
         return discovery.handler(request, Context.make(HttpClient.HttpClient, client));
-      return onboardingWeb(request);
+      return notFound();
     };
     const listener = yield* servePublic(publicWeb, config.publicPort, config.hostname);
     const registerCallback = (tools: MessagingTools, actionsEnabled: boolean) =>
@@ -100,20 +97,11 @@ export const composeServer = (config: ServerConfig) =>
         }),
       messages,
       messages.gestures,
-      {
-        turnstileSecret: config.secrets.TURNSTILE_SECRET,
-        notice: noticeCopy,
-        defaultPersonaID: config.defaultPersonaID,
-        ...(config.noticeVersion ? { noticeVersion: config.noticeVersion } : {}),
-      },
       health,
     );
-    yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
     yield* watchCatalog(host.client, config.opencode.directory, catalog.load, personas).pipe(
       Effect.forkScoped,
     );
-    onboardingWeb = (request) =>
-      host.onboardingWeb(request, Context.make(HttpClient.HttpClient, client));
     managementWeb = contactManagement(yield* contacts(catalog.publicList), config.managementToken);
     const scheduled = yield* firstContacts(
       host,

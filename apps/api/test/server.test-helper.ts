@@ -115,7 +115,6 @@ export const composedTestServer = (
             PERSONA_CATALOG_URL: catalog.url,
             TOKEN_CATALOG: catalog.token,
             TOKEN_MANAGEMENT: "management-test-token",
-            DEFAULT_PERSONA_ID: "persona1",
             PORT: "0",
             IMSG_URL: `${listenerUrl(mac)}/rpc`,
             IMSG_TOKEN: "messaging-secret",

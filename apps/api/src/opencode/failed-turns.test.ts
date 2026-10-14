@@ -23,7 +23,6 @@ import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
-import { noticeCopy } from "../onboarding/onboarding.ts";
 import { failedTurns } from "./failed-turns.ts";
 import { scriptedOverrides } from "./scripted-overrides.test-helper.ts";
 
@@ -100,7 +99,6 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
             },
             fakeMessages().messages,
             fakeGestures().gestures,
-            { turnstileSecret: "test", notice: noticeCopy },
             notifications,
           );
           const bind = (sessionID: string, handle: string) =>
@@ -405,7 +403,6 @@ test("provider failures back off independently per Conversation, doubling throug
           secondAt = yield* Clock.currentTimeMillis;
           expect(yield* requests("two@example.com")).toBe(index + 2);
         }
-        yield* Effect.promise(host.disposeOnboarding);
       }).pipe(Effect.provide(TestClock.layer())),
     );
   } finally {

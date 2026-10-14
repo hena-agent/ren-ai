@@ -3,7 +3,6 @@
   "workspaces": {
     ".": {
       "entry": [
-        "scripts/check-site-build.ts!",
         "scripts/exceptions.ts!",
         "scripts/run-quality-gate.ts!",
         "scripts/verify-gates.ts!"
@@ -39,9 +38,6 @@
     },
     "apps/discovery": {
       "entry": ["index.html", "worker/entry.mjs!", "scripts/build-worker.mjs!"]
-    },
-    "packages/discovery.hena.dev": {
-      "entry": ["src/routeTree.gen.ts!"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],

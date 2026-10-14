@@ -6,4 +6,3 @@ skills-lock.json
 fixtures/
 reports/mutation/
 .stryker-tmp/
-packages/discovery.hena.dev/src/routeTree.gen.ts

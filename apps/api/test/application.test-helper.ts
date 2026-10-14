@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { loadPersonas } from "@ren-ai/personas";
 import { isolatedHost } from "./isolated-host.test-helper.ts";
 import type { HostOptions, PersonaHostOptions } from "./embedded-host.test-helper.ts";
-import { startMessagingApplication, type OnboardingConfig } from "../src/application.ts";
+import { startMessagingApplication } from "../src/application.ts";
 import type { Messages, Gestures } from "@ren-ai/imsg";
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 
@@ -21,7 +21,6 @@ export const startMessagingHost = (
   options: MessagingOptions,
   messages: Messages,
   gestures: Gestures,
-  onboarding: OnboardingConfig,
   alerts: FailureAlerts,
 ) =>
   Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
@@ -30,7 +29,6 @@ export const startMessagingHost = (
       (tools) => isolatedHost(root, { ...options, ...tools }),
       messages,
       gestures,
-      { defaultPersonaID: "persona1", ...onboarding },
       alerts,
     ),
   );
@@ -41,7 +39,6 @@ export const startMessagingServer = (
   databaseFile: string,
   messages: Messages,
   gestures: Gestures,
-  onboarding: OnboardingConfig,
   alerts: FailureAlerts,
 ) =>
   Effect.gen(function* () {
@@ -49,7 +46,7 @@ export const startMessagingServer = (
     const database = yield* Layer.build(
       SqliteClient.layer({ filename: databaseFile, busyTimeout: "5 seconds" }),
     );
-    return yield* startMessagingHost(root, options, messages, gestures, onboarding, alerts).pipe(
+    return yield* startMessagingHost(root, options, messages, gestures, alerts).pipe(
       Effect.provide(database),
     );
   });

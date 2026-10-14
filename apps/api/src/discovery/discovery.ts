@@ -15,8 +15,8 @@ import {
   PublicPersona,
   discoveryNotice,
 } from "@ren-ai/onboarding";
-import { verifyTurnstile } from "../onboarding/onboarding.ts";
-import { submissionLimit } from "../onboarding/rate-limit.ts";
+import { submissionLimit } from "./rate-limit.ts";
+import { verifyTurnstile } from "./turnstile.ts";
 
 const failure = Schema.Literals([
   "consent",
@@ -116,7 +116,7 @@ export const makeDiscoveryWeb = ({
         Layer.provide(HttpServer.layerServices),
         Layer.provide(
           HttpRouter.cors({
-            allowedOrigins: ["https://discovery.hena.dev", "https://discovery.ambivalent.dev"],
+            allowedOrigins: ["https://discovery.ambivalent.dev"],
           }),
         ),
       ),

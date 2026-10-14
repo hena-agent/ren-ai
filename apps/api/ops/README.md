@@ -1,41 +1,46 @@
 # Separate application, OpenCode, and Messages deployments
 
-## Discovery domain cutover
+## Discovery and Admin
 
-`discovery.ambivalent.dev` is an additional swipe/waitlist app in `apps/discovery`,
-deployed with Cloudflare Workers Builds. `admin.ambivalent.dev` is the Catalog and
-authoring Worker in `apps/admin`. The existing `discovery.hena.dev` site and its
-GitHub Actions deployment remain active. See the [Discover setup](../../../apps/discovery/README.md)
-and [Admin setup](../../../apps/admin/README.md#workers-builds).
-Deploy the `/discovery/` API's additional CORS origin and allow the new hostname
-in Turnstile before deploying Discover. Retain the old widget hostname and
-onboarding API origin. Point the application at `https://admin.ambivalent.dev` with
-the matching private Catalog token; changing the website does not redeploy the
-application.
+`discovery.ambivalent.dev` is the Discovery app in `apps/discovery`, and
+`admin.ambivalent.dev` is the Catalog and authoring Worker in `apps/admin`. GitHub
+Actions deploys both after the quality gates; see the [Discover setup](../../../apps/discovery/README.md)
+and [Admin setup](../../../apps/admin/README.md#automatic-deployment). Point the
+application at `https://admin.ambivalent.dev` with the matching private Catalog
+token; deploying either website does not redeploy the application.
 
-The site is `discovery.hena.dev` in `packages/discovery.hena.dev`, served by the `discovery-hena-dev` Worker. The former `msg-hena-dev` Worker and its `msg.hena.dev` domain are retired without a redirect. The existing Turnstile widget now permits only `discovery.hena.dev`.
+## Retire the old test site
 
-For a future domain move, deploy the API's new CORS origin and update Turnstile before deploying the website. Verify HTTPS, `/`, `/privacy`, and browser access to `/onboarding` and `/waitlist` before retiring the old Worker, custom-domain/DNS binding, and CORS origin. Build with the production `VITE_TURNSTILE_SITE_KEY`; main auto-deploys the site. `ops/deploy.sh` is for bootstrap-only migration, not a routine API update.
+The persona-selection site at `discovery.hena.dev` and its immediate onboarding are
+gone ([ADR-0015](../../../docs/adr/0015-discovery-is-the-only-onboarding.md)). Every
+conversation it started was test data. Retire it in this order:
 
-For persona selection, deploy the API/catalog before the site when possible. If an older API returns 404 for `/personas`, the new site still offers the handle form and omits `personaID`, preserving that API's default persona. Server and network errors show catalog retry instead; they never enable legacy onboarding or offer fabricated profiles.
-
-The generated route file's three exception paths move with the package; their reasons and dates stay unchanged. Changes to `quality-exceptions.json` require the human CODEOWNER's review.
+1. With the old application still running, take each handle from the `user`
+   table of `server.sqlite` and `remove` it with the operator CLI, so no
+   conversation from the old flow remains.
+2. Delete `DEFAULT_PERSONA_ID` from the protected application env file and deploy
+   the application. Migration 020 drops the email waitlist and leftover Notice
+   records; the old site's routes now answer `404`.
+3. In the hena.dev Cloudflare account, delete the `discovery-hena-dev` Worker and
+   its `discovery.hena.dev` custom domain, and remove that hostname from the
+   Turnstile widget.
+4. Delete the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository
+   secrets; no workflow uses them.
 
 ## Service deployment and relocation
 
 ### Discovery selection and first contact
 
 The normal application listener serves `/discovery/personas` and
-`/discovery/waitlist` alongside the existing onboarding and plugin callback.
-The management routes `/management/discovery` (GET) and
-`/management/discovery/select` (POST) require `TOKEN_MANAGEMENT`, matching
+`/discovery/waitlist` alongside the plugin callback.
+The management routes `/management/discovery` (GET),
+`/management/discovery/select` and `/management/discovery/start` (POST) require `TOKEN_MANAGEMENT`, matching
 Admin's `TOKEN_MANAGEMENT`. Keep this credential separate from `TOKEN_CATALOG`,
 messaging and plugin tokens. Configure the Admin Catalog at
 `https://admin.ambivalent.dev` and retain the application SQLite volume.
 
-Before rollout, inspect live `user`/`conversation` persona assignments. The new
-one-persona/one-user policy also applies to legacy onboarding; duplicate live
-assignments stop application startup and need explicit operator resolution.
+Before rollout, inspect live `user`/`conversation` persona assignments. Duplicate
+live assignments stop application startup and need explicit operator resolution.
 No conversations are automatically deleted. Migration 019 creates the durable
 assignment/selection/contact tables. Operator removal and test reset release
 assignments. Failed, blocked, unreachable and uncertain first contacts keep
@@ -43,8 +48,7 @@ their reservation until the operator resolves/removes them.
 
 Selection and its 5–60 minute schedule commit together. The worker records a
 session ID before creating its native folder, and records the Conversation
-before enqueueing the Greeting with a stable inbox ID. It sends no separate
-Notice. Restart continues untouched due reservations and observes existing
+before enqueueing the Greeting with a stable inbox ID. Restart continues untouched due reservations and observes existing
 preparations/sends without submitting a second Greeting. An interrupted or
 uncertain attempt requires inspection; send failures and iMessage absence are
 distinct from observed success. Request/task diagnostics are JSON with request
@@ -53,8 +57,6 @@ message content.
 
 Deploy the updated API, set the matching Admin secret, deploy Admin, then
 rebuild Discovery with `VITE_DISCOVERY_API_URL=https://api-msg.hena.dev`.
-Retain the existing site's CORS origin and add `discovery.ambivalent.dev` to the
-existing production Turnstile widget.
 
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
@@ -80,7 +82,7 @@ The Catalog is the Admin Worker's Drizzle/D1 database and starts empty. Set
 env file; the token matches the Worker's `TOKEN_CATALOG`. There is no file mount
 or seed-copy step. See [Admin deployment](../../../apps/admin/README.md).
 The application polls revisions and synchronizes native folders. Publish new
-personas before onboarding; any default must be an actual published ID.
+personas before Discovery offers them.
 Missing IDs preserve existing session snapshots privately. Deploy the updated
 session-folder plugin before the application so new Conversations receive
 initial State/Memory while updates preserve existing documents.
@@ -132,7 +134,7 @@ The Mac messaging service is a separate package with its own [runbook](../../ims
 2. During the approved pause, stop **old intake and scheduling**; settle work or record every pending/uncertain send. Stop its LaunchAgent and confirm no process still holds either database. Leave Apple Messages receiving. Export existing target Docker volumes as a rollback backup only during their own separately approved stop; never replace that home during the initial session import.
 3. `CONFIRM_SOURCE_STOPPED=yes bash ops/snapshot-legacy.sh OLD-STATE NEW-SNAPSHOT` preserves complete application state, bookmarks/bindings/send records, plus coherent `server.sqlite` and `opencode.sqlite` copies. No original database writes. This tooling requires the original state tree, not the old GET-only viewer.
 4. `bash ops/export-legacy.sh NEW-SNAPSHOT OLD-PERSONA-DIRECTORY` runs the pinned native 2.0.19 core/server **only inside a network-disabled one-off image** against a throwaway copy. It exports through native HTTP route APIs without opening a listener, invoking a restart sweep, calling the model, or loading the old plugin. Native schema migrations may update only that disposable copy. Review fidelity against stopped 2.0.16 snapshots before cutover; keep original snapshots unchanged. `sessions.json` includes all sessions in the old location (active, retained resets/removals and children) and pending user/synthetic inbox data.
-5. `bash ops/install-application-state.sh NEW-SNAPSHOT/application-state` copies the separate application state into an **empty** target application volume without rewriting session IDs/bookmarks or clearing uncertain sends. Start the app with `BOOTSTRAP_ONLY=true` via `CONFIRM_STAGED_DEPLOYMENT=yes bash ops/deploy.sh`: HTTP/callback starts, onboarding is 503, tools reject execution, and no intake/scheduling/recovery/OpenCode calls run.
+5. `bash ops/install-application-state.sh NEW-SNAPSHOT/application-state` copies the separate application state into an **empty** target application volume without rewriting session IDs/bookmarks or clearing uncertain sends. Start the app with `BOOTSTRAP_ONLY=true` via `CONFIRM_STAGED_DEPLOYMENT=yes bash ops/deploy.sh`: HTTP/callback starts, management is 503, tools reject execution, and no intake/scheduling/recovery/OpenCode calls run.
 6. Install/verify the plugin location and sessions overlay with the callback alive. Use `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts restore NEW-SNAPSHOT/sessions.json` against the existing OpenCode. Restore checks the complete archive and target IDs, refuses collisions/cycles/control work and fork/revert metadata, preserves IDs, creates folders before import and imports parents first. Modern archives carry persona/agent/rules and Conversation document snapshots. If an archive needs definitions, supply the authenticated Catalog connection; missing IDs fail. For root sessions, use the paused `session-transfer.ts folders NEW-ARCHIVE.json` command after draining execution and inbox work. Native2.0.19 import omits fork/revert information; such archives require a full OpenCode home-volume restore. Pending work is queued with `resume:false`, including inline images. Existing sessions are never overwritten. Inspect partial target IDs before retrying an import.
 7. Verify session/message/tool history, retained sessions, app bindings, plugin policy, both public authenticated endpoints, native cookie/machine/UI flows, and Messages attachment/status/read/typing/reaction behavior. Reconcile physical-send uncertainty against Messages history; **never retry an uncertain send just because it is absent from imported session memory**. Pending control operations must be drained/settled before migration, not silently dropped.
 8. Explicitly restart the app with `BOOTSTRAP_ONLY=false` only after verification. Recovery activates imported pending inbox work through supported APIs, intake catches up Messages history and GUID deduplication prevents replay. Verify messages received during the pause, scheduling and delivery reconciliation with a marked test Handle, not personal conversations.
