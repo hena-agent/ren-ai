@@ -28,14 +28,16 @@ test("photo deletion confirms its style and main-image promotion, cancellation l
     event.preventDefault();
   });
   form.requestSubmit(main);
-  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 메인"));
-  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("다음 사진이 메인"));
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 대표"));
+  expect(confirm).toHaveBeenLastCalledWith(
+    expect.stringContaining("추가 1 사진이 새 대표 · 외모 기준"),
+  );
   expect(sent).toEqual([]);
   expect(form.hasAttribute("aria-busy")).toBe(false);
   confirm.mockReturnValue(true);
   form.requestSubmit(secondary);
   expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 추가 1"));
-  expect(confirm).toHaveBeenLastCalledWith(expect.not.stringContaining("다음 사진이 메인"));
+  expect(confirm).toHaveBeenLastCalledWith(expect.not.stringContaining("새 대표 · 외모 기준"));
   expect(sent).toEqual([secondary.getAttribute("formaction")]);
   expect(document.querySelectorAll(".image-option")).toHaveLength(2);
 });

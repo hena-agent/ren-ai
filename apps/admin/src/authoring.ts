@@ -42,6 +42,7 @@ export function readIntent(form: FormData) {
     intent === "subportrait" ||
     intent === "regenerate" ||
     intent === "delete-image" ||
+    intent === "set-main" ||
     intent === "introduction" ||
     intent === "profile" ||
     intent === "inspect" ||

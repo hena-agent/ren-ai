@@ -10,6 +10,7 @@ import {
   legacy,
   request,
   tokenOf,
+  portraitImage,
 } from "../test/fixtures.ts";
 import {
   basePreview,
@@ -190,7 +191,8 @@ test("invalid styles, image targets and missing public introductions are rejecte
 
 test("legacy single image replacement preserves its format and works with a signed draft after restart", async () => {
   const { admin, store } = await fixture();
-  await store.create(legacy);
+  const imageUrl = await store.saveImage(portraitImage);
+  await store.create({ ...legacy, imageUrl });
   const path = `/personas/${legacy.id}`;
   const page = await (await admin(request(path))).text();
   const fields = {
@@ -200,8 +202,8 @@ test("legacy single image replacement preserves its format and works with a sign
     intent: "regenerate",
   };
   const next = await (await admin(request(`${path}?image=0&style=photo`, fields))).text();
-  expect(preview(next).imageUrl).not.toBe(legacy.imageUrl);
-  expect((await store.get(legacy.id)).imageUrl).toBe(legacy.imageUrl);
+  expect(preview(next).imageUrl).not.toBe(imageUrl);
+  expect((await store.get(legacy.id)).imageUrl).toBe(imageUrl);
   const fresh = createAdmin(store, "test-password", "", { generator, log: () => {} });
   expect(
     (await fresh(request(`${path}?image=0&style=photo`, { ...fields, draft: tokenOf(next) })))

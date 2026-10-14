@@ -109,8 +109,22 @@ export function Comparison({
                       loading="lazy"
                     />
                   </a>
-                  <figcaption>{main ? "메인" : `추가 ${index}`}</figcaption>
+                  <figcaption>{main ? "대표 · 외모 기준" : `추가 ${index}`}</figcaption>
                   <div className="portrait-image-actions">
+                    {!main && (
+                      <button
+                        className="secondary"
+                        form="persona-editor"
+                        type="submit"
+                        name="intent"
+                        value="set-main"
+                        disabled={locked}
+                        formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
+                        aria-label={`${copy.portraitLabels[style]} 추가 ${index} 대표로 지정`}
+                      >
+                        대표로 지정
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="secondary"
@@ -145,7 +159,7 @@ export function Comparison({
                       value="delete-image"
                       disabled={locked}
                       formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
-                      data-confirm-delete={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 사진을 삭제할까요?${main ? " 같은 스타일의 다음 사진이 메인이 됩니다. 남은 사진이 없으면 이 스타일은 빈 상태로 표시됩니다." : ""} 저장하기 전까지 공개된 사진은 유지됩니다.`}
+                      data-confirm-delete={`${copy.portraitLabels[style]} ${main ? "대표" : `추가 ${index}`} 사진을 삭제할까요?${main ? ` ${images.find((image) => image.style === style && !image.main) ? "추가 1 사진이 새 대표 · 외모 기준이 되고 Discovery에서 먼저 표시됩니다." : "남은 사진이 없어 이 스타일은 빈 상태로 표시됩니다."}` : ""} 저장하기 전까지 공개된 사진은 유지됩니다.`}
                       aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 삭제`}
                     >
                       삭제

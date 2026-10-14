@@ -66,7 +66,7 @@ export function imageSubmission(
       key: regenerationKey(previewOf(draft, emptyPersona), params),
       draft: latest?.base === draft.base ? latest : draft,
     };
-  if (intent === "regenerate")
+  if (intent === "regenerate" || intent === "set-main")
     return {
       key: regenerationKey(previewOf(draft, emptyPersona), params),
       draft: latestImageDraft(draft, latest, params),
