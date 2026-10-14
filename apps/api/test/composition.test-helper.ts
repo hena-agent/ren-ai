@@ -1,30 +1,25 @@
-import { join } from "node:path";
-import { ConfigProvider, Context, Effect } from "effect";
+import { Context, Effect } from "effect";
 import { HttpClient } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
-import { Session } from "@opencode/schema/session";
-import { makeHealth } from "./health/health.ts";
-import { makeBackup } from "./backup/backup.ts";
-import { startMessagingApplication } from "./application.ts";
-import { prepareMessaging, type MessagingTools } from "./application-tools.ts";
-import { catalogClient, type CatalogConnection } from "./personas/catalog.ts";
-import { operatorHandler } from "./operator/api.ts";
-import { serveOperatorSocket } from "./operator/socket.ts";
+import { silentAlerts } from "./messaging.test-helper.ts";
+import { startMessagingApplication } from "../src/application.ts";
+import { prepareMessaging, type MessagingTools } from "../src/application-tools.ts";
+import { catalogClient, type CatalogConnection } from "../src/personas/catalog.ts";
+import { operatorHandler } from "../src/operator/api.ts";
+import { authenticatedOperator } from "./operator-http.test-helper.ts";
 import { servePublic } from "@ren-ai/transport/listener";
 import { remoteMessages } from "@ren-ai/imsg/client";
-import { applicationGateway } from "./opencode/application-gateway.ts";
-import { remoteHost, type RemoteConfig } from "./opencode/remote.ts";
-import { exportSessions } from "./opencode/transfer.ts";
-import { syncFolders, catalogRefresher } from "./opencode/catalog-sync.ts";
-import { makeDiscoveryWeb } from "./discovery/discovery.ts";
-import { contacts } from "./discovery/contacts.ts";
-import { checkAssignments } from "./discovery/assignment.ts";
-import { contactManagement } from "./discovery/management.ts";
-import { firstContacts } from "./discovery/first-contact.ts";
-import { migrate } from "./database.ts";
+import { applicationGateway } from "../src/opencode/application-gateway.ts";
+import { remoteHost, type RemoteConfig } from "../src/opencode/remote.ts";
+import { syncFolders, catalogRefresher } from "../src/opencode/catalog-sync.ts";
+import { makeDiscoveryWeb } from "../src/discovery/discovery.ts";
+import { contacts } from "../src/discovery/contacts.ts";
+import { checkAssignments } from "../src/discovery/assignment.ts";
+import { contactManagement } from "../src/discovery/management.ts";
+import { firstContacts } from "../src/discovery/first-contact.ts";
+import { migrate } from "../src/database.ts";
 
 export interface ServerConfig {
-  readonly stateDirectory: string;
   readonly catalog: CatalogConnection;
   readonly managementToken: string;
   readonly publicPort: number;
@@ -43,9 +38,7 @@ const notFound = () => Promise.resolve(new Response("Not Found", { status: 404 }
 /** Start the callback listener before recovery can load the remote persona plugin. */
 export const composeServer = (config: ServerConfig) =>
   Effect.gen(function* () {
-    const health = yield* makeHealth.pipe(
-      Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config.secrets))),
-    );
+    const health = silentAlerts;
     const client = yield* HttpClient.HttpClient;
     const sql = yield* SqlClient.SqlClient;
     yield* migrate;
@@ -61,10 +54,12 @@ export const composeServer = (config: ServerConfig) =>
     yield* Effect.addFinalizer(() => Effect.promise(discovery.dispose));
     let callbackWeb: (request: Request) => Promise<Response> = starting;
     let managementWeb: (request: Request) => Promise<Response> = starting;
+    let operatorWeb: (request: Request) => Promise<Response> = starting;
     const publicWeb = (request: Request) => {
       const path = new URL(request.url).pathname;
       if (path.startsWith("/rpc")) return callbackWeb(request);
       if (path.startsWith("/management/")) return managementWeb(request);
+      if (path.startsWith("/operator/")) return operatorWeb(request);
       if (path.startsWith("/discovery/"))
         return discovery.handler(request, Context.make(HttpClient.HttpClient, client));
       return notFound();
@@ -129,27 +124,8 @@ export const composeServer = (config: ServerConfig) =>
       Effect.mapError((cause) => new Error("Application heartbeat failed", { cause })),
     );
     yield* heartbeat;
-    yield* Effect.forkScoped(health.monitor);
-    const backup = yield* makeBackup(
-      {
-        directory: join(config.stateDirectory, "backups"),
-        sessions: sql<{ sessionID: string }>`SELECT session_id AS sessionID FROM conversation
-      UNION SELECT session_id AS sessionID FROM retained_session`.pipe(
-          Effect.flatMap((rows) =>
-            exportSessions(
-              host.client,
-              rows.map((row) => Session.ID.make(row.sessionID)),
-            ),
-          ),
-        ),
-      },
-      health,
-    );
-    yield* Effect.forkScoped(backup.monitor);
     const operator = operatorHandler(host.operator);
     yield* Effect.addFinalizer(() => Effect.promise(operator.dispose));
-    const socket = join(config.stateDirectory, "operator", "operator.sock");
-    const stop = yield* Effect.promise(() => serveOperatorSocket(socket, operator.handler));
-    yield* Effect.addFinalizer(() => Effect.promise(stop));
-    return { mode: "running" as const, host, heartbeat, backup, socket, publicWeb, listener };
+    operatorWeb = authenticatedOperator(operator.handler, config.managementToken);
+    return { mode: "running" as const, host, heartbeat, publicWeb, listener };
   });

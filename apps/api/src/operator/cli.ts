@@ -1,8 +1,7 @@
 import { Effect } from "effect";
-import { operatorClient } from "./socket.ts";
+import { operatorClient, operatorConnection, type OperatorConnection } from "./clientHttp.ts";
 
-/** The future CLI entry file only passes argv and the state socket path here. */
-export const runOperatorCli = (args: readonly string[], socketPath: string) =>
+export const runOperatorCli = (args: readonly string[], connection?: OperatorConnection) =>
   Effect.gen(function* () {
     const [command, handle] = args;
     if (
@@ -14,7 +13,7 @@ export const runOperatorCli = (args: readonly string[], socketPath: string) =>
         new Error("Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE"),
       );
     }
-    const client = yield* operatorClient(socketPath);
+    const client = yield* operatorClient(connection ?? (yield* operatorConnection));
     if (command === "test-handle" || command === "untest-handle") {
       yield* client.operator.testHandle({
         payload: { handle, enabled: command === "test-handle" },

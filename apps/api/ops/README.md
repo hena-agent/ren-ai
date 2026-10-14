@@ -40,16 +40,25 @@ deploying either website does not redeploy the application.
 
 ## Operator commands
 
-The application image carries the operator CLI at `/app/src/operator.js`. It calls
-the running service through the socket in its state volume. From `apps/api`, with
-the deployment's Compose variables set:
+From a dependency-installed checkout in `apps/api`, set `API_APP_URL` to the
+central HTTPS application origin and load `TOKEN_MANAGEMENT` from the protected
+operator environment. The typed CLI calls authenticated `/operator` routes;
+it never opens an application state directory or Unix socket:
 
 ```sh
-docker compose -f ops/compose.yml exec api bun /app/src/operator.js remove HANDLE
+API_APP_URL=https://api-app.renai.im bun run operator remove HANDLE
 ```
 
 The commands are `remove`, `block`, `rebuild`, `test-handle` and `untest-handle`,
 each taking one handle.
+
+The Dockerfile now builds only plugin-installation and explicit offline-export
+artifacts. `compose.yml` retains the plugin installer and original volume names,
+not an application listener or tunnel. The obsolete Docker serving/deploy path
+has been removed; api-app runs as the Worker, and api-msg's separately provisioned
+runtime is owned by `apps/api-msg`. This cleanup does not move OpenCode, Messages,
+their ingress, or any existing volume. The stopped legacy volume remains available
+for the coordinated read-only state export.
 
 ## Retire the old test site
 
@@ -57,11 +66,10 @@ The persona-selection site at `discovery.hena.dev` and its immediate onboarding 
 gone ([ADR-0015](../../../docs/adr/0015-discovery-is-the-only-onboarding.md)). Every
 conversation it started was test data. Retire it in this order:
 
-1. With the old application still running, take each handle from the `user`
-   table of `server.sqlite` and `remove` it with the [operator CLI](#operator-commands),
-   so no conversation from the old flow remains. The old image has no CLI: build
-   the new image and run its CLI against the same state volume with
-   `docker run --rm --entrypoint bun -v ren-ai-application-state:/state ren-ai/application:local /app/src/operator.js remove HANDLE`.
+1. After the coordinated state import, take each legacy test handle from the
+   reviewed export and `remove` it with the [central operator CLI](#operator-commands),
+   so no conversation from the old flow remains. Do not attach a new writer to
+   the stopped legacy SQLite volume.
 2. Delete `DEFAULT_PERSONA_ID` from the protected application env file and deploy
    the application. Migration 020 drops the email waitlist and leftover Notice
    records; the old site's routes now answer `404`.
@@ -129,7 +137,8 @@ The management routes `/management/discovery` (GET),
 `/management/discovery/select` and `/management/discovery/start` (POST) require `TOKEN_MANAGEMENT`, matching
 Admin's `TOKEN_MANAGEMENT`. Keep this credential separate from `TOKEN_CATALOG`,
 messaging and plugin tokens. Configure the Admin Catalog at
-`https://admin.renai.im` and retain the application SQLite volume.
+`https://admin.renai.im`. Current application state belongs to Durable Object
+SQLite; preserve any stopped legacy volume only for reviewed export/rollback.
 
 Before rollout, inspect live `user`/`conversation` persona assignments. Duplicate
 live assignments stop application startup and need explicit operator resolution.
@@ -205,7 +214,7 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
 2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api-app.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Each runtime module receives `directory:/srv/ren-ai`, the callback URL and `tokenFile:/srv/ren-ai/application.token`; it runs only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
 3. Put `opencode.json` and `application.token` (same value as `REN_AI_APPLICATION_TOKEN`) in `REN_AI_LOCATION_INPUT`, owner-only. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. The new exporter requires all five volumes: when upgrading an old four-volume deployment, first provision the new empty sessions volume (`docker volume create "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}"`) without mounting it into running services, then export with the **old** location volume selected. For an existing old plugin volume, select a **new** `REN_AI_LOCATION_VOLUME` (for example `ren-ai-opencode-location-v2`) and explicitly `docker volume create "$REN_AI_LOCATION_VOLUME"`; never overwrite the old volume. Keep the application in `BOOTSTRAP_ONLY=true` while migrating.
-4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The application bundle also carries `templates/ground-rules.md` beside its `src/app.js`, preserving `new URL('../templates/ground-rules.md', import.meta.url)` after bundling. No plugin constructs agents.
+4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The Worker bundles its ground rules as text; Node story adapters load the private template with `loadGroundRules`. No plugin constructs agents.
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.
 
    ```sh
@@ -229,7 +238,7 @@ The Mac messaging service is a separate package with its own [runbook](../../ims
 2. During the approved pause, stop **old intake and scheduling**; settle work or record every pending/uncertain send. Stop its LaunchAgent and confirm no process still holds either database. Leave Apple Messages receiving. Export existing target Docker volumes as a rollback backup only during their own separately approved stop; never replace that home during the initial session import.
 3. `CONFIRM_SOURCE_STOPPED=yes bash ops/snapshot-legacy.sh OLD-STATE NEW-SNAPSHOT` preserves complete application state, bookmarks/bindings/send records, plus coherent `server.sqlite` and `opencode.sqlite` copies. No original database writes. This tooling requires the original state tree, not the old GET-only viewer.
 4. `bash ops/export-legacy.sh NEW-SNAPSHOT OLD-PERSONA-DIRECTORY` runs the pinned native 2.0.19 core/server **only inside a network-disabled one-off image** against a throwaway copy. It exports through native HTTP route APIs without opening a listener, invoking a restart sweep, calling the model, or loading the old plugin. Native schema migrations may update only that disposable copy. Review fidelity against stopped 2.0.16 snapshots before cutover; keep original snapshots unchanged. `sessions.json` includes all sessions in the old location (active, retained resets/removals and children) and pending user/synthetic inbox data.
-5. `bash ops/install-application-state.sh NEW-SNAPSHOT/application-state` copies the separate application state into an **empty** target application volume without rewriting session IDs/bookmarks or clearing uncertain sends. Start the app with `BOOTSTRAP_ONLY=true` via `CONFIRM_STAGED_DEPLOYMENT=yes bash ops/deploy.sh`: HTTP/callback starts, management is 503, tools reject execution, and no intake/scheduling/recovery/OpenCode calls run.
+5. The historical `install-application-state.sh` copies a stopped snapshot to an empty archival volume only. It is not a Worker import. Use the coordinated read-only export and empty Durable Object import described above; do not start another local SQLite writer. Keep the Worker bootstrap-only while reviewing IDs/bookmarks and uncertain sends.
 6. Install/verify the plugin location and sessions overlay with the callback alive. Use `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts restore NEW-SNAPSHOT/sessions.json` against the existing OpenCode. Restore checks the complete archive and target IDs, refuses collisions/cycles/control work and fork/revert metadata, preserves IDs, creates folders before import and imports parents first. Modern archives carry persona/agent/rules and Conversation document snapshots. If an archive needs definitions, supply the authenticated Catalog connection; missing IDs fail. For root sessions, use the paused `session-transfer.ts folders NEW-ARCHIVE.json` command after draining execution and inbox work. Native2.0.19 import omits fork/revert information; such archives require a full OpenCode home-volume restore. Pending work is queued with `resume:false`, including inline images. Existing sessions are never overwritten. Inspect partial target IDs before retrying an import.
 7. Verify session/message/tool history, retained sessions, app bindings, plugin policy, both public authenticated endpoints, native cookie/machine/UI flows, and Messages attachment/status/read/typing/reaction behavior. Reconcile physical-send uncertainty against Messages history; **never retry an uncertain send just because it is absent from imported session memory**. Pending control operations must be drained/settled before migration, not silently dropped.
 8. Explicitly restart the app with `BOOTSTRAP_ONLY=false` only after verification. Recovery activates imported pending inbox work through supported APIs, intake catches up Messages history and GUID deduplication prevents replay. Verify messages received during the pause, scheduling and delivery reconciliation with a marked test Handle, not personal conversations.

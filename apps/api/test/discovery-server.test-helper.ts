@@ -1,9 +1,9 @@
 import { Context, Effect } from "effect";
 import { HttpClient } from "effect/unstable/http";
-import { catalogClient } from "../personas/catalog.ts";
-import { migrate } from "../database.ts";
+import { catalogClient } from "../src/personas/catalog.ts";
+import { migrate } from "../src/database.ts";
 import { servePublic } from "@ren-ai/transport/listener";
-import { makeDiscoveryWeb } from "./discovery.ts";
+import { makeDiscoveryWeb } from "../src/discovery/discovery.ts";
 
 export const startDiscovery = ({
   catalogUrl,

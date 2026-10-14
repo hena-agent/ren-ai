@@ -1,10 +1,9 @@
-import { mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { TestLLM } from "@opencode/ai/testing";
-import { Effect, Layer, Sink, Stream, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
-import { ChildProcessSpawner } from "effect/unstable/process";
 import { Session } from "@opencode/schema/session";
 import { expect, test, vi } from "vitest";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
@@ -12,6 +11,7 @@ import { discoveryNotice, ContactSelection } from "@ren-ai/onboarding";
 import { SqlClient } from "effect/unstable/sql";
 import { randomUUID } from "node:crypto";
 import { runOperatorCli } from "./operator/cli.ts";
+import { exportSessions } from "./opencode/transfer.ts";
 import { valid, personaFixture } from "../test/host.test-helper.ts";
 import { composedTestServer, unrelatedSession } from "../test/server.test-helper.ts";
 import { listenerUrl } from "../test/listener.test-helper.ts";
@@ -19,25 +19,8 @@ import { servePublic } from "@ren-ai/transport/listener";
 import { runMessagingTest } from "../test/messaging.test-helper.ts";
 
 const platform = Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer);
-const processes = ChildProcessSpawner.make(() =>
-  Effect.succeed(
-    ChildProcessSpawner.makeHandle({
-      pid: ChildProcessSpawner.ProcessId(1),
-      exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
-      isRunning: Effect.succeed(false),
-      unref: Effect.succeed(Effect.void),
-      kill: () => Effect.void,
-      stdin: Sink.drain,
-      stdout: Stream.make(new TextEncoder().encode("Filesystem 100 99 1 1% /")),
-      stderr: Stream.empty,
-      all: Stream.empty,
-      getInputFd: () => Sink.drain,
-      getOutputFd: () => Stream.empty,
-    }),
-  ),
-);
 
-test("composed HTTP, remote OpenCode, messaging API and operator socket complete a Conversation", async () => {
+test("composed HTTP, remote OpenCode, messaging API and authenticated operator complete a Conversation", async () => {
   const { root, personaDirectory, cleanup } = await personaFixture("composed-server-", valid);
   const fake = fakeMessages();
   const ui = fakeGestures();
@@ -151,24 +134,21 @@ test("composed HTTP, remote OpenCode, messaging API and operator socket complete
           (yield* Effect.promise(() => server.publicWeb(new Request("http://local/api/config"))))
             .status,
         ).toBe(404);
-        yield* server.backup.tick;
-        const files = yield* Effect.promise(() => readdir(join(root, "backups")));
-        expect(files.filter((name) => /^server-\d+\.sqlite$/.test(name))).toHaveLength(1);
-        const archive = files.find((name) => /^opencode-\d+\.json$/.test(name))!;
-        expect(
-          yield* Effect.promise(() => readFile(join(root, "backups", archive), "utf8")),
-        ).toContain("반가워!");
-        expect(server.socket).toBe(join(root, "operator", "operator.sock"));
-        expect(yield* runOperatorCli(["remove", conversation!.handle], server.socket)).toBe(
+        const archive = yield* exportSessions(server.host.client, [sessionID]);
+        expect(archive).toContain("반가워!");
+        const operator = { url: listenerUrl(server.listener), token: "management-test-token" };
+        const unauthorized = yield* Effect.promise(() =>
+          fetch(`${operator.url}/operator/remove`, { method: "POST" }),
+        );
+        expect(unauthorized.status).toBe(401);
+        expect(yield* server.host.conversations.byHandle(conversation!.handle)).toBeDefined();
+        expect(yield* runOperatorCli(["remove", conversation!.handle], operator)).toBe(
           `Removed ${conversation!.handle}`,
         );
         expect(yield* server.host.conversations.byHandle(conversation!.handle)).toBeUndefined();
         expect(yield* sql`SELECT * FROM discovery_registration`).toEqual([]);
         expect(fake.bubbles).toHaveLength(2);
-      }).pipe(
-        Effect.provide(platform),
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, processes),
-      ),
+      }).pipe(Effect.provide(platform)),
     );
   } finally {
     vi.stubGlobal("fetch", network);
@@ -264,10 +244,7 @@ test("production model selection uses remote OpenCode and isolates persona confi
         expect(plugins.data.find((plugin) => plugin.id === "ren-ai.tools")?.state.status).toBe(
           "active",
         );
-      }).pipe(
-        Effect.provide(platform),
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, processes),
-      ),
+      }).pipe(Effect.provide(platform)),
     );
   } finally {
     await cleanup();
