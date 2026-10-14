@@ -4,7 +4,7 @@ import {
   bindTestHandle,
   currentMemory,
   resetFixture,
-  onboardTestHandle,
+  startTestHandle,
 } from "../../test/reset.test-helper.ts";
 import { quietTestHost } from "../../test/messaging-host.test-helper.ts";
 
@@ -28,10 +28,9 @@ test("an edit waiting behind a reset cannot be admitted to the retired session",
               return yield* f.fake.messages.recent(handle, since);
             }),
         });
-        yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
         yield* bindTestHandle(host, f.handle);
         yield* f.fake.text(f.handle, "/reset", Date.now());
-        yield* onboardTestHandle(host, f.handle);
+        yield* startTestHandle(host, f.fake.messages, f.handle);
         const old = yield* currentMemory(host, f.handle);
         const message = yield* f.fake.text(f.handle, "before second reset", Date.now());
         yield* host.sessions.wait(old.id);
@@ -46,7 +45,7 @@ test("an edit waiting behind a reset cannot be admitted to the retired session",
         hold = false;
         yield* Deferred.succeed(release, undefined);
         yield* Fiber.join(resetting);
-        yield* onboardTestHandle(host, f.handle);
+        yield* startTestHandle(host, f.fake.messages, f.handle);
         yield* host.sessions.wait(old.id);
         expect(JSON.stringify(yield* host.sessions.messages({ sessionID: old.id }))).not.toContain(
           "racing edit",

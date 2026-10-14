@@ -15,7 +15,6 @@ import { conversationTools } from "../../test/host.test-helper.ts";
 import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
-import { noticeCopy } from "../onboarding/onboarding.ts";
 
 test("a real persona session reads and reacts only to its own User's latest message", async () => {
   const root = await filesystem.mkdtemp(join(tmpdir(), "reading-persona-"));
@@ -98,7 +97,6 @@ You are Persona1.
                   ),
                 ),
             },
-            { turnstileSecret: "test-secret", notice: noticeCopy },
             silentAlerts,
           );
           const session = yield* host.createSession("persona1");

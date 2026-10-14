@@ -4,7 +4,7 @@ Open <https://oc.hena.dev> and sign in with the existing OpenCode credentials. E
 
 The native OpenCode interface is fully interactive. Prompts and controls act on the live session, and iMessages are sent through its conversation-bound `send`, `read`, `react`, and `wait` tools. The custom read-only viewer has been removed.
 
-After `/reset`, a test handle can onboard again at discovery.hena.dev to get a new session. Earlier sessions retain their Memory and carry `· reset TIME` or `· removed TIME` in their titles. Opening an old browser tab still opens that old session; only the current active binding can send to the Conversation.
+After `/reset`, a test handle registers again through Discovery and is started from Admin's waitlist to get a new session. Earlier sessions retain their Memory and carry `· reset TIME` or `· removed TIME` in their titles. Opening an old browser tab still opens that old session; only the current active binding can send to the Conversation.
 
 Inspect `.opencode/agents/<persona-id>.md` for the persona agent, `AGENTS.md` for ground rules, `persona.json` for its catalog snapshot, and `opencode.json` for its default agent and disabled built-ins. Active folders refresh from the external catalog at application startup and catalog change; retained sessions keep their historical files. Editing generated files is not a catalog update.
 

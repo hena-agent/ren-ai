@@ -7,12 +7,10 @@ import { Session } from "@opencode/core/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Agent, AbsolutePath, Location } from "@opencode/schema";
 import { Plugin } from "@opencode/plugin/effect";
-import { Effect, Layer } from "effect";
-import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { Effect } from "effect";
 import { afterAll, expect, test, vi } from "vitest";
 import { startMessagingHost, startPersonaHost } from "../../test/application.test-helper.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
-import { noticeCopy } from "../onboarding/onboarding.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
 import {
@@ -27,6 +25,8 @@ import {
   conversationTools,
 } from "../../test/host.test-helper.ts";
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
+import { dueContact } from "../discovery/contact.test-helper.ts";
+import { firstContacts } from "../discovery/first-contact.ts";
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
   const { tmpdir: temporaryDirectory } = await import("node:os");
@@ -255,11 +255,6 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
                 }),
             },
             ui.gestures,
-            {
-              turnstileSecret: "test-secret",
-              notice: noticeCopy,
-              noticeVersion: "v1",
-            },
             silentAlerts,
           );
           let toolDescription = "";
@@ -440,40 +435,21 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(tables.map((row) => row.name)).toEqual(
             expect.arrayContaining(["user", "conversation", "send"]),
           );
-          const turnstile = HttpClient.make((request) =>
-            Effect.sync(() => {
-              if (
-                !(request.body instanceof HttpBody.Uint8Array) ||
-                !new TextDecoder().decode(request.body.body).includes("secret=test-secret")
-              ) {
-                throw new Error("Turnstile secret was not passed from startup");
-              }
-              return HttpClientResponse.fromWeb(
-                request,
-                new Response('{"success":true}', {
-                  status: 200,
-                  headers: { "content-type": "application/json" },
-                }),
-              );
-            }),
-          );
           step = 0;
-          expect(
-            yield* host
-              .onboard({
-                handle: "+821033333333",
-                personaID: "persona2",
-                locale: "ko",
-                privacyNoticeVersion: "v1",
-                turnstileToken: "human",
-              })
-              .pipe(Effect.provide(Layer.succeed(HttpClient.HttpClient, turnstile))),
-          ).toBe("sent");
-          expect(imessage.bubbles[2]?.text).toContain("그만 받고 싶으면");
+          yield* dueContact("+821033333333", "persona2");
+          const contacts = yield* firstContacts(
+            host,
+            imessage.messages,
+            host.conversations,
+            "test/probe",
+            () => {},
+          );
+          yield* contacts.tick;
           const joined = yield* host.conversations.byHandle("+821033333333");
+          expect(joined?.personaID).toBe("persona2");
           yield* Effect.promise(async () => {
             await expect
-              .poll(() => imessage.bubbles[3], { timeout: 5000 })
+              .poll(() => imessage.bubbles[2], { timeout: 5000 })
               .toEqual({
                 handle: joined!.handle,
                 text: "bubble 1",
@@ -482,7 +458,6 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           yield* host.sessions
             .wait(Session.ID.make(joined!.sessionID))
             .pipe(Effect.timeout("20 seconds"));
-          yield* Effect.promise(host.disposeOnboarding);
           expect(yield* host.operator.remove(first.handle)).toBe("removed");
           expect(yield* host.conversations.byHandle(first.handle)).toBeUndefined();
           expect(yield* host.sessions.get(session.id).pipe(Effect.flip)).toBeDefined();

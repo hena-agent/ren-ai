@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { expect, test } from "vitest";
-import { currentMemory, resetFixture, onboardTestHandle } from "../../test/reset.test-helper.ts";
+import { currentMemory, resetFixture, startTestHandle } from "../../test/reset.test-helper.ts";
 
 test.each(["renumbered", "missing"])(
   "reset cutoffs survive %s Messages rows and equal timestamps",
@@ -14,13 +14,11 @@ test.each(["renumbered", "missing"])(
           yield* f.fake.text(f.handle, "first old fact", at);
           yield* f.fake.text(f.handle, "second old fact", at);
           const command = yield* f.fake.text(f.handle, "/reset", at);
-          yield* onboardTestHandle(host, f.handle);
+          yield* startTestHandle(host, f.fake.messages, f.handle);
           const history = yield* f.fake.messages.after(0);
-          yield* f.fake.replace(
-            mode === "renumbered"
-              ? history.map((row) => ({ ...row, id: row.id + 1000 }))
-              : history.filter((row) => row.guid !== command.guid),
-          );
+          yield* mode === "renumbered"
+            ? f.fake.replace(history.map((row) => ({ ...row, id: row.id + 1000 })))
+            : f.fake.remove(command.guid);
           yield* host.operator.rebuild(f.handle);
           const restored = yield* currentMemory(host, f.handle);
           expect(restored.text).not.toContain("old fact");

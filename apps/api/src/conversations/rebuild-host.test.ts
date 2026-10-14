@@ -9,7 +9,6 @@ import { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
 import { fakeMessages } from "@ren-ai/imsg/testing";
-import { noticeCopy } from "../onboarding/onboarding.ts";
 import { setupRebuilding } from "./rebuild.ts";
 
 test("a deleted session heals on the next message and an operator rebuild replaces its Memory", async () => {
@@ -95,7 +94,6 @@ test("a deleted session heals on the next message and an operator rebuild replac
           host.conversations,
           host,
           messages,
-          noticeCopy,
           () => Effect.succeed(false),
           () => Effect.void,
           () => Effect.void,
@@ -112,7 +110,6 @@ test("a deleted session heals on the next message and an operator rebuild replac
             yield* host.sessions.messages({ sessionID: Session.ID.make(resumed.sessionID) }),
           ),
         ).toContain("missed during downtime");
-        yield* Effect.promise(host.disposeOnboarding);
       }),
     );
   } finally {

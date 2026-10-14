@@ -59,9 +59,8 @@ export const resets = (
                   Effect.gen(function* () {
                     yield* sql`INSERT INTO retained_session (session_id, handle, title)
                 VALUES (${sessionID}, ${row.handle}, ${title})`;
-                    yield* sql`INSERT INTO reset (guid, handle, row_id, date, session_id, notice_id)
-                VALUES (${row.guid}, ${row.handle}, ${row.id}, ${row.createdAt}, ${sessionID},
-                  COALESCE((SELECT MAX(id) FROM send WHERE handle = ${row.handle} AND kind = 'notice'), 0))`;
+                    yield* sql`INSERT INTO reset (guid, handle, row_id, date, session_id)
+                VALUES (${row.guid}, ${row.handle}, ${row.id}, ${row.createdAt}, ${sessionID})`;
                     yield* sql`DELETE FROM user WHERE handle = ${row.handle}`;
                   }),
                 );

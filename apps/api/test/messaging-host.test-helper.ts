@@ -7,7 +7,6 @@ import { startMessagingHost, startPersonaHost } from "./application.test-helper.
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 import type { Messages } from "@ren-ai/imsg";
 import { fakeGestures } from "@ren-ai/imsg/testing";
-import { noticeCopy } from "../src/onboarding/onboarding.ts";
 import { silentAlerts } from "./messaging.test-helper.ts";
 
 const messagingOptions = (
@@ -61,7 +60,6 @@ export const startTestHost = (
     messagingOptions(root, personaDirectory, llm, databasePath),
     messages,
     fakeGestures().gestures,
-    { turnstileSecret: "test", notice: noticeCopy },
     alerts,
   );
 

@@ -54,7 +54,6 @@ test("an interrupted send is shown to her with its real outcome after Messages s
         expect(request).toContain("delivered");
         expect(request).toContain("confirmed late");
         expect(request).not.toContain("Tool execution interrupted");
-        yield* Effect.promise(host.disposeOnboarding);
       }),
     );
   } finally {

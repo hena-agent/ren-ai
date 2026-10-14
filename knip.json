@@ -10,7 +10,6 @@
         "scripts/import-local.mjs"
       ]
     },
-    "packages/discovery.hena.dev": { "entry": ["src/routeTree.gen.ts"] },
     "apps/api": {
       "entry": ["test/compiled-plugin/regression.mjs"]
     }

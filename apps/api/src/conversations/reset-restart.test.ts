@@ -4,7 +4,7 @@ import {
   resetFixture,
   bindTestHandle,
   currentMemory,
-  onboardTestHandle,
+  startTestHandle,
 } from "../../test/reset.test-helper.ts";
 import { SqlClient } from "effect/unstable/sql";
 
@@ -48,7 +48,7 @@ test("restart and a missing session cannot restore pre-reset Memory, including a
       Effect.gen(function* () {
         const host = yield* start;
         expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
-        yield* onboardTestHandle(host, handle);
+        yield* startTestHandle(host, fake.messages, handle);
         yield* fake.text(handle, "new identity after onboarding", Date.now());
         const { id, text } = yield* currentMemory(host, handle);
         expect(id).not.toBe(original);
@@ -74,7 +74,7 @@ test("restart and a missing session cannot restore pre-reset Memory, including a
     await run(
       Effect.gen(function* () {
         const host = yield* start;
-        yield* onboardTestHandle(host, handle);
+        yield* startTestHandle(host, fake.messages, handle);
         yield* fake.text(handle, "third identity after onboarding", Date.now());
         const { text: memory } = yield* currentMemory(host, handle);
         expect(memory).toContain("third identity");
@@ -106,7 +106,7 @@ test.each([false, true])(
           yield* Deferred.await(entered);
           rename.mockRestore();
           expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
-          expect(yield* onboardTestHandle(host, handle)).toBe("unknown");
+          expect(yield* startTestHandle(host, fake.messages, handle)).toBe("unavailable");
           if (missing) yield* host.sessions.remove(original.id);
           return original.id;
         }),
@@ -117,12 +117,12 @@ test.each([false, true])(
           expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
           const sql = yield* SqlClient.SqlClient;
           expect(yield* sql`SELECT complete FROM reset`).toEqual([{ complete: 1 }]);
-          yield* onboardTestHandle(host, handle);
+          yield* startTestHandle(host, fake.messages, handle);
           const memory = yield* currentMemory(host, handle);
           expect(memory.id).not.toBe(old);
           expect(memory.text).toContain("<conversation-started");
           expect((yield* host.sessions.list()).data).toHaveLength(missing ? 1 : 2);
-          expect(fake.bubbles).toHaveLength(1);
+          expect(fake.bubbles).toEqual([]);
         }),
       );
     } finally {
@@ -131,42 +131,27 @@ test.each([false, true])(
   },
 );
 
-test("an upgrade finishes a legacy memory-only reset and excludes its previous Notice", async () => {
-  const f = await resetFixture("reset-upgrade-");
+test("startup finishes a committed reset whose command is already behind the bookmark", async () => {
+  const f = await resetFixture("reset-resume-");
   try {
     await f.run(
       Effect.gen(function* () {
         const host = yield* f.startMarked;
         const sql = yield* SqlClient.SqlClient;
         const old = yield* currentMemory(host, f.handle);
-        const allocated = yield* host.createSession("persona1");
-        yield* sql`INSERT INTO send (handle, kind, content, state, recorded_at, updated_at)
-        VALUES (${f.handle}, 'notice', 'old', 'sent', 1, 1)`;
         yield* sql`INSERT INTO retained_session (session_id, handle, title)
         VALUES (${old.id}, ${f.handle}, 'old reset session')`;
         yield* sql`INSERT INTO reset (guid, handle, row_id, date, session_id)
-        VALUES ('legacy-reset', ${f.handle}, 1, 2, ${allocated.id})`;
-        yield* sql`UPDATE conversation SET session_id = ${allocated.id}, reset_guid = 'legacy-reset'`;
-        yield* sql`ALTER TABLE reset DROP COLUMN notice_id`;
-        yield* sql`ALTER TABLE user DROP COLUMN persona_id`;
-        yield* sql`DROP TABLE discovery_contact`;
-        yield* sql`DROP TABLE discovery_selection`;
-        yield* sql`DROP TABLE persona_assignment`;
-        yield* sql`DROP TABLE discovery_like`;
-        yield* sql`DROP TABLE discovery_registration`;
-        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 16`;
+        VALUES ('offline-reset', ${f.handle}, 1, 2, ${old.id})`;
+        yield* sql`DELETE FROM user WHERE handle = ${f.handle}`;
       }),
     );
     await f.run(
       Effect.gen(function* () {
         const host = yield* f.start;
         const sql = yield* SqlClient.SqlClient;
-        expect(yield* host.conversations.byHandle(f.handle)).toBeUndefined();
-        expect(yield* sql`SELECT complete, notice_id FROM reset`).toEqual([
-          { complete: 1, notice_id: 1 },
-        ]);
-        expect(yield* onboardTestHandle(host, f.handle)).toBe("sent");
-        expect(f.fake.bubbles).toHaveLength(1);
+        expect(yield* sql`SELECT complete FROM reset`).toEqual([{ complete: 1 }]);
+        expect(yield* startTestHandle(host, f.fake.messages, f.handle)).toBe("started");
         expect((yield* currentMemory(host, f.handle)).text).toContain("<conversation-started");
       }),
     );

@@ -116,7 +116,9 @@ test(
       expect(next.get("harin")?.published).toBe(false);
       yield* host.watch();
       yield* Effect.sleep("1100 millis");
-      expect((yield* host.api.list()).map((persona) => persona.name)).toEqual(["수아 수정"]);
+      expect(
+        [...host.personas.values()].filter((persona) => persona.published).map((p) => p.name),
+      ).toEqual(["수아 수정"]);
       expect(yield* host.read(harin.id)).toMatchObject({
         persona: { prompt: "You are Harin.\n\n## 공개 프로필\n\n29살 서울 사진가" },
       });

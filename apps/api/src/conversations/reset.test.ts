@@ -2,8 +2,7 @@ import { Effect } from "effect";
 import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
 import { registration } from "../../test/messaging.test-helper.ts";
-import { resetFixture, bindTestHandle, onboardTestHandle } from "../../test/reset.test-helper.ts";
-import { noticeCopy } from "../onboarding/onboarding.ts";
+import { resetFixture, bindTestHandle, startTestHandle } from "../../test/reset.test-helper.ts";
 
 test("a test handle resets Memory into a new session and keeps the old session for review", async () => {
   const { fake, handle, start, run, cleanup } = await resetFixture("reset-");
@@ -16,7 +15,7 @@ test("a test handle resets Memory into a new session and keeps the old session f
         yield* fake.text(handle, "My secret is marmalade", at);
         yield* host.sessions.wait(old.id);
         const command = yield* fake.text(handle, " /Reset \n", at + 1);
-        yield* onboardTestHandle(host, handle);
+        yield* startTestHandle(host, fake.messages, handle);
         const fresh = (yield* host.conversations.byHandle(handle))!;
         expect(fresh.sessionID).not.toBe(old.id);
         const id = Session.ID.make(fresh.sessionID);
@@ -40,7 +39,7 @@ test("a test handle resets Memory into a new session and keeps the old session f
         expect(memory).toContain("<conversation-started");
         expect(memory).not.toContain("marmalade");
         expect(memory).not.toContain("/Reset");
-        expect(fake.bubbles).toContainEqual({ handle, text: noticeCopy.ko });
+        expect(fake.bubbles).toEqual([]);
         yield* fake.redeliver(command);
         expect((yield* host.conversations.byHandle(handle))!.sessionID).toBe(id);
         yield* host.operator.rebuild(handle);
@@ -98,7 +97,7 @@ test("only a complete command from a marked, active User resets and unrelated ha
         expect((yield* host.conversations.byHandle(handle))!.sessionID).toBe(old.id);
         const before = yield* fake.text(handle, "old target", Date.now());
         const reset = yield* fake.text(handle, "/RESET", Date.now());
-        yield* onboardTestHandle(host, handle);
+        yield* startTestHandle(host, fake.messages, handle);
         const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
         yield* fake.text(handle, "late old row", reset.createdAt - 1);
         yield* fake.text(handle, "", Date.now(), {

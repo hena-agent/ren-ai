@@ -26,7 +26,6 @@ test("deployment defaults select the persona location and normal Docker listener
     stateDirectory: "/state",
     catalog: { url: "https://admin.test", token: "catalog-token" },
     managementToken: "management-token",
-    defaultPersonaID: "Persona1",
     publicPort: 4700,
     hostname: "0.0.0.0",
     bootstrapOnly: false,
@@ -57,7 +56,6 @@ test("a replacement deployment can override binding, location, model and bootstr
             BOOTSTRAP_ONLY: "true",
             OPENCODE_DIRECTORY: "/replacement/personas",
             PERSONA_MODEL: "provider/replacement",
-            DEFAULT_PERSONA_ID: "harin",
           }),
         ),
       ),
@@ -68,5 +66,4 @@ test("a replacement deployment can override binding, location, model and bootstr
   expect(config.bootstrapOnly).toBe(true);
   expect(config.opencode.directory).toBe("/replacement/personas");
   expect(config.opencode.model).toBe("provider/replacement");
-  expect(config.defaultPersonaID).toBe("harin");
 });

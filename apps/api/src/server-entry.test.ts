@@ -26,8 +26,8 @@ test("the actual Bun entry keeps its SQLite layer alive for HTTP callbacks after
             expect(yield* client.sends({ sessionID })).toEqual([]);
             expect(yield* client.handle({ sessionID })).toBeUndefined();
           }
-          const onboarding = yield* Effect.promise(() => fetch(`${url}/onboarding`));
-          expect(onboarding.status).toBe(503);
+          const management = yield* Effect.promise(() => fetch(`${url}/management/discovery`));
+          expect(management.status).toBe(503);
           expect(
             yield* client
               .send({ sessionID: "existing", text: "must stay paused", callID: "pause" })

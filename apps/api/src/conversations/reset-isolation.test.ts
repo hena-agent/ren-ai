@@ -10,7 +10,7 @@ import {
 } from "../../test/messaging.test-helper.ts";
 import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
-import { onboardTestHandle } from "../../test/reset.test-helper.ts";
+import { startTestHandle } from "../../test/reset.test-helper.ts";
 
 test.each([false, true])(
   "reset interrupts a waiting persona and fences edits (concurrent poll: %s)",
@@ -40,7 +40,6 @@ test.each([false, true])(
                 return yield* fake.messages.recent(target, since);
               }),
           });
-          yield* Effect.addFinalizer(() => Effect.promise(host.disposeOnboarding));
           const old = yield* host.createSession("persona1");
           yield* host.conversations.create(registration(handle, old.id));
           yield* host.operator.testHandle(handle, true);
@@ -62,7 +61,7 @@ test.each([false, true])(
             resetOnRead = true;
             yield* Effect.sleep("1100 millis");
           } else yield* fake.text(handle, "/reset", Date.now());
-          yield* onboardTestHandle(host, handle);
+          yield* startTestHandle(host, fake.messages, handle);
           const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
           yield* host.sessions.wait(id);
           expect((yield* host.sessions.get(old.id)).outcome).toBe("interrupted");

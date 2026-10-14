@@ -33,7 +33,6 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
             stateDirectory: root,
             catalog,
             managementToken: "management-test-token",
-            defaultPersonaID: "persona1",
             publicPort: 0,
             bootstrapOnly: true,
             messaging: { url: "https://imsg.invalid/rpc", token: "messaging" },
@@ -53,7 +52,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
           expect(
             yield* Effect.promise(() =>
               server
-                .publicWeb(new Request("https://app.test/onboarding"))
+                .publicWeb(new Request("https://app.test/management/discovery"))
                 .then((response) => response.text()),
             ),
           ).toBe("Starting");
@@ -61,7 +60,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
             (yield* Effect.promise(() =>
               server.publicWeb(new Request("https://app.test/onboarding")),
             )).status,
-          ).toBe(503);
+          ).toBe(404);
           const client = yield* RpcClient.make(applicationApi).pipe(
             Effect.provide(
               RpcClient.layerProtocolHttp({

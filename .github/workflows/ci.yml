@@ -101,31 +101,6 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  deploy:
-    name: Deploy discovery.hena.dev
-    needs: gates
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@v2.2.0
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-      - run: bun install --frozen-lockfile
-      - run: bun run --cwd packages/discovery.hena.dev build
-        env:
-          VITE_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-      - run: bun run --cwd packages/discovery.hena.dev deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
   # The Ambivalent Co. Workers pin their account in wrangler.jsonc; the token belongs to it.
   deploy-admin:
     name: Deploy admin.ambivalent.dev

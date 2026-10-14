@@ -8,14 +8,12 @@ import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { withLifecycle } from "./lifecycle.ts";
 
 interface Origin {
-  readonly locale: "ko";
   readonly startedAt: number;
 }
 
 export const rebuilder = (
   directory: Effect.Success<typeof conversations>,
   host: PersonaRuntime,
-  notice: Readonly<Record<"ko", string>>,
   replay: (conversation: Conversation) => Effect.Effect<void, Error>,
 ) => {
   const remove = (id: string) =>
@@ -43,8 +41,7 @@ export const rebuilder = (
               } else if (!(yield* directory.rebuilding(conversation))) {
                 return "present" as const;
               }
-              const [origin] =
-                yield* sql<Origin>`SELECT user.locale, conversation.started_at AS startedAt
+              const [origin] = yield* sql<Origin>`SELECT conversation.started_at AS startedAt
           FROM user JOIN conversation ON conversation.user_id = user.id
           WHERE conversation.id = ${conversation.id} AND conversation.session_id = ${conversation.sessionID}`;
               return {
@@ -67,13 +64,8 @@ export const rebuilder = (
           return yield* Effect.fail(new Error(`Unknown persona: ${conversation.personaID}`));
         yield* host.sessions.prompt({
           sessionID: Session.ID.make(conversation.sessionID),
-          id: SessionMessage.ID.make(`msg_onboarding_${conversation.sessionID}`),
-          text: conversationStarted(
-            origin.startedAt,
-            persona.openingLine,
-            notice[origin.locale],
-            persona.timeZone,
-          ),
+          id: SessionMessage.ID.make(`msg_started_${conversation.sessionID}`),
+          text: conversationStarted(origin.startedAt, persona.openingLine, persona.timeZone),
         });
         yield* replay(conversation);
         yield* directory.rebuilt(conversation);

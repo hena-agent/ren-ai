@@ -11,7 +11,6 @@ import { migrate } from "../database.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 import { intake } from "../intake/intake.ts";
 import { rebuilder } from "./rebuild-session.ts";
-import { noticeCopy } from "../onboarding/onboarding.ts";
 
 const persona = {
   id: "persona1",
@@ -66,7 +65,7 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
         expect(transcript).toContain("later");
         expect(transcript).toContain("<gap>");
         expect(transcript).not.toContain("before onboarding");
-        const recovery = yield* rebuilder(host.conversations, host, noticeCopy, host.intake.replay);
+        const recovery = yield* rebuilder(host.conversations, host, host.intake.replay);
         expect(yield* recovery.rebuild(handle)).toBe("present");
         yield* host.sessions.remove(Session.ID.make(rebuilt.sessionID));
         yield* recovery.missing;
@@ -92,7 +91,6 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
           BEGIN DELETE FROM user WHERE id = NEW.user_id; END`;
         expect(yield* host.operator.rebuild(handle)).toBe("not_found");
         expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
-        yield* Effect.promise(host.disposeOnboarding);
       }),
     );
   } finally {

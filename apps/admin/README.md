@@ -93,7 +93,7 @@ optional `documents` snapshot field initializes new Conversation folders with
 `STATE.md` and `MEMORY.md`. Catalog updates preserve evolving Conversation
 documents; session snapshots include the current pair for export/restore.
 Point both API services at the same Worker. Publish newly authored personas
-before fresh onboarding. Any configured default must be an actual published ID.
+before Discovery offers them.
 
 ### Automatic deployment
 

@@ -12,7 +12,7 @@ RUN mkdir -p /artifact/src /artifact/templates && \
 FROM oven/bun:1.4.2 AS application
 WORKDIR /app
 COPY --from=app-build /artifact /app
-ENV STATE_DIRECTORY=/state PERSONA_DIRECTORY=/personas DEFAULT_PERSONA_ID=Persona1 LISTEN_HOST=0.0.0.0 PORT=4700
+ENV STATE_DIRECTORY=/state PERSONA_DIRECTORY=/personas LISTEN_HOST=0.0.0.0 PORT=4700
 EXPOSE 4700
 ENTRYPOINT ["bun", "/app/src/app.js"]
 

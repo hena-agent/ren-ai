@@ -25,7 +25,7 @@ export const resetBoundary = (messages: Messages) =>
         if (!row.fromMe) return false;
         return (
           (yield* sql`SELECT 1 FROM send WHERE handle = ${row.handle}
-      AND (kind = 'notice' OR conversation_id IS NULL)
+      AND conversation_id IS NULL
       AND (guid = ${row.guid} OR (guid IS NULL AND content = ${row.text}))`).length > 0
         );
       });

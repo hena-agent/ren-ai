@@ -3,7 +3,7 @@
 Platform facts for moving `apps/api` from a long-lived Bun process onto Cloudflare Workers, Durable Objects (DOs) and/or D1. Sections 1–8 contain only what the cited source says. The analysis is kept to the second-to-last section.
 
 - **Checked:** 2026-10-13. The Cloudflare pages are quoted as they appeared on that day; each page shows its own "Last updated" date.
-- **Repo versions:** `effect` 4.0.0-rc.112, `@opencode/client` 2.0.19, `wrangler` 4.149.0 (`apps/admin/package.json`) and 4.141.0 (`packages/discovery.hena.dev/package.json`), `@cloudflare/workers-types` 5.20261011.1 (`apps/admin/package.json`).
+- **Repo versions:** `effect` 4.0.0-rc.112, `@opencode/client` 2.0.19, `wrangler` 4.149.0 (`apps/admin/package.json`), `@cloudflare/workers-types` 5.20261011.1 (`apps/admin/package.json`).
 - **npm on the same day:** `effect` `latest` = 4.0.4 and `rc` = 4.0.0-rc.118 ([registry](https://registry.npmjs.org/effect)); `wrangler` `latest` = 4.149.0 ([registry](https://registry.npmjs.org/wrangler)).
 - **Path shorthand:** `<client>` = `node_modules/.bun/@opencode+client@2.0.19+11eac7cfbf53fc55/node_modules/@opencode/client`. `<effect>` = `node_modules/.bun/effect@4.0.0-rc.112/node_modules/effect`.
 
@@ -300,7 +300,7 @@ Sources: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1
   - CI needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The suggested token template is "Edit Cloudflare Workers", and the official action is `cloudflare/wrangler-action@v4`.
   - That template grants Workers Routes, Scripts, KV Storage and R2 Storage write; Workers Tail read; Account Settings read; and User Details/Memberships read. **It has no D1 permission** ([token templates](https://developers.cloudflare.com/fundamentals/api/reference/template/)).
   - Since 2025-05-02, "`D1:Edit` permission is required for any database writes via HTTP API" ([D1 release notes](https://developers.cloudflare.com/d1/platform/release-notes/)).
-  - This repo's `deploy` job already passes both secrets to `bun run --cwd packages/discovery.hena.dev deploy` (`.github/workflows/ci.yml`).
+  - This repo's Worker deploy jobs pass the account's token as `CLOUDFLARE_API_TOKEN` and pin the account ID in each `wrangler.jsonc` (`.github/workflows/ci.yml`).
 - **D1 migrations in CI:** `wrangler d1 migrations apply <DATABASE> --remote`. In CI or other non-interactive runs, the confirmation step is skipped and a backup is still captured. A migration that errors is rolled back, and earlier successful migrations stay applied ([Wrangler D1 commands](https://developers.cloudflare.com/workers/wrangler/commands/d1/#d1-migrations-apply)). Applied migrations are recorded in `d1_migrations`. `migrations_dir`, `migrations_table` and `migrations_pattern` are configurable ([D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)).
 - **Durable Object class lifecycle:**
   - The declarative `exports` field (Wrangler ≥ 4.107.0 per the [CHANGELOG](https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/CHANGELOG.md); announced 2026-07-04 in the [changelog](https://developers.cloudflare.com/changelog/post/2026-06-30-declarative-do-class-exports/)) replaces the legacy `migrations` array. Example: `"exports": { "MyDO": { "type": "durable-object", "storage": "sqlite" } }`.

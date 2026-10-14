@@ -1,6 +1,6 @@
 # ren-ai
 
-An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo includes persona discovery, persona Admin, the discovery.hena.dev site, the messaging application with its separately deployed Mac messaging gateway and remote OpenCode plugins, a local Persona Lab, and a standalone persona engine. Seven quality gates block CI.
+An iMessage service for conversations with fictional personas. This Bun and Turborepo monorepo includes persona Discovery, persona Admin, the messaging application with its separately deployed Mac messaging gateway and remote OpenCode plugins, a local Persona Lab, and a standalone persona engine. Seven quality gates block CI.
 
 The premise is that when agents write most of the code, review does not scale but gates do.
 
@@ -25,12 +25,11 @@ bun run ci
 ## Persona discovery and Admin
 
 Production hosting: `discovery.ambivalent.dev` serves `apps/discovery` and
-`admin.ambivalent.dev` serves `apps/admin`, each through Cloudflare Workers Builds.
-The existing `discovery.hena.dev` onboarding site keeps its GitHub Actions
-deployment. Setup and prerequisites are in the [Discover runbook](apps/discovery/README.md)
+`admin.ambivalent.dev` serves `apps/admin`, each deployed by GitHub Actions after the
+quality gates. Setup and prerequisites are in the [Discover runbook](apps/discovery/README.md)
 and [Admin runbook](apps/admin/README.md).
 
-Admin creates OpenCode personas from a name and detailed private character description. A brief idea can generate an editable AI character draft. AI writes a first-person dating-profile introduction and creates self-chosen profile photos in LovePlus-inspired Japanese 2D anime and near-photorealistic styles. Operators choose the image count, then add, regenerate or delete independent photos. IDs and runtime instructions are managed internally. `apps/discovery` supports style selection, swipe, Like / Pass and web-consented waiting registration. `packages/discovery.hena.dev` lets a visitor select a published persona and continue through handle/consent onboarding into a conversation.
+Admin creates OpenCode personas from a name and detailed private character description. A brief idea can generate an editable AI character draft. AI writes a first-person dating-profile introduction and creates self-chosen profile photos in LovePlus-inspired Japanese 2D anime and near-photorealistic styles. Operators choose the image count, then add, regenerate or delete independent photos. IDs and runtime instructions are managed internally. `apps/discovery` supports style selection, swipe, Like / Pass and web-consented waiting registration. Admin then selects waiting people, or starts a waiting test handle right away.
 
 Start Admin with a password:
 
@@ -61,7 +60,7 @@ bun run --cwd apps/discovery dev
 
 Open http://127.0.0.1:3867 and choose anime or realistic display for the whole catalog. The style is restored across reloads and can be switched while browsing or entering contact details without resetting choices or inputs. Use the up-arrow to expand the profile in the same browsing area. Photo/text taps do not open it; the down-arrow or Escape collapses it while preserving the selected photo. The name/collapse header stays accessible while photos and the public introduction scroll. Shared floating Pass/Like circles sit above the content, with a soft bottom fade and enough reading/safe-area padding to reveal the last introduction line. Desktop retains the sidebar; mobile reading uses the full screen. Outside clicks leave the reading profile open. Reading liked profiles preserves the current card and any typed contact details. Its Vite proxy calls the API on port 4867, including every generated gallery image. The frontend and backend use Cloudflare's public test keys locally. Defaults share Admin's `apps/admin/data/personas` directory and store registrations in `apps/api/data/discovery.sqlite`. Generated portraits live in the persona directory's `images/` subdirectory; include it with the Markdown files in persona backups. All images referenced by a published persona are served publicly; unpublished and unreferenced images remain private. `PERSONA_DIRECTORY` and `DISCOVERY_DATABASE` override the API's paths. Use `PORT` per process to change its default port and `DISCOVERY_API_URL` to change the frontend proxy target. Vite reports busy ports instead of switching silently.
 
-For public hosting, configure the browser app's `VITE_DISCOVERY_API_URL` and real `VITE_TURNSTILE_SITE_KEY`, and the API's matching `TURNSTILE_SECRET`. The standalone swipe API serves `/discovery/personas` and `/discovery/waitlist`; the messaging API also serves `/personas` and `/onboarding` for the prerendered `discovery.hena.dev` site. Both use the messaging service database and permit the canonical `https://discovery.hena.dev` origin. Deployment and domain cutover are tracked in the [MVP spec](docs/specs/persona-discovery-admin.md). See the site and API `.env.example` files for configuration.
+For public hosting, configure the browser app's `VITE_DISCOVERY_API_URL` and real `VITE_TURNSTILE_SITE_KEY`, and the API's matching `TURNSTILE_SECRET`. The standalone swipe API and the messaging API both serve `/discovery/personas` and `/discovery/waitlist` from the messaging service database and permit only the Discovery origin. See the site and API `.env.example` files for configuration.
 
 Quality checks use Node 24 from `.nvmrc`.
 
@@ -87,7 +86,6 @@ apps/persona-lab/     Local simulation app for the standalone persona engine.
 packages/personas/     Shared OpenCode persona loader, validation and file store.
 packages/persona-engine/  Relationship state engine (not wired into iMessage runtime).
 packages/onboarding/   Shared browser-safe Handle, disclosure, persona catalog and registration shapes.
-packages/discovery.hena.dev/   Prerendered Korean persona selection and onboarding site.
 packages/transport/         Bearer-authenticated RPC client/server and HTTP listener shared by the services.
 packages/plugins/    OpenCode runtime plugins and the shared application RPC protocol.
 scripts/                Repo tooling: exceptions report and gate verification.
@@ -114,12 +112,12 @@ For the messaging services, use the [application deployment and relocation runbo
 
 ### CI execution
 
-`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys discovery.hena.dev, admin.ambivalent.dev and discovery.ambivalent.dev, and publishes an attested imsg.hena.dev bundle, which the Messages Mac pulls itself ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
+`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys admin.ambivalent.dev and discovery.ambivalent.dev, and publishes an attested imsg.hena.dev bundle, which the Messages Mac pulls itself ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
 
 ## Design decisions worth knowing
 
 - **bun installs and runs scripts; Node runs tests.** Vitest treats bun as a package manager only, and the v8 coverage provider does not work on the bun runtime.
-- **Libraries are Just-in-Time.** They export TypeScript source directly, with no build step. The messaging site, Discovery and Persona Lab build their browser UIs with Vite; the lab builds when starting. An unbuilt compiled library makes type-aware lint and knip exit 0 while enforcing nothing — a silent false pass.
+- **Libraries are Just-in-Time.** They export TypeScript source directly, with no build step. Discovery and Persona Lab build their browser UIs with Vite; the lab builds when starting. An unbuilt compiled library makes type-aware lint and knip exit 0 while enforcing nothing — a silent false pass.
 - **Exact version pins, no ranges.** oxfmt is pre-1.0 with no semver protection on formatting output, and `oxlint-tsgolint` is hard-pinned to a TypeScript patch release.
 - **bun's default isolated linker is kept.** It turns an undeclared dependency into an immediate failure instead of a latent bug.
 - **`globalStore = true` in `bunfig.toml`.** Packages are symlinked from one machine-wide store, so a clone's `node_modules` is ~200KB instead of ~240MB.
