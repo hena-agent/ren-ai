@@ -7,6 +7,7 @@ import { cloudflareConfiguration } from "./cloudflare-config.ts";
 import type { CloudflareBindings, CloudflareConfiguration } from "./cloudflare-config.ts";
 import { createExecutionRuntime } from "./execution-runtime.ts";
 import { applicationRequest } from "./application-request.ts";
+import { stateTransfer } from "./state-transfer.ts";
 
 export interface CloudflareApplication {
   readonly store: ApplicationStore;
@@ -60,6 +61,13 @@ export const createCloudflareApplication = async (
           const path = new URL(request.url).pathname;
           if (path === "/health" && request.method === "GET")
             return health(configuration.bootstrapOnly);
+          if (path.startsWith("/management/state/"))
+            return stateTransfer(
+              request,
+              store,
+              bindings.TOKEN_MANAGEMENT,
+              configuration.bootstrapOnly,
+            );
           if (configuration.bootstrapOnly && isWriteRequest(request)) return bootstrapResponse();
           if (path.startsWith("/rpc") || path.startsWith("/operator/")) {
             if (configuration.bootstrapOnly) return bootstrapResponse();
