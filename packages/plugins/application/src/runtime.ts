@@ -53,22 +53,29 @@ interface RemoteConfig {
 const remoteOptions = (config: RemoteConfig) =>
   Effect.gen(function* () {
     const api = yield* rpcClient(applicationApi, config);
+    const waitUntilResult = (sessionID: string, seconds: number) => {
+      const deadline = Date.now() + Math.max(0, seconds) * 1000;
+      const read: (remaining: number) => Effect.Effect<string, Error> = (remaining) =>
+        api.wait({ sessionID, seconds: remaining }).pipe(
+          Stream.filter((output) => output !== ""),
+          Stream.runLast,
+          Effect.flatMap((result) => {
+            if (Option.isSome(result)) return Effect.succeed(result.value);
+            const next = Math.max(0, (deadline - Date.now()) / 1000);
+            return next > 0
+              ? read(next)
+              : Effect.fail(new Error("Wait stream ended without a result"));
+          }),
+          Effect.mapError(failure),
+        );
+      return read(Math.max(0, seconds));
+    };
     const options: PersonaPluginOptions = {
       personaDirectory: config.directory,
       personas: new Map(),
       send: (sessionID, text, callID) =>
         api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
-      wait: (sessionID, seconds) =>
-        api.wait({ sessionID, seconds }).pipe(
-          Stream.filter((output) => output !== ""),
-          Stream.runLast,
-          Effect.flatMap((result) =>
-            Option.isSome(result)
-              ? Effect.succeed(result.value)
-              : Effect.fail(new Error("Wait stream ended without a result")),
-          ),
-          Effect.mapError(failure),
-        ),
+      wait: waitUntilResult,
       read: (sessionID) => api.read({ sessionID }).pipe(Effect.mapError(failure)),
       react: (sessionID, tapback, callID) =>
         api.react({ sessionID, tapback, callID }).pipe(Effect.mapError(failure)),

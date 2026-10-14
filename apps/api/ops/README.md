@@ -1,5 +1,34 @@
 # Separate application, OpenCode, and Messages deployments
 
+## Cloudflare application and controlled cutover
+
+`@ren-ai/api-app` is the stateful Worker at `https://api-app.renai.im`;
+`@ren-ai/api-msg` is the DB-free Mac executor at `https://api-msg.renai.im`.
+The executor forwards to `https://oc.renai.im` and
+`https://imsg.renai.im/rpc`. Discovery registration and Admin management use
+api-app; Discovery profile reads remain same-origin against Admin's D1.
+
+CI deploys api-app only from `main` after every quality gate, then probes its
+safe health and registry endpoints. Its first deployment must remain
+bootstrap-only, with intake and background scheduling disabled. Do not enable
+intake while the old application is accepting registrations. During a planned
+pause, stop old intake/scheduling, settle or record uncertain sends, take a
+read-only export of the old SQLite state, and import it into an empty Worker
+store. Verify IDs, assignments, bookmarks, pending work and uncertain sends
+before enabling the new intake. Preserve the stopped container and volume for
+rollback. The import endpoint/format is coordinated with the api-app owner;
+do not invent an alternate transfer path. No script here changes live ingress,
+stops a service, imports state or enables intake.
+
+Configure api-app's private `TOKEN_EXECUTOR` secret and
+`API_MSG_URL=https://api-msg.renai.im`. Provision the Mac executor once through
+the current Mac deployment procedure: create its separate process, tunnel and
+protected environment with the same `TOKEN_EXECUTOR`, plus `OPENCODE_URL`,
+`OPENCODE_AUTHORIZATION`, `IMSG_URL` and `IMSG_TOKEN`. It has no Turnstile secret
+or local application database. Thereafter the Mac consumes the attested bundle
+published from `main`; it does not receive a manual deploy or alter the native
+imsg protocol.
+
 ## Discovery and Admin
 
 `renai.im` is the Discovery app in `apps/discovery`, and `admin.renai.im` is the
@@ -51,9 +80,9 @@ pause.
 
 Before merging:
 
-1. In the Ambivalent Co. account, create three remotely managed tunnels with these
-   public hostnames on `renai.im`:
-   - `api.renai.im` → `http://api:4700` (this Compose project's network)
+1. In the Ambivalent Co. account, provision the Mac executor tunnel for
+   `api-msg.renai.im`, plus the existing Mac endpoints:
+   - `api-msg.renai.im` → the separately provisioned executor listener
    - `imsg.renai.im` → `http://127.0.0.1:4702` (the Messages Mac)
    - `oc.renai.im` → the auth proxy origin that the `oc.hena.dev` tunnel uses today
 2. Create an Invisible Turnstile widget for `renai.im`. Put its site key in the
@@ -67,19 +96,18 @@ Before merging:
 
 Cutover:
 
-5. Merge. CI deploys Admin on `admin.renai.im` and Discovery as the new
-   `persona-discovery` Worker on `renai.im`.
+5. Merge. CI deploys Admin, Discovery and api-app after quality gates; api-app
+   initially remains bootstrap-only.
 6. On the Messages Mac, follow [Move to imsg.renai.im](../../imsg/ops/README.md#move-to-imsgrenaiim).
 7. In the external OpenCode Compose project, replace the tunnel token with the
    `oc.renai.im` tunnel's and recreate only that tunnel container. Sign in again at
    `https://oc.renai.im`.
-8. In the protected application env file, set `PERSONA_CATALOG_URL=https://admin.renai.im`,
-   `IMSG_URL=https://imsg.renai.im/rpc`, `OPENCODE_URL=https://oc.renai.im` and the new
-   widget's `TURNSTILE_SECRET`, and point `REN_AI_TUNNEL_TOKEN` at the `api.renai.im`
-   tunnel's token. Install a plugin location whose callback is `https://api.renai.im/rpc`
-   into a new `REN_AI_LOCATION_VOLUME` (steps 2–5 of the plugin location below), then
-   `docker compose -f ops/compose.yml up -d --build --remove-orphans`: the Compose
-   service is now `api`.
+8. Provision api-msg process/tunnel and protected environment once. Set
+   `TOKEN_EXECUTOR`, `API_MSG_URL`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`,
+   `IMSG_URL` and `IMSG_TOKEN`; do not put `TURNSTILE_SECRET` or application DB
+   settings on the Mac. The Mac automatically installs the attested `main`
+   bundle. Install a plugin location whose callback is
+   `https://api-app.renai.im/rpc`.
 9. In Messages on the Mac, set **Start New Conversations From** to `hi@renai.im`.
 10. Verify with a marked test handle: register on `https://renai.im`, start it from
     Admin's waitlist and confirm the Greeting arrives from `hi@renai.im`.
@@ -119,19 +147,22 @@ distinct from observed success. Request/task diagnostics are JSON with request
 IDs and sanitized causes, excluding handles, tokens, private persona text and
 message content.
 
-Deploy the updated API, set the matching Admin secret, deploy Admin, then
-rebuild Discovery with `VITE_DISCOVERY_API_URL=https://api.renai.im`.
+Admin management uses `APPLICATION_API_URL=https://api-app.renai.im` and
+`TOKEN_MANAGEMENT`; Discovery registration uses
+`VITE_DISCOVERY_API_URL=https://api-app.renai.im`. Discovery profile reads
+continue using same-origin `/api/personas` from Admin D1.
 
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
 ## Services and credentials
 
-| Service     | Runtime                                                            | Persistent state                                                                                            | Ingress / auth                                                                |
-| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                   | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                    |
-| Application | `application` Docker image                                         | `ren-ai-application-state`; remote Admin D1 Catalog                                                         | `api.renai.im` → `http://api:4700`, Cloudflare Tunnel; plugin callback Bearer |
-| OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable session folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers   |
-| Fleet       | Separate [MDM tooling](../../imsg/ops/mdm/README.md)               | Fleet database, certificates and secrets                                                                    | `fleet.hena.dev`                                                              |
+| Service     | Runtime                                                            | Persistent state                                                                                            | Ingress / auth                                                              |
+| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                   | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                  |
+| Application | `@ren-ai/api-app` Cloudflare Worker                                | SQLite-backed application Durable Object; remote Admin D1 Catalog                                           | `api-app.renai.im`; plugin callback Bearer                                  |
+| Executor    | `@ren-ai/api-msg` Bun process on the Mac                           | None                                                                                                        | `api-msg.renai.im` → Mac; `TOKEN_EXECUTOR`                                  |
+| OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable session folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers |
+| Fleet       | Separate [MDM tooling](../../imsg/ops/mdm/README.md)               | Fleet database, certificates and secrets                                                                    | `fleet.hena.dev`                                                            |
 
 The initial target is the **existing OrbStack OpenCode on this Mac**, not a new OpenCode server or a physical move. Its external Compose source is `/Users/chris/git/hena-agent/oc.hena.dev/docker-compose.yml` (user-owned, not a Git repository). Preserve its upstream/proxy/tunnel, persistent whole home and existing sessions. The app uses authenticated public **`https://oc.renai.im` from the initial deployment**, even on this same Mac; apply and verify the machine-Basic proxy adapter **before starting the application, bootstrap mode, or session import**. The existing internal proxy→upstream origin networking stays unchanged. The application does not join the private OpenCode network or bypass its public HTTPS ingress. No Tailscale dependency or read-only UI remains.
 
@@ -172,7 +203,7 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
    Initial inventory can be empty while a location initializes. Inspect the loaded location again before treating it as empty. On the deployed 2.0.19 instance, disabling versioned package targets did not disable the loaded plugins; their actual IDs (`henadev.anthropic-auth`, `opencode-discord-noti`, `opencode-translate`) did. Verify those plugins are absent or disabled after reloading the persona location, while ordinary locations retain them.
 
-2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Each runtime module receives `directory:/srv/ren-ai`, the callback URL and `tokenFile:/srv/ren-ai/application.token`; it runs only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
+2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api-app.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Each runtime module receives `directory:/srv/ren-ai`, the callback URL and `tokenFile:/srv/ren-ai/application.token`; it runs only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
 3. Put `opencode.json` and `application.token` (same value as `REN_AI_APPLICATION_TOKEN`) in `REN_AI_LOCATION_INPUT`, owner-only. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. The new exporter requires all five volumes: when upgrading an old four-volume deployment, first provision the new empty sessions volume (`docker volume create "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}"`) without mounting it into running services, then export with the **old** location volume selected. For an existing old plugin volume, select a **new** `REN_AI_LOCATION_VOLUME` (for example `ren-ai-opencode-location-v2`) and explicitly `docker volume create "$REN_AI_LOCATION_VOLUME"`; never overwrite the old volume. Keep the application in `BOOTSTRAP_ONLY=true` while migrating.
 4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The application bundle also carries `templates/ground-rules.md` beside its `src/app.js`, preserving `new URL('../templates/ground-rules.md', import.meta.url)` after bundling. No plugin constructs agents.
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.

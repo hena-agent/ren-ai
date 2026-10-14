@@ -18,7 +18,7 @@ export interface AdminEnv {
   GEMINI_API_URL?: string;
   ADMIN_TEXT_MODEL?: string;
   ADMIN_IMAGE_MODEL?: string;
-  MESSAGING_API_URL?: string;
+  APPLICATION_API_URL?: string;
   TOKEN_MANAGEMENT?: string;
 }
 
@@ -52,7 +52,7 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
         ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
       }),
       persistence: { saved, checkpoint: editing.save, wake },
-      management: managementClient(env.MESSAGING_API_URL ?? "", env.TOKEN_MANAGEMENT ?? ""),
+      management: managementClient(env.APPLICATION_API_URL ?? "", env.TOKEN_MANAGEMENT ?? ""),
     },
   );
   return {

@@ -24,7 +24,7 @@ Tests bind port 0.
 
 Deploy through a PR merged into `main`, after the quality gates pass. The
 `Deploy renai.im` job in [`ci.yml`](../../.github/workflows/ci.yml) builds with
-`VITE_DISCOVERY_API_URL=https://api.renai.im` and `VITE_TURNSTILE_SITE_KEY`
+`VITE_DISCOVERY_API_URL=https://api-app.renai.im` and `VITE_TURNSTILE_SITE_KEY`
 from the `TURNSTILE_SITE_KEY` repository variable, then deploys and verifies the
 `persona-discovery` Worker. It uses the same `CLOUDFLARE_API_TOKEN` secret as
 [Admin deployment](../admin/README.md#automatic-deployment).
