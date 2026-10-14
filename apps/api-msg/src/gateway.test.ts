@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGateway, type GatewayConfig } from "./gateway.ts";
+import { createGateway, type GatewayConfig, type GatewayOptions } from "./gateway.ts";
 import { checkMacHealth, nativeCommand } from "./health.ts";
 
 const config: GatewayConfig = {
@@ -21,6 +21,47 @@ describe("authenticated execution gateway", () => {
     expect(response.status).toBe(401);
     expect(response.headers.get("x-request-id")).toBe("req-1");
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each(["wrong-secret", "", "Bearer "])(
+    "rejects incorrect or missing credentials",
+    async (value) => {
+      const handler = createGateway({ config });
+      const authorization = value ? `Bearer ${value}` : null;
+      const response = await handler(
+        request("/health", { headers: authorization ? { authorization } : {} }),
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("x-request-id")).toBeTruthy();
+    },
+  );
+
+  it("rejects blank configured executor tokens", () => {
+    expect(() => createGateway({ config: { ...config, executorToken: "  " } })).toThrow(
+      "TOKEN_EXECUTOR must not be blank",
+    );
+    expect(() => createGateway({ config: { ...config, opencodeAuthorization: " " } })).toThrow(
+      "Upstream authorization must not be blank",
+    );
+  });
+
+  it("accepts configured HTTPS and explicit loopback HTTP URLs only", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok"));
+    const local = createGateway({
+      config: {
+        ...config,
+        opencodeUrl: "http://127.0.0.1:4701",
+        imsgUrl: "http://localhost:4702/rpc",
+      },
+      fetcher,
+    });
+    expect((await local(request("/opencode/test", { headers: authorized }))).status).toBe(200);
+    expect(() =>
+      createGateway({ config: { ...config, opencodeUrl: "http://example.test" } }),
+    ).toThrow("Invalid fixed upstream URL");
+    expect(() =>
+      createGateway({ config: { ...config, opencodeUrl: "https://user:pass@oc.test" } }),
+    ).toThrow("Invalid fixed upstream URL");
   });
 
   it("returns not found for unsupported routes", async () => {
@@ -64,15 +105,16 @@ describe("authenticated execution gateway", () => {
   ])("rejects path tricks %s", async (path) => {
     const fetcher = vi.fn<typeof fetch>();
     const handler = createGateway({ config, fetcher });
-    expect([400, 404]).toContain(
-      (await handler(request(`/opencode${path}`, { headers: authorized }))).status,
-    );
+    const response = await handler(request(`/opencode${path}`, { headers: authorized }));
+    expect([400, 404]).toContain(response.status);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("rejects non-http configured OpenCode targets", async () => {
-    const handler = createGateway({ config: { ...config, opencodeUrl: "file:///etc" } });
-    expect((await handler(request("/opencode/status", { headers: authorized }))).status).toBe(400);
+  it("rejects non-http configured OpenCode targets", () => {
+    expect(() => createGateway({ config: { ...config, opencodeUrl: "file:///etc" } })).toThrow(
+      "Invalid fixed upstream URL",
+    );
   });
 
   it("forwards the exact imsg RPC body once with its dedicated bearer credential", async () => {
@@ -81,7 +123,14 @@ describe("authenticated execution gateway", () => {
     const response = await handler(
       request("/imsg/rpc", {
         method: "POST",
-        headers: { ...authorized, "content-type": "application/json" },
+        headers: {
+          ...authorized,
+          "content-type": "application/json",
+          cookie: "private-cookie",
+          host: "forged.test",
+          connection: "x-remove-me, invalid token",
+          "x-remove-me": "hop-value",
+        },
         body: '{"private":"payload"}',
       }),
     );
@@ -90,6 +139,10 @@ describe("authenticated execution gateway", () => {
     if (!(sent instanceof Request)) throw new Error("Expected Request");
     expect(sent.url).toBe("https://imsg.test/rpc");
     expect(sent.headers.get("authorization")).toBe("Bearer imsg-secret");
+    expect(sent.headers.get("cookie")).toBeNull();
+    expect(sent.headers.get("host")).not.toBe("forged.test");
+    expect(sent.headers.get("connection")).toBeNull();
+    expect(sent.headers.get("x-remove-me")).toBeNull();
     expect(await sent.text()).toBe('{"private":"payload"}');
     expect(response.status).toBe(202);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -122,9 +175,10 @@ describe("authenticated execution gateway", () => {
   });
 
   it("returns safe correlated network uncertainty after exactly one side-effect request", async () => {
-    const logs: Record<string, string | number>[] = [];
+    const logs: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
     const secret = "private-input-and-secret";
-    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error(secret));
+    const failure = Object.assign(new Error(secret), { code: "ECONNRESET" });
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(failure);
     const handler = createGateway({
       config,
       fetcher,
@@ -138,10 +192,16 @@ describe("authenticated execution gateway", () => {
     expect(response.status).toBe(502);
     expect(data).not.toContain(secret);
     expect(JSON.stringify(logs)).not.toContain(secret);
-    expect(logs[0]).toMatchObject({
+    expect(JSON.stringify(logs)).toContain("ECONNRESET");
+    expect(JSON.stringify(logs)).not.toContain("authorization");
+    expect(JSON.stringify(logs)).not.toContain("cookie");
+    expect(logs.at(-1)).toMatchObject({
       requestId: "corr-9",
       stage: "upstream",
       outcome: "network_failure",
+      cause: "Error",
+      code: "ECONNRESET",
+      stackFrames: expect.any(Array),
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
@@ -154,15 +214,115 @@ describe("authenticated execution gateway", () => {
     expect(await response.text()).not.toContain("opaque rejection");
   });
 
+  it("sanitizes unsafe error names, codes, and payload-bearing stack text", async () => {
+    const error = Object.assign(new Error("private prompt"), {
+      name: "private prompt",
+      code: "secret code",
+      stack: "private prompt\nprivate prompt is not a frame",
+    });
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(error);
+    const events: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
+    const handler = createGateway({ config, fetcher, log: (_level, event) => events.push(event) });
+    const response = await handler(request("/opencode/status", { headers: authorized }));
+    expect(response.status).toBe(502);
+    expect(await response.text()).not.toContain("private prompt");
+    expect(JSON.stringify(events)).not.toContain("private prompt");
+    expect(events.at(-1)).toMatchObject({ cause: "Error", code: "UPSTREAM_NETWORK" });
+    expect(events.at(-1)?.["stackFrames"]).toBeUndefined();
+  });
+
   it("preserves upstream HTTP errors and safe request correlation", async () => {
+    const events: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response("private upstream body", { status: 503 }));
-    const handler = createGateway({ config, fetcher, id: () => "http-1" });
+    const handler = createGateway({
+      config,
+      fetcher,
+      id: () => "http-1",
+      log: (_level, event) => events.push(event),
+    });
     const response = await handler(request("/opencode/status", { headers: authorized }));
     expect(response.status).toBe(503);
     expect(response.headers.get("x-request-id")).toBe("http-1");
     expect(await response.text()).toBe("private upstream body");
+    expect(events.at(-1)).toMatchObject({
+      level: "error",
+      outcome: "http_failure",
+      upstreamStatus: 503,
+    });
+  });
+
+  it("records upstream client failures as warnings", async () => {
+    const events: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("bad request", { status: 400 }));
+    const handler = createGateway({ config, fetcher, log: (_level, event) => events.push(event) });
+    expect((await handler(request("/opencode/status", { headers: authorized }))).status).toBe(400);
+    expect(events.at(-1)).toMatchObject({
+      level: "warn",
+      outcome: "http_failure",
+      upstreamStatus: 400,
+    });
+  });
+
+  it("rejects upstream redirects without exposing or following Location", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(null, { status: 302, headers: { location: "https://other.test/private" } }),
+      );
+    const events: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
+    const handler = createGateway({ config, fetcher, log: (_level, event) => events.push(event) });
+    const response = await handler(request("/opencode/status", { headers: authorized }));
+    const sent = fetcher.mock.calls[0]?.[0];
+    expect(response.status).toBe(502);
+    expect(response.headers.get("location")).toBeNull();
+    expect(sent instanceof Request && sent.redirect).toBe("manual");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({ level: "error", outcome: "redirect_rejected" });
+  });
+
+  it("logs correlated safe lifecycle summaries for unexpected paths", async () => {
+    const events: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
+    const handler = createGateway({
+      config,
+      id: () => "route-7",
+      now: () => 1_800_000_000_000,
+      log: (_level, event) => events.push(event),
+    });
+    const response = await handler(request("/unexpected/private-id", { headers: authorized }));
+    expect(response.status).toBe(404);
+    expect(response.headers.get("x-request-id")).toBe("route-7");
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      service: "api-msg",
+      timestamp: new Date(1_800_000_000_000).toISOString(),
+      level: "info",
+      event: "request_start",
+      requestId: "route-7",
+    });
+    expect(events[1]).toMatchObject({
+      level: "warn",
+      event: "request_complete",
+      stage: "routing",
+      outcome: "not_found",
+      upstreamStatus: 404,
+    });
+    expect(JSON.stringify(events)).not.toContain("private-id");
+  });
+
+  it("returns correlated method errors with warning summaries", async () => {
+    const events: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
+    const handler = createGateway({ config, log: (_level, event) => events.push(event) });
+    const health = await handler(request("/health", { method: "POST", headers: authorized }));
+    const imsg = await handler(request("/imsg/rpc", { headers: authorized }));
+    expect(health.status).toBe(405);
+    expect(imsg.status).toBe(405);
+    expect(health.headers.get("x-request-id")).toBeTruthy();
+    expect(imsg.headers.get("x-request-id")).toBeTruthy();
+    expect(events.filter((event) => event["outcome"] === "method_not_allowed")).toHaveLength(2);
   });
 
   it("returns only health facts and records check failures in the response", async () => {

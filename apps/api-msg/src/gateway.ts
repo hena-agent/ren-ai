@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { checkMacHealth, type MacHealth } from "./health.ts";
 
 export type GatewayConfig = {
@@ -8,132 +8,253 @@ export type GatewayConfig = {
   imsgUrl: string;
   imsgToken: string;
 };
+type Level = "info" | "warn" | "error";
+type LogFields = Record<string, string | number | string[]>;
 export type GatewayOptions = {
   config: GatewayConfig;
   fetcher?: typeof fetch;
   health?: () => Promise<MacHealth>;
-  log?: (level: "info" | "warn" | "error", event: Record<string, string | number>) => void;
+  log?: (level: Level, event: LogFields) => void;
   now?: () => number;
   id?: () => string;
 };
 
-const safeError = (error: Error, code: string) => ({
-  cause: error.name.slice(0, 80),
-  code,
-});
+const headerToken = (value: string | null) => {
+  const match = /^Bearer (.+)$/i.exec(value ?? "");
+  return match?.[1] ?? "";
+};
 
-const target = (base: string, path: string, search: string): URL | null => {
+const authorized = (header: string | null, expected: string) => {
+  const actualDigest = createHash("sha256").update(headerToken(header)).digest();
+  const expectedDigest = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(actualDigest, expectedDigest);
+};
+
+const configuredUrl = (input: string) => {
+  const url = new URL(input);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    (url.protocol !== "https:" && !(url.protocol === "http:" && loopback))
+  ) {
+    throw new Error("Invalid fixed upstream URL");
+  }
+  return url;
+};
+
+const target = (base: URL, path: string, search: string): URL | null => {
   if (/%25|%2f|%5c|%2e/i.test(path) || path.includes("\\") || path.startsWith("//")) return null;
-  const root = new URL(base);
-  if (root.protocol !== "https:" && root.protocol !== "http:") return null;
-  const result = new URL(`${root.origin}${root.pathname.replace(/\/$/, "")}${path}${search}`);
-  return result;
+  return new URL(`${base.origin}${base.pathname.replace(/\/$/, "")}${path}${search}`);
+};
+
+const safeErrorNames = new Set([
+  "Error",
+  "TypeError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "URIError",
+  "EvalError",
+  "AggregateError",
+  "AbortError",
+  "TimeoutError",
+  "DOMException",
+  "FetchError",
+  "SocketError",
+  "ConnectTimeoutError",
+  "HeadersTimeoutError",
+  "RequestAbortedError",
+]);
+
+const safeError = (error: Error, code: string) => {
+  const safeName = safeErrorNames.has(error.name) ? error.name : "Error";
+  const errorCode = "code" in error && typeof error.code === "string" ? error.code : code;
+  const safeCode = /^[A-Z][A-Z0-9_]{0,63}$/.test(errorCode) ? errorCode : code;
+  const stackFrames = error.stack
+    ?.split("\n")
+    .slice(1)
+    .filter((line) => /^\s+at\s+[\w.$<>]+\s+\(.+:\d+:\d+\)$/.test(line))
+    .slice(0, 8)
+    .map((line) => line.trim().slice(0, 200));
+  return { cause: safeName, code: safeCode, ...(stackFrames?.length ? { stackFrames } : {}) };
+};
+
+const stripHopByHop = (headers: Headers) => {
+  const nominated = (headers.get("connection") ?? "")
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter((name) => /^[a-z0-9!#$%&'*+.^_`|~-]+$/i.test(name));
+  for (const name of [
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    ...nominated,
+  ])
+    headers.delete(name);
 };
 
 export const createGateway = (options: GatewayOptions) => {
+  const config = options.config;
+  if (!config.executorToken.trim()) throw new Error("TOKEN_EXECUTOR must not be blank");
+  if (!config.opencodeAuthorization.trim() || !config.imsgToken.trim()) {
+    throw new Error("Upstream authorization must not be blank");
+  }
+  const opencodeUrl = configuredUrl(config.opencodeUrl);
+  const imsgUrl = configuredUrl(config.imsgUrl);
   const fetcher = options.fetcher ?? fetch;
   const health = options.health ?? checkMacHealth;
+  const now = options.now ?? Date.now;
+  const id = options.id ?? randomUUID;
   const log =
     options.log ??
     ((level, event) => {
       const line = JSON.stringify(event);
       (level === "info" ? process.stdout : process.stderr).write(`${line}\n`);
     });
-  const now = options.now ?? Date.now;
-  const id = options.id ?? randomUUID;
+  const emit = (level: Level, fields: LogFields) =>
+    log(level, { service: "api-msg", timestamp: new Date(now()).toISOString(), level, ...fields });
 
   return async (request: Request): Promise<Response> => {
     const requestId = id();
     const started = now();
     const url = new URL(request.url);
-    const unauthorized =
-      request.headers.get("authorization") !== `Bearer ${options.config.executorToken}`;
-    if (unauthorized) {
-      log("warn", {
-        requestId,
-        operation: "authentication",
-        stage: "auth",
-        outcome: "rejected",
-        durationMs: now() - started,
-        upstreamStatus: 0,
-      });
-      return new Response("Unauthorized", { status: 401, headers: { "x-request-id": requestId } });
-    }
+    const op = operation(url.pathname);
+    const common = { requestId, operation: op };
+    emit("info", {
+      ...common,
+      event: "request_start",
+      stage: "request",
+      outcome: "started",
+      durationMs: 0,
+      upstreamStatus: 0,
+    });
     const finish = (
       stage: string,
       outcome: string,
-      status = 0,
-      level: "info" | "warn" | "error" = "info",
-      cause?: string,
+      status: number,
+      level: Level,
+      error?: Error,
     ) => {
-      const error =
-        cause === undefined
-          ? {}
-          : safeError(
-              new Error(cause),
-              stage === "upstream" ? "UPSTREAM_NETWORK" : "HEALTH_CHECK_FAILED",
-            );
-      log(level, {
-        requestId,
-        operation: url.pathname.startsWith("/opencode/") ? "opencode" : url.pathname,
+      emit(level, {
+        ...common,
+        event: "request_complete",
         stage,
         outcome,
         durationMs: now() - started,
         upstreamStatus: status,
-        ...error,
+        ...(error
+          ? safeError(error, stage === "upstream" ? "UPSTREAM_NETWORK" : "HEALTH_CHECK_FAILED")
+          : {}),
+      });
+    };
+    const complete = (
+      response: Response,
+      stage: string,
+      outcome: string,
+      level: Level,
+      error?: Error,
+    ) => {
+      finish(stage, outcome, response.status, level, error);
+      const headers = new Headers(response.headers);
+      headers.set("x-request-id", requestId);
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
       });
     };
 
-    if (url.pathname === "/health" && request.method === "GET") {
-      return healthResponse(health, requestId, finish);
+    if (!authorized(request.headers.get("authorization"), config.executorToken)) {
+      return complete(new Response("Unauthorized", { status: 401 }), "auth", "rejected", "warn");
     }
-
+    if (url.pathname === "/health") {
+      if (request.method !== "GET")
+        return complete(
+          new Response("Method not allowed", { status: 405 }),
+          "routing",
+          "method_not_allowed",
+          "warn",
+        );
+      return healthResponse(health, requestId, complete);
+    }
     const isOpenCode = url.pathname.startsWith("/opencode/");
     const isImsg = url.pathname === "/imsg/rpc";
-    if (!isOpenCode && !isImsg)
-      return new Response("Not found", { status: 404, headers: { "x-request-id": requestId } });
+    if (isImsg && request.method !== "POST") {
+      return complete(
+        new Response("Method not allowed", { status: 405 }),
+        "routing",
+        "method_not_allowed",
+        "warn",
+      );
+    }
+    if (!isOpenCode && !isImsg) {
+      return complete(new Response("Not found", { status: 404 }), "routing", "not_found", "warn");
+    }
     const destination = isOpenCode
-      ? target(options.config.opencodeUrl, url.pathname.slice("/opencode".length), url.search)
-      : new URL(options.config.imsgUrl);
-    if (destination === null)
-      return new Response("Invalid path", { status: 400, headers: { "x-request-id": requestId } });
+      ? target(opencodeUrl, url.pathname.slice("/opencode".length), url.search)
+      : imsgUrl;
+    if (destination === null) {
+      return complete(
+        new Response("Invalid path", { status: 400 }),
+        "routing",
+        "invalid_path",
+        "warn",
+      );
+    }
     const headers = new Headers(request.headers);
-    headers.delete("host");
-    headers.delete("authorization");
+    stripHopByHop(headers);
+    for (const name of ["host", "authorization", "cookie", "x-request-id"]) headers.delete(name);
     headers.set(
       "authorization",
-      isOpenCode ? options.config.opencodeAuthorization : `Bearer ${options.config.imsgToken}`,
+      isOpenCode ? config.opencodeAuthorization : `Bearer ${config.imsgToken}`,
     );
-    headers.delete("x-request-id");
-    let body: ReadableStream<Uint8Array> | null = null;
-    if (request.method !== "GET" && request.method !== "HEAD") body = request.body;
-    return forward(fetcher, request, destination, headers, body, requestId, finish);
+    const body = request.method === "GET" || request.method === "HEAD" ? null : request.body;
+    return forward(fetcher, request, destination, headers, body, complete);
   };
 };
 
-type Finish = (
+const operation = (path: string) => {
+  if (path.startsWith("/opencode/")) return "opencode";
+  if (path === "/imsg/rpc") return "imsg";
+  if (path === "/health") return "health";
+  return "routing";
+};
+
+type Complete = (
+  response: Response,
   stage: string,
   outcome: string,
-  status?: number,
-  level?: "info" | "warn" | "error",
-  cause?: string,
-) => void;
+  level: Level,
+  error?: Error,
+) => Response;
 
 const healthResponse = async (
   health: () => Promise<MacHealth>,
   requestId: string,
-  finish: Finish,
+  complete: Complete,
 ) => {
   try {
     const facts = await health();
-    finish("health", "success");
-    return Response.json(facts, { headers: { "x-request-id": requestId } });
+    return complete(Response.json(facts), "health", "success", "info");
   } catch (error) {
     const cause = error instanceof Error ? error : new Error("UnknownError");
-    finish("health", "failure", 0, "error", cause.name);
-    return Response.json(
-      { error: "Health check failed", requestId, cause: safeError(cause, "HEALTH_CHECK_FAILED") },
-      { status: 500, headers: { "x-request-id": requestId } },
+    return complete(
+      Response.json(
+        { error: "Health check failed", requestId, ...safeError(cause, "HEALTH_CHECK_FAILED") },
+        { status: 500 },
+      ),
+      "health",
+      "failure",
+      "error",
+      cause,
     );
   }
 };
@@ -144,8 +265,7 @@ const forward = async (
   destination: URL,
   headers: Headers,
   body: ReadableStream<Uint8Array> | null,
-  requestId: string,
-  finish: Finish,
+  complete: Complete,
 ) => {
   try {
     const upstream = await fetcher(
@@ -154,28 +274,43 @@ const forward = async (
         headers,
         body,
         redirect: "manual",
-        duplex: body ? "half" : undefined,
+        ...(body ? { duplex: "half" as const } : {}),
         signal: request.signal,
-      } as RequestInit),
+      }),
     );
-    const responseHeaders = new Headers(upstream.headers);
-    responseHeaders.set("x-request-id", requestId);
-    finish("upstream", "success", upstream.status);
-    return new Response(upstream.body, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers: responseHeaders,
-    });
+    if ([301, 302, 303, 307, 308].includes(upstream.status)) {
+      await upstream.body?.cancel();
+      return complete(
+        Response.json({ error: "Upstream redirects are not allowed" }, { status: 502 }),
+        "upstream",
+        "redirect_rejected",
+        "error",
+      );
+    }
+    const level: Level =
+      upstream.status >= 500 ? "error" : upstream.status >= 400 ? "warn" : "info";
+    const outcome = upstream.status >= 400 ? "http_failure" : "success";
+    return complete(
+      new Response(upstream.body, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers: upstream.headers,
+      }),
+      "upstream",
+      outcome,
+      level,
+    );
   } catch (error) {
     const cause = error instanceof Error ? error : new Error("UnknownError");
-    finish("upstream", "network_failure", 0, "error", cause.name);
-    return Response.json(
-      {
-        error: "Upstream outcome is uncertain",
-        requestId,
-        ...safeError(cause, "UPSTREAM_NETWORK"),
-      },
-      { status: 502, headers: { "x-request-id": requestId } },
+    return complete(
+      Response.json(
+        { error: "Upstream outcome is uncertain", ...safeError(cause, "UPSTREAM_NETWORK") },
+        { status: 502 },
+      ),
+      "upstream",
+      "network_failure",
+      "error",
+      cause,
     );
   }
 };
