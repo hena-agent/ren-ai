@@ -8,7 +8,7 @@ umask 077
 "$bun" -e '
 const root = process.argv[1];
 process.stdout.write(JSON.stringify({
-  Label: "dev.hena.ren-ai-imsg-deploy",
+  Label: "im.renai.imsg-deploy",
   ProgramArguments: ["/bin/bash", root + "/deploy/update.sh", root],
   WorkingDirectory: root + "/deploy",
   EnvironmentVariables: { PATH: root + "/deploy/bin:" + root + "/bin:/usr/bin:/bin:/usr/sbin:/sbin" },

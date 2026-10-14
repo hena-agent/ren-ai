@@ -6,7 +6,7 @@ import { expect, test } from "vitest";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import { catalogFixture } from "../test/catalog-fixture.ts";
 
-test("the packaged Discovery Worker reads real D1 and delegates SPA/assets without contacting api-msg", async () => {
+test("the packaged Discovery Worker reads real D1 and delegates SPA/assets without contacting the messaging API", async () => {
   execFileSync("bun", [fileURLToPath(new URL("../scripts/build-worker.mjs", import.meta.url))], {
     cwd: fileURLToPath(new URL("..", import.meta.url)),
     encoding: "utf8",

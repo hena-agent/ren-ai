@@ -116,7 +116,7 @@ export const makeDiscoveryWeb = ({
         Layer.provide(HttpServer.layerServices),
         Layer.provide(
           HttpRouter.cors({
-            allowedOrigins: ["https://discovery.ambivalent.dev"],
+            allowedOrigins: ["https://renai.im"],
           }),
         ),
       ),

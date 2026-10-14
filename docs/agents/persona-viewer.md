@@ -1,6 +1,6 @@
 # Persona sessions in OpenCode
 
-Open <https://oc.hena.dev> and sign in with the existing OpenCode credentials. Each persona session lives in its own `/srv/ren-ai/sessions/<folder-id>` location; search by the User's Handle to find a Conversation. The root `/srv/ren-ai` is the read-only plugin/config location, not a shared session working folder.
+Open <https://oc.renai.im> and sign in with the existing OpenCode credentials. Each persona session lives in its own `/srv/ren-ai/sessions/<folder-id>` location; search by the User's Handle to find a Conversation. The root `/srv/ren-ai` is the read-only plugin/config location, not a shared session working folder.
 
 The native OpenCode interface is fully interactive. Prompts and controls act on the live session, and iMessages are sent through its conversation-bound `send`, `read`, `react`, and `wait` tools. The custom read-only viewer has been removed.
 

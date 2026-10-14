@@ -7,10 +7,8 @@ afterEach(() => {
 });
 test("service-owned independent main and additional photos are resolved individually at the public API boundary", async () => {
   vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api.example.net");
-  const main =
-    "https://admin.ambivalent.dev/discovery/images/01234567-89ab-cdef-0123-456789abcdef.jpg";
-  const extra =
-    "https://admin.ambivalent.dev/discovery/images/11234567-89ab-cdef-0123-456789abcdef.png";
+  const main = "https://admin.renai.im/discovery/images/01234567-89ab-cdef-0123-456789abcdef.jpg";
+  const extra = "https://admin.renai.im/discovery/images/11234567-89ab-cdef-0123-456789abcdef.png";
   vi.stubGlobal(
     "fetch",
     vi.fn<typeof fetch>().mockResolvedValue(

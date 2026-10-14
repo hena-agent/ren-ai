@@ -24,9 +24,10 @@ bun run ci
 
 ## Persona discovery and Admin
 
-Production hosting: `discovery.ambivalent.dev` serves `apps/discovery` and
-`admin.ambivalent.dev` serves `apps/admin`, each deployed by GitHub Actions after the
-quality gates. Setup and prerequisites are in the [Discover runbook](apps/discovery/README.md)
+Production hosting: `renai.im` serves `apps/discovery` and `admin.renai.im` serves
+`apps/admin`, each deployed by GitHub Actions after the quality gates
+([ADR-0016](docs/adr/0016-the-service-lives-at-renai-im-in-one-cloudflare-account.md)).
+Setup and prerequisites are in the [Discover runbook](apps/discovery/README.md)
 and [Admin runbook](apps/admin/README.md).
 
 Admin creates OpenCode personas from a name and detailed private character description. A brief idea can generate an editable AI character draft. AI writes a first-person dating-profile introduction and creates self-chosen profile photos in LovePlus-inspired Japanese 2D anime and near-photorealistic styles. Operators choose the image count, then add, regenerate or delete independent photos. IDs and runtime instructions are managed internally. `apps/discovery` supports style selection, swipe, Like / Pass and web-consented waiting registration. Admin then selects waiting people, or starts a waiting test handle right away.
@@ -94,7 +95,7 @@ quality-exceptions.json  The only place file-level gate exceptions may live.
 
 ## The gates
 
-For the messaging services, use the [application deployment and relocation runbook](apps/api/ops/README.md) and the [Messages Mac runbook](apps/imsg/ops/README.md). The [service boundary decision](docs/adr/0010-separate-the-messages-mac-from-opencode.md) records the Mac/Docker split and the native OpenCode interface at `oc.hena.dev`; [ADR-0012](docs/adr/0012-each-session-runs-in-its-own-opencode-folder-written-by-a-plugin.md) adds per-session native agent/instruction folders and their separate persistent volume.
+For the messaging services, use the [application deployment and relocation runbook](apps/api/ops/README.md) and the [Messages Mac runbook](apps/imsg/ops/README.md). The [service boundary decision](docs/adr/0010-separate-the-messages-mac-from-opencode.md) records the Mac/Docker split and the native OpenCode interface, now at `oc.renai.im`; [ADR-0012](docs/adr/0012-each-session-runs-in-its-own-opencode-folder-written-by-a-plugin.md) adds per-session native agent/instruction folders and their separate persistent volume.
 
 | Gate                  | Threshold      | Command                |
 | --------------------- | -------------- | ---------------------- |
@@ -112,7 +113,7 @@ For the messaging services, use the [application deployment and relocation runbo
 
 ### CI execution
 
-`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys admin.ambivalent.dev and discovery.ambivalent.dev, and publishes an attested imsg.hena.dev bundle, which the Messages Mac pulls itself ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
+`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys admin.renai.im and renai.im, and publishes an attested Messages Mac bundle, which the Messages Mac pulls itself ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
 
 ## Design decisions worth knowing
 

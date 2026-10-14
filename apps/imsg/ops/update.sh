@@ -1,11 +1,11 @@
 #!/bin/bash
-# Run by the dev.hena.ren-ai-imsg-deploy LaunchAgent: deploys the head of main once CI has
+# Run by the im.renai.imsg-deploy LaunchAgent: deploys the head of main once CI has
 # built and attested its JavaScript payload. Binaries, credentials and permissions never change.
 set -euo pipefail
 root="${1:?Usage: update.sh INSTALLED-MESSAGING-HOME}"
 deploy="$root/deploy"
 repository=hena-agent/ren-ai
-gateway="gui/$(id -u)/dev.hena.ren-ai-imsg"
+gateway="gui/$(id -u)/im.renai.imsg"
 payload=(imsg.js verify.js messages-ui.applescript imsg.graph.json verify.graph.json)
 # Only these change what runs; the dependency graphs are build metadata.
 runtime=(imsg.js verify.js messages-ui.applescript)

@@ -1,8 +1,9 @@
 # Discover on Cloudflare
 
-`discovery.ambivalent.dev` serves this Vite browser app through the
-`discovery-ambivalent-dev` Worker's static assets and same-origin
-`GET /api/personas`. That endpoint reads the Admin Catalog D1 directly through
+`renai.im` serves this Vite browser app through the `persona-discovery` Worker's
+static assets and same-origin `GET /api/personas`, in the `Ambivalent Co.` account
+([ADR-0016](../../docs/adr/0016-the-service-lives-at-renai-im-in-one-cloudflare-account.md)).
+That endpoint reads the Admin Catalog D1 directly through
 `@ren-ai/personas/catalog`; it does not call the messaging API or Admin HTTP API.
 Only published profiles are returned, and image URLs point at Admin's
 publication-checked image endpoint.
@@ -22,12 +23,10 @@ Tests bind port 0.
 ## Automatic deployment
 
 Deploy through a PR merged into `main`, after the quality gates pass. The
-`Deploy discovery.ambivalent.dev` job in
-[`ci.yml`](../../.github/workflows/ci.yml) builds with
-`VITE_DISCOVERY_API_URL=https://api-msg.hena.dev` and `VITE_TURNSTILE_SITE_KEY`
+`Deploy renai.im` job in [`ci.yml`](../../.github/workflows/ci.yml) builds with
+`VITE_DISCOVERY_API_URL=https://api.renai.im` and `VITE_TURNSTILE_SITE_KEY`
 from the `TURNSTILE_SITE_KEY` repository variable, then deploys and verifies the
-`discovery-ambivalent-dev` Worker in the `Ambivalent Co.` account. It uses the
-same `CLOUDFLARE_API_TOKEN_AMBIVALENT` secret as
+`persona-discovery` Worker. It uses the same `CLOUDFLARE_API_TOKEN` secret as
 [Admin deployment](../admin/README.md#automatic-deployment).
 Do not deploy manually or also connect Workers Builds.
 The deployment job checks both the page and `/api/personas` before succeeding.
@@ -36,25 +35,14 @@ The deployment job checks both the page and `/api/personas` before succeeding.
 build compiles only the Worker, preserving the browser assets and their
 production API/Turnstile values from the preceding CI build.
 
-Wrangler binds `discovery.ambivalent.dev` as a custom domain, serves
-`dist/client/` with SPA navigation, and routes `/api/personas` to
-`dist/worker/entry.js`. The runtime D1 binding points at the same
-`persona-catalog` as Admin. `PERSONA_CATALOG_URL` supplies the image origin.
-The read-only Worker does not own schema migrations.
+Wrangler binds `renai.im` as a custom domain, serves `dist/client/` with SPA
+navigation, and routes `/api/personas` to `dist/worker/entry.js`. `www.renai.im`
+is a redirect rule in the `renai.im` zone, not part of this Worker. The runtime D1
+binding points at the same `persona-catalog` as Admin. `PERSONA_CATALOG_URL`
+supplies the image origin. The read-only Worker does not own schema migrations.
 `VITE_DISCOVERY_API_URL` is used only for waiting registration. Build variables
 are compiled into browser assets, not Worker runtime variables.
 Never put a private token in a `VITE_` key.
-
-Before the first production build:
-
-1. Allow `https://discovery.ambivalent.dev` in the messaging API's `/discovery/`
-   CORS configuration.
-2. Allow `discovery.ambivalent.dev` in the Invisible Turnstile widget. If using
-   the existing widget, its API secret stays unchanged.
-3. Publish personas in the Admin Catalog bound to this Worker. See
-   [Admin deployment](../admin/README.md).
-4. Merge the PR and verify HTTPS, style selection, public photos and waiting
-   registration after CI deploys.
 
 For a local packaging check, run `bun run build` and
 `bunx wrangler deploy --dry-run` from this directory.
@@ -62,20 +50,12 @@ For a local packaging check, run `bun run build` and
 ## API handoff
 
 The messaging API is deployed separately. Its availability does not block
-profile browsing; waiting registration still requires it. The API operator must:
-
-- Serve `POST /discovery/waitlist` at `https://api-msg.hena.dev`. The
-  `src/server.ts` composition uses the messaging server's persistent database
-  for Discovery registrations and first-contact reservations.
-- Read published profiles from `https://admin.ambivalent.dev` to validate Likes.
-  Configure the private Catalog token for the messaging runtime and retain the
-  waitlist in persistent storage.
-- Permit `https://discovery.ambivalent.dev` in CORS, including JSON POST
-  preflight.
-- Add `discovery.ambivalent.dev` to the existing Turnstile widget's allowed
-  hostnames and use that widget's matching secret for API verification.
-- Publish personas in the Admin Catalog and verify profile/image retrieval and
-  waiting registration through the deployed frontend.
+profile browsing; waiting registration still requires it. The API must permit
+`https://renai.im` in CORS, including JSON POST preflight, and verify
+registrations with the secret of the Turnstile widget whose site key the build
+uses. Changing the widget means rebuilding the site and redeploying the API with
+its secret. The [application runbook](../api/ops/README.md#move-to-renaiim)
+covers the cutover.
 
 Workers Observability is enabled. Catalog responses expose `X-Request-ID`; the
 Worker logs operation, outcome and duration with that ID. Catalog failures are

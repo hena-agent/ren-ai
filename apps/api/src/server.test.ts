@@ -83,7 +83,7 @@ test("composed HTTP, remote OpenCode, messaging API and operator socket complete
               method: "POST",
               headers: {
                 "content-type": "application/json",
-                origin: "https://discovery.ambivalent.dev",
+                origin: "https://renai.im",
               },
               body: JSON.stringify({
                 handle: "+821012345678",
@@ -96,9 +96,7 @@ test("composed HTTP, remote OpenCode, messaging API and operator socket complete
           ),
         );
         expect(registration.status).toBe(200);
-        expect(registration.headers.get("access-control-allow-origin")).toBe(
-          "https://discovery.ambivalent.dev",
-        );
+        expect(registration.headers.get("access-control-allow-origin")).toBe("https://renai.im");
         const key = randomUUID();
         const selected = yield* Effect.promise(() =>
           server.publicWeb(
