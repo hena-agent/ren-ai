@@ -67,6 +67,7 @@ export const withRemoteHost = async <A, E>(
               authorization: "Basic test",
               directory: personaDirectory,
               model: "test/probe",
+              groundRules: "",
             },
             native.personas,
           ).pipe(

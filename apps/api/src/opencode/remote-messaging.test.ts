@@ -108,6 +108,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
                     authorization: "Basic test",
                     directory: personaDirectory,
                     model: "test/probe",
+                    groundRules: "",
                   },
                   native.personas,
                 );

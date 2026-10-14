@@ -1,4 +1,4 @@
-import { Deferred, Effect, Schema } from "effect";
+import { Effect } from "effect";
 import { AbsolutePath, Agent, Session } from "@opencode/schema";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -71,7 +71,7 @@ test.each(["new", "fork"] as const)(
 );
 
 test(
-  "a native session admitted after the refresh inventory still receives that edit through the native event stream",
+  "a native session admitted after the refresh inventory receives the edit on a later refresh",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const retained = yield* beginRetainingParent(host);
@@ -114,7 +114,7 @@ test(
       });
       yield* Effect.promise(() => fixture.store.update(updated));
       const next = yield* loadPersonas(fixture.catalogDirectory);
-      yield* syncFolders(host.remote.client, fixture.personaDirectory, next);
+      yield* syncFolders(host.remote.client, fixture.personaDirectory, next, fixture.groundRules);
       expect((yield* host.remote.sessions.get(child.id)).location.directory).toBe(
         sessionDirectory(fixture.personaDirectory, child.id),
       );
@@ -172,7 +172,12 @@ test(
         ...updated.get("persona1")!,
         prompt: "You draw the seaside market.",
       });
-      yield* syncFolders(host.remote.client, fixture.personaDirectory, updated);
+      yield* syncFolders(
+        host.remote.client,
+        fixture.personaDirectory,
+        updated,
+        fixture.groundRules,
+      );
       yield* expectPrompt(host, managed.id, "You draw the seaside market.");
       expect(yield* host.remote.sessions.get(unrelated.id)).toEqual(before);
     }),
@@ -193,7 +198,7 @@ test(
         prompt: "You grow lavender on the balcony.",
       });
       const next = yield* catalogWithoutHarin(fixture, updated);
-      yield* syncFolders(host.remote.client, fixture.personaDirectory, next);
+      yield* syncFolders(host.remote.client, fixture.personaDirectory, next, fixture.groundRules);
       expect(yield* host.read(harin.id)).toEqual(original);
       expect(next.get("harin")?.published).toBe(false);
       yield* host.watch();
@@ -225,9 +230,12 @@ test(
         prompt: "This change requires a valid selected agent.",
       });
       expect(
-        (yield* syncFolders(host.remote.client, fixture.personaDirectory, updated).pipe(
-          Effect.flip,
-        )).message,
+        (yield* syncFolders(
+          host.remote.client,
+          fixture.personaDirectory,
+          updated,
+          fixture.groundRules,
+        ).pipe(Effect.flip)).message,
       ).toContain(`Managed session ${id} has no catalog persona`);
       expect(yield* host.read(active.id)).toEqual(original);
       yield* host.remote.client.session.switchAgent({
@@ -235,7 +243,12 @@ test(
         agent: Agent.ID.make("persona1"),
       });
       yield* host.remote.sessions.wait(id);
-      yield* syncFolders(host.remote.client, fixture.personaDirectory, updated);
+      yield* syncFolders(
+        host.remote.client,
+        fixture.personaDirectory,
+        updated,
+        fixture.groundRules,
+      );
       yield* expectPrompt(host, id, "This change requires a valid selected agent.");
     }),
   ),
@@ -260,35 +273,23 @@ test(
       const missing = new Map(host.personas);
       missing.delete("persona1");
       expect(
-        (yield* syncFolders(host.remote.client, fixture.personaDirectory, missing).pipe(
-          Effect.flip,
-        )).message,
+        (yield* syncFolders(
+          host.remote.client,
+          fixture.personaDirectory,
+          missing,
+          fixture.groundRules,
+        ).pipe(Effect.flip)).message,
       ).toContain("snapshot persona ID does not match");
     }),
   ),
 );
 
 test(
-  "a closed native event connection reconnects and reconciles sessions created during the gap",
+  "the next bounded refresh reconciles native sessions created after the catalog revision",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const retained = yield* beginRetainingParent(host);
       yield* retained.finish;
-      const disconnected = yield* Deferred.make<void>();
-      let connections = 0;
-      host.transport.after = async (request, response) => {
-        if (new URL(request.url).pathname !== "/api/event") return response;
-        if (++connections !== 1) return response;
-        const reader = response.body!.getReader();
-        const first = await reader.read();
-        await reader.cancel();
-        await Effect.runPromise(Deferred.succeed(disconnected, undefined));
-        const chunk = Schema.decodeUnknownSync(Schema.Uint8Array)(first.value);
-        return new Response(new TextDecoder().decode(chunk), {
-          status: response.status,
-          headers: response.headers,
-        });
-      };
       const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         name: "수아 수정",
@@ -296,13 +297,9 @@ test(
       });
       yield* Effect.promise(() => fixture.store.update(updated));
       yield* host.watch();
-      yield* Deferred.await(disconnected).pipe(Effect.timeout("5 seconds"));
       yield* expectProfile(host, "수아 수정");
       const child = yield* host.nativeChild(retained.parent);
       yield* expectPrompt(host, child.id, updated.prompt);
-      yield* Effect.promise(async () => {
-        await expect.poll(() => connections, { timeout: 5000 }).toBeGreaterThanOrEqual(2);
-      });
       expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
     }),
   ),

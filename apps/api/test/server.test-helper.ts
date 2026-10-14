@@ -29,6 +29,7 @@ export const localOpenCode = (
       authorization: "Basic test",
       directory,
       model: "test/probe",
+      groundRules: "",
     },
     native.personas,
   ).pipe(

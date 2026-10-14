@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Effect, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { TestLLM } from "@opencode/ai/testing";
+import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 import { expect, test } from "vitest";
 import { messagingFixture } from "../../test/messaging.test-helper.ts";
 import {
@@ -28,6 +29,7 @@ test("persona sessions are operated through the public OpenCode API", async () =
               authorization: "Basic machine",
               directory: personaDirectory,
               model: "test/probe",
+              groundRules: yield* Effect.tryPromise(loadGroundRules),
             },
             native.personas,
           ).pipe(
@@ -48,6 +50,9 @@ test("persona sessions are operated through the public OpenCode API", async () =
           expect(
             unrelated.data.find((agent) => agent.id === "persona1")?.system ?? "",
           ).not.toContain("You are Persona1");
+          expect((yield* remote.createSession("missing").pipe(Effect.flip)).message).toContain(
+            "Unknown persona",
+          );
           const session = yield* remote.createSession("persona1");
           expect(session.location.directory).toBe(join(personaDirectory, "sessions", session.id));
           expect(
@@ -92,6 +97,7 @@ test("persona sessions are operated through the public OpenCode API", async () =
           yield* remote.sessions.cancelInbox({ sessionID: session.id, inboxID: pending[0]!.id });
           expect(yield* remote.sessions.inbox(session.id)).toEqual([]);
           yield* remote.sessions.interrupt(session.id);
+          yield* remote.sessions.remove(session.id);
           yield* remote.sessions.remove(session.id);
           expect(
             yield* remote.sessions

@@ -3,6 +3,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { remoteHost } from "../src/opencode/remote.ts";
 import { runSessionTransfer } from "../src/operations/session-transfer.ts";
 import { catalogClient } from "../src/personas/catalog.ts";
+import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 
 const [command, file] = process.argv.slice(2);
 const operation = Schema.decodeUnknownSync(
@@ -19,7 +20,13 @@ await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
       const host = yield* remoteHost(
-        { baseUrl, authorization, directory, model: "opencode-go/deepseek-v4.1-flash" },
+        {
+          baseUrl,
+          authorization,
+          directory,
+          model: "opencode-go/deepseek-v4.1-flash",
+          groundRules: yield* Effect.tryPromise(loadGroundRules),
+        },
         new Map(),
       );
       yield* runSessionTransfer(host.client, {

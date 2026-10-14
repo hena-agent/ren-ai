@@ -41,6 +41,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
               authorization: "Basic test",
               directory: "/srv/ren-ai",
               model: "test/probe",
+              groundRules: "",
             },
             secrets: {
               TURNSTILE_SECRET: "turnstile",
