@@ -57,8 +57,7 @@ Boot out the deploy agent first, then the messaging gateway and its separate mes
 
 [ADR-0016](../../../docs/adr/0016-the-service-lives-at-renai-im-in-one-cloudflare-account.md) moves this service from `imsg.hena.dev` to `imsg.renai.im` and its LaunchAgents and permission profile from `dev.hena.*` to `im.renai.*`. Do it at the planned pause of the [application move](../../api/ops/README.md#move-to-renaiim), once the `imsg.renai.im` tunnel exists in the Ambivalent Co. account and CI has published a bundle from the new labels.
 
-1. From `apps/imsg`, deliver the renamed permission profile with `bun --env-file ops/mdm/.env run ops/mdm/profile-entry.ts --apply` ([MDM tooling](mdm/README.md)). Wait until Fleet shows it installed on the Mac, then delete the old `dev.hena.messaging.pppc.*` profile in Fleet. Both grant the same identities, so the permissions never lapse.
-2. Stop the agents and give each plist its new label and file name:
+1. Stop the agents and give each plist its new label and file name:
 
    ```sh
    cd ~/Library/LaunchAgents
@@ -69,5 +68,6 @@ Boot out the deploy agent first, then the messaging gateway and its separate mes
    done
    ```
 
+2. Delete the old `dev.hena.messaging.pppc.*` profile in Fleet, then from `apps/imsg` deliver the renamed one with `bun --env-file ops/mdm/.env run ops/mdm/profile-entry.ts --apply` ([MDM tooling](mdm/README.md)) and wait until Fleet shows it verified on the Mac. Fleet refuses a second profile with the same display name, and the renamed profile keeps the old one's, so the Mac has neither Full Disk Access nor Accessibility nor Automation in between. That is why the agents stop first.
 3. Overwrite `$MESSAGING_HOME/tunnel/token` (owner-only) with the `imsg.renai.im` tunnel's raw token, and copy the reviewed `ops/update.sh` over `$MESSAGING_HOME/deploy/update.sh`: the installed copy restarts the gateway by its old label.
 4. Bootstrap `im.renai.imsg.plist` and `im.renai.imsg-tunnel.plist`, run the no-send probe locally and through `https://imsg.renai.im/rpc`, then bootstrap `im.renai.imsg-deploy.plist` last.
