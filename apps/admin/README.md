@@ -146,7 +146,7 @@ preparation are never automatically repeated. Inspect the API's recorded
 session/send before recovery; deleting a user through the operator removes the
 registration and releases the assignment.
 
-Set Worker `MESSAGING_API_URL=https://api.renai.im` (declared in Wrangler)
+Set Worker `APPLICATION_API_URL=https://api-app.renai.im` (declared in Wrangler)
 and runtime secret `TOKEN_MANAGEMENT`, matching the application's
 `TOKEN_MANAGEMENT`. Use a different value from `TOKEN_CATALOG`. Tokens remain
 server-side; Admin authenticates the operator and enforces same-origin POSTs.
@@ -194,8 +194,8 @@ bunx wrangler secret delete MESSAGING_API_TOKEN
 
 Delete only secrets that exist. Leave `ADMIN_PASSWORD`, `GEMINI_API_KEY`,
 `IMSG_TOKEN`, `REN_AI_APPLICATION_TOKEN` and `OPENCODE_AUTHORIZATION` in place;
-they serve other authentication/provider purposes. Public `MESSAGING_API_URL`
-and `PERSONA_CATALOG_URL` settings are unchanged.
+they serve other authentication/provider purposes. Public
+`APPLICATION_API_URL` and `PERSONA_CATALOG_URL` configure separate services.
 
 - Persona, initial State and initial Memory are D1 text columns. Downloaded
   `persona.md` is a serialized view, not another source of truth. A revision CAS

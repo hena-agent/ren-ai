@@ -95,7 +95,7 @@ test("choices survive a reload and corrupt or inaccessible browser storage is sa
 });
 
 test("profiles use the same-origin Worker even when registration uses a separate API", async () => {
-  vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api.renai.im/");
+  vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api-app.renai.im/");
   vi.resetModules();
   const { discoveryClient: deployed } = await import("./client.ts");
   const imageUrl =
@@ -158,7 +158,7 @@ test("profiles use the same-origin Worker even when registration uses a separate
       turnstileToken: "verified",
     }),
   ).toEqual({ status: "waiting" });
-  expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.renai.im/discovery/waitlist");
+  expect(fetcher.mock.calls[1]?.[0]).toBe("https://api-app.renai.im/discovery/waitlist");
   vi.unstubAllEnvs();
   vi.resetModules();
 });
