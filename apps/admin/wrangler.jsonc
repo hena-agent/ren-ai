@@ -18,6 +18,7 @@
       "binding": "DB",
       "database_name": "persona-catalog",
       "database_id": "da5c6ee3-7ea6-49b3-8e6f-6ceff12d3f7f",
+      "preview_database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "drizzle",
     },
   ],

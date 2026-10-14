@@ -21,6 +21,15 @@ Open `http://127.0.0.1:3729` using Basic authentication (`admin` and
 `.wrangler/`. Browser and edge SSR bundles are built before Wrangler starts.
 Worker builds use `workerd` export conditions, avoiding browser DOM helpers.
 
+The D1 `preview_database_id` is the stable local identifier used before remote
+provisioning. Keep it unchanged: local SQLite files are keyed by database ID,
+so changing the production `database_id` without a fixed preview ID opens a
+different local database. Production deployment uses `database_id`; local
+development uses the preview ID and the existing `.wrangler/state/v3` Catalog.
+Back up `.wrangler/state` with the local Admin stopped before changing storage
+configuration. An empty Catalog after an ID change may mean another local DB
+was opened, not that the original data was deleted.
+
 ### Import existing local Admin data
 
 Stop the local Admin while transferring data, then run:
