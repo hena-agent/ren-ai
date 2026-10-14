@@ -46,6 +46,7 @@ test.each([false, true])(
           const native = yield* standaloneTestHost(root, personaDirectory, llm);
           const fixture = yield* applicationRpcFixture;
           let catalogs = 0;
+          let waitAttempts = 0;
           fixture.transport.fetch = async (request) => {
             const payload = Schema.decodeUnknownSync(
               Schema.fromJsonString(Schema.Struct({ id: Schema.Number, tag: Schema.String })),
@@ -53,8 +54,9 @@ test.each([false, true])(
             if (payload.tag === "catalog" && ++catalogs)
               return new Response("Starting", { status: 503 });
             if (payload.tag !== "wait") return fixture.web.handler(request);
+            const values = ++waitAttempts === 1 ? [""] : ["observed result"];
             return new Response(
-              `${JSON.stringify({ _tag: "Chunk", requestId: payload.id, values: [""] })}\n${JSON.stringify({ _tag: "Exit", requestId: payload.id, exit: { _tag: "Success", value: null } })}\n`,
+              `${JSON.stringify({ _tag: "Chunk", requestId: payload.id, values })}\n${JSON.stringify({ _tag: "Exit", requestId: payload.id, exit: { _tag: "Success", value: null } })}\n`,
             );
           };
           const config = {
@@ -83,8 +85,8 @@ test.each([false, true])(
             .filter((part) => part.id === "heartbeat-only")
             .map((part) => part.result);
           expect(results).toHaveLength(1);
-          expect(results[0]).toMatchObject({ type: "error" });
-          expect(JSON.stringify(results)).toContain("Wait stream ended without a result");
+          expect(results[0]).toEqual({ type: "text", value: "observed result" });
+          expect(waitAttempts).toBe(2);
           expect(catalogs).toBe(0);
           const beforeMismatch = (yield* llm.requests()).length;
           yield* Effect.promise(() =>

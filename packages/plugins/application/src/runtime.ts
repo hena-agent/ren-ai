@@ -2,11 +2,12 @@ import { Plugin } from "@opencode/plugin/effect";
 import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
-import { Effect, Option, Schema, Stream } from "effect";
+import { Effect, Schema } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { applicationApi, persona } from "./protocol.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import type { PersonaPluginOptions } from "./options.ts";
+import { waitForResult } from "./wait.ts";
 
 export const inPersonaLocation = (directory: string, root: string) => {
   return (
@@ -53,29 +54,12 @@ interface RemoteConfig {
 const remoteOptions = (config: RemoteConfig) =>
   Effect.gen(function* () {
     const api = yield* rpcClient(applicationApi, config);
-    const waitUntilResult = (sessionID: string, seconds: number) => {
-      const deadline = Date.now() + Math.max(0, seconds) * 1000;
-      const read: (remaining: number) => Effect.Effect<string, Error> = (remaining) =>
-        api.wait({ sessionID, seconds: remaining }).pipe(
-          Stream.filter((output) => output !== ""),
-          Stream.runLast,
-          Effect.flatMap((result) => {
-            if (Option.isSome(result)) return Effect.succeed(result.value);
-            const next = Math.max(0, (deadline - Date.now()) / 1000);
-            return next > 0
-              ? read(next)
-              : Effect.fail(new Error("Wait stream ended without a result"));
-          }),
-          Effect.mapError(failure),
-        );
-      return read(Math.max(0, seconds));
-    };
     const options: PersonaPluginOptions = {
       personaDirectory: config.directory,
       personas: new Map(),
       send: (sessionID, text, callID) =>
         api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
-      wait: waitUntilResult,
+      wait: (sessionID, seconds) => waitForResult(api, sessionID, seconds),
       read: (sessionID) => api.read({ sessionID }).pipe(Effect.mapError(failure)),
       react: (sessionID, tapback, callID) =>
         api.react({ sessionID, tapback, callID }).pipe(Effect.mapError(failure)),

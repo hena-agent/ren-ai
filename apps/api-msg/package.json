@@ -11,6 +11,7 @@
   },
   "scripts": {
     "start": "bun run ops/api-msg-entry.mjs",
+    "probe": "bun run ops/probe-entry.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
