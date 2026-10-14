@@ -33,7 +33,7 @@ test("the browser client reads the catalog and validates the real registration a
       imageUrl: "https://example.net/nari.jpg",
     },
   ]);
-  expect(fetcher).toHaveBeenCalledWith("/discovery/personas", { signal });
+  expect(fetcher).toHaveBeenCalledWith("/api/personas", { signal });
   const request = {
     handle: "a@example.org",
     locale: "ko",
@@ -94,11 +94,12 @@ test("choices survive a reload and corrupt or inaccessible browser storage is sa
   expect(saveChoices({ nari: true })).toBe(false);
 });
 
-test("public deployment can call the configured API rather than the static site", async () => {
+test("profiles use the same-origin Worker even when registration uses a separate API", async () => {
   vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api-msg.hena.dev/");
   vi.resetModules();
   const { discoveryClient: deployed } = await import("./client.ts");
-  const imageUrl = "/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png";
+  const imageUrl =
+    "https://admin.ambivalent.dev/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png";
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
     Response.json([
       {
@@ -129,24 +130,35 @@ test("public deployment can call the configured API rather than the static site"
   );
   vi.stubGlobal("fetch", fetcher);
   const profiles = await deployed.profiles(new AbortController().signal);
-  expect(profiles[0]?.imageUrl).toBe(`https://api-msg.hena.dev${imageUrl}`);
+  expect(profiles[0]?.imageUrl).toBe(imageUrl);
   expect(profiles[0]?.portraits).toEqual({
-    anime: `https://api-msg.hena.dev${imageUrl}`,
+    anime: imageUrl,
     photo: "https://photos.example.net/nari.jpg",
   });
   expect(profiles[1]?.imageUrl).toBe("https://photos.example.net/legacy.jpg");
   expect(profiles[0]?.portraitGallery).toEqual([
-    { anime: `https://api-msg.hena.dev${imageUrl}`, photo: "https://photos.example.net/nari.jpg" },
+    { anime: imageUrl, photo: "https://photos.example.net/nari.jpg" },
     {
       anime: "https://photos.example.net/another.jpg",
-      photo: `https://api-msg.hena.dev${imageUrl}`,
+      photo: imageUrl,
     },
   ]);
   expect(profiles[2]?.portraits).toEqual({
     anime: "https://photos.example.net/mixed/",
-    photo: `https://api-msg.hena.dev${imageUrl}`,
+    photo: imageUrl,
   });
-  expect(fetcher.mock.calls[0]?.[0]).toBe("https://api-msg.hena.dev/discovery/personas");
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/personas");
+  fetcher.mockResolvedValueOnce(Response.json({ status: "waiting" }));
+  expect(
+    await deployed.join({
+      handle: "a@example.org",
+      locale: "ko",
+      privacyNoticeVersion: discoveryNotice.version,
+      likedPersonaIDs: ["nari"],
+      turnstileToken: "verified",
+    }),
+  ).toEqual({ status: "waiting" });
+  expect(fetcher.mock.calls[1]?.[0]).toBe("https://api-msg.hena.dev/discovery/waitlist");
   vi.unstubAllEnvs();
   vi.resetModules();
 });

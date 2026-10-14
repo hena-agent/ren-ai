@@ -10,4 +10,5 @@
   "assets": {
     "directory": "./dist/client",
   },
+  "observability": { "enabled": true },
 }

@@ -3,12 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "./worker/entry.mjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "vite build",
+    "build": "vite build && bun scripts/build-worker.mjs",
+    "dev:worker": "bun run build && wrangler dev --port ${DISCOVERY_WORKER_PORT:-4873} --persist-to \"${DISCOVERY_PERSIST_PATH:-../admin/.wrangler/state}\" --var PERSONA_CATALOG_URL:${PERSONA_CATALOG_URL:-http://127.0.0.1:3729}",
     "deploy": "wrangler deploy",
     "preview": "vite preview --host 127.0.0.1",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p worker/tsconfig.json"
   },
   "dependencies": {
     "@ren-ai/onboarding": "workspace:*",
@@ -18,11 +20,16 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261011.1",
     "@testing-library/react": "16.3.0",
+    "@total-typescript/shoehorn": "0.1.2",
+    "@types/node": "26.6.2",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.2.0",
+    "esbuild": "0.28.2",
     "happy-dom": "20.14.5",
+    "miniflare": "5.20261006.1-alpha",
     "typescript": "7.0.2",
     "vite": "7.3.6",
     "vitest": "5.0.1",

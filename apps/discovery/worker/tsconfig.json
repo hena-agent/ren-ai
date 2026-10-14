@@ -1,0 +1,10 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "types": ["@cloudflare/workers-types", "node"],
+    "lib": ["es2023"]
+  },
+  "include": ["entry.mjs"]
+}

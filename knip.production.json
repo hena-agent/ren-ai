@@ -38,7 +38,7 @@
       ]
     },
     "apps/discovery": {
-      "entry": ["index.html"]
+      "entry": ["index.html", "worker/entry.mjs!", "scripts/build-worker.mjs!"]
     },
     "packages/discovery.hena.dev": {
       "entry": ["src/routeTree.gen.ts!"]
