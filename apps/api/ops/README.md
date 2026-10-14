@@ -21,6 +21,7 @@ rollback. No script changes live ingress, stops a service or enables intake.
 After old intake and scheduling are stopped, create an owner-only private archive:
 
 ```sh
+# state:export runs Node 24 (node:sqlite URI support preserves readonly WAL reads).
 CONFIRM_APPLICATION_STOPPED=yes bun run state:export /private/path/server.sqlite /private/path/new-state.json
 API_APP_URL=https://api-app.renai.im bun run state:import /private/path/new-state.json
 ```

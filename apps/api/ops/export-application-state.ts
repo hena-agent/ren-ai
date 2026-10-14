@@ -1,7 +1,7 @@
 import { writeFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { SqliteClient } from "@effect/sql-sqlite-bun";
+import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect } from "effect";
 import { exportReadOnlyApplicationState } from "../src/state-snapshot.ts";
 
@@ -20,7 +20,9 @@ filename.searchParams.set("readonly_shm", "1");
 if (!existsSync(`${source}-wal`)) filename.searchParams.set("immutable", "1");
 const snapshot = await Effect.runPromise(
   Effect.scoped(exportReadOnlyApplicationState).pipe(
-    Effect.provide(SqliteClient.layer({ filename: filename.href, readonly: true, create: false })),
+    Effect.provide(
+      SqliteClient.layer({ filename: filename.href, readonly: true, disableWAL: true }),
+    ),
   ),
 );
 const after = await stat(source);

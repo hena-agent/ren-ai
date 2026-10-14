@@ -11,7 +11,7 @@ import { expect, test } from "vitest";
 import { migrate } from "./database.ts";
 import { exportReadOnlyApplicationState, readStateSnapshot } from "./state-snapshot.ts";
 
-test("the real Bun archive command opens stopped source read-only and creates a private non-overwriting archive", async () => {
+test("the real Node archive command opens stopped source read-only and creates a private non-overwriting archive", async () => {
   const root = await mkdtemp(join(tmpdir(), "application-export-"));
   const source = join(root, "server.sqlite");
   const target = join(root, "state.json");
@@ -28,7 +28,7 @@ test("the real Bun archive command opens stopped source read-only and creates a 
       .digest("hex");
     expect(await readdir(root)).toEqual(["server.sqlite"]);
     const command = fileURLToPath(new URL("../ops/export-application-state.ts", import.meta.url));
-    const output = execFileSync("bun", [command, source, target], {
+    const output = execFileSync(process.execPath, [command, source, target], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: { ...process.env, CONFIRM_APPLICATION_STOPPED: "yes" },
       encoding: "utf8",
@@ -45,14 +45,14 @@ test("the real Bun archive command opens stopped source read-only and creates a 
       ["source-private-marker", 123],
     ]);
     expect(() =>
-      execFileSync("bun", [command, source, target], {
+      execFileSync(process.execPath, [command, source, target], {
         env: { ...process.env, CONFIRM_APPLICATION_STOPPED: "yes" },
         stdio: "pipe",
       }),
     ).toThrow(/EEXIST/);
     expect(await readdir(root)).toEqual(["server.sqlite", "state.json"]);
     expect(() =>
-      execFileSync("bun", [command, source, join(root, "unconfirmed.json")], {
+      execFileSync(process.execPath, [command, source, join(root, "unconfirmed.json")], {
         env: { ...process.env, CONFIRM_APPLICATION_STOPPED: "no" },
         stdio: "pipe",
       }),
@@ -80,7 +80,7 @@ test("the stopped source export includes uncheckpointed WAL rows without modifyi
     expect(files).toEqual(["server #?%.sqlite", "server #?%.sqlite-shm", "server #?%.sqlite-wal"]);
     const before = await Promise.all(files.map((file) => readFile(join(root, file))));
     const command = fileURLToPath(new URL("../ops/export-application-state.ts", import.meta.url));
-    const output = execFileSync("bun", [command, source, target], {
+    const output = execFileSync(process.execPath, [command, source, target], {
       env: { ...process.env, CONFIRM_APPLICATION_STOPPED: "yes" },
       encoding: "utf8",
     });

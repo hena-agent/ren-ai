@@ -23,6 +23,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.2
       # OpenCode uses explicit resource management (await using), which needs
       # Node 24. Bun installs and runs scripts; Node runs tests with v8 coverage.
       - uses: actions/setup-node@v6
@@ -46,6 +48,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.2
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc

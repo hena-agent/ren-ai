@@ -10,7 +10,7 @@
   "main": "./worker/entry.ts",
   "exports": "./worker/entry.ts",
   "scripts": {
-    "state:export": "bun ops/export-application-state.ts",
+    "state:export": "node ops/export-application-state.ts",
     "state:import": "bun ops/import-application-state.ts",
     "build:worker": "bun scripts/build-worker.mjs",
     "start": "bun run dev",
