@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { Effect, Schema } from "effect";
+import { Effect, Exit, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 
 const Scalar = Schema.Union([
@@ -46,7 +46,7 @@ const schemaTables = Effect.gen(function* () {
   );
 });
 
-export const exportApplicationState = Effect.gen(function* () {
+const snapshotContents = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   return yield* Effect.gen(function* () {
     const tables = yield* schemaTables;
@@ -65,7 +65,22 @@ export const exportApplicationState = Effect.gen(function* () {
       ),
     };
     return Schema.decodeUnknownSync(StateSnapshot)(snapshot);
-  }).pipe(sql.withTransaction);
+  });
+});
+
+export const exportApplicationState = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  return yield* snapshotContents.pipe(sql.withTransaction);
+});
+
+/** Bun's SQL adapter uses BEGIN IMMEDIATE even for readonly clients; source export uses a deferred read transaction. */
+export const exportReadOnlyApplicationState = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  return yield* Effect.acquireUseRelease(
+    sql`BEGIN`,
+    () => snapshotContents,
+    (_rows, exit) => (Exit.isFailure(exit) ? sql`ROLLBACK` : sql`COMMIT`).pipe(Effect.orDie),
+  );
 });
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: validate a private state archive before any restore query
