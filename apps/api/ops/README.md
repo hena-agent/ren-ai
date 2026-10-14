@@ -9,6 +9,19 @@ and [Admin setup](../../../apps/admin/README.md#automatic-deployment). Point the
 application at `https://admin.ambivalent.dev` with the matching private Catalog
 token; deploying either website does not redeploy the application.
 
+## Operator commands
+
+The application image carries the operator CLI at `/app/src/operator.js`. It calls
+the running service through the socket in its state volume. From `apps/api`, with
+the deployment's Compose variables set:
+
+```sh
+docker compose -f ops/compose.yml exec api-msg bun /app/src/operator.js remove HANDLE
+```
+
+The commands are `remove`, `block`, `rebuild`, `test-handle` and `untest-handle`,
+each taking one handle.
+
 ## Retire the old test site
 
 The persona-selection site at `discovery.hena.dev` and its immediate onboarding are
@@ -16,8 +29,10 @@ gone ([ADR-0015](../../../docs/adr/0015-discovery-is-the-only-onboarding.md)). E
 conversation it started was test data. Retire it in this order:
 
 1. With the old application still running, take each handle from the `user`
-   table of `server.sqlite` and `remove` it with the operator CLI, so no
-   conversation from the old flow remains.
+   table of `server.sqlite` and `remove` it with the [operator CLI](#operator-commands),
+   so no conversation from the old flow remains. The old image has no CLI: build
+   the new image and run its CLI against the same state volume with
+   `docker run --rm --entrypoint bun -v ren-ai-application-state:/state ren-ai/application:local /app/src/operator.js remove HANDLE`.
 2. Delete `DEFAULT_PERSONA_ID` from the protected application env file and deploy
    the application. Migration 020 drops the email waitlist and leftover Notice
    records; the old site's routes now answer `404`.
