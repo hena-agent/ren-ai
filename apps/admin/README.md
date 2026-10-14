@@ -209,6 +209,27 @@ and `PERSONA_CATALOG_URL` settings are unchanged.
 
 ## Diagnostics and checks
 
+### US execution and image editing
+
+Production uses `ADMIN_JURISDICTION=us` and the US-restricted `PersonaAdmin`
+object named `global`. This is a different object from the former unrestricted
+`global`: saved D1 documents and R2 photos remain, but its private unsaved drafts
+and queue are not carried over. Alarms on the former object stop without making
+new generation calls. Already submitted upstream requests cannot be cancelled.
+Do not set `ADMIN_JURISDICTION=local` in production. The `dev` command explicitly
+sets it for workerd, which does not implement jurisdiction restrictions.
+
+Finished image jobs have **기록 삭제** and **종료된 기록 모두 삭제** actions.
+There is no automatic expiry. These actions remove finished task records, not
+photos or the latest draft; pending/running work remains. Submission receipts
+remain so replaying a deleted paid submission cannot create more images.
+
+Drop one PNG, JPEG or WebP (up to 20 MB) into a style's upload area, or select
+**사진 업로드** / **파일로 교체**. Every upload requires a 4:5 crop confirmation;
+position and zoom controls produce a 1024×1280 JPEG. Uploads use the private R2
+preview and become public only after **저장하기**. Each style still allows six
+photos. Upload/replace is locked while that persona has queued generation.
+
 Structured JSON goes to Workers stdout/stderr. Search Workers Logs or
 `bunx wrangler tail` using the displayed request ID / `X-Request-ID`.
 Diagnostics retain stages, causes/codes and durations, excluding Persona text,
