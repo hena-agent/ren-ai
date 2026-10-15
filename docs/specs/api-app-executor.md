@@ -59,7 +59,7 @@ Status: implementation contract approved in the operator conversation.
 - Initial Cloudflare application deployment is bootstrap-only. The old intake
   must be paused and state verified before one new intake is enabled.
 - Public default application domain: `api-app.renai.im` in Ambivalent Co.
-  The DB-free Mac execution domain is `api-msg.renai.im`; current upstreams
+  The DB-free Mac execution domain is `api.renai.im`; current upstreams
   remain `oc.renai.im` and `imsg.renai.im`. Do not restore retired hostnames.
 - Runtime secrets are server-only; browser Site key remains the GitHub variable.
 - Logs correlate requests/operations and record safe stage/cause/outcome metadata,

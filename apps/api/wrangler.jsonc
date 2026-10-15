@@ -12,7 +12,7 @@
   "route": { "pattern": "api-app.renai.im", "custom_domain": true },
   "vars": {
     "PERSONA_CATALOG_URL": "https://admin.renai.im",
-    "API_MSG_URL": "https://api-msg.renai.im",
+    "API_MSG_URL": "https://api.renai.im",
     "PERSONA_MODEL": "opencode-go/deepseek-v4.1-flash",
     "OPENCODE_DIRECTORY": "/srv/ren-ai",
     "BOOTSTRAP_ONLY": "true",
