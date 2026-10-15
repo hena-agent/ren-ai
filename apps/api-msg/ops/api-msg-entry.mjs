@@ -8,7 +8,7 @@ const required = (name) => {
 const { createGateway } = await import("../src/index.ts");
 const handler = createGateway({
   config: {
-    executorToken: required("TOKEN_EXECUTOR"),
+    managementToken: required("TOKEN_MANAGEMENT"),
     opencodeUrl: process.env.OPENCODE_URL ?? "https://oc.renai.im",
     opencodeAuthorization: required("OPENCODE_AUTHORIZATION"),
     imsgUrl: process.env.IMSG_URL ?? "https://imsg.renai.im/rpc",

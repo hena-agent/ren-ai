@@ -8,8 +8,8 @@ bun="${IMSG_HOME:-/usr/local/lib/ren-ai-messaging}/bin/bun"
 plist="${API_MSG_LAUNCH_AGENT:-$HOME/Library/LaunchAgents/im.renai.api-msg.plist}"
 [[ "$(uname -s)" == Darwin && "$(id -u)" != 0 ]] || { echo 'macOS GUI user required; do not run as root' >&2; exit 1; }
 [[ "$root" == /* && "$bun" == /* && "$plist" == /* && -x "$bun" && ! -e "$root" && ! -e "$plist" ]] || { echo 'New absolute api-msg paths and the installed imsg Bun runtime are required' >&2; exit 1; }
-grep -q '^TOKEN_EXECUTOR=.' "$config" && grep -q '^OPENCODE_AUTHORIZATION=.' "$config" && grep -q '^IMSG_TOKEN=.' "$config" || { echo 'TOKEN_EXECUTOR, OPENCODE_AUTHORIZATION and IMSG_TOKEN are required' >&2; exit 1; }
-if grep -qEv '^([[:space:]]*#.*|[[:space:]]*|TOKEN_EXECUTOR=[^[:space:]]+|OPENCODE_URL=[^[:space:]]+|OPENCODE_AUTHORIZATION="Basic [^"]+"|IMSG_URL=[^[:space:]]+|IMSG_TOKEN=[^[:space:]]+|LISTEN_HOST=[^[:space:]]+|PORT=[0-9]+)$' "$config"; then
+grep -q '^TOKEN_MANAGEMENT=.' "$config" && grep -q '^OPENCODE_AUTHORIZATION=.' "$config" && grep -q '^IMSG_TOKEN=.' "$config" || { echo 'TOKEN_MANAGEMENT, OPENCODE_AUTHORIZATION and IMSG_TOKEN are required' >&2; exit 1; }
+if grep -qEv '^([[:space:]]*#.*|[[:space:]]*|TOKEN_MANAGEMENT=[^[:space:]]+|TOKEN_CATALOG=[^[:space:]]+|OPENCODE_URL=[^[:space:]]+|OPENCODE_AUTHORIZATION="Basic [^"]+"|IMSG_URL=[^[:space:]]+|IMSG_TOKEN=[^[:space:]]+|LISTEN_HOST=[^[:space:]]+|PORT=[0-9]+)$' "$config"; then
   echo 'Unexpected api-msg environment setting; use only the documented executor variables' >&2
   exit 1
 fi

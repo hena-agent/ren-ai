@@ -6,7 +6,5 @@ export const executionBindings: CloudflareBindings = {
   TURNSTILE_SECRET: "turnstile-secret",
   TOKEN_MANAGEMENT: "management-secret",
   API_MSG_URL: "https://api-msg.example",
-  TOKEN_EXECUTOR: "executor-secret",
-  REN_AI_APPLICATION_TOKEN: "application-secret",
   BOOTSTRAP_ONLY: "false",
 };

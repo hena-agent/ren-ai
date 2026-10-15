@@ -10,7 +10,7 @@ services:
     network_mode: none
     volumes:
       - persona-location:/location
-      - ${REN_AI_LOCATION_INPUT:?Set REN_AI_LOCATION_INPUT to reviewed config/token directory}:/input:ro
+      - ${REN_AI_LOCATION_INPUT:?Set REN_AI_LOCATION_INPUT to reviewed config directory}:/input:ro
 volumes:
   application-state:
     name: ${REN_AI_STATE_VOLUME:-ren-ai-application-state}

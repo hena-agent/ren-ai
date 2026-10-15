@@ -22,7 +22,6 @@ export const locationConfig = (input: {
           options: {
             directory: "/srv/ren-ai",
             url: input.callback,
-            tokenFile: "/srv/ren-ai/application.token",
           },
         })),
         {

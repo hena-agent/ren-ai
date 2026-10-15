@@ -8,8 +8,7 @@ const configuration = {
   apiMsgUrl: "https://executor.example",
   openCodeUrl: "https://executor.example/opencode",
   imsgRpcUrl: "https://executor.example/imsg/rpc",
-  executorToken: "executor-secret",
-  applicationToken: "application-secret",
+  managementToken: "management-secret",
   model: "test",
   directory: "/srv/ren-ai",
 };
@@ -66,7 +65,7 @@ test("health checks are rate limited and keep native facts separate from credent
     }),
   );
   expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(fetcher.mock.calls[0]![1]?.headers).toEqual({ Authorization: "Bearer executor-secret" });
+  expect(fetcher.mock.calls[0]![1]?.headers).toEqual({ Authorization: "Bearer management-secret" });
 });
 
 test("health and notification failures record safe diagnostics before recovery", async () => {
@@ -92,7 +91,7 @@ test("health and notification failures record safe diagnostics before recovery",
     expect(logs).toContain("executor.health");
     expect(logs).toContain("alert.delivery");
     expect(logs).toContain('\\"status\\":503');
-    expect(logs).not.toContain("executor-secret");
+    expect(logs).not.toContain("management-secret");
     expect(logs).not.toContain("private failure input");
   } finally {
     stderr.mockRestore();

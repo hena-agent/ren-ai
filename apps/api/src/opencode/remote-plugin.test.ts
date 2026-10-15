@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import {
   ordinaryProjectHost,
@@ -24,13 +24,12 @@ import {
 } from "../../test/persona-plugins.test-helper.ts";
 
 const installedPlugin = installedPlugins[0]!;
+afterEach(() => vi.unstubAllEnvs());
 
 test.each([false, true])(
   "the plugins validate wait results without catalog loading (default entries: %s)",
   async (installed) => {
     const { root, personaDirectory } = await messagingFixture("plugin-wait-result-");
-    const tokenFile = join(root, "application-token");
-    await writeFile(tokenFile, "\napplication-secret\n");
     try {
       await runMessagingTest(
         Effect.gen(function* () {
@@ -44,6 +43,7 @@ test.each([false, true])(
             return TestLLM.text("observed result", "answer");
           });
           const native = yield* standaloneTestHost(root, personaDirectory, llm);
+          vi.stubEnv("TOKEN_MANAGEMENT", "application-secret");
           const fixture = yield* applicationRpcFixture;
           let catalogs = 0;
           let waitAttempts = 0;
@@ -65,7 +65,7 @@ test.each([false, true])(
             token: "application-secret",
           };
           const plugin = installed
-            ? installedPlugins.map((entry) => withPluginOptions(entry, { ...config, tokenFile }))
+            ? installedPlugins.map((entry) => withPluginOptions(entry, config))
             : remotePersonaPlugins(config);
           yield* registerApplicationPlugin(native, plugin, (input, init) =>
             fixture.transport.fetch(new Request(input, init)),
@@ -110,7 +110,8 @@ test.each([false, true])(
   },
 );
 
-test("default entries skip root and unrelated locations without opening their token file", async () => {
+test("default entries skip root and unrelated locations without management credentials", async () => {
+  vi.stubEnv("TOKEN_MANAGEMENT", undefined);
   const { root, personaDirectory } = await messagingFixture("plugin-default-scope-");
   const unrelated = join(root, "other-project");
   await mkdir(unrelated);
@@ -124,7 +125,6 @@ test("default entries skip root and unrelated locations without opening their to
             withPluginOptions(entry, {
               directory: personaDirectory,
               url: "https://unused.test/rpc",
-              tokenFile: "/not-used",
             }),
           ),
           () => Promise.reject(new Error("Unexpected callback")),
@@ -148,34 +148,37 @@ test("default entries skip root and unrelated locations without opening their to
   }
 });
 
-test("malformed installed plugin options are reported as a failed plugin, not an inactive directory match", async () => {
-  const { root, personaDirectory } = await messagingFixture("plugin-options-");
-  try {
-    await runMessagingTest(
-      Effect.gen(function* () {
-        const llm = yield* scriptedPersona();
-        yield* llm.serve(() => TestLLM.text("ordinary", "answer"));
-        const native = yield* standaloneTestHost(root, personaDirectory, llm);
-        yield* registerInstalledPlugin(native, installedPlugin, {
-          directory: 1,
-          url: "https://app.test/rpc",
-          tokenFile: "/not-used",
-        });
-        const remote = yield* localOpenCode(native, personaDirectory);
-        const session = yield* native.createSession("persona1");
-        yield* remote.sessions.prompt({
-          sessionID: session.id,
-          text: "initialize configured plugins",
-        });
-        yield* remote.sessions.wait(session.id).pipe(Effect.timeout("5 seconds"));
-        const body = JSON.stringify(
-          yield* remote.client.plugin.list({ location: session.location }),
-        );
-        expect(body).toContain('"status":"failed"');
-        expect(body).toContain("directory");
-      }),
-    );
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
+test.each(["options", "token"])(
+  "invalid plugin %s fails closed before calling the application",
+  async (invalid) => {
+    vi.stubEnv("TOKEN_MANAGEMENT", undefined);
+    const { root, personaDirectory } = await messagingFixture("plugin-options-");
+    try {
+      await runMessagingTest(
+        Effect.gen(function* () {
+          const llm = yield* scriptedPersona();
+          yield* llm.serve(() => TestLLM.text("ordinary", "answer"));
+          const native = yield* standaloneTestHost(root, personaDirectory, llm);
+          yield* registerInstalledPlugin(native, installedPlugin, {
+            directory: invalid === "options" ? 1 : personaDirectory,
+            url: "https://app.test/rpc",
+          });
+          const remote = yield* localOpenCode(native, personaDirectory);
+          const session = yield* native.createSession("persona1");
+          yield* remote.sessions.prompt({
+            sessionID: session.id,
+            text: "initialize configured plugins",
+          });
+          yield* remote.sessions.wait(session.id).pipe(Effect.timeout("5 seconds"));
+          const body = JSON.stringify(
+            yield* remote.client.plugin.list({ location: session.location }),
+          );
+          expect(body).toContain('"status":"failed"');
+          expect(body).toContain(invalid === "options" ? "directory" : "TOKEN_MANAGEMENT");
+        }),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);

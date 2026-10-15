@@ -44,8 +44,6 @@ test("the retained source entry runs the Worker with Durable Object SQLite, neve
               TURNSTILE_SECRET: text("private-turnstile"),
               TOKEN_MANAGEMENT: text("private-management"),
               API_MSG_URL: text("https://executor.invalid"),
-              TOKEN_EXECUTOR: text("private-executor"),
-              REN_AI_APPLICATION_TOKEN: text("private-application"),
               BOOTSTRAP_ONLY: text("true"),
             },
           },

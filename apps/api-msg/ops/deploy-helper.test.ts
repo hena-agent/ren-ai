@@ -35,7 +35,7 @@ const fixture = async (mode: string) => {
     mkdir(bin),
     mkdir(bundle),
   ]);
-  await writeFile(join(root, "api-msg.env"), "TOKEN_EXECUTOR=not-used-by-probe\n");
+  await writeFile(join(root, "api-msg.env"), "TOKEN_MANAGEMENT=not-used-by-probe\n");
   await writeFile(join(deploy, "token"), "github_pat_fixture\n");
   await writeFile(join(root, "SHA256SUMS"), "");
   for (const name of payload) await writeFile(join(root, name), `old-${name}`);

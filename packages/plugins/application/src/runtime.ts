@@ -94,7 +94,6 @@ export const remotePlugin = (id: string, factory: Factory, config: RemoteConfig)
 const configSchema = Schema.Struct({
   directory: Schema.String,
   url: Schema.String,
-  tokenFile: Schema.String,
 });
 
 export const configuredPlugin = (id: string, factory: Factory) =>
@@ -108,10 +107,11 @@ export const configuredPlugin = (id: string, factory: Factory) =>
           !inPersonaLocation(ctx.location.directory, config.directory)
         )
           return;
-        const token = yield* Effect.tryPromise(() => readFile(config.tokenFile, "utf8"));
+        const token = process.env["TOKEN_MANAGEMENT"]?.trim();
+        if (!token) throw new Error("TOKEN_MANAGEMENT is required");
         yield* remotePlugin(id, factory, {
           ...config,
-          token: token.trim(),
+          token,
         }).effect(ctx);
       }).pipe(Effect.orDie),
   });

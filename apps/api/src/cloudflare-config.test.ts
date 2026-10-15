@@ -8,8 +8,6 @@ const bindings: CloudflareBindings = {
   TURNSTILE_SECRET: "turnstile-secret",
   TOKEN_MANAGEMENT: "management-secret",
   API_MSG_URL: "https://api-msg.example",
-  TOKEN_EXECUTOR: "executor-secret",
-  REN_AI_APPLICATION_TOKEN: "plugin-secret",
 };
 
 const publicPersona = {
@@ -35,8 +33,7 @@ test("builds catalog and executor configuration with bootstrap enabled by defaul
     apiMsgUrl: "https://api-msg.example/",
     openCodeUrl: "https://api-msg.example/opencode",
     imsgRpcUrl: "https://api-msg.example/imsg/rpc",
-    executorToken: "executor-secret",
-    applicationToken: "plugin-secret",
+    managementToken: "management-secret",
     model: "opencode-go/deepseek-v4.1-flash",
     directory: "/srv/ren-ai",
   });
@@ -50,6 +47,20 @@ test("builds catalog and executor configuration with bootstrap enabled by defaul
     "https://admin.example/api/personas",
     "https://admin.example/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png",
   ]);
+});
+
+test("public Catalog configuration needs no private credentials", async () => {
+  const config = cloudflareConfiguration(
+    {
+      PERSONA_CATALOG_URL: bindings.PERSONA_CATALOG_URL,
+      API_MSG_URL: bindings.API_MSG_URL,
+    },
+    async () => Response.json([publicPersona]),
+  );
+  expect(await config.applicationStore.catalog()).toHaveLength(1);
+  expect(config.applicationStore.managementToken).toBe("");
+  expect(config.applicationStore.turnstileSecret).toBe("");
+  expect(config.execution.managementToken).toBe("");
 });
 
 test("honors explicit runtime settings and validates bootstrap and executor origin configuration", () => {
@@ -68,8 +79,11 @@ test("honors explicit runtime settings and validates bootstrap and executor orig
   expect(() =>
     cloudflareConfiguration({ ...bindings, API_MSG_URL: "http://api-msg.example" }),
   ).toThrow("API_MSG_URL must be a credential-free HTTPS or loopback HTTP origin");
-  expect(() => cloudflareConfiguration({ ...bindings, TOKEN_MANAGEMENT: " " })).toThrow(
-    "TOKEN_MANAGEMENT is required",
+  expect(
+    cloudflareConfiguration({ ...bindings, TOKEN_MANAGEMENT: " " }).execution.managementToken,
+  ).toBe("");
+  expect(() => cloudflareConfiguration({ ...bindings, PERSONA_CATALOG_URL: " " })).toThrow(
+    "PERSONA_CATALOG_URL is required",
   );
 });
 
@@ -82,6 +96,6 @@ test.each(["localhost", "127.0.0.1", "[::1]"])(
     });
     expect(config.execution.openCodeUrl).toBe(`http://${host}:4700/opencode`);
     expect(config.execution.imsgRpcUrl).toBe(`http://${host}:4700/imsg/rpc`);
-    expect(config.execution.executorToken).toBe(bindings.TOKEN_EXECUTOR);
+    expect(config.execution.managementToken).toBe(bindings.TOKEN_MANAGEMENT);
   },
 );

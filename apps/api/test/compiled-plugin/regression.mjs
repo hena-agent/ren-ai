@@ -102,7 +102,6 @@ try {
     writeFileSync(entry, `import "../../../fixture.mjs";\n${readFileSync(entry, "utf8")}`);
   }
   copyFileSync(fileURLToPath(new URL("./fixture.mjs", import.meta.url)), join(root, "fixture.mjs"));
-  writeFileSync(join(root, "application.token"), "isolated-application-token\n", { mode: 0o600 });
   writeFileSync(
     join(root, "opencode.json"),
     JSON.stringify({
@@ -128,7 +127,6 @@ try {
         options: {
           directory: "/srv/ren-ai",
           url: "http://127.0.0.1:4710/rpc",
-          tokenFile: "/srv/ren-ai/application.token",
         },
       })),
     }),
@@ -146,6 +144,8 @@ try {
     "/srv/ren-ai",
     "--env",
     "OPENCODE_SERVER_PASSWORD=isolated-regression-password",
+    "--env",
+    "TOKEN_MANAGEMENT=isolated-application-token",
     "--env",
     "HOME=/tmp/isolated-home",
     "--env",

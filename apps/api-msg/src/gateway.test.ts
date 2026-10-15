@@ -3,7 +3,7 @@ import { createGateway, type GatewayConfig, type GatewayOptions } from "./gatewa
 import { checkMacHealth, nativeCommand } from "./health.ts";
 
 const config: GatewayConfig = {
-  executorToken: "shared-secret",
+  managementToken: "shared-secret",
   opencodeUrl: "https://oc.test/base",
   opencodeAuthorization: "Basic server-auth",
   imsgUrl: "https://imsg.test/rpc",
@@ -37,8 +37,8 @@ describe("authenticated execution gateway", () => {
   );
 
   it("rejects blank configured executor tokens", () => {
-    expect(() => createGateway({ config: { ...config, executorToken: "  " } })).toThrow(
-      "TOKEN_EXECUTOR must not be blank",
+    expect(() => createGateway({ config: { ...config, managementToken: "  " } })).toThrow(
+      "TOKEN_MANAGEMENT must not be blank",
     );
     expect(() => createGateway({ config: { ...config, opencodeAuthorization: " " } })).toThrow(
       "Upstream authorization must not be blank",

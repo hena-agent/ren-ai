@@ -64,7 +64,7 @@ test.each(["sent", "uncertain"] as const)(
             const native = yield* standaloneTestHost(root, personaDirectory, llm);
             const callback = yield* rpcClient(applicationApi, {
               url: "https://app/rpc",
-              token: "application-secret",
+              token: "management-secret",
             }).pipe(
               Effect.provide(FetchHttpClient.layer),
               Effect.provideService(FetchHttpClient.Fetch, callbackNetwork),
@@ -74,7 +74,7 @@ test.each(["sent", "uncertain"] as const)(
               native,
               remotePersonaPlugins({
                 url: "https://app/rpc",
-                token: "application-secret",
+                token: "management-secret",
                 directory: personaDirectory,
               }),
               callbackNetwork,
@@ -121,7 +121,7 @@ test.each(["sent", "uncertain"] as const)(
             const imsg = yield* servePublic(messages.handler, 0);
             const gateway = createGateway({
               config: {
-                executorToken: "executor-secret",
+                managementToken: "management-secret",
                 opencodeUrl: listenerUrl(openCode),
                 opencodeAuthorization: "Basic native-secret",
                 imsgUrl: `${listenerUrl(imsg)}/rpc`,

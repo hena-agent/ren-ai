@@ -22,10 +22,10 @@ Status: implementation contract approved in the operator conversation.
 
 ## Execution interface
 
-- Cloudflare calls Mac `/opencode/...` using `TOKEN_EXECUTOR`. The Mac forwards
+- Cloudflare calls Mac `/opencode/...` using the existing `TOKEN_MANAGEMENT`. The Mac forwards
   native OpenCode requests to its fixed configured `OPENCODE_URL`, replacing
   authorization with `OPENCODE_AUTHORIZATION`. Streaming and cancellation work.
-- Cloudflare calls Mac `/imsg/rpc` using `TOKEN_EXECUTOR`. The Mac forwards the
+- Cloudflare calls Mac `/imsg/rpc` using `TOKEN_MANAGEMENT`. The Mac forwards the
   existing imsg protocol to fixed `IMSG_URL` using `IMSG_TOKEN`; no protocol change
   is imposed on the independently deployed imsg gateway.
 - Mac `/health` returns safe disk/screen health facts to the application, never

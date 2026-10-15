@@ -2,6 +2,8 @@
 # Only OpenCode gets this mount; the application uses authenticated plugin RPC.
 services:
   opencode-upstream:
+    environment:
+      TOKEN_MANAGEMENT: ${TOKEN_MANAGEMENT:?Set the existing management token in the protected environment}
     volumes:
       - persona-location:/srv/ren-ai:ro
       - persona-sessions:/srv/ren-ai/sessions

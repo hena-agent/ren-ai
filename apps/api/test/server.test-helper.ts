@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
-import { writeFile } from "node:fs/promises";
+import { vi } from "vitest";
 import type { TestLLM } from "@opencode/ai/testing";
 import type { Session } from "@opencode/core/session";
 import { Effect } from "effect";
@@ -137,8 +137,11 @@ export const composedTestServer = (
         ),
       ),
     );
-    const tokenFile = join(root, "application-token");
-    yield* Effect.promise(() => writeFile(tokenFile, "\napplication-secret\n", { mode: 0o600 }));
+    const previousToken = process.env["TOKEN_MANAGEMENT"];
+    vi.stubEnv("TOKEN_MANAGEMENT", "application-secret");
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => vi.stubEnv("TOKEN_MANAGEMENT", previousToken)),
+    );
     yield* Effect.forEach(installedPlugins, (installedPlugin) =>
       Effect.promise(() =>
         native.run(
@@ -150,7 +153,6 @@ export const composedTestServer = (
                 options: {
                   url: `${listenerUrl(server.listener)}/rpc`,
                   directory: personaDirectory,
-                  tokenFile,
                 },
               }),
           }),

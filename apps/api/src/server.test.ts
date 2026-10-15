@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { TestLLM } from "@opencode/ai/testing";
@@ -228,7 +228,7 @@ test("production model selection uses remote OpenCode and isolates persona confi
         );
         const otherDirectory = join(root, "unrelated-project");
         yield* Effect.promise(() => mkdir(otherDirectory));
-        yield* Effect.promise(() => rm(join(root, "application-token")));
+        vi.stubEnv("TOKEN_MANAGEMENT", undefined);
         expect((yield* unrelatedSession(server.host.client, otherDirectory)).outcome).toBe(
           "succeeded",
         );

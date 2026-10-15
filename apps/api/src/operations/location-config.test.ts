@@ -28,7 +28,6 @@ test("persona location uses the pinned V2 config shape without changing global c
         options: {
           directory: "/srv/ren-ai",
           url: "https://api-app.renai.im/rpc",
-          tokenFile: "/srv/ren-ai/application.token",
         },
       })),
       {
