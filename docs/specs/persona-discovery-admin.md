@@ -22,7 +22,7 @@
 - `apps/admin`에서 목록 → 생성/수정 → 저장 → 공개/비공개 흐름과 저장된 카드 미리보기를 제공한다.
 - 인물 모델은 **OpenCode 기준**이다. 사용자 결정에 따라 Persona Engine 대신 프롬프트·언어·시간대·첫 인사 지침·기억 지침을 관리한다.
 - `packages/personas`가 OpenCode Markdown 로더, 검증, 파일 저장, 공개 프로필 조회를 공유한다. 공개 프로필도 같은 Markdown의 YAML frontmatter에 저장하며 별도 메타데이터 DB를 두지 않는다.
-- 공개 프로필 조회는 Admin 서버의 `GET /api/personas`로 제공한다. 반환 필드는 `id`, `name`, `bio`, `imageUrl`뿐이다. 사용자 사이트/API 배포 연결은 다음 단계에서 진행한다.
+- Admin Catalog 공개 projection은 Admin의 `GET /api/personas`가 제공한다. 브라우저용 Discovery는 이 응답을 직접 호출하지 않고, 매 요청마다 api-app의 `GET /discovery/personas`를 호출한다. api-app은 현재 Admin 공개 Catalog를 읽어 이미지 URL을 Admin origin으로 해석해 반환한다.
 - 이미지는 첫 버전에서 HTTPS URL을 입력한다. 기존 파일에 공개 프로필 필드가 없으면 ID를 이름으로 표시하고 비공개 상태로 연다.
 - 기존 iMessage API도 공용 로더를 사용한다. 같은 디렉터리를 지정하면 저장한 OpenCode 설정을 읽으며, 실행 중인 API에는 **재시작 후** 반영된다. 공개/비공개는 카드 노출 상태이며 기존 Conversation을 삭제하지 않는다.
 - Admin은 어두운 중립색·고밀도 편집 화면으로 구성하고 네이티브 HTML 폼으로 저장한다. 브라우저 JavaScript와 별도 프런트엔드 빌드 없이 서버에서 HTML을 렌더링한다.
@@ -51,22 +51,21 @@ Admin과 저장 API에는 비밀번호 인증과 동일 출처 폼 제출 검사
 
 이번 단위는 사용자 결정에 따라 선택 확인을 넘어 **실제 대기 등록**까지 포함한다.
 
-- `apps/discovery`는 공개 프로필 카드, 터치 스와이프·Like / Pass 버튼·방향키, Like 개수, 연락받기 화면을 제공한다. 선택은 브라우저에 보관하고 새로고침 후 복원한다. 다시 탐색은 Pass만 되돌리고 Like를 유지한다.
+- `apps/discovery`는 공개 프로필 카드, 터치 스와이프·Like / Pass 버튼·방향키, Like 개수, 연락받기 화면을 제공한다. 공개 목록 조회와 등록은 api-app을 사용한다. 목록은 조회마다 최신 Admin 공개 Catalog에서 가져와 배포된 브라우저 번들을 다시 만들지 않아도 공개된 새 인물을 반영한다. 선택은 브라우저에 보관하고 새로고침 후 복원한다. 다시 탐색은 Pass만 되돌리고 Like를 유지한다.
 - 한 명만 Like해도 연락처 입력으로 진행한다. 전화번호와 Apple ID 이메일을 정규화·검증하고 AI 안내·개인정보 disclosure·동의·Turnstile을 웹에서 처리한다.
-- API는 `GET /discovery/personas`와 `POST /discovery/waitlist`를 제공한다. Admin과 동일한 OpenCode 파일의 공개 필드만 조회하고, 제출 시 Like 후보가 현재 공개되어 있는지 검증한다.
+- api-app은 `GET /discovery/personas`와 `POST /discovery/waitlist`를 제공한다. 공개 목록은 요청 시 Admin의 `GET /api/personas`를 호출하고, 브라우저에는 공개 필드만 반환하며, 제출 시 Like 후보가 현재 공개되어 있는지 다시 검증한다. Discovery에는 별도 목록 API Worker나 D1 binding을 두지 않는다.
 - SQLite의 `discovery_registration`과 `discovery_like`에 정규화된 Handle, Like 목록, 언어, 동의 버전, 등록 시각을 트랜잭션으로 보관한다. 등록 시각이 동의 시각이다. Handle의 UNIQUE 제약과 `INSERT OR IGNORE`로 동시 제출을 처리하며 재제출은 기존 Like를 덮어쓰지 않는다.
 - 차단·삭제 진행 중인 Handle은 거부한다. 이미 대화가 시작된 Handle은 `active`를 반환하고 새 등록을 만들지 않는다. 운영자 `remove`는 대기 등록과 Like도 삭제한다.
 - 응답은 `waiting` 또는 `active`다. 이번 등록 경로는 Conversation이나 발송을 생성하지 않으며 순서·연락 시점을 약속하지 않는다. 초대, N명 선정, 지연된 Greeting, 등록 상태 조회·연락처 수정은 다음 단위다.
 - 기존 사이트의 `/onboard`·`/waitlist` 계약은 계속 지원한다. 공유 Turnstile은 브라우저 전용 subpath로 내보내며 기존 사이트도 같은 구현을 사용한다.
 
-로컬에서 Admin에 페르소나를 저장·공개한 다음 두 터미널에서 실행한다:
+로컬에서 Admin에 페르소나를 저장·공개한 다음 루트에서 실행한다:
 
 ```sh
-TURNSTILE_SECRET=1x0000000000000000000000000000000AA bun run --cwd apps/api dev:discovery
-bun run --cwd apps/discovery dev
+bun dev
 ```
 
-프런트엔드는 `http://127.0.0.1:3867`, API는 `http://127.0.0.1:4867`이다. 각 프로세스의 `PORT`로 포트를 바꾸고 프런트엔드의 `DISCOVERY_API_URL`로 프록시를 맞춘다. API의 기본 파일 경로는 Admin의 페르소나 디렉터리와 `apps/api/data/discovery.sqlite`이며 `PERSONA_DIRECTORY`·`DISCOVERY_DATABASE`로 변경할 수 있다. 실행 명령의 Turnstile secret은 로컬용 공개 테스트 키다.
+프런트엔드는 `http://127.0.0.1:3867`, api-app은 `http://127.0.0.1:4879`, DB 없는 api-msg executor는 `http://127.0.0.1:4700`이다. Discovery에는 별도 카탈로그 Worker나 4873 listener가 없다. 로컬 서비스 및 개발용 token 설정은 각 앱의 `.env.development`와 Admin의 `.dev.vars`를 사용한다. api-app은 `BOOTSTRAP_ONLY=true`로 시작하므로 공개 목록 조회는 가능하지만 등록 쓰기와 실행은 차단된다.
 
 실제 iMessage API에도 같은 경로를 연결하고 기존 `server.sqlite`에 새 테이블을 추가했다. 공개 배포에서는 실제 Turnstile 키, API URL과 CORS origin을 맞춰야 한다. 기존 사이트는 이후 삭제했다(ADR-0015).
 

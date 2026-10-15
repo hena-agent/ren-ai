@@ -90,17 +90,19 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
             const readonly = await fetch(`${base}${imageUrl}`, { method: "POST" });
             expect(readonly.status).toBe(405);
             expect(readonly.headers.get("allow")).toBe("GET");
-            const catalog = await fetch(`${base}/discovery/personas`);
-            expect(await catalog.json()).toEqual([
-              {
-                id: "hayeon",
-                name: "하연",
-                bio: "함께 요리해요.",
-                imageUrl: photoUrl,
-                portraits,
-                publicProfile: "함께 요리해요.",
+            const publicProfileEntry = {
+              id: "hayeon",
+              name: "하연",
+              bio: "함께 요리해요.",
+              imageUrl: `${remoteCatalog.url}${photoUrl}`,
+              portraits: {
+                anime: `${remoteCatalog.url}${imageUrl}`,
+                photo: `${remoteCatalog.url}${photoUrl}`,
               },
-            ]);
+              publicProfile: "함께 요리해요.",
+            };
+            const catalog = await fetch(`${base}/discovery/personas`);
+            expect(await catalog.json()).toEqual([publicProfileEntry]);
             const extraUrl = await store.saveImage({
               bytes: Buffer.from("89504e470d0a1a0a", "hex"),
               mimeType: "image/png",
@@ -109,15 +111,10 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
             await store.update({ ...(await store.get("hayeon")), portraitGallery });
             expect(await (await fetch(`${base}/discovery/personas`)).json()).toEqual([
               {
-                id: "hayeon",
-                name: "하연",
-                bio: "함께 요리해요.",
-                imageUrl: photoUrl,
-                portraits,
-                publicProfile: "함께 요리해요.",
+                ...publicProfileEntry,
                 secondaryPortraits: [
-                  { style: "anime", imageUrl: extraUrl },
-                  { style: "photo", imageUrl: extraUrl },
+                  { style: "anime", imageUrl: `${remoteCatalog.url}${extraUrl}` },
+                  { style: "photo", imageUrl: `${remoteCatalog.url}${extraUrl}` },
                 ],
               },
             ]);

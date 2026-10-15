@@ -6,7 +6,17 @@
 `@ren-ai/api-msg` is the DB-free Mac executor at `https://api-msg.renai.im`.
 The executor forwards to `https://oc.renai.im` and
 `https://imsg.renai.im/rpc`. Discovery registration and Admin management use
-api-app; Discovery profile reads remain same-origin against Admin's D1.
+api-app; Discovery also reads its public profiles through api-app, which requests
+the current public Catalog from Admin on every read.
+
+Local `bun dev` serves api-app at `http://127.0.0.1:4879` and its Wrangler
+debugger at `http://127.0.0.1:5879`. Export `API_APP_PORT` or
+`API_APP_INSPECTOR_PORT` to override these process-level settings.
+
+The root `bun dev` starts both api-app and api-msg. api-app loads the checked-in
+`.env.development` and connects to `http://127.0.0.1:4700` with the matching
+local executor token. Private `.dev.vars` overrides these Worker bindings.
+Bootstrap mode remains enabled until explicitly configured for execution.
 
 CI deploys api-app only from `main` after every quality gate, then probes its
 safe health and registry endpoints. Its first deployment must remain
@@ -181,8 +191,8 @@ message content.
 
 Admin management uses `APPLICATION_API_URL=https://api-app.renai.im` and
 `TOKEN_MANAGEMENT`; Discovery registration uses
-`VITE_DISCOVERY_API_URL=https://api-app.renai.im`. Discovery profile reads
-continue using same-origin `/api/personas` from Admin D1.
+`VITE_DISCOVERY_API_URL=https://api-app.renai.im`. Discovery profile reads use
+api-app's `/discovery/personas`; the browser does not bind D1 or run a catalog API.
 
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 

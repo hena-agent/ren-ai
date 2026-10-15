@@ -13,7 +13,10 @@ const photo = Schema.String.pipe(
       /^\/discovery\/images\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|webp)$/.test(
         value,
       ) ||
-      (URL.canParse(value) && new URL(value).protocol === "https:"),
+      (URL.canParse(value) &&
+        (new URL(value).protocol === "https:" ||
+          (new URL(value).protocol === "http:" &&
+            ["localhost", "127.0.0.1", "[::1]"].includes(new URL(value).hostname)))),
   ),
 );
 

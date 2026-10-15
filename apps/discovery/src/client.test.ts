@@ -10,6 +10,21 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+test("a later profile read requests api-app again and includes newly published personas", async () => {
+  const profile = { id: "first", name: "First", bio: "Public profile", imageUrl: "" };
+  const added = { ...profile, id: "added", name: "Added" };
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json([profile]))
+    .mockResolvedValueOnce(Response.json([profile, added]));
+  vi.stubGlobal("fetch", fetcher);
+  const signal = new AbortController().signal;
+  expect(await discoveryClient.profiles(signal)).toEqual([profile]);
+  expect(await discoveryClient.profiles(signal)).toEqual([profile, added]);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher).toHaveBeenLastCalledWith("/discovery/personas", { signal, cache: "no-store" });
+});
+
 test("the browser client reads the catalog and validates the real registration answer", async () => {
   const fetcher = vi.fn<typeof fetch>();
   vi.stubGlobal("fetch", fetcher);
@@ -33,7 +48,7 @@ test("the browser client reads the catalog and validates the real registration a
       imageUrl: "https://example.net/nari.jpg",
     },
   ]);
-  expect(fetcher).toHaveBeenCalledWith("/api/personas", { signal });
+  expect(fetcher).toHaveBeenCalledWith("/discovery/personas", { signal, cache: "no-store" });
   const request = {
     handle: "a@example.org",
     locale: "ko",
@@ -94,7 +109,7 @@ test("choices survive a reload and corrupt or inaccessible browser storage is sa
   expect(saveChoices({ nari: true })).toBe(false);
 });
 
-test("profiles use the same-origin Worker even when registration uses a separate API", async () => {
+test("profiles and registration use api-app while portraits retain their catalog origin", async () => {
   vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api-app.renai.im/");
   vi.resetModules();
   const { discoveryClient: deployed } = await import("./client.ts");
@@ -147,7 +162,7 @@ test("profiles use the same-origin Worker even when registration uses a separate
     anime: "https://photos.example.net/mixed/",
     photo: imageUrl,
   });
-  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/personas");
+  expect(fetcher.mock.calls[0]?.[0]).toBe("https://api-app.renai.im/discovery/personas");
   fetcher.mockResolvedValueOnce(Response.json({ status: "waiting" }));
   expect(
     await deployed.join({

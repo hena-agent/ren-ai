@@ -43,7 +43,7 @@
       ]
     },
     "apps/discovery": {
-      "entry": ["index.html", "worker/entry.mjs!", "scripts/build-worker.mjs!"]
+      "entry": ["index.html"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],

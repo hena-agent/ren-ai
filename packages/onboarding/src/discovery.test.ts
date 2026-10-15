@@ -10,6 +10,27 @@ const profile = {
 };
 const pair = { anime: "https://example.net/anime.jpg", photo: "https://example.net/photo.jpg" };
 
+test("local Discovery accepts loopback HTTP portraits while rejecting other insecure origins", () => {
+  const decode = Schema.decodeUnknownSync(PublicPersona);
+  for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+    const imageUrl = `http://${host}:3729/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png`;
+    const local = {
+      ...profile,
+      imageUrl,
+      portraits: { anime: imageUrl, photo: imageUrl },
+      secondaryPortraits: [{ style: "photo", imageUrl }],
+    };
+    expect(decode(local)).toEqual(local);
+  }
+  for (const imageUrl of [
+    "http://example.net/photo.jpg",
+    "http://localhost.example.net/photo.jpg",
+    "http://127.0.0.1.example.net/photo.jpg",
+    "ftp://127.0.0.1/photo.jpg",
+  ])
+    expect(() => decode({ ...profile, imageUrl })).toThrow(/imageUrl/);
+});
+
 test("public galleries retain complete image pairs and reject unsafe or partial collections", () => {
   const decode = Schema.decodeUnknownSync(PublicPersona);
   expect(decode(profile)).toEqual(profile);

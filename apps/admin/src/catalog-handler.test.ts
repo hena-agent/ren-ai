@@ -4,16 +4,55 @@ import type { AdminEnv } from "./cloudflare-admin.ts";
 import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
 import { initialDocuments, portraitImage } from "../test/fixtures.ts";
 
-test("Catalog HTTP separates public profiles and images from the authenticated atomic private snapshot", async () => {
-  const { db, bucket, store } = await cloudflareFixture();
+const fixture = async () => {
+  const resources = await cloudflareFixture();
   const env: AdminEnv = {
-    DB: db,
-    IMAGES: bucket,
+    DB: resources.db,
+    IMAGES: resources.bucket,
     ASSETS: { fetch: async () => new Response("") },
     ADMIN_PASSWORD: "password",
     TOKEN_CATALOG: "catalog-secret",
     GEMINI_API_KEY: "",
   };
+  return { ...resources, env };
+};
+
+test("public Catalog reads current image associations, including anime-only and imageless records", async () => {
+  const { db, store, env } = await fixture();
+  const imageUrl = await store.saveImage(portraitImage);
+  const secondary = await store.saveImage(portraitImage);
+  await store.save(
+    {
+      ...databasePersona,
+      published: true,
+      imageUrl,
+      portraits: { anime: imageUrl },
+      secondaryPortraits: [{ style: "anime", imageUrl: secondary }],
+    },
+    initialDocuments,
+    { persona: "" },
+  );
+  const read = () => catalogHandler(new Request("https://admin.test/api/personas"), env);
+  const first = await read();
+  expect(first.status).toBe(200);
+  expect(await first.json()).toMatchObject([
+    {
+      id: databasePersona.id,
+      imageUrl,
+      portraits: { anime: imageUrl },
+      secondaryPortraits: [{ style: "anime", imageUrl: secondary }],
+    },
+  ]);
+  await db.exec("DELETE FROM persona_images");
+  const updated = await read();
+  expect(updated.status).toBe(200);
+  const profiles = await updated.text();
+  expect(JSON.parse(profiles)).toMatchObject([{ id: databasePersona.id, imageUrl: "" }]);
+  expect(profiles).not.toContain('"portraits"');
+});
+
+test("Catalog HTTP separates public profiles and images from the authenticated atomic private snapshot", async () => {
+  const { db, store, env } = await fixture();
   const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   const call = (path: string, init?: RequestInit, bindings = env) =>
