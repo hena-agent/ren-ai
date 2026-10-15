@@ -57,7 +57,7 @@ export function managementClient(
         },
         ...(input && { body: JSON.stringify(input) }),
         signal: AbortSignal.timeout(15_000),
-        redirect: "error",
+        redirect: "manual",
       });
     } catch (cause) {
       throw validationFailure(

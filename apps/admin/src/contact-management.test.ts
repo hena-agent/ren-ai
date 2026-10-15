@@ -30,6 +30,28 @@ const setup = async (client?: ManagementClient) => {
   return { admin, logs };
 };
 
+test("waitlist reads use Workers-supported redirect mode and reject redirects without forwarding credentials", async () => {
+  const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
+    if (init?.redirect !== "manual") throw new TypeError("Invalid redirect value");
+    return Response.json({ entries: [], eligibleCount: 0 });
+  });
+  const { admin, logs } = await setup(
+    managementClient("https://api.test", "secret-token", fetcher),
+  );
+  expect((await admin(request("/waitlist"))).status).toBe(200);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  fetcher.mockResolvedValueOnce(Response.redirect("https://other.test/private", 302));
+  const response = await admin(request("/waitlist"));
+  expect(response.status).toBe(503);
+  expect(response.headers.get("location")).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  const failure = logs.find((event) => event.event === "operation.failed");
+  expect(failure?.requestId).toBe(response.headers.get("x-request-id"));
+  expect(failure?.code).toBe("management_response");
+  expect(failure?.status).toBe(302);
+  expect(JSON.stringify(logs)).not.toContain("secret-token");
+});
+
 test("authenticated Admin lists, confirms and displays exclusive selection and reservations", async () => {
   const waiting = entry();
   const scheduled = {
