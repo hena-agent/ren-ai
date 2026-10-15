@@ -52,16 +52,16 @@ Generation and image-save failures preserve the published profile. Every batch, 
 
 Admin stores optional `portraits` (style-specific mains) and `secondaryPortraits` (independent `{ style, imageUrl }` photos, stored as `secondary-portraits` in Markdown). `imageUrl` remains for older clients. Legacy `portraitGallery` / `portrait-gallery` pairs migrate to these fields on read without regenerating images; new files and public responses contain no scene IDs, recommendation plans or completion records. Discovery displays only the selected style's available photos, with previous/next controls on cards and profile details. A style with no photos displays a placeholder. Photo navigation does not create a Like or Pass. Deploy API readers for the optional image and gender fields first, then Discovery, before Admin saves the new format. Existing paired, single-image and old API responses remain usable.
 
-The API's local `TURNSTILE_SECRET` is set in `apps/api/.env.example`. Run the apps with the root `bun run dev`; `apps/api` also offers `dev:discovery` for the standalone swipe-registration API. For that API and `apps/discovery`, use separate terminals:
+Run Admin, api-app, api-msg and Discovery together with root `bun dev`. Discovery
+opens one frontend listener on port 3867. It requests public profiles and
+registrations from api-app on port 4879; api-app reads the current public Catalog
+from Admin on port 3729. The local api-msg gateway listens on port 4700. Local
+config uses `.env.development` files and development-only credentials; it must
+not be deployed.
 
-```sh
-TURNSTILE_SECRET=1x0000000000000000000000000000000AA bun run --cwd apps/api dev:discovery
-bun run --cwd apps/discovery dev
-```
+Open http://127.0.0.1:3867 to browse. Profile reads use `/discovery/personas` on api-app on every request, so newly published catalog entries appear without rebuilding Discovery. Owned images retain Admin's publication-checked URLs. Waiting registration uses the same api-app. Set local persona credentials in `apps/admin/.dev.vars`; the API Worker's local settings are in `apps/api/.env.development` and the executor's are in `apps/api-msg/.env.development`. `BOOTSTRAP_ONLY=true` allows public profile reads but deliberately blocks registration writes and execution until an operator explicitly enables the cutover.
 
-Open http://127.0.0.1:3867 and choose anime or realistic display for the whole catalog. The style is restored across reloads and can be switched while browsing or entering contact details without resetting choices or inputs. Use the up-arrow to expand the profile in the same browsing area. Photo/text taps do not open it; the down-arrow or Escape collapses it while preserving the selected photo. The name/collapse header stays accessible while photos and the public introduction scroll. Shared floating Pass/Like circles sit above the content, with a soft bottom fade and enough reading/safe-area padding to reveal the last introduction line. Desktop retains the sidebar; mobile reading uses the full screen. Outside clicks leave the reading profile open. Reading liked profiles preserves the current card and any typed contact details. Its Vite proxy calls the API on port 4867, including every generated gallery image. The frontend and backend use Cloudflare's public test keys locally. Defaults share Admin's `apps/admin/data/personas` directory and store registrations in `apps/api/data/discovery.sqlite`. Generated portraits live in the persona directory's `images/` subdirectory; include it with the Markdown files in persona backups. All images referenced by a published persona are served publicly; unpublished and unreferenced images remain private. `PERSONA_DIRECTORY` and `DISCOVERY_DATABASE` override the API's paths. Use `PORT` per process to change its default port and `DISCOVERY_API_URL` to change the frontend proxy target. Vite reports busy ports instead of switching silently.
-
-For public hosting, configure the browser app's `VITE_DISCOVERY_API_URL` and real `VITE_TURNSTILE_SITE_KEY`, and the API's matching `TURNSTILE_SECRET`. The standalone swipe API and the messaging API both serve `/discovery/personas` and `/discovery/waitlist` from the messaging service database and permit only the Discovery origin. See the site and API `.env.example` files for configuration.
+For public hosting, configure Discovery's `VITE_DISCOVERY_API_URL=https://api-app.renai.im` and real `VITE_TURNSTILE_SITE_KEY`, and api-app's matching `TURNSTILE_SECRET`. api-app serves `/discovery/personas` from the current Admin Catalog and `/discovery/waitlist` through its application Durable Object. Discovery serves browser assets only and opens no separate catalog listener. See the app `.env.example` files for configuration.
 
 Quality checks use Node 24 from `.nvmrc`.
 

@@ -10,6 +10,7 @@
     "./health": "./src/health.ts"
   },
   "scripts": {
+    "dev": "PORT=${API_MSG_PORT:-4700} bun --watch --env-file=.env.development ops/api-msg-entry.mjs",
     "start": "bun run ops/api-msg-entry.mjs",
     "probe": "bun run ops/probe-entry.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",

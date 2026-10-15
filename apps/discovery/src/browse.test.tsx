@@ -107,7 +107,7 @@ test("the real client is used by default and inherited property names are valid 
   await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
   expect(screen.queryByRole("button", { name: "다시 둘러보기" })).toBeNull();
   expect(screen.getByRole("button", { name: /연락받기/ }).hasAttribute("disabled")).toBe(false);
-  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/personas");
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/discovery/personas");
   expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
 });
 

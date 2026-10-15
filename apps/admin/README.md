@@ -9,7 +9,8 @@ explicitly imported into local D1/R2 with the one-off command below.
 ## Local development
 
 Copy `.dev.vars.example` to `.dev.vars` and set local credentials. `PORT` is a
-process environment variable; its default remains 3729.
+process environment variable; its default remains 3729. The Wrangler debugger uses
+`http://127.0.0.1:5729`; export `ADMIN_INSPECTOR_PORT` to override it.
 
 ```sh
 bun run --cwd apps/admin db:local

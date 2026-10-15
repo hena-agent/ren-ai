@@ -88,3 +88,17 @@ The api-msg listener is configured on port 4700, replacing the retired local
 application listener contract. Verify that the old application intake is
 paused and imported centrally before enabling api-app intake. Provisioning or
 updating this executor does not enable application intake or send messages.
+
+## Local development
+
+From the repository root, `bun dev` includes `@ren-ai/api-msg#dev` alongside
+`@ren-ai/api-app#dev`. The executor listens at `http://127.0.0.1:4700`;
+export `API_MSG_PORT` to change it and update api-app's `API_MSG_URL` accordingly.
+
+Development loads `apps/api-msg/.env.development` with local-only credentials.
+Export `TOKEN_EXECUTOR`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`, `IMSG_URL`,
+and `IMSG_TOKEN` to override them. `TOKEN_EXECUTOR` must match api-app.
+The default upstreams are local OpenCode at `http://127.0.0.1:4096` and imsg
+at `http://127.0.0.1:4702/rpc`; these must be running for execution requests.
+`bun dev` starts the gateway, not the upstream OpenCode or Messages services.
+Production `start` continues requiring explicitly supplied credentials.
