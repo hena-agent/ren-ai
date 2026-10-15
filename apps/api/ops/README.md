@@ -19,14 +19,11 @@ local `TOKEN_MANAGEMENT`. Private `.dev.vars` overrides these Worker bindings.
 Bootstrap mode remains enabled until explicitly configured for execution.
 
 CI deploys api-app only from `main` after every quality gate, then probes its
-safe health and public Catalog endpoints. Its first deployment must remain
-bootstrap-only, with intake and background scheduling disabled. Do not enable
-intake while the old application is accepting registrations. During a planned
-pause, stop old intake/scheduling, settle or record uncertain sends, take a
-read-only export of the old SQLite state, and import it into an empty Worker
-store. Verify IDs, assignments, bookmarks, pending work and uncertain sends
-before enabling the new intake. Preserve the stopped container and volume for
-rollback. No script changes live ingress, stops a service or enables intake.
+safe health and public Catalog endpoints. The production Wrangler config sets
+`BOOTSTRAP_ONLY=false`, so deployments run intake and background scheduling.
+The old application must remain stopped to prevent duplicate intake. For a
+state restore, set bootstrap-only mode while importing and verifying the
+archive, then restore `false`. No script changes live ingress or stops a service.
 
 After old intake and scheduling are stopped, create an owner-only private archive:
 
@@ -47,11 +44,11 @@ them out of Git/logs and preserve IDs, bookmarks and uncertain sends.
 
 Copy `apps/api/.dev.vars.example` to `.dev.vars` for local Worker development.
 `bun run dev` listens on `API_APP_PORT` (default 4879). Local state belongs to
-Wrangler's DO persistence, never a running Mac `server.sqlite`. Bootstrap is
-enabled by default; after the explicit import and native executor verification,
-change `BOOTSTRAP_ONLY` to `false` through a reviewed PR. SQLite DO point-in-time
-recovery replaces the retired local nightly database snapshots; OpenCode's
-session documents remain in the existing OpenCode storage and exports.
+Wrangler's DO persistence, never a running Mac `server.sqlite`. Local bootstrap
+mode remains enabled by default; production's `false` setting is in
+`wrangler.jsonc`. SQLite DO point-in-time recovery replaces the retired local
+nightly database snapshots; OpenCode's session documents remain in the existing
+OpenCode storage and exports.
 
 Reuse api-app's existing private `TOKEN_MANAGEMENT` secret and
 `API_MSG_URL=https://api.renai.im`. Provision the Mac executor once through
