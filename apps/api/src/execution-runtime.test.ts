@@ -104,6 +104,21 @@ const open = () =>
       return new Response(null);
     },
   );
+
+test("execution requires the existing management and Catalog credentials", async () => {
+  for (const field of ["TOKEN_MANAGEMENT", "TOKEN_CATALOG"] as const) {
+    const bindings = { ...executionBindings, [field]: undefined };
+    await expect(
+      createExecutionRuntime(
+        fromPartial<ApplicationStore>({ context: Context.empty() }),
+        cloudflareConfiguration(bindings),
+        bindings,
+        "rules",
+        fetch,
+      ),
+    ).rejects.toThrow("TOKEN_MANAGEMENT and TOKEN_CATALOG are required for execution");
+  }
+});
 beforeEach(() => {
   control.events.length = 0;
   control.requests.length = 0;

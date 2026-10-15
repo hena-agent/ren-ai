@@ -44,8 +44,6 @@ const bindings: CloudflareBindings = {
   TURNSTILE_SECRET: "turnstile-secret",
   TOKEN_MANAGEMENT: "management-token",
   API_MSG_URL: "https://api-msg.example",
-  TOKEN_EXECUTOR: "executor-token",
-  REN_AI_APPLICATION_TOKEN: "application-token",
 };
 const fetcher: typeof fetch = async () => Response.json({ success: true });
 const settledRuntime = () => {

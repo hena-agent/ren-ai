@@ -65,7 +65,7 @@ export const createCloudflareApplication = async (
             return stateTransfer(
               request,
               store,
-              bindings.TOKEN_MANAGEMENT,
+              configuration.applicationStore.managementToken,
               configuration.bootstrapOnly,
             );
           if (configuration.bootstrapOnly && isWriteRequest(request)) return bootstrapResponse();

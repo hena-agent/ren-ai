@@ -11,7 +11,7 @@
         "API_APP_*",
         "API_MSG_*",
         "DISCOVERY_*",
-        "TOKEN_EXECUTOR",
+        "TOKEN_MANAGEMENT",
         "OPENCODE_*",
         "IMSG_*"
       ]

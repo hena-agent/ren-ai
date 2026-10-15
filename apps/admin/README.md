@@ -194,7 +194,7 @@ bunx wrangler secret delete MESSAGING_API_TOKEN
 ```
 
 Delete only secrets that exist. Leave `ADMIN_PASSWORD`, `GEMINI_API_KEY`,
-`IMSG_TOKEN`, `REN_AI_APPLICATION_TOKEN` and `OPENCODE_AUTHORIZATION` in place;
+`IMSG_TOKEN`, `TOKEN_MANAGEMENT` and `OPENCODE_AUTHORIZATION` in place;
 they serve other authentication/provider purposes. Public
 `APPLICATION_API_URL` and `PERSONA_CATALOG_URL` configure separate services.
 

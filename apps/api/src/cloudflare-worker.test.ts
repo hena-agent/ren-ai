@@ -26,7 +26,11 @@ const workerSource = () => {
 };
 
 const textBinding = (value: string) => ({ type: "text" as const, value });
-const openWorker = async (resourcePersistencePath: string, bootstrapOnly: boolean) => {
+const openWorker = async (
+  resourcePersistencePath: string,
+  bootstrapOnly: boolean,
+  secrets = true,
+) => {
   const source = await workerSource();
   const runtime = new Miniflare({
     resourcePersistencePath,
@@ -48,12 +52,12 @@ const openWorker = async (resourcePersistencePath: string, bootstrapOnly: boolea
               exportName: "ApiApplication",
             },
             PERSONA_CATALOG_URL: textBinding("https://admin.example"),
-            TOKEN_CATALOG: textBinding("catalog-secret"),
-            TURNSTILE_SECRET: textBinding("turnstile-secret"),
-            TOKEN_MANAGEMENT: textBinding("management-secret"),
+            ...(secrets && {
+              TOKEN_CATALOG: textBinding("catalog-secret"),
+              TURNSTILE_SECRET: textBinding("turnstile-secret"),
+              TOKEN_MANAGEMENT: textBinding("management-secret"),
+            }),
             API_MSG_URL: textBinding("https://api-msg.example"),
-            TOKEN_EXECUTOR: textBinding("executor-secret"),
-            REN_AI_APPLICATION_TOKEN: textBinding("application-secret"),
             BOOTSTRAP_ONLY: textBinding(String(bootstrapOnly)),
           },
         },
@@ -65,6 +69,39 @@ const openWorker = async (resourcePersistencePath: string, bootstrapOnly: boolea
 
 const send = (runtime: Miniflare, path: string, init?: Parameters<Miniflare["dispatchFetch"]>[1]) =>
   runtime.dispatchFetch(`https://api-app.example${path}`, init);
+
+test("public reads work without private secrets while management and registration fail closed", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "api-app-public-"));
+  try {
+    const runtime = await openWorker(persistence, false, false);
+    expect((await send(runtime, "/health")).status).toBe(200);
+    const profiles = await send(runtime, "/discovery/personas");
+    expect(profiles.status).toBe(200);
+    expect(await profiles.json()).toMatchObject([{ id: "sora" }]);
+    expect(
+      (
+        await send(runtime, "/management/discovery", {
+          headers: { Authorization: "Bearer " },
+        })
+      ).status,
+    ).toBe(401);
+    const registration = await send(runtime, "/discovery/waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        handle: "public@example.com",
+        locale: "ko",
+        likedPersonaIDs: ["sora"],
+        privacyNoticeVersion: discoveryNotice.version,
+        turnstileToken: "human",
+      }),
+    });
+    expect(registration.status).toBe(400);
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
 
 test("compiled Worker serves safely in bootstrap and activates persisted registry after cutover", async () => {
   const persistence = await mkdtemp(join(tmpdir(), "api-app-worker-"));

@@ -26,6 +26,8 @@ export async function createExecutionRuntime(
   groundRules: string,
   fetcher: typeof fetch,
 ) {
+  if (!configuration.execution.managementToken || !bindings.TOKEN_CATALOG?.trim())
+    throw new Error("TOKEN_MANAGEMENT and TOKEN_CATALOG are required for execution");
   const scope = await Effect.runPromise(Scope.make());
   const http = await Effect.runPromise(
     Layer.buildWithScope(FetchHttpClient.layer, scope).pipe(
@@ -47,7 +49,7 @@ export async function createExecutionRuntime(
     const httpClient = yield* HttpClient.HttpClient;
     const messages = yield* remoteMessages({
       url: execution.imsgRpcUrl,
-      token: execution.executorToken,
+      token: execution.managementToken,
     }).pipe(
       // RPC's HTTP transport appends '/'; the executor exposes one exact endpoint.
       Effect.provideService(
@@ -66,12 +68,12 @@ export async function createExecutionRuntime(
       personas,
       (tools) =>
         Effect.gen(function* () {
-          callback = applicationGateway(tools, health, execution.applicationToken);
+          callback = applicationGateway(tools, health, execution.managementToken);
           yield* Effect.addFinalizer(() => Effect.promise(callback!.dispose));
           const remote = yield* remoteHost(
             {
               baseUrl: execution.openCodeUrl,
-              authorization: `Bearer ${execution.executorToken}`,
+              authorization: `Bearer ${execution.managementToken}`,
               directory: execution.directory,
               model: execution.model,
               groundRules,

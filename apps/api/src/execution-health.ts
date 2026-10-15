@@ -66,7 +66,7 @@ export const createExecutionHealth = (
       nextCheck = now + 60_000;
       const check = Effect.tryPromise(async () => {
         const response = await fetcher(new URL("/health", configuration.apiMsgUrl), {
-          headers: { Authorization: `Bearer ${configuration.executorToken}` },
+          headers: { Authorization: `Bearer ${configuration.managementToken}` },
           signal: AbortSignal.timeout(10_000),
         });
         if (!response.ok)

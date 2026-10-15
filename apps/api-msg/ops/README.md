@@ -15,7 +15,7 @@ path; the default service identity is `/usr/local/lib/ren-ai-api-msg`.
    `api-msg.renai.im` → `http://127.0.0.1:4700`. Do not reuse or edit the imsg
    tunnel or the OpenCode ingress.
 2. Set api-app's private `API_MSG_URL=https://api-msg.renai.im` and
-   `TOKEN_EXECUTOR` secret. Set the same token in a protected copy of
+   `TOKEN_MANAGEMENT` secret. Reuse the existing token in a protected copy of
    [`api-msg.env.example`](api-msg.env.example); also provide the existing
    native OpenCode authorization header and imsg token. No secret belongs in
    the plist, command line or logs.
@@ -96,8 +96,8 @@ From the repository root, `bun dev` includes `@ren-ai/api-msg#dev` alongside
 export `API_MSG_PORT` to change it and update api-app's `API_MSG_URL` accordingly.
 
 Development loads `apps/api-msg/.env.development` with local-only credentials.
-Export `TOKEN_EXECUTOR`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`, `IMSG_URL`,
-and `IMSG_TOKEN` to override them. `TOKEN_EXECUTOR` must match api-app.
+Export `TOKEN_MANAGEMENT`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`, `IMSG_URL`,
+and `IMSG_TOKEN` to override them. `TOKEN_MANAGEMENT` must match api-app and the OpenCode plugin environment.
 The default upstreams are local OpenCode at `http://127.0.0.1:4096` and imsg
 at `http://127.0.0.1:4702/rpc`; these must be running for execution requests.
 `bun dev` starts the gateway, not the upstream OpenCode or Messages services.

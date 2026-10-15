@@ -11,7 +11,7 @@ The stateful application (`apps/api`, served at `api-app.renai.im`) runs as a lo
 - **One Durable Object holds the application.** A SQLite-backed Durable Object owns application state through `@effect/sql-sqlite-do`, and is its only writer. A stateless Worker routes Discovery registration, management, the plugin's `/rpc` and the operator API to it. One object matches today's single process and single file, and the per-object ceiling of about 1,000 requests/s is far above this service's load. Partitioning by conversation stays a later option.
 - **Loops become one alarm-driven heartbeat.** Everything that now runs forever in the process moves onto the object's single alarm: polling the Mac for rows after the inbox bookmark through the existing `after` request, edit and unsend detection, follow-ups, health checks, and at a slower cadence failed-turn recovery (today's `recover`) and the catalog refresh. Nothing depends on a connection surviving a deploy, and the Mac needs no change. Incoming messages wait up to one beat.
 - **`wait` stays a streaming request.** A request has no wall-clock limit while its caller stays connected, so the plugin's 55-minute `wait` with 20-second heartbeats keeps working. A deploy cuts it, so the plugin learns to re-issue an interrupted `wait` for the remaining time.
-- **The Mac and OpenCode stay where they are.** The object calls `https://api-msg.renai.im` using `TOKEN_EXECUTOR`; that DB-free gateway calls `https://imsg.renai.im` and `https://oc.renai.im` with their existing credentials. The catalog remains in Admin D1.
+- **The Mac and OpenCode stay where they are.** The object calls `https://api-msg.renai.im` using the existing `TOKEN_MANAGEMENT`; that DB-free gateway calls `https://imsg.renai.im` and `https://oc.renai.im` with their existing credentials. OpenCode plugins use the same `TOKEN_MANAGEMENT` environment variable for authenticated callbacks; no separate token file is required. The catalog remains in Admin D1.
 - **Operations.** The operator CLI calls an authenticated HTTPS endpoint instead of a Unix socket. Durable Object point-in-time recovery (30 days) replaces the nightly files on the Mac.
 - **Deployment.** After the gates pass on `main`, CI runs `wrangler deploy` and a smoke check, the same way it deploys discovery.hena.dev. `wrangler rollback` is the way back. Durable Object classes use Wrangler's `exports` field. Every deploy restarts the object, so startup reconciles everything a restart can interrupt, the rule ADR-0010 already applies to reconnects.
 
@@ -38,7 +38,7 @@ Each stage leaves a working product.
    - Export `server.sqlite` and import it into the object.
    - Keep the old intake paused until the imported store is verified, then enable exactly one intake and verify with a marked test Handle.
    - Keep the stopped container and its volume for rollback; leave the Mac executor tunnel in place.
-5. **Automatic deployment.** CI deploys `api-app.renai.im` after quality gates and smoke-checks safe health and registry endpoints. Deployment remains bootstrap-only until the controlled cutover enables intake.
+5. **Automatic deployment.** CI deploys `api-app.renai.im` after quality gates and smoke-checks `/health` and `/discovery/personas`. Deployment remains bootstrap-only until the controlled cutover enables intake.
 
 ## Acceptance
 

@@ -2,7 +2,7 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { checkMacHealth, type MacHealth } from "./health.ts";
 
 export type GatewayConfig = {
-  executorToken: string;
+  managementToken: string;
   opencodeUrl: string;
   opencodeAuthorization: string;
   imsgUrl: string;
@@ -103,7 +103,7 @@ const stripHopByHop = (headers: Headers) => {
 
 export const createGateway = (options: GatewayOptions) => {
   const config = options.config;
-  if (!config.executorToken.trim()) throw new Error("TOKEN_EXECUTOR must not be blank");
+  if (!config.managementToken.trim()) throw new Error("TOKEN_MANAGEMENT must not be blank");
   if (!config.opencodeAuthorization.trim() || !config.imsgToken.trim()) {
     throw new Error("Upstream authorization must not be blank");
   }
@@ -172,7 +172,7 @@ export const createGateway = (options: GatewayOptions) => {
       });
     };
 
-    if (!authorized(request.headers.get("authorization"), config.executorToken)) {
+    if (!authorized(request.headers.get("authorization"), config.managementToken)) {
       return complete(new Response("Unauthorized", { status: 401 }), "auth", "rejected", "warn");
     }
     if (url.pathname === "/health") {

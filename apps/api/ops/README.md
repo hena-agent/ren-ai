@@ -15,11 +15,11 @@ debugger at `http://127.0.0.1:5879`. Export `API_APP_PORT` or
 
 The root `bun dev` starts both api-app and api-msg. api-app loads the checked-in
 `.env.development` and connects to `http://127.0.0.1:4700` with the matching
-local executor token. Private `.dev.vars` overrides these Worker bindings.
+local `TOKEN_MANAGEMENT`. Private `.dev.vars` overrides these Worker bindings.
 Bootstrap mode remains enabled until explicitly configured for execution.
 
 CI deploys api-app only from `main` after every quality gate, then probes its
-safe health and registry endpoints. Its first deployment must remain
+safe health and public Catalog endpoints. Its first deployment must remain
 bootstrap-only, with intake and background scheduling disabled. Do not enable
 intake while the old application is accepting registrations. During a planned
 pause, stop old intake/scheduling, settle or record uncertain sends, take a
@@ -53,10 +53,10 @@ change `BOOTSTRAP_ONLY` to `false` through a reviewed PR. SQLite DO point-in-tim
 recovery replaces the retired local nightly database snapshots; OpenCode's
 session documents remain in the existing OpenCode storage and exports.
 
-Configure api-app's private `TOKEN_EXECUTOR` secret and
+Reuse api-app's existing private `TOKEN_MANAGEMENT` secret and
 `API_MSG_URL=https://api-msg.renai.im`. Provision the Mac executor once through
 the current Mac deployment procedure: create its separate process, tunnel and
-protected environment with the same `TOKEN_EXECUTOR`, plus `OPENCODE_URL`,
+protected environment with the same `TOKEN_MANAGEMENT`, plus `OPENCODE_URL`,
 `OPENCODE_AUTHORIZATION`, `IMSG_URL` and `IMSG_TOKEN`. It has no Turnstile secret
 or local application database. Thereafter the Mac consumes the attested bundle
 published from `main`; it does not receive a manual deploy or alter the native
@@ -144,7 +144,7 @@ Cutover:
    `oc.renai.im` tunnel's and recreate only that tunnel container. Sign in again at
    `https://oc.renai.im`.
 8. Provision api-msg process/tunnel and protected environment once. Set
-   `TOKEN_EXECUTOR`, `API_MSG_URL`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`,
+   `TOKEN_MANAGEMENT`, `API_MSG_URL`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`,
    `IMSG_URL` and `IMSG_TOKEN`; do not put `TURNSTILE_SECRET` or application DB
    settings on the Mac. The Mac automatically installs the attested `main`
    bundle. Install a plugin location whose callback is
@@ -202,7 +202,7 @@ No script below performs the live cutover, stops existing services, changes an e
 | ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                   | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                  |
 | Application | `@ren-ai/api-app` Cloudflare Worker                                | SQLite-backed application Durable Object; remote Admin D1 Catalog                                           | `api-app.renai.im`; plugin callback Bearer                                  |
-| Executor    | `@ren-ai/api-msg` Bun process on the Mac                           | None                                                                                                        | `api-msg.renai.im` → Mac; `TOKEN_EXECUTOR`                                  |
+| Executor    | `@ren-ai/api-msg` Bun process on the Mac                           | None                                                                                                        | `api-msg.renai.im` → Mac; `TOKEN_MANAGEMENT`                                |
 | OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable session folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers |
 | Fleet       | Separate [MDM tooling](../../imsg/ops/mdm/README.md)               | Fleet database, certificates and secrets                                                                    | `fleet.hena.dev`                                                            |
 
@@ -210,7 +210,7 @@ The following host-relocation notes describe the prior Docker application deploy
 
 The inspected Alpine/aarch64 OpenCode 2.0.19 image needs `gcompat=1.1.0-r4` and `LD_PRELOAD=/lib/libgcompat.so.0` for its bundled PTY library. Without both, terminal creation fails with `gnu_get_libc_version: symbol not found`. The deployed external Compose file includes a `compat/Dockerfile` with this same-version fix; preserve it during relocation. The OpenCode executable is unchanged. Verify a ticketed WebSocket shell roundtrip, not only the UI or `/api/info`.
 
-The removed `application.env.example` applied to the old Docker application. For the executor's minimal protected environment, use [`api-msg.env.example`](../../api-msg/ops/api-msg.env.example): it includes the shared `TOKEN_EXECUTOR`, native `OPENCODE_AUTHORIZATION`, and existing `IMSG_TOKEN`. The Mac has no `TURNSTILE_SECRET`, application database, Catalog/management token or provider credential.
+The removed `application.env.example` applied to the old Docker application. For the executor's minimal protected environment, use [`api-msg.env.example`](../../api-msg/ops/api-msg.env.example): it reuses `TOKEN_MANAGEMENT`, native `OPENCODE_AUTHORIZATION`, and existing `IMSG_TOKEN`. The Mac needs no Turnstile secret, application database or provider credential.
 
 Compose variables: `REN_AI_APP_ENV` (absolute protected env file), `REN_AI_TUNNEL_TOKEN` (application tunnel), `REN_AI_LOCATION_INPUT` (absolute reviewed plugin config/token staging directory). Volume names are overridable through `REN_AI_STATE_VOLUME`, `REN_AI_LOCATION_VOLUME`, `REN_AI_SESSION_VOLUME`. The application never mounts either OpenCode volume; session-folder writes use authenticated public plugin RPC.
 
@@ -245,8 +245,8 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
    Initial inventory can be empty while a location initializes. Inspect the loaded location again before treating it as empty. On the deployed 2.0.19 instance, disabling versioned package targets did not disable the loaded plugins; their actual IDs (`henadev.anthropic-auth`, `opencode-discord-noti`, `opencode-translate`) did. Verify those plugins are absent or disabled after reloading the persona location, while ordinary locations retain them.
 
-2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api-app.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Each runtime module receives `directory:/srv/ren-ai`, the callback URL and `tokenFile:/srv/ren-ai/application.token`; it runs only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
-3. Put `opencode.json` and `application.token` (same value as `REN_AI_APPLICATION_TOKEN`) in `REN_AI_LOCATION_INPUT`, owner-only. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. The new exporter requires all five volumes: when upgrading an old four-volume deployment, first provision the new empty sessions volume (`docker volume create "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}"`) without mounting it into running services, then export with the **old** location volume selected. For an existing old plugin volume, select a **new** `REN_AI_LOCATION_VOLUME` (for example `ren-ai-opencode-location-v2`) and explicitly `docker volume create "$REN_AI_LOCATION_VOLUME"`; never overwrite the old volume. Keep the application in `BOOTSTRAP_ONLY=true` while migrating.
+2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api-app.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Runtime modules receive `directory:/srv/ren-ai` and the callback URL, and read the existing `TOKEN_MANAGEMENT` from the OpenCode process environment; they run only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
+3. Put `opencode.json` in `REN_AI_LOCATION_INPUT`, owner-only. Supply the existing `TOKEN_MANAGEMENT` to the OpenCode process through its protected environment; no separate token file is installed. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. The new exporter requires all five volumes: when upgrading an old four-volume deployment, first provision the new empty sessions volume (`docker volume create "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}"`) without mounting it into running services, then export with the **old** location volume selected. For an existing old plugin volume, select a **new** `REN_AI_LOCATION_VOLUME` (for example `ren-ai-opencode-location-v2`) and explicitly `docker volume create "$REN_AI_LOCATION_VOLUME"`; never overwrite the old volume. Keep the application in `BOOTSTRAP_ONLY=true` while migrating.
 4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The Worker bundles its ground rules as text; Node story adapters load the private template with `loadGroundRules`. No plugin constructs agents.
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.
 
