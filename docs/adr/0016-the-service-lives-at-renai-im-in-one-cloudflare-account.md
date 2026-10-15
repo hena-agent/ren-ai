@@ -14,7 +14,7 @@ Ren AI's hostnames were split across two domains in two Cloudflare accounts. Adm
 | `www.renai.im`     | A redirect to `renai.im`                                            |
 | `admin.renai.im`   | Admin (`apps/admin`, Worker `persona-admin`)                        |
 | `api-app.renai.im` | The stateful application (`apps/api`, `@ren-ai/api-app`) on Workers |
-| `api-msg.renai.im` | The DB-free Mac executor (`apps/api-msg`, `@ren-ai/api-msg`)        |
+| `api.renai.im`     | The DB-free Mac executor (`apps/api-msg`, `@ren-ai/api-msg`)        |
 | `imsg.renai.im`    | The Messages Mac gateway (`apps/imsg`)                              |
 | `oc.renai.im`      | OpenCode and its native operator interface                          |
 

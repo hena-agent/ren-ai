@@ -1,6 +1,6 @@
 # api-msg Mac executor
 
-`api-msg.renai.im` is the DB-free authenticated executor on the current Messages
+`api.renai.im` is the DB-free authenticated executor on the current Messages
 Mac. It listens on loopback port 4700 and forwards fixed OpenCode and imsg
 upstreams. It does not own application state, credentials for Turnstile, a local
 database, or a second Messages gateway. The separate existing `imsg.renai.im`
@@ -12,9 +12,9 @@ Use the GUI Mac user, never root. Set `API_MSG_HOME` only to a new absolute
 path; the default service identity is `/usr/local/lib/ren-ai-api-msg`.
 
 1. In Cloudflare, create a **separate** tunnel and public hostname
-   `api-msg.renai.im` → `http://127.0.0.1:4700`. Do not reuse or edit the imsg
+   `api.renai.im` → `http://127.0.0.1:4700`. Do not reuse or edit the imsg
    tunnel or the OpenCode ingress.
-2. Set api-app's private `API_MSG_URL=https://api-msg.renai.im` and
+2. Set api-app's private `API_MSG_URL=https://api.renai.im` and
    `TOKEN_MANAGEMENT` secret. Reuse the existing token in a protected copy of
    [`api-msg.env.example`](api-msg.env.example); also provide the existing
    native OpenCode authorization header and imsg token. No secret belongs in

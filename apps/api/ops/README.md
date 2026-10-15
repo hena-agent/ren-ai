@@ -3,7 +3,7 @@
 ## Cloudflare application and controlled cutover
 
 `@ren-ai/api-app` is the stateful Worker at `https://api-app.renai.im`;
-`@ren-ai/api-msg` is the DB-free Mac executor at `https://api-msg.renai.im`.
+`@ren-ai/api-msg` is the DB-free Mac executor at `https://api.renai.im`.
 The executor forwards to `https://oc.renai.im` and
 `https://imsg.renai.im/rpc`. Discovery registration and Admin management use
 api-app; Discovery also reads its public profiles through api-app, which requests
@@ -54,7 +54,7 @@ recovery replaces the retired local nightly database snapshots; OpenCode's
 session documents remain in the existing OpenCode storage and exports.
 
 Reuse api-app's existing private `TOKEN_MANAGEMENT` secret and
-`API_MSG_URL=https://api-msg.renai.im`. Provision the Mac executor once through
+`API_MSG_URL=https://api.renai.im`. Provision the Mac executor once through
 the current Mac deployment procedure: create its separate process, tunnel and
 protected environment with the same `TOKEN_MANAGEMENT`, plus `OPENCODE_URL`,
 `OPENCODE_AUTHORIZATION`, `IMSG_URL` and `IMSG_TOKEN`. It has no Turnstile secret
@@ -122,8 +122,8 @@ pause.
 Before merging:
 
 1. In the Ambivalent Co. account, provision the Mac executor tunnel for
-   `api-msg.renai.im`, plus the existing Mac endpoints:
-   - `api-msg.renai.im` → the separately provisioned executor listener
+   `api.renai.im`, plus the existing Mac endpoints:
+   - `api.renai.im` → the separately provisioned executor listener
    - `imsg.renai.im` → `http://127.0.0.1:4702` (the Messages Mac)
    - `oc.renai.im` → the auth proxy origin that the `oc.hena.dev` tunnel uses today
 2. Create an Invisible Turnstile widget for `renai.im`. Put its site key in the
@@ -202,7 +202,7 @@ No script below performs the live cutover, stops existing services, changes an e
 | ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                   | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                  |
 | Application | `@ren-ai/api-app` Cloudflare Worker                                | SQLite-backed application Durable Object; remote Admin D1 Catalog                                           | `api-app.renai.im`; plugin callback Bearer                                  |
-| Executor    | `@ren-ai/api-msg` Bun process on the Mac                           | None                                                                                                        | `api-msg.renai.im` → Mac; `TOKEN_MANAGEMENT`                                |
+| Executor    | `@ren-ai/api-msg` Bun process on the Mac                           | None                                                                                                        | `api.renai.im` → Mac; `TOKEN_MANAGEMENT`                                    |
 | OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable session folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers |
 | Fleet       | Separate [MDM tooling](../../imsg/ops/mdm/README.md)               | Fleet database, certificates and secrets                                                                    | `fleet.hena.dev`                                                            |
 
