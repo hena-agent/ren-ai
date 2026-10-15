@@ -15,7 +15,7 @@ import { renderPage } from "./page.tsx";
 import type { PageContent } from "./page.tsx";
 import copy from "./copy.json";
 import { generateTextDraft } from "./generation-workflows.ts";
-import { deletePortrait } from "./regenerate-portrait.ts";
+import { deletePortrait, setMainPortrait } from "./regenerate-portrait.ts";
 import { createImageQueue } from "./image-queue.ts";
 import type { ImageJob, DurableQueue } from "./image-queue.ts";
 import { createImageBatch, restoreImageBatch } from "./image-batch.ts";
@@ -180,8 +180,11 @@ export function createAdmin(
           },
         });
       }
-      if (intent === "delete-image") {
-        const next = deletePortrait(persona, draft, submittedKey);
+      if (intent === "delete-image" || intent === "set-main") {
+        const next =
+          intent === "set-main"
+            ? setMainPortrait(persona, draft, submittedKey)
+            : deletePortrait(persona, draft, submittedKey);
         subDrafts.set(draft.id, next);
         return html(
           renderPage({
@@ -192,10 +195,8 @@ export function createAdmin(
           }),
         );
       }
-      if (intent === "introduction" || intent === "profile") {
-        if (intent === "introduction" && !persona.bio)
-          throw new PersonaError("invalid", copy.regenerateRequired);
-      }
+      if (intent === "introduction" && !persona.bio)
+        throw new PersonaError("invalid", copy.regenerateRequired);
       if (intent === "inspect")
         return html(
           renderPage({

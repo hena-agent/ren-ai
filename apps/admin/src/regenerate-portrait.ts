@@ -41,10 +41,13 @@ export async function regeneratePortrait(
     new URLSearchParams({ image: active.imageUrl, style: active.style }),
   );
   const fields = { style: target.style, poseIndex: target.index };
-  let reference: Portrait | undefined;
+  const reference = await readPortraitReference(
+    mainImage(persona, target.style)!,
+    target.style,
+    store,
+  );
   let composition: Portrait | undefined;
   if (!active.main) {
-    reference = await readPortraitReference(mainImage(persona, target.style)!, target.style, store);
     composition = await readPortraitReference(target.url, target.style, store);
   }
   await stage("generating");
@@ -84,6 +87,24 @@ export function deletePortrait(persona: PersonaRecord, draft: Draft, submittedKe
   const remaining = personaImages(persona).filter(
     (image) => `${image.style}:${image.imageUrl}` !== submittedKey,
   );
+  return orderedPortraitDraft(persona, draft, remaining);
+}
+
+export function setMainPortrait(persona: PersonaRecord, draft: Draft, submittedKey: string) {
+  const images = personaImages(persona);
+  const selected = images.find((image) => `${image.style}:${image.imageUrl}` === submittedKey);
+  if (!selected) throw new PersonaError("conflict", copy.stale);
+  return orderedPortraitDraft(persona, draft, [
+    selected,
+    ...images.filter((image) => image !== selected),
+  ]);
+}
+
+function orderedPortraitDraft(
+  persona: PersonaRecord,
+  draft: Draft,
+  remaining: ReturnType<typeof personaImages>,
+) {
   const primary = (["anime", "photo"] as const).map((style) =>
     remaining.find((image) => image.style === style),
   );

@@ -74,7 +74,7 @@ test("both styles are saved together, survive restart and become public without 
       [...window.document.querySelectorAll(".image-option figcaption")].map(
         (caption) => caption.textContent,
       ),
-    ).toEqual(["메인", "메인"]);
+    ).toEqual(["대표 · 외모 기준", "대표 · 외모 기준"]);
     expect(window.document.querySelector('[name="imageChoice"]')).toBeNull();
     expect(window.document.querySelector('input[type="radio"]')).toBeNull();
   } finally {
