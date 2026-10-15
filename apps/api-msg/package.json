@@ -1,0 +1,23 @@
+{
+  "name": "@ren-ai/api-msg",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./gateway": "./src/gateway.ts",
+    "./health": "./src/health.ts"
+  },
+  "scripts": {
+    "start": "bun run ops/api-msg-entry.mjs",
+    "probe": "bun run ops/probe-entry.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  }
+}

@@ -16,7 +16,7 @@ alongside it: this builds the app and starts the D1 catalog listener at
 `http://127.0.0.1:4873`. Vite proxies `/api/personas` there. The Worker shares
 Admin's local `.wrangler/state` and fixed preview database ID. Apply Admin's
 local D1 schema and run local Admin on port 3729 for its photos.
-The `/discovery/` registration proxy still targets the messaging API on port 4867. See `.env.example` for overrides (`DISCOVERY_WORKER_URL`,
+The `/discovery/` registration proxy targets the local api-app Worker on port 4879. See `.env.example` for overrides (`DISCOVERY_WORKER_URL`,
 `DISCOVERY_WORKER_PORT`, `DISCOVERY_PERSIST_PATH`, `PERSONA_CATALOG_URL`).
 Tests bind port 0.
 
@@ -24,7 +24,7 @@ Tests bind port 0.
 
 Deploy through a PR merged into `main`, after the quality gates pass. The
 `Deploy renai.im` job in [`ci.yml`](../../.github/workflows/ci.yml) builds with
-`VITE_DISCOVERY_API_URL=https://api.renai.im` and `VITE_TURNSTILE_SITE_KEY`
+`VITE_DISCOVERY_API_URL=https://api-app.renai.im` and `VITE_TURNSTILE_SITE_KEY`
 from the `TURNSTILE_SITE_KEY` repository variable, then deploys and verifies the
 `persona-discovery` Worker. It uses the same `CLOUDFLARE_API_TOKEN` secret as
 [Admin deployment](../admin/README.md#automatic-deployment).

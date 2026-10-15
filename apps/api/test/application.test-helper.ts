@@ -30,6 +30,23 @@ export const startMessagingHost = (
       messages,
       gestures,
       alerts,
+    ).pipe(
+      Effect.tap((host) =>
+        Effect.gen(function* () {
+          const stop = yield* messages.follow(0, () =>
+            Effect.all([host.heartbeat.intake, host.heartbeat.followUps]),
+          );
+          yield* Effect.addFinalizer(() => Effect.sync(stop));
+          yield* Effect.forkScoped(
+            Effect.forever(
+              Effect.sleep("1 second").pipe(
+                Effect.andThen(Effect.all([host.heartbeat.intake, host.heartbeat.followUps])),
+                Effect.catchCause(Effect.logError),
+              ),
+            ),
+          );
+        }),
+      ),
     ),
   );
 

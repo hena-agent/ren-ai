@@ -7,7 +7,7 @@ test("persona location uses the pinned V2 config shape without changing global c
   expect(
     JSON.parse(
       locationConfig({
-        callback: "https://api.renai.im/rpc",
+        callback: "https://api-app.renai.im/rpc",
         disabledPlugins: [
           "translation",
           "/root/.config/opencode/plugins/discord",
@@ -27,7 +27,7 @@ test("persona location uses the pinned V2 config shape without changing global c
         package: `/srv/ren-ai/plugins/${name}/src`,
         options: {
           directory: "/srv/ren-ai",
-          url: "https://api.renai.im/rpc",
+          url: "https://api-app.renai.im/rpc",
           tokenFile: "/srv/ren-ai/application.token",
         },
       })),

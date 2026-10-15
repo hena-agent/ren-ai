@@ -11,7 +11,7 @@ import {
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { expect, test } from "vitest";
 import { messagingFixture } from "../test/messaging.test-helper.ts";
-import { composeServer } from "./server.ts";
+import { composeServer } from "../test/composition.test-helper.ts";
 import { applicationApi } from "./opencode/application-protocol.ts";
 import { testCatalog } from "../test/catalog.test-helper.ts";
 
@@ -30,7 +30,6 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
         Effect.gen(function* () {
           const catalog = yield* testCatalog(personaDirectory);
           const server = yield* composeServer({
-            stateDirectory: root,
             catalog,
             managementToken: "management-test-token",
             publicPort: 0,
@@ -41,6 +40,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
               authorization: "Basic test",
               directory: "/srv/ren-ai",
               model: "test/probe",
+              groundRules: "",
             },
             secrets: {
               TURNSTILE_SECRET: "turnstile",

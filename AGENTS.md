@@ -1,5 +1,7 @@
 # AGENTS.md
 
+- Ask for and receive explicit user approval before creating a Git worktree.
+  Use the current working directory unless the user approves another worktree.
 - Do not preserve backward compatibility. Remove obsolete paths instead of
   adding compatibility layers, fallbacks, or migrations.
 - Choose the simplest implementation that fully meets the current

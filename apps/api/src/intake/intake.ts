@@ -70,11 +70,7 @@ export const intake = (
       current = { rowID: tail?.id ?? 0, date: tail?.createdAt ?? 0 };
       yield* save(current);
     }
-    const replaced = history.find((row) => row.id === current.rowID)?.createdAt !== current.date;
-    const cursor = replaced ? 0 : current.rowID;
     let last = current;
-    const afterBookmark = (row: IncomingMessage) =>
-      replaced ? row.createdAt >= current.date : row.id > last.rowID || row.createdAt > last.date;
     const outgoing = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!reconcile) return;
@@ -205,7 +201,6 @@ export const intake = (
       });
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
-        if (!afterBookmark(row)) return;
         if (row.tapback && !row.tapback.added) {
           last = { rowID: row.id, date: row.createdAt };
           yield* save(last);
@@ -259,15 +254,27 @@ export const intake = (
         last = { rowID: row.id, date: row.createdAt };
         yield* save(last);
       });
-    const start = messages
-      .follow(cursor, receive)
-      .pipe(Effect.flatMap((stop) => Effect.addFinalizer(() => Effect.sync(stop))));
-    if (startImmediately) yield* start;
-    yield* Effect.forkScoped(changes.monitor);
+    const poll = Effect.gen(function* () {
+      const all = yield* messages.after(0);
+      const replaced = all.find((row) => row.id === last.rowID)?.createdAt !== last.date;
+      const boundary = last.date;
+      const rows = replaced ? all : yield* messages.after(last.rowID);
+      for (const row of rows) {
+        if (replaced ? row.createdAt >= boundary : row.id > last.rowID || row.createdAt > last.date)
+          yield* receive(row);
+      }
+    });
+    const heartbeat = Effect.all([poll, changes.poll], { concurrency: "unbounded" }).pipe(
+      Effect.asVoid,
+    );
+    if (startImmediately) yield* heartbeat;
     return {
-      resetPending: Effect.forEach(history.filter(afterBookmark), reset).pipe(Effect.asVoid),
+      resetPending: Effect.forEach(
+        history.filter((row) => row.id > current.rowID || row.createdAt > current.date),
+        reset,
+      ).pipe(Effect.asVoid),
       replay,
-      start,
+      poll: heartbeat,
       onNew: (listener: (conversation: Conversation) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);

@@ -56,12 +56,16 @@ test("polls only active Conversations, reports each change once and stops after 
             }),
           zone,
         );
+        yield* incoming.poll;
         const signals: number[] = [];
         incoming.onNew((conversation) => signals.push(conversation.id));
         const a = yield* fake.text(first.handle, 'old "text"', start);
+        yield* incoming.poll;
         yield* fake.text("stranger@example.com", "unwatched", start);
+        yield* incoming.poll;
         yield* fake.edit(a.guid, 'edited "text"');
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts.map((entry) => entry.text)).toEqual([
           '<message at="2026-09-25 Fri 20:00">old "text"</message>',
           '<edited was="old ”text”" at="2026-09-25 Fri 20:00">edited "text"</edited>',
@@ -70,41 +74,54 @@ test("polls only active Conversations, reports each change once and stops after 
         expect(prompts[1]?.id).toBe(
           `msg_edit_${createHash("sha256").update([first.sessionID, a.guid, 'old "text"', 'edited "text"', "1"].join("\0")).digest("hex")}`,
         );
-        expect(reads).toEqual([first.handle]);
+        expect(reads).toEqual([first.handle, first.handle, first.handle]);
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts).toHaveLength(2);
         yield* fake.edit(a.guid, 'old "text"');
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         yield* fake.edit(a.guid, 'edited "text"');
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts[3]?.id).not.toBe(prompts[1]?.id);
         yield* fake.unsend(a.guid);
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts[4]?.text).toBe('<unsent at="2026-09-25 Fri 20:00"/>');
         expect(new Set(prompts.map((entry) => entry.id)).size).toBe(5);
         expect(signals).toEqual([first.id, first.id, first.id, first.id, first.id]);
         const afterUnsend = reads.length;
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(reads).toHaveLength(afterUnsend);
         const b = yield* fake.text(first.handle, "later", start + 6000);
+        yield* incoming.poll;
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         const c = yield* fake.text(first.handle, "also here", start + 7000);
+        yield* incoming.poll;
         yield* fake.edit(b.guid, "revised before newest");
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts.at(-1)?.text).toContain('was="later"');
         yield* TestClock.adjust("2 minutes");
         yield* fake.unsend(b.guid);
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts).toHaveLength(8);
         yield* fake.edit(b.guid, "revised");
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts[8]?.text).toContain('was="revised before newest"');
         yield* fake.unsend(c.guid);
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts).toHaveLength(9);
         yield* TestClock.adjust("13 minutes");
         const before = reads.length;
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(reads).toHaveLength(before);
         expect(reads).not.toContain("idle@example.com");
       }).pipe(
@@ -123,9 +140,11 @@ test("restart takes current text as baseline, so changes while down are missed",
       const begin = () => intake(fake.messages, directory.byHandle, capture(prompts), zone);
       const start = Effect.scoped(
         Effect.gen(function* () {
-          yield* begin();
+          const incoming = yield* begin();
           const row = yield* fake.text(conversation.handle, "first", time);
+          yield* incoming.poll;
           const removed = yield* fake.text(conversation.handle, "withdrawn", time);
+          yield* incoming.poll;
           return { row, removed };
         }),
       );
@@ -135,8 +154,9 @@ test("restart takes current text as baseline, so changes while down are missed",
       yield* fake.text(conversation.handle, "missed watch, caught up", time);
       yield* Effect.scoped(
         Effect.gen(function* () {
-          yield* begin();
+          const incoming = yield* begin();
           yield* TestClock.adjust("1 second");
+          yield* incoming.poll;
           expect(prompts).toHaveLength(3);
           expect(
             prompts.every((text) => !text.startsWith("<edited") && !text.startsWith("<unsent")),
@@ -144,6 +164,7 @@ test("restart takes current text as baseline, so changes while down are missed",
           yield* fake.edit(row.guid, "after restart");
           yield* fake.edit(removed.guid, "not revived");
           yield* TestClock.adjust("1 second");
+          yield* incoming.poll;
           expect(prompts[3]).toContain('was="while down"');
           expect(prompts).toHaveLength(4);
         }),
@@ -161,17 +182,21 @@ test("at the exact Apple deadlines the edit and unsend are still visible", async
       Effect.gen(function* () {
         const { start, directory, conversation, fake } = yield* setup("boundary@example.com");
         const prompts: string[] = [];
-        yield* intake(fake.messages, directory.byHandle, capture(prompts), zone);
+        const incoming = yield* intake(fake.messages, directory.byHandle, capture(prompts), zone);
         const toUnsend = yield* fake.text(conversation.handle, "unsend", start);
+        yield* incoming.poll;
         const toEdit = yield* fake.text(conversation.handle, "edit", start);
+        yield* incoming.poll;
         yield* TestClock.adjust(119_000);
         yield* fake.unsend(toUnsend.guid);
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts[2]).toContain("<unsent");
         yield* TestClock.adjust(779_000);
         // At 15 minutes the message is still eligible; after that it is not polled.
         yield* fake.edit(toEdit.guid, "edited at the deadline");
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts[3]).toContain("edited at the deadline");
       }).pipe(
         Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
@@ -205,7 +230,7 @@ test("polling ignores missing rows rather than treating them as unsent", async (
         const { start, directory, conversation, fake } = yield* setup("missing@example.com");
         const prompts: string[] = [];
         let missing = false;
-        yield* intake(
+        const incoming = yield* intake(
           {
             ...fake.messages,
             recent: (handle, since) =>
@@ -216,13 +241,16 @@ test("polling ignores missing rows rather than treating them as unsent", async (
           zone,
         );
         const row = yield* fake.text(conversation.handle, "before", start);
+        yield* incoming.poll;
         missing = true;
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(logs).toEqual([]);
         expect(prompts).toHaveLength(1);
         missing = false;
         yield* fake.edit(row.guid, "after");
         yield* TestClock.adjust("1 second");
+        yield* incoming.poll;
         expect(prompts[1]).toContain("after</edited>");
       }).pipe(
         Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
@@ -244,22 +272,42 @@ test("a restart does not watch a GUID until its original prompt has been admitte
       const prompts: string[] = [];
       yield* Effect.scoped(
         Effect.gen(function* () {
-          yield* intake(fake.messages, directory.byHandle, capture(prompts), zone);
+          const incoming = yield* intake(fake.messages, directory.byHandle, capture(prompts), zone);
           yield* fake.text(conversation.handle, "admitted", start);
+          yield* incoming.poll;
         }),
       );
       const pending = yield* fake.text(conversation.handle, "pending", start);
+      let admitPending = false;
       yield* Effect.scoped(
         Effect.gen(function* () {
-          yield* intake(
-            { ...fake.messages, follow: () => Effect.succeed(() => {}) },
+          const incoming = yield* intake(
+            {
+              ...fake.messages,
+              after: (cursor) =>
+                fake.messages
+                  .after(cursor)
+                  .pipe(
+                    Effect.map((rows) =>
+                      rows.filter((row) => admitPending || row.guid !== pending.guid),
+                    ),
+                  ),
+            },
             directory.byHandle,
             capture(prompts),
             zone,
           );
           yield* fake.edit(pending.guid, "changed before admission");
           yield* TestClock.adjust("1 second");
+          yield* incoming.poll;
           expect(prompts).toHaveLength(1);
+          admitPending = true;
+          yield* incoming.poll;
+          expect(prompts[1]).toContain("changed before admission</message>");
+          yield* fake.edit(pending.guid, "changed after admission");
+          yield* incoming.poll;
+          expect(prompts).toHaveLength(3);
+          expect(prompts[2]).toContain('was="changed before admission"');
         }),
       );
     }).pipe(

@@ -98,8 +98,5 @@ export const watchEdits = (
         }
       }
     });
-    const monitor = Effect.forever(
-      Effect.sleep("1 second").pipe(Effect.flatMap(() => poll.pipe(Effect.catch(Effect.logError)))),
-    );
-    return { remember, monitor };
+    return { remember, poll };
   });

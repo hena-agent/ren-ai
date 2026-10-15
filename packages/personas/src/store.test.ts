@@ -30,11 +30,13 @@ test("inspection diagnostics retain transport causes without payload-bearing mes
   try {
     const store = await createPersonaStore(root);
     await store.create(harin);
-    const underlying = Object.assign(new Error("private underlying payload"), { code: "EIO" });
-    const withoutStack = Object.assign(new Error("private payload"), { code: 42 });
+    const underlying = Object.assign(new Error("secret-persona-payload underlying"), {
+      code: "EIO",
+    });
+    const withoutStack = Object.assign(new Error("secret-persona-payload"), { code: 42 });
     delete withoutStack.stack;
     for (const cause of [
-      new Error("private wrapper payload", { cause: underlying }),
+      new Error("secret-persona-payload wrapper", { cause: underlying }),
       withoutStack,
       null,
     ]) {
@@ -44,7 +46,7 @@ test("inspection diagnostics retain transport causes without payload-bearing mes
       expect(rows).toMatchObject([
         { id: "mira", error: "invalid_persona_file", causeName: "Error" },
       ]);
-      expect(JSON.stringify(rows)).not.toContain("private");
+      expect(JSON.stringify(rows)).not.toContain("secret-persona-payload");
     }
     const read = vi.spyOn(files, "readFile").mockRejectedValueOnce(underlying);
     expect(await store.inspect()).toMatchObject([{ causeCode: "EIO" }]);

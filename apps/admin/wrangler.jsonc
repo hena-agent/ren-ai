@@ -4,7 +4,7 @@
   "account_id": "b1e7a34d896345430d5982b9baecd07c",
   "workers_dev": false,
   "route": { "pattern": "admin.renai.im", "custom_domain": true },
-  "vars": { "MESSAGING_API_URL": "https://api.renai.im", "ADMIN_JURISDICTION": "us" },
+  "vars": { "APPLICATION_API_URL": "https://api-app.renai.im", "ADMIN_JURISDICTION": "us" },
   "placement": { "mode": "smart" },
   "main": "dist/worker/entry.js",
   "build": { "command": "bun run build" },

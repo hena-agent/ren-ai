@@ -35,7 +35,7 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
     const retained = yield* retainedSessions(host);
     yield* retained.resume;
     sends.onSent(follow.sent);
-    const forget = yield* failedTurns(host, directory, alerts);
+    const failed = yield* failedTurns(host, directory, alerts);
     const { incoming, recovery } = yield* setupRebuilding(
       directory,
       host,
@@ -43,9 +43,8 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       sends.reconcile,
       follow.received,
       follow.sent,
-      forget,
+      failed.forget,
     );
-    yield* Effect.forkScoped(follow.monitor);
     incoming.onNew((conversation) => pace.onNew(conversation.sessionID));
     const operator = yield* makeOperator(
       directory,
@@ -55,7 +54,13 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
           .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
       (handle) => recovery.rebuild(handle, true),
       (sessionID, handle) =>
-        retained.retainRemoved(sessionID, handle).pipe(Effect.tap(() => forget(sessionID))),
+        retained.retainRemoved(sessionID, handle).pipe(Effect.tap(() => failed.forget(sessionID))),
     );
-    return { ...host, conversations: directory, intake: incoming, operator };
+    return {
+      ...host,
+      conversations: directory,
+      intake: incoming,
+      operator,
+      heartbeat: { intake: incoming.poll, followUps: follow.tick, failedTurns: failed.tick },
+    };
   });

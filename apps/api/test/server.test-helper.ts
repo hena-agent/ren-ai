@@ -1,12 +1,12 @@
 import { join } from "node:path";
+import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 import { writeFile } from "node:fs/promises";
 import type { TestLLM } from "@opencode/ai/testing";
 import type { Session } from "@opencode/core/session";
-import { ConfigProvider, Effect } from "effect";
+import { Effect } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { startPersonaHost } from "./application.test-helper.ts";
-import { composeServer } from "../src/server.ts";
-import { applicationConfig } from "../src/configuration.ts";
+import { composeServer } from "./composition.test-helper.ts";
 import { servePublic } from "@ren-ai/transport/listener";
 import { messageGateway } from "@ren-ai/imsg/testing";
 import { installedPlugins, remotePersonaPlugins } from "./persona-plugins.test-helper.ts";
@@ -29,6 +29,7 @@ export const localOpenCode = (
       authorization: "Basic test",
       directory,
       model: "test/probe",
+      groundRules: "",
     },
     native.personas,
   ).pipe(
@@ -107,33 +108,35 @@ export const composedTestServer = (
     yield* Effect.addFinalizer(() => Effect.promise(gateway.dispose));
     const mac = yield* servePublic(gateway.handler, 0);
     const catalog = yield* testCatalog(personaDirectory);
-    const config = yield* applicationConfig.pipe(
-      Effect.provide(
-        ConfigProvider.layer(
-          ConfigProvider.fromUnknown({
-            STATE_DIRECTORY: root,
-            PERSONA_CATALOG_URL: catalog.url,
-            TOKEN_CATALOG: catalog.token,
-            TOKEN_MANAGEMENT: "management-test-token",
-            PORT: "0",
-            IMSG_URL: `${listenerUrl(mac)}/rpc`,
-            IMSG_TOKEN: "messaging-secret",
-            OPENCODE_URL: listenerUrl(openCode),
-            OPENCODE_AUTHORIZATION: "Basic machine",
-            OPENCODE_DIRECTORY: personaDirectory,
-            TURNSTILE_SECRET: "turnstile-test",
-            REN_AI_APPLICATION_TOKEN: "application-secret",
-            DISCORD_WEBHOOK_URL: "https://discord.invalid/hook",
-            ...(model ? { PERSONA_MODEL: model } : {}),
-          }),
+    const server = yield* composeServer({
+      catalog,
+      managementToken: "management-test-token",
+      publicPort: 0,
+      messaging: { url: `${listenerUrl(mac)}/rpc`, token: "messaging-secret" },
+      opencode: {
+        baseUrl: listenerUrl(openCode),
+        authorization: "Basic machine",
+        directory: personaDirectory,
+        model: model ?? "opencode-go/deepseek-v4.1-flash",
+        groundRules: yield* Effect.tryPromise(loadGroundRules),
+      },
+      secrets: {
+        TURNSTILE_SECRET: "turnstile-test",
+        APPLICATION_TOKEN: "application-secret",
+        DISCORD_WEBHOOK_URL: "https://discord.invalid/hook",
+      },
+    });
+    if (server.mode !== "running") throw new Error("Expected running application");
+    const stop = yield* messages.follow(0, () => server.heartbeat);
+    yield* Effect.addFinalizer(() => Effect.sync(stop));
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Effect.sleep("1 second").pipe(
+          Effect.andThen(server.heartbeat),
+          Effect.catchCause(Effect.logError),
         ),
       ),
     );
-    const server = yield* composeServer({
-      ...config,
-      ...(model ? { noticeVersion: "v1" } : {}),
-    });
-    if (server.mode !== "running") throw new Error("Expected running application");
     const tokenFile = join(root, "application-token");
     yield* Effect.promise(() => writeFile(tokenFile, "\napplication-secret\n", { mode: 0o600 }));
     yield* Effect.forEach(installedPlugins, (installedPlugin) =>

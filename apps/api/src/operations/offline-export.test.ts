@@ -124,6 +124,7 @@ test("location export walks all native pages and fails on a stuck server cursor"
               authorization: "Basic machine",
               directory: root,
               model: "test/probe",
+              groundRules: "",
             },
             new Map(),
           ).pipe(

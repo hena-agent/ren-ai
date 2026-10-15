@@ -4,19 +4,6 @@ WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 
-FROM source AS app-build
-RUN mkdir -p /artifact/src /artifact/templates && \
-    bun build --target=bun --outfile=/artifact/src/app.js apps/api/src/server-entry.ts && \
-    bun build --target=bun --outfile=/artifact/src/operator.js apps/api/src/operator-entry.ts && \
-    cp packages/plugins/session-folder/templates/ground-rules.md /artifact/templates/ground-rules.md
-
-FROM oven/bun:1.4.2 AS application
-WORKDIR /app
-COPY --from=app-build /artifact /app
-ENV STATE_DIRECTORY=/state PERSONA_DIRECTORY=/personas LISTEN_HOST=0.0.0.0 PORT=4700
-EXPOSE 4700
-ENTRYPOINT ["bun", "/app/src/app.js"]
-
 FROM source AS plugin-build
 RUN for name in tools context memory title dice session-folder; do \
       mkdir -p "/plugins/$name/src" && \

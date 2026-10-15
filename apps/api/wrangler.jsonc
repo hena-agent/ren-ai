@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ren-ai-api-app",
+  "account_id": "b1e7a34d896345430d5982b9baecd07c",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "main": "dist/worker/entry.js",
+  "build": { "command": "bun scripts/build-worker.mjs" },
+  "no_bundle": true,
+  "workers_dev": false,
+  "dev": { "port": 4879 },
+  "route": { "pattern": "api-app.renai.im", "custom_domain": true },
+  "vars": {
+    "PERSONA_CATALOG_URL": "https://admin.renai.im",
+    "API_MSG_URL": "https://api-msg.renai.im",
+    "PERSONA_MODEL": "opencode-go/deepseek-v4.1-flash",
+    "OPENCODE_DIRECTORY": "/srv/ren-ai",
+    "BOOTSTRAP_ONLY": "true",
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "APPLICATION", "class_name": "ApiApplication" }],
+  },
+  "exports": { "ApiApplication": { "type": "durable-object", "storage": "sqlite" } },
+  "observability": { "enabled": true },
+}

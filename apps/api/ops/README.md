@@ -1,5 +1,57 @@
 # Separate application, OpenCode, and Messages deployments
 
+## Cloudflare application and controlled cutover
+
+`@ren-ai/api-app` is the stateful Worker at `https://api-app.renai.im`;
+`@ren-ai/api-msg` is the DB-free Mac executor at `https://api-msg.renai.im`.
+The executor forwards to `https://oc.renai.im` and
+`https://imsg.renai.im/rpc`. Discovery registration and Admin management use
+api-app; Discovery profile reads remain same-origin against Admin's D1.
+
+CI deploys api-app only from `main` after every quality gate, then probes its
+safe health and registry endpoints. Its first deployment must remain
+bootstrap-only, with intake and background scheduling disabled. Do not enable
+intake while the old application is accepting registrations. During a planned
+pause, stop old intake/scheduling, settle or record uncertain sends, take a
+read-only export of the old SQLite state, and import it into an empty Worker
+store. Verify IDs, assignments, bookmarks, pending work and uncertain sends
+before enabling the new intake. Preserve the stopped container and volume for
+rollback. No script changes live ingress, stops a service or enables intake.
+
+After old intake and scheduling are stopped, create an owner-only private archive:
+
+```sh
+# state:export runs Node 24 (node:sqlite URI support preserves readonly WAL reads).
+CONFIRM_APPLICATION_STOPPED=yes bun run state:export /private/path/server.sqlite /private/path/new-state.json
+API_APP_URL=https://api-app.renai.im bun run state:import /private/path/new-state.json
+```
+
+Load `TOKEN_MANAGEMENT` from a protected environment. The exporter opens the
+source read-only and exclusively creates a mode-0600 JSON archive. Import is
+authenticated at `POST /management/state/import`, works only in bootstrap mode,
+and atomically restores into an empty application database. Repeating the same
+archive is idempotent; a different archive, incompatible columns or nonempty
+target is rejected. `GET /management/state/export` is an authenticated private
+verification snapshot. Archives contain handles and conversation text: keep
+them out of Git/logs and preserve IDs, bookmarks and uncertain sends.
+
+Copy `apps/api/.dev.vars.example` to `.dev.vars` for local Worker development.
+`bun run dev` listens on `API_APP_PORT` (default 4879). Local state belongs to
+Wrangler's DO persistence, never a running Mac `server.sqlite`. Bootstrap is
+enabled by default; after the explicit import and native executor verification,
+change `BOOTSTRAP_ONLY` to `false` through a reviewed PR. SQLite DO point-in-time
+recovery replaces the retired local nightly database snapshots; OpenCode's
+session documents remain in the existing OpenCode storage and exports.
+
+Configure api-app's private `TOKEN_EXECUTOR` secret and
+`API_MSG_URL=https://api-msg.renai.im`. Provision the Mac executor once through
+the current Mac deployment procedure: create its separate process, tunnel and
+protected environment with the same `TOKEN_EXECUTOR`, plus `OPENCODE_URL`,
+`OPENCODE_AUTHORIZATION`, `IMSG_URL` and `IMSG_TOKEN`. It has no Turnstile secret
+or local application database. Thereafter the Mac consumes the attested bundle
+published from `main`; it does not receive a manual deploy or alter the native
+imsg protocol.
+
 ## Discovery and Admin
 
 `renai.im` is the Discovery app in `apps/discovery`, and `admin.renai.im` is the
@@ -11,16 +63,25 @@ deploying either website does not redeploy the application.
 
 ## Operator commands
 
-The application image carries the operator CLI at `/app/src/operator.js`. It calls
-the running service through the socket in its state volume. From `apps/api`, with
-the deployment's Compose variables set:
+From a dependency-installed checkout in `apps/api`, set `API_APP_URL` to the
+central HTTPS application origin and load `TOKEN_MANAGEMENT` from the protected
+operator environment. The typed CLI calls authenticated `/operator` routes;
+it never opens an application state directory or Unix socket:
 
 ```sh
-docker compose -f ops/compose.yml exec api bun /app/src/operator.js remove HANDLE
+API_APP_URL=https://api-app.renai.im bun run operator remove HANDLE
 ```
 
 The commands are `remove`, `block`, `rebuild`, `test-handle` and `untest-handle`,
 each taking one handle.
+
+The Dockerfile now builds only plugin-installation and explicit offline-export
+artifacts. `compose.yml` retains the plugin installer and original volume names,
+not an application listener or tunnel. The obsolete Docker serving/deploy path
+has been removed; api-app runs as the Worker, and api-msg's separately provisioned
+runtime is owned by `apps/api-msg`. This cleanup does not move OpenCode, Messages,
+their ingress, or any existing volume. The stopped legacy volume remains available
+for the coordinated read-only state export.
 
 ## Retire the old test site
 
@@ -28,11 +89,10 @@ The persona-selection site at `discovery.hena.dev` and its immediate onboarding 
 gone ([ADR-0015](../../../docs/adr/0015-discovery-is-the-only-onboarding.md)). Every
 conversation it started was test data. Retire it in this order:
 
-1. With the old application still running, take each handle from the `user`
-   table of `server.sqlite` and `remove` it with the [operator CLI](#operator-commands),
-   so no conversation from the old flow remains. The old image has no CLI: build
-   the new image and run its CLI against the same state volume with
-   `docker run --rm --entrypoint bun -v ren-ai-application-state:/state ren-ai/application:local /app/src/operator.js remove HANDLE`.
+1. After the coordinated state import, take each legacy test handle from the
+   reviewed export and `remove` it with the [central operator CLI](#operator-commands),
+   so no conversation from the old flow remains. Do not attach a new writer to
+   the stopped legacy SQLite volume.
 2. Delete `DEFAULT_PERSONA_ID` from the protected application env file and deploy
    the application. Migration 020 drops the email waitlist and leftover Notice
    records; the old site's routes now answer `404`.
@@ -51,9 +111,9 @@ pause.
 
 Before merging:
 
-1. In the Ambivalent Co. account, create three remotely managed tunnels with these
-   public hostnames on `renai.im`:
-   - `api.renai.im` → `http://api:4700` (this Compose project's network)
+1. In the Ambivalent Co. account, provision the Mac executor tunnel for
+   `api-msg.renai.im`, plus the existing Mac endpoints:
+   - `api-msg.renai.im` → the separately provisioned executor listener
    - `imsg.renai.im` → `http://127.0.0.1:4702` (the Messages Mac)
    - `oc.renai.im` → the auth proxy origin that the `oc.hena.dev` tunnel uses today
 2. Create an Invisible Turnstile widget for `renai.im`. Put its site key in the
@@ -67,19 +127,18 @@ Before merging:
 
 Cutover:
 
-5. Merge. CI deploys Admin on `admin.renai.im` and Discovery as the new
-   `persona-discovery` Worker on `renai.im`.
+5. Merge. CI deploys Admin, Discovery and api-app after quality gates; api-app
+   initially remains bootstrap-only.
 6. On the Messages Mac, follow [Move to imsg.renai.im](../../imsg/ops/README.md#move-to-imsgrenaiim).
 7. In the external OpenCode Compose project, replace the tunnel token with the
    `oc.renai.im` tunnel's and recreate only that tunnel container. Sign in again at
    `https://oc.renai.im`.
-8. In the protected application env file, set `PERSONA_CATALOG_URL=https://admin.renai.im`,
-   `IMSG_URL=https://imsg.renai.im/rpc`, `OPENCODE_URL=https://oc.renai.im` and the new
-   widget's `TURNSTILE_SECRET`, and point `REN_AI_TUNNEL_TOKEN` at the `api.renai.im`
-   tunnel's token. Install a plugin location whose callback is `https://api.renai.im/rpc`
-   into a new `REN_AI_LOCATION_VOLUME` (steps 2–5 of the plugin location below), then
-   `docker compose -f ops/compose.yml up -d --build --remove-orphans`: the Compose
-   service is now `api`.
+8. Provision api-msg process/tunnel and protected environment once. Set
+   `TOKEN_EXECUTOR`, `API_MSG_URL`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`,
+   `IMSG_URL` and `IMSG_TOKEN`; do not put `TURNSTILE_SECRET` or application DB
+   settings on the Mac. The Mac automatically installs the attested `main`
+   bundle. Install a plugin location whose callback is
+   `https://api-app.renai.im/rpc`.
 9. In Messages on the Mac, set **Start New Conversations From** to `hi@renai.im`.
 10. Verify with a marked test handle: register on `https://renai.im`, start it from
     Admin's waitlist and confirm the Greeting arrives from `hi@renai.im`.
@@ -101,7 +160,8 @@ The management routes `/management/discovery` (GET),
 `/management/discovery/select` and `/management/discovery/start` (POST) require `TOKEN_MANAGEMENT`, matching
 Admin's `TOKEN_MANAGEMENT`. Keep this credential separate from `TOKEN_CATALOG`,
 messaging and plugin tokens. Configure the Admin Catalog at
-`https://admin.renai.im` and retain the application SQLite volume.
+`https://admin.renai.im`. Current application state belongs to Durable Object
+SQLite; preserve any stopped legacy volume only for reviewed export/rollback.
 
 Before rollout, inspect live `user`/`conversation` persona assignments. Duplicate
 live assignments stop application startup and need explicit operator resolution.
@@ -119,25 +179,28 @@ distinct from observed success. Request/task diagnostics are JSON with request
 IDs and sanitized causes, excluding handles, tokens, private persona text and
 message content.
 
-Deploy the updated API, set the matching Admin secret, deploy Admin, then
-rebuild Discovery with `VITE_DISCOVERY_API_URL=https://api.renai.im`.
+Admin management uses `APPLICATION_API_URL=https://api-app.renai.im` and
+`TOKEN_MANAGEMENT`; Discovery registration uses
+`VITE_DISCOVERY_API_URL=https://api-app.renai.im`. Discovery profile reads
+continue using same-origin `/api/personas` from Admin D1.
 
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
 ## Services and credentials
 
-| Service     | Runtime                                                            | Persistent state                                                                                            | Ingress / auth                                                                |
-| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                   | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                    |
-| Application | `application` Docker image                                         | `ren-ai-application-state`; remote Admin D1 Catalog                                                         | `api.renai.im` → `http://api:4700`, Cloudflare Tunnel; plugin callback Bearer |
-| OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable session folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers   |
-| Fleet       | Separate [MDM tooling](../../imsg/ops/mdm/README.md)               | Fleet database, certificates and secrets                                                                    | `fleet.hena.dev`                                                              |
+| Service     | Runtime                                                            | Persistent state                                                                                            | Ingress / auth                                                              |
+| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                   | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                  |
+| Application | `@ren-ai/api-app` Cloudflare Worker                                | SQLite-backed application Durable Object; remote Admin D1 Catalog                                           | `api-app.renai.im`; plugin callback Bearer                                  |
+| Executor    | `@ren-ai/api-msg` Bun process on the Mac                           | None                                                                                                        | `api-msg.renai.im` → Mac; `TOKEN_EXECUTOR`                                  |
+| OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable session folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers |
+| Fleet       | Separate [MDM tooling](../../imsg/ops/mdm/README.md)               | Fleet database, certificates and secrets                                                                    | `fleet.hena.dev`                                                            |
 
-The initial target is the **existing OrbStack OpenCode on this Mac**, not a new OpenCode server or a physical move. Its external Compose source is `/Users/chris/git/hena-agent/oc.hena.dev/docker-compose.yml` (user-owned, not a Git repository). Preserve its upstream/proxy/tunnel, persistent whole home and existing sessions. The app uses authenticated public **`https://oc.renai.im` from the initial deployment**, even on this same Mac; apply and verify the machine-Basic proxy adapter **before starting the application, bootstrap mode, or session import**. The existing internal proxy→upstream origin networking stays unchanged. The application does not join the private OpenCode network or bypass its public HTTPS ingress. No Tailscale dependency or read-only UI remains.
+The following host-relocation notes describe the prior Docker application deployment and are retained only for archived backup/rollback work. They do not provision or deploy api-app or api-msg. For the current Mac executor setup, use [api-msg provisioning](../../api-msg/ops/README.md). The current executor uses the existing OpenCode upstream through authenticated public `https://oc.renai.im`; do not alter its tunnel or proxy for api-msg.
 
 The inspected Alpine/aarch64 OpenCode 2.0.19 image needs `gcompat=1.1.0-r4` and `LD_PRELOAD=/lib/libgcompat.so.0` for its bundled PTY library. Without both, terminal creation fails with `gnu_get_libc_version: symbol not found`. The deployed external Compose file includes a `compat/Dockerfile` with this same-version fix; preserve it during relocation. The OpenCode executable is unchanged. Verify a ticketed WebSocket shell roundtrip, not only the UI or `/api/info`.
 
-Copy `application.env.example` to a protected path outside Git. Set its secrets from the existing deployment; `OPENCODE_AUTHORIZATION` is the complete native `Basic …` header, not a made-up token. The app has **no provider credential**; keep existing provider credentials in OpenCode's preserved home. The Mac has **only** `IMSG_TOKEN` plus its independent Cloudflare Tunnel credential, never app/OpenCode/provider secrets.
+The removed `application.env.example` applied to the old Docker application. For the executor's minimal protected environment, use [`api-msg.env.example`](../../api-msg/ops/api-msg.env.example): it includes the shared `TOKEN_EXECUTOR`, native `OPENCODE_AUTHORIZATION`, and existing `IMSG_TOKEN`. The Mac has no `TURNSTILE_SECRET`, application database, Catalog/management token or provider credential.
 
 Compose variables: `REN_AI_APP_ENV` (absolute protected env file), `REN_AI_TUNNEL_TOKEN` (application tunnel), `REN_AI_LOCATION_INPUT` (absolute reviewed plugin config/token staging directory). Volume names are overridable through `REN_AI_STATE_VOLUME`, `REN_AI_LOCATION_VOLUME`, `REN_AI_SESSION_VOLUME`. The application never mounts either OpenCode volume; session-folder writes use authenticated public plugin RPC.
 
@@ -172,9 +235,9 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
    Initial inventory can be empty while a location initializes. Inspect the loaded location again before treating it as empty. On the deployed 2.0.19 instance, disabling versioned package targets did not disable the loaded plugins; their actual IDs (`henadev.anthropic-auth`, `opencode-discord-noti`, `opencode-translate`) did. Verify those plugins are absent or disabled after reloading the persona location, while ordinary locations retain them.
 
-2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Each runtime module receives `directory:/srv/ren-ai`, the callback URL and `tokenFile:/srv/ren-ai/application.token`; it runs only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
+2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api-app.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Each runtime module receives `directory:/srv/ren-ai`, the callback URL and `tokenFile:/srv/ren-ai/application.token`; it runs only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
 3. Put `opencode.json` and `application.token` (same value as `REN_AI_APPLICATION_TOKEN`) in `REN_AI_LOCATION_INPUT`, owner-only. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. The new exporter requires all five volumes: when upgrading an old four-volume deployment, first provision the new empty sessions volume (`docker volume create "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}"`) without mounting it into running services, then export with the **old** location volume selected. For an existing old plugin volume, select a **new** `REN_AI_LOCATION_VOLUME` (for example `ren-ai-opencode-location-v2`) and explicitly `docker volume create "$REN_AI_LOCATION_VOLUME"`; never overwrite the old volume. Keep the application in `BOOTSTRAP_ONLY=true` while migrating.
-4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The application bundle also carries `templates/ground-rules.md` beside its `src/app.js`, preserving `new URL('../templates/ground-rules.md', import.meta.url)` after bundling. No plugin constructs agents.
+4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The Worker bundles its ground rules as text; Node story adapters load the private template with `loadGroundRules`. No plugin constructs agents.
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.
 
    ```sh
@@ -198,7 +261,7 @@ The Mac messaging service is a separate package with its own [runbook](../../ims
 2. During the approved pause, stop **old intake and scheduling**; settle work or record every pending/uncertain send. Stop its LaunchAgent and confirm no process still holds either database. Leave Apple Messages receiving. Export existing target Docker volumes as a rollback backup only during their own separately approved stop; never replace that home during the initial session import.
 3. `CONFIRM_SOURCE_STOPPED=yes bash ops/snapshot-legacy.sh OLD-STATE NEW-SNAPSHOT` preserves complete application state, bookmarks/bindings/send records, plus coherent `server.sqlite` and `opencode.sqlite` copies. No original database writes. This tooling requires the original state tree, not the old GET-only viewer.
 4. `bash ops/export-legacy.sh NEW-SNAPSHOT OLD-PERSONA-DIRECTORY` runs the pinned native 2.0.19 core/server **only inside a network-disabled one-off image** against a throwaway copy. It exports through native HTTP route APIs without opening a listener, invoking a restart sweep, calling the model, or loading the old plugin. Native schema migrations may update only that disposable copy. Review fidelity against stopped 2.0.16 snapshots before cutover; keep original snapshots unchanged. `sessions.json` includes all sessions in the old location (active, retained resets/removals and children) and pending user/synthetic inbox data.
-5. `bash ops/install-application-state.sh NEW-SNAPSHOT/application-state` copies the separate application state into an **empty** target application volume without rewriting session IDs/bookmarks or clearing uncertain sends. Start the app with `BOOTSTRAP_ONLY=true` via `CONFIRM_STAGED_DEPLOYMENT=yes bash ops/deploy.sh`: HTTP/callback starts, management is 503, tools reject execution, and no intake/scheduling/recovery/OpenCode calls run.
+5. The historical `install-application-state.sh` copies a stopped snapshot to an empty archival volume only. It is not a Worker import. Use the coordinated read-only export and empty Durable Object import described above; do not start another local SQLite writer. Keep the Worker bootstrap-only while reviewing IDs/bookmarks and uncertain sends.
 6. Install/verify the plugin location and sessions overlay with the callback alive. Use `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts restore NEW-SNAPSHOT/sessions.json` against the existing OpenCode. Restore checks the complete archive and target IDs, refuses collisions/cycles/control work and fork/revert metadata, preserves IDs, creates folders before import and imports parents first. Modern archives carry persona/agent/rules and Conversation document snapshots. If an archive needs definitions, supply the authenticated Catalog connection; missing IDs fail. For root sessions, use the paused `session-transfer.ts folders NEW-ARCHIVE.json` command after draining execution and inbox work. Native2.0.19 import omits fork/revert information; such archives require a full OpenCode home-volume restore. Pending work is queued with `resume:false`, including inline images. Existing sessions are never overwritten. Inspect partial target IDs before retrying an import.
 7. Verify session/message/tool history, retained sessions, app bindings, plugin policy, both public authenticated endpoints, native cookie/machine/UI flows, and Messages attachment/status/read/typing/reaction behavior. Reconcile physical-send uncertainty against Messages history; **never retry an uncertain send just because it is absent from imported session memory**. Pending control operations must be drained/settled before migration, not silently dropped.
 8. Explicitly restart the app with `BOOTSTRAP_ONLY=false` only after verification. Recovery activates imported pending inbox work through supported APIs, intake catches up Messages history and GUID deduplication prevents replay. Verify messages received during the pause, scheduling and delivery reconciliation with a marked test Handle, not personal conversations.

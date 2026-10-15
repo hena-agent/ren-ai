@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./ground-rules": "./templates/ground-rules.md",
     ".": "./src/index.ts",
     "./protocol": "./src/protocol.ts",
     "./files": "./src/files.ts",

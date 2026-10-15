@@ -2,11 +2,12 @@ import { Plugin } from "@opencode/plugin/effect";
 import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
-import { Effect, Option, Schema, Stream } from "effect";
+import { Effect, Schema } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { applicationApi, persona } from "./protocol.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import type { PersonaPluginOptions } from "./options.ts";
+import { waitForResult } from "./wait.ts";
 
 export const inPersonaLocation = (directory: string, root: string) => {
   return (
@@ -58,17 +59,7 @@ const remoteOptions = (config: RemoteConfig) =>
       personas: new Map(),
       send: (sessionID, text, callID) =>
         api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
-      wait: (sessionID, seconds) =>
-        api.wait({ sessionID, seconds }).pipe(
-          Stream.filter((output) => output !== ""),
-          Stream.runLast,
-          Effect.flatMap((result) =>
-            Option.isSome(result)
-              ? Effect.succeed(result.value)
-              : Effect.fail(new Error("Wait stream ended without a result")),
-          ),
-          Effect.mapError(failure),
-        ),
+      wait: (sessionID, seconds) => waitForResult(api, sessionID, seconds),
       read: (sessionID) => api.read({ sessionID }).pipe(Effect.mapError(failure)),
       react: (sessionID, tapback, callID) =>
         api.react({ sessionID, tapback, callID }).pipe(Effect.mapError(failure)),

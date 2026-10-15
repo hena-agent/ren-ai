@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { Session } from "@opencode/schema/session";
 import { SessionInbox } from "@opencode/schema/session-inbox";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -292,7 +292,7 @@ test("cleanup never deletes a session already bound to a Conversation", async ()
   );
 });
 
-test("observational and queue-read failures are diagnosed while the monitor remains interruptible", async () => {
+test("observational failures are diagnosed and queue-read failures remain visible to the caller", async () => {
   await withContactDatabase(
     Effect.gen(function* () {
       const f = yield* setup;
@@ -303,9 +303,9 @@ test("observational and queue-read failures are diagnosed while the monitor rema
       expect(f.logs.at(-1)?.stage).toBe("task.observe");
       yield* f.worker.tick;
       expect(f.logs.filter((entry) => entry.stage === "task.observe")).toHaveLength(1);
-      yield* f.worker.monitor.pipe(Effect.timeoutOption("20 millis"));
       yield* f.sql`DROP TABLE discovery_contact`;
-      yield* f.worker.monitor.pipe(Effect.timeoutOption("20 millis"));
+      const failed = yield* Effect.result(f.worker.tick);
+      expect(Result.isFailure(failed)).toBe(true);
       expect(f.logs.at(-1)?.stage).toBe("queue.read");
     }),
   );

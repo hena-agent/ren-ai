@@ -35,7 +35,7 @@ test("sending the reset Greeting does not schedule a follow-up until the User re
         yield* host.sessions.wait(id);
         expect(fake.bubbles).toContainEqual({ handle, text: "Hello stranger" });
         offset += 8 * 86_400_000;
-        yield* Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+        yield* host.heartbeat.followUps;
         yield* host.sessions.wait(id);
         expect(JSON.stringify(yield* host.sessions.messages({ sessionID: id }))).not.toContain(
           "<checked-phone",
@@ -43,7 +43,7 @@ test("sending the reset Greeting does not schedule a follow-up until the User re
         yield* fake.text(handle, "new reply", yield* Clock.currentTimeMillis);
         yield* host.sessions.wait(id);
         offset += 3 * 86_400_000;
-        yield* Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+        yield* host.heartbeat.followUps;
         yield* host.sessions.wait(id);
         expect(JSON.stringify(yield* host.sessions.messages({ sessionID: id }))).toContain(
           "<checked-phone",

@@ -57,15 +57,14 @@
       },
     },
     "apps/api": {
-      "name": "@ren-ai/api",
+      "name": "@ren-ai/api-app",
       "version": "0.0.0",
       "bin": {
-        "ren-ai-discovery": "./src/discovery-entry.mjs",
+        "ren-ai-api-worker-build": "./scripts/build-worker.mjs",
         "ren-ai-operator": "./src/operator-entry.ts",
       },
       "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.112",
-        "@effect/sql-sqlite-bun": "4.0.0-rc.112",
+        "@effect/sql-sqlite-do": "4.0.0-rc.112",
         "@opencode/client": "2.0.19",
         "@opencode/schema": "2.0.19",
         "@ren-ai/imsg": "workspace:*",
@@ -77,6 +76,9 @@
         "effect": "4.0.0-rc.112",
       },
       "devDependencies": {
+        "@cloudflare/workers-types": "5.20261011.1",
+        "@effect/platform-node": "4.0.0-rc.112",
+        "@effect/sql-sqlite-bun": "4.0.0-rc.112",
         "@effect/sql-sqlite-node": "4.0.0-rc.112",
         "@opencode/ai": "2.0.19",
         "@opencode/core": "2.0.19",
@@ -88,6 +90,18 @@
         "@ren-ai/plugin-title": "workspace:*",
         "@ren-ai/plugin-tools": "workspace:*",
         "@total-typescript/shoehorn": "0.1.2",
+        "@types/node": "26.6.2",
+        "esbuild": "0.28.2",
+        "miniflare": "5.20261006.1-alpha",
+        "typescript": "7.0.2",
+        "vitest": "5.0.1",
+        "wrangler": "4.149.0",
+      },
+    },
+    "apps/api-msg": {
+      "name": "@ren-ai/api-msg",
+      "version": "0.0.0",
+      "devDependencies": {
         "@types/node": "26.6.2",
         "typescript": "7.0.2",
         "vitest": "5.0.1",
@@ -480,6 +494,8 @@
     "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-rc.112", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.21.3" }, "peerDependencies": { "effect": "^4.0.0-rc.112" } }, "sha512-ttjz0xKamFN7vL8pNDYVwddJLjZvqKePc05djlz2VcdaKbLsnYbtMnL1rbOfHgEnIUSHGh7FkjaN4DM1Ov81sQ=="],
 
     "@effect/sql-sqlite-bun": ["@effect/sql-sqlite-bun@4.0.0-rc.112", "", { "peerDependencies": { "effect": "^4.0.0-rc.112" } }, "sha512-EqR8pWZo3VzedRvP6qo5HcfqNmFvSa+sQLWQl3oBMx2KY1FCc8NYjep79wYjNkW0qABnffrPUXCMTOncd1A+5g=="],
+
+    "@effect/sql-sqlite-do": ["@effect/sql-sqlite-do@4.0.0-rc.112", "", { "peerDependencies": { "effect": "^4.0.0-rc.112" } }, "sha512-PewNVasimmhrdxYbNU91O0YlCcalIHOoF0H5XAWXrmzcEQrKM7kVCyb5h0gmJAZjBM4ZgWRvPY0PUOfbNmWchQ=="],
 
     "@effect/sql-sqlite-node": ["@effect/sql-sqlite-node@4.0.0-rc.112", "", { "peerDependencies": { "effect": "^4.0.0-rc.112" } }, "sha512-jGRtbJsn5z7DqsMEPSbXq2Q9mYEvMy1v9DTeziTtDEnDzlxhxfrXkSeupZbYqAP5pukIM1JBa10zfAn6KnHG2Q=="],
 
@@ -1087,7 +1103,9 @@
 
     "@ren-ai/admin": ["@ren-ai/admin@workspace:apps/admin"],
 
-    "@ren-ai/api": ["@ren-ai/api@workspace:apps/api"],
+    "@ren-ai/api-app": ["@ren-ai/api-app@workspace:apps/api"],
+
+    "@ren-ai/api-msg": ["@ren-ai/api-msg@workspace:apps/api-msg"],
 
     "@ren-ai/discovery": ["@ren-ai/discovery@workspace:apps/discovery"],
 

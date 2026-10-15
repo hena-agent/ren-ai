@@ -19,12 +19,19 @@ import { TestLLM } from "@opencode/ai/testing";
 import { SessionRunnerModel } from "@opencode/core/session/runner/model";
 import { Session } from "@opencode/schema/session";
 import { Clock, Effect, Option } from "effect";
-import { TestClock } from "effect/testing";
+import { TestClock as ClockTesting } from "effect/testing";
 import { expect, test } from "vitest";
 import { startMessagingHost } from "../../test/application.test-helper.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
 import { failedTurns } from "./failed-turns.ts";
 import { scriptedOverrides } from "./scripted-overrides.test-helper.ts";
+
+// A beat is finite: drive it around clock advances instead of replaying tens
+// of thousands of 10ms sleeps during a 15-minute fake-clock jump.
+const heartbeatClock = <E>(tick: Effect.Effect<void, E>) => ({
+  adjust: (duration: Parameters<typeof ClockTesting.adjust>[0]) =>
+    tick.pipe(Effect.andThen(ClockTesting.adjust(duration)), Effect.andThen(tick)),
+});
 
 const awaitUntil = <E>(done: () => Effect.Effect<boolean, E>) =>
   Effect.promise(async () => {
@@ -101,6 +108,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
             fakeGestures().gestures,
             notifications,
           );
+          const TestClock = heartbeatClock(host.heartbeat.failedTurns);
           const bind = (sessionID: string, handle: string) =>
             host.conversations.create({
               handle,
@@ -305,7 +313,8 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* bind(orphan.id, "restored@example.com");
           mode = "ok";
           const beforeRecovery = (yield* llm.requests()).length;
-          yield* failedTurns(host, host.conversations, notifications);
+          yield* (yield* failedTurns(host, host.conversations, notifications)).tick;
+          yield* TestClock.adjust("1 second");
           yield* llm.wait(beforeRecovery + 1);
           yield* host.sessions.wait(orphan.id);
           expect((yield* host.sessions.get(orphan.id)).outcome).toBe("succeeded");
@@ -342,11 +351,11 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           );
           expect(yield* host.conversations.bySession(missing.id)).toBeDefined();
           const beforeMissing = (yield* llm.requests()).length;
-          yield* failedTurns(host, host.conversations, notifications);
+          yield* (yield* failedTurns(host, host.conversations, notifications)).tick;
           expect(yield* llm.requests()).toHaveLength(beforeMissing);
         }).pipe(
           Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
-          Effect.provide(TestClock.layer()),
+          Effect.provide(ClockTesting.layer()),
         ),
       ),
     );
@@ -363,6 +372,7 @@ test("provider failures back off independently per Conversation, doubling throug
         const llm = yield* scriptedPersona();
         yield* llm.serve(() => providerUnavailable("Provider unavailable"));
         const host = yield* startTestHost(root, personaDirectory, llm, fakeMessages().messages);
+        const TestClock = heartbeatClock(host.heartbeat.failedTurns);
         const prompt = (handle: string) =>
           Effect.gen(function* () {
             const session = yield* host.createSession("persona1");
@@ -403,7 +413,7 @@ test("provider failures back off independently per Conversation, doubling throug
           secondAt = yield* Clock.currentTimeMillis;
           expect(yield* requests("two@example.com")).toBe(index + 2);
         }
-      }).pipe(Effect.provide(TestClock.layer())),
+      }).pipe(Effect.provide(ClockTesting.layer())),
     );
   } finally {
     await rm(root, { recursive: true, force: true });

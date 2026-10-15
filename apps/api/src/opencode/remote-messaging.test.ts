@@ -108,6 +108,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
                     authorization: "Basic test",
                     directory: personaDirectory,
                     model: "test/probe",
+                    groundRules: "",
                   },
                   native.personas,
                 );
@@ -120,6 +121,10 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           Effect.provide(FetchHttpClient.layer),
           Effect.provideService(FetchHttpClient.Fetch, network),
         );
+        const stopHeartbeat = yield* local.messages.follow(0, () =>
+          Effect.all([application.heartbeat.intake, application.heartbeat.followUps]),
+        );
+        yield* Effect.addFinalizer(() => Effect.sync(stopHeartbeat));
         const session = yield* application.createSession("persona1");
         yield* application.conversations.create(registration("+821012345678", session.id));
         local.status("+821012345678", {

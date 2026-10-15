@@ -1,7 +1,6 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 import { expect, test } from "vitest";
 import { retainedSessions } from "../conversations/retained.ts";
 import { syncFolders } from "./catalog-sync.ts";
@@ -24,8 +23,13 @@ test(
       yield* retention.retainRemoved(retained.id, "retained@example.com");
       const old = yield* host.read(retained.id);
       yield* host.write(active.id, { ...old, rules: "Rules from before the deployment." });
-      yield* syncFolders(host.remote.client, fixture.personaDirectory, host.personas);
-      const rules = yield* Effect.promise(loadGroundRules);
+      yield* syncFolders(
+        host.remote.client,
+        fixture.personaDirectory,
+        host.personas,
+        fixture.groundRules,
+      );
+      const rules = fixture.groundRules;
       expect((yield* host.read(active.id)).rules).toBe(rules);
       const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
@@ -63,6 +67,26 @@ test(
       yield* expectPrompt(host, active.id, live.prompt);
       expect(yield* host.read(retained.id)).toEqual(old);
       expect((yield* host.read(active.id)).rules).toBe(rules);
+    }),
+  ),
+);
+
+test(
+  "catalog revisions preserve live state when a persona description is unchanged",
+  catalogTest((host, fixture) =>
+    Effect.gen(function* () {
+      const active = yield* host.activeSession();
+      const live = {
+        ...host.personas.get("persona1")!,
+        memory: "Memory written during this session.",
+      };
+      host.personas.set("persona1", live);
+      const updated = authoredDefinition({ ...live, name: "이름만 수정" });
+      yield* Effect.promise(() => fixture.store.update(updated));
+      yield* host.watch();
+      yield* expectProfile(host, "이름만 수정");
+      expect(host.personas.get("persona1")?.memory).toBe(live.memory);
+      expect((yield* host.read(active.id)).persona.memory).toBe(live.memory);
     }),
   ),
 );
@@ -110,7 +134,7 @@ test(
         prompt: "A valid Catalog update.",
       });
       const next = yield* catalogWithoutHarin(fixture, updated);
-      yield* syncFolders(host.remote.client, fixture.personaDirectory, next);
+      yield* syncFolders(host.remote.client, fixture.personaDirectory, next, fixture.groundRules);
       expect(yield* host.read(active.id)).toMatchObject({ persona: { prompt: updated.prompt } });
       expect(yield* host.read(harin.id)).toEqual(old);
       expect(next.get("harin")?.published).toBe(false);
@@ -198,7 +222,12 @@ test(
     Effect.gen(function* () {
       const missing = yield* host.activeSession("persona1", "missing@example.com");
       yield* host.remote.client.session.remove({ sessionID: missing.id });
-      yield* syncFolders(host.remote.client, fixture.personaDirectory, host.personas);
+      yield* syncFolders(
+        host.remote.client,
+        fixture.personaDirectory,
+        host.personas,
+        fixture.groundRules,
+      );
       const active = yield* host.activeSession();
       const old = yield* host.read(active.id);
       const legacy = yield* host.remote.client.session.create(
@@ -218,9 +247,12 @@ test(
         prompt: "This update must wait for migration.",
       });
       expect(
-        (yield* syncFolders(host.remote.client, fixture.personaDirectory, updated).pipe(
-          Effect.flip,
-        )).message,
+        (yield* syncFolders(
+          host.remote.client,
+          fixture.personaDirectory,
+          updated,
+          fixture.groundRules,
+        ).pipe(Effect.flip)).message,
       ).toContain("Migrate existing sessions");
       expect(yield* host.read(active.id)).toEqual(old);
     }),
