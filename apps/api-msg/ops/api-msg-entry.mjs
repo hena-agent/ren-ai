@@ -15,8 +15,11 @@ const handler = createGateway({
     imsgToken: required("IMSG_TOKEN"),
   },
 });
-Bun.serve({
+const server = Bun.serve({
   hostname: process.env.LISTEN_HOST ?? "127.0.0.1",
   port: Number(process.env.PORT ?? 4700),
   fetch: handler,
 });
+process.stdout.write(
+  `${JSON.stringify({ service: "api-msg", event: "listening", url: server.url.href })}\n`,
+);

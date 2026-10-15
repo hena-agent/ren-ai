@@ -40,7 +40,9 @@ test("builds catalog and executor configuration with bootstrap enabled by defaul
     model: "opencode-go/deepseek-v4.1-flash",
     directory: "/srv/ren-ai",
   });
-  expect(await config.applicationStore.catalog()).toEqual([publicPersona]);
+  expect(await config.applicationStore.catalog()).toEqual([
+    { ...publicPersona, imageUrl: `https://admin.example${publicPersona.imageUrl}` },
+  ]);
   expect(
     await (await config.applicationStore.image("01234567-89ab-cdef-0123-456789abcdef.png")).text(),
   ).toBe("image");
@@ -65,8 +67,21 @@ test("honors explicit runtime settings and validates bootstrap and executor orig
   );
   expect(() =>
     cloudflareConfiguration({ ...bindings, API_MSG_URL: "http://api-msg.example" }),
-  ).toThrow("API_MSG_URL must be a credential-free HTTPS origin");
+  ).toThrow("API_MSG_URL must be a credential-free HTTPS or loopback HTTP origin");
   expect(() => cloudflareConfiguration({ ...bindings, TOKEN_MANAGEMENT: " " })).toThrow(
     "TOKEN_MANAGEMENT is required",
   );
 });
+
+test.each(["localhost", "127.0.0.1", "[::1]"])(
+  "local executor on %s uses the same authenticated execution paths",
+  (host) => {
+    const config = cloudflareConfiguration({
+      ...bindings,
+      API_MSG_URL: `http://${host}:4700`,
+    });
+    expect(config.execution.openCodeUrl).toBe(`http://${host}:4700/opencode`);
+    expect(config.execution.imsgRpcUrl).toBe(`http://${host}:4700/imsg/rpc`);
+    expect(config.execution.executorToken).toBe(bindings.TOKEN_EXECUTOR);
+  },
+);

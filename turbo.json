@@ -4,7 +4,17 @@
   "tasks": {
     "dev": {
       "persistent": true,
-      "cache": false
+      "cache": false,
+      "passThroughEnv": [
+        "PORT",
+        "ADMIN_INSPECTOR_PORT",
+        "API_APP_*",
+        "API_MSG_*",
+        "DISCOVERY_*",
+        "TOKEN_EXECUTOR",
+        "OPENCODE_*",
+        "IMSG_*"
+      ]
     },
     "typecheck": {
       "inputs": [
