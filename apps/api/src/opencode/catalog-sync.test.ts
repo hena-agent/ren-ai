@@ -37,10 +37,11 @@ test(
         prompt: "You remember the turquoise umbrella.",
       });
       yield* Effect.promise(() => fixture.store.update(updated));
-      yield* host.watch();
+      yield* host.refresh;
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* expectProfile(host, "수아 수정");
       expect(yield* host.read(retained.id)).toEqual(old);
+      // Native location/config initialization is asynchronous even after the RPC completes.
       yield* Effect.promise(async () => {
         await expect
           .poll(
@@ -50,6 +51,7 @@ test(
                   host.remote.client.agent.list({ location: active.location }),
                 )
               ).data.find((agent) => agent.id === "persona1")?.system,
+            { timeout: 5_000 },
           )
           .toBe(updated.prompt);
       });
@@ -64,6 +66,7 @@ test(
         rules: "Outdated rules awaiting the next edit.",
       });
       yield* Effect.promise(() => fixture.store.update(live));
+      yield* host.refresh;
       yield* expectPrompt(host, active.id, live.prompt);
       expect(yield* host.read(retained.id)).toEqual(old);
       expect((yield* host.read(active.id)).rules).toBe(rules);
@@ -83,7 +86,7 @@ test(
       host.personas.set("persona1", live);
       const updated = authoredDefinition({ ...live, name: "이름만 수정" });
       yield* Effect.promise(() => fixture.store.update(updated));
-      yield* host.watch();
+      yield* host.refresh;
       yield* expectProfile(host, "이름만 수정");
       expect(host.personas.get("persona1")?.memory).toBe(live.memory);
       expect((yield* host.read(active.id)).persona.memory).toBe(live.memory);
@@ -102,15 +105,16 @@ test(
       yield* Effect.promise(() =>
         fixture.store.update({ ...host.personas.get("persona1")!, name: "준비된 수아" }),
       );
-      yield* host.watch();
+      yield* host.refresh;
       yield* expectProfile(host, "준비된 수아");
       yield* Effect.promise(() => writeFile(filename, "broken frontmatter"));
-      yield* Effect.sleep("1100 millis");
+      yield* host.refresh;
       expect(yield* host.read(active.id)).toEqual(old);
       expect(yield* host.profileName()).toBe("준비된 수아");
       yield* Effect.promise(() =>
         writeFile(filename, source.replace("You are Persona1.", "You remember the yellow scarf.")),
       );
+      yield* host.refresh;
       yield* expectPrompt(
         host,
         active.id,
@@ -138,8 +142,7 @@ test(
       expect(yield* host.read(active.id)).toMatchObject({ persona: { prompt: updated.prompt } });
       expect(yield* host.read(harin.id)).toEqual(old);
       expect(next.get("harin")?.published).toBe(false);
-      yield* host.watch();
-      yield* Effect.sleep("1100 millis");
+      yield* host.refresh;
       expect(
         [...host.personas.values()].filter((persona) => persona.published).map((p) => p.name),
       ).toEqual(["수아 수정"]);
@@ -147,6 +150,7 @@ test(
         persona: { prompt: "You are Harin.\n\n## 공개 프로필\n\n29살 서울 사진가" },
       });
       yield* Effect.promise(() => fixture.store.create(savedHarin));
+      yield* host.refresh;
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* expectProfile(host, "수아 수정");
     }),
@@ -170,13 +174,13 @@ test(
         prompt: "You like evening walks.",
       });
       yield* Effect.promise(() => fixture.store.update(updated));
-      yield* host.watch();
-      yield* Effect.sleep("1100 millis");
+      yield* host.refresh;
       expect(yield* host.profileName()).toBe("수아");
       yield* Effect.promise(async () => {
         await rm(filename, { recursive: true });
         await writeFile(filename, rules);
       });
+      yield* host.refresh;
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* expectProfile(host, "수아 수정");
     }),
@@ -190,27 +194,29 @@ test(
       const active = yield* host.activeSession();
       const offline = `${fixture.catalogDirectory}-offline`;
       yield* Effect.promise(() => rename(fixture.catalogDirectory, offline));
-      yield* host.watch();
-      yield* Effect.sleep("1100 millis");
+      yield* host.refresh;
       expect(yield* host.profileName()).toBe("수아");
       yield* Effect.promise(async () => {
         await rename(offline, fixture.catalogDirectory);
         await fixture.store.update({ ...host.personas.get("persona1")!, name: "돌아온 수아" });
       });
+      yield* host.refresh;
       yield* expectProfile(host, "돌아온 수아");
       const updated = authoredDefinition({
         ...host.personas.get("persona1")!,
         prompt: "You like rainy afternoons.",
       });
       yield* Effect.promise(() => fixture.store.update(updated));
+      yield* host.refresh;
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* Effect.promise(() => rename(fixture.catalogDirectory, offline));
-      yield* Effect.sleep("1100 millis");
+      yield* host.refresh;
       expect(yield* host.profileName()).toBe("돌아온 수아");
       yield* Effect.promise(async () => {
         await rename(offline, fixture.catalogDirectory);
         await fixture.store.update({ ...updated, name: "다시 만난 수아" });
       });
+      yield* host.refresh;
       yield* expectProfile(host, "다시 만난 수아");
     }),
   ),

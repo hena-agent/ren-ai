@@ -21,5 +21,6 @@ await buildWorker({
   target: "es2023",
   outfile: "dist/worker/entry.js",
   external: ["node:*", "cloudflare:workers"],
+  define: { BUILD_REVISION: JSON.stringify(process.env.GITHUB_SHA ?? "development") },
   minify: true,
 });

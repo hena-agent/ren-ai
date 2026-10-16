@@ -96,26 +96,33 @@
   padding-top: 20px;
   border-top: 1px solid var(--line);
 }
-.details-content .profile-answer {
+.details-content .profile-prompt {
   padding: 20px;
   background: var(--canvas);
   border-radius: 16px;
 }
-.details-content .profile-facts ul {
-  padding-left: 20px;
+.profile-facts {
+  margin: 0;
   display: grid;
   gap: 12px;
 }
-.details-content blockquote {
-  margin: 16px 0;
-  padding-left: 16px;
-  border-left: 2px solid var(--line);
+.profile-facts > div {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  line-height: 1.6;
 }
-.details-content h4 {
-  margin: 0 0 10px;
+.profile-facts dt {
   font-size: 14px;
-  font-weight: 500;
   color: var(--muted);
+}
+.profile-facts dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.profile-facts dt,
+.profile-facts dd,
+.public-profile-section h3 {
   overflow-wrap: anywhere;
 }
 .profile-caption p {
@@ -123,6 +130,11 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.profile-caption p.profile-meta {
+  font-size: 14px;
+  -webkit-line-clamp: 1;
+  margin-bottom: 6px;
 }
 .profile-card[data-expanded="true"] {
   cursor: auto;

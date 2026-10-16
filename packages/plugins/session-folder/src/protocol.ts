@@ -6,6 +6,9 @@ export const folderID = Schema.String.check(Schema.isPattern(/^ses[a-zA-Z0-9_-]{
 export const folderSnapshot = Schema.Struct({
   persona: Schema.Struct({
     id: Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/)),
+    version: Schema.optionalKey(
+      Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
+    ),
     timeZone: Schema.String,
     language: Schema.String,
     openingLine: Schema.String,

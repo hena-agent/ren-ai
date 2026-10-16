@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { MarkdownProfile } from "@ren-ai/personas/markdown";
+import { PublicProfileView } from "@ren-ai/personas/public-profile-view";
+import { projectPublicProfile } from "@ren-ai/personas/profile-projection";
 import { splitPersonaMarkdown } from "@ren-ai/personas/profile";
 import type { PersonaImage } from "@ren-ai/personas";
 
@@ -18,10 +19,11 @@ export function PublicPersonaPreview({
   const [index, setIndex] = useState(0);
   const photos = images.filter((image) => image.style === style);
   const selected = Math.min(index, Math.max(0, photos.length - 1));
-  let markdown = "";
+  let profile;
   let invalid = false;
   try {
-    markdown = splitPersonaMarkdown(source).publicMarkdown;
+    const markdown = splitPersonaMarkdown(source).publicMarkdown;
+    if (markdown) profile = projectPublicProfile(markdown);
   } catch {
     invalid = true;
   }
@@ -82,8 +84,8 @@ export function PublicPersonaPreview({
         <h2>{name || "새 페르소나"}</h2>
         {invalid ? (
           <p>공개 프로필의 형식을 확인해 주세요.</p>
-        ) : markdown ? (
-          <MarkdownProfile markdown={markdown} />
+        ) : profile ? (
+          <PublicProfileView profile={profile} />
         ) : (
           <p>Persona의 공개 프로필을 작성하세요.</p>
         )}

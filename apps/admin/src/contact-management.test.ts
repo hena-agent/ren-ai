@@ -19,7 +19,10 @@ const entry = (state: typeof ContactState.Type = "waiting"): typeof ContactEntry
   scheduledAt: null,
   requestId: null,
 });
-const idle = { start: vi.fn<ManagementClient["start"]>() };
+const idle = {
+  start: vi.fn<ManagementClient["start"]>(),
+  refreshCatalog: vi.fn<ManagementClient["refreshCatalog"]>(),
+};
 const setup = async (client?: ManagementClient) => {
   const f = await fixture();
   const logs: LogEntry[] = [];
@@ -116,6 +119,7 @@ test("a waiting test handle starts now with a chosen liked persona", async () =>
     list: async () => ({ entries: [entry(), tester], eligibleCount: 2 }),
     select: async (input) => ({ ...input, requested: input.count, entries: [] }),
     start,
+    refreshCatalog: idle.refreshCatalog,
   });
   const page = await (await admin(request("/waitlist"))).text();
   expect(page).toContain("테스트 연락처 바로 시작");

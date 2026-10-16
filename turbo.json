@@ -17,13 +17,8 @@
       ]
     },
     "typecheck": {
-      "inputs": [
-        "src/**",
-        "web/**",
-        "tsconfig.json",
-        "package.json",
-        "$TURBO_ROOT$/tsconfig.base.json"
-      ]
+      "dependsOn": ["^typecheck"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.base.json"]
     }
   }
 }

@@ -10,6 +10,27 @@ const profile = {
 };
 const pair = { anime: "https://example.net/anime.jpg", photo: "https://example.net/photo.jpg" };
 
+test("profile section contracts require useful plain-text content and typed rows", () => {
+  const decode = Schema.decodeUnknownSync(PublicPersona);
+  for (const publicProfile of [
+    { introduction: " ", sections: [] },
+    { introduction: "소개", sections: [{ type: "basics", title: "기본 정보", items: [] }] },
+    {
+      introduction: "소개",
+      sections: [
+        {
+          type: "basics",
+          title: "기본 정보",
+          items: [{ key: "private", label: "직업", value: "도예가" }],
+        },
+      ],
+    },
+    { introduction: "소개", sections: [{ type: "interests", title: "관심사", items: [""] }] },
+    { introduction: "소개", sections: [{ type: "text", title: "내 소개", body: "" }] },
+  ])
+    expect(() => decode({ ...profile, profile: publicProfile })).toThrow(/profile/);
+});
+
 test("local Discovery accepts loopback HTTP portraits while rejecting other insecure origins", () => {
   const decode = Schema.decodeUnknownSync(PublicPersona);
   for (const host of ["localhost", "127.0.0.1", "[::1]"]) {

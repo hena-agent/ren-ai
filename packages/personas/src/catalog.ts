@@ -1,6 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { Schema } from "effect";
 import { splitPersonaMarkdown } from "./profile.ts";
+import { projectPublicProfile } from "./profile-projection.ts";
+import type { PublicProfile } from "./public-profile.ts";
 
 const Row = Schema.Struct({
   id: Schema.String,
@@ -15,7 +17,7 @@ interface Profile {
   id: string;
   name: string;
   bio: string;
-  publicProfile: string;
+  profile: PublicProfile;
   portraits: Partial<Record<Style, string>>;
   secondaryPortraits: { style: Style; imageUrl: string }[];
 }
@@ -24,8 +26,9 @@ interface Profile {
 export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
   const result = await db
     .prepare(`
-    SELECT p.id, p.name, p.markdown, i.style, i.objectKey, i.position
-    FROM personas p LEFT JOIN persona_images i ON i.personaId = p.id
+    SELECT p.id, p.name, v.markdown, i.style, i.objectKey, i.position
+    FROM personas p JOIN persona_versions v ON v.personaId = p.id AND v.version = p.currentVersion
+    LEFT JOIN persona_images i ON i.personaId = p.id
     WHERE p.published = 1 ORDER BY p.id, i.position, i.style
   `)
     .all();
@@ -39,7 +42,7 @@ export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
         id: row.id,
         name: row.name,
         bio,
-        publicProfile: publicMarkdown,
+        profile: projectPublicProfile(publicMarkdown),
         portraits: {},
         secondaryPortraits: [],
       };

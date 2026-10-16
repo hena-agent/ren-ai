@@ -66,7 +66,10 @@ Open http://127.0.0.1:3867 to browse. Profile reads use `/discovery/personas` on
 
 For public hosting, configure Discovery's `VITE_DISCOVERY_API_URL=https://api-app.renai.im` and real `VITE_TURNSTILE_SITE_KEY`, and api-app's matching `TURNSTILE_SECRET`. api-app serves `/discovery/personas` from the current Admin Catalog and `/discovery/waitlist` through its application Durable Object. Discovery serves browser assets only and opens no separate catalog listener. See the app `.env.example` files for configuration.
 
-Quality checks use Node 24 from `.nvmrc`.
+Quality checks use Node 24 from `.nvmrc` and Bun 1.4.2 from `package.json`.
+The artifact tests enforce the exact Bun version. To use it without changing your
+global installation, prefix commands with `bunx --package bun@1.4.2`, for example
+`bunx --package bun@1.4.2 bun run ci`.
 
 ```sh
 nvm use
@@ -116,7 +119,30 @@ For the messaging services, use the [application deployment and relocation runbo
 
 ### CI execution
 
-`bun run ci:checks` runs formatting, lint, types, tests and builds. GitHub Actions runs `ci:checks` and `verify-gates` in parallel; deployment waits for both. On `main` it deploys admin.renai.im and renai.im, and publishes an attested Messages Mac bundle, which the Messages Mac pulls itself ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants deliberate violations and confirms that each gate rejects them.
+`bun run ci:checks` runs formatting, lint, types, dead-code and duplication checks,
+the exceptions report and the build before the full coverage suite, so cheap
+failures surface first. GitHub Actions runs `ci:checks` and `verify-gates` in parallel;
+deployment waits for both. On `main` it deploys admin.renai.im and renai.im, and
+publishes an attested Messages Mac bundle, which the Messages Mac pulls itself
+([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants
+deliberate violations and confirms that each gate rejects them. Its coverage
+probe runs only the two small fixture workspaces, retaining root coverage discovery
+and requiring a threshold failure naming each planted file.
+
+### Local feedback
+
+- Pre-commit lints and formats staged files. Pre-push runs cached typechecks and
+  `bun run test:changed`, skipping both for documentation-only pushes.
+- `bun run test:changed` uses Vitest's dependency graph against `origin/main`,
+  including uncommitted edits, and enforces 100% coverage on changed source files.
+  Keep that ref current with `git fetch origin`. This is local feedback: removed
+  tests and dependencies loaded through filesystem/subprocess operations still
+  need the full `bun run ci`, which CI always runs.
+- Tests share half the available CPUs and keep process isolation. Passing tests'
+  console output is hidden; failures retain their logs.
+- Run concurrent agents' coverage suites in separate worktrees (with approval),
+  because Vitest locks the report directory. Run `verify-gates` sequentially with
+  other checks in each checkout because it temporarily plants invalid source files.
 
 ## Design decisions worth knowing
 

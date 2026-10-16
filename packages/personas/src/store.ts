@@ -19,6 +19,9 @@ import { legacyPersonaDraft } from "./legacy.ts";
 import { readInitialFiles, writeInitialFiles, prepareInitialFiles } from "./initial-files.ts";
 import type { InitialDocuments } from "./initial.ts";
 import { publicationIssues } from "./publication.ts";
+import { nextPersonaVersion, requireVersion } from "./versions.ts";
+import type { SaveSnapshot } from "./versions.ts";
+import { historyFor, readVersions, writeVersionFiles } from "./version-files.ts";
 
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
@@ -46,29 +49,44 @@ export async function createPersonaStore(directory: string) {
       });
     return parsePersona(id, bytes.toString());
   };
+  const previousForWrite = async (input: PersonaRecord, create: boolean, legacySource?: string) => {
+    if (create) {
+      if ((await readdir(directory)).includes(`${input.id}.md`))
+        throw new PersonaError("conflict", "이미 사용 중인 ID입니다.");
+      const [last] = await readVersions(directory, input.id);
+      return last
+        ? { ...input, version: last.version, description: last.markdown, prompt: last.markdown }
+        : undefined;
+    }
+    if (legacySource === undefined) return get(input.id);
+    if ((await source(input.id)) !== legacySource)
+      throw new PersonaError("conflict", "기존 파일이 변경되었습니다. 다시 검사해 주세요.");
+    return legacyPersonaDraft(input.id, legacySource);
+  };
   const write = async (
     input: PersonaRecord,
     create: boolean,
     legacySource?: string,
     documents?: InitialDocuments,
+    restoredFrom?: number,
   ) => {
-    const persona = decodePersona(input);
-    if (!create) {
-      if (legacySource !== undefined) {
-        if ((await source(persona.id)) !== legacySource)
-          throw new PersonaError("conflict", "기존 파일이 변경되었습니다. 다시 검사해 주세요.");
-      } else await get(persona.id);
-    }
+    const candidate = decodePersona(input);
+    const previous = await previousForWrite(candidate, create, legacySource);
+    const version = nextPersonaVersion(previous, candidate.prompt, restoredFrom);
+    const markdown = previous?.version === version ? previous.prompt : candidate.prompt;
+    const persona = { ...candidate, version, description: markdown, prompt: markdown };
     const temporary = join(directory, randomUUID());
     await writeFile(temporary, serializePersona(persona));
     let staged: Awaited<ReturnType<typeof prepareInitialFiles>> | undefined;
     let installed = false;
+    let history: Awaited<ReturnType<typeof writeVersionFiles>> | undefined;
     try {
       if (documents) {
         staged = await prepareInitialFiles(directory, persona.id, documents);
         await staged.commit();
         installed = true;
       }
+      history = await writeVersionFiles(directory, persona, previous, restoredFrom);
       const target = join(directory, `${persona.id}.md`);
       if (create) {
         await link(temporary, target).catch((error: NodeJS.ErrnoException) => {
@@ -81,20 +99,27 @@ export async function createPersonaStore(directory: string) {
       const failure = new AggregateError([error], "Persona commit and initial rollback failed", {
         cause: error,
       });
-      if (installed) {
+      for (const rollback of [history?.rollback, installed ? staged!.rollback : undefined]) {
         try {
-          await staged!.rollback();
+          await rollback?.();
         } catch (rollbackError) {
           failure.errors.push(rollbackError);
-          throw failure;
         }
       }
+      if (failure.errors.length > 1) throw failure;
       throw error;
     } finally {
       await unlink(temporary).catch((error: NodeJS.ErrnoException) => {
         if (error.code !== "ENOENT") throw error;
       });
     }
+    return persona;
+  };
+  const history = async (id: string) => {
+    const current = await get(id);
+    return (await historyFor(directory, current)).filter(
+      (entry) => entry.version <= (current.version ?? entry.version),
+    );
   };
   return {
     list,
@@ -106,11 +131,10 @@ export async function createPersonaStore(directory: string) {
     },
     convertLegacy: (input: PersonaRecord, original: string) => write(input, false, original),
     get,
-    save: async (
-      input: PersonaRecord,
-      documents: InitialDocuments,
-      expected: { persona: string; initial?: InitialDocuments; legacySource?: string },
-    ) => {
+    versions: async (id: string) =>
+      (await history(id)).map(({ markdown: _markdown, ...summary }) => summary),
+    version: async (id: string, version: number) => requireVersion(await history(id), version),
+    save: async (input: PersonaRecord, documents: InitialDocuments, expected: SaveSnapshot) => {
       validateID(input.id);
       if (initialWrites.has(input.id)) throw new PersonaError("conflict", "저장 중입니다.");
       initialWrites.add(input.id);
@@ -134,7 +158,13 @@ export async function createPersonaStore(directory: string) {
           if (issues.length)
             throw new PersonaError("invalid", issues.map((issue) => issue.message).join(" "));
         }
-        await write(input, !expected.persona, expected.legacySource, documents);
+        return await write(
+          input,
+          !expected.persona,
+          expected.legacySource,
+          documents,
+          expected.restoredFrom,
+        );
       } finally {
         initialWrites.delete(input.id);
       }
@@ -192,7 +222,8 @@ export async function createPersonaStore(directory: string) {
           imageUrl,
           ...(portraits === undefined ? {} : { portraits }),
           ...(secondaryPortraits === undefined ? {} : { secondaryPortraits }),
-          publicProfile: publicProfile!,
+          profile: projectPublicProfile(publicProfile!),
         })),
   };
 }
+import { projectPublicProfile } from "./profile-projection.ts";

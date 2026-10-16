@@ -71,6 +71,7 @@ export const generator: ProfileGenerator = {
 };
 export const portraitImage = { bytes: png, mimeType: "image/png" as const };
 export const legacy = {
+  version: 1,
   id: "legacy",
   name: "미라",
   bio: "파리에서 그림을 그려요.",

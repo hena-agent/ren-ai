@@ -5,6 +5,7 @@ import { executionSnapshot } from "./execution-catalog.ts";
 const network = globalThis.fetch;
 let upstream = "";
 let catalogRevision = "initial";
+let catalogReads = 0;
 
 globalThis.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : input.toString());
@@ -14,6 +15,7 @@ globalThis.fetch = async (input, init) => {
   }
   if (url.hostname === "admin.example") {
     if (url.pathname === "/api/catalog") {
+      catalogReads++;
       if (new Headers(init?.headers).get("authorization") !== "Bearer catalog-secret")
         return new Response(null, { status: 401 });
       return Response.json(executionSnapshot(catalogRevision));
@@ -48,6 +50,7 @@ export class ExecutionApplication extends ApiApplication {
       catalogRevision = "changed";
     }
     return Response.json({
+      catalogReads,
       contacts: this.ctx.storage.sql
         .exec("SELECT state, session_id FROM discovery_contact")
         .toArray(),

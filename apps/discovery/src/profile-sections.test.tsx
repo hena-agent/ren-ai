@@ -14,68 +14,77 @@ const fields = {
   onClose: vi.fn<() => void>(),
   disabled: false,
 };
-test("dating information renders as typed sections and empty optional sections stay hidden", () => {
+
+test("JSON sections render as semantic facts, interest chips and question cards in authored order", () => {
   const view = render(
     <ProfileDetails
       {...fields}
       persona={{
         ...persona,
-        publicProfile:
-          "안녕하세요.\n\n### 기본 정보\n\n- 직업: 도예가\n\n### 관심사\n\n- 재즈\n- 산책\n\n### 문답: 완벽한 일요일은?\n\n책방에 가요.\n\n### 비어 있는 항목",
+        profile: {
+          introduction: "안녕하세요.",
+          sections: [
+            {
+              type: "basics",
+              title: "기본 정보",
+              items: [{ key: "occupation", label: "직업", value: "도예가" }],
+            },
+            { type: "interests", title: "관심사", items: ["재즈", "산책"] },
+            { type: "lifestyle", title: "라이프스타일", items: [{ label: "주말", value: "산책" }] },
+            {
+              type: "relationship",
+              title: "관계 스타일",
+              items: [{ label: "연락", value: "천천히" }],
+            },
+            { type: "prompt", question: "완벽한 일요일은?", answer: "책방에 가요." },
+            { type: "text", title: "내가 편해지는 순간", body: "말없이 같이 있을 때요." },
+          ],
+        },
       }}
     />,
   );
-  expect(view.container.querySelector(".profile-facts")?.textContent).toContain("도예가");
+  expect(screen.getByText("직업").tagName).toBe("DT");
+  expect(screen.getByText("도예가").tagName).toBe("DD");
   expect(view.container.querySelectorAll(".profile-interests li")).toHaveLength(2);
-  expect(screen.getByRole("heading", { name: "완벽한 일요일은?" })).toBeTruthy();
-  expect(view.container.querySelector(".profile-answer")?.textContent).toContain("책방에 가요.");
-  expect(screen.queryByRole("heading", { name: "비어 있는 항목" })).toBeNull();
+  expect(view.container.querySelector(".profile-prompt")?.textContent).toContain("책방에 가요.");
+  expect(
+    screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent),
+  ).toEqual([
+    "기본 정보",
+    "관심사",
+    "라이프스타일",
+    "관계 스타일",
+    "완벽한 일요일은?",
+    "내가 편해지는 순간",
+  ]);
 });
-test("public Markdown supports persona-chosen headings and omits undisclosed interests", () => {
-  render(
+
+test("an introduction-only profile has no placeholder sections and JSON strings stay plain text", () => {
+  const view = render(
     <ProfileDetails
       {...fields}
       persona={{
         ...persona,
-        publicProfile:
-          "천천히 알아가요.\n\n### 내가 편해지는 순간\n말없이 같이 있을 때요.\n\n### 같이 해보고 싶은 일\n- 독립서점 구경\n- 산책",
+        profile: {
+          introduction: "<script>alert(1)</script>",
+          sections: [{ type: "text", title: "내 링크", body: "[책방](javascript:alert(1))" }],
+        },
       }}
     />,
   );
-  expect(screen.getByRole("heading", { name: "내가 편해지는 순간" })).toBeTruthy();
-  expect(screen.getAllByRole("listitem")).toHaveLength(2);
-  expect(screen.queryByText("관심사")).toBeNull();
-});
-test("old API introductions are still displayed while raw HTML and unsafe links cannot execute", () => {
-  const view = render(<ProfileDetails {...fields} persona={persona} />);
-  expect(screen.getByText(persona.bio)).toBeTruthy();
+  expect(screen.getByText("<script>alert(1)</script>")).toBeTruthy();
+  expect(view.container.querySelector("script, a")).toBeNull();
   view.rerender(
     <ProfileDetails
       {...fields}
-      persona={{
-        ...persona,
-        publicProfile: "안녕하세요.\n\n<script>alert(1)</script>\n\n[링크](javascript:alert(1))",
-      }}
+      persona={{ ...persona, profile: { introduction: "소개만 있어요.", sections: [] } }}
     />,
   );
-  expect(view.container.querySelector("script")).toBeNull();
-  expect(view.container.querySelector("a")?.getAttribute("href")).not.toContain("javascript:");
+  expect(screen.getByText("소개만 있어요.")).toBeTruthy();
+  expect(screen.queryByText("관심사")).toBeNull();
 });
-test("reference links keep working across public section boundaries", () => {
-  render(
-    <ProfileDetails
-      {...fields}
-      persona={{
-        ...persona,
-        publicProfile:
-          "[소개 링크][place]\n\n### 좋아하는 곳\n\n[책방][place]\n\n[place]: https://example.org/bookshop",
-      }}
-    />,
-  );
-  expect(screen.getByRole("link", { name: "소개 링크" }).getAttribute("href")).toBe(
-    "https://example.org/bookshop",
-  );
-  expect(screen.getByRole("link", { name: "책방" }).getAttribute("href")).toBe(
-    "https://example.org/bookshop",
-  );
+
+test("responses from a running older API still show the public bio without a Markdown renderer", () => {
+  render(<ProfileDetails {...fields} persona={persona} />);
+  expect(screen.getByText(persona.bio)).toBeTruthy();
 });

@@ -84,6 +84,27 @@ test("publication validates real document content, metadata identity, traits and
   ).toThrow(/특성 이름/);
 });
 
+test("new public saves validate structured fields without rejecting reads of existing public prose", () => {
+  for (const content of [
+    "### 기본 정보\n직접 작성한 소개예요.",
+    "### 기본 정보\n- 직업:",
+    "### 기본 정보\n- 직업: 도예가\n- 직업: 사진가",
+    "### 관심사\n재즈, 산책",
+    "### 문답:\n답변만 있어요.",
+    "### 문답: &nbsp;\n답변만 있어요.",
+  ]) {
+    const description = withPublicProfile(source, `소개.\n\n${content}`);
+    const record = decodePersona({ ...persona, published: true, description });
+    expect(record.published).toBe(true);
+    expect(publicationIssues(record, documents)).toEqual([
+      {
+        tab: "persona",
+        message: "Persona의 필수 형식·이름·성별·공개 자기소개·공개 정보 목록을 확인해 주세요.",
+      },
+    ]);
+  }
+});
+
 test("bundle saves roll back initial pointers on persona commit failure and keep private incomplete drafts editable", async () => {
   const root = await mkdtemp(join(tmpdir(), "persona-bundle-"));
   try {

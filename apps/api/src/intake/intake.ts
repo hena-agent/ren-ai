@@ -49,7 +49,7 @@ export const intake = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const lock = yield* Semaphore.make(1);
+    const pollLock = yield* Semaphore.make(1);
     const beforeReset = yield* resetBoundary(messages);
     const listeners = new Set<(conversation: Conversation) => void>();
     const signal = (conversation: Conversation) => {
@@ -268,9 +268,9 @@ export const intake = (
           yield* receive(row);
       }
     });
-    // Polls share one bookmark and must observe the preceding poll's acknowledgement.
-    // Edit checks stay outside the lock so a later poll can reset a session with queued edits.
-    const heartbeat = Effect.all([lock.withPermit(poll), changes.poll], {
+    // Live notifications and periodic polls share the admission cursor. Edit
+    // observation stays outside this lock because it can itself deliver a reset.
+    const heartbeat = Effect.all([pollLock.withPermit(poll), changes.poll], {
       concurrency: "unbounded",
     }).pipe(Effect.asVoid);
     if (startImmediately) yield* heartbeat;

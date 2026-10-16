@@ -14,6 +14,8 @@ import { PublicPersonaPreview } from "./public-persona-preview.tsx";
 import { ContactPage } from "./contact-page.tsx";
 import type { ContactView } from "./contact-page.tsx";
 import { UploadDialog } from "./upload-controls.tsx";
+import { VersionPage } from "./version-page.tsx";
+import type { VersionView } from "./version-page.tsx";
 
 interface EditorFields {
   documents?: InitialDocuments | undefined;
@@ -147,6 +149,19 @@ function Editor({
             ← 목록
           </a>
           <h1 className="editor-name">{persona.name || copy.new}</h1>
+          {editing && persona.version && (
+            <div className="profile-item-actions">
+              <span>현재 v{persona.version}</span>
+              <button
+                type="submit"
+                className="secondary"
+                formAction={`${action}/versions`}
+                disabled={locked}
+              >
+                버전 기록
+              </button>
+            </div>
+          )}
           <span className="editor-change-state" data-editor-change-state aria-live="polite">
             {!persona.name ? "생성 전" : changed ? "저장 전 미리보기" : "저장됨"}
           </span>
@@ -238,6 +253,72 @@ function heading(view: ContactView | undefined, inspections: readonly Inspection
   return inspections ? "Persona 형식 검사" : copy.list;
 }
 
+function PersonaList({ personas }: { personas: readonly PersonaRecord[] }) {
+  if (!personas.length)
+    return (
+      <div className="empty">
+        <p>{copy.empty}</p>
+        <a href="/new">{copy.start} →</a>
+      </div>
+    );
+  return (
+    <div className="persona-grid">
+      {personas.map((persona) => (
+        <div key={persona.id}>
+          <a className="card-link" href={`/personas/${persona.id}`}>
+            <Preview persona={persona} />
+            <span className="edit-label">{copy.edit}</span>
+          </a>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PageNotices({
+  error,
+  saved,
+  catalogPending,
+  imageJob,
+  imageJobs,
+  queuePosition,
+  queueObservedAt,
+}: Pick<EditorFields, "imageJob" | "imageJobs" | "queuePosition" | "queueObservedAt"> & {
+  error: string;
+  saved?: boolean | undefined;
+  catalogPending?: boolean | undefined;
+}) {
+  return (
+    <>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      {saved && <output className="notice success">{copy.saved}</output>}
+      {catalogPending && (
+        <output className="notice">
+          저장된 카탈로그의 메시징 서버 적용을 기다리고 있습니다. 연결이 복구되면 자동으로
+          재시도합니다.
+        </output>
+      )}
+      {imageJob && (
+        <div data-image-progress>
+          {(imageJobs ?? [{ job: imageJob, position: queuePosition! }]).map((entry, index) => (
+            <ImageJobPanel
+              key={entry.job.id}
+              job={entry.job}
+              position={entry.position}
+              now={queueObservedAt!}
+              titleId={index === 0 ? "image-queue-title" : `image-queue-${entry.job.id}`}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function renderPage({
   personas,
   record,
@@ -245,6 +326,7 @@ export function renderPage({
   draft,
   error = "",
   saved,
+  catalogPending,
   seed,
   portraitInstructions,
   portraitOperation,
@@ -263,11 +345,14 @@ export function renderPage({
   tab,
   showIdea,
   contactView,
+  versionView,
 }: PageContent & {
   error?: string;
   saved?: boolean;
+  catalogPending?: boolean | undefined;
   inspections?: readonly InspectionRow[];
   contactView?: ContactView;
+  versionView?: VersionView;
 }) {
   return (
     "<!doctype html>" +
@@ -310,36 +395,26 @@ export function renderPage({
               </a>
             </nav>
           </header>
-          <main id="main" className={record ? "persona-workbench" : undefined}>
-            <div className="page-heading" hidden={Boolean(record)}>
+          <main id="main" className={record || versionView ? "persona-workbench" : undefined}>
+            <div className="page-heading" hidden={Boolean(record || versionView)}>
               <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
               <h1>{heading(contactView, inspections)}</h1>
               <p className="description">
                 {contactView ? "대기자 선정과 첫 연락 진행 상태를 관리합니다." : copy.description}
               </p>
             </div>
-            {error && (
-              <p className="notice error" role="alert">
-                {error}
-              </p>
-            )}
-            {saved && <output className="notice success">{copy.saved}</output>}
-            {imageJob && (
-              <div data-image-progress>
-                {(imageJobs ?? [{ job: imageJob, position: queuePosition! }]).map(
-                  (entry, index) => (
-                    <ImageJobPanel
-                      key={entry.job.id}
-                      job={entry.job}
-                      position={entry.position}
-                      now={queueObservedAt!}
-                      titleId={index === 0 ? "image-queue-title" : `image-queue-${entry.job.id}`}
-                    />
-                  ),
-                )}
-              </div>
-            )}
-            {contactView ? (
+            <PageNotices
+              error={error}
+              saved={saved}
+              catalogPending={catalogPending}
+              imageJob={imageJob}
+              imageJobs={imageJobs}
+              queuePosition={queuePosition}
+              queueObservedAt={queueObservedAt}
+            />
+            {versionView ? (
+              <VersionPage {...versionView} />
+            ) : contactView ? (
               <ContactPage view={contactView} />
             ) : inspections ? (
               <InspectionResults rows={inspections} />
@@ -363,22 +438,8 @@ export function renderPage({
                 tab={tab}
                 showIdea={showIdea}
               />
-            ) : personas.length ? (
-              <div className="persona-grid">
-                {personas.map((persona) => (
-                  <div key={persona.id}>
-                    <a className="card-link" href={`/personas/${persona.id}`}>
-                      <Preview persona={persona} />
-                      <span className="edit-label">{copy.edit}</span>
-                    </a>
-                  </div>
-                ))}
-              </div>
             ) : (
-              <div className="empty">
-                <p>{copy.empty}</p>
-                <a href="/new">{copy.start} →</a>
-              </div>
+              <PersonaList personas={personas} />
             )}
           </main>
         </body>

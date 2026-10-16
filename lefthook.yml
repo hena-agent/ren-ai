@@ -18,6 +18,8 @@ pre-push:
   parallel: true
   jobs:
     - name: typecheck
+      glob: &check-inputs "{apps/**,packages/**,scripts/**,*.{ts,tsx,js,mjs,cjs,json,jsonc,toml,lock},.nvmrc,lefthook.yml,.github/**}"
       run: sh scripts/pinned-node.sh bun run typecheck
     - name: test
-      run: sh scripts/pinned-node.sh bun run test
+      glob: *check-inputs
+      run: sh scripts/pinned-node.sh bun run test:changed

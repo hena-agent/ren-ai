@@ -57,6 +57,11 @@ path; the default service identity is `/usr/local/lib/ren-ai-api-msg`.
 
 ## Automatic updates
 
+`GET /health` retains Bearer authentication and reports `service: "api-msg"`, the
+full source `revision` embedded by CI, and `status`. A locked screen, nearly-full
+disk or failed Mac health check returns `degraded` with HTTP 503; ready returns 200. Local source runs use revision `development`. Responses are never cached.
+The bundled probe requires this identity, its own artifact revision and readiness.
+
 After the gateway is verified, provision the updater once. Create a fine-grained
 GitHub token for `hena-agent/ren-ai` with read-only Actions and Attestations
 permissions only. Keep the raw token in an owner-only file, then install the
@@ -72,7 +77,7 @@ attested `api-msg-bundle` from the latest completed `main` CI push and verifies
 the workflow identity, `refs/heads/main`, exact commit digest and hosted-runner
 provenance. It probes the currently installed process first, installs only the
 JavaScript payload, and restarts only `im.renai.api-msg` when executable payload
-files change. Metadata-only changes do not restart. Failed probes restore the
+files change, including the embedded revision. Failed probes restore the
 previous payload; a bad artifact is marked rejected if the prior service was
 healthy, otherwise it is deferred until the Mac recovers. The updater never
 modifies `api-msg.env`, Bun, either upstream, the imsg process or any tunnel.

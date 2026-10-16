@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { PersonaError } from "@ren-ai/personas";
 import { characterValidationFields } from "./generation-failure.ts";
 
 export interface LogFields {
@@ -7,6 +8,8 @@ export interface LogFields {
   stage?: string;
   intent?: string;
   personaId?: string;
+  personaVersion?: number;
+  restoredFrom?: number;
   style?: string;
   poseIndex?: number;
   model?: string;
@@ -138,6 +141,7 @@ export function reportFailure(
   emit({
     ...fields,
     ...(error instanceof GenerationError && error.fields),
+    ...(error instanceof PersonaError && { code: error.kind }),
     ...(!(error instanceof GenerationError) &&
       "code" in root &&
       typeof root.code === "string" && { code: root.code }),
@@ -176,7 +180,11 @@ export async function operation<T>(stage: string, fields: LogFields, run: () => 
     });
     return result;
   } catch (error) {
-    reportFailure(error, { ...fields, stage, durationMs: performance.now() - start });
+    reportFailure(
+      error,
+      { ...fields, stage, durationMs: performance.now() - start },
+      error instanceof PersonaError ? "warn" : "error",
+    );
     throw error;
   }
 }
@@ -185,7 +193,7 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
   const path = new URL(request.url).pathname;
   const route = /^\/personas\/[a-zA-Z0-9_-]+$/.test(path)
     ? "/personas/:id"
-    : ["/", "/new", "/personas", "/api/personas", "/inspection"].includes(path)
+    : ["/", "/new", "/personas", "/api/personas", "/inspection", "/health"].includes(path)
       ? path
       : "/other";
   return scope.run(
@@ -218,12 +226,18 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
 export const requestId = () => scope.getStore()!.requestId;
 export const captureLogging = () => AsyncLocalStorage.snapshot();
 
-export function loggedJob<T>(id: string, fields: LogFields, run: () => Promise<T>, log: Log) {
+export function loggedJob<T>(
+  id: string,
+  fields: LogFields,
+  run: () => Promise<T>,
+  log: Log,
+  route = "/image-jobs/:id",
+) {
   return scope.run(
     {
       requestId: id,
       method: "ALARM",
-      route: "/image-jobs/:id",
+      route,
       fields,
       secrets: [],
       reported: new Map(),

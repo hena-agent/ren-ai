@@ -7,8 +7,11 @@ export interface ContactDiagnostic {
   durationMs: number;
   level: "info" | "warn" | "error";
   status?: number;
+  upstreamStatus?: number;
   code?: string;
   personaId?: string;
+  personaVersion?: number;
+  sessionId?: string;
   model?: string;
   causeName?: string;
   causeCode?: string;
@@ -30,6 +33,11 @@ export function contactCause(cause: unknown) {
   return {
     causeName: root.constructor.name,
     ...(code && { causeCode: code }),
+    ...("upstreamStatus" in root &&
+      typeof root.upstreamStatus === "number" &&
+      Number.isInteger(root.upstreamStatus) &&
+      root.upstreamStatus >= 100 &&
+      root.upstreamStatus <= 599 && { upstreamStatus: root.upstreamStatus }),
     stack: (root.stack ?? "")
       .split("\n")
       .filter((line) => /^\s+at .*(?:\.(?:ts|js|mjs):\d+:\d+|node:.*:\d+:\d+)/.test(line))

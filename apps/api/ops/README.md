@@ -62,6 +62,18 @@ imsg protocol.
 
 ## Discovery and Admin
 
+`GET /health` identifies `api-app` and the exact source revision embedded in the
+Worker. Database readiness and authenticated `api-msg` readiness are separate:
+an unavailable, unauthorized or wrong-service executor makes overall health
+`degraded` (HTTP 503), even while public Catalog reads remain available.
+`bootstrapOnly` reports the intake setting separately. Local runs use revision
+`development`; responses exclude credentials and upstream payloads.
+
+CI checks the running Worker service and exact revision. It records degraded
+dependency health without blocking artifact publication: the Mac updater needs
+the completed CI run before it can install that artifact. Verify executor health
+again after the Mac update before declaring an end-to-end deployment ready.
+
 `renai.im` is the Discovery app in `apps/discovery`, and `admin.renai.im` is the
 Catalog and authoring Worker in `apps/admin`. GitHub Actions deploys both after the
 quality gates; see the [Discover setup](../../../apps/discovery/README.md) and
@@ -191,6 +203,15 @@ Admin management uses `APPLICATION_API_URL=https://api-app.renai.im` and
 `TOKEN_MANAGEMENT`; Discovery registration uses
 `VITE_DISCOVERY_API_URL=https://api-app.renai.im`. Discovery profile reads use
 api-app's `/discovery/personas`; the browser does not bind D1 or run a catalog API.
+
+Admin sends `POST /management/catalog/refresh` with `TOKEN_MANAGEMENT` after
+committing catalog edits. This route belongs to api-app, not the Mac executor;
+it loads the latest authenticated Admin catalog and synchronizes active native
+session folders. Live State/Memory and retained folders are preserved. The
+route returns 204 after synchronization, 503 on failure (with a request ID),
+and rejects writes during bootstrap. Duplicate notifications are safe. Catalog
+loading runs at execution startup and on notifications, never on heartbeats.
+Admin retains and retries unacknowledged notifications across restarts.
 
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 

@@ -211,7 +211,15 @@ test.each(["sent", "uncertain"] as const)(
               expect(parseInitialState(initial.state).mood).toBe(50);
               expect(initial.memory).toContain("initial Memory");
               await executionState(runtime, "/__fixture/catalog");
-              await executionState(runtime, "/__fixture/alarm");
+              const idle = await executionState(runtime, "/__fixture/alarm");
+              expect(idle.catalogReads).toBe(state.catalogReads);
+              const agent = join(session, ".opencode/agents/persona1.md");
+              expect(await readFile(agent, "utf8")).not.toContain(
+                "Updated character instructions.",
+              );
+              expect((await send("/management/catalog/refresh", {})).status).toBe(204);
+              expect((await executionState(runtime)).catalogReads).toBe(state.catalogReads + 1);
+              expect(await readFile(agent, "utf8")).toContain("Updated character instructions.");
               expect(await files()).toEqual(initial);
               const replay = await (await send("/management/discovery/select", select)).json();
               await runtime.dispose();

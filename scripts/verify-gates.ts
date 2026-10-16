@@ -88,7 +88,16 @@ const CHECKS: readonly Check[] = [
       "apps/persona-lab/src/gate-check.ts":
         "export const untested = (n: number): number => (n > 0 ? n : 0);\n",
     },
-    command: ["vitest", "run", "--coverage", "--silent"],
+    // File filters retain root coverage discovery, including the unimported probes.
+    // --project filters instead drop those files from coverage in Vitest 5.
+    command: [
+      "vitest",
+      "run",
+      "packages/onboarding/",
+      "apps/persona-lab/",
+      "--coverage",
+      "--silent",
+    ],
     expect: "does not meet",
     coverageFailures: [
       "packages/onboarding/src/gate-check.tsx",
@@ -158,6 +167,14 @@ const CHECKS: readonly Check[] = [
   {
     gate: "app suppression reasons",
     files: { "apps/persona-lab/src/gate-check.ts": "// @ts-nocheck\n" },
+    command: ["bun", "run", "exceptions"],
+    expect: 'inline suppression has no "-- reason"',
+    checkInverse: true,
+    allowed: "// @ts-nocheck -- documented exception\n",
+  },
+  {
+    gate: "plugin suppression reasons",
+    files: { "packages/plugins/application/src/gate-check.ts": "// @ts-nocheck\n" },
     command: ["bun", "run", "exceptions"],
     expect: 'inline suppression has no "-- reason"',
     checkInverse: true,
