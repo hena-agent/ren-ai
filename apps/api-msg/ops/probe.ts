@@ -1,9 +1,5 @@
 import { buildRevision, parseHealth } from "@ren-ai/transport/health";
-
-export type ExecutorHealth = {
-  diskNearlyFull: boolean;
-  screenLocked: boolean;
-};
+import type { ExecutorHealth } from "../src/health.ts";
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: validate untrusted executor health identity and Mac facts
 function facts(input: unknown): ExecutorHealth {
@@ -15,7 +11,7 @@ function facts(input: unknown): ExecutorHealth {
     !("diskNearlyFull" in input) ||
     typeof input.diskNearlyFull !== "boolean" ||
     !("screenLocked" in input) ||
-    typeof input.screenLocked !== "boolean"
+    (input.screenLocked !== null && typeof input.screenLocked !== "boolean")
   )
     throw new Error("api-msg health response was invalid");
   return { diskNearlyFull: input.diskNearlyFull, screenLocked: input.screenLocked };

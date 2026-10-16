@@ -222,9 +222,8 @@ export function createAdmin(
             conversion: draft.conversion,
           }),
         );
-      if (!generator && intent !== "apply-improvement" && intent !== "discard-improvement")
-        return unconfigured(persona, draft);
-      const next = await generateTextDraft(persona, draft, intent, generator!);
+      if (!generator) return unconfigured(persona, draft);
+      const next = await generateTextDraft(persona, draft, intent, generator);
       await assertSnapshot(store, draft);
       subDrafts.set(draft.id, next);
       return html(

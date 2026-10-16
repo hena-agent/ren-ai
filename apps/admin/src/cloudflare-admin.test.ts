@@ -173,7 +173,7 @@ test("the Worker connects authenticated management pages without exposing its se
         ASSETS: { fetch: async () => new Response("asset") },
         ADMIN_PASSWORD: "test-password",
         TOKEN_CATALOG: "catalog",
-        APPLICATION_API_URL: "https://api-app.renai.im",
+        APPLICATION_API_URL: "https://api.renai.im",
         TOKEN_MANAGEMENT: "messaging-secret",
       },
       storage,

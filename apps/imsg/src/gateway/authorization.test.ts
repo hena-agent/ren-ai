@@ -59,6 +59,7 @@ test("permission verification reports a denied Mac UI permission", async () => {
 
 test("HTTP health preserves authorization and reports identity and no-send readiness", async () => {
   const f = gatewayFixture();
+  const history = vi.spyOn(f.local.messages, "after");
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   try {
     const unauthorized = await f.server.handler(healthRequest("GET", "wrong"));
@@ -70,6 +71,7 @@ test("HTTP health preserves authorization and reports identity and no-send readi
     expect(methodNotAllowed.status).toBe(405);
     expect(methodNotAllowed.headers.get("cache-control")).toBe("no-store");
     const response = await f.server.handler(healthRequest());
+    expect(history).toHaveBeenCalledExactlyOnceWith(0, 1);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({

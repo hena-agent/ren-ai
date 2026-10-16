@@ -17,7 +17,7 @@ const since = { ...handle, since: Schema.Number };
 const cursor = {
   rowID: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
 };
-const message = Schema.Struct({
+export const incomingMessage = Schema.Struct({
   id: Schema.Number,
   guid: Schema.String,
   handle: Schema.String,
@@ -58,19 +58,28 @@ export const messagingApi = RpcGroup.make(
     error: Schema.String,
   }),
   Rpc.make("after", {
-    payload: cursor,
-    success: Schema.Array(message),
+    payload: {
+      ...cursor,
+      limit: Schema.optionalKey(
+        Schema.Number.check(
+          Schema.isInt(),
+          Schema.isGreaterThanOrEqualTo(1),
+          Schema.isLessThanOrEqualTo(500),
+        ),
+      ),
+    },
+    success: Schema.Array(incomingMessage),
     error: Schema.String,
   }),
   Rpc.make("follow", {
     payload: { ...cursor, date: Schema.NullOr(Schema.Number) },
-    success: Schema.NullOr(message),
+    success: Schema.NullOr(incomingMessage),
     stream: true,
     error: Schema.String,
   }),
   Rpc.make("recent", {
     payload: since,
-    success: Schema.Array(message),
+    success: Schema.Array(incomingMessage),
     error: Schema.String,
   }),
   Rpc.make("status", {

@@ -291,6 +291,12 @@ Admin 저장 확정 후 기존 관리 인증으로 api-app의 `POST /management/
 
 #### Discovery 상세 프로필
 
+공개 전달 계약은 **구조화된 JSON**이다. 작성 원본은 Markdown을 유지하고 Catalog가
+공개 영역만 `profile: { introduction, sections }`로 변환한다. 섹션은 기본 정보·관심사·
+라이프스타일·관계 스타일·문답·자유 글의 명시적 타입을 갖는다. Discovery는 Markdown
+문자열을 받거나 렌더링하지 않고 정보 행·관심사 태그·질문 카드로 표시한다. Admin도
+같은 변환과 표시를 사용한다. 자세한 필드와 순차 배포 계약은 아래 문서를 따른다.
+
 공개 자기소개 확장, 기본 정보·관심사·라이프스타일·관계 스타일·문답과 기존
 Persona 검사·변환의 현재 계약은 [Persona 작성·상세 프로필](persona-authoring-profiles.md)을 따른다.
 

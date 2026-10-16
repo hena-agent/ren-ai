@@ -7,7 +7,8 @@ import { PublicPersonaPreview } from "./public-persona-preview.tsx";
 import { markdownEditor } from "./markdown-editor.ts";
 import { bindDocumentTabs } from "./document-tabs.ts";
 import { updateEditorDiagnostics } from "./editor-diagnostics.ts";
-import { PublicProfileEditor } from "./public-profile-editor.tsx";
+import { bindDocumentTools } from "./document-tools-browser.ts";
+import { LanguagePanel } from "./language-panel.tsx";
 
 const Images = Schema.Array(
   Schema.Struct({ style: Schema.Literals(["anime", "photo"]), imageUrl: Schema.String }),
@@ -51,22 +52,10 @@ export function bindDocumentEditor(form: HTMLFormElement) {
   const label = editor.querySelector<HTMLElement>("[data-document-status]")!;
   const window = form.ownerDocument.defaultView!;
   const view = markdownEditor(editor.querySelector<HTMLElement>("[data-markdown-editor]")!, source);
-  const profileEditor = createRoot(
-    editor.querySelector<HTMLElement>("[data-public-profile-editor]")!,
-  );
-  const renderProfileEditor = () =>
-    profileEditor.render(
-      createElement(PublicProfileEditor, {
-        source: source.value,
-        locked: source.readOnly,
-        onChange: (value: string) => {
-          source.value = value;
-          source.dispatchEvent(new window.Event("input", { bubbles: true }));
-        },
-      }),
-    );
+  bindDocumentTools(editor, view);
   const state = form.querySelector<HTMLTextAreaElement>('[name="stateSource"]')!;
   const memory = form.querySelector<HTMLTextAreaElement>('[name="memorySource"]')!;
+  const languages = createRoot(editor.querySelector<HTMLElement>("[data-language-panel]")!);
   const initialViews = [state, memory].map((field) => {
     field.hidden = true;
     return markdownEditor(
@@ -102,6 +91,13 @@ export function bindDocumentEditor(form: HTMLFormElement) {
       () => selectTab("persona"),
     );
     const stateResult = stateStatus(state.value, source.value);
+    languages.render(
+      createElement(LanguagePanel, {
+        source: source.value,
+        documents: { state: state.value, memory: memory.value },
+        locked: source.readOnly || result.state !== "valid",
+      }),
+    );
     const statePane = form.querySelector<HTMLElement>("#pane-state")!;
     statePane.dataset["stateFormat"] = stateResult.state;
     statePane.querySelector<HTMLElement>("[data-state-status]")!.textContent = stateResult.label;
@@ -132,7 +128,6 @@ export function bindDocumentEditor(form: HTMLFormElement) {
   };
   let timer = 0;
   const schedule = () => {
-    renderProfileEditor();
     for (const [field, current] of [
       [source, view],
       [state, initialViews[0]!],
@@ -154,10 +149,9 @@ export function bindDocumentEditor(form: HTMLFormElement) {
     form.removeEventListener("input", schedule);
     form.removeEventListener("photos-updated", update);
     preview?.unmount();
-    profileEditor.unmount();
+    languages.unmount();
     for (const current of [view, ...initialViews]) current.destroy();
     editors.delete(form);
   });
   update();
-  renderProfileEditor();
 }

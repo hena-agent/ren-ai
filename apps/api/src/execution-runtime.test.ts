@@ -6,6 +6,7 @@ import type { ApplicationStore } from "./application-store.ts";
 import { cloudflareConfiguration } from "./cloudflare-config.ts";
 import { createExecutionRuntime } from "./execution-runtime.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
+import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 
 const control = vi.hoisted(() => ({
   events: [] as string[],
@@ -14,6 +15,8 @@ const control = vi.hoisted(() => ({
   startup: async () => {},
   callback: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("callback")),
   operator: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("operator")),
+  folderRead: vi.fn<() => Effect.Effect<typeof folderSnapshot.Type, Error>>(),
+  languageFailure: undefined as Error | undefined,
 }));
 
 const step = (name: string) =>
@@ -74,6 +77,19 @@ vi.mock("./opencode/catalog-sync.ts", () => ({
 vi.mock("./discovery/first-contact.ts", () => ({
   firstContacts: () => Effect.succeed({ tick: step("contacts") }),
 }));
+vi.mock("./discovery/conversation-languages.ts", () => ({
+  conversationLanguages:
+    (read: (id: string) => Effect.Effect<typeof folderSnapshot.Type, Error>) => () =>
+      read("ses_languages").pipe(
+        Effect.match({
+          onSuccess: () => new Response("languages"),
+          onFailure: (cause) => {
+            control.languageFailure = cause;
+            return new Response("unavailable", { status: 503 });
+          },
+        }),
+      ),
+}));
 vi.mock("./application.ts", () => ({
   startMessagingApplication: (
     _personas: Map<string, never>,
@@ -81,7 +97,7 @@ vi.mock("./application.ts", () => ({
   ) =>
     create({}).pipe(
       Effect.map(() => ({
-        client: {},
+        client: { rpc: () => ({ read: control.folderRead }) },
         operator: {},
         conversations: {},
         heartbeat: {
@@ -126,6 +142,35 @@ beforeEach(() => {
   control.startup = async () => {};
   control.callback.mockClear();
   control.operator.mockClear();
+  control.folderRead.mockReset();
+  control.languageFailure = undefined;
+});
+
+test("authenticated language reads use the configured executor location and preserve upstream failure causes", async () => {
+  const runtime = await open();
+  const request = new Request("https://app/operator/languages", {
+    headers: { authorization: "Bearer management-secret" },
+  });
+  try {
+    control.folderRead.mockReturnValueOnce(
+      Effect.succeed(fromPartial<typeof folderSnapshot.Type>({})),
+    );
+    expect(await (await runtime.fetch(request.clone())).text()).toBe("languages");
+    expect(control.folderRead).toHaveBeenCalledWith(
+      { folderID: "ses_languages" },
+      { location: { directory: cloudflareConfiguration(executionBindings).execution.directory } },
+    );
+    expect(control.operator).not.toHaveBeenCalled();
+    const cause = Object.assign(new Error("private upstream payload"), { code: "ECONNRESET" });
+    control.folderRead.mockReturnValueOnce(Effect.fail(cause));
+    expect((await runtime.fetch(request.clone())).status).toBe(503);
+    expect(control.languageFailure).toMatchObject({
+      message: "Conversation State could not be read",
+      cause,
+    });
+  } finally {
+    await runtime.close();
+  }
 });
 
 test("does not start for rejected operator access; publishes callback before remote startup awaits it", async () => {
@@ -139,7 +184,7 @@ test("does not start for rejected operator access; publishes callback before rem
     };
     expect((await runtime.fetch(new Request("https://app/rpc"))).status).toBe(503);
     await runtime.tick();
-    expect(control.requests).toEqual(["https://api-msg.example/imsg/rpc"]);
+    expect(control.requests).toEqual(["https://api-msg.example/imsg/rpc/"]);
     expect(control.callback).toHaveBeenCalledTimes(1);
     expect(control.events).toEqual([
       "catalog",

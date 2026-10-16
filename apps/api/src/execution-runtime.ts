@@ -1,5 +1,5 @@
 import { Context, Effect, Exit, Layer, Scope } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { remoteMessages } from "@ren-ai/imsg/client";
 import { startMessagingApplication } from "./application.ts";
 import { applicationGateway } from "./opencode/application-gateway.ts";
@@ -15,6 +15,8 @@ import type { SqlClient } from "effect/unstable/sql";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
+import { conversationLanguages } from "./discovery/conversation-languages.ts";
+import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -46,23 +48,10 @@ export async function createExecutionRuntime(
   let operator: ReturnType<typeof operatorHandler> | undefined;
   const boot = Effect.gen(function* () {
     const { personas } = yield* Effect.tryPromise(catalog.load);
-    const httpClient = yield* HttpClient.HttpClient;
     const messages = yield* remoteMessages({
       url: execution.imsgRpcUrl,
       token: execution.managementToken,
-    }).pipe(
-      // RPC's HTTP transport appends '/'; the executor exposes one exact endpoint.
-      Effect.provideService(
-        HttpClient.HttpClient,
-        HttpClient.makeWith(
-          (request) =>
-            httpClient.postprocess(
-              Effect.map(request, HttpClientRequest.setUrl(execution.imsgRpcUrl)),
-            ),
-          httpClient.preprocess,
-        ),
-      ),
-    );
+    });
     const health = yield* createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher);
     const host = yield* startMessagingApplication(
       personas,
@@ -93,6 +82,16 @@ export async function createExecutionRuntime(
     const catalogSync = catalogRefresher(host.client, execution.directory, catalog.load, personas);
     return {
       refreshCatalog: catalogSync.refresh(groundRules),
+      languages: conversationLanguages((sessionID) =>
+        host.client
+          .rpc(sessionFolders)
+          .read({ folderID: sessionID }, { location: { directory: execution.directory } })
+          .pipe(
+            Effect.mapError(
+              (cause) => new Error("Conversation State could not be read", { cause }),
+            ),
+          ),
+      ),
       tick: Effect.gen(function* () {
         yield* host.heartbeat.intake;
         yield* contacts.tick;
@@ -173,7 +172,9 @@ export async function createExecutionRuntime(
           );
         }
       }
-      await open();
+      const runtime = await open();
+      if (url.pathname === "/operator/languages" && request.method === "GET")
+        return run(runtime.languages(request));
       url.pathname = url.pathname.slice("/operator".length);
       return operator!.handler(new Request(url, request));
     },

@@ -1,6 +1,7 @@
 import { Deferred, Effect, Exit, Option, Queue, Scope, Semaphore, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { parseRpc } from "./imsg-protocol.ts";
+import { observe } from "../diagnostics.ts";
 
 type Frame = ReturnType<typeof parseRpc>;
 
@@ -52,7 +53,9 @@ export const imsgRpc = Effect.gen(function* () {
                 yield* frame.error
                   ? Deferred.fail(
                       wait,
-                      new Error(`imsg ${frame.error.code}: ${frame.error.message}`),
+                      Object.assign(new Error(`imsg ${frame.error.code}: ${frame.error.message}`), {
+                        code: frame.error.code,
+                      }),
                     )
                   : Deferred.succeed(wait, frame.result!);
               }
@@ -77,21 +80,41 @@ export const imsgRpc = Effect.gen(function* () {
   );
   yield* Scope.addFinalizer(parent, stop);
   const request = (method: string, params: object) =>
-    Effect.gen(function* () {
-      const connection = yield* start;
-      const reply = yield* Deferred.make<object, Error>();
-      if (pending.size >= 128) return yield* Effect.fail(new Error("imsg RPC capacity exceeded"));
-      const id = ++sequence;
-      pending.set(id, reply);
-      try {
-        yield* Queue.offer(
-          connection.input,
-          new TextEncoder().encode(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`),
-        );
-        return yield* Deferred.await(reply);
-      } finally {
-        pending.delete(id);
-      }
-    });
+    observe(
+      `imsg.rpc.${method}`,
+      Effect.gen(function* () {
+        const connection = yield* start;
+        const reply = yield* Deferred.make<object, Error>();
+        if (pending.size >= 128) return yield* Effect.fail(new Error("imsg RPC capacity exceeded"));
+        const id = ++sequence;
+        pending.set(id, reply);
+        try {
+          yield* Queue.offer(
+            connection.input,
+            new TextEncoder().encode(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`),
+          );
+          return yield* Deferred.await(reply).pipe(
+            Effect.timeoutOrElse({
+              duration: "30 seconds",
+              orElse: () =>
+                Effect.gen(function* () {
+                  pending.delete(id);
+                  // Close only this request's child. Its reader rejects the remaining
+                  // waiters; a replacement child cannot be killed by a stale timeout.
+                  yield* Scope.close(connection.scope, Exit.void);
+                  return yield* Effect.fail(
+                    Object.assign(new Error("imsg RPC timed out; mutation outcome uncertain"), {
+                      code: "IMSG_RPC_TIMEOUT",
+                    }),
+                  );
+                }),
+            }),
+          );
+        } finally {
+          pending.delete(id);
+        }
+      }),
+      () => ({ pending: pending.size }),
+    );
   return { request, notices, restart: stop };
 });

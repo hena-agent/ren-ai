@@ -3,7 +3,9 @@ import type {
   ContactSnapshot,
   ContactSelection,
   ContactState,
+  ConversationLanguages,
 } from "@ren-ai/onboarding";
+import { LanguageReadout } from "./language-panel.tsx";
 
 export interface ContactView {
   tab: "waitlist" | "first-contacts";
@@ -16,6 +18,7 @@ export interface ContactView {
   attempted?: boolean;
   snapshot?: typeof ContactSnapshot.Type;
   selection?: typeof ContactSelection.Type;
+  languages?: typeof ConversationLanguages.Type;
 }
 const labels: Record<typeof ContactState.Type, string> = {
   waiting: "대기 중",
@@ -83,6 +86,9 @@ function Rows({
                 <span className="contact-handle">{entry.handle}</span>
                 {entry.testHandle && <small>테스트 연락처</small>}
                 <small>{time(entry.createdAt)}</small>
+                {entry.state === "active" && (
+                  <a href={`/first-contacts?languages=${entry.id}`}>현재 언어 실력</a>
+                )}
               </th>
               <td>{entry.likedPersonas.map((p) => p.name).join(", ") || "없음"}</td>
               <td>
@@ -170,6 +176,21 @@ export function ContactPage({ view }: { view: ContactView }) {
   );
   return (
     <section className="contact-management" aria-label="대기자와 첫 연락 관리">
+      {view.languages && (
+        <section aria-label="현재 대화의 언어 실력">
+          <h2>현재 대화의 언어 실력</h2>
+          <LanguageReadout languages={view.languages.languages} />
+          {view.languages.lastStateChange && (
+            <p>
+              최근 State 변경: {view.languages.lastStateChange.at} —{" "}
+              {view.languages.lastStateChange.reason}
+            </p>
+          )}
+          <p className="hint">
+            이 대화에서 학습한 현재 실력입니다. Discovery에는 초기 실력이 표시됩니다.
+          </p>
+        </section>
+      )}
       <div className="contact-summary">
         {view.tab === "waitlist" && (
           <p className="contact-eligible">

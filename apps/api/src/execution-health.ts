@@ -5,7 +5,10 @@ import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import { parseHealth } from "@ren-ai/transport/health";
 
-const Facts = Schema.Struct({ diskNearlyFull: Schema.Boolean, screenLocked: Schema.Boolean });
+const Facts = Schema.Struct({
+  diskNearlyFull: Schema.Boolean,
+  screenLocked: Schema.NullOr(Schema.Boolean),
+});
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow health and notification failures into payload-free diagnostics
 const diagnose = (cause: unknown, stage: string) => {
@@ -69,6 +72,7 @@ export const createExecutionHealth = (
         const response = await fetcher(new URL("/health", configuration.apiMsgUrl), {
           headers: { Authorization: `Bearer ${configuration.managementToken}` },
           signal: AbortSignal.timeout(10_000),
+          redirect: "manual",
         });
         if (response.status !== 200 && response.status !== 503)
           throw Object.assign(new Error("Executor health is unavailable"), {
@@ -77,7 +81,9 @@ export const createExecutionHealth = (
           });
         try {
           const body = await response.json();
-          parseHealth(body, "api-msg");
+          const health = parseHealth(body, "api-msg");
+          if (response.status !== (health.status === "ready" ? 200 : 503))
+            throw new Error("Executor health status is inconsistent");
           return Schema.decodeUnknownSync(Facts)(body);
         } catch (cause) {
           throw Object.assign(new Error("Invalid executor health response", { cause }), {
@@ -89,7 +95,11 @@ export const createExecutionHealth = (
         Effect.flatMap((facts) =>
           Effect.all([
             facts.diskNearlyFull ? raise("disk-nearly-full") : clear("disk-nearly-full"),
-            facts.screenLocked ? raise("screen-locked") : clear("screen-locked"),
+            facts.screenLocked === null
+              ? Effect.void
+              : facts.screenLocked
+                ? raise("screen-locked")
+                : clear("screen-locked"),
             clear("executor-unavailable"),
           ]),
         ),

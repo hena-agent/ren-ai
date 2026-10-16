@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import type { PersonaRecord } from "./model.ts";
 import { CharacterSheet, Stat } from "./character-sheet.ts";
 import { splitPersonaMarkdown, requirePublicProfile } from "./profile.ts";
+import { languageBackground } from "./languages.ts";
 
 const descriptionVersion = 2;
 const sectionKeys = {
@@ -53,6 +54,29 @@ function checked<T>(section: string, detail: string, read: () => T, excerpt = ""
   }
 }
 
+function readIdentity(section: string, source: string) {
+  const identity =
+    /^이름: ([^\n]+)\n성별: (여성|남성)(?:\n주 사용 언어: [^\n]+\n모국어: [^\n]+)?\n\n([\s\S]+)$/.exec(
+      section,
+    );
+  if (!identity)
+    throw invalid(
+      "정체성·외형",
+      "이름: … / 성별: 여성 또는 남성 뒤에 빈 줄과 외형 설명이 필요합니다.",
+    );
+  const background = checked(
+    "정체성·외형",
+    "주 사용 언어와 모국어에 유효한 언어 코드를 작성해 주세요.",
+    () => languageBackground(source),
+  );
+  return {
+    name: identity[1],
+    gender: identity[2] === "여성" ? "female" : "male",
+    appearance: identity[3],
+    ...(background && { languageBackground: background }),
+  };
+}
+
 export function parseCharacterDescription(source: string) {
   source = splitPersonaMarkdown(source).privateMarkdown;
   const parts = source
@@ -71,12 +95,7 @@ export function parseCharacterDescription(source: string) {
     if (!value) throw invalid(title, "필수 섹션의 내용이 비어 있습니다.");
     return value;
   };
-  const identity = /^이름: ([^\n]+)\n성별: (여성|남성)\n\n([\s\S]+)$/.exec(section("정체성·외형"));
-  if (!identity)
-    throw invalid(
-      "정체성·외형",
-      "이름: … / 성별: 여성 또는 남성 뒤에 빈 줄과 외형 설명이 필요합니다.",
-    );
+  const identity = readIdentity(section("정체성·외형"), source);
   const base = Object.fromEntries(
     section("기본 성향 (0–100, 고정)")
       .split(/^- /m)
@@ -151,9 +170,7 @@ export function parseCharacterDescription(source: string) {
   );
   try {
     return Schema.decodeUnknownSync(CharacterSheet)({
-      name: identity[1],
-      gender: identity[2] === "여성" ? "female" : "male",
-      appearance: identity[3],
+      ...identity,
       ...textSections,
       samples: samples.map((line) => line.slice(2)),
       base,

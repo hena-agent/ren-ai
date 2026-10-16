@@ -5,7 +5,7 @@ import type { DiscoveryClient } from "./client.ts";
 import { readChoices, saveChoices } from "./choices.ts";
 import { Card } from "./card.tsx";
 import { JoinForm } from "./join-form.tsx";
-import copy from "./copy.json";
+import { useCopy, LocaleProvider } from "./locale.tsx";
 import { readImageStyle, saveImageStyle, withImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
 import type { StyledPersona } from "./image-style.ts";
@@ -38,6 +38,7 @@ function Deck({
   details: { persona: StyledPersona; image: number } | undefined;
   onCollapse: () => void;
 }) {
+  const copy = useCopy();
   if (!people.length)
     return (
       <div className="empty-card">
@@ -98,6 +99,7 @@ function Deck({
 }
 
 function Receipt({ waiting }: { waiting: boolean }) {
+  const copy = useCopy();
   return (
     <section className="receipt" aria-labelledby="receipt-title">
       <span className="receipt-mark" aria-hidden="true">
@@ -116,6 +118,15 @@ type Catalog =
   | { phase: "ready"; people: readonly PublicPersona[] };
 
 export function App({ client = discoveryClient }: { client?: DiscoveryClient }) {
+  return (
+    <LocaleProvider>
+      <DiscoveryApp client={client} />
+    </LocaleProvider>
+  );
+}
+
+function DiscoveryApp({ client }: { client: DiscoveryClient }) {
+  const copy = useCopy();
   const [catalog, setCatalog] = useState<Catalog>({ phase: "loading" });
   const activeRequest = useRef(new AbortController());
   const load = useCallback(
@@ -177,6 +188,7 @@ function Experience({
   people: readonly PublicPersona[];
   client: DiscoveryClient;
 }) {
+  const copy = useCopy();
   const [choices, setChoices] = useState(readChoices);
   const [style, setStyle] = useState(readImageStyle);
   const [styleStorageFailure, setStyleStorageFailure] = useState(false);

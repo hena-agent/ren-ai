@@ -64,7 +64,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                 name: "소라",
                 bio: "밤에는 음악을 만들어요.",
                 imageUrl: "https://example.org/sora.jpg",
-                publicProfile: "밤에는 음악을 만들어요.",
+                profile: { introduction: "밤에는 음악을 만들어요.", sections: [] },
               },
             ]);
             const submit = (likedPersonaIDs = ["sora"]) =>
@@ -75,6 +75,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                   body: JSON.stringify({
                     handle: "+821012345678",
                     locale: "ko",
+                    conversationLanguage: "ja",
                     privacyNoticeVersion: discoveryNotice.version,
                     turnstileToken: "human",
                     likedPersonaIDs,
@@ -104,6 +105,9 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
         ).toEqual([{ handle: "+821012345678", consent_version: discoveryNotice.version }]);
         expect(yield* sql<{ persona_id: string }>`SELECT persona_id FROM discovery_like`).toEqual([
           { persona_id: "sora" },
+        ]);
+        expect(yield* sql`SELECT conversation_language FROM discovery_language`).toEqual([
+          { conversation_language: "ja" },
         ]);
         expect(yield* sql`SELECT id FROM conversation`).toEqual([]);
         expect(yield* sql`SELECT id FROM send`).toEqual([]);

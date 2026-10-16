@@ -155,6 +155,20 @@ export const migrate = Effect.gen(function* () {
         review INTEGER NOT NULL DEFAULT 0,
         provider_alerted INTEGER NOT NULL DEFAULT 0
       )`,
+      "022_discovery_language": sql`CREATE TABLE discovery_language (
+        registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
+        conversation_language TEXT NOT NULL
+      )`,
+      "023_recovery_scan": sql`CREATE TABLE recovery_scan (
+        id INTEGER PRIMARY KEY CHECK(id = 1), conversation_id INTEGER NOT NULL
+      )`,
+      "024_intake_pending": Effect.gen(function* () {
+        yield* sql`CREATE TABLE intake_pending (
+          id INTEGER PRIMARY KEY, guid TEXT NOT NULL UNIQUE, handle TEXT NOT NULL,
+          payload TEXT NOT NULL, retry_at INTEGER NOT NULL DEFAULT 0
+        )`;
+        yield* sql`CREATE INDEX intake_pending_handle ON intake_pending(handle, id)`;
+      }),
     }),
   });
 });

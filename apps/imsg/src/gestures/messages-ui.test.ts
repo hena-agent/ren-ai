@@ -89,11 +89,10 @@ test("typing checks the chat, guards each character, clears and parks", async ()
   expect(await Effect.runPromise(gestures.typing("alice@example.com", "hi", 0))).toBe(true);
   expect(events).toEqual([
     "ensure",
-    "chats --limit 10000 --json",
+    "chats --limit 100 --json",
     "open sms://open?groupid=alice%40example.com",
     "clear sms://open?groupid=alice%40example.com",
-    "key h",
-    "key i",
+    "key hi",
     "clear sms://open?groupid=alice%40example.com",
     "park",
   ]);
@@ -141,10 +140,10 @@ test.each([
   );
   expect(fixture.events).toEqual([
     "ensure",
-    "chats --limit 10000 --json",
+    "chats --limit 100 --json",
     "open sms://open?groupid=alice%40example.com",
     "clear sms://open?groupid=alice%40example.com",
-    "key h",
+    "key hi",
     "clear sms://open?groupid=alice%40example.com",
     "park",
   ]);
@@ -213,7 +212,7 @@ test("reopens before a read and parks after tapbacks, including failures", async
   await Effect.runPromise(fixture.gestures.read("alice@example.com"));
   expect(fixture.events.slice(0, 4)).toEqual([
     "ensure",
-    "chats --limit 10000 --json",
+    "chats --limit 100 --json",
     "read sms://open?groupid=alice%40example.com",
     "park",
   ]);

@@ -85,6 +85,8 @@ export const makeDiscoveryWeb = ({
             yield* sql`INSERT OR IGNORE INTO discovery_registration (id, handle, locale, consent_version, created_at)
         VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${created}) RETURNING id`;
           if (inserted.length) {
+            yield* sql`INSERT INTO discovery_language (registration_id, conversation_language)
+              VALUES (${id}, ${input.conversationLanguage ?? input.locale})`;
             for (const personaID of input.likedPersonaIDs)
               yield* sql`INSERT INTO discovery_like (registration_id, persona_id) VALUES (${id}, ${personaID})`;
           }

@@ -70,6 +70,9 @@ test.each(["sent", "no_imessage", "unknown"] as const)(
 test.each([
   ["after", { rowID: -1 }],
   ["after", { rowID: 0.5 }],
+  ["after", { rowID: 0, limit: 0 }],
+  ["after", { rowID: 0, limit: 0.5 }],
+  ["after", { rowID: 0, limit: 501 }],
   ["follow", { rowID: -1, date: null }],
   ["follow", { rowID: 0.5, date: null }],
   ["typing", { handle: "handle", text: "draft", durationMillis: -1 }],

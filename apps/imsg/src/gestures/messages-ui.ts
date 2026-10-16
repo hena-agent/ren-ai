@@ -1,26 +1,12 @@
 import { fileURLToPath } from "node:url";
-import { Effect, Semaphore, Stream } from "effect";
+import { Clock, Effect, Semaphore, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { Gestures } from "./gestures.ts";
+import { observe } from "../diagnostics.ts";
+import { chatLookup } from "./chat-lookup.ts";
 
 const script = fileURLToPath(new URL("./messages-ui.applescript", import.meta.url));
 const url = (handle: string) => `sms://open?groupid=${encodeURIComponent(handle)}`;
-
-// imsg chats prints one JSON object per line, not a JSON array.
-const chatFor = (output: string, handle: string) => {
-  for (const line of output.split("\n")) {
-    if (!line.trim()) continue;
-    // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: parse untrusted imsg chat JSON
-    const row: unknown = JSON.parse(line);
-    if (typeof row !== "object" || row === null) continue;
-    if (!("identifier" in row) || row.identifier !== handle) continue;
-    if (!("service" in row) || row.service !== "iMessage") continue;
-    if (!("is_group" in row) || row.is_group !== false) continue;
-    if (!("id" in row) || !Number.isSafeInteger(row.id) || Number(row.id) <= 0) continue;
-    return Number(row.id);
-  }
-  throw new Error(`No direct iMessage Conversation for ${handle}`);
-};
 
 export const makeMessagesUi = (health: {
   readonly raise: (name: string, detail: string) => Effect.Effect<void>;
@@ -56,22 +42,15 @@ export const makeMessagesUi = (health: {
           forceKillAfter: "1 second",
         }),
       ).pipe(
-        Effect.mapError((error) => new Error(`Messages UI ${action}: ${error.message}`)),
+        Effect.mapError(
+          (error) => new Error(`Messages UI ${action}: ${error.message}`, { cause: error }),
+        ),
         Effect.timeoutOrElse({
           duration: "15 seconds",
           orElse: () => Effect.fail(new Error(`Messages UI ${action} timed out`)),
         }),
       );
-    const find = (handle: string) =>
-      capture(ChildProcess.make("imsg", ["chats", "--limit", "10000", "--json"])).pipe(
-        Effect.flatMap((output) =>
-          Effect.try({
-            try: () => chatFor(output, handle),
-            catch: (error) => new Error(String(error)),
-          }),
-        ),
-        Effect.mapError((error) => new Error(`Cannot find Conversation: ${String(error)}`)),
-      );
+    const find = chatLookup(capture);
     const alert = (action: string, error: Error) =>
       Effect.gen(function* () {
         failures++;
@@ -104,12 +83,38 @@ export const makeMessagesUi = (health: {
         Effect.tapError((error) => alert(action, error)),
       );
 
+    let queued = 0;
+    const locked = <A>(action: string, body: Effect.Effect<A, Error>) =>
+      Effect.gen(function* () {
+        const enqueued = yield* Clock.currentTimeMillis;
+        queued++;
+        let queueWaitMs = 0;
+        return yield* observe(
+          `imsg.gesture.${action}`,
+          lock
+            .withPermit(
+              Effect.gen(function* () {
+                queueWaitMs = (yield* Clock.currentTimeMillis) - enqueued;
+                return yield* body;
+              }),
+            )
+            .pipe(Effect.timeout("60 seconds")),
+          () => ({ queueWaitMs, queued }),
+        ).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              queued--;
+            }),
+          ),
+        );
+      });
     const gestures: Gestures = {
-      probe: () => lock.withPermit(act("ensure", Effect.void)),
+      probe: () => locked("probe", act("ensure", Effect.void)),
       typing: (handle, text, durationMillis) =>
         Effect.gen(function* () {
           const started = yield* Effect.clockWith((clock) => clock.currentTimeMillis);
-          return yield* lock.withPermit(
+          return yield* locked(
+            "typing",
             act(
               "typing",
               Effect.gen(function* () {
@@ -119,9 +124,7 @@ export const makeMessagesUi = (health: {
                 yield* run("clear", url(handle));
                 // Always clear the draft, including on an interrupted Effect.
                 yield* Effect.gen(function* () {
-                  for (const character of text) {
-                    yield* run("key", character);
-                  }
+                  yield* run("key", text);
                   const elapsed =
                     (yield* Effect.clockWith((clock) => clock.currentTimeMillis)) - started;
                   yield* Effect.sleep(Math.max(0, durationMillis - elapsed));
@@ -132,7 +135,8 @@ export const makeMessagesUi = (health: {
           );
         }),
       read: (handle) =>
-        lock.withPermit(
+        locked(
+          "read",
           act(
             "read",
             Effect.gen(function* () {
@@ -142,21 +146,24 @@ export const makeMessagesUi = (health: {
           ),
         ),
       react: (handle, tapback) =>
-        lock.withPermit(
+        locked(
+          "react",
           act(
             "react",
             Effect.gen(function* () {
               const chat = yield* find(handle);
               yield* capture(
-                ChildProcess.make("imsg", [
-                  "react",
-                  "--chat-id",
-                  String(chat),
-                  "--reaction",
-                  tapback,
-                  "--json",
-                ]),
-              ).pipe(Effect.mapError((error) => new Error(`Tapback failed: ${error.message}`)));
+                ChildProcess.make(
+                  "imsg",
+                  ["react", "--chat-id", String(chat), "--reaction", tapback, "--json"],
+                  { forceKillAfter: "1 second" },
+                ),
+              ).pipe(
+                Effect.timeout("15 seconds"),
+                Effect.mapError(
+                  (error) => new Error(`Tapback failed: ${error.message}`, { cause: error }),
+                ),
+              );
             }),
           ),
         ),

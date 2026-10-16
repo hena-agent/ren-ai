@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import type { PublicPersona } from "@ren-ai/onboarding";
-import copy from "./copy.json";
+import { useCopy, LocalePicker } from "./locale.tsx";
 
 export type BrowseView = "browse" | "liked" | "contact";
 
 export function Header({ children }: { children?: ReactNode }) {
+  const copy = useCopy();
   return (
     <header className="site-header">
       <a className="skip-link" href="#discovery-content">
@@ -14,6 +15,7 @@ export function Header({ children }: { children?: ReactNode }) {
         {copy.brand}
       </a>
       {children}
+      <LocalePicker />
     </header>
   );
 }
@@ -27,6 +29,7 @@ export function LikedPanel({
   onOpen: (persona: PublicPersona) => void;
   disabled: boolean;
 }) {
+  const copy = useCopy();
   return (
     <aside className="discovery-sidebar" aria-labelledby="liked-title">
       <div className="sidebar-heading">
@@ -75,6 +78,7 @@ export function Navigation({
   disabled: boolean;
   onView: (view: BrowseView) => void;
 }) {
+  const copy = useCopy();
   return (
     <nav className="app-navigation" aria-label={copy.navigation}>
       <button

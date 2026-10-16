@@ -6,5 +6,13 @@ export {
   SelectContacts,
   StartContact,
   ContactSelection,
+  ConversationLanguages,
 } from "./contacts.ts";
-export { PublicPersona, DiscoveryRequest, DiscoveryAnswer, discoveryNotice } from "./discovery.ts";
+export {
+  PublicPersona,
+  DiscoveryRequest,
+  DiscoveryAnswer,
+  discoveryNotice,
+  discoveryNotices,
+  DiscoveryLocale,
+} from "./discovery.ts";

@@ -1,7 +1,7 @@
 # Discovery
 
 `renai.im` serves this Vite browser app through Cloudflare static assets.
-Both public profiles and waiting registration use `api-app.renai.im`:
+Both public profiles and waiting registration use `api.renai.im`:
 
 ```text
 Discovery → api-app /discovery/personas → Admin public Catalog → D1
@@ -28,7 +28,7 @@ frontend port. Vite development and preview use `strictPort: true`.
 ## Deployment
 
 Deploy through a PR merged into `main`, after the quality gates pass. CI builds
-with `VITE_DISCOVERY_API_URL=https://api-app.renai.im` and the public
+with `VITE_DISCOVERY_API_URL=https://api.renai.im` and the public
 `TURNSTILE_SITE_KEY` repository variable, then deploys the static assets and checks
 `https://renai.im/`. api-app's deployment checks `/discovery/personas` separately.
 Do not deploy manually or also connect Workers Builds.

@@ -44,7 +44,8 @@ export const fakeMessages = (events: string[] = []) => {
           dateRead: null,
         };
       }),
-    after: (rowID) => Effect.sync(() => rows.filter((row) => row.id > rowID)),
+    after: (rowID, limit) =>
+      Effect.sync(() => rows.filter((row) => row.id > rowID).slice(0, limit)),
     recent: (handle, since) =>
       Effect.sync(() => rows.filter((row) => row.handle === handle && row.createdAt >= since)),
     sendStatus: (guid) => Effect.sync(() => sendStatuses.get(guid) ?? "unknown"),

@@ -46,13 +46,16 @@ test("alerts are durable, deduplicated and never forward private detail", async 
 
 test("health checks are rate limited and keep native facts separate from credentials", async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-    Response.json({
-      service: "api-msg",
-      revision: "development",
-      status: "ready",
-      diskNearlyFull: true,
-      screenLocked: true,
-    }),
+    Response.json(
+      {
+        service: "api-msg",
+        revision: "development",
+        status: "degraded",
+        diskNearlyFull: true,
+        screenLocked: true,
+      },
+      { status: 503 },
+    ),
   );
   await run(
     Effect.gen(function* () {
@@ -64,6 +67,18 @@ test("health checks are rate limited and keep native facts separate from credent
         { name: "disk-nearly-full" },
         { name: "screen-locked" },
       ]);
+      const docker = yield* createExecutionHealth(configuration, undefined, fetcher);
+      fetcher.mockResolvedValue(
+        Response.json({
+          service: "api-msg",
+          revision: "development",
+          status: "ready",
+          diskNearlyFull: false,
+          screenLocked: null,
+        }),
+      );
+      yield* docker.tick;
+      expect(yield* sql`SELECT name FROM application_alert`).toEqual([{ name: "screen-locked" }]);
       const restarted = yield* createExecutionHealth(configuration, undefined, fetcher);
       fetcher.mockResolvedValue(
         Response.json({
@@ -78,17 +93,21 @@ test("health checks are rate limited and keep native facts separate from credent
       expect(yield* sql`SELECT name FROM application_alert`).toEqual([]);
     }),
   );
-  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher).toHaveBeenCalledTimes(3);
   expect(fetcher.mock.calls[0]![1]?.headers).toEqual({ Authorization: "Bearer management-secret" });
 });
 
-test.each([502, 503])(
+test.each([502, 503, 200])(
   "health HTTP %s and notification failures record safe diagnostics before recovery",
   async (status) => {
     const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null, { status }))
+      .mockResolvedValueOnce(
+        status === 200
+          ? Response.json({ service: "api-msg", revision: "development", status: "degraded" })
+          : new Response(null, { status }),
+      )
       .mockResolvedValueOnce(new Response(null, { status: 401 }))
       .mockRejectedValueOnce("private failure input");
     try {
