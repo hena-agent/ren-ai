@@ -290,6 +290,29 @@ the checked production JPEG returned HTTP 200 with `CF-Cache-Status: DYNAMIC` an
 no `Cache-Control`. Configure a Cloudflare cache rule for this image domain if
 edge caching is desired for existing objects; new-upload metadata is not retroactive.
 
+### Unreadable editing records
+
+Startup validates persisted private drafts and image batches before rebuilding the
+queue. If one cannot be restored, that persona's drafts and job rows are moved
+verbatim into a uniquely named `recovery:` archive in the same storage transaction.
+Other personas continue normally. R2 originals, D1 saves and paid-submission
+receipts are retained; archived work is never automatically generated again.
+The old image URL format is not accepted or rewritten.
+
+The authenticated **편집 기록 복구 파일** link (`GET /editing-recovery`) downloads
+the archived records as private JSON with `Cache-Control: no-store`. It contains
+private editing text and per-image prompts. Operators can retrieve unsaved text
+and existing image keys from it while continuing from the current Catalog save.
+Archives are not automatically expired or overwritten on subsequent recoveries.
+Startup diagnostics use `editing_restore_failed`, a generated request ID and
+persona ID, excluding record contents. A failed archive write fails initialization
+instead of discarding data.
+
+`GET /health` checks both D1 and the actual editor Durable Object initialization;
+an unavailable editor is reported separately and returns HTTP 503 even when D1
+is ready. Deployment checks retry the exact revision and editor readiness before
+declaring Admin ready.
+
 Structured JSON goes to Workers stdout/stderr. Search Workers Logs or
 `bunx wrangler tail` using the displayed request ID / `X-Request-ID`.
 Diagnostics retain stages, causes/codes and durations, excluding Persona text,

@@ -1,7 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { cloudflareAdmin } from "./cloudflare-admin.ts";
 import { memoryStorage } from "../test/memory-storage.ts";
-import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
+import { cloudflareFixture, databasePersona, adminBindings } from "../test/cloudflare-fixture.ts";
 import { character, initialDocuments, portraitImage, request, tokenOf } from "../test/fixtures.ts";
 import type { AdminEnv } from "./cloudflare-admin.ts";
 import { captureWorkerLogs } from "../test/worker-logs.ts";
@@ -121,11 +121,7 @@ test("alarms execute one photo, re-arm remaining work and restore safe failed di
   const { storage, clearAlarm } = memoryStorage();
   const { stdout, stderr } = captureWorkerLogs();
   const env: AdminEnv = {
-    DB: db,
-    IMAGES: bucket,
-    ASSETS: { fetch: async () => new Response("asset") },
-    ADMIN_PASSWORD: "test-password",
-    TOKEN_CATALOG: "catalog",
+    ...adminBindings(db, bucket),
     GEMINI_API_KEY: "",
     GEMINI_API_URL: "https://provider.test",
     ADMIN_TEXT_MODEL: "text-fixture",

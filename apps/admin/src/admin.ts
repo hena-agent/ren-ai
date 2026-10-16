@@ -11,7 +11,7 @@ import {
 } from "./authoring.ts";
 import { restoreDraft, draftTokens, previewOf, documentsOf, captureDocuments } from "./draft.ts";
 import type { Draft } from "./draft.ts";
-import { renderPage } from "./page.tsx";
+import { renderPage as renderAdminPage } from "./page.tsx";
 import type { PageContent } from "./page.tsx";
 import copy from "./copy.json";
 import { generateTextDraft } from "./generation-workflows.ts";
@@ -68,6 +68,8 @@ export function createAdmin(
   }: AdminOptions = {},
 ) {
   if (!password.trim()) throw new Error("ADMIN_PASSWORD is required");
+  const renderPage = (content: Parameters<typeof renderAdminPage>[0]) =>
+    renderAdminPage({ ...content, recoveryAvailable: Boolean(persistence?.recovery) });
   const expected = createHash("sha256")
     .update(`Basic ${Buffer.from(`admin:${password}`).toString("base64")}`)
     .digest();
@@ -79,6 +81,7 @@ export function createAdmin(
     script,
     localImages,
     (content) => html(renderPage(content)),
+    persistence?.recovery,
   );
   const busy = new Set<string>();
   const subDrafts = new Map<string, Draft>(persistence?.saved?.drafts);
