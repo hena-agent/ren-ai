@@ -63,6 +63,10 @@ export const intake = (
     const save = (row: Bookmark) =>
       sql`INSERT INTO bookmark (id, row_id, date) VALUES (1, ${row.rowID}, ${row.date})
         ON CONFLICT(id) DO UPDATE SET row_id = excluded.row_id, date = excluded.date`;
+    // Replay can acknowledge a message while live admission is awaiting the same prompt ID.
+    const markSeen = (sessionID: string, guid: string) =>
+      sql`INSERT INTO intake_seen (session_id, guid) VALUES (${sessionID}, ${guid})
+        ON CONFLICT(session_id, guid) DO NOTHING`;
     let current = yield* bookmark();
     const history = yield* messages.after(0);
     if (!current) {
@@ -88,7 +92,7 @@ export const intake = (
           promptID(conversation.sessionID, row.guid),
           sentByYou(row.text, row.createdAt, timeZone(conversation.personaID)),
         );
-        yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${conversation.sessionID}, ${row.guid})`;
+        yield* markSeen(conversation.sessionID, row.guid);
         signal(conversation);
       });
     const target = (row: IncomingMessage, guid: string) =>
@@ -188,8 +192,7 @@ export const intake = (
             previous = row.createdAt;
             latestReply = Math.max(latestReply, row.createdAt);
           }
-          yield* sql`INSERT OR IGNORE INTO intake_seen (session_id, guid)
-            VALUES (${conversation.sessionID}, ${row.guid})`;
+          yield* markSeen(conversation.sessionID, row.guid);
         }
         if ((yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID) return;
         if (previous !== null) {
@@ -239,7 +242,7 @@ export const intake = (
             rendered.files,
           );
           yield* Effect.gen(function* () {
-            yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${conversation.sessionID}, ${row.guid})`;
+            yield* markSeen(conversation.sessionID, row.guid);
             yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt} WHERE id = ${conversation.id}`;
             yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
