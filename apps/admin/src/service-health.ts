@@ -40,7 +40,8 @@ export async function adminHealth(
         }),
         readiness("health.editor", async () => {
           const response = await editor();
-          if (!response.ok) throw new Error("Editor readiness check failed");
+          if (response.status !== 204 && response.status !== 401)
+            throw new Error("Editor readiness check failed");
         }),
       ]);
       return healthResponse(

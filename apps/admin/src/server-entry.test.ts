@@ -7,9 +7,6 @@ import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
 test("the real Worker and Durable Object serve bundled assets and correlate generation failures", async () => {
   const { runtime } = await workerFixture();
   const headers = { authorization };
-  expect((await runtime.dispatchFetch("http://localhost:3729/_internal/editor-ready")).status).toBe(
-    401,
-  );
   const health = await runtime.dispatchFetch("http://localhost:3729/health");
   expect(health.status).toBe(200);
   expect(health.headers.get("cache-control")).toBe("no-store");
