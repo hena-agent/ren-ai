@@ -8,6 +8,13 @@
       "when": 1791711821108,
       "tag": "0000_chilly_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792130000000,
+      "tag": "0001_persona_versions",
+      "breakpoints": true
     }
   ]
 }

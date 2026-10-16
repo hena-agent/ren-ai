@@ -9,6 +9,7 @@ import { stringify } from "yaml";
 import { withPublicProfile } from "./profile.ts";
 
 const persona = decodePersona({
+  version: 1,
   id: "gallery",
   name: "인물",
   bio: "공개 소개",

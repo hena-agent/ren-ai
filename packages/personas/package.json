@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./profile": "./src/profile.ts",
+    "./profile-sections": "./src/profile-sections.ts",
     "./catalog": "./src/catalog.ts",
     "./markdown": "./src/markdown.tsx"
   },

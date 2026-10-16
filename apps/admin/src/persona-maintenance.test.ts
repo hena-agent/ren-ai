@@ -32,22 +32,32 @@ async function prepareConversion(convert: typeof generator.convert) {
   const result = await fixture({ ...generator, convert });
   await result.store.create(original);
   const page = await (await result.admin(request("/personas/legacy"))).text();
-  return { ...result, input: { ...fields, draft: tokenOf(page), intent: "convert" } };
+  return { ...result, input: { ...fields, draft: tokenOf(page), intent: "improve" } };
 }
 
-const convertPage = (
+const convertPage = async (
   admin: Awaited<ReturnType<typeof fixture>>["admin"],
   page: string,
   source: string,
-) =>
-  admin(
+) => {
+  const response = await admin(
     request("/personas/legacy", {
       ...fields,
       description: source,
       draft: tokenOf(page),
-      intent: "convert",
+      intent: "improve",
     }),
   );
+  if (response.status !== 200) return response;
+  return admin(
+    request("/personas/legacy", {
+      ...fields,
+      description: source,
+      draft: tokenOf(await response.text()),
+      intent: "apply-improvement",
+    }),
+  );
+};
 
 test("catalog inspection isolates malformed files, remains private and performs no AI calls", async () => {
   const convert = vi.fn<typeof generator.convert>();
@@ -117,12 +127,21 @@ test("conversion can be saved immediately with existing photos and public state,
   );
   expect(inspected.status).toBe(200);
   expect(convert).not.toHaveBeenCalled();
+  const proposal = await admin(
+    request("/personas/legacy", { ...fields, draft: tokenOf(initial), intent: "improve" }),
+  );
+  const pending = await proposal.text();
+  expect(preview(pending).description).toBe(original.description);
+  expect(pending).toContain(conversion.additions[0]);
   const converted = await admin(
-    request("/personas/legacy", { ...fields, draft: tokenOf(initial), intent: "convert" }),
+    request("/personas/legacy", {
+      ...fields,
+      draft: tokenOf(pending),
+      intent: "apply-improvement",
+    }),
   );
   expect(converted.status).toBe(200);
   const page = await converted.text();
-  expect(page).toContain(conversion.additions[0]);
   expect(page).not.toContain("변환 전 설명");
   const draft = preview(page);
   expect(draft.description).toBe(description);
@@ -133,7 +152,7 @@ test("conversion can be saved immediately with existing photos and public state,
   expect(await store.get("legacy")).toEqual(original);
   const refreshed = await (await admin(request("/personas/legacy"))).text();
   expect(preview(refreshed).description).toBe(description);
-  expect(refreshed).toContain(conversion.additions[0]);
+  expect(refreshed).not.toContain("개선 결과 비교");
   const directSave = await admin(
     request("/personas/legacy", { ...fields, description, draft: tokenOf(page), intent: "save" }),
   );
@@ -162,25 +181,19 @@ test("conversion can be saved immediately with existing photos and public state,
   expect(JSON.stringify(await store.publicList())).not.toContain("additions");
 });
 
-test("already structured descriptions are normalized locally without inventing supplements or requiring paid image work", async () => {
-  const convert = vi.fn<typeof generator.convert>();
+test("already structured descriptions can be improved without requiring paid image work", async () => {
+  const convert = vi.fn<typeof generator.convert>().mockResolvedValue(conversion);
   const { admin, store } = await fixture({ ...generator, convert });
   const record = { ...original, description };
   await store.create(record);
   const page = await (await admin(request("/personas/legacy"))).text();
-  const response = await admin(
-    request("/personas/legacy", {
-      ...fields,
-      description,
-      draft: tokenOf(page),
-      intent: "convert",
-    }),
-  );
+  expect(page).toContain('value="improve"');
+  const response = await convertPage(admin, page, description);
   const normalized = await response.text();
   expect(response.status).toBe(200);
   expect(normalized).not.toContain("conversion-report");
   expect(normalized).not.toContain("변환 전 설명");
-  expect(convert).not.toHaveBeenCalled();
+  expect(convert).toHaveBeenCalledTimes(1);
   expect(
     (
       await admin(
@@ -192,7 +205,8 @@ test("already structured descriptions are normalized locally without inventing s
 });
 
 test("conversion retains public edits submitted in the same form without treating version-only changes as new settings", async () => {
-  const { admin, store } = await fixture();
+  const convert = vi.fn<typeof generator.convert>().mockResolvedValue(conversion);
+  const { admin, store } = await fixture({ ...generator, convert });
   await store.create({ ...original, description });
   const page = await (await admin(request("/personas/legacy"))).text();
   const result = await convertPage(admin, page, description);
@@ -226,7 +240,8 @@ test("bad conversion output, changed identity and stale source preserve the orig
   const { admin, store, input } = await prepareConversion(convert);
   for (let index = 0; index < 2; index++)
     expect((await admin(request("/personas/legacy", input))).status).toBe(503);
-  expect((await admin(request("/personas/legacy", { ...input, name: "edited" }))).status).toBe(400);
+  convert.mockResolvedValueOnce(conversion);
+  expect((await admin(request("/personas/legacy", { ...input, name: "edited" }))).status).toBe(503);
   expect(await store.get("legacy")).toEqual(original);
   await store.update({
     ...original,
@@ -258,18 +273,19 @@ test("converted sheet identity is validated even when an adapter returns the exp
       ...fields,
       published: "",
       draft: tokenOf(next),
-      intent: "convert",
+      intent: "improve",
     }),
   );
   expect(response.status).toBe(200);
   const converted = await response.text();
+  convert.mockResolvedValueOnce(conversion);
   const repeated = await admin(
     request("/personas/legacy", {
       ...fields,
       description,
       published: "",
       draft: tokenOf(converted),
-      intent: "convert",
+      intent: "improve",
     }),
   );
   expect(repeated.status).toBe(200);
@@ -294,9 +310,17 @@ test("conversion uses the real structured-generation and review boundary with ex
     .mockResolvedValueOnce(characterResponse({ issues: [], additions: conversion.additions }));
   const model = createProfileGenerator({ key: "key", fetcher });
   expect(
-    await model.convert({ name: sheet.name, description: original.description!, gender: "female" }),
+    await model.convert(
+      { name: sheet.name, description: original.description!, gender: "female" },
+      "주말 생활을 보강해 줘.",
+    ),
   ).toEqual(conversion);
   expect(await new Request(...fetcher.mock.calls[0]!).text()).toContain("SAVED NAME: 하린");
+  for (const call of fetcher.mock.calls) {
+    const body = await new Request(...call).text();
+    expect(body).toContain("주말 생활을 보강해 줘.");
+    expect(body).toContain("문답: 완벽한 일요일은?");
+  }
   const wrong = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(characterResponse({ ...sheet, name: "changed" }, true));

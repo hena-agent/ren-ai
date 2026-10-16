@@ -3,6 +3,7 @@ import { SqlClient } from "effect/unstable/sql";
 import type { CloudflareConfiguration } from "./cloudflare-config.ts";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
+import { parseHealth } from "@ren-ai/transport/health";
 
 const Facts = Schema.Struct({ diskNearlyFull: Schema.Boolean, screenLocked: Schema.Boolean });
 
@@ -69,12 +70,21 @@ export const createExecutionHealth = (
           headers: { Authorization: `Bearer ${configuration.managementToken}` },
           signal: AbortSignal.timeout(10_000),
         });
-        if (!response.ok)
+        if (response.status !== 200 && response.status !== 503)
           throw Object.assign(new Error("Executor health is unavailable"), {
             status: response.status,
             code: "EXECUTOR_HEALTH_HTTP",
           });
-        return Schema.decodeUnknownSync(Facts)(await response.json());
+        try {
+          const body = await response.json();
+          parseHealth(body, "api-msg");
+          return Schema.decodeUnknownSync(Facts)(body);
+        } catch (cause) {
+          throw Object.assign(new Error("Invalid executor health response", { cause }), {
+            status: response.status,
+            code: "EXECUTOR_HEALTH_INVALID",
+          });
+        }
       }).pipe(
         Effect.flatMap((facts) =>
           Effect.all([

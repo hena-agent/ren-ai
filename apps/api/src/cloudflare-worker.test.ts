@@ -7,6 +7,7 @@ import { discoveryNotice } from "@ren-ai/onboarding";
 import { expect, test } from "vitest";
 import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
 import { readStateSnapshot } from "./state-snapshot.ts";
+import { readyApplicationHealth } from "../test/execution-bindings.ts";
 
 let bundledWorker: Promise<string> | undefined;
 const workerSource = () => {
@@ -74,7 +75,14 @@ test("public reads work without private secrets while management and registratio
   const persistence = await mkdtemp(join(tmpdir(), "api-app-public-"));
   try {
     const runtime = await openWorker(persistence, false, false);
-    expect((await send(runtime, "/health")).status).toBe(200);
+    const health = await send(runtime, "/health");
+    expect(health.status).toBe(503);
+    expect(await health.json()).toMatchObject({
+      service: "api-app",
+      status: "degraded",
+      database: "ready",
+      executor: { status: "unconfigured" },
+    });
     const profiles = await send(runtime, "/discovery/personas");
     expect(profiles.status).toBe(200);
     expect(await profiles.json()).toMatchObject([{ id: "sora" }]);
@@ -108,11 +116,7 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
   try {
     let runtime = await openWorker(persistence, true);
     const health = await send(runtime, "/health");
-    expect(await health.json()).toEqual({
-      database: "ready",
-      storage: "durable-object-sqlite",
-      bootstrapOnly: true,
-    });
+    expect(await health.json()).toEqual(readyApplicationHealth);
     expect((await send(runtime, "/discovery/personas")).status).toBe(200);
     expect(
       (

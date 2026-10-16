@@ -1,5 +1,15 @@
 import type { CloudflareBindings } from "../src/cloudflare-config.ts";
 
+export const readyApplicationHealth = {
+  service: "api-app",
+  revision: "development",
+  status: "ready",
+  database: "ready",
+  storage: "durable-object-sqlite",
+  bootstrapOnly: true,
+  executor: { service: "api-msg", revision: "development", status: "ready" },
+};
+
 export const executionBindings: CloudflareBindings = {
   PERSONA_CATALOG_URL: "https://admin.example",
   TOKEN_CATALOG: "catalog-secret",

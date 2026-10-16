@@ -18,9 +18,12 @@ export async function wakeAlarm(storage: DurableObjectStorage, due: number) {
 export function catalogDelivery(storage: DurableObjectStorage, notify: () => Promise<void>) {
   const key = "catalog-notification";
   let tail = Promise.resolve();
-  const serial = (run: () => Promise<void>) => {
+  const serial = <T>(run: () => Promise<T>) => {
     const next = tail.then(run);
-    tail = next.catch(() => {});
+    tail = next.then(
+      () => undefined,
+      () => undefined,
+    );
     return next;
   };
   const deliver = async () => {
@@ -51,21 +54,23 @@ export function catalogDelivery(storage: DurableObjectStorage, notify: () => Pro
   return {
     pending: async () => Boolean(await storage.get<PendingCatalog>(key)),
     flush: () => serial(deliver),
-    save: (run: () => Promise<void>) =>
+    save: <T>(run: () => Promise<T>) =>
       serial(async () => {
         const previous = await storage.get<PendingCatalog>(key);
         // Intent precedes the D1 commit so a restart cannot lose a committed change's notification.
         const pending: PendingCatalog = { requestId: requestId(), attempts: 0, due: Date.now() };
         await storage.put(key, pending);
         await wakeAlarm(storage, pending.due + 1);
+        let result: T;
         try {
-          await run();
+          result = await run();
         } catch (cause) {
           if (previous) await storage.put(key, previous);
           else await storage.delete(key);
           throw cause;
         }
         await deliver();
+        return result;
       }),
   };
 }

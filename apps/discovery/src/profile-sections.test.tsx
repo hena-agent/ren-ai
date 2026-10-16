@@ -14,6 +14,23 @@ const fields = {
   onClose: vi.fn<() => void>(),
   disabled: false,
 };
+test("dating information renders as typed sections and empty optional sections stay hidden", () => {
+  const view = render(
+    <ProfileDetails
+      {...fields}
+      persona={{
+        ...persona,
+        publicProfile:
+          "안녕하세요.\n\n### 기본 정보\n\n- 직업: 도예가\n\n### 관심사\n\n- 재즈\n- 산책\n\n### 문답: 완벽한 일요일은?\n\n책방에 가요.\n\n### 비어 있는 항목",
+      }}
+    />,
+  );
+  expect(view.container.querySelector(".profile-facts")?.textContent).toContain("도예가");
+  expect(view.container.querySelectorAll(".profile-interests li")).toHaveLength(2);
+  expect(screen.getByRole("heading", { name: "완벽한 일요일은?" })).toBeTruthy();
+  expect(view.container.querySelector(".profile-answer")?.textContent).toContain("책방에 가요.");
+  expect(screen.queryByRole("heading", { name: "비어 있는 항목" })).toBeNull();
+});
 test("public Markdown supports persona-chosen headings and omits undisclosed interests", () => {
   render(
     <ProfileDetails
@@ -43,4 +60,22 @@ test("old API introductions are still displayed while raw HTML and unsafe links 
   );
   expect(view.container.querySelector("script")).toBeNull();
   expect(view.container.querySelector("a")?.getAttribute("href")).not.toContain("javascript:");
+});
+test("reference links keep working across public section boundaries", () => {
+  render(
+    <ProfileDetails
+      {...fields}
+      persona={{
+        ...persona,
+        publicProfile:
+          "[소개 링크][place]\n\n### 좋아하는 곳\n\n[책방][place]\n\n[place]: https://example.org/bookshop",
+      }}
+    />,
+  );
+  expect(screen.getByRole("link", { name: "소개 링크" }).getAttribute("href")).toBe(
+    "https://example.org/bookshop",
+  );
+  expect(screen.getByRole("link", { name: "책방" }).getAttribute("href")).toBe(
+    "https://example.org/bookshop",
+  );
 });

@@ -34,6 +34,33 @@ const withFiles = async (
   }
 };
 
+test("session snapshots record one applied version, reject stale writers and preserve live documents on a rollback release", () =>
+  withFiles(async (files) => {
+    const v1 = renderSnapshot(
+      {
+        ...snapshot.persona,
+        version: 1,
+        initial: { state: "current State", memory: "current Memory" },
+      },
+      snapshot.rules,
+    );
+    await files.write("ses_versions", v1);
+    const v2 = renderSnapshot(
+      { ...v1.persona, version: 2, prompt: "Latest definition." },
+      snapshot.rules,
+    );
+    await files.write("ses_versions", v2);
+    expect((await files.read("ses_versions")).persona.version).toBe(2);
+    await expect(files.write("ses_versions", v1)).rejects.toThrow("cannot go backwards");
+    const rollback = renderSnapshot({ ...v1.persona, version: 3 }, snapshot.rules);
+    await files.write("ses_versions", rollback);
+    const current = await files.read("ses_versions");
+    expect(current.persona).toEqual(rollback.persona);
+    expect(current.agent).toBe(v1.agent);
+    expect(current.documents).toEqual(v1.documents);
+    expect(current.agent).not.toContain("version:");
+  }));
+
 test("new folder writes publish only complete snapshots and clean failed staging", () =>
   withFiles(async (files, directory) => {
     const write = fs.writeFile;
@@ -72,6 +99,18 @@ test("failed live writes preserve every old snapshot file and unrelated files", 
     expect(await fs.readFile(join(target, ".opencode", "agents", "persona1.md"), "utf8")).toBe(
       snapshot.agent,
     );
+  }));
+
+test("existing session folders reject a non-directory OpenCode path before staging any changes", () =>
+  withFiles(async (files, directory) => {
+    const target = await files.write("ses_not_directory", snapshot);
+    await fs.rm(join(target, ".opencode", "agents"), { recursive: true });
+    await fs.mkdir(join(directory, "outside-agent-dir"));
+    await fs.symlink(join(directory, "outside-agent-dir"), join(target, ".opencode", "agents"));
+    await expect(
+      files.write("ses_not_directory", { ...snapshot, agent: "must not publish" }),
+    ).rejects.toThrow("Session folder must be a real directory");
+    expect(await fs.readFile(join(target, "persona.json"), "utf8")).toContain("Original.");
   }));
 
 test("preflight read failures never publish part of an update and canonical paths reject unsafe IDs", () =>

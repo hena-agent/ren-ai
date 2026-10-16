@@ -1,16 +1,13 @@
 import { decodePersona, PersonaError, inspectPersona } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
-import { authorPersona, characterOf, emptyPersona } from "./authoring.ts";
+import { authorPersona, characterOf } from "./authoring.ts";
 import type { ProfileGenerator } from "./generation.ts";
-import { GenerationError, operation } from "./logging.ts";
+import { operation } from "./logging.ts";
 import type { Draft } from "./draft.ts";
-import { previewOf, documentsOf } from "./draft.ts";
+import { documentsOf } from "./draft.ts";
 import { serializePersona } from "@ren-ai/personas";
-import {
-  parseCharacterDescription,
-  versionedPersona,
-  renderCharacterSheet,
-} from "@ren-ai/personas";
+import { versionedPersona } from "@ren-ai/personas";
+import { improvePersona, resolveImprovement } from "./persona-improvement.ts";
 import {
   splitPersonaMarkdown,
   withPublicProfile,
@@ -53,56 +50,18 @@ async function characterDraft(seed: string, previous: PersonaRecord, generator: 
   return { persona: decodePersona(versionedPersona(draft)), initial: character.initial };
 }
 
-async function conversionDraft(persona: PersonaRecord, draft: Draft, generator: ProfileGenerator) {
-  let description: string;
-  let additions: readonly string[];
-  try {
-    const sheet = parseCharacterDescription(persona.description!);
-    if (sheet.name !== persona.name || (persona.gender && sheet.gender !== persona.gender))
-      throw new GenerationError("Description identity does not match persona", {
-        code: "description_identity_mismatch",
-      });
-    const profile = requirePublicProfile(persona.description!).publicMarkdown;
-    description = withPublicProfile(renderCharacterSheet(sheet), profile);
-    additions = [];
-  } catch {
-    const converted = await operation("character.convert", {}, async () => {
-      const result = await generator.convert(characterOf(persona));
-      const sheet = parseCharacterDescription(result.description);
-      requirePublicProfile(result.description);
-      if (
-        result.name !== persona.name ||
-        sheet.name !== persona.name ||
-        (persona.gender && sheet.gender !== persona.gender)
-      )
-        throw new GenerationError("Conversion changed persona identity", {
-          code: "conversion_identity_mismatch",
-        });
-      return result;
-    });
-    description = converted.description;
-    additions = converted.additions;
-  }
-  const form = new FormData();
-  form.set("name", persona.name);
-  form.set("description", description);
-  if (persona.published) form.set("published", "on");
-  const converted = versionedPersona(authorPersona(form, persona));
-  return {
-    ...draft,
-    preview: serializePersona(converted),
-    conversion:
-      persona.description === previewOf(draft, emptyPersona).description && draft.conversion
-        ? draft.conversion
-        : { source: persona.description!, additions },
-    imageEditing: true,
-  };
-}
-
 export async function generateTextDraft(
   persona: ReturnType<typeof authorPersona>,
   draft: Draft,
-  intent: "character" | "introduction" | "profile" | "convert" | "state" | "memory",
+  intent:
+    | "character"
+    | "introduction"
+    | "profile"
+    | "improve"
+    | "apply-improvement"
+    | "discard-improvement"
+    | "state"
+    | "memory",
   generator: ProfileGenerator,
 ) {
   if (intent === "state" || intent === "memory") {
@@ -123,7 +82,9 @@ export async function generateTextDraft(
     };
   }
   if (intent === "introduction") return introductionDraft(persona, draft, generator);
-  if (intent === "convert") return conversionDraft(persona, draft, generator);
+  if (intent === "improve") return improvePersona(persona, draft, generator);
+  if (intent === "apply-improvement" || intent === "discard-improvement")
+    return resolveImprovement(persona, draft, intent === "apply-improvement");
   if (intent === "profile") {
     const publicMarkdown = await operation("profile.generate", {}, () =>
       generator.profile(characterOf(persona)),

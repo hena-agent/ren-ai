@@ -28,3 +28,5 @@ export {
   validateInitialDocuments,
   validateInitialMemory,
 } from "./initial.ts";
+export { PersonaVersion, nextPersonaVersion, requireVersion } from "./versions.ts";
+export type { VersionSummary, SaveSnapshot } from "./versions.ts";

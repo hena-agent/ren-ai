@@ -11,6 +11,7 @@ vi.mock("node:crypto", async () => ({
 }));
 
 const persona = decodePersona({
+  version: 1,
   id: "harin",
   name: "하린",
   bio: "공개 소개",

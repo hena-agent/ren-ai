@@ -3,10 +3,19 @@
 Admin runs as a Worker. Drizzle owns the D1 schema; a private R2 bucket stores
 immutable generated images. One SQLite-backed Durable Object (`PersonaAdmin`,
 named `global`) owns private drafts, the image FIFO and submission deduplication.
+Persona documents are immutable numbered versions in D1; each Catalog read uses
+the current version pointer. Existing persona rows migrate their current Markdown
+to v1. Version restoration creates a new current version and leaves photos,
+initial documents and conversation state/memory unchanged.
 New Catalog schemas start empty. Existing saved Markdown and images can be
 explicitly imported into local D1/R2 with the one-off command below.
 
 ## Local development
+
+`GET /health` reports service `admin`, the full source revision embedded in the
+Worker, and database readiness. HTTP 200 means ready; 503 means degraded.
+Local source builds use revision `development`. The response is uncached and
+contains no credentials or persona data. CI verifies the service and revision.
 
 Copy `.env.example` to `.env` and set local credentials. Bun loads process settings
 and Wrangler loads Worker bindings from that same file. `PORT` defaults to 3729;
