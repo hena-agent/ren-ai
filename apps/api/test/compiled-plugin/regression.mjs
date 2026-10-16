@@ -39,7 +39,7 @@ const artifact = `${name}-artifact`;
 const containers = [];
 let started = false;
 /** @param {string[]} args */
-const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", timeout: 60_000 });
+const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", timeout: 180_000 });
 const auth = `Authorization: Basic ${Buffer.from("opencode:isolated-regression-password").toString("base64")}`;
 /** @param {string} path @param {object | undefined} body @param {number} port */
 function request(path, body, port = 4096) {
