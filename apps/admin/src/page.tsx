@@ -346,6 +346,7 @@ export function renderPage({
   showIdea,
   contactView,
   versionView,
+  recoveryAvailable,
 }: PageContent & {
   error?: string;
   saved?: boolean;
@@ -353,6 +354,7 @@ export function renderPage({
   inspections?: readonly InspectionRow[];
   contactView?: ContactView;
   versionView?: VersionView;
+  recoveryAvailable?: boolean;
 }) {
   return (
     "<!doctype html>" +
@@ -381,6 +383,7 @@ export function renderPage({
                 + {copy.new}
               </a>
               <a href="/inspection">전체 검사</a>
+              {recoveryAvailable && <a href="/editing-recovery">편집 기록 복구 파일</a>}
               <a
                 href="/waitlist"
                 aria-current={contactView?.tab === "waitlist" ? "page" : undefined}

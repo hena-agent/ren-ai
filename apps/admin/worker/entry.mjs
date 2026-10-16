@@ -13,6 +13,10 @@ export class PersonaAdmin extends DurableObject {
   }
   /** @override @param {Request} request */
   async fetch(request) {
+    if (new URL(request.url).pathname === "/health") {
+      await this.ready;
+      return new Response(null, { status: 204 });
+    }
     return (await this.ready).fetch(request);
   }
   /** @override */
@@ -25,16 +29,27 @@ export class PersonaAdmin extends DurableObject {
   }
 }
 
+/** @param {import('../src/cloudflare-admin.ts').AdminEnv & {ADMIN: DurableObjectNamespace}} env */
+function editor(env) {
+  const namespace = env.ADMIN_JURISDICTION === "local" ? env.ADMIN : env.ADMIN.jurisdiction("us");
+  return namespace.getByName("global");
+}
+
 export default {
   /** @param {Request} request @param {import('../src/cloudflare-admin.ts').AdminEnv & {ADMIN: DurableObjectNamespace}} env */
   fetch(request, env) {
     const path = new URL(request.url).pathname;
-    if (path === "/health") return adminRequest(request, () => adminHealth(request, env));
+    if (path === "/health")
+      return adminRequest(request, () =>
+        adminHealth(request, env, () =>
+          editor(env).fetch(
+            new Request("https://admin.internal/health", { signal: AbortSignal.timeout(4000) }),
+          ),
+        ),
+      );
     if (path === "/api/catalog" || path === "/api/personas") return catalogHandler(request, env);
     return adminRequest(request, () => {
-      const namespace =
-        env.ADMIN_JURISDICTION === "local" ? env.ADMIN : env.ADMIN.jurisdiction("us");
-      return namespace.getByName("global").fetch(request);
+      return editor(env).fetch(request);
     });
   },
 };

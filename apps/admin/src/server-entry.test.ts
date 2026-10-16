@@ -1,6 +1,8 @@
 import { expect, test } from "vitest";
 import { workerFixture } from "../test/worker-fixture.ts";
 import { authorization, tokenOf } from "../test/fixtures.ts";
+import { readFile } from "node:fs/promises";
+import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
 
 test("the real Worker and Durable Object serve bundled assets and correlate generation failures", async () => {
   const { runtime } = await workerFixture();
@@ -13,6 +15,7 @@ test("the real Worker and Durable Object serve bundled assets and correlate gene
     revision: process.env["GITHUB_SHA"] ?? "development",
     status: "ready",
     database: "ready",
+    editor: "ready",
   });
   const page = await runtime.dispatchFetch("http://localhost:3729/new", { headers });
   expect(page.status).toBe(200);
@@ -42,4 +45,22 @@ test("the real Worker and Durable Object serve bundled assets and correlate gene
   });
   expect(failed.status).toBe(503);
   expect(await failed.text()).toContain(failed.headers.get("x-request-id")!);
+});
+
+test("Worker health reports degraded when its real editor Durable Object cannot initialize", async () => {
+  await workerFixture();
+  const worker = await readFile(new URL("../dist/worker/entry.js", import.meta.url), "utf8");
+  const { runtime } = await cloudflareFixture(
+    worker,
+    "export default {fetch(){return new Response(null,{status:503})}}",
+  );
+  const response = await runtime.dispatchFetch("http://localhost:3729/health");
+  expect(response.status).toBe(503);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toMatchObject({
+    service: "admin",
+    status: "degraded",
+    database: "ready",
+    editor: "unavailable",
+  });
 });
