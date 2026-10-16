@@ -328,9 +328,12 @@ describe("authenticated execution gateway", () => {
   it("returns only health facts and records check failures in the response", async () => {
     const facts = { diskNearlyFull: false, screenLocked: true };
     const success = createGateway({ config, health: async () => facts });
-    expect(await (await success(request("/health", { headers: authorized }))).json()).toEqual(
-      facts,
-    );
+    expect(await (await success(request("/health", { headers: authorized }))).json()).toEqual({
+      ...facts,
+      service: "api-msg",
+      revision: "development",
+      status: "degraded",
+    });
     const failure = createGateway({
       config,
       health: async () => {
@@ -339,7 +342,7 @@ describe("authenticated execution gateway", () => {
       id: () => "health-1",
     });
     const failed = await failure(request("/health", { headers: authorized }));
-    expect(failed.status).toBe(500);
+    expect(failed.status).toBe(503);
     expect(await failed.text()).not.toContain("secret detail");
     expect(failed.headers.get("x-request-id")).toBe("health-1");
     const errorFailure = createGateway({
@@ -348,7 +351,24 @@ describe("authenticated execution gateway", () => {
         throw new Error("private");
       },
     });
-    expect((await errorFailure(request("/health", { headers: authorized }))).status).toBe(500);
+    expect((await errorFailure(request("/health", { headers: authorized }))).status).toBe(503);
+    const ready = createGateway({
+      config,
+      health: async () => ({ diskNearlyFull: false, screenLocked: false }),
+    });
+    const response = await ready(request("/health", { headers: authorized }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({
+      service: "api-msg",
+      revision: "development",
+      status: "ready",
+    });
+    const diskFull = createGateway({
+      config,
+      health: async () => ({ diskNearlyFull: true, screenLocked: false }),
+    });
+    expect((await diskFull(request("/health", { headers: authorized }))).status).toBe(503);
   });
 
   it("reports native Mac disk and screen checks, failing safely per probe", async () => {

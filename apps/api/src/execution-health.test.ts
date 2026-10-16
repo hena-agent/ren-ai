@@ -45,9 +45,18 @@ test("alerts are durable, deduplicated and never forward private detail", async 
 });
 
 test("health checks are rate limited and keep native facts separate from credentials", async () => {
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValue(Response.json({ diskNearlyFull: true, screenLocked: true }));
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+    Response.json(
+      {
+        service: "api-msg",
+        revision: "development",
+        status: "degraded",
+        diskNearlyFull: true,
+        screenLocked: true,
+      },
+      { status: 503 },
+    ),
+  );
   await run(
     Effect.gen(function* () {
       const health = yield* createExecutionHealth(configuration, undefined, fetcher);
@@ -59,7 +68,15 @@ test("health checks are rate limited and keep native facts separate from credent
         { name: "screen-locked" },
       ]);
       const restarted = yield* createExecutionHealth(configuration, undefined, fetcher);
-      fetcher.mockResolvedValue(Response.json({ diskNearlyFull: false, screenLocked: false }));
+      fetcher.mockResolvedValue(
+        Response.json({
+          service: "api-msg",
+          revision: "development",
+          status: "ready",
+          diskNearlyFull: false,
+          screenLocked: false,
+        }),
+      );
       yield* restarted.tick;
       expect(yield* sql`SELECT name FROM application_alert`).toEqual([]);
     }),

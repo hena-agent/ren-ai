@@ -1,5 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { checkMacHealth, type MacHealth } from "./health.ts";
+import { healthResponse as serviceHealth } from "@ren-ai/transport/health";
 
 export type GatewayConfig = {
   managementToken: string;
@@ -165,6 +166,7 @@ export const createGateway = (options: GatewayOptions) => {
       finish(stage, outcome, response.status, level, error);
       const headers = new Headers(response.headers);
       headers.set("x-request-id", requestId);
+      if (url.pathname === "/health") headers.set("Cache-Control", "no-store");
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -243,14 +245,17 @@ const healthResponse = async (
 ) => {
   try {
     const facts = await health();
-    return complete(Response.json(facts), "health", "success", "info");
+    const ready = !facts.diskNearlyFull && !facts.screenLocked;
+    return complete(
+      serviceHealth("api-msg", ready ? "ready" : "degraded", facts),
+      "health",
+      ready ? "success" : "degraded",
+      ready ? "info" : "warn",
+    );
   } catch (error) {
     const cause = error instanceof Error ? error : new Error("UnknownError");
     return complete(
-      Response.json(
-        { error: "Health check failed", requestId, ...safeError(cause, "HEALTH_CHECK_FAILED") },
-        { status: 500 },
-      ),
+      serviceHealth("api-msg", "degraded", { error: "Health check failed", requestId }),
       "health",
       "failure",
       "error",

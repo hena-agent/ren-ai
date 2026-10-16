@@ -107,6 +107,9 @@ version's message names the commit it came from. The job authenticates with the
 token with Workers Scripts, D1 and Workers R2 Storage (Write), Account Settings
 (Read) and Workers Routes (Write) on `renai.im`. Do not also connect Workers
 Builds: it would deploy every push a second time, without waiting for the gates.
+The deployment check also verifies `/health` reports service `admin` and the
+exact source revision embedded in the Worker. It reports D1 readiness separately;
+health responses are uncached and contain no credentials or Catalog data.
 Every deploy restarts the Durable Object, so an image being generated at that
 moment needs an operator-confirmed retry.
 

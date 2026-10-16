@@ -8,3 +8,13 @@ export const executionBindings: CloudflareBindings = {
   API_MSG_URL: "https://api-msg.example",
   BOOTSTRAP_ONLY: "false",
 };
+
+export const readyApplicationHealth = {
+  service: "api-app",
+  revision: "development",
+  status: "ready",
+  database: "ready",
+  storage: "durable-object-sqlite",
+  bootstrapOnly: true,
+  executor: { service: "api-msg", revision: "development", status: "ready" },
+};

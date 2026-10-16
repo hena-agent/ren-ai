@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { createLab } from "./lab.ts";
 import type { Character } from "./loop.ts";
 import type { Saved, SessionInfo } from "./store.ts";
@@ -70,6 +70,28 @@ const eventLab = (witness: Model, store: ReturnType<typeof memoryStore>["store"]
     () => 1_000,
   );
 
+it("health reports storage failures without leaking local paths or session data", async () => {
+  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  try {
+    for (const cause of [new Error("private-path-marker"), "private-payload-marker"]) {
+      const store = { ...memoryStore().store, list: () => Promise.reject(cause) };
+      const response = await eventLab(model, store).handle(new Request("http://localhost/health"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        service: "persona-lab",
+        revision: "development",
+        status: "degraded",
+        storage: "unavailable",
+      });
+      expect(JSON.stringify(stderr.mock.calls)).toContain(response.headers.get("x-request-id"));
+    }
+    expect(JSON.stringify(stderr.mock.calls)).not.toContain("private-path-marker");
+    expect(JSON.stringify(stderr.mock.calls)).not.toContain("private-payload-marker");
+  } finally {
+    stderr.mockRestore();
+  }
+});
+
 it("serves session actions under /api while keeping page routes separate", async () => {
   const { store } = memoryStore();
   const instance = createLab(
@@ -82,6 +104,14 @@ it("serves session actions under /api while keeping page routes separate", async
     () => 1_000,
   );
   const value = await readCharacter(await instance.handle(request("/api/new?persona=jiwoo")));
+  const health = await instance.handle(new Request("http://localhost/health"));
+  expect(health.headers.get("cache-control")).toBe("no-store");
+  expect(await health.json()).toEqual({
+    service: "persona-lab",
+    revision: "development",
+    status: "ready",
+    storage: "ready",
+  });
   const id = value.session.id;
   expect(
     (await instance.handle(new Request(`http://localhost/api/event?session=${id}`))).status,

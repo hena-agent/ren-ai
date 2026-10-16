@@ -1,7 +1,13 @@
 import { Effect } from "effect";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
 import { messageGateway } from "./server.ts";
+
+const healthRequest = (method = "GET", token = "secret") =>
+  new Request("https://imsg.test/health", {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
 test("messaging authorization fails closed for absent configuration and invalid credentials", async () => {
   const fixture = gatewayFixture();
@@ -48,5 +54,54 @@ test("permission verification reports a denied Mac UI permission", async () => {
     );
   } finally {
     await fixture.server.dispose();
+  }
+});
+
+test("HTTP health preserves authorization and reports identity and no-send readiness", async () => {
+  const f = gatewayFixture();
+  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  try {
+    const unauthorized = await f.server.handler(healthRequest("GET", "wrong"));
+    expect(unauthorized.status).toBe(401);
+    expect(unauthorized.headers.get("cache-control")).toBe("no-store");
+    expect(unauthorized.headers.get("x-request-id")).not.toBeNull();
+    expect(JSON.stringify(stderr.mock.calls)).toContain("authorization");
+    const methodNotAllowed = await f.server.handler(healthRequest("POST"));
+    expect(methodNotAllowed.status).toBe(405);
+    expect(methodNotAllowed.headers.get("cache-control")).toBe("no-store");
+    const response = await f.server.handler(healthRequest());
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({
+      service: "imsg",
+      revision: "development",
+      status: "ready",
+    });
+    f.gestures.gestures.probe = () =>
+      Effect.fail(
+        Object.assign(new Error("private permission detail"), { code: "PERMISSION_DENIED" }),
+      );
+    const failed = await f.server.handler(healthRequest());
+    expect(failed.status).toBe(503);
+    expect(await failed.json()).toEqual({
+      service: "imsg",
+      revision: "development",
+      status: "degraded",
+    });
+    expect(JSON.stringify(stderr.mock.calls)).toContain(failed.headers.get("x-request-id"));
+    expect(JSON.stringify(stderr.mock.calls)).not.toContain("private permission detail");
+    expect(JSON.stringify(stderr.mock.calls)).toContain("PERMISSION_DENIED");
+    for (const code of [123, "private-code-marker"]) {
+      f.gestures.gestures.probe = () =>
+        Effect.fail(Object.assign(new Error("private failure"), { code }));
+      expect((await f.server.handler(healthRequest())).status).toBe(503);
+    }
+    expect(JSON.stringify(stderr.mock.calls)).not.toContain("private-code-marker");
+    f.gestures.gestures.probe = () => Effect.never;
+    expect((await f.server.handler(healthRequest())).status).toBe(503);
+    expect(f.local.bubbles).toEqual([]);
+  } finally {
+    stderr.mockRestore();
+    await f.server.dispose();
   }
 });

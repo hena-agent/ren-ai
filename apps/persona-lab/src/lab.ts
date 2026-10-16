@@ -1,4 +1,5 @@
 import { ABSORB_MS, INTERVAL_MS, begin, admit, decide, pendingFor } from "./loop.ts";
+import { healthResponse } from "@ren-ai/transport/health";
 import type { Character, Outcome } from "./loop.ts";
 import { createStore, restore } from "./store.ts";
 import type { Saved, SessionInfo } from "./store.ts";
@@ -67,6 +68,24 @@ export const createLab = (
   script = "",
 ): Lab => {
   const characters = new Map<string, Saved>();
+  const health = async () => {
+    const requestId = crypto.randomUUID();
+    const started = performance.now();
+    let ready = true;
+    try {
+      await store.list();
+    } catch (cause) {
+      ready = false;
+      process.stderr.write(
+        `${JSON.stringify({ service: "persona-lab", requestId, operation: "health", stage: "storage.read", outcome: "failed", level: "error", durationMs: performance.now() - started, code: "STORAGE_UNAVAILABLE", causeName: cause instanceof Error ? cause.name : "NonError" })}\n`,
+      );
+    }
+    const response = healthResponse("persona-lab", ready ? "ready" : "degraded", {
+      storage: ready ? "ready" : "unavailable",
+    });
+    response.headers.set("X-Request-ID", requestId);
+    return response;
+  };
   const queues = new Map<string, Promise<void>>();
   const serialized = <T>(id: string, operation: () => Promise<T>): Promise<T> => {
     const previous = queues.get(id) ?? Promise.resolve();
@@ -281,6 +300,7 @@ export const createLab = (
       const asset = staticResponse(request.method, url.pathname, page, stylesheet, script);
       if (asset) return asset;
       if (url.pathname.startsWith("/api/")) url.pathname = url.pathname.slice(4);
+      if (request.method === "GET" && url.pathname === "/health") return health();
       if (request.method === "GET" && url.pathname === "/sessions")
         return listSessions(url.searchParams.get("persona"));
       if (request.method === "POST" && url.pathname === "/new")

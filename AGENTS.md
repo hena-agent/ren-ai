@@ -92,6 +92,13 @@ The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/
 - Keep credentials, authorization headers, signed drafts, handles, conversation text, private persona descriptions, prompts and image bytes/base64 out of logs. Allowlist provider diagnostic fields, redact echoed secrets/private inputs and bound diagnostic strings. Replace payload-bearing schema/JSON errors with a safe summary and retain stack frames separately.
 - Test failure logging through the real request/task boundary: assert correlation, stage/cause metadata and sensitive-data exclusion alongside the existing recovery behavior.
 
+## Service health
+
+- Every HTTP API provides `GET /health` with `service`, `revision` (the full source commit embedded in the running artifact; `development` locally), and `status` (`ready` or `degraded`). Use `@ren-ai/transport/health`; retain the service's authentication boundary and send `Cache-Control: no-store`.
+- Return HTTP 200 for ready and 503 for degraded. Report required dependency readiness separately so a live database cannot conceal an unavailable executor. Keep credentials, user data, private paths and upstream payloads out of health responses.
+- Deployment checks verify the expected service and exact artifact revision, not just HTTP success. Mac post-restart probes require the running artifact's revision and readiness. Artifact publication alone does not prove Mac installation or tunnel routing.
+- Worker CI may verify identity while dependencies are still rolling out: Mac updaters consume completed CI artifacts. Record degraded readiness explicitly and verify it after the Mac update before declaring the end-to-end rollout complete.
+
 ## Ports
 
 Assign a stable, uncommon default per local service: **3000–3999 for frontends**, **4000–4999 for backends**, and **5000–5999 for auxiliary services**. A browser-facing full-stack app uses the frontend range; a separate API listener uses the backend range.

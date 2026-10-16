@@ -5,6 +5,15 @@ import { authorization, tokenOf } from "../test/fixtures.ts";
 test("the real Worker and Durable Object serve bundled assets and correlate generation failures", async () => {
   const { runtime } = await workerFixture();
   const headers = { authorization };
+  const health = await runtime.dispatchFetch("http://localhost:3729/health");
+  expect(health.status).toBe(200);
+  expect(health.headers.get("cache-control")).toBe("no-store");
+  expect(await health.json()).toEqual({
+    service: "admin",
+    revision: process.env["GITHUB_SHA"] ?? "development",
+    status: "ready",
+    database: "ready",
+  });
   const page = await runtime.dispatchFetch("http://localhost:3729/new", { headers });
   expect(page.status).toBe(200);
   const markup = await page.text();
