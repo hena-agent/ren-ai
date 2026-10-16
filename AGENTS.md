@@ -82,6 +82,7 @@ The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/
 - Generate self-presentation: photos the persona would choose for a dating profile and a first-person introduction they would actually write. Express private emotional darkness only as a subtle undertone. Vary selfies, friend-taken snapshots, travel/full-body and everyday pictures instead of imposing headshot framing or illustrating internal pathology.
 - New persona creation defaults to female, with the male option disabled in both the UI and creation boundary. Keep the character and image prompts capable of representing either gender; legacy records without a gender continue using their descriptions.
 - When changing authoring or image generation, read the latest workflow section in `docs/specs/persona-discovery-admin.md` for reference, retry and publication behavior.
+- Keep native/primary language background in Persona, operator-approved initial proficiency in State, learned expressions in Memory, and proficiency growth in the individual Conversation's State. Never copy Catalog edits into an existing Conversation. Discovery exposes only initial proficiency and does not translate public persona writing; screen locale, consent locale, and preferred conversation language are separate.
 
 ## Logging
 

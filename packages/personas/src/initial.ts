@@ -4,6 +4,7 @@ import { PersonaError } from "./model.ts";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toString } from "mdast-util-to-string";
 import type { InitialDocuments } from "./initial-documents.ts";
+import { LanguageProficiency } from "./languages.ts";
 export { InitialDocuments } from "./initial-documents.ts";
 
 const Score = Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 0, maximum: 100 }));
@@ -17,6 +18,7 @@ export const InitialScores = Schema.Struct({
 });
 export const InitialState = Schema.Struct({
   ...InitialScores.fields,
+  languageProficiency: Schema.optionalKey(LanguageProficiency),
   traits: Schema.Record(
     Schema.String.check(Schema.isPattern(/\S/)),
     Schema.Struct({

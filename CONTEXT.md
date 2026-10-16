@@ -78,6 +78,22 @@ _Avoid_: personality, memory, probability
 The persona's positive interest in getting to know one conversation's user. A persona-specific starting value describes her interest on first meeting; subsequent affection reflects that conversation's experience. It is distinct from familiarity, trust, desire to chat and intent to date.
 _Avoid_: action probability, relationship stage
 
+**Language background**:
+A Persona's native languages, primary language and history of learning languages. This is identity; becoming fluent in a learned language does not make it a native language.
+_Avoid_: current proficiency, display language
+
+**Language proficiency**:
+What a Persona can currently understand and express in one language within one Conversation. It starts from operator-approved initial State and can develop through that Conversation's practice. Learned expressions and learning experiences belong to Memory.
+_Avoid_: native language, experience points, shared Persona progress
+
+**Display language**:
+The language a person uses to read Discovery's controls and notices. Public profiles remain in their original language, and changing this setting does not change a Persona's proficiency.
+_Avoid_: conversation language, profile translation
+
+**Preferred conversation language**:
+The language a person asks to use when joining the waitlist. The first Greeting respects the assigned Persona's ability in that language; a Persona who does not speak it uses her primary language.
+_Avoid_: consent language, guaranteed fluency
+
 **Conversation history**:
 The actual sequence of messages and actions, including any checkpoint summarising older exchanges. History records what happened; it is distinct from what the persona currently remembers.
 _Avoid_: Memory

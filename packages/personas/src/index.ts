@@ -18,6 +18,13 @@ export {
 export { initialTraits, checkInitialPersona, publicationIssues } from "./publication.ts";
 export { stateStatus } from "./state-diagnostics.ts";
 export {
+  LanguageCode,
+  LanguageProficiency,
+  LanguageBackground,
+  languageBackground,
+  languageSummary,
+} from "./languages.ts";
+export {
   InitialState,
   ConversationState,
   InitialScores,

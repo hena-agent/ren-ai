@@ -19,6 +19,8 @@ import { legacyPersonaDraft } from "./legacy.ts";
 import { readInitialFiles, writeInitialFiles, prepareInitialFiles } from "./initial-files.ts";
 import type { InitialDocuments } from "./initial.ts";
 import { publicationIssues } from "./publication.ts";
+import { parseInitialState } from "./initial.ts";
+import { languageSummary } from "./languages.ts";
 
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
@@ -183,16 +185,36 @@ export async function createPersonaStore(directory: string) {
       return imageResponse(directory, filename);
     },
     publicList: async () =>
-      (await list())
-        .filter((persona) => persona.published)
-        .map(({ id, name, bio, imageUrl, portraits, secondaryPortraits, publicProfile }) => ({
-          id,
-          name,
-          bio,
-          imageUrl,
-          ...(portraits === undefined ? {} : { portraits }),
-          ...(secondaryPortraits === undefined ? {} : { secondaryPortraits }),
-          publicProfile: publicProfile!,
-        })),
+      Promise.all(
+        (await list())
+          .filter((persona) => persona.published)
+          .map(
+            async ({
+              id,
+              name,
+              bio,
+              imageUrl,
+              portraits,
+              secondaryPortraits,
+              publicProfile,
+              prompt,
+            }) => {
+              const initial = await readInitialFiles(directory, id);
+              const languages = initial?.state.trim()
+                ? languageSummary(prompt, parseInitialState(initial.state).languageProficiency)
+                : undefined;
+              return {
+                id,
+                name,
+                bio,
+                imageUrl,
+                ...(portraits === undefined ? {} : { portraits }),
+                ...(secondaryPortraits === undefined ? {} : { secondaryPortraits }),
+                publicProfile: publicProfile!,
+                ...(languages && { languages }),
+              };
+            },
+          ),
+      ),
   };
 }

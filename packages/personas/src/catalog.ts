@@ -1,11 +1,14 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { Schema } from "effect";
 import { splitPersonaMarkdown } from "./profile.ts";
+import { parseInitialState } from "./initial.ts";
+import { languageSummary, type PublicLanguages } from "./languages.ts";
 
 const Row = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   markdown: Schema.String,
+  state: Schema.String,
   style: Schema.NullOr(Schema.Literals(["anime", "photo"])),
   objectKey: Schema.NullOr(Schema.String),
   position: Schema.NullOr(Schema.Number),
@@ -16,15 +19,16 @@ interface Profile {
   name: string;
   bio: string;
   publicProfile: string;
+  languages?: typeof PublicLanguages.Type;
   portraits: Partial<Record<Style, string>>;
   secondaryPortraits: { style: Style; imageUrl: string }[];
 }
 
-/** The same public projection serves Admin and Discovery, without reading State/Memory. */
+/** Only the initial language proficiency is projected; other State and Memory stay private. */
 export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
   const result = await db
     .prepare(`
-    SELECT p.id, p.name, p.markdown, i.style, i.objectKey, i.position
+    SELECT p.id, p.name, p.markdown, p.state, i.style, i.objectKey, i.position
     FROM personas p LEFT JOIN persona_images i ON i.personaId = p.id
     WHERE p.published = 1 ORDER BY p.id, i.position, i.style
   `)
@@ -35,11 +39,15 @@ export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
     let profile = profiles.get(row.id);
     if (!profile) {
       const { bio, publicMarkdown } = splitPersonaMarkdown(row.markdown);
+      const languages = row.state.trim()
+        ? languageSummary(row.markdown, parseInitialState(row.state).languageProficiency)
+        : undefined;
       profile = {
         id: row.id,
         name: row.name,
         bio,
         publicProfile: publicMarkdown,
+        ...(languages && { languages }),
         portraits: {},
         secondaryPortraits: [],
       };
