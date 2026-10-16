@@ -69,7 +69,12 @@ an unavailable, unauthorized or wrong-service executor makes overall health
 `bootstrapOnly` reports the intake setting separately. Local runs use revision
 `development`; responses exclude credentials and upstream payloads.
 
-CI checks the running Worker service and exact revision. It records degraded
+CI checks the running Worker service and exact revision. Probes retry up to twelve
+times, five seconds apart, with a ten-second timeout per request so deployment
+propagation does not cause a one-shot false failure. Each failed probe records
+allowlisted expected/actual revisions, readiness and HTTP status without upstream
+response bodies. An old revision never satisfies the check. Admin additionally
+requires editor readiness. API rollout records degraded
 dependency health without blocking artifact publication: the Mac updater needs
 the completed CI run before it can install that artifact. Verify executor health
 again after the Mac update before declaring an end-to-end deployment ready.
