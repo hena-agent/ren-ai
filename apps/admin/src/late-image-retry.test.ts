@@ -191,7 +191,7 @@ test("a failed regeneration row retries one owned target and preserves the oppos
   try {
     window.document.body.innerHTML = completed;
     expect(window.document.querySelector(".queue-thumbnail img")?.getAttribute("src")).toBe(
-      preview(completed).portraits!.photo!.replace(/^\/discovery\/images\//, "/images/"),
+      preview(completed).portraits!.photo!,
     );
   } finally {
     await window.happyDOM.close();

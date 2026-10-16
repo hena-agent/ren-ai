@@ -52,10 +52,11 @@ and its tunnel after engine restarts.
 
 ## Automatic updates
 
-`GET /health` retains Bearer authentication and reports `service: "api-msg"`, the
+`GET /health` requires no authentication and reports `service: "api-msg"`, the
 full source `revision` embedded by CI, and `status`. A locked screen, nearly-full
 disk or failed Mac health check returns `degraded` with HTTP 503; ready returns 200. Local source runs use revision `development`. Responses are never cached.
 The bundled probe requires this identity, its own artifact revision and readiness.
+All other paths retain Bearer authentication with `TOKEN_MANAGEMENT`.
 
 The Mac pulls the attested `api-msg-bundle` published by CI after the quality
 gates. Provision the deploy LaunchAgent using a fine-grained GitHub token for

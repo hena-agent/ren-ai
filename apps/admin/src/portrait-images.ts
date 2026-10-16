@@ -3,6 +3,7 @@ import { PersonaError, personaImages } from "@ren-ai/personas";
 import type { PersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
 import { operation, GenerationError } from "./logging.ts";
 import copy from "./copy.json";
+import { ownedImageKey } from "@ren-ai/personas/image-url";
 
 export const mainImage = (persona: PersonaRecord, style: "anime" | "photo") =>
   personaImages(persona).find((image) => image.main && image.style === style)?.imageUrl;
@@ -34,10 +35,10 @@ export async function readPortraitReference(
   style: "anime" | "photo",
   store: PersonaStore,
 ) {
-  if (!url.startsWith("/discovery/images/"))
-    throw new PersonaError("invalid", copy.baseOwnedRequired);
+  const key = ownedImageKey(url);
+  if (!key) throw new PersonaError("invalid", copy.baseOwnedRequired);
   return operation("portrait.reference.read", { style }, async (): Promise<Portrait> => {
-    const response = await store.image(url.slice("/discovery/images/".length));
+    const response = await store.image(key);
     if (!response.ok)
       throw new GenerationError("Base portrait unavailable", {
         code: "reference_unavailable",

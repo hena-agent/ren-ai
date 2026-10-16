@@ -154,7 +154,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   const image = /src="(\/images\/[^"]+)"/.exec(page)![1]!;
   expect(await store.list()).toEqual([]);
   expect(await (await admin(new Request("http://localhost:3729/api/personas"))).json()).toEqual([]);
-  expect((await store.publicImage(image.slice("/images/".length))).status).toBe(404);
+  expect((await store.image(image.slice("/images/".length))).status).toBe(200);
   const privateImage = await admin(request(image));
   expect(privateImage.status).toBe(200);
   expect(privateImage.headers.get("content-type")).toBe("image/png");
@@ -170,9 +170,9 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(save.status).toBe(303);
   const id = idOf(save);
   const persisted = await (await createPersonaStore(root)).get(id);
-  expect(persisted.portraits?.photo).toBe(`/discovery${image}`);
+  expect(persisted.portraits?.photo).toBe(image);
   expect(persisted.portraits?.photo).toBe(persisted.imageUrl);
-  expect((await store.publicImage(image.slice("/images/".length))).status).toBe(200);
+  expect((await store.image(image.slice("/images/".length))).status).toBe(200);
   const publicResponse = await admin(new Request("http://localhost:3729/api/personas"));
   expect(publicResponse.headers.get("cache-control")).toBe("no-store");
   const listed = await publicResponse.text();
@@ -210,7 +210,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   );
   expect(withdraw.status).toBe(303);
   expect(await store.publicList()).toEqual([]);
-  expect((await store.publicImage(image.slice("/images/".length))).status).toBe(404);
+  expect((await store.image(image.slice("/images/".length))).status).toBe(200);
 });
 
 test("a failed full image refresh preserves completed photos and can be retried without regenerating the introduction", async () => {

@@ -57,24 +57,24 @@ test("private Admin listing retains unpublished documents, version metadata and 
   expect(await store.publicList()).toEqual([]);
 });
 
-test("R2 previews become public only when referenced by the current published save", async () => {
+test("Catalog publication controls listing, while images retain their direct R2 URLs", async () => {
   const { store } = await cloudflareFixture();
   const imageUrl = await store.saveImage(portraitImage);
   const filename = imageUrl.split("/").at(-1)!;
   expect((await store.image(filename)).status).toBe(200);
-  expect((await store.publicImage(filename)).status).toBe(404);
+  expect(imageUrl).toBe(`https://persona-images.renai.im/${filename}`);
   const record = { ...databasePersona, published: true, imageUrl, portraits: { photo: imageUrl } };
   await store.save(record, initialDocuments, { persona: "" });
-  expect((await store.publicImage(filename)).status).toBe(200);
   const profiles = await store.publicList();
   expect(profiles).toHaveLength(1);
+  expect(profiles[0]!.imageUrl).toBe(imageUrl);
   expect(JSON.stringify(profiles)).not.toContain("비공개");
   const saved = await store.get(record.id);
   await store.save({ ...saved, published: false }, initialDocuments, {
     persona: serializePersona(saved),
     initial: initialDocuments,
   });
-  expect((await store.publicImage(filename)).status).toBe(404);
+  expect(await store.publicList()).toEqual([]);
   expect((await store.image(filename)).status).toBe(200);
 });
 
@@ -94,7 +94,7 @@ test("publication and owned-image validation fail before a document commit", asy
     store.save(
       {
         ...databasePersona,
-        imageUrl: "/discovery/images/00000000-0000-0000-0000-000000000000.png",
+        imageUrl: "https://persona-images.renai.im/00000000-0000-0000-0000-000000000000.png",
       },
       initialDocuments,
       { persona: "" },

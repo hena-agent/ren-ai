@@ -21,7 +21,7 @@ test("dismissed records stay gone after restart and replay never creates another
   );
   expect(deleted.status).toBe(200);
   const cleaned = await deleted.text();
-  expect(cleaned).toContain("/images/");
+  expect(cleaned).toContain("https://persona-images.renai.im/");
   expect(cleaned).toContain("편집한 이름");
   expect(state.saved!.queue.jobs).toHaveLength(0);
   expect(state.saved!.queue.keys).toHaveLength(1);

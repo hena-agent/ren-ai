@@ -40,7 +40,6 @@ const storage = fromPartial<DurableObjectStorage>({
 });
 const config = {
   catalog: async () => [],
-  image: async () => new Response("image"),
   turnstileSecret: "test-secret",
   managementToken: "test-token",
   httpClient: fromPartial<HttpClient.HttpClient>({}),

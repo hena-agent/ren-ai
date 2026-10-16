@@ -4,6 +4,7 @@ import { normalizePortraits } from "./portraits.ts";
 import type { PersonaImage } from "./portraits.ts";
 import { splitPersonaMarkdown } from "./profile.ts";
 import { InitialDocuments } from "./initial-documents.ts";
+import { ownedImageKey } from "./image-url.ts";
 
 export interface Persona {
   readonly name?: string;
@@ -155,12 +156,7 @@ export function decodePersona(input: unknown): PersonaRecord {
       }
     }
     for (const imageUrl of images)
-      if (
-        !/^\/discovery\/images\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|webp)$/.test(
-          imageUrl,
-        ) &&
-        new URL(imageUrl).protocol !== "https:"
-      ) {
+      if (!ownedImageKey(imageUrl) && new URL(imageUrl).protocol !== "https:") {
         throw new Error("프로필 이미지는 HTTPS URL이어야 합니다.");
       }
     if (persona.published && !persona.bio.trim()) {

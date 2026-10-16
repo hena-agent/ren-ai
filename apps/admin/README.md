@@ -1,6 +1,6 @@
 # Persona Admin on Cloudflare
 
-Admin runs as a Worker. Drizzle owns the D1 schema; a private R2 bucket stores
+Admin runs as a Worker. Drizzle owns the D1 schema; the public R2 bucket stores
 immutable generated images. One SQLite-backed Durable Object (`PersonaAdmin`,
 named `global`) owns private drafts, the image FIFO and submission deduplication.
 Persona documents are immutable numbered versions in D1; each Catalog read uses
@@ -82,7 +82,8 @@ in the `Ambivalent Co.` account. Wrangler references the remote `persona-catalog
 D1 database in that account. A new remote Catalog starts empty;
 `import:local` does not populate remote resources.
 
-The D1 schema and private R2 bucket `persona-images` are provisioned.
+The D1 schema and R2 bucket `persona-images` are provisioned. The bucket is served
+directly at `https://persona-images.renai.im/<objectKey>` through its R2 custom domain.
 Set separate production secrets interactively from `apps/admin`:
 
 ```sh
@@ -232,10 +233,14 @@ they serve other authentication/provider purposes. Public
   `persona.md` is a serialized view, not another source of truth. A revision CAS
   and atomic batch commit documents and photo links together; a losing writer
   cannot replace the winner's links.
-- Upload to R2 before referencing a photo in a draft. Saving publishes the
-  current links. `/images/<key>` requires operator authentication;
-  `/discovery/images/<key>` requires a current published reference. Unpublishing
-  or removing a reference makes the public URL return 404. Originals remain.
+- Upload to R2 before referencing a photo in a draft. D1 stores only the object
+  key; Persona views and Catalog responses contain the absolute R2 URL. Admin
+  and API do not proxy production images. Saving publishes current links in the
+  profile listing; draft and unreferenced images are also accessible by URL.
+  Unpublishing or removing a reference does not revoke an image URL. Originals remain.
+  New UUID-keyed uploads use `Cache-Control: public, max-age=31536000, immutable`.
+  Local development uses authenticated `/images/<key>` against local R2; local
+  Catalog responses resolve those URLs against the Admin request origin.
 - Each alarm processes one photo. Persist `generating` before a paid call and
   checkpoint the completed URL and preview together. An interrupted in-flight
   photo needs an operator-confirmed retry; completed siblings and deduplication
@@ -268,9 +273,22 @@ remain so replaying a deleted paid submission cannot create more images.
 
 Drop one PNG, JPEG or WebP (up to 20 MB) into a style's upload area, or select
 **사진 업로드** / **파일로 교체**. Every upload requires a 4:5 crop confirmation;
-position and zoom controls produce a 1024×1280 JPEG. Uploads use the private R2
-preview and become public only after **저장하기**. Each style still allows six
+position and zoom controls produce a 1024×1280 JPEG. Uploads use direct R2 URLs;
+**저장하기** applies the selected image links to the profile. Each style still allows six
 photos. Upload/replace is locked while that persona has queued generation.
+
+### Direct-image URL rollout
+
+Before deploying this URL change, finish pending image jobs and save unsaved
+previews; persisted drafts and task checkpoints can contain the former image
+paths. There is no old-path adapter or automatic draft rewrite. Existing D1 object
+keys and R2 files need no migration. Deploy Admin, refresh the API/runtime Catalog,
+then deploy the API without its old image proxy. Reload open Admin editors.
+Verify existing and newly uploaded images load from the R2 domain and browser
+image requests no longer reach Admin/API. Existing objects may lack cache metadata:
+the checked production JPEG returned HTTP 200 with `CF-Cache-Status: DYNAMIC` and
+no `Cache-Control`. Configure a Cloudflare cache rule for this image domain if
+edge caching is desired for existing objects; new-upload metadata is not retroactive.
 
 Structured JSON goes to Workers stdout/stderr. Search Workers Logs or
 `bunx wrangler tail` using the displayed request ID / `X-Request-ID`.

@@ -17,6 +17,7 @@ import { recordOf, currentPersonaRows } from "./database-record.ts";
 import { validationFailure } from "./logging.ts";
 import { personaValues, photoValues } from "./catalog-values.ts";
 import { readPublicCatalog } from "@ren-ai/personas/catalog";
+import { personaImageBase } from "@ren-ai/personas/image-url";
 
 async function databaseOperation<T>(run: () => Promise<T>) {
   try {
@@ -33,6 +34,7 @@ async function databaseOperation<T>(run: () => Promise<T>) {
 export function databaseStore(
   binding: D1Database,
   bucket: ImageBucket,
+  imageBase = personaImageBase,
 ): PersonaStore & {
   catalog: () => Promise<{
     revision: string;
@@ -40,7 +42,7 @@ export function databaseStore(
   }>;
 } {
   const db = drizzle(binding);
-  const images = r2Images(bucket);
+  const images = r2Images(bucket, imageBase);
   const rowOf = async (id: string) => {
     const row = await currentPersonaRows(db).where(eq(personas.id, id)).get();
     if (!row) throw new PersonaError("not_found", "페르소나를 찾을 수 없습니다.");
@@ -54,6 +56,7 @@ export function databaseStore(
         .from(personaImages)
         .where(eq(personaImages.personaId, id))
         .orderBy(asc(personaImages.position)),
+      imageBase,
     );
   const readCatalog = () =>
     databaseOperation(() =>
@@ -68,6 +71,7 @@ export function databaseStore(
       recordOf(
         row,
         photos.filter((photo) => photo.personaId === row.id),
+        imageBase,
       ),
     );
   };
@@ -83,6 +87,7 @@ export function databaseStore(
             recordOf(
               row,
               photos.filter((photo) => photo.personaId === row.id),
+              imageBase,
             ),
           ),
           state: row.state,
@@ -126,16 +131,7 @@ export function databaseStore(
       throw new PersonaError("not_found", "파일 가져오기는 지원하지 않습니다.");
     },
     ...images,
-    publicImage: async (filename) => {
-      const referenced = await db
-        .select({ id: personas.id })
-        .from(personaImages)
-        .innerJoin(personas, eq(personaImages.personaId, personas.id))
-        .where(and(eq(personas.published, true), eq(personaImages.objectKey, filename)))
-        .get();
-      return referenced ? images.image(filename) : new Response(null, { status: 404 });
-    },
-    publicList: () => databaseOperation(() => readPublicCatalog(binding)),
+    publicList: () => databaseOperation(() => readPublicCatalog(binding, imageBase)),
     save: async (input, documents, expected) => {
       const record = decodePersona(input);
       if (record.published) {
@@ -219,6 +215,7 @@ export function databaseStore(
           markdown: previous?.currentVersion === version ? previous.markdown : record.description!,
         },
         photos,
+        imageBase,
       );
     },
   };

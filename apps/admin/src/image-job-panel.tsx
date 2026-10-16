@@ -71,7 +71,7 @@ export function ImageJobPanel({
               <div className="queue-thumbnail">
                 {task.imageUrl ? (
                   <img
-                    src={task.imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+                    src={task.imageUrl}
                     alt={`${copy.portraitLabels[task.style]} 사진 ${task.index + 1}`}
                     width={48}
                     height={60}

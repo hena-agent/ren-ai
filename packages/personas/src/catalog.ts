@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { Schema } from "effect";
 import { splitPersonaMarkdown } from "./profile.ts";
+import { personaImageBase } from "./image-url.ts";
 import { parseInitialState } from "./initial.ts";
 import { languageSummary, type PublicLanguages } from "./languages.ts";
 import { projectPublicProfile } from "./profile-projection.ts";
@@ -26,8 +27,11 @@ interface Profile {
   secondaryPortraits: { style: Style; imageUrl: string }[];
 }
 
-/** Only the initial language proficiency is projected; other State and Memory stay private. */
-export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
+/** Public catalog projection includes direct image URLs and only initial proficiency from State. */
+export async function readPublicCatalog(
+  db: Pick<D1Database, "prepare">,
+  imageBase = personaImageBase,
+) {
   const result = await db
     .prepare(`
     SELECT p.id, p.name, v.markdown, p.state, i.style, i.objectKey, i.position
@@ -57,7 +61,7 @@ export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
       profiles.set(row.id, profile);
     }
     if (row.style === null) continue;
-    const imageUrl = `/discovery/images/${row.objectKey}`;
+    const imageUrl = `${imageBase}${row.objectKey}`;
     if (row.position === 0) profile.portraits[row.style] = imageUrl;
     else profile.secondaryPortraits.push({ style: row.style, imageUrl });
   }

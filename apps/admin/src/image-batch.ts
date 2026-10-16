@@ -1,5 +1,6 @@
 import { decodePersona, PersonaError, personaImages, serializePersona } from "@ren-ai/personas";
 import type { PersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
+import { ownedImageKey } from "@ren-ai/personas/image-url";
 import { characterOf, emptyPersona } from "./authoring.ts";
 import type { Draft } from "./draft.ts";
 import { completedImageDraft, previewOf } from "./draft.ts";
@@ -75,17 +76,14 @@ function slotsOf(
     const active = images.findIndex((image) => `${style}:${image.imageUrl}` === key);
     if (
       active > 0 &&
-      [mainImage(persona, style)!, images[active]!.imageUrl].some(
-        (url) => !url.startsWith("/discovery/images/"),
-      )
+      [mainImage(persona, style)!, images[active]!.imageUrl].some((url) => !ownedImageKey(url))
     )
       throw new PersonaError("invalid", copy.baseOwnedRequired);
     return active < 0 ? [] : imageSlots(intent, 1, style, active);
   }
   if (draft.imageCount! > 6 - images.length) throw new PersonaError("invalid", copy.galleryFull);
   const main = mainImage(persona, style);
-  if (main && !main.startsWith("/discovery/images/"))
-    throw new PersonaError("invalid", copy.baseOwnedRequired);
+  if (main && !ownedImageKey(main)) throw new PersonaError("invalid", copy.baseOwnedRequired);
   return imageSlots(intent, draft.imageCount!, style, images.length);
 }
 

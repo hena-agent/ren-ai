@@ -57,15 +57,28 @@ export function createAdmin(
   store: PersonaStore,
   password: string,
   stylesheet: string,
-  { generator, script, log, persistence, management, catalogPending }: AdminOptions = {},
+  {
+    generator,
+    script,
+    log,
+    persistence,
+    management,
+    catalogPending,
+    localImages = true,
+  }: AdminOptions = {},
 ) {
   if (!password.trim()) throw new Error("ADMIN_PASSWORD is required");
   const expected = createHash("sha256")
     .update(`Basic ${Buffer.from(`admin:${password}`).toString("base64")}`)
     .digest();
   const tokens = draftTokens(password);
-  const privateResource = createResources(store, tokens, stylesheet, script, (content) =>
-    html(renderPage(content)),
+  const privateResource = createResources(
+    store,
+    tokens,
+    stylesheet,
+    script,
+    localImages,
+    (content) => html(renderPage(content)),
   );
   const busy = new Set<string>();
   const subDrafts = new Map<string, Draft>(persistence?.saved?.drafts);

@@ -11,6 +11,7 @@ export function createResources(
   tokens: ReturnType<typeof draftTokens>,
   stylesheet: string,
   script: string | undefined,
+  localImages: boolean,
   render: (content: Parameters<typeof renderPage>[0]) => Response,
 ) {
   return async (pathname: string) => {
@@ -65,7 +66,7 @@ export function createResources(
         personas: [],
         inspections: inspectFiles(await operation("persona.inspect", {}, store.inspect)),
       });
-    if (pathname.startsWith("/images/"))
+    if (localImages && pathname.startsWith("/images/"))
       return operation("image.read", {}, () => store.image(pathname.slice("/images/".length)));
     return undefined;
   };

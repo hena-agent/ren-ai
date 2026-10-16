@@ -48,7 +48,6 @@ export const composeServer = (config: ServerConfig) =>
     yield* checkAssignments;
     const discovery = yield* makeDiscoveryWeb({
       catalog: catalog.publicList,
-      image: catalog.publicImage,
       turnstileSecret: config.secrets.TURNSTILE_SECRET,
     });
     yield* Effect.addFinalizer(() => Effect.promise(discovery.dispose));

@@ -12,7 +12,11 @@ function setup() {
       <input name="draft" value="private-draft" readOnly />
       <UploadControls portraitStyle="photo" locked={false} full={false} />
       <UploadControls portraitStyle="anime" locked={false} full={false} />
-      <button type="button" data-upload-style="photo" data-upload-image="/discovery/images/old.jpg">
+      <button
+        type="button"
+        data-upload-style="photo"
+        data-upload-image="https://persona-images.renai.im/old.jpg"
+      >
         교체
       </button>
       <UploadDialog />
@@ -106,7 +110,9 @@ test("drop selects its style, replacement selects only its target, and cancel ma
   await vi.waitFor(() => expect(s.dialog.open).toBe(true));
   s.confirm.click();
   await vi.waitFor(() => expect(s.install).toHaveBeenCalledTimes(1));
-  expect(fetcher.mock.calls[0]![0]).toContain("image=%2Fdiscovery%2Fimages%2Fold.jpg");
+  expect(fetcher.mock.calls[0]![0]).toContain(
+    "image=https%3A%2F%2Fpersona-images.renai.im%2Fold.jpg",
+  );
 });
 
 test("bad files, multiple drops, empty selection and decode failures do not submit", async () => {

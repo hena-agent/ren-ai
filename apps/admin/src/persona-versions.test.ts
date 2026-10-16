@@ -78,7 +78,9 @@ test("the storage upgrade preserves existing Persona documents as v1 without cha
   expect(current).toMatchObject({
     version: 1,
     description: databasePersona.description,
-    portraits: { photo: "/discovery/images/00000000-0000-0000-0000-000000000001.jpg" },
+    portraits: {
+      photo: "https://persona-images.renai.im/00000000-0000-0000-0000-000000000001.jpg",
+    },
   });
   expect(await store.version(current.id, 1)).toMatchObject({
     markdown: databasePersona.description,
