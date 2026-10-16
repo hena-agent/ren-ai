@@ -84,7 +84,13 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
           ...history,
           { ...history.at(-1)!, id: 999, guid: "missing-persona-incoming", fromMe: false },
         ]);
-        expect(String(yield* host.heartbeat.intake.pipe(Effect.flip))).toContain("Unknown persona");
+        yield* host.heartbeat.intake;
+        expect(
+          yield* sql`SELECT guid FROM intake_pending WHERE guid = 'missing-persona-incoming'`,
+        ).toEqual([{ guid: "missing-persona-incoming" }]);
+        expect(
+          yield* sql`SELECT guid FROM intake_seen WHERE guid = 'missing-persona-incoming'`,
+        ).toEqual([]);
         yield* fake.replace(history);
         expect(String(yield* recovery.rebuild(handle).pipe(Effect.flip))).toContain(
           "Unknown persona",

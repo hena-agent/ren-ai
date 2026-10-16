@@ -16,7 +16,10 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
         client.image({ reference: attachment.path }).pipe(Effect.mapError(failure)),
       sendText: (handle: string, text: string) =>
         client.sendText({ handle, text }).pipe(Effect.mapError(failure)),
-      after: (rowID: number) => client.after({ rowID }).pipe(Effect.mapError(failure)),
+      after: (rowID: number, limit?: number) =>
+        client
+          .after({ rowID, ...(limit === undefined ? {} : { limit }) })
+          .pipe(Effect.mapError(failure)),
       follow: (rowID: number, receive: (row: IncomingMessage) => Effect.Effect<void, Error>) => {
         let date: number | null = null;
         return Effect.map(

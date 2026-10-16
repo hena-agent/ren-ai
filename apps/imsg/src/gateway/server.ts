@@ -8,11 +8,12 @@ import { readAttachment, transportRow } from "./attachments.ts";
 
 export const messageGateway = (messages: Messages, token: string, gestures: Gestures) => {
   const handlers = messagingApi.toLayer({
-    probe: () => messages.after(0).pipe(Effect.andThen(gestures.probe()), Effect.mapError(String)),
+    probe: () =>
+      messages.after(0, 1).pipe(Effect.andThen(gestures.probe()), Effect.mapError(String)),
     image: ({ reference }) => readAttachment(messages, reference).pipe(Effect.mapError(String)),
     sendText: ({ handle, text }) => messages.sendText(handle, text).pipe(Effect.mapError(String)),
-    after: ({ rowID }) =>
-      messages.after(rowID).pipe(
+    after: ({ rowID, limit }) =>
+      messages.after(rowID, limit).pipe(
         Effect.map((rows) => rows.map(transportRow)),
         Effect.mapError(String),
       ),
@@ -21,7 +22,9 @@ export const messageGateway = (messages: Messages, token: string, gestures: Gest
         Effect.gen(function* () {
           const replaced =
             date !== null &&
-            !(yield* messages.after(0)).some((row) => row.id === rowID && row.createdAt === date);
+            !(yield* messages.after(Math.max(0, rowID - 1), 1)).some(
+              (row) => row.id === rowID && row.createdAt === date,
+            );
           yield* Effect.acquireRelease(
             messages.follow(replaced ? 0 : rowID, (row) =>
               replaced && row.createdAt < date

@@ -1,9 +1,69 @@
-import { Deferred, Effect, Fiber } from "effect";
+import { Deferred, Effect, Fiber, Logger } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { failure, setup } from "../../test/messages-ui.test-helper.ts";
 
 const alice = "alice@example.com";
+
+test("a long typing uses a bounded number of native processes, not one process per character", async () => {
+  const fixture = await setup();
+  await Effect.runPromise(fixture.gestures.typing(alice, "x".repeat(1000), 0));
+  expect(fixture.events.filter((event) => event.startsWith("key "))).toHaveLength(1);
+  expect(fixture.events).toHaveLength(7);
+});
+
+test.each(["chats", "react"])("a stalled %s subprocess releases the shared UI", async (action) => {
+  const fixture = await setup();
+  fixture.blockAction(action, Effect.never);
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const task = yield* Effect.forkScoped(
+          fixture.gestures.react(alice, "love").pipe(Effect.result),
+        );
+        yield* TestClock.adjust("16 seconds");
+        expect(task.pollUnsafe()).toBeDefined();
+        fixture.blockAction("", Effect.void);
+        yield* fixture.gestures.read(alice);
+        expect(fixture.events.at(-1)).toBe("park");
+      }).pipe(Effect.provide(TestClock.layer())),
+    ),
+  );
+});
+
+test("an overlong gesture cleans up its draft and emits private-data-free queue timings", async () => {
+  const fixture = await setup();
+  const logs: string[] = [];
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const typing = yield* Effect.forkScoped(
+          fixture.gestures.typing(alice, "private draft", 120_000).pipe(Effect.result),
+        );
+        yield* TestClock.adjust("61 seconds");
+        expect(typing.pollUnsafe()).toBeDefined();
+        expect(fixture.events.slice(-2)).toEqual([
+          "clear sms://open?groupid=alice%40example.com",
+          "park",
+        ]);
+        yield* fixture.gestures.probe();
+      }).pipe(
+        Effect.provide(TestClock.layer()),
+        Effect.provide(
+          Logger.layer([
+            Logger.make((entry) => {
+              logs.push(JSON.stringify(entry.message));
+            }),
+          ]),
+        ),
+      ),
+    ),
+  );
+  expect(logs.join()).toContain('"queueWaitMs":0');
+  expect(logs.join()).toContain('"outcome":"failed"');
+  expect(logs.join()).not.toContain(alice);
+  expect(logs.join()).not.toContain("private draft");
+});
 
 /** The persona's read holds the Messages UI until `release`, as when it calls read and send together. */
 const readHoldingTheUi = async () => {

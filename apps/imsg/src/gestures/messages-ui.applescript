@@ -33,19 +33,20 @@ on run argv
       delay 0.5
     end if
     tell application "System Events" to tell process "Messages"
-      -- Check immediately before every keystroke, including draft cleanup.
-      if frontmost is false then error "Messages is not in front"
-      set focusedItem to value of attribute "AXFocusedUIElement"
-      if not (exists attribute "AXIdentifier" of focusedItem) then error "composer is not focused"
-      if (value of attribute "AXIdentifier" of focusedItem) is not "messageBodyField" then error "composer is not focused"
       if action is "key" then
-        if (item 2 of argv) is (ASCII character 10) or (item 2 of argv) is (ASCII character 13) then
-          -- Plain Return would SEND the draft. Option-Return inserts a line break.
-          key code 36 using option down
-        else
-          keystroke (item 2 of argv)
-        end if
+        -- One process for the whole draft; still validate focus before EVERY character.
+        repeat with glyph in characters of (item 2 of argv)
+          my guardComposer()
+          set characterText to contents of glyph
+          if characterText is (ASCII character 10) or characterText is (ASCII character 13) then
+            -- Plain Return would SEND the draft. Option-Return inserts a line break.
+            key code 36 using option down
+          else
+            keystroke characterText
+          end if
+        end repeat
       else
+        my guardComposer()
         keystroke "a" using command down
         key code 51
       end if
@@ -59,3 +60,12 @@ on run argv
     error "Unknown UI action"
   end if
 end run
+
+on guardComposer()
+  tell application "System Events" to tell process "Messages"
+    if frontmost is false then error "Messages is not in front"
+    set focusedItem to value of attribute "AXFocusedUIElement"
+    if not (exists attribute "AXIdentifier" of focusedItem) then error "composer is not focused"
+    if (value of attribute "AXIdentifier" of focusedItem) is not "messageBodyField" then error "composer is not focused"
+  end tell
+end guardComposer

@@ -305,8 +305,10 @@ test("a non-advancing scan fails instead of looping; history limit grows beyond 
         f.replace(large);
         expect(yield* messages.recent(handle, 0)).toHaveLength(102);
         expect(
-          f.commands.find((entry) => entry.method === "messages.history")?.params["limit"],
-        ).toBe(103);
+          f.commands
+            .filter((entry) => entry.method === "messages.history")
+            .map((entry) => entry.params["limit"]),
+        ).toEqual([100, 200]);
         f.stuck();
         expect((yield* messages.after(0).pipe(Effect.flip)).message).toContain("did not advance");
       }).pipe(Effect.provide(f.dependencies)),
