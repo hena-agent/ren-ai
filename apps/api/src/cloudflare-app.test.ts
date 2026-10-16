@@ -203,6 +203,26 @@ test("closes the SQL store even when execution scope cleanup rejects", async () 
   expect(controls.closeStore).toHaveBeenCalledOnce();
 });
 
+test("executor authorization failure reports degraded health with correlated warning diagnostics", async () => {
+  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  const app = await createCloudflareApplication(
+    storage,
+    bindings,
+    "rules",
+    async () => new Response(null, { status: 401 }),
+  );
+  try {
+    const response = await app.fetch(new Request("https://api-app.example/health"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ executor: { status: "unauthorized" } });
+    expect(JSON.stringify(stderr.mock.calls)).toContain("executor_unauthorized");
+    expect(JSON.stringify(stderr.mock.calls)).toContain(response.headers.get("x-request-id"));
+  } finally {
+    stderr.mockRestore();
+    await app.close();
+  }
+});
+
 test("passes writes after explicit activation and closes HTTP resources after a store error", async () => {
   const app = await createCloudflareApplication(
     storage,

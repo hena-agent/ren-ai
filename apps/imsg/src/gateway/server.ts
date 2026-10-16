@@ -120,7 +120,7 @@ export const messageGateway = (messages: Messages, token: string, gestures: Gest
         service: "imsg",
         requestId,
         operation: "health",
-        stage: response.status === 401 ? "authorization" : "health",
+        stage: "authorization",
         outcome: "rejected",
         level: "warn",
         status: response.status,

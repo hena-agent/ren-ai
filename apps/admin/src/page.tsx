@@ -285,8 +285,8 @@ function PageNotices({
   queueObservedAt,
 }: Pick<EditorFields, "imageJob" | "imageJobs" | "queuePosition" | "queueObservedAt"> & {
   error: string;
-  saved?: boolean;
-  catalogPending?: boolean;
+  saved?: boolean | undefined;
+  catalogPending?: boolean | undefined;
 }) {
   return (
     <>

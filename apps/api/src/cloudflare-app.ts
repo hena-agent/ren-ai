@@ -36,7 +36,7 @@ const health = async (
   );
   if (executor.status !== "ready")
     contactLog({
-      requestId: request.headers.get("X-Operation-ID") ?? crypto.randomUUID(),
+      requestId: request.headers.get("X-Operation-ID")!,
       operation: "api-app.health",
       stage: "executor.probe",
       outcome: "failed",

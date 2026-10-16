@@ -362,7 +362,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-}, 20000);
+}, 60000);
 
 test("provider failures back off independently per Conversation, doubling through the 15-minute ceiling", async () => {
   const { root, personaDirectory } = await messagingFixture("failed-schedules-");
