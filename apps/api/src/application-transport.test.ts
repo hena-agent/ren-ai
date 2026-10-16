@@ -43,3 +43,72 @@ test("initialization and transport failure retain correlation and safe cause wit
     stderr.mockRestore();
   }
 });
+
+test("health reports the edge artifact revision separately from a Durable Object on an older code version", async () => {
+  const health = await applicationTransport(new Request("https://app.example/health"), async () =>
+    Response.json({
+      service: "api-app",
+      revision: "a".repeat(40),
+      status: "ready",
+      database: "ready",
+      storage: "durable-object-sqlite",
+      bootstrapOnly: false,
+      executor: { service: "api-msg", revision: "a".repeat(40), status: "ready" },
+    }),
+  );
+  expect(health.status).toBe(503);
+  expect(await health.json()).toEqual({
+    service: "api-app",
+    revision: "development",
+    status: "degraded",
+    database: "ready",
+    storage: "durable-object-sqlite",
+    bootstrapOnly: false,
+    executor: { service: "api-msg", revision: "a".repeat(40), status: "ready" },
+    applicationRuntime: { revision: "a".repeat(40), status: "outdated" },
+  });
+});
+
+test.each([
+  ["ready", 200],
+  ["degraded", 503],
+] as const)(
+  "edge identity retains matching Durable Object readiness (%s)",
+  async (status, expectedStatus) => {
+    const response = await applicationTransport(
+      new Request("https://app.example/health"),
+      async () =>
+        Response.json(
+          {
+            service: "api-app",
+            revision: "development",
+            status,
+            database: "ready",
+            storage: "durable-object-sqlite",
+            bootstrapOnly: false,
+            executor: { service: "api-msg", status: "ready" },
+          },
+          { status: expectedStatus },
+        ),
+    );
+    expect(response.status).toBe(expectedStatus);
+    expect(await response.json()).toMatchObject({
+      revision: "development",
+      status,
+      applicationRuntime: { revision: "development", status: "ready" },
+    });
+  },
+);
+
+test("a malformed Durable Object health response stays degraded without echoing its payload", async () => {
+  const response = await applicationTransport(new Request("https://app.example/health"), async () =>
+    Response.json({ service: "private-marker", revision: "sensitive-marker", status: "ready" }),
+  );
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({
+    service: "api-app",
+    revision: "development",
+    status: "degraded",
+    applicationRuntime: { status: "unavailable" },
+  });
+});
