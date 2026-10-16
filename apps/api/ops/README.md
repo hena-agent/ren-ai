@@ -69,9 +69,9 @@ an unavailable, unauthorized or wrong-service executor makes overall health
 `bootstrapOnly` reports the intake setting separately. Local runs use revision
 `development`; responses exclude credentials and upstream payloads.
 
-CI checks the running Worker service and exact revision. Probes retry up to twelve
+CI checks the running Worker service and exact revision. Probes retry up to ninety-six
 times, five seconds apart, with a ten-second timeout per request so deployment
-propagation does not cause a one-shot false failure. Each failed probe records
+propagation has up to 15 minutes to reach the Durable Object. Each failed probe records
 allowlisted expected/actual revisions, readiness and HTTP status without upstream
 response bodies. An old revision never satisfies the check. Admin additionally
 requires editor readiness. API rollout records degraded
