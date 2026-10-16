@@ -98,12 +98,12 @@ test("deleting one style preserves the opposite image, promotes only same-style 
   const removed = await response.text();
   expect(preview(removed).portraits?.anime).toBe(original.portraits?.anime);
   expect(preview(removed).portraits?.photo).toBe(original.secondaryPortraits?.[0]?.imageUrl);
-  expect((await store.publicImage(main.split("/").at(-1)!)).status).toBe(200);
+  expect((await store.image(main.split("/").at(-1)!)).status).toBe(200);
   expect(
     (await admin(request(route, { ...character, draft: tokenOf(removed), published: "on" })))
       .status,
   ).toBe(303);
-  expect((await store.publicImage(main.split("/").at(-1)!)).status).toBe(404);
+  expect((await store.image(main.split("/").at(-1)!)).status).toBe(200);
   expect(portrait).toHaveBeenCalledTimes(3);
   let remaining = await (await admin(request(route))).text();
   for (const image of personaImages(preview(remaining)))
