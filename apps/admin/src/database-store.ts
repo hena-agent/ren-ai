@@ -1,12 +1,19 @@
 import type { D1Database } from "@cloudflare/workers-types";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { decodePersona, PersonaError, publicationIssues, serializePersona } from "@ren-ai/personas";
+import {
+  decodePersona,
+  PersonaError,
+  publicationIssues,
+  serializePersona,
+  nextPersonaVersion,
+  requireVersion,
+} from "@ren-ai/personas";
 import type { PersonaStore } from "@ren-ai/personas";
-import { personas, personaImages } from "./database-schema.ts";
+import { personas, personaImages, personaVersions } from "./database-schema.ts";
 import { r2Images } from "./r2-images.ts";
 import type { ImageBucket } from "./r2-images.ts";
-import { recordOf } from "./database-record.ts";
+import { recordOf, currentPersonaRows } from "./database-record.ts";
 import { validationFailure } from "./logging.ts";
 import { personaValues, photoValues } from "./catalog-values.ts";
 import { readPublicCatalog } from "@ren-ai/personas/catalog";
@@ -35,7 +42,7 @@ export function databaseStore(
   const db = drizzle(binding);
   const images = r2Images(bucket);
   const rowOf = async (id: string) => {
-    const row = await db.select().from(personas).where(eq(personas.id, id)).get();
+    const row = await currentPersonaRows(db).where(eq(personas.id, id)).get();
     if (!row) throw new PersonaError("not_found", "페르소나를 찾을 수 없습니다.");
     return row;
   };
@@ -51,7 +58,7 @@ export function databaseStore(
   const readCatalog = () =>
     databaseOperation(() =>
       db.batch([
-        db.select().from(personas).orderBy(asc(personas.id)),
+        currentPersonaRows(db).orderBy(asc(personas.id)),
         db.select().from(personaImages).orderBy(asc(personaImages.position)),
       ]),
     );
@@ -85,6 +92,30 @@ export function databaseStore(
     },
     list,
     get,
+    versions: async (id) => {
+      await rowOf(id);
+      return databaseOperation(() =>
+        db
+          .select({
+            version: personaVersions.version,
+            createdAt: personaVersions.createdAt,
+            restoredFrom: personaVersions.restoredFrom,
+          })
+          .from(personaVersions)
+          .where(eq(personaVersions.personaId, id))
+          .orderBy(desc(personaVersions.version)),
+      );
+    },
+    version: async (id, version) => {
+      await rowOf(id);
+      const rows = await databaseOperation(() =>
+        db
+          .select()
+          .from(personaVersions)
+          .where(and(eq(personaVersions.personaId, id), eq(personaVersions.version, version))),
+      );
+      return requireVersion(rows, version);
+    },
     source,
     initial: async (id) => {
       const row = await rowOf(id);
@@ -112,7 +143,7 @@ export function databaseStore(
         if (issues.length)
           throw new PersonaError("invalid", issues.map((issue) => issue.message).join(" "));
       }
-      const previous = await db.select().from(personas).where(eq(personas.id, record.id)).get();
+      const previous = await currentPersonaRows(db).where(eq(personas.id, record.id)).get();
       if (
         (previous ? serializePersona(await get(record.id)) : "") !== expected.persona ||
         (previous &&
@@ -124,7 +155,12 @@ export function databaseStore(
           "Persona 또는 초기값이 변경되었습니다. 다시 열어 주세요.",
         );
       const photos = await photoValues(record, bucket);
-      const values = personaValues(record, documents, previous);
+      const version = nextPersonaVersion(
+        previous && { version: previous.currentVersion, prompt: previous.markdown },
+        record.description!,
+        expected.restoredFrom,
+      );
+      const values = { ...personaValues(record, documents, previous), currentVersion: version };
       const commitId = values.commitId;
       const ownsCommit = sql`exists (select 1 from ${personas} where ${personas.id} = ${record.id} and ${personas.commitId} = ${commitId})`;
       const write = previous
@@ -133,6 +169,25 @@ export function databaseStore(
             .set(values)
             .where(and(eq(personas.id, record.id), eq(personas.revision, previous.revision)))
         : db.insert(personas).values(values).onConflictDoNothing();
+      const history =
+        version !== previous?.currentVersion
+          ? [
+              db.insert(personaVersions).select(
+                db
+                  .select({
+                    personaId: sql<string>`${record.id}`.as("personaId"),
+                    version: sql<number>`${version}`.as("version"),
+                    markdown: sql<string>`${record.description!}`.as("markdown"),
+                    createdAt: sql<number>`${values.updatedAt}`.as("createdAt"),
+                    restoredFrom: sql<number | null>`${expected.restoredFrom ?? null}`.as(
+                      "restoredFrom",
+                    ),
+                  })
+                  .from(personas)
+                  .where(and(eq(personas.id, record.id), ownsCommit)),
+              ),
+            ]
+          : [];
       const inserts = photos.map((photo) =>
         db.insert(personaImages).select(
           db
@@ -151,12 +206,20 @@ export function databaseStore(
       const [result] = await databaseOperation(() =>
         db.batch([
           write,
+          ...history,
           db.delete(personaImages).where(and(eq(personaImages.personaId, record.id), ownsCommit)),
           ...inserts,
         ]),
       );
       if (!result.meta.changes)
         throw new PersonaError("conflict", "Persona가 변경되었습니다. 다시 열어 주세요.");
+      return recordOf(
+        {
+          ...values,
+          markdown: previous?.currentVersion === version ? previous.markdown : record.description!,
+        },
+        photos,
+      );
     },
   };
 }

@@ -3,6 +3,7 @@ import { Schema } from "effect";
 import { InitialDocuments, parsePersona, PersonaError, serializePersona } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import copy from "./copy.json";
+import { captureImprovement } from "./persona-improvement.ts";
 const Draft = Schema.Struct({
   id: Schema.String,
   // The original saved snapshot for stale-edit checks; empty for a new character.
@@ -19,7 +20,14 @@ const Draft = Schema.Struct({
   conversion: Schema.optionalKey(
     Schema.Struct({
       source: Schema.String,
+      result: Schema.String,
       additions: Schema.Array(Schema.String).check(Schema.isMaxLength(20)),
+    }),
+  ),
+  improvementInput: Schema.optionalKey(
+    Schema.Struct({
+      scope: Schema.Literals(["persona", "profile"]),
+      instructions: Schema.String,
     }),
   ),
   seed: Schema.optionalKey(Schema.String),
@@ -50,11 +58,12 @@ export function captureDocuments(form: FormData, draft: Draft): Draft {
   const tab = form.get("tab") ?? draft.tab ?? "persona";
   if (tab !== "persona" && tab !== "state" && tab !== "memory")
     throw new PersonaError("invalid", copy.formError);
-  return {
+  const next: Draft = {
     ...draft,
     tab,
     initial: { ...draft.initial, preview: { state: read("state"), memory: read("memory") } },
   };
+  return form.get("intent") === "improve" ? captureImprovement(form, next) : next;
 }
 
 function draftFor(persona: PersonaRecord, editing: boolean): Draft {

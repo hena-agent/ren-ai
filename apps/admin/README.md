@@ -3,10 +3,19 @@
 Admin runs as a Worker. Drizzle owns the D1 schema; a private R2 bucket stores
 immutable generated images. One SQLite-backed Durable Object (`PersonaAdmin`,
 named `global`) owns private drafts, the image FIFO and submission deduplication.
+Persona documents are immutable numbered versions in D1; each Catalog read uses
+the current version pointer. Existing persona rows migrate their current Markdown
+to v1. Version restoration creates a new current version and leaves photos,
+initial documents and conversation state/memory unchanged.
 New Catalog schemas start empty. Existing saved Markdown and images can be
 explicitly imported into local D1/R2 with the one-off command below.
 
 ## Local development
+
+`GET /health` reports service `admin`, the full source revision embedded in the
+Worker, and database readiness. HTTP 200 means ready; 503 means degraded.
+Local source builds use revision `development`. The response is uncached and
+contains no credentials or persona data. CI verifies the service and revision.
 
 Copy `.env.example` to `.env` and set local credentials. Bun loads process settings
 and Wrangler loads Worker bindings from that same file. `PORT` defaults to 3729;
@@ -107,6 +116,9 @@ version's message names the commit it came from. The job authenticates with the
 token with Workers Scripts, D1 and Workers R2 Storage (Write), Account Settings
 (Read) and Workers Routes (Write) on `renai.im`. Do not also connect Workers
 Builds: it would deploy every push a second time, without waiting for the gates.
+The deployment check also verifies `/health` reports service `admin` and the
+exact source revision embedded in the Worker. It reports D1 readiness separately;
+health responses are uncached and contain no credentials or Catalog data.
 Every deploy restarts the Durable Object, so an image being generated at that
 moment needs an operator-confirmed retry.
 

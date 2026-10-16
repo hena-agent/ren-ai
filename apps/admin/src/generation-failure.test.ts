@@ -59,7 +59,7 @@ test("conversion reports the rejected section and rule without leaking generated
       name: sheet.name,
       description: legacy.prompt,
       gender: "female",
-      intent: "convert",
+      intent: "improve",
     }),
   );
   expect(response.status).toBe(503);

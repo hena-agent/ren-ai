@@ -3,6 +3,7 @@ import type { InitialDocuments, PersonaRecord } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
 import { documentStatus } from "./document-diagnostics.ts";
 import { LanguagePanel } from "./language-panel.tsx";
+import { ImprovementControls } from "./improvement-controls.tsx";
 
 export function DocumentEditor({
   persona,
@@ -10,6 +11,7 @@ export function DocumentEditor({
   editing,
   action,
   conversion,
+  improvementInput,
   documents = { state: "", memory: "" },
   tab = "persona",
 }: {
@@ -18,6 +20,7 @@ export function DocumentEditor({
   editing: boolean;
   action: string;
   conversion?: Draft["conversion"];
+  improvementInput?: Draft["improvementInput"];
   documents?: InitialDocuments;
   tab?: Draft["tab"];
 }) {
@@ -70,18 +73,10 @@ export function DocumentEditor({
           </span>
           <div className="document-actions">
             {editing && <a href={`${action}/persona.md`}>내려받기</a>}
-            <button
-              type="submit"
-              name="intent"
-              value="convert"
-              data-document-convert
-              hidden={result.state === "valid" || result.state === "empty"}
-              disabled={locked}
-            >
-              형식 정리
-            </button>
           </div>
         </div>
+        <ImprovementControls locked={locked} input={improvementInput} result={conversion} />
+        <div data-public-profile-editor />
         <div className="document-source">
           <div data-markdown-editor />
           <textarea
@@ -116,16 +111,6 @@ export function DocumentEditor({
             </li>
           ))}
         </ul>
-        {conversion && conversion.additions.length > 0 && (
-          <section className="conversion-report" aria-label="정리 결과">
-            <h3>보강한 설정</h3>
-            <ul>
-              {conversion.additions.map((item, index) => (
-                <li key={index}>{item}</li>
-              ))}
-            </ul>
-          </section>
-        )}
       </section>
       {(["state", "memory"] as const).map((key) => (
         <section

@@ -13,8 +13,14 @@ export default defineConfig({
       "@ren-ai/personas/catalog": fileURLToPath(
         new URL("../../packages/personas/src/catalog.ts", import.meta.url),
       ),
-      "@ren-ai/personas/markdown": fileURLToPath(
-        new URL("../../packages/personas/src/markdown.tsx", import.meta.url),
+      "@ren-ai/personas/public-profile-view": fileURLToPath(
+        new URL("../../packages/personas/src/public-profile-view.tsx", import.meta.url),
+      ),
+      "@ren-ai/personas/public-profile": fileURLToPath(
+        new URL("../../packages/personas/src/public-profile.ts", import.meta.url),
+      ),
+      "@ren-ai/personas/profile-projection": fileURLToPath(
+        new URL("../../packages/personas/src/profile-projection.ts", import.meta.url),
       ),
       "@ren-ai/personas/profile": fileURLToPath(
         new URL("../../packages/personas/src/profile.ts", import.meta.url),

@@ -25,6 +25,29 @@ function PortraitImage({ persona }: { persona: PublicPersona }) {
   );
 }
 
+function ProfileCaption({ persona }: { persona: PublicPersona }) {
+  const facts =
+    persona.profile?.sections.flatMap((section) =>
+      section.type === "basics" ? section.items : [],
+    ) ?? [];
+  const age = facts.find((fact) => fact.key === "age")?.value;
+  const metadata = ["occupation", "location"]
+    .map((key) => facts.find((fact) => fact.key === key)?.value)
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <div className="profile-caption">
+      <h2>
+        {persona.name}
+        {age && ` · ${age}`}
+      </h2>
+      {metadata && <p className="profile-meta">{metadata}</p>}
+      <p>{persona.bio}</p>
+      <ProfileLanguages persona={persona} compact />
+    </div>
+  );
+}
+
 function SwipeActions({
   disabled,
   onChoose,
@@ -204,11 +227,7 @@ export function Card({
                   PASS
                 </span>
               )}
-              <div className="profile-caption">
-                <h2>{persona.name}</h2>
-                <p>{persona.bio}</p>
-                <ProfileLanguages persona={persona} compact />
-              </div>
+              <ProfileCaption persona={persona} />
               <button
                 className="profile-info"
                 ref={openButton}

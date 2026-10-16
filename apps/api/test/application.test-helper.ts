@@ -22,6 +22,7 @@ export const startMessagingHost = (
   messages: Messages,
   gestures: Gestures,
   alerts: FailureAlerts,
+  polling = true,
 ) =>
   Effect.flatMap(loadPersonas(options.personaDirectory), (personas) =>
     startMessagingApplication(
@@ -37,6 +38,7 @@ export const startMessagingHost = (
             Effect.all([host.heartbeat.intake, host.heartbeat.followUps]),
           );
           yield* Effect.addFinalizer(() => Effect.sync(stop));
+          if (!polling) return;
           yield* Effect.forkScoped(
             Effect.forever(
               Effect.sleep("1 second").pipe(

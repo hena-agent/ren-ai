@@ -70,40 +70,59 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.details-content > p + p {
+.details-content p + p {
   margin-top: 20px;
 }
-.details-content > h3 {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
+.details-content .public-profile-section h3 {
   font-size: 17px;
   color: var(--ink);
 }
-.details-content > ul {
+.details-content .profile-interests ul {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   padding: 0;
   list-style: none;
 }
-.details-content > ul > li {
+.details-content .profile-interests li {
   padding: 8px 14px;
   background: var(--canvas);
   border-radius: 24px;
   overflow-wrap: anywhere;
   max-width: 100%;
 }
-.details-content blockquote {
-  margin: 16px 0;
-  padding-left: 16px;
-  border-left: 2px solid var(--line);
+.details-content .public-profile-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
-.details-content h4 {
-  margin: 0 0 10px;
+.details-content .profile-prompt {
+  padding: 20px;
+  background: var(--canvas);
+  border-radius: 16px;
+}
+.profile-facts {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+.profile-facts > div {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  line-height: 1.6;
+}
+.profile-facts dt {
   font-size: 14px;
-  font-weight: 500;
   color: var(--muted);
+}
+.profile-facts dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.profile-facts dt,
+.profile-facts dd,
+.public-profile-section h3 {
   overflow-wrap: anywhere;
 }
 .profile-caption p {
@@ -111,6 +130,11 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.profile-caption p.profile-meta {
+  font-size: 14px;
+  -webkit-line-clamp: 1;
+  margin-bottom: 6px;
 }
 .profile-card[data-expanded="true"] {
   cursor: auto;

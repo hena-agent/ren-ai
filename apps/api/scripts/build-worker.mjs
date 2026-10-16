@@ -14,4 +14,5 @@ await build({
   outfile: "dist/worker/entry.js",
   external: ["cloudflare:workers", "node:*"],
   minify: true,
+  define: { BUILD_REVISION: JSON.stringify(process.env.GITHUB_SHA ?? "development") },
 });
