@@ -31,9 +31,9 @@ export const resetFixture = async (prefix: string) => {
   return {
     ...fixture,
     fake,
-    handle: "tester@example.com",
+    handle: "+821012345678",
     start,
-    startMarked: start.pipe(Effect.tap((host) => bindTestHandle(host, "tester@example.com"))),
+    startMarked: start.pipe(Effect.tap((host) => bindTestHandle(host, "+821012345678"))),
     run: <A, E>(body: Parameters<typeof runMessagingTest<A, E>>[0]) =>
       runMessagingTest(body, join(fixture.root, "server.sqlite")),
     cleanup: () => rm(fixture.root, { recursive: true, force: true }),

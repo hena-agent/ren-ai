@@ -80,7 +80,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   expect(within(initialLanguages).getAllByRole("listitem")).toHaveLength(2);
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "language@example.org" } });
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "01012345678" } });
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.change(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }), {
     target: { value: "ja" },
@@ -90,7 +90,12 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   });
   expect(document.documentElement.lang).toBe("en");
   expect(localStorage.getItem("renai.locale")).toBe("en");
-  expect(screen.getByRole<HTMLInputElement>("textbox").value).toBe("language@example.org");
+  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Mobile number" }).value).toBe(
+    "010-1234-5678",
+  );
+  const country = screen.getByRole<HTMLSelectElement>("combobox", { name: "Country code" });
+  expect(country.value).toBe("KR");
+  expect(within(country).getByRole("option", { name: "🇰🇷 South Korea +82" })).toBeTruthy();
   expect(
     screen.getByRole<HTMLSelectElement>("combobox", { name: "Preferred conversation language" })
       .value,
@@ -108,7 +113,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   fireEvent.click(screen.getByRole("button", { name: "同意してウェイトリストに登録" }));
   await screen.findByRole("heading", { name: "ウェイトリストに登録しました。" });
   expect(join).toHaveBeenCalledWith({
-    handle: "language@example.org",
+    handle: "+821012345678",
     locale: "ja",
     conversationLanguage: "ja",
     privacyNoticeVersion: discoveryNotices.ja.version,

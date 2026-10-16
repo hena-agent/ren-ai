@@ -128,12 +128,12 @@ test("reading a liked profile during contact entry preserves the mounted form an
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
   const input = screen.getByRole("textbox");
-  fireEvent.change(input, { target: { value: "saved@example.com" } });
+  fireEvent.change(input, { target: { value: "01012345678" } });
   fireEvent.click(likedButton("하린"));
   expect(screen.getByRole("region", { name: "하린" })).toBeTruthy();
   expect(input.closest(".contact-surface")!.hasAttribute("hidden")).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
   expect(screen.getByRole("textbox")).toBe(input);
   expect(screen.queryByRole("button", { name: "좋아요" })).toBeNull();
-  expect(input.getAttribute("value")).toBe("saved@example.com");
+  expect(input.getAttribute("value")).toBe("010-1234-5678");
 });
