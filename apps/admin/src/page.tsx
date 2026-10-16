@@ -33,6 +33,7 @@ interface EditorFields {
   queuePosition?: number | undefined;
   queueObservedAt?: number | undefined;
   conversion?: Draft["conversion"] | undefined;
+  improvementInput?: Draft["improvementInput"];
 }
 
 function needsCreation(persona: PersonaRecord, editing: boolean, retry: boolean) {
@@ -52,6 +53,7 @@ function Editor({
   imageJobs,
   imageReservations,
   conversion,
+  improvementInput,
   changed = true,
   documents = { state: "", memory: "" },
   tab,
@@ -177,6 +179,7 @@ function Editor({
               editing={editing}
               action={action}
               conversion={conversion}
+              improvementInput={improvementInput}
               documents={documents}
               tab={tab}
             />
@@ -253,6 +256,7 @@ export function renderPage({
   queuePosition,
   queueObservedAt,
   conversion,
+  improvementInput,
   inspections,
   changed,
   documents,
@@ -353,6 +357,7 @@ export function renderPage({
                 imageJobs={imageJobs}
                 imageReservations={imageReservations}
                 conversion={conversion}
+                improvementInput={improvementInput}
                 changed={changed}
                 documents={documents}
                 tab={tab}

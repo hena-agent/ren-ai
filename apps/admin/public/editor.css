@@ -2,6 +2,75 @@
   max-width: 1440px;
   padding-top: 24px;
 }
+.improvement-controls,
+.public-profile-editor {
+  padding: 20px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  margin: 0;
+  min-width: 0;
+}
+.improvement-controls h3,
+.public-profile-editor legend {
+  font-size: 16px;
+  font-weight: 600;
+}
+.profile-edit-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.profile-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.improvement-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.improvement-result {
+  margin-top: 24px;
+}
+.improvement-comparison textarea {
+  resize: vertical;
+  font:
+    13px/1.7 ui-monospace,
+    monospace;
+}
+.public-profile-section {
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.public-persona-preview .profile-interests ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+.public-persona-preview .profile-interests li {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+.public-persona-preview .profile-facts ul {
+  padding-left: 18px;
+}
+.public-persona-preview .profile-answer {
+  padding: 16px;
+  margin: 12px 0;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+@media (max-width: 700px) {
+  .improvement-comparison {
+    grid-template-columns: 1fr;
+  }
+}
 .upload-drop {
   display: grid;
   gap: 8px;

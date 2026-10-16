@@ -50,6 +50,7 @@ const documentFields = (draft: Draft) => ({
   documents: documentsOf(draft),
   tab: draft.tab,
   showIdea: Boolean(draft.characterPending),
+  improvementInput: draft.improvementInput,
 });
 export function createAdmin(
   store: PersonaStore,
@@ -207,14 +208,9 @@ export function createAdmin(
             conversion: draft.conversion,
           }),
         );
-      if (
-        intent === "convert" &&
-        (persona.name !== previewOf(draft, emptyPersona).name ||
-          persona.gender !== previewOf(draft, emptyPersona).gender)
-      )
-        throw new PersonaError("invalid", copy.identityError);
-      if (!generator) return unconfigured(persona, draft);
-      const next = await generateTextDraft(persona, draft, intent, generator);
+      if (!generator && intent !== "apply-improvement" && intent !== "discard-improvement")
+        return unconfigured(persona, draft);
+      const next = await generateTextDraft(persona, draft, intent, generator!);
       await assertSnapshot(store, draft);
       subDrafts.set(draft.id, next);
       return html(

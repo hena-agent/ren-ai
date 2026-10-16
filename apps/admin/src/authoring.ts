@@ -46,7 +46,9 @@ export function readIntent(form: FormData) {
     intent === "introduction" ||
     intent === "profile" ||
     intent === "inspect" ||
-    intent === "convert" ||
+    intent === "improve" ||
+    intent === "apply-improvement" ||
+    intent === "discard-improvement" ||
     intent === "state" ||
     intent === "memory"
   )
