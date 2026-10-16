@@ -75,7 +75,8 @@ it("health reports storage failures without leaking local paths or session data"
   try {
     for (const cause of [new Error("private-path-marker"), "private-payload-marker"]) {
       const store = { ...memoryStore().store, list: () => Promise.reject(cause) };
-      const response = await eventLab(model, store).handle(new Request("http://localhost/health"));
+      const instance = eventLab(model, store);
+      const response = await instance.handle(new Request("http://localhost/health"));
       expect(response.status).toBe(503);
       expect(await response.json()).toEqual({
         service: "persona-lab",

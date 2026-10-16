@@ -63,11 +63,23 @@ export const messageGateway = (messages: Messages, token: string, gestures: Gest
     if (request.method !== "GET") {
       const requestId = crypto.randomUUID();
       process.stderr.write(
-        `${JSON.stringify({ service: "imsg", requestId, operation: "health", stage: "routing", outcome: "rejected", level: "warn", status: 405 })}\n`,
+        `${JSON.stringify({
+          service: "imsg",
+          requestId,
+          operation: "health",
+          stage: "routing",
+          outcome: "rejected",
+          level: "warn",
+          status: 405,
+        })}\n`,
       );
       return new Response(null, {
         status: 405,
-        headers: { Allow: "GET", "Cache-Control": "no-store", "X-Request-ID": requestId },
+        headers: {
+          Allow: "GET",
+          "Cache-Control": "no-store",
+          "X-Request-ID": requestId,
+        },
       });
     }
     const requestId = crypto.randomUUID();
@@ -79,7 +91,19 @@ export const messageGateway = (messages: Messages, token: string, gestures: Gest
     );
     if (Result.isFailure(result))
       process.stderr.write(
-        `${JSON.stringify({ service: "imsg", requestId, operation: "health", stage: "messages.probe", outcome: "failed", level: "error", durationMs: performance.now() - start, causeName: result.failure.name === "TimeoutError" ? "TimeoutError" : "Error", ...("code" in result.failure && typeof result.failure.code === "string" && /^[A-Z0-9_]{1,64}$/.test(result.failure.code) && { causeCode: result.failure.code }) })}\n`,
+        `${JSON.stringify({
+          service: "imsg",
+          requestId,
+          operation: "health",
+          stage: "messages.probe",
+          outcome: "failed",
+          level: "error",
+          durationMs: performance.now() - start,
+          causeName: result.failure.name === "TimeoutError" ? "TimeoutError" : "Error",
+          ...("code" in result.failure &&
+            typeof result.failure.code === "string" &&
+            /^[A-Z0-9_]{1,64}$/.test(result.failure.code) && { causeCode: result.failure.code }),
+        })}\n`,
       );
     const response = healthResponse("imsg", Result.isSuccess(result) ? "ready" : "degraded");
     response.headers.set("X-Request-ID", requestId);
@@ -92,7 +116,15 @@ export const messageGateway = (messages: Messages, token: string, gestures: Gest
     const requestId = crypto.randomUUID();
     response.headers.set("X-Request-ID", requestId);
     process.stderr.write(
-      `${JSON.stringify({ service: "imsg", requestId, operation: "health", stage: response.status === 401 ? "authorization" : "health", outcome: "rejected", level: "warn", status: response.status })}\n`,
+      `${JSON.stringify({
+        service: "imsg",
+        requestId,
+        operation: "health",
+        stage: "authorization",
+        outcome: "rejected",
+        level: "warn",
+        status: response.status,
+      })}\n`,
     );
     return response;
   };

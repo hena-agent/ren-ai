@@ -33,6 +33,7 @@ describe("authenticated execution gateway", () => {
       );
       expect(response.status).toBe(401);
       expect(response.headers.get("x-request-id")).toBeTruthy();
+      expect(response.headers.get("cache-control")).toBe("no-store");
     },
   );
 

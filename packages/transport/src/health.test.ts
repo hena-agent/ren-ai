@@ -46,7 +46,7 @@ test("health parsing narrows untrusted responses and excludes extra payload", ()
   expect(() => parseHealth(health, "api-msg", "b".repeat(40))).toThrow("revision");
 });
 
-test("deployment verification requires exact identity and distinguishes readiness from identity-only rollout checks", async () => {
+test("deployment verification requires the exact service and artifact, and distinguishes readiness from identity-only rollout checks", async () => {
   expect(await verifyHealth(Response.json(health), "api-msg", health.revision)).toEqual(health);
   const degraded = { ...health, status: "degraded" };
   expect(
@@ -63,7 +63,7 @@ test("deployment verification requires exact identity and distinguishes readines
   ).rejects.toThrow("identity or revision");
 });
 
-test("dependency probes reject wrong servers, auth failures, redirects and private payloads", async () => {
+test("dependency probes reject the wrong server, auth failures and redirects without leaking bodies or credentials", async () => {
   const fetcher = vi.fn<typeof fetch>();
   expect(await probeHealth("https://executor.test", "api-msg", " ", fetcher)).toEqual({
     status: "unconfigured",

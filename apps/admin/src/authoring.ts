@@ -46,7 +46,9 @@ export function readIntent(form: FormData) {
     intent === "introduction" ||
     intent === "profile" ||
     intent === "inspect" ||
-    intent === "convert" ||
+    intent === "improve" ||
+    intent === "apply-improvement" ||
+    intent === "discard-improvement" ||
     intent === "state" ||
     intent === "memory"
   )
@@ -70,7 +72,10 @@ export function authorPersona(form: FormData, previous: PersonaRecord) {
   const description = read("description");
   const gender = selectedGender(form, previous);
   const changed =
-    name !== previous.name || description !== descriptionOf(previous) || gender !== previous.gender;
+    name !== previous.name ||
+    description.replace(/\r\n?/g, "\n") !==
+      descriptionOf(previous).replace(/\r\n?/g, "\n").trim() ||
+    gender !== previous.gender;
   return {
     ...previous,
     name,

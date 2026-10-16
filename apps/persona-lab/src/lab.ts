@@ -77,7 +77,17 @@ export const createLab = (
     } catch (cause) {
       ready = false;
       process.stderr.write(
-        `${JSON.stringify({ service: "persona-lab", requestId, operation: "health", stage: "storage.read", outcome: "failed", level: "error", durationMs: performance.now() - started, code: "STORAGE_UNAVAILABLE", causeName: cause instanceof Error ? cause.name : "NonError" })}\n`,
+        `${JSON.stringify({
+          service: "persona-lab",
+          requestId,
+          operation: "health",
+          stage: "storage.read",
+          outcome: "failed",
+          level: "error",
+          durationMs: performance.now() - started,
+          code: "STORAGE_UNAVAILABLE",
+          causeName: cause instanceof Error ? cause.name : "NonError",
+        })}\n`,
       );
     }
     const response = healthResponse("persona-lab", ready ? "ready" : "degraded", {

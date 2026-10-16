@@ -38,6 +38,12 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 This repo enforces seven gates. They are not advisory. `bun run ci` runs all of them and CI blocks on it.
 
+Before running checks, activate the Node version in `.nvmrc` (`nvm use`) and verify it with `node --version`. Vitest uses Node from `PATH`, even when launched through Bun; Node 22 cannot parse OpenCode's `await using` syntax.
+
+Use focused checks during development. Run `bun run ci` once after implementation and final review; batch any fixes, rerun only affected checks, and report unresolved failures.
+
+Serialize coverage and `verify-gates` runs within one checkout. Wait for other runs to finish: Vitest shares its report directory, and `verify-gates` temporarily plants and deletes source fixtures.
+
 | Gate                  | Threshold      | Enforced by                 |
 | --------------------- | -------------- | --------------------------- |
 | Cyclomatic complexity | < 22           | oxlint `eslint/complexity`  |

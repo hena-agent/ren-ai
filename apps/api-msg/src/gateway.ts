@@ -255,7 +255,10 @@ const healthResponse = async (
   } catch (error) {
     const cause = error instanceof Error ? error : new Error("UnknownError");
     return complete(
-      serviceHealth("api-msg", "degraded", { error: "Health check failed", requestId }),
+      serviceHealth("api-msg", "degraded", {
+        error: "Health check failed",
+        requestId,
+      }),
       "health",
       "failure",
       "error",

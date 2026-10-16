@@ -77,7 +77,7 @@ attested `api-msg-bundle` from the latest completed `main` CI push and verifies
 the workflow identity, `refs/heads/main`, exact commit digest and hosted-runner
 provenance. It probes the currently installed process first, installs only the
 JavaScript payload, and restarts only `im.renai.api-msg` when executable payload
-files change, including the embedded revision. Metadata-only changes do not restart. Failed probes restore the
+files change, including the embedded revision. Failed probes restore the
 previous payload; a bad artifact is marked rejected if the prior service was
 healthy, otherwise it is deferred until the Mac recovers. The updater never
 modifies `api-msg.env`, Bun, either upstream, the imsg process or any tunnel.

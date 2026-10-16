@@ -57,6 +57,11 @@ test.each([
   },
   {
     status: 200,
+    body: JSON.stringify({ service: "api-msg", revision: "development", status: "ready" }),
+    expected: "invalid",
+  },
+  {
+    status: 200,
     body: JSON.stringify({ service: "api-msg", revision: "development", status: "degraded" }),
     expected: "invalid",
   },

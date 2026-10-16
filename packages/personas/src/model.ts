@@ -18,6 +18,8 @@ export interface Persona {
   readonly prompt: string;
   /** Initial conversation documents, supplied by the private runtime Catalog. */
   readonly initial?: InitialDocuments;
+  /** Saved Persona document revision, never part of the prompt body. */
+  readonly version?: number;
 }
 
 export interface PersonaRecord extends Persona {
@@ -58,6 +60,9 @@ const SecondaryPortraits = Schema.Array(
   }),
 ).check(Schema.isMaxLength(10));
 const Frontmatter = Schema.Struct({
+  version: Schema.optionalKey(
+    Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
+  ),
   "time-zone": Schema.String,
   language: Schema.String,
   "opening-line": Schema.String,
@@ -77,6 +82,7 @@ const Frontmatter = Schema.Struct({
 });
 
 const Input = Schema.Struct({
+  version: Frontmatter.fields.version,
   id: Schema.String,
   name: Schema.String,
   bio: Schema.String,
@@ -189,6 +195,7 @@ export function parsePersona(id: string, source: string): PersonaRecord {
     imageUrl: fields["image-url"] ?? "",
     published: fields.published ?? false,
     description: match[2]!,
+    ...(fields.version === undefined ? {} : { version: fields.version }),
     ...(fields.gender === undefined ? {} : { gender: fields.gender }),
     ...(fields["description-version"] === undefined
       ? {}
@@ -216,6 +223,7 @@ export function serializePersona(persona: PersonaRecord): string {
     published: persona.published,
     gender: persona.gender,
     "description-version": persona.descriptionVersion,
+    version: persona.version,
     portraits: persona.portraits,
     "secondary-portraits": persona.secondaryPortraits,
   })}---\n${persona.description ?? persona.prompt}`;

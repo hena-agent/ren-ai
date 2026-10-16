@@ -2,7 +2,8 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { personaImages } from "@ren-ai/personas";
-import { personas, personaImages as photos } from "./database-schema.ts";
+import { personas, personaImages as photos, personaVersions } from "./database-schema.ts";
+import { currentPersonaRows } from "./database-record.ts";
 import { personaContent, personaValues, photoValues } from "./catalog-values.ts";
 import { imageKey } from "./r2-images.ts";
 import type { ImageBucket } from "./r2-images.ts";
@@ -23,16 +24,21 @@ async function imageMatches(image: ImportImage, object: Awaited<ReturnType<Image
 
 async function currentMatches(binding: D1Database, input: ImportPersona, source: ImportSource) {
   const db = drizzle(binding);
-  const current = await db.select().from(personas).where(eq(personas.id, input.record.id)).get();
+  const current = await currentPersonaRows(db).where(eq(personas.id, input.record.id)).get();
   if (!current) return false;
   const {
     revision: _revision,
     commitId: _commitId,
     createdAt: _createdAt,
     updatedAt: _updatedAt,
+    markdown,
+    currentVersion: _currentVersion,
     ...content
   } = current;
-  if (JSON.stringify(content) !== JSON.stringify(personaContent(input.record, input.documents)))
+  if (
+    markdown !== input.record.description ||
+    JSON.stringify(content) !== JSON.stringify(personaContent(input.record, input.documents))
+  )
     throw new Error(`Import ID conflicts with existing Persona ${input.record.id}`);
   const counts = { anime: 0, photo: 0 };
   const expected = personaImages(input.record).map((photo) => {
@@ -94,6 +100,15 @@ export async function importCatalog(
         for (const input of additions) {
           // One-off transfer preserves existing publication; normal authoring save still validates publication readiness.
           statements.push(db.insert(personas).values(personaValues(input.record, input.documents)));
+          statements.push(
+            db.insert(personaVersions).values({
+              personaId: input.record.id,
+              version: 1,
+              markdown: input.record.description!,
+              createdAt: Date.now(),
+              restoredFrom: null,
+            }),
+          );
           const links = await photoValues(input.record, bucket);
           if (links.length) statements.push(db.insert(photos).values(links));
         }
