@@ -40,21 +40,12 @@ const convertPage = async (
   page: string,
   source: string,
 ) => {
-  const response = await admin(
+  return admin(
     request("/personas/legacy", {
       ...fields,
       description: source,
       draft: tokenOf(page),
       intent: "improve",
-    }),
-  );
-  if (response.status !== 200) return response;
-  return admin(
-    request("/personas/legacy", {
-      ...fields,
-      description: source,
-      draft: tokenOf(await response.text()),
-      intent: "apply-improvement",
     }),
   );
 };
@@ -130,18 +121,9 @@ test("conversion can be saved immediately with existing photos and public state,
   const proposal = await admin(
     request("/personas/legacy", { ...fields, draft: tokenOf(initial), intent: "improve" }),
   );
-  const pending = await proposal.text();
-  expect(preview(pending).description).toBe(original.description);
-  expect(pending).toContain(conversion.additions[0]);
-  const converted = await admin(
-    request("/personas/legacy", {
-      ...fields,
-      draft: tokenOf(pending),
-      intent: "apply-improvement",
-    }),
-  );
-  expect(converted.status).toBe(200);
-  const page = await converted.text();
+  expect(proposal.status).toBe(200);
+  const page = await proposal.text();
+  expect(page).toContain(conversion.additions[0]);
   expect(page).not.toContain("변환 전 설명");
   const draft = preview(page);
   expect(draft.description).toBe(description);
@@ -152,7 +134,7 @@ test("conversion can be saved immediately with existing photos and public state,
   expect(await store.get("legacy")).toEqual(original);
   const refreshed = await (await admin(request("/personas/legacy"))).text();
   expect(preview(refreshed).description).toBe(description);
-  expect(refreshed).not.toContain("개선 결과 비교");
+  expect(refreshed).toContain("data-improvement-source");
   const directSave = await admin(
     request("/personas/legacy", { ...fields, description, draft: tokenOf(page), intent: "save" }),
   );

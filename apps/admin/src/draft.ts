@@ -20,7 +20,6 @@ const Draft = Schema.Struct({
   conversion: Schema.optionalKey(
     Schema.Struct({
       source: Schema.String,
-      result: Schema.String,
       additions: Schema.Array(Schema.String).check(Schema.isMaxLength(20)),
     }),
   ),

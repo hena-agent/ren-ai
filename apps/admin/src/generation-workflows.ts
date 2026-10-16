@@ -7,7 +7,7 @@ import type { Draft } from "./draft.ts";
 import { documentsOf } from "./draft.ts";
 import { serializePersona } from "@ren-ai/personas";
 import { versionedPersona } from "@ren-ai/personas";
-import { improvePersona, resolveImprovement } from "./persona-improvement.ts";
+import { improvePersona } from "./persona-improvement.ts";
 import {
   splitPersonaMarkdown,
   withPublicProfile,
@@ -53,15 +53,7 @@ async function characterDraft(seed: string, previous: PersonaRecord, generator: 
 export async function generateTextDraft(
   persona: ReturnType<typeof authorPersona>,
   draft: Draft,
-  intent:
-    | "character"
-    | "introduction"
-    | "profile"
-    | "improve"
-    | "apply-improvement"
-    | "discard-improvement"
-    | "state"
-    | "memory",
+  intent: "character" | "introduction" | "profile" | "improve" | "state" | "memory",
   generator: ProfileGenerator,
 ) {
   if (intent === "state" || intent === "memory") {
@@ -83,8 +75,6 @@ export async function generateTextDraft(
   }
   if (intent === "introduction") return introductionDraft(persona, draft, generator);
   if (intent === "improve") return improvePersona(persona, draft, generator);
-  if (intent === "apply-improvement" || intent === "discard-improvement")
-    return resolveImprovement(persona, draft, intent === "apply-improvement");
   if (intent === "profile") {
     const publicMarkdown = await operation("profile.generate", {}, () =>
       generator.profile(characterOf(persona)),

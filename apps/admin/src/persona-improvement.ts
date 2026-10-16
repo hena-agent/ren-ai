@@ -3,7 +3,6 @@ import {
   parseCharacterDescription,
   serializePersona,
   versionedPersona,
-  parsePersona,
 } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import { requirePublicProfile, withPublicProfile } from "@ren-ai/personas/profile";
@@ -62,44 +61,19 @@ export async function improvePersona(
     return improved;
   });
   protect(result.description, ...result.additions);
+  const form = new FormData();
+  form.set("name", persona.name);
+  form.set("description", result.description);
+  if (persona.published) form.set("published", "on");
+  const next = versionedPersona(authorPersona(form, persona));
   return {
     ...draft,
-    preview: serializePersona(persona),
+    preview: serializePersona(next),
+    tab: "persona",
     imageEditing: true,
     conversion: {
       source: persona.description!,
-      result: result.description,
       additions: result.additions,
     },
   };
-}
-
-export function resolveImprovement(persona: PersonaRecord, draft: Draft, apply: boolean): Draft {
-  const pending = draft.conversion;
-  if (!pending) throw new PersonaError("conflict", "적용할 개선 결과가 없습니다.");
-  const original = parsePersona(draft.id, draft.preview);
-  if (apply && (original.name !== persona.name || original.gender !== persona.gender))
-    throw new PersonaError(
-      "invalid",
-      "개선 요청 이후 이름이나 성별이 바뀌었습니다. 다시 개선해 주세요.",
-    );
-  if (
-    apply &&
-    persona.description!.replace(/\r\n?/g, "\n") !== pending.source.replace(/\r\n?/g, "\n")
-  )
-    throw new PersonaError(
-      "conflict",
-      "개선 요청 이후 원문이 바뀌었습니다. 현재 원문으로 다시 개선해 주세요.",
-    );
-  let next = persona;
-  if (apply) {
-    const form = new FormData();
-    form.set("name", persona.name);
-    form.set("description", pending.result);
-    if (persona.published) form.set("published", "on");
-    next = versionedPersona(authorPersona(form, persona));
-  }
-  const result = { ...draft, preview: serializePersona(next), imageEditing: true };
-  delete result.conversion;
-  return result;
 }
