@@ -9,4 +9,5 @@ export interface AdminOptions {
   log?: Log;
   persistence?: AdminPersistence;
   management?: ManagementClient;
+  catalogPending?: () => Promise<boolean>;
 }

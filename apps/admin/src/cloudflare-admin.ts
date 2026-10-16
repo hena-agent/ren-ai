@@ -6,6 +6,7 @@ import { loggedJob, writeLog as workerLog } from "./logging.ts";
 import { editingStorage } from "./editing-storage.ts";
 import type { ImageBucket } from "./r2-images.ts";
 import { managementClient } from "./contact-client.ts";
+import { catalogDelivery, wakeAlarm } from "./catalog-delivery.ts";
 
 export interface AdminEnv {
   ADMIN_JURISDICTION?: "us" | "local";
@@ -35,11 +36,12 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
     asset("editor.css"),
     asset("pending.js"),
   ]);
-  const wake = async () => {
-    if ((await storage.getAlarm()) === null) await storage.setAlarm(Date.now() + 1);
-  };
+  const wake = () => wakeAlarm(storage, Date.now() + 1);
+  const management = managementClient(env.APPLICATION_API_URL ?? "", env.TOKEN_MANAGEMENT ?? "");
+  const delivery = catalogDelivery(storage, management.refreshCatalog);
+  const store = databaseStore(env.DB, env.IMAGES);
   const handle = createAdmin(
-    databaseStore(env.DB, env.IMAGES),
+    { ...store, save: (...args) => delivery.save(() => store.save(...args)) },
     env.ADMIN_PASSWORD,
     `${css}\n${editorCss}`,
     {
@@ -52,12 +54,14 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
         ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
       }),
       persistence: { saved, checkpoint: editing.save, wake },
-      management: managementClient(env.APPLICATION_API_URL ?? "", env.TOKEN_MANAGEMENT ?? ""),
+      management,
+      catalogPending: delivery.pending,
     },
   );
   return {
     fetch: handle,
     alarm: async () => {
+      await delivery.flush();
       const job = handle.nextJob();
       if (!job) return;
       await loggedJob(

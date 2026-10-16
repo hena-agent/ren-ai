@@ -8,6 +8,7 @@ export interface ManagementClient {
   list: () => Promise<typeof ContactSnapshot.Type>;
   select: (input: typeof SelectContacts.Type) => Promise<typeof ContactSelection.Type>;
   start: (input: typeof StartContact.Type) => Promise<typeof ContactSelection.Type>;
+  refreshCatalog: () => Promise<void>;
 }
 
 async function selection(response: Response) {
@@ -30,6 +31,7 @@ export function managementClient(
   const request = async (
     path: string,
     input?: typeof SelectContacts.Type | typeof StartContact.Type,
+    method = input ? "POST" : "GET",
   ) => {
     protect(token);
     if (!url || !token)
@@ -49,7 +51,7 @@ export function managementClient(
     let response: Response;
     try {
       response = await fetcher(new URL(path, base), {
-        method: input ? "POST" : "GET",
+        method,
         headers: {
           Authorization: `Bearer ${token}`,
           "X-Operation-ID": requestId(),
@@ -107,5 +109,8 @@ export function managementClient(
         ),
       ),
     start: async (input) => selection(await request("/management/discovery/start", input)),
+    refreshCatalog: async () => {
+      await request("/management/catalog/refresh", undefined, "POST");
+    },
   };
 }
