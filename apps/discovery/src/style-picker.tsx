@@ -1,7 +1,7 @@
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { withImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
-import copy from "./copy.json";
+import { useCopy } from "./locale.tsx";
 
 export function StylePicker({
   sample,
@@ -10,6 +10,7 @@ export function StylePicker({
   sample: PublicPersona;
   onChoose: (style: ImageStyle) => void;
 }) {
+  const copy = useCopy();
   return (
     <section className="style-picker" aria-labelledby="style-title">
       <h1 id="style-title">{copy.styleTitle}</h1>
@@ -38,6 +39,7 @@ export function StyleSwitch({
   style: ImageStyle;
   onChoose: (style: ImageStyle) => void;
 }) {
+  const copy = useCopy();
   return (
     <fieldset className="style-switch">
       <legend className="sr-only">{copy.styleSetting}</legend>

@@ -1,7 +1,8 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 import type { StyledPersona } from "./image-style.ts";
 import { GalleryControls } from "./photo-gallery.tsx";
-import copy from "./copy.json";
+import { useCopy } from "./locale.tsx";
+import { ProfileLanguages } from "./profile-languages.tsx";
 import { MarkdownProfile } from "@ren-ai/personas/markdown";
 
 function DetailsGallery({
@@ -15,12 +16,17 @@ function DetailsGallery({
   onImageChange: (image: number) => void;
   disabled: boolean;
 }) {
+  const copy = useCopy();
   const images = persona.imageUrls ?? [persona.imageUrl];
   const currentImage = Math.min(image, images.length - 1);
   return (
     <div className="details-media">
       {images[currentImage] ? (
-        <img className="details-photo" src={images[currentImage]} alt={`${persona.name} 프로필`} />
+        <img
+          className="details-photo"
+          src={images[currentImage]}
+          alt={`${persona.name} ${copy.profilePhoto}`}
+        />
       ) : (
         <div className="photo-fallback">
           <span>{persona.name.slice(0, 1)}</span>
@@ -50,6 +56,7 @@ export function ProfileDetails({
   onImageChange: (image: number) => void;
   disabled: boolean;
 }) {
+  const copy = useCopy();
   const close = useRef<HTMLButtonElement>(null);
   const collapse = useEffectEvent(onClose);
   useEffect(() => {
@@ -91,6 +98,7 @@ export function ProfileDetails({
         />
         <div className="details-content">
           <span className="details-label">{copy.profileLabel}</span>
+          <ProfileLanguages persona={persona} />
           <MarkdownProfile markdown={persona.publicProfile ?? persona.bio} />
         </div>
       </div>
