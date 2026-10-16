@@ -11,5 +11,5 @@ const isMobileNumber = (value: string) => {
   return phone?.number === value && phone.isValid();
 };
 
-/** A mobile number of any country in E.164 form, the only contact Discovery accepts. */
+/** A mobile number of any country in E.164 form: the only kind of Handle Discovery registers. */
 export const MobileNumber = Schema.String.check(Schema.makeFilter(isMobileNumber));

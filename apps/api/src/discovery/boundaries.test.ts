@@ -90,7 +90,7 @@ test("mobile numbers from any country register in international form", async () 
       yield* Effect.tryPromise(async () => {
         try {
           for (const handle of ["+14155550100", "+819012345678"])
-            expect((await post(web, { ...input, handle }, handle)).status).toBe(200);
+            expect((await post(web, { ...input, handle })).status).toBe(200);
         } finally {
           await web.dispose();
         }

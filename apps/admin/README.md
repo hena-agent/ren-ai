@@ -164,6 +164,8 @@ that persona and schedule the first Greeting immediately, without random
 selection. The API refuses other handles, unliked or taken personas and handles
 that are no longer waiting with `409`. This is how a test handle starts a new
 conversation after `/reset`: register again through Discovery, then start it here.
+Discovery accepts only mobile numbers, so a test handle that restarts this way is
+the tester's iPhone number, not an Apple ID email.
 Deploy the API before Admin; an older API answers the start with `404`.
 
 `/first-contacts` shows reservations, session preparation, Greeting processing,

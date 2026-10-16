@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { getCountries } from "libphonenumber-js/mobile";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { JoinForm } from "./join-form.tsx";
@@ -169,6 +170,8 @@ test("an invalid number is pointed out only after leaving the field or trying to
   fireEvent.change(number(), { target: { value: "" } });
   fireEvent.blur(number());
   expect(screen.queryByRole("alert")).toBeNull();
+  join();
+  expect(screen.getByRole("alert").textContent).toBe("휴대전화 번호를 확인해 주세요.");
   expect(submit).not.toHaveBeenCalled();
 });
 
@@ -216,7 +219,7 @@ test("the picker offers the detected country, Korea, Japan and the US before eve
     "🇬🇭 가나 +233",
   ]);
   expect(options[4]!.disabled).toBe(true);
-  expect(options).toHaveLength(246);
+  expect(options).toHaveLength(getCountries().length + 1);
 });
 
 test("a pasted international number chooses its country and joins in international form", async () => {
@@ -228,6 +231,9 @@ test("a pasted international number chooses its country and joins in internation
   join();
   await act(async () => {});
   expect(submit).toHaveBeenCalledWith(expect.objectContaining({ handle: "+14155550100" }));
+  // Its calling code belongs to the old country, so choosing another one starts the number over.
+  fireEvent.change(country(), { target: { value: "KR" } });
+  expect(number().value).toBe("");
 });
 
 test("choosing another country reads the typed digits as that country's number", () => {
@@ -241,6 +247,7 @@ test("choosing another country reads the typed digits as that country's number",
   expect(number().getAttribute("placeholder")).toBe("090-1234-5678");
   expect(screen.getByText("🇯🇵 +81")).toBeTruthy();
   expect(screen.queryByRole("alert")).toBeNull();
+  // The divider between suggested and other countries is not a country.
   fireEvent.change(country(), { target: { value: "──────────" } });
   expect(country().value).toBe("JP");
 });
@@ -251,7 +258,7 @@ test("a public deployment uses its configured Turnstile key", () => {
   expect(key).toBe("public-invisible-key");
 });
 
-test("verification alone cannot enable an invalid or unconsented submission, and native navigation is prevented", () => {
+test("verification alone cannot enable an unconsented submission, joining explains an incomplete number, and native navigation is prevented", () => {
   mount();
   const button = screen.getByRole("button", { name: "동의하고 대기 등록" });
   const form = button.closest("form")!;
@@ -261,8 +268,12 @@ test("verification alone cannot enable an invalid or unconsented submission, and
   expect(button.hasAttribute("disabled")).toBe(true);
   fireEvent.click(screen.getByRole("checkbox"));
   expect(button.hasAttribute("disabled")).toBe(false);
+  // A phone keypad has no return key, so the button must explain an incomplete number.
   fireEvent.change(number(), { target: { value: "010-9876" } });
-  expect(button.hasAttribute("disabled")).toBe(true);
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(button);
+  expect(screen.getByRole("alert").textContent).toBe("휴대전화 번호를 확인해 주세요.");
+  expect(number().getAttribute("aria-invalid")).toBe("true");
   const event = new Event("submit", { bubbles: true, cancelable: true });
   fireEvent(form, event);
   expect(event.defaultPrevented).toBe(true);

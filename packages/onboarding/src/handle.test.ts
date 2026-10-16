@@ -12,25 +12,20 @@ describe("Handle", () => {
     ["+82 10-1234-5678", "+821012345678"],
     ["+1 415 555 0100", "+14155550100"],
     ["+81 90-1234-5678", "+819012345678"],
+    // The operator still reaches numbers registered before Discovery required mobile numbers.
+    ["02 123 4567", "+8221234567"],
+    ["070 1234 5678", "+827012345678"],
     ["  A.User@EXAMPLE.COM  ", "a.user@example.com"],
   ])("normalizes %s to %s", (input, normalized) => {
     expect(normalizeHandle(input)).toBe(normalized);
   });
 
-  it.each([
-    null,
-    12,
-    "",
-    "010123456789",
-    "010-12x4-5678",
-    "010+12345678",
-    "02 123 4567",
-    "070 1234 5678",
-    "a@",
-    "a b@example.com",
-  ])("rejects invalid Handle %s", (input) => {
-    expect(normalizeHandle(input)).toBeUndefined();
-  });
+  it.each([null, 12, "", "010123456789", "010-12x4-5678", "010+12345678", "a@", "a b@example.com"])(
+    "rejects invalid Handle %s",
+    (input) => {
+      expect(normalizeHandle(input)).toBeUndefined();
+    },
+  );
 
   it("normalizes an email Handle and rejects invalid input", () => {
     expect(normalizeHandle("  H@Example.COM  ")).toBe("h@example.com");

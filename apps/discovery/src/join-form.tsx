@@ -38,18 +38,18 @@ export function JoinForm({
   const [conversationLanguage, setConversationLanguage] = useState<Locale>(locale);
   const [contact, setContact] = useState<{
     phone: string | undefined;
-    checked: boolean;
+    touched: boolean;
     consentLanguage: Locale | null;
-  }>({ phone: undefined, checked: false, consentLanguage: null });
+  }>({ phone: undefined, touched: false, consentLanguage: null });
   const [token, setToken] = useState<string | null>("");
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState(false);
   const submitting = useRef(false);
   const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
-  const invalid = contact.checked && contact.phone !== undefined && !handle;
+  const invalid = contact.touched && !handle;
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    setContact((current) => ({ ...current, checked: true }));
+    setContact((current) => ({ ...current, touched: true }));
     if (
       submitting.current ||
       !handle ||
@@ -102,20 +102,26 @@ export function JoinForm({
         <div className="contact-fields">
           <label htmlFor="handle">{copy.handle}</label>
           <PhoneField
+            id="handle"
+            describedBy={invalid ? "handle-error" : "handle-hint"}
             value={contact.phone}
-            onChange={(phone) => setContact((current) => ({ ...current, phone, checked: false }))}
-            onBlur={() => setContact((current) => ({ ...current, checked: true }))}
+            onChange={(phone) => setContact((current) => ({ ...current, phone, touched: false }))}
+            onBlur={() =>
+              setContact((current) => ({ ...current, touched: current.phone !== undefined }))
+            }
             invalid={invalid}
             disabled={pending}
           />
-          <p className="field-hint" id="handle-hint">
-            {copy.handleHint}
-          </p>
-          {invalid && (
-            <p id="handle-error" role="alert">
-              {copy.invalidHandle}
+          <div className="field-note">
+            <p className={invalid ? "field-hint replaced" : "field-hint"} id="handle-hint">
+              {copy.handleHint}
             </p>
-          )}
+            {invalid && (
+              <p id="handle-error" role="alert">
+                {copy.invalidHandle}
+              </p>
+            )}
+          </div>
         </div>
         <label htmlFor="conversation-language">{copy.conversationLanguage}</label>
         <select
@@ -174,9 +180,7 @@ export function JoinForm({
         <button
           className="primary-button join-submit"
           type="submit"
-          disabled={
-            pending || !handle || contact.consentLanguage !== locale || !token || !liked.length
-          }
+          disabled={pending || contact.consentLanguage !== locale || !token || !liked.length}
         >
           {pending ? copy.pending : copy.submit}
         </button>

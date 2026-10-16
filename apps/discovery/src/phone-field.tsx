@@ -22,8 +22,6 @@ declare global {
 }
 
 const countries = getCountries();
-const isCountry = (region?: string): region is Country =>
-  countries.some((country) => country === region);
 /** Two regional indicator symbols, which platforms render as the country's flag. */
 const flag = (country: Country) =>
   String.fromCodePoint(0x1f1a5 + country.charCodeAt(0), 0x1f1a5 + country.charCodeAt(1));
@@ -38,7 +36,8 @@ function detectCountry(): Country {
     ) ??
     navigator.languages
       .map((language) => new Intl.Locale(language).maximize().region)
-      .find(isCountry) ??
+      .filter((region) => region !== undefined)
+      .find((region) => isSupportedCountry(region)) ??
     "KR"
   );
 }
@@ -56,7 +55,7 @@ function CountryPicker({
   "aria-label": label,
 }: {
   value: Country;
-  options: readonly { value?: Country; label: string }[];
+  options: readonly ({ value: Country; label: string } | { divider: true })[];
   onChange: (country: Country) => void;
   onFocus: FocusEventHandler<HTMLSelectElement>;
   onBlur: FocusEventHandler<HTMLSelectElement>;
@@ -78,13 +77,13 @@ function CountryPicker({
         }}
       >
         {options.map((option) =>
-          option.value ? (
-            <option key={option.value} value={option.value}>
-              {`${flag(option.value)} ${option.label} ${code(option.value)}`}
-            </option>
-          ) : (
+          "divider" in option ? (
             <option key="divider" disabled>
               ──────────
+            </option>
+          ) : (
+            <option key={option.value} value={option.value}>
+              {`${flag(option.value)} ${option.label} ${code(option.value)}`}
             </option>
           ),
         )}
@@ -95,12 +94,16 @@ function CountryPicker({
 
 /** A mobile number typed for a chosen country; `onChange` receives it in international form. */
 export function PhoneField({
+  id,
+  describedBy,
   value,
   onChange,
   onBlur,
   invalid,
   disabled,
 }: {
+  id: string;
+  describedBy: string;
   value: string | undefined;
   onChange: (value: string | undefined) => void;
   onBlur: () => void;
@@ -123,7 +126,7 @@ export function PhoneField({
   }, [locale, copy.countryCode]);
   return (
     <PhoneInput
-      id="handle"
+      id={id}
       className="phone-field"
       defaultCountry={detected}
       countryOptionsOrder={order}
@@ -137,7 +140,7 @@ export function PhoneField({
       onChange={onChange}
       onBlur={onBlur}
       aria-invalid={invalid}
-      aria-describedby={invalid ? "handle-error" : "handle-hint"}
+      aria-describedby={describedBy}
       disabled={disabled}
     />
   );
