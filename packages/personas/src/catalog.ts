@@ -26,8 +26,9 @@ interface Profile {
 export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
   const result = await db
     .prepare(`
-    SELECT p.id, p.name, p.markdown, i.style, i.objectKey, i.position
-    FROM personas p LEFT JOIN persona_images i ON i.personaId = p.id
+    SELECT p.id, p.name, v.markdown, i.style, i.objectKey, i.position
+    FROM personas p JOIN persona_versions v ON v.personaId = p.id AND v.version = p.currentVersion
+    LEFT JOIN persona_images i ON i.personaId = p.id
     WHERE p.published = 1 ORDER BY p.id, i.position, i.style
   `)
     .all();

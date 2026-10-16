@@ -1,9 +1,19 @@
 import { Effect } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { remoteMessages } from "../src/gateway/client.ts";
+import { buildRevision, verifyHealth } from "@ren-ai/transport/health";
 
 const token = process.env["IMSG_TOKEN"];
 if (!token) throw new Error("IMSG_TOKEN is required");
+await verifyHealth(
+  await fetch(new URL("/health", process.env["IMSG_URL"] ?? "http://127.0.0.1:4702/rpc"), {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(4_000),
+    redirect: "manual",
+  }),
+  "imsg",
+  buildRevision(),
+);
 await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {

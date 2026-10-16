@@ -66,9 +66,8 @@ export async function basePreview(model = subGenerator) {
 }
 export async function savedPreview(model = subGenerator) {
   const result = await basePreview(model);
-  const original = preview(result.page);
+  const original = await result.store.create(preview(result.page));
   const route = `/personas/${original.id}`;
-  await result.store.create(original);
   return { ...result, original, route, editing: await (await result.admin(request(route))).text() };
 }
 export const modelReply = (text: string) =>

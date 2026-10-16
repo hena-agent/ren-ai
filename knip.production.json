@@ -13,6 +13,7 @@
         "worker/entry.ts!",
         "src/server-entry.ts!",
         "src/operator-entry.ts!",
+        "ops/check-health.ts!",
         "ops/location-config.ts!",
         "ops/offline-export.ts!",
         "ops/patch-opencode-proxy.ts!",

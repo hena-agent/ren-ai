@@ -10,6 +10,8 @@ export interface ContactDiagnostic {
   upstreamStatus?: number;
   code?: string;
   personaId?: string;
+  personaVersion?: number;
+  sessionId?: string;
   model?: string;
   causeName?: string;
   causeCode?: string;

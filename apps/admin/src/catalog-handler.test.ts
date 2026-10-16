@@ -69,7 +69,7 @@ test("public Catalog reads current image associations, including anime-only and 
   for (const privateField of ["비공개", "publicProfile", "###", "**", '"state"', '"memory"'])
     expect(profiles).not.toContain(privateField);
   await db
-    .prepare("UPDATE personas SET markdown = ? WHERE id = ?")
+    .prepare("UPDATE persona_versions SET markdown = ? WHERE personaId = ? AND version = 1")
     .bind(
       withPublicProfile(databasePersona.description!, "소개.\n\n### 기본 정보\n도예가로 일해요."),
       databasePersona.id,

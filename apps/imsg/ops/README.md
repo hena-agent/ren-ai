@@ -6,6 +6,12 @@ Apart from the deploy agent restarting the gateway it updates, no script below s
 
 ## Build and install
 
+Authenticated `GET /health` identifies service `imsg` and the full source revision
+embedded in its CI artifact (`development` locally). It performs a bounded,
+no-send Messages DB/UI probe: HTTP 200 is ready and 503 is degraded. Responses
+are uncached and omit messages, handles and credentials. The bundled verifier
+requires the running revision to match its own artifact before its RPC probe.
+
 ```sh
 bash ops/build-mac.sh /absolute/new/artifact /absolute/reviewed/imsg
 bash /absolute/new/artifact/install.sh /absolute/new/artifact /absolute/private/imsg.env

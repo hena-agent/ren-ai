@@ -54,8 +54,12 @@ test("the retained source entry runs the Worker with Durable Object SQLite, neve
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
       const health = await runtime.dispatchFetch("https://app.test/health");
-      expect(health.status).toBe(200);
+      expect(health.status).toBe(503);
       expect(await health.json()).toEqual({
+        service: "api-app",
+        revision: "development",
+        status: "degraded",
+        executor: { status: "unreachable" },
         database: "ready",
         storage: "durable-object-sqlite",
         bootstrapOnly: true,

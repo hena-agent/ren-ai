@@ -72,7 +72,10 @@ export function authorPersona(form: FormData, previous: PersonaRecord) {
   const description = read("description");
   const gender = selectedGender(form, previous);
   const changed =
-    name !== previous.name || description !== descriptionOf(previous) || gender !== previous.gender;
+    name !== previous.name ||
+    description.replace(/\r\n?/g, "\n") !==
+      descriptionOf(previous).replace(/\r\n?/g, "\n").trim() ||
+    gender !== previous.gender;
   return {
     ...previous,
     name,

@@ -33,11 +33,15 @@ export function jobUrl(response: Response) {
 
 export async function finishedJob(admin: ReturnType<typeof createAdmin>, path: string) {
   let page = "";
-  await vi.waitFor(async () => {
-    const response = await admin(request(path));
-    expect(response.status).toBe(200);
-    page = await response.text();
-    expect(page).toContain(`data-image-job="${path.split("/").at(-1)}" data-job-active="false"`);
-  });
+  await vi.waitFor(
+    async () => {
+      const response = await admin(request(path));
+      expect(response.status).toBe(200);
+      page = await response.text();
+      expect(page).toContain(`data-image-job="${path.split("/").at(-1)}" data-job-active="false"`);
+    },
+    // Concurrent Worker builds under coverage can delay a FIFO turn beyond the 1s default.
+    { timeout: 5000 },
+  );
   return page;
 }

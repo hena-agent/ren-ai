@@ -78,8 +78,8 @@ test("saving name and private document edits preserves all photos without invoki
   });
   portrait.mockClear();
   const name = "수정한 이름";
-  const description = original
-    .description!.replace("짧은 검은 머리", "긴 갈색 머리")
+  const description = original.description
+    .replace("짧은 검은 머리", "긴 갈색 머리")
     .replace(`이름: ${original.name}`, `이름: ${name}`);
   expect(description).not.toBe(original.description);
   const updated = `${description}\n\n새롭게 덧붙인 공개 문장입니다.`;
@@ -160,7 +160,7 @@ test("public rewriting derives results from the same Markdown document and prese
 test("malformed public facts fail at the real save boundary with correlated private-safe diagnostics", async () => {
   const { admin, store, route, original, editing, logs } = await savedPreview();
   const description = withPublicProfile(
-    original.description!,
+    original.description,
     "소개.\n\n### 기본 정보\n- 운영자만-아는-입력",
   );
   const response = await admin(

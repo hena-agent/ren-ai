@@ -18,6 +18,14 @@ _Avoid_: bio, introduction, system prompt
 The name, image and introduction shown to people choosing personas. It is distinct from the private persona description.
 _Avoid_: persona definition, prompt
 
+**Persona version**:
+An immutable saved edition of one persona's identity document, including its private description and public profile. It excludes photos, initial State and Memory, and the evolving state and memories of Conversations.
+_Avoid_: description format version, conversation snapshot
+
+**Persona restoration**:
+A new latest Persona version containing the document from an earlier version. It preserves the intervening versions and the persona's existing Conversations.
+_Avoid_: memory reset, session rebuild
+
 **Catalog**:
 Every persona the service can play. Only published personas appear in Discovery; editing a persona changes her in every ongoing conversation.
 _Avoid_: roster, lineup, persona list
