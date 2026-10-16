@@ -50,8 +50,13 @@ export const checkedPhone = (date: number, timeZone: string) =>
 const webConsent =
   "The user consented on the website. Send your own first greeting; do not send a separate service notice.";
 /** Opens every Conversation, at first contact and when its session is rebuilt. */
-export const conversationStarted = (at: number, openingLine: string, timeZone: string) =>
-  `<conversation-started at="${timestamp(at, timeZone)}"/>\n${openingLine}\n<notice>${words(webConsent)}</notice>`;
+export const conversationStarted = (
+  at: number,
+  openingLine: string,
+  timeZone: string,
+  preferredLanguage?: string,
+) =>
+  `<conversation-started at="${timestamp(at, timeZone)}"${preferredLanguage ? ` preferred-language="${attribute(preferredLanguage)}"` : ""}/>\n${openingLine}\n<notice>${words(webConsent)}</notice>`;
 
 export const sentByYou = (text: string, date: number, timeZone: string) =>
   `<sent-by-you at="${timestamp(date, timeZone)}">${words(text)}</sent-by-you>`;

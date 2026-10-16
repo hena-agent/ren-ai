@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { LanguageBackground } from "./languages.ts";
 
 const Text = Schema.String.check(Schema.isPattern(/\S/), Schema.isMaxLength(2000));
 const Score = Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 0, maximum: 100 }));
@@ -8,6 +9,7 @@ const Line = Text.check(Schema.isPattern(/^[^\r\n]+$/));
 export const CharacterSheet = Schema.Struct({
   name: Line,
   gender: Schema.Literals(["female", "male"]),
+  languageBackground: Schema.optionalKey(LanguageBackground),
   appearance: Text,
   background: Text,
   dailyLife: Text,
@@ -51,7 +53,7 @@ export function renderCharacterSheet(sheet: typeof CharacterSheet.Type) {
   const sections = [
     [
       "정체성·외형",
-      `이름: ${sheet.name}\n성별: ${sheet.gender === "female" ? "여성" : "남성"}\n\n${sheet.appearance}`,
+      `이름: ${sheet.name}\n성별: ${sheet.gender === "female" ? "여성" : "남성"}${sheet.languageBackground ? `\n주 사용 언어: ${sheet.languageBackground.primary}\n모국어: ${sheet.languageBackground.native.join(", ")}` : ""}\n\n${sheet.appearance}`,
     ],
     ["성장 배경", sheet.background],
     ["생활·목표", sheet.dailyLife],

@@ -10,6 +10,7 @@
     "./public-profile": "./src/public-profile.ts",
     "./profile-projection": "./src/profile-projection.ts",
     "./catalog": "./src/catalog.ts",
+    "./languages": "./src/languages.ts",
     "./public-profile-view": "./src/public-profile-view.tsx"
   },
   "scripts": {

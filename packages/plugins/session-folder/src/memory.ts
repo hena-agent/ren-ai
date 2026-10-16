@@ -46,12 +46,21 @@ function changeState(
   input: typeof memoryTools.update_state.input.Type,
   source: string,
 ) {
-  if (Object.keys(input.scores).length || input.traits) {
+  for (const [code, level] of Object.entries(input.languageProficiency ?? {}))
+    if (!snapshot.state?.languageProficiency?.[code] && level !== "beginner")
+      throw new Error("A newly learned language must start at beginner");
+  if (Object.keys(input.scores).length || input.traits || input.languageProficiency) {
     try {
       snapshot.state = Schema.decodeUnknownSync(ConversationState)({
         ...snapshot.state,
         ...input.scores,
         traits: { ...snapshot.state?.traits, ...input.traits },
+        ...(input.languageProficiency && {
+          languageProficiency: {
+            ...snapshot.state?.languageProficiency,
+            ...input.languageProficiency,
+          },
+        }),
       });
     } catch (cause) {
       throw new Error("State needs all five integer scores between 0 and 100", { cause });
@@ -60,7 +69,16 @@ function changeState(
   for (const name of [...Object.keys(input.additions), ...input.remove])
     if (
       name in InitialScores.fields ||
-      ["traits", "additional", "__proto__", "constructor", "prototype"].includes(name)
+      [
+        "traits",
+        "languageProficiency",
+        "nativeLanguages",
+        "primaryLanguage",
+        "additional",
+        "__proto__",
+        "constructor",
+        "prototype",
+      ].includes(name)
     )
       throw new Error("Additional State cannot replace built-in fields");
   snapshot.additional = Object.fromEntries(

@@ -155,6 +155,10 @@ export const migrate = Effect.gen(function* () {
         review INTEGER NOT NULL DEFAULT 0,
         provider_alerted INTEGER NOT NULL DEFAULT 0
       )`,
+      "022_discovery_language": sql`CREATE TABLE discovery_language (
+        registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
+        conversation_language TEXT NOT NULL
+      )`,
     }),
   });
 });

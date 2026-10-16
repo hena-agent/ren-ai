@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { PublicPersona } from "@ren-ai/onboarding";
-import copy from "./copy.json";
+import { useCopy } from "./locale.tsx";
+import { ProfileLanguages } from "./profile-languages.tsx";
 import type { StyledPersona } from "./image-style.ts";
 import { GalleryControls } from "./photo-gallery.tsx";
 import { ProfileDetails } from "./profile-details.tsx";
 
 function PortraitImage({ persona }: { persona: PublicPersona }) {
+  const copy = useCopy();
   const [failed, setFailed] = useState(false);
   return failed || !persona.imageUrl ? (
     <div className="photo-fallback">
@@ -16,7 +18,7 @@ function PortraitImage({ persona }: { persona: PublicPersona }) {
     <img
       className="profile-photo"
       src={persona.imageUrl}
-      alt={`${persona.name} 프로필`}
+      alt={`${persona.name} ${copy.profilePhoto}`}
       draggable={false}
       onError={() => setFailed(true)}
     />
@@ -41,6 +43,7 @@ function ProfileCaption({ persona }: { persona: PublicPersona }) {
       </h2>
       {metadata && <p className="profile-meta">{metadata}</p>}
       <p>{persona.bio}</p>
+      <ProfileLanguages persona={persona} compact />
     </div>
   );
 }
@@ -52,6 +55,7 @@ function SwipeActions({
   disabled: boolean;
   onChoose: (like: boolean) => void;
 }) {
+  const copy = useCopy();
   return (
     <div className="swipe-actions">
       <button
@@ -95,6 +99,7 @@ export function Card({
   onCollapse?: (() => void) | undefined;
   initialImage?: number | undefined;
 }) {
+  const copy = useCopy();
   const pointer = useRef<{ id: number; x: number; y: number } | null>(null);
   const openButton = useRef<HTMLButtonElement>(null);
   const pending = useRef<boolean | null>(null);
@@ -227,7 +232,7 @@ export function Card({
                 className="profile-info"
                 ref={openButton}
                 type="button"
-                aria-label={`${persona.name} 소개 전체 보기`}
+                aria-label={`${persona.name} ${copy.fullProfile}`}
                 disabled={exit !== undefined}
                 onClick={open}
                 aria-describedby="swipe-help"

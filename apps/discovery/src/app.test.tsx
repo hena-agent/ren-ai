@@ -54,6 +54,7 @@ test("a visitor likes a profile, enters a handle and consent, and really joins t
   expect(join).toHaveBeenCalledWith({
     handle: "+821012345678",
     locale: "ko",
+    conversationLanguage: "ko",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["harin"],
     turnstileToken: "human",

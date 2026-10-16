@@ -77,6 +77,11 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
         : select(form, view, client));
     }
     view.snapshot = await operation("management.list", {}, client.list);
+    const registrationID = url.searchParams.get("languages");
+    if (registrationID) {
+      const id = Schema.decodeUnknownSync(SelectContacts.fields.requestId)(registrationID);
+      view.languages = await operation("management.languages", {}, () => client.languages(id));
+    }
     return render();
   } catch (cause) {
     const expected = cause instanceof PersonaError;
