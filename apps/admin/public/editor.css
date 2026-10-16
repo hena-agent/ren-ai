@@ -37,23 +37,6 @@
 .version-history .improvement-comparison textarea {
   min-height: 320px;
 }
-.improvement-controls,
-.public-profile-editor {
-  padding: 20px 16px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  margin: 0;
-  min-width: 0;
-}
-.improvement-controls h3,
-.public-profile-editor legend {
-  font-size: 16px;
-  font-weight: 600;
-}
-.profile-edit-section {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--line);
-}
 .profile-item-actions {
   display: flex;
   flex-wrap: wrap;
@@ -66,14 +49,110 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.improvement-result {
-  margin-top: 24px;
-}
 .improvement-comparison textarea {
   resize: vertical;
   font:
     13px/1.7 ui-monospace,
     monospace;
+}
+@media (max-width: 700px) {
+  .improvement-comparison {
+    grid-template-columns: 1fr;
+  }
+}
+.document-source-heading,
+.improvement-diff-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.document-source-heading {
+  padding: 8px 16px;
+  border-block: 1px solid var(--line);
+  color: var(--muted);
+}
+.document-source-heading > span {
+  color: var(--ink);
+  font-weight: 600;
+}
+.persona-workbench .document-source-heading .document-actions {
+  margin-left: 0;
+  gap: 8px;
+}
+.persona-workbench .profile-help-button {
+  width: 44px;
+  padding: 0;
+}
+.profile-help-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.profile-help-heading button {
+  padding: 0;
+  min-width: 44px;
+  font-size: 20px;
+}
+.profile-help-dialog pre {
+  padding: 16px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.improvement-diff {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.improvement-diff .toggle {
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 400;
+  margin: 0;
+}
+.improvement-diff summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.improvement-diff ul {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.diff-legend {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  font-size: 12px;
+}
+.diff-legend span:first-child {
+  color: var(--signal);
+}
+.diff-legend span:last-child {
+  color: var(--warning);
+}
+.persona-workbench .cm-merge-b .cm-changedLine,
+.persona-workbench .cm-inlineChangedLine {
+  background: color-mix(in srgb, var(--signal) 9%, transparent);
+}
+.persona-workbench .cm-merge-b .cm-changedText {
+  background: color-mix(in srgb, var(--signal) 20%, transparent);
+}
+.persona-workbench .cm-deletedChunk {
+  background: color-mix(in srgb, var(--warning) 9%, transparent);
+}
+.persona-workbench .cm-merge-b .cm-deletedText,
+.persona-workbench .cm-deletedChunk .cm-deletedText {
+  background: color-mix(in srgb, var(--warning) 20%, transparent);
+  text-decoration: line-through;
 }
 .public-profile-section {
   padding: 18px 0;
@@ -118,11 +197,6 @@
   background: var(--field);
   border: 1px solid var(--line);
   border-radius: 8px;
-}
-@media (max-width: 700px) {
-  .improvement-comparison {
-    grid-template-columns: 1fr;
-  }
 }
 .upload-drop {
   display: grid;

@@ -12,6 +12,7 @@ import { preview } from "../test/sub-portraits.ts";
 import { splitPersonaMarkdown, withPublicProfile } from "@ren-ai/personas/profile";
 import { captureImprovement } from "./persona-improvement.ts";
 import { serializePersona } from "@ren-ai/personas";
+import { draftTokens } from "./draft.ts";
 
 const profile =
   "천천히 알아가요.\n\n### 관심사\n\n- 산책\n- 재즈\n\n### 문답: 완벽한 일요일은?\n\n늦잠 자고 동네 책방에 가요.";
@@ -38,35 +39,33 @@ async function setup() {
   return { ...result, convert, rewrite, fields };
 }
 
-test("improvement proposes, survives reload, applies then saves without changing photos or initial siblings", async () => {
+test("improvement automatically updates the draft, survives reload and saves without changing photos or initial siblings", async () => {
   const { admin, store, convert, fields } = await setup();
   const original = await store.get("legacy");
   const proposal = await admin(request("/personas/legacy", { ...fields, intent: "improve" }));
   expect(proposal.status).toBe(200);
   const page = await proposal.text();
-  expect(preview(page).description).toBe(character.description);
+  expect(preview(page).description).toBe(updated);
+  expect(preview(page).imageUrl).toBe(original.imageUrl);
+  expect(draftTokens("test-password").decode(tokenOf(page)).conversion?.source).toBe(
+    character.description,
+  );
   expect(page).toContain("관심사와 문답을 보강했습니다.");
   expect(convert).toHaveBeenCalledWith(
     expect.objectContaining(character),
     fields.improvementInstructions,
   );
   expect(await store.get("legacy")).toEqual(original);
-  expect(await (await admin(request("/personas/legacy"))).text()).toContain("개선 결과 비교");
-  const applied = await admin(
-    request("/personas/legacy", { ...fields, draft: tokenOf(page), intent: "apply-improvement" }),
-  );
-  expect(applied.status).toBe(200);
-  const appliedPage = await applied.text();
-  expect(preview(appliedPage).description).toBe(updated);
-  expect(preview(appliedPage).imageUrl).toBe(original.imageUrl);
-  expect(await store.get("legacy")).toEqual(original);
+  const reloaded = await (await admin(request("/personas/legacy"))).text();
+  expect(reloaded).toContain("data-improvement-source");
+  expect(preview(reloaded).description).toBe(updated);
   expect(
     (
       await admin(
         request("/personas/legacy", {
           ...fields,
           description: updated,
-          draft: tokenOf(appliedPage),
+          draft: tokenOf(page),
           intent: "save",
         }),
       )
@@ -75,9 +74,12 @@ test("improvement proposes, survives reload, applies then saves without changing
   expect((await store.get("legacy")).description).toBe(updated);
   expect(await store.initial("legacy")).toEqual(initialDocuments);
   expect(JSON.stringify(await store.publicList())).not.toContain("비공개 요청");
+  expect(await (await admin(request("/personas/legacy"))).text()).not.toContain(
+    "data-improvement-source",
+  );
 });
 
-test("profile-only improvement preserves the private source and cancelling retains current edits", async () => {
+test("profile-only improvement preserves private edits and the result remains directly editable", async () => {
   const { admin, fields, rewrite, convert } = await setup();
   const source = character.description.replace("짧은 검은 머리", "긴 갈색 머리");
   const response = await admin(
@@ -94,52 +96,75 @@ test("profile-only improvement preserves the private source and cancelling retai
     fields.improvementInstructions,
   );
   expect(convert).not.toHaveBeenCalled();
-  const applied = await admin(
-    request("/personas/legacy", {
-      ...fields,
-      description: source,
-      draft: tokenOf(page),
-      intent: "apply-improvement",
-    }),
-  );
-  expect(splitPersonaMarkdown(preview(await applied.text()).description!).privateMarkdown).toBe(
+  const improved = preview(page).description!;
+  expect(splitPersonaMarkdown(improved).privateMarkdown).toBe(
     splitPersonaMarkdown(source).privateMarkdown,
   );
-  const changed = `${source}\n\n직접 편집한 내용`;
-  const cancelled = await admin(
+  const changed = `${improved}\n\n직접 편집한 내용`;
+  const inspected = await admin(
     request("/personas/legacy", {
       ...fields,
       description: changed,
       draft: tokenOf(page),
-      intent: "discard-improvement",
+      intent: "inspect",
     }),
   );
-  expect(preview(await cancelled.text()).description).toBe(changed);
+  expect(inspected.status).toBe(200);
+  expect(await inspected.text()).toContain("직접 편집한 내용");
 });
 
-test("stale proposals, changed identities, missing results and obsolete intents are rejected", async () => {
+test("obsolete proposal intents are rejected and stale saved snapshots cannot be improved", async () => {
   const { admin, fields, store } = await setup();
-  expect(
-    (await admin(request("/personas/legacy", { ...fields, intent: "apply-improvement" }))).status,
-  ).toBe(409);
-  expect((await admin(request("/personas/legacy", { ...fields, intent: "convert" }))).status).toBe(
-    400,
-  );
+  for (const intent of ["convert", "apply-improvement", "discard-improvement"])
+    expect((await admin(request("/personas/legacy", { ...fields, intent }))).status).toBe(400);
   const proposed = await admin(request("/personas/legacy", { ...fields, intent: "improve" }));
   const draft = tokenOf(await proposed.text());
-  for (const change of [{ description: `${character.description}\n수정` }, { name: "다른 이름" }])
-    expect(
-      (
-        await admin(
-          request("/personas/legacy", { ...fields, ...change, draft, intent: "apply-improvement" }),
-        )
-      ).status,
-    ).toBe(change.name ? 400 : 409);
   await store.update({ ...(await store.get("legacy")), description: updated });
   expect(
-    (await admin(request("/personas/legacy", { ...fields, draft, intent: "apply-improvement" })))
-      .status,
+    (await admin(request("/personas/legacy", { ...fields, draft, intent: "improve" }))).status,
   ).toBe(409);
+});
+
+test("repeated improvement uses the current edited draft as its diff baseline", async () => {
+  const { admin, fields, convert } = await setup();
+  const first = await admin(request("/personas/legacy", { ...fields, intent: "improve" }));
+  const current = `${updated}\n\n직접 추가한 내용`;
+  convert.mockResolvedValueOnce({
+    ...character,
+    description: `${current}\n\n한 번 더 개선`,
+    additions: [],
+  });
+  const response = await admin(
+    request("/personas/legacy", {
+      ...fields,
+      description: current,
+      draft: tokenOf(await first.text()),
+      intent: "improve",
+    }),
+  );
+  expect(response.status).toBe(200);
+  const page = await response.text();
+  expect(draftTokens("test-password").decode(tokenOf(page)).conversion?.source).toBe(current);
+  expect(convert).toHaveBeenLastCalledWith(
+    expect.objectContaining({ description: current }),
+    fields.improvementInstructions,
+  );
+  expect(preview(page).description).toContain("한 번 더 개선");
+});
+
+test("a concurrent saved change rejects the generated result before it can replace the editing draft", async () => {
+  const { admin, fields, convert, store } = await setup();
+  const concurrent = withPublicProfile(character.description, "다른 탭에서 저장한 소개");
+  convert.mockImplementationOnce(async () => {
+    await store.update({ ...(await store.get("legacy")), description: concurrent });
+    return { ...character, description: updated, additions: [] };
+  });
+  const response = await admin(request("/personas/legacy", { ...fields, intent: "improve" }));
+  expect(response.status).toBe(409);
+  const page = await response.text();
+  expect(preview(page).description).toBe(character.description);
+  expect(page).not.toContain("data-improvement-source");
+  expect((await store.get("legacy")).description).toBe(concurrent);
 });
 
 test("failure diagnostics are correlated and exclude operator prompts and generated private text", async () => {

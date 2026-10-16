@@ -4,6 +4,7 @@ import type { Draft } from "./draft.ts";
 import { documentStatus } from "./document-diagnostics.ts";
 import { LanguagePanel } from "./language-panel.tsx";
 import { ImprovementControls } from "./improvement-controls.tsx";
+import { ProfileHelp } from "./profile-help.tsx";
 
 export function DocumentEditor({
   persona,
@@ -72,11 +73,63 @@ export function DocumentEditor({
             {result.label}
           </span>
           <div className="document-actions">
+            <button
+              id="open-improvement"
+              type="button"
+              className="secondary"
+              data-document-dialog="improvement-dialog"
+              disabled={locked}
+            >
+              페르소나 개선
+            </button>
             {editing && <a href={`${action}/persona.md`}>내려받기</a>}
           </div>
         </div>
-        <ImprovementControls locked={locked} input={improvementInput} result={conversion} />
-        <div data-public-profile-editor />
+        <ImprovementControls locked={locked} input={improvementInput} />
+        <ProfileHelp />
+        <div className="document-source-heading">
+          <span>Persona 초안</span>
+          <div className="document-actions">
+            <button type="button" className="secondary" data-jump-public-profile>
+              공개 프로필로 이동
+            </button>
+            <button
+              id="open-profile-help"
+              type="button"
+              className="secondary profile-help-button"
+              data-document-dialog="profile-help-dialog"
+              aria-label="공개 프로필 작성 도움말"
+            >
+              ?
+            </button>
+          </div>
+        </div>
+        {conversion && (
+          <section className="improvement-diff" aria-label="개선 변경 내용">
+            <div className="improvement-diff-heading">
+              <output>개선 내용을 초안에 반영했습니다 · 저장 전</output>
+              <label className="toggle">
+                <input type="checkbox" data-improvement-diff defaultChecked />
+                변경 표시
+              </label>
+            </div>
+            <p className="diff-legend">
+              <span>+ 추가</span>
+              <span>− 삭제</span>
+            </p>
+            {conversion.additions.length > 0 && (
+              <details>
+                <summary>개선 요약</summary>
+                <ul>
+                  {conversion.additions.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            <textarea hidden readOnly data-improvement-source value={conversion.source} />
+          </section>
+        )}
         <div className="document-source">
           <div data-markdown-editor />
           <textarea

@@ -3,18 +3,21 @@ import type { Draft } from "./draft.ts";
 export function ImprovementControls({
   locked,
   input,
-  result,
 }: {
   locked: boolean;
   input?: Draft["improvementInput"];
-  result?: Draft["conversion"];
 }) {
   return (
-    <section className="improvement-controls" aria-label="페르소나 개선">
-      <h3>페르소나 개선</h3>
-      <p className="hint">
-        현재 편집본을 기준으로 개선합니다. 결과를 확인하고 적용한 뒤 저장하세요. 사진·State·Memory는
-        유지합니다.
+    <dialog
+      id="improvement-dialog"
+      className="portrait-dialog"
+      aria-labelledby="improvement-title"
+      aria-describedby="improvement-hint"
+    >
+      <h2 id="improvement-title">페르소나 개선</h2>
+      <p className="hint" id="improvement-hint">
+        현재 초안에 바로 반영하고 변경된 부분을 표시합니다. 사진·State·Memory는 유지하며, 저장하기를
+        눌러야 공개됩니다.
       </p>
       <label htmlFor="improvement-scope">
         개선 범위
@@ -40,37 +43,15 @@ export function ImprovementControls({
           placeholder="말투는 유지하고, 관심사와 주말 생활을 구체적으로 보강해 줘."
         />
       </label>
-      <button type="submit" name="intent" value="improve" disabled={locked}>
-        페르소나 개선
-      </button>
-      {result && (
-        <section className="improvement-result" aria-label="개선 결과 비교">
-          <h3>변경 내용 확인</h3>
-          <ul>
-            {result.additions.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-          <div className="improvement-comparison">
-            <label htmlFor="improvement-before">
-              변경 전<textarea id="improvement-before" readOnly rows={10} value={result.source} />
-            </label>
-            <label htmlFor="improvement-after">
-              개선 제안
-              <textarea id="improvement-after" readOnly rows={10} value={result.result} />
-            </label>
-          </div>
-          <p className="hint">요청 이후 원문을 수정했다면 현재 원문으로 다시 개선하세요.</p>
-          <div className="profile-item-actions">
-            <button type="submit" name="intent" value="apply-improvement" disabled={locked}>
-              편집 초안에 적용
-            </button>
-            <button type="submit" name="intent" value="discard-improvement" disabled={locked}>
-              제안 취소
-            </button>
-          </div>
-        </section>
-      )}
-    </section>
+      <output data-improvement-pending aria-live="polite" />
+      <div className="dialog-actions">
+        <button type="button" className="secondary" data-close-document-dialog>
+          취소
+        </button>
+        <button type="submit" name="intent" value="improve" disabled={locked}>
+          개선하기
+        </button>
+      </div>
+    </dialog>
   );
 }
