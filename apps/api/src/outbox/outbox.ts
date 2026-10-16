@@ -56,6 +56,20 @@ export const outbox = (
         RETURNING id, recorded_at AS recordedAt`;
         return rows[0];
       });
+    const settle = (conversation: Conversation, match: SendRow, guid: string, at: number) =>
+      Effect.gen(function* () {
+        const status = yield* messages
+          .sendStatus(guid)
+          .pipe(Effect.catch(() => Effect.succeed("unknown" as const)));
+        if (status !== "unknown") {
+          const late = inFlight.has(match.id) ? match.late : 1;
+          const updated =
+            yield* sql`UPDATE send SET state = ${status}, guid = ${guid}, updated_at = ${at},
+            late = ${late}, notification_pending = CASE WHEN ${late} = 1 THEN 1 ELSE notification_pending END
+            WHERE id = ${match.id} AND state IN ('recorded', 'uncertain') RETURNING id`;
+          if (updated.length && status !== "failed") yield* notifySent(conversation);
+        }
+      });
     const reconcile = (conversation: Conversation, row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!row.fromMe || row.handle !== conversation.handle) return false;
@@ -67,17 +81,7 @@ export const outbox = (
           ORDER BY CASE WHEN guid = ${row.guid} THEN 0 ELSE 1 END, id LIMIT 1`;
         const match = matches[0];
         if (!match) return false;
-        const status = yield* messages
-          .sendStatus(row.guid)
-          .pipe(Effect.catch(() => Effect.succeed("unknown" as const)));
-        if (status !== "unknown") {
-          const late = inFlight.has(match.id) ? match.late : 1;
-          const updated =
-            yield* sql`UPDATE send SET state = ${status}, guid = ${row.guid}, updated_at = ${row.createdAt},
-            late = ${late}, notification_pending = CASE WHEN ${late} = 1 THEN 1 ELSE notification_pending END
-            WHERE id = ${match.id} AND state IN ('recorded', 'uncertain') RETURNING id`;
-          if (updated.length && status !== "failed") yield* notifySent(conversation);
-        }
+        yield* settle(conversation, match, row.guid, row.createdAt);
         return true;
       });
     const pending = (conversation: Conversation) =>
@@ -90,8 +94,12 @@ export const outbox = (
       );
     const check = (conversation: Conversation, earlier: SendRow) =>
       Effect.gen(function* () {
-        const rows = yield* messages.recent(conversation.handle, earlier.recordedAt);
-        for (const row of rows) yield* reconcile(conversation, row);
+        if (earlier.guid && inFlight.has(earlier.id))
+          yield* settle(conversation, earlier, earlier.guid, earlier.recordedAt);
+        else {
+          const rows = yield* messages.recent(conversation.handle, earlier.recordedAt);
+          for (const row of rows) yield* reconcile(conversation, row);
+        }
         const state = yield* sql<SendRow>`SELECT id, kind, state, content, guid, late,
               notification_pending AS notificationPending,
               recorded_at AS recordedAt, updated_at AS updatedAt, tool_call_id AS toolCallID
@@ -195,7 +203,7 @@ export const outbox = (
             if (ready !== true) return notSent("a new message arrived");
             const recorded = yield* recordAttempt(conversation, "text", text, callID);
             if (!recorded) return notSent("this Conversation is unavailable");
-            const { id, recordedAt: now } = recorded;
+            const { id } = recorded;
             inFlight.add(id);
             return yield* Effect.gen(function* () {
               const outcome = yield* Effect.result(messages.sendText(conversation.handle, text));
@@ -206,11 +214,10 @@ export const outbox = (
               }
               yield* sql`UPDATE send SET state = 'uncertain', guid = ${outcome.success.guid}, updated_at = ${yield* Clock.currentTimeMillis}
               WHERE id = ${id} AND state = 'recorded'`;
-              const observed = yield* messages.recent(conversation.handle, now);
-              for (const item of observed) yield* reconcile(conversation, item);
               let row = (yield* sql<SendRow>`SELECT id, state, content, guid, late,
                notification_pending AS notificationPending, recorded_at AS recordedAt,
-               updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+                updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+              row = yield* check(conversation, row);
               for (let attempt = 0; attempt < 15 && row.state === "uncertain"; attempt++) {
                 // imsg can accept a send before Messages exposes its row.
                 yield* Effect.sleep("200 millis");

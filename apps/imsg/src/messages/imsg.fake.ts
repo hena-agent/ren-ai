@@ -1,6 +1,7 @@
 import { Effect, Layer, Queue, Sink, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { IncomingMessage } from "./messages.ts";
+import { MessageMetadata } from "./message-metadata.ts";
 
 export const handle = "<iphone>";
 export const at = "2026-09-25T12:02:07.447Z";
@@ -77,7 +78,7 @@ export const isParams = (value: unknown): value is Record<string, string | numbe
   !Array.isArray(value) &&
   Object.values(value).every((item) => ["string", "number", "boolean"].includes(typeof item));
 
-export const fixture = () => {
+export const fixture = (pageLimit = 2) => {
   const spawned: ChildProcess.Command[] = [];
   const commands: Array<{
     id: number;
@@ -147,7 +148,9 @@ export const fixture = () => {
             const request = decodeRequest(bytes);
             commands.push(request);
             const cursor = Number(request.params["since_rowid"] ?? 0);
-            const page = rows.filter((row) => row.id > cursor).slice(0, 2);
+            const page = rows
+              .filter((row) => row.id > cursor)
+              .slice(0, Math.min(pageLimit, Number(request.params["limit"] ?? pageLimit)));
             const next = page.at(-1)?.id ?? cursor;
             let result: object;
             switch (request.method) {
@@ -164,7 +167,8 @@ export const fixture = () => {
                 result = {
                   messages: history
                     .filter((row) => row.chat_id === request.params["chat_id"])
-                    .toReversed(),
+                    .toReversed()
+                    .slice(0, Number(request.params["limit"])),
                 };
                 break;
               case "message.send_status":
@@ -206,7 +210,23 @@ export const fixture = () => {
     alerts,
     alertDetails,
     connections,
-    dependencies: Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+    dependencies: Layer.merge(
+      Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Layer.succeed(MessageMetadata, {
+        lookup: (recipient) =>
+          Effect.sync(() => {
+            const matching = rows.filter((row) => row.chat_identifier === recipient);
+            const latest = matching.at(-1);
+            if (!latest) return undefined;
+            const outgoing = matching.filter((row) => row.is_from_me).at(-1);
+            return {
+              chatID: latest.chat_id,
+              guid: outgoing?.guid ?? null,
+              createdAt: outgoing ? Date.parse(outgoing.created_at) : null,
+            };
+          }),
+      }),
+    ),
     alertsService: {
       raise: (name: string, detail?: string) =>
         Effect.sync(() => {

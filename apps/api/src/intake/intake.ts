@@ -15,6 +15,7 @@ import {
 import { watchEdits } from "./edits.ts";
 import { imageMime } from "@ren-ai/imsg";
 import { resetBoundary } from "../conversations/reset-boundary.ts";
+import { intakeQueue } from "./queue.ts";
 
 export interface PromptImage {
   readonly uri: string;
@@ -50,6 +51,7 @@ export const intake = (
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const pollLock = yield* Semaphore.make(1);
+    const queue = yield* intakeQueue;
     const beforeReset = yield* resetBoundary(messages);
     const listeners = new Set<(conversation: Conversation) => void>();
     const signal = (conversation: Conversation) => {
@@ -69,7 +71,7 @@ export const intake = (
       sql`INSERT INTO intake_seen (session_id, guid) VALUES (${sessionID}, ${guid})
         ON CONFLICT(session_id, guid) DO NOTHING`;
     let current = yield* bookmark();
-    const history = yield* messages.after(0);
+    const history = yield* messages.after(Math.max(0, (current?.rowID ?? 1) - 1));
     if (!current) {
       const tail = history.at(-1);
       current = { rowID: tail?.id ?? 0, date: tail?.createdAt ?? 0 };
@@ -206,21 +208,15 @@ export const intake = (
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (row.tapback && !row.tapback.added) {
-          last = { rowID: row.id, date: row.createdAt };
-          yield* save(last);
           return;
         }
         yield* reset(row);
         if (yield* beforeReset(row)) {
-          last = { rowID: row.id, date: row.createdAt };
-          yield* save(last);
           return;
         }
         if (ensure) yield* ensure(row.handle);
         if (row.fromMe) {
           yield* outgoing(row);
-          last = { rowID: row.id, date: row.createdAt };
-          yield* save(last);
           return;
         }
         const conversation = yield* byHandle(row.handle);
@@ -228,8 +224,6 @@ export const intake = (
           const seen =
             yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
           if (seen.length) {
-            last = { rowID: row.id, date: row.createdAt };
-            yield* save(last);
             return;
           }
           const earlier = yield* sql<{
@@ -248,25 +242,28 @@ export const intake = (
             yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
             yield* received(conversation, row.createdAt);
-            yield* save({ rowID: row.id, date: row.createdAt });
           }).pipe(sql.withTransaction);
-          last = { rowID: row.id, date: row.createdAt };
           changes.remember(conversation, row);
           signal(conversation);
           return;
         }
-        last = { rowID: row.id, date: row.createdAt };
-        yield* save(last);
       });
     const poll = Effect.gen(function* () {
-      const all = yield* messages.after(0);
-      const replaced = all.find((row) => row.id === last.rowID)?.createdAt !== last.date;
+      const tail = yield* messages.after(Math.max(0, last.rowID - 1), 101);
+      const replaced =
+        last.rowID > 0 && tail.find((row) => row.id === last.rowID)?.createdAt !== last.date;
       const boundary = last.date;
-      const rows = replaced ? all : yield* messages.after(last.rowID);
-      for (const row of rows) {
-        if (replaced ? row.createdAt >= boundary : row.id > last.rowID || row.createdAt > last.date)
-          yield* receive(row);
+      const rows = replaced ? yield* messages.after(0) : tail;
+      const batch = rows
+        .filter((row) =>
+          replaced ? row.createdAt >= boundary : row.id > last.rowID || row.createdAt > last.date,
+        )
+        .slice(0, 100);
+      const acknowledged = yield* queue.enqueue(batch);
+      if (acknowledged) {
+        last = { rowID: acknowledged.id, date: acknowledged.createdAt };
       }
+      yield* queue.drain(receive);
     });
     // Live notifications and periodic polls share the admission cursor. Edit
     // observation stays outside this lock because it can itself deliver a reset.

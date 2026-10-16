@@ -10,6 +10,7 @@ import {
 } from "./imsg-protocol.ts";
 import { imsgRpc } from "./imsg-rpc.ts";
 import { imageData } from "./images.ts";
+import { MessageMetadata } from "./message-metadata.ts";
 
 interface Alerts {
   raise(name: string, detail?: string): Effect.Effect<void>;
@@ -24,25 +25,26 @@ export const makeImsgMessages = (alerts: Alerts) =>
     const rpc = yield* imsgRpc;
     const lifetime = yield* Scope.Scope;
     let sendFailures = 0;
-    const after = (rowID: number) =>
+    const after = (rowID: number, limit = Infinity) =>
       Effect.gen(function* () {
         const rows: Array<IncomingMessage & { chatID: number }> = [];
         let cursor = rowID;
         for (;;) {
           const reply = yield* rpc.request("messages.after", {
             since_rowid: cursor,
-            limit: pageSize,
+            limit: Math.min(500, limit - rows.length),
             attachments: true,
             include_reactions: true,
           });
           const page = yield* Effect.try(() => afterPage(reply));
           rows.push(...page.rows);
-          if (!page.more) return rows;
+          if (!page.more || rows.length >= limit) return rows;
           if (page.next <= cursor)
             return yield* Effect.fail(new Error("imsg messages.after did not advance"));
           cursor = page.next;
         }
       });
+    const chat = (yield* MessageMetadata).lookup;
     const status = (guid: string) =>
       Effect.flatMap(rpc.request("message.send_status", { guid }), (value) =>
         Effect.map(
@@ -79,10 +81,8 @@ export const makeImsgMessages = (alerts: Alerts) =>
         ),
       lastOutgoingStatus: (handle) =>
         Effect.gen(function* () {
-          const outgoing = (yield* after(0))
-            .filter((row) => row.fromMe && row.handle === handle)
-            .at(-1);
-          if (!outgoing) return undefined;
+          const outgoing = yield* chat(handle);
+          if (!outgoing?.guid) return undefined;
           const result = yield* status(outgoing.guid);
           return { delivered: result.state === "delivered", readAt: result.dateRead };
         }),
@@ -112,32 +112,30 @@ export const makeImsgMessages = (alerts: Alerts) =>
         }),
       textStatus: (handle, since) =>
         Effect.gen(function* () {
-          const rows = yield* after(0);
-          const last = rows
-            .filter((row) => row.fromMe && row.handle === handle && row.createdAt >= since)
-            .at(-1);
-          if (!last) return "unknown";
+          const last = yield* chat(handle);
+          if (!last?.guid || last.createdAt === null || last.createdAt < since) return "unknown";
           const result = yield* status(last.guid);
           if (result.error === 22) return "no_imessage";
           return result.state === "sent" || result.state === "delivered" ? "sent" : "unknown";
         }),
       recent: (handle, since) =>
         Effect.gen(function* () {
-          // Find the numeric chat ID from the row scan; a chat GUID isn't a Handle.
-          const all = yield* after(0);
-          const match = all.find((row) => row.handle === handle);
+          const match = yield* chat(handle);
           if (!match) return [];
           const chatID = match.chatID;
-          // history has no offset/cursor. Its date filter plus a limit above the
-          // current scan's chat size includes the entire edit window, not just 50 rows.
-          const reply = yield* rpc.request("messages.history", {
-            chat_id: chatID,
-            start: new Date(since).toISOString(),
-            limit: Math.max(pageSize, all.length + 1),
-            attachments: true,
-          });
-          const rows = yield* Effect.try(() => historyPage(reply));
-          return rows.filter((row) => row.createdAt >= since).toSorted((a, b) => a.id - b.id);
+          // History has no cursor: grow only this chat's window until it is complete,
+          // including equal-timestamp rows and messages arriving during the query.
+          for (let limit = pageSize; ; limit *= 2) {
+            const reply = yield* rpc.request("messages.history", {
+              chat_id: chatID,
+              start: new Date(since).toISOString(),
+              limit,
+              attachments: true,
+            });
+            const rows = yield* Effect.try(() => historyPage(reply));
+            if (rows.length < limit)
+              return rows.filter((row) => row.createdAt >= since).toSorted((a, b) => a.id - b.id);
+          }
         }),
       follow: (rowID, receive) =>
         Effect.gen(function* () {
@@ -146,7 +144,7 @@ export const makeImsgMessages = (alerts: Alerts) =>
           let restarts = 0;
           const replay = (checkReplacement: boolean) =>
             Effect.gen(function* () {
-              const all = yield* after(0);
+              let all = yield* after(Math.max(0, cursor - 1));
               if (lastDate === 0) lastDate = all.find((row) => row.id === cursor)?.createdAt ?? 0;
               if (
                 checkReplacement &&
@@ -154,6 +152,7 @@ export const makeImsgMessages = (alerts: Alerts) =>
               ) {
                 // ROWIDs are local to chat.db; reconcile by date after replacement.
                 cursor = 0;
+                all = yield* after(0);
               }
               for (const row of all) {
                 if (row.id <= cursor || (checkReplacement && row.createdAt < lastDate)) continue;

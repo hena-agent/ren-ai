@@ -48,7 +48,19 @@ export const setup = async () => {
       // Like osascript and imsg: nothing on stdout, the reason on stderr, exit status 1.
       const exits = action === exiting;
       return ChildProcessSpawner.makeHandle({
-        stdout: exits ? Stream.empty : text(action === "chats" ? chats : "ok"),
+        stdout: exits
+          ? Stream.empty
+          : text(
+              action === "chats"
+                ? chats
+                    .split("\n")
+                    .filter((line) => line.trim())
+                    .slice(0, Number(command.args[2]))
+                    .join("\n")
+                : action === "group"
+                  ? chats
+                  : "ok",
+            ),
         stderr: exits ? text(`${diagnostic}\n`) : Stream.empty,
         all: Stream.empty,
         pid: ChildProcessSpawner.ProcessId(1),

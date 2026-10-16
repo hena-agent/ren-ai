@@ -9,8 +9,8 @@ export interface Messages {
   sendText(handle: string, text: string): Effect.Effect<{ readonly guid: string | null }, Error>;
   /** Status of her most recent outgoing row, using its date_read and delivery fields. */
   lastOutgoingStatus(handle: string): Effect.Effect<OutgoingStatus | undefined, Error>;
-  /** Rows are ordered by Messages ROWID; following replays rows after the cursor before watching. */
-  after(rowID: number): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
+  /** Ordered by ROWID. Older deployed gateways may return more than the optional limit. */
+  after(rowID: number, limit?: number): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
   /** All rows in this Handle's chat since the timestamp, including empty (unsent) texts. */
   recent(handle: string, since: number): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
   /** The final status of an outgoing Messages row; error 22 is failed, not sent. */
