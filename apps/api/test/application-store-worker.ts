@@ -41,7 +41,6 @@ export class Registry extends DurableObject<Environment> {
   private application() {
     this.store ??= createApplicationStore(this.ctx.storage, {
       catalog,
-      image: async () => new Response("image"),
       turnstileSecret: "test-secret",
       managementToken: this.env.TOKEN_MANAGEMENT,
       httpClient,

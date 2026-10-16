@@ -82,7 +82,7 @@ test("public Catalog reads current image associations, including anime-only and 
   ]);
 });
 
-test("Catalog HTTP separates public profiles and images from the authenticated atomic private snapshot", async () => {
+test("Catalog HTTP separates public profiles from the authenticated atomic private snapshot", async () => {
   const { db, store, env } = await fixture();
   const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
@@ -112,8 +112,7 @@ test("Catalog HTTP separates public profiles and images from the authenticated a
   expect(publicResponse.status).toBe(200);
   const publicBody = await publicResponse.text();
   expect(publicBody).not.toContain("비공개");
-  expect((await call(imageUrl)).status).toBe(200);
-  expect((await call("/discovery/images/not-owned.png")).status).toBe(404);
+  expect(publicBody).toContain(imageUrl);
   const privateResponse = await call("/api/catalog", {
     headers: { authorization: "Bearer catalog-secret" },
   });

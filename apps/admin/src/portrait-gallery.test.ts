@@ -81,7 +81,7 @@ test("a selected style adds one independent image and never regenerates its oppo
   const saved = await publishPreview(admin, first);
   const record = await store.get(idOf(saved));
   for (const image of personaImages(record))
-    expect((await store.publicImage(image.imageUrl.split("/").at(-1)!)).status).toBe(200);
+    expect((await store.image(image.imageUrl.split("/").at(-1)!)).status).toBe(200);
   for (const value of ["private selfie idea", "private optional tweak"]) {
     expect(serializePersona(record)).not.toContain(value);
     expect(JSON.stringify(logs)).not.toContain(value);

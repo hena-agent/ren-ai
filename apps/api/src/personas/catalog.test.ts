@@ -6,8 +6,8 @@ const fixturePersona = parsePersona(
   "---\nname: 하린\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: Say hello.\nmemory: Keep memories.\n---\nPrivate character instructions.\n\n## 공개 프로필\n\nintro\n",
 );
 
-test("public Catalog reads stay fresh and resolve every owned portrait against Admin", async () => {
-  const owned = "/discovery/images/00000000-0000-0000-0000-000000000000.png";
+test("public Catalog reads stay fresh and preserve direct image URLs", async () => {
+  const owned = "https://persona-images.renai.im/00000000-0000-0000-0000-000000000000.png";
   const external = "https://photos.example.net/photo.jpg";
   const profile = {
     id: "sora",
@@ -27,15 +27,8 @@ test("public Catalog reads stay fresh and resolve every owned portrait against A
     );
   const client = catalogClient({ url: "http://127.0.0.1:3729", token: "secret" }, fetcher);
   const [first] = await client.publicList();
-  expect(first).toEqual({
-    id: "sora",
-    name: "Sora",
-    bio: "Public introduction",
-    imageUrl: `http://127.0.0.1:3729${owned}`,
-    portraits: { anime: `http://127.0.0.1:3729${owned}`, photo: external },
-    secondaryPortraits: [{ style: "photo", imageUrl: `http://127.0.0.1:3729${owned}` }],
-    portraitGallery: [{ anime: `http://127.0.0.1:3729${owned}`, photo: external }],
-  });
+  const { privatePrompt: _privatePrompt, ...publicProfile } = profile;
+  expect(first).toEqual(publicProfile);
   expect(await client.publicList()).toHaveLength(2);
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
@@ -55,9 +48,7 @@ test("Catalog requests use separate public/private boundaries and validate every
           { id: record.id, source: serializePersona(record), state: "state", memory: "memory" },
         ],
       });
-    if (path === "/api/personas")
-      return Response.json([{ id: record.id, name: "name", bio: "intro", imageUrl: "" }]);
-    return new Response("image");
+    return Response.json([{ id: record.id, name: "name", bio: "intro", imageUrl: "" }]);
   });
   const client = catalogClient(connection, fetcher);
   expect((await client.load()).personas.get(record.id)?.prompt).toBe(record.prompt);
@@ -65,12 +56,7 @@ test("Catalog requests use separate public/private boundaries and validate every
   expect(calls[0]!.redirect).toBe("manual");
   expect(await client.publicList()).toHaveLength(1);
   expect(calls[1]!.headers.has("authorization")).toBe(false);
-  expect((await client.publicImage("invalid")).status).toBe(404);
-  expect(await (await client.publicImage("00000000-0000-0000-0000-000000000000.png")).text()).toBe(
-    "image",
-  );
-  expect(calls[2]!.headers.has("authorization")).toBe(false);
-  expect(calls[2]!.redirect).toBe("manual");
+  expect(calls).toHaveLength(2);
 });
 
 test("Catalog uses Workers-supported manual redirects without forwarding them to callers", async () => {
@@ -80,15 +66,10 @@ test("Catalog uses Workers-supported manual redirects without forwarding them to
   await expect(client.load()).rejects.toThrow("Catalog request failed (302");
   fetcher.mockResolvedValueOnce(Response.redirect("https://other.test/public", 301));
   await expect(client.publicList()).rejects.toThrow("Catalog request failed (301");
-  const filename = "00000000-0000-0000-0000-000000000000.png";
-  fetcher.mockResolvedValueOnce(Response.redirect("https://other.test/image", 307));
-  await expect(client.publicImage(filename)).rejects.toThrow("Catalog image redirect refused");
-  fetcher.mockResolvedValueOnce(new Response(null, { status: 404 }));
-  expect((await client.publicImage(filename)).status).toBe(404);
 });
 
 test("runtime definitions carry initial documents and absolute R2 image URLs for the existing Discovery client", async () => {
-  const owned = "/discovery/images/00000000-0000-0000-0000-000000000000.png";
+  const owned = "https://persona-images.renai.im/00000000-0000-0000-0000-000000000000.png";
   const record = {
     ...fixturePersona,
     imageUrl: owned,
@@ -110,12 +91,12 @@ test("runtime definitions carry initial documents and absolute R2 image URLs for
   );
   const client = catalogClient({ url: "https://admin.test", token: "catalog-secret" }, fetcher);
   const loaded = (await client.load()).personas.get(record.id)!;
-  expect(loaded.imageUrl).toBe(`https://admin.test${owned}`);
+  expect(loaded.imageUrl).toBe(owned);
   expect(loaded.portraits).toEqual({
-    anime: `https://admin.test${owned}`,
+    anime: owned,
     photo: "https://example.net/photo.jpg",
   });
-  expect(loaded.secondaryPortraits?.[0]?.imageUrl).toBe(`https://admin.test${owned}`);
+  expect(loaded.secondaryPortraits?.[0]?.imageUrl).toBe(owned);
   expect(loaded.initial).toEqual({ state: "initial state", memory: "initial memory" });
   fetcher.mockResolvedValueOnce(
     Response.json({

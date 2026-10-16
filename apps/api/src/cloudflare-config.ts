@@ -67,7 +67,6 @@ export const cloudflareConfiguration = (
   return {
     applicationStore: {
       catalog: catalog.publicList,
-      image: catalog.publicImage,
       turnstileSecret: bindings.TURNSTILE_SECRET ?? "",
       managementToken: bindings.TOKEN_MANAGEMENT?.trim() ?? "",
     },

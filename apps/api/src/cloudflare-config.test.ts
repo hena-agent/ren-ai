@@ -14,7 +14,7 @@ const publicPersona = {
   id: "sora",
   name: "Sora",
   bio: "A musician",
-  imageUrl: "/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png",
+  imageUrl: "https://persona-images.renai.im/01234567-89ab-cdef-0123-456789abcdef.png",
   profile: { introduction: "A musician", sections: [] },
 };
 
@@ -37,16 +37,8 @@ test("builds catalog and executor configuration with bootstrap enabled by defaul
     model: "opencode-go/deepseek-v4.1-flash",
     directory: "/srv/ren-ai",
   });
-  expect(await config.applicationStore.catalog()).toEqual([
-    { ...publicPersona, imageUrl: `https://admin.example${publicPersona.imageUrl}` },
-  ]);
-  expect(
-    await (await config.applicationStore.image("01234567-89ab-cdef-0123-456789abcdef.png")).text(),
-  ).toBe("image");
-  expect(requested).toEqual([
-    "https://admin.example/api/personas",
-    "https://admin.example/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png",
-  ]);
+  expect(await config.applicationStore.catalog()).toEqual([publicPersona]);
+  expect(requested).toEqual(["https://admin.example/api/personas"]);
 });
 
 test("public Catalog configuration needs no private credentials", async () => {

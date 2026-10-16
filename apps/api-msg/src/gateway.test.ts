@@ -49,6 +49,13 @@ it("forwards fetched compressed JSON without stale wire-encoding headers", async
   }
 });
 
+it.each(["/health/", "/health/details"])("keeps %s behind authentication", async (path) => {
+  const health = vi.fn<NonNullable<GatewayOptions["health"]>>();
+  const handler = createGateway({ config, health });
+  expect((await handler(request(path))).status).toBe(401);
+  expect(health).not.toHaveBeenCalled();
+});
+
 describe("authenticated execution gateway", () => {
   it("rejects browser requests before invoking upstream", async () => {
     const fetcher = vi.fn<typeof fetch>();
@@ -65,11 +72,10 @@ describe("authenticated execution gateway", () => {
       const handler = createGateway({ config });
       const authorization = value ? `Bearer ${value}` : null;
       const response = await handler(
-        request("/health", { headers: authorization ? { authorization } : {} }),
+        request("/imsg/rpc", { headers: authorization ? { authorization } : {} }),
       );
       expect(response.status).toBe(401);
       expect(response.headers.get("x-request-id")).toBeTruthy();
-      expect(response.headers.get("cache-control")).toBe("no-store");
     },
   );
 
@@ -356,7 +362,7 @@ describe("authenticated execution gateway", () => {
   it("returns correlated method errors with warning summaries", async () => {
     const events: Parameters<NonNullable<GatewayOptions["log"]>>[1][] = [];
     const handler = createGateway({ config, log: (_level, event) => events.push(event) });
-    const health = await handler(request("/health", { method: "POST", headers: authorized }));
+    const health = await handler(request("/health", { method: "POST" }));
     const imsg = await handler(request("/imsg/rpc", { headers: authorized }));
     expect(health.status).toBe(405);
     expect(imsg.status).toBe(405);
@@ -368,7 +374,7 @@ describe("authenticated execution gateway", () => {
   it("returns only health facts and records check failures in the response", async () => {
     const facts = { diskNearlyFull: false, screenLocked: true };
     const success = createGateway({ config, health: async () => facts });
-    expect(await (await success(request("/health", { headers: authorized }))).json()).toEqual({
+    expect(await (await success(request("/health"))).json()).toEqual({
       ...facts,
       service: "api-msg",
       revision: "development",
@@ -381,7 +387,7 @@ describe("authenticated execution gateway", () => {
       },
       id: () => "health-1",
     });
-    const failed = await failure(request("/health", { headers: authorized }));
+    const failed = await failure(request("/health"));
     expect(failed.status).toBe(503);
     expect(await failed.text()).not.toContain("secret detail");
     expect(failed.headers.get("x-request-id")).toBe("health-1");
@@ -391,12 +397,12 @@ describe("authenticated execution gateway", () => {
         throw new Error("private");
       },
     });
-    expect((await errorFailure(request("/health", { headers: authorized }))).status).toBe(503);
+    expect((await errorFailure(request("/health"))).status).toBe(503);
     const ready = createGateway({
       config,
       health: async () => ({ diskNearlyFull: false, screenLocked: null }),
     });
-    const response = await ready(request("/health", { headers: authorized }));
+    const response = await ready(request("/health"));
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toMatchObject({
@@ -408,7 +414,7 @@ describe("authenticated execution gateway", () => {
       config,
       health: async () => ({ diskNearlyFull: true, screenLocked: false }),
     });
-    expect((await diskFull(request("/health", { headers: authorized }))).status).toBe(503);
+    expect((await diskFull(request("/health"))).status).toBe(503);
   });
 
   it("reports native Mac disk and screen checks, failing safely per probe", async () => {

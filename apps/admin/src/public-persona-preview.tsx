@@ -47,7 +47,7 @@ export function PublicPersonaPreview({
       </div>
       {photos[selected] ? (
         <img
-          src={photos[selected].imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+          src={photos[selected].imageUrl}
           alt={`${name} 프로필 사진 ${selected + 1}`}
           width={800}
           height={1000}

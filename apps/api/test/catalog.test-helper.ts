@@ -22,8 +22,7 @@ export async function startTestCatalog(directory: string) {
             reply = Response.json({ revision: JSON.stringify(personas), personas });
           }
         } else if (request.url === "/api/personas") reply = Response.json(await store.publicList());
-        else
-          reply = await store.publicImage((request.url ?? "").slice("/discovery/images/".length));
+        else reply = new Response(null, { status: 404 });
         response.writeHead(reply.status, Object.fromEntries(reply.headers));
         response.end(Buffer.from(await reply.arrayBuffer()));
       } catch {

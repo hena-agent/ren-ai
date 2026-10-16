@@ -74,8 +74,8 @@ test("the two independent main styles run one at a time and both results become 
   ]);
   const draft = draftTokens("test-password").decode(tokenOf(await response.text()));
   const pair = parsePersona(draft.id, draft.preview).portraits;
-  expect(pair?.anime).toMatch(/^\/discovery\/images\//);
-  expect(pair?.photo).toMatch(/^\/discovery\/images\//);
+  expect(pair?.anime).toMatch(/^\/images\//);
+  expect(pair?.photo).toMatch(/^\/images\//);
   expect(await store.list()).toEqual([]);
 });
 
@@ -106,9 +106,7 @@ test("either style failing keeps the completed sibling as a partial preview and 
     const partial = draftTokens("test-password").decode(tokenOf(await failed.text()));
     const record = parsePersona(partial.id, partial.preview);
     expect(record.portraits?.[style]).toBeUndefined();
-    expect(record.portraits?.[style === "anime" ? "photo" : "anime"]).toMatch(
-      /^\/discovery\/images\//,
-    );
+    expect(record.portraits?.[style === "anime" ? "photo" : "anime"]).toMatch(/^\/images\//);
     expect(record.bio).toBe(parsePersona(partial.id, previous).bio);
     expect(await store.list()).toEqual([]);
   }

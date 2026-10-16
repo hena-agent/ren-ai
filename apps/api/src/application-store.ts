@@ -12,7 +12,6 @@ import type { PublicPersona } from "@ren-ai/onboarding";
 
 export interface ApplicationStoreConfig {
   readonly catalog: () => Promise<readonly PublicPersona[]>;
-  readonly image: (filename: string) => Promise<Response>;
   readonly turnstileSecret: string;
   readonly managementToken: string;
   readonly httpClient: HttpClient.HttpClient;
@@ -46,7 +45,6 @@ export const createApplicationStore = async (
     const discovery = await run(
       makeDiscoveryWeb({
         catalog: config.catalog,
-        image: config.image,
         turnstileSecret: config.turnstileSecret,
       }),
     );

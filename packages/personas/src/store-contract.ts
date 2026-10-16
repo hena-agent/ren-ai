@@ -10,7 +10,6 @@ export type PersonaStore = Pick<
   | "save"
   | "saveImage"
   | "image"
-  | "publicImage"
   | "publicList"
   | "inspect"
   | "importDraft"

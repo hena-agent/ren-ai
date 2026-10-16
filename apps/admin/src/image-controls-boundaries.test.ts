@@ -125,7 +125,7 @@ test("a saved partial style exposes only its remaining main image, and addition 
   }
   expect(document.querySelector('[value="introduction"]')).toBeNull();
   const image = document.querySelector<HTMLImageElement>("#portrait-gallery-anime img")!;
-  const originalUrl = image.getAttribute("src")!.replace(/^\/images\//, "/discovery/images/");
+  const originalUrl = image.getAttribute("src")!;
   const expectedTarget = `/personas?image=${encodeURIComponent(originalUrl)}&style=anime`;
   const figure = image.closest("figure")!;
   expect(figure.querySelector('[value="regenerate"]')?.getAttribute("formaction")).toBe(

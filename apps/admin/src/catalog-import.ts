@@ -86,7 +86,10 @@ export async function importCatalog(
       await operation("catalog.import.upload", { operationId }, async () => {
         for (const image of uploads)
           await bucket.put(image.key, await importImageBytes(image), {
-            httpMetadata: { contentType: image.mimeType },
+            httpMetadata: {
+              contentType: image.mimeType,
+              cacheControl: "public, max-age=31536000, immutable",
+            },
           });
       });
       await operation("catalog.import.verify-images", { operationId }, async () => {

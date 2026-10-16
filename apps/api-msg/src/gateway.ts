@@ -174,9 +174,6 @@ export const createGateway = (options: GatewayOptions) => {
       });
     };
 
-    if (!authorized(request.headers.get("authorization"), config.managementToken)) {
-      return complete(new Response("Unauthorized", { status: 401 }), "auth", "rejected", "warn");
-    }
     if (url.pathname === "/health") {
       if (request.method !== "GET")
         return complete(
@@ -186,6 +183,9 @@ export const createGateway = (options: GatewayOptions) => {
           "warn",
         );
       return healthResponse(health, requestId, complete);
+    }
+    if (!authorized(request.headers.get("authorization"), config.managementToken)) {
+      return complete(new Response("Unauthorized", { status: 401 }), "auth", "rejected", "warn");
     }
     const isOpenCode = url.pathname.startsWith("/opencode/");
     const isImsg = op === "imsg";

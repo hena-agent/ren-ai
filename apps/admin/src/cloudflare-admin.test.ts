@@ -1,12 +1,72 @@
 import { expect, test, vi } from "vitest";
 import { cloudflareAdmin } from "./cloudflare-admin.ts";
 import { memoryStorage } from "../test/memory-storage.ts";
-import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
-import { character, request, tokenOf } from "../test/fixtures.ts";
+import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
+import { character, initialDocuments, portraitImage, request, tokenOf } from "../test/fixtures.ts";
 import type { AdminEnv } from "./cloudflare-admin.ts";
 import { captureWorkerLogs } from "../test/worker-logs.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { adminRequest } from "./admin-request.ts";
+import { databaseStore } from "./database-store.ts";
+import { catalogHandler } from "./catalog-handler.ts";
+
+test.each([false, true])(
+  "image delivery is direct R2 in production and local R2 in development (local: %s)",
+  async (local) => {
+    const { db, bucket } = await cloudflareFixture();
+    const { storage } = memoryStorage();
+    const { stdout, stderr } = captureWorkerLogs();
+    const store = databaseStore(db, bucket, local ? "/images/" : undefined);
+    const imageUrl = await store.saveImage(portraitImage);
+    const secondary = await store.saveImage(portraitImage);
+    await store.save(
+      {
+        ...databasePersona,
+        published: true,
+        imageUrl,
+        portraits: { photo: imageUrl },
+        secondaryPortraits: [{ style: "photo", imageUrl: secondary }],
+      },
+      initialDocuments,
+      { persona: "" },
+    );
+    const env: AdminEnv = {
+      DB: db,
+      IMAGES: bucket,
+      ASSETS: { fetch: async () => new Response("asset") },
+      ADMIN_PASSWORD: "test-password",
+      TOKEN_CATALOG: "catalog",
+      ...(local && { ADMIN_JURISDICTION: "local" }),
+    };
+    const admin = await cloudflareAdmin(env, storage);
+    const editor = await (await admin.fetch(request(`/personas/${databasePersona.id}`))).text();
+    expect(editor).toContain(`src="${imageUrl}"`);
+    expect(editor).toContain(`href="${secondary}"`);
+    const filename = imageUrl.split("/").at(-1)!;
+    expect((await admin.fetch(request(`/images/${filename}`))).status).toBe(local ? 200 : 404);
+    expect((await admin.fetch(request(`/discovery/images/${filename}`))).status).toBe(404);
+    const publicRequest = request("/api/personas");
+    const publicUrl = local ? new URL(imageUrl, publicRequest.url).href : imageUrl;
+    const profile = await catalogHandler(publicRequest, env);
+    expect(await profile.json()).toMatchObject([
+      {
+        imageUrl: publicUrl,
+        secondaryPortraits: [
+          { imageUrl: local ? new URL(secondary, publicRequest.url).href : secondary },
+        ],
+      },
+    ]);
+    const catalog = await catalogHandler(
+      new Request(new URL("/api/catalog", publicRequest.url), {
+        headers: { authorization: "Bearer catalog" },
+      }),
+      env,
+    );
+    expect(await catalog.text()).toContain(publicUrl);
+    stdout.mockRestore();
+    stderr.mockRestore();
+  },
+);
 
 test.each(["empty", "missing"] as const)(
   "the Worker boundary handles %s API key configuration without losing diagnostics or private drafts",

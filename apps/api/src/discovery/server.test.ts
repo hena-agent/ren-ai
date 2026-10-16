@@ -1,7 +1,7 @@
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Context, Effect, Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
@@ -13,7 +13,6 @@ import { makeOperator } from "../operator/operator.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import { startTestCatalog } from "../../test/catalog.test-helper.ts";
-import { makeDiscoveryWeb } from "./discovery.ts";
 
 test("the discovery HTTP adapter accepts real HTTP and operator removal deletes waiting preferences", async () => {
   const root = await mkdtemp(join(tmpdir(), "discovery-server-"));
@@ -63,16 +62,19 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
                 profile: { introduction: "함께 요리해요.", sections: [] },
               },
             ]);
-            const imageUrl = await store.saveImage({
-              bytes: Buffer.from("89504e470d0a1a0a", "hex"),
-              mimeType: "image/png",
-            });
-            expect((await fetch(`${base}${imageUrl}`)).status).toBe(404);
+            const imageUrl = (
+              await store.saveImage({
+                bytes: Buffer.from("89504e470d0a1a0a", "hex"),
+                mimeType: "image/png",
+              })
+            ).replace("/images/", "https://persona-images.renai.im/");
             const saved = await store.get("hayeon");
-            const photoUrl = await store.saveImage({
-              bytes: Buffer.from("89504e470d0a1a0a", "hex"),
-              mimeType: "image/png",
-            });
+            const photoUrl = (
+              await store.saveImage({
+                bytes: Buffer.from("89504e470d0a1a0a", "hex"),
+                mimeType: "image/png",
+              })
+            ).replace("/images/", "https://persona-images.renai.im/");
             const portraits = { anime: imageUrl, photo: photoUrl };
             await store.update({
               ...saved,
@@ -80,45 +82,42 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               portraits,
               description: withPublicProfile("Private character source", "함께 요리해요."),
             });
-            const portrait = await fetch(`${base}${imageUrl}`);
-            expect(portrait.status).toBe(200);
-            expect(portrait.headers.get("content-type")).toBe("image/png");
-            expect((await fetch(`${base}${photoUrl}`)).status).toBe(200);
-            expect(Buffer.from(await portrait.arrayBuffer()).toString("hex")).toBe(
-              "89504e470d0a1a0a",
-            );
-            const readonly = await fetch(`${base}${imageUrl}`, { method: "POST" });
-            expect(readonly.status).toBe(405);
-            expect(readonly.headers.get("allow")).toBe("GET");
+            for (const method of ["GET", "POST"]) {
+              expect(
+                (await fetch(`${base}/discovery/images/${imageUrl.split("/").at(-1)}`, { method }))
+                  .status,
+              ).toBe(404);
+            }
             const publicProfileEntry = {
               id: "hayeon",
               name: "하연",
               bio: "함께 요리해요.",
-              imageUrl: `${remoteCatalog.url}${photoUrl}`,
+              imageUrl: photoUrl,
               portraits: {
-                anime: `${remoteCatalog.url}${imageUrl}`,
-                photo: `${remoteCatalog.url}${photoUrl}`,
+                anime: imageUrl,
+                photo: photoUrl,
               },
               profile: { introduction: "함께 요리해요.", sections: [] },
             };
             const catalog = await fetch(`${base}/discovery/personas`);
             expect(await catalog.json()).toEqual([publicProfileEntry]);
-            const extraUrl = await store.saveImage({
-              bytes: Buffer.from("89504e470d0a1a0a", "hex"),
-              mimeType: "image/png",
-            });
+            const extraUrl = (
+              await store.saveImage({
+                bytes: Buffer.from("89504e470d0a1a0a", "hex"),
+                mimeType: "image/png",
+              })
+            ).replace("/images/", "https://persona-images.renai.im/");
             const portraitGallery = [portraits, { anime: extraUrl, photo: extraUrl }];
             await store.update({ ...(await store.get("hayeon")), portraitGallery });
             expect(await (await fetch(`${base}/discovery/personas`)).json()).toEqual([
               {
                 ...publicProfileEntry,
                 secondaryPortraits: [
-                  { style: "anime", imageUrl: `${remoteCatalog.url}${extraUrl}` },
-                  { style: "photo", imageUrl: `${remoteCatalog.url}${extraUrl}` },
+                  { style: "anime", imageUrl: extraUrl },
+                  { style: "photo", imageUrl: extraUrl },
                 ],
               },
             ]);
-            expect((await fetch(`${base}${extraUrl}`)).status).toBe(200);
             const publicProfile = "함께 요리해요.\n\n### 같이 하고 싶은 일\n- 베이킹\n- 산책";
             await store.update({
               ...(await store.get("hayeon")),
@@ -145,12 +144,6 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               "###",
             ])
               expect(enriched).not.toContain(field);
-            const filename = imageUrl.split("/").at(-1)!;
-            await rm(join(root, "profiles", "images", filename));
-            await mkdir(join(root, "profiles", "images", filename));
-            const unavailable = await fetch(`${base}${imageUrl}`);
-            expect(unavailable.status).toBe(503);
-            expect(await unavailable.text()).toBe("");
             const joined = await fetch(`${base}/discovery/waitlist`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -174,11 +167,10 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
           expect(yield* sql`SELECT id FROM send`).toEqual([]);
           yield* Effect.promise(async () => {
             await remoteCatalog.close();
-            const unavailable = await fetch(
+            const removed = await fetch(
               `http://127.0.0.1:${address.port}/discovery/images/00000000-0000-0000-0000-000000000000.png`,
             );
-            expect(unavailable.status).toBe(503);
-            expect(unavailable.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+            expect(removed.status).toBe(404);
           });
         }),
       ).pipe(
@@ -193,52 +185,4 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
-
-test("the image boundary turns opaque and numeric-code failures into correlated unavailable responses", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        let failure: string | Error = "opaque private failure";
-        const web = yield* makeDiscoveryWeb({
-          catalog: async () => [],
-          turnstileSecret: "",
-          image: async () => {
-            throw failure;
-          },
-        });
-        yield* Effect.addFinalizer(() => Effect.promise(web.dispose));
-        const client = yield* HttpClient.HttpClient;
-        for (const cause of [
-          "opaque private failure",
-          new Error("private read failure"),
-          Object.assign(new Error("private read failure"), { code: 14 }),
-          Object.assign(new Error("private read failure"), { code: {} }),
-        ]) {
-          failure = cause;
-          const response = yield* Effect.promise(() =>
-            web.handler(
-              new Request("https://api.test/discovery/images/photo.png"),
-              Context.make(HttpClient.HttpClient, client),
-            ),
-          );
-          expect(response.status).toBe(503);
-          expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
-          expect(yield* Effect.promise(() => response.text())).toBe("");
-        }
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            SqliteClient.layer({ filename: ":memory:" }),
-            Layer.succeed(
-              HttpClient.HttpClient,
-              HttpClient.make((request) =>
-                Effect.succeed(HttpClientResponse.fromWeb(request, new Response())),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
 });

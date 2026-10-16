@@ -39,9 +39,10 @@ test("check is read-only; import preserves legacy publication and orphan origina
   });
   expect(await target.store.initial(record.id)).toEqual({ state: "", memory: "" });
   expect((await target.bucket.list()).objects).toHaveLength(2);
-  expect((await target.store.publicImage(source.images[0]!.key)).status).toBe(
-    source.images[0]!.key === record.imageUrl.split("/").at(-1) ? 200 : 404,
+  expect(record.imageUrl).toBe(
+    `https://persona-images.renai.im/${record.imageUrl.split("/").at(-1)}`,
   );
+  expect((await target.store.image(source.images[0]!.key)).status).toBe(200);
   expect(await run(false)).toMatchObject({
     personasAdded: 0,
     imagesUploaded: 0,
@@ -139,7 +140,7 @@ test("independent per-style ordering survives import and repeat", async () => {
     await importCatalog(target.db, target.bucket, source, false, "ordered-repeat"),
   ).toMatchObject({ personasAdded: 0, imagesUploaded: 0 });
   expect((await target.store.get(legacy.id)).secondaryPortraits).toEqual([
-    { style: "photo", imageUrl: anime },
+    { style: "photo", imageUrl: anime.replace("/images/", "https://persona-images.renai.im/") },
   ]);
   stdout.mockRestore();
   stderr.mockRestore();

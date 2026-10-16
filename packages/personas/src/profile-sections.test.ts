@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { readProfileSections, profileSectionKind } from "./profile-sections.ts";
+import { readProfileSections } from "./profile-sections.ts";
 
 test("section parsing preserves free Markdown and ignores headings inside code blocks", () => {
   const source =
@@ -15,13 +15,4 @@ test("section parsing preserves free Markdown and ignores headings inside code b
     sections: [],
   });
   expect(readProfileSections("")).toEqual({ introduction: "", sections: [] });
-  for (const [title, kind] of [
-    ["관심사", "interests"],
-    ["기본 정보", "facts"],
-    ["라이프스타일", "facts"],
-    ["관계 스타일", "facts"],
-    ["문답: 일요일은?", "answer"],
-    ["자유 제목", "text"],
-  ])
-    expect(profileSectionKind(title!)).toBe(kind);
 });

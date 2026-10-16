@@ -1,7 +1,7 @@
 import { stateStatus } from "@ren-ai/personas";
 import type { InitialDocuments, PersonaRecord } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
-import { documentStatus } from "./document-diagnostics.ts";
+import { documentStatus } from "@ren-ai/personas";
 import { LanguagePanel } from "./language-panel.tsx";
 import { ImprovementControls } from "./improvement-controls.tsx";
 import { ProfileHelp } from "./profile-help.tsx";

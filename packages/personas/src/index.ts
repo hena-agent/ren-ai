@@ -17,6 +17,7 @@ export {
 } from "./character-format.ts";
 export { initialTraits, checkInitialPersona, publicationIssues } from "./publication.ts";
 export { stateStatus } from "./state-diagnostics.ts";
+export { documentStatus } from "./document-diagnostics.ts";
 export {
   LanguageCode,
   LanguageProficiency,

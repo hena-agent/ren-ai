@@ -48,8 +48,8 @@ test("both styles are saved together, survive restart and become public without 
   let images: string[];
   try {
     window.document.body.innerHTML = page;
-    images = [...window.document.querySelectorAll(".image-option img")].map(
-      (image) => `/discovery${image.getAttribute("src")}`,
+    images = [...window.document.querySelectorAll(".image-option img")].map((image) =>
+      image.getAttribute("src")!,
     );
     expect(images).toHaveLength(2);
     const comparison = window.document.querySelector("section.image-options");
@@ -85,7 +85,7 @@ test("both styles are saved together, survive restart and become public without 
   expect(page).toContain(copy.styles.anime);
   expect(page).toContain(copy.styles.photo);
   for (const image of images!)
-    expect((await store.publicImage(image.split("/").at(-1)!)).status).toBe(404);
+    expect((await store.image(image.split("/").at(-1)!)).status).toBe(200);
   const saved = await admin(
     request("/personas", { ...character, draft: tokenOf(page), published: "on" }),
   );
@@ -94,7 +94,7 @@ test("both styles are saved together, survive restart and become public without 
   const record = await reopened.get(idOf(saved));
   expect(record.portraits).toEqual({ anime: images![1], photo: images![0] });
   for (const image of images!)
-    expect((await reopened.publicImage(image.split("/").at(-1)!)).status).toBe(200);
+    expect((await reopened.image(image.split("/").at(-1)!)).status).toBe(200);
   expect(await reopened.publicList()).toEqual([
     {
       id: record.id,
@@ -106,11 +106,11 @@ test("both styles are saved together, survive restart and become public without 
     },
   ]);
   const edited = await (await admin(request(`/personas/${record.id}`))).text();
-  expect(edited).toContain(images![0]!.replace("/discovery", ""));
-  expect(edited).toContain(images![1]!.replace("/discovery", ""));
+  expect(edited).toContain(images![0]!);
+  expect(edited).toContain(images![1]!);
   await admin(request(`/personas/${record.id}`, { ...character, draft: tokenOf(edited) }));
   for (const image of images!)
-    expect((await reopened.publicImage(image.split("/").at(-1)!)).status).toBe(404);
+    expect((await reopened.image(image.split("/").at(-1)!)).status).toBe(200);
 });
 
 test("saved previews keep external portrait URLs intact and use authenticated routes for owned images", async () => {
@@ -136,7 +136,7 @@ test("saved previews keep external portrait URLs intact and use authenticated ro
       ]),
     ).toEqual([
       [external, `${legacy.name} ${copy.styles.anime}`],
-      [owned.replace("/discovery", ""), `${legacy.name} ${copy.styles.photo}`],
+      [owned, `${legacy.name} ${copy.styles.photo}`],
     ]);
     expect(
       [...card!.querySelectorAll(".portrait-label")].map((label) => [
@@ -152,14 +152,14 @@ test("saved previews keep external portrait URLs intact and use authenticated ro
     expect(single?.querySelector(".portrait-split")).toBeNull();
     expect(single?.querySelectorAll("img")).toHaveLength(1);
     const thumbnail = single?.querySelector(".persona-card img");
-    expect(thumbnail?.getAttribute("src")).toBe(owned.replace("/discovery", ""));
+    expect(thumbnail?.getAttribute("src")).toBe(owned);
     expect(thumbnail?.getAttribute("alt")).toBe(`${legacy.name} 프로필`);
     window.document.body.innerHTML = await (await admin(request(`/personas/${legacy.id}`))).text();
     expect(
       [...window.document.querySelectorAll(".image-option img")].map((image) =>
         image.getAttribute("src"),
       ),
-    ).toEqual([owned.replace("/discovery", ""), external]);
+    ).toEqual([owned, external]);
   } finally {
     await window.happyDOM.close();
   }
@@ -183,8 +183,8 @@ test("client-supplied image choices cannot replace either saved style", async ()
   );
   expect(response.status).toBe(303);
   const record = await store.get(idOf(response));
-  expect(record.portraits?.anime).toMatch(/^\/discovery\/images\//);
-  expect(record.portraits?.photo).toMatch(/^\/discovery\/images\//);
+  expect(record.portraits?.anime).toMatch(/^\/images\//);
+  expect(record.portraits?.photo).toMatch(/^\/images\//);
   expect(JSON.stringify(await store.publicList())).not.toContain("evil.example");
 });
 

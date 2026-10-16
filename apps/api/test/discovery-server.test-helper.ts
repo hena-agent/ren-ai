@@ -21,7 +21,6 @@ export const startDiscovery = ({
     const web = yield* makeDiscoveryWeb({
       catalog: store.publicList,
       turnstileSecret,
-      image: store.publicImage,
     });
     yield* Effect.addFinalizer(() => Effect.promise(web.dispose));
     return yield* servePublic(
