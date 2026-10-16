@@ -8,14 +8,14 @@ export async function waitForHealth(
   identityOnly = false,
   fetcher: typeof fetch = fetch,
 ) {
-  for (let attempt = 1; attempt <= 12; attempt++) {
+  for (let attempt = 1; attempt <= 96; attempt++) {
     const started = performance.now();
     let actual: ReturnType<typeof parseHealth> | undefined;
     let status: number | undefined;
     try {
       const response = await fetcher(new URL("/health", url), {
         redirect: "manual",
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(4_000),
         cache: "no-store",
       });
       status = response.status;
@@ -40,7 +40,7 @@ export async function waitForHealth(
           ...(actual && { actualRevision: actual.revision, readiness: actual.status }),
         }) + "\n",
       );
-      if (attempt < 12) await new Promise<void>((resolve) => setTimeout(resolve, 5000));
+      if (attempt < 96) await new Promise<void>((resolve) => setTimeout(resolve, 5000));
     }
   }
   throw new Error("Deployment health verification timed out; expected artifact was not confirmed");

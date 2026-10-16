@@ -28,7 +28,7 @@ test("rollout waits for the exact revision and real readiness, reporting only al
   expect(JSON.stringify(logs.mock.calls)).not.toContain("private-marker");
 });
 
-test("unreachable and invalid endpoints stop after twelve probes without leaking upstream content", async () => {
+test("unreachable and invalid endpoints stop after ninety-six probes without leaking upstream content", async () => {
   vi.useFakeTimers();
   const logs = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("private response body"));
@@ -37,8 +37,8 @@ test("unreachable and invalid endpoints stop after twelve probes without leaking
   const timers = vi.runAllTimersAsync();
   await expect(pending).rejects.toThrow("timed out");
   await timers;
-  expect(fetcher).toHaveBeenCalledTimes(12);
-  expect(logs).toHaveBeenCalledTimes(12);
+  expect(fetcher).toHaveBeenCalledTimes(96);
+  expect(logs).toHaveBeenCalledTimes(96);
   expect(JSON.stringify(logs.mock.calls)).not.toContain("private");
 });
 
