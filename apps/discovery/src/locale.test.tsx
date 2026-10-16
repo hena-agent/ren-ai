@@ -6,6 +6,7 @@ import { LocalePicker, LocaleProvider } from "./locale.tsx";
 import { ProfileLanguages } from "./profile-languages.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { choose } from "../test/choose.ts";
+import { JoinForm } from "./join-form.tsx";
 
 afterEach(() => {
   cleanup();
@@ -155,4 +156,27 @@ test("blocked storage retains the chosen language and invalid select events do n
   render(<LocalePicker />);
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "ja" } });
   expect(screen.getByRole<HTMLSelectElement>("combobox").value).toBe("ko");
+});
+
+test("conversation language choices are explicit and consent can be withdrawn", () => {
+  render(
+    <JoinForm
+      liked={[persona]}
+      client={{ profiles: async () => [persona], join: async () => ({ status: "waiting" }) }}
+      onBack={vi.fn<() => void>()}
+      onSuccess={vi.fn<(status: "waiting" | "active") => void>()}
+    />,
+  );
+  const language = screen.getByRole<HTMLSelectElement>("combobox", { name: "대화하고 싶은 언어" });
+  for (const value of ["en", "ko"]) {
+    fireEvent.change(language, { target: { value } });
+    expect(language.value).toBe(value);
+  }
+  fireEvent.change(language, { target: { value: "invalid" } });
+  expect(language.value).toBe("ko");
+  const consent = screen.getByRole<HTMLInputElement>("checkbox");
+  fireEvent.click(consent);
+  expect(consent.checked).toBe(true);
+  fireEvent.click(consent);
+  expect(consent.checked).toBe(false);
 });

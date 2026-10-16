@@ -54,4 +54,9 @@ test("D1 and file Catalogs expose only approved initial language proficiency and
     );
     expect((await store.publicList())[0]?.languages?.proficiency["en"]).toBe("proficient");
   }
+  await cloud.db
+    .prepare("UPDATE personas SET state = '' WHERE id = ?")
+    .bind(databasePersona.id)
+    .run();
+  expect((await cloud.store.publicList())[0]?.languages).toBeUndefined();
 });
