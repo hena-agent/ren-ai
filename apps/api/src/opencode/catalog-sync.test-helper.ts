@@ -152,28 +152,28 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
         });
         return session;
       });
-    const watch = () => {
-      const refresher = catalogRefresher(
-        remote.client,
-        fixture.personaDirectory,
-        async () => {
-          const loaded = await Effect.runPromise(loadPersonas(fixture.catalogDirectory));
-          return {
-            revision: JSON.stringify([...loaded.values()].map(serializePersona)),
-            personas: loaded,
-          };
-        },
-        personas,
-      );
-      return Effect.forkScoped(
+    const refresher = catalogRefresher(
+      remote.client,
+      fixture.personaDirectory,
+      async () => {
+        const loaded = await Effect.runPromise(loadPersonas(fixture.catalogDirectory));
+        return {
+          revision: JSON.stringify([...loaded.values()].map(serializePersona)),
+          personas: loaded,
+        };
+      },
+      personas,
+    );
+    const refresh = refresher.refresh(fixture.groundRules).pipe(Effect.catchCause(Effect.logError));
+    const watch = () =>
+      Effect.forkScoped(
         Effect.gen(function* () {
           while (true) {
-            yield* refresher.refresh(fixture.groundRules).pipe(Effect.catchCause(Effect.logError));
+            yield* refresh;
             yield* Effect.sleep("1 second");
           }
         }),
       );
-    };
     const profileName = () => Effect.sync(() => personas.get("persona1")?.name);
     /** A reserved first contact that is due now, started the way the scheduler starts it. */
     const firstContact = (handle: string, personaID = "persona1") =>
@@ -201,6 +201,7 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
       metParent,
       activeSession,
       directory,
+      refresh,
       watch,
       profileName,
       transport,

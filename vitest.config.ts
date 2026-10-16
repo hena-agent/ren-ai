@@ -3,7 +3,10 @@ import exceptions from "./quality-exceptions.json" with { type: "json" };
 
 export default defineConfig({
   test: {
-    projects: ["apps/*", "packages/*", "packages/plugins/*"],
+    projects: ["apps/*", "packages/!(plugins)", "packages/plugins/*"],
+    // One shared budget avoids oversubscribing the integration tests' native runtimes.
+    maxWorkers: "50%",
+    silent: "passed-only",
     coverage: {
       provider: "v8",
       include: ["{apps,packages}/*/src/**/*.{ts,tsx}", "packages/plugins/*/src/**/*.{ts,tsx}"],
