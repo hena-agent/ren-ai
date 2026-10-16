@@ -1,11 +1,15 @@
 import { Schema } from "effect";
-import { isPhoneHandle } from "./countries.ts";
+import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
 
 export const Email = Schema.String.pipe(
   Schema.check(Schema.isPattern(/^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/)),
   Schema.check(Schema.isLowercased(), Schema.isTrimmed()),
 );
 
-const Phone = Schema.String.pipe(Schema.refine((value): value is string => isPhoneHandle(value)));
+const isMobileNumber = (value: string) => {
+  const phone = parsePhoneNumberFromString(value, { extract: false });
+  return phone?.number === value && phone.isValid();
+};
 
-export const Handle = Schema.Union([Phone, Email]);
+/** A mobile number of any country in E.164 form, the only contact Discovery accepts. */
+export const MobileNumber = Schema.String.check(Schema.makeFilter(isMobileNumber));

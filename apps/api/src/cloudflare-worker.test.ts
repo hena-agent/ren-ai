@@ -97,7 +97,7 @@ test("public reads work without private secrets while management and registratio
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        handle: "public@example.com",
+        handle: "+821012345678",
         locale: "ko",
         likedPersonaIDs: ["sora"],
         privacyNoticeVersion: discoveryNotice.version,
@@ -105,6 +105,7 @@ test("public reads work without private secrets while management and registratio
       }),
     });
     expect(registration.status).toBe(400);
+    expect(await registration.json()).toBe("verification");
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });
@@ -138,9 +139,9 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
     runtime = await openWorker(persistence, false);
     const registration = await send(runtime, "/discovery/waitlist", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "CF-Connecting-IP": "person@example.com" },
+      headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.7" },
       body: JSON.stringify({
-        handle: "person@example.com",
+        handle: "+821012345678",
         locale: "ko",
         privacyNoticeVersion: discoveryNotice.version,
         turnstileToken: "human",
@@ -178,7 +179,7 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
       headers: { Authorization: "Bearer management-secret" },
     });
     const restoredContacts = await contactEntries(() => restored.text());
-    expect(restoredContacts.entries[0]?.handle).toBe("person@example.com");
+    expect(restoredContacts.entries[0]?.handle).toBe("+821012345678");
     expect(restoredContacts.entries[0]?.id).toBe(waiting.entries[0]?.id);
   } finally {
     await stopRuntimes();

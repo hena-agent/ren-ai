@@ -47,7 +47,7 @@ The handle every persona texts from.
 _Avoid_: persona handle, sender, bot account
 
 **Discovery**:
-Browsing published personas' public profiles, Liking or Passing each, and joining the waitlist with a handle and web consent.
+Browsing published personas' public profiles, Liking or Passing each, and joining the waitlist with a mobile number and web consent. Discovery never asks for an Apple ID email.
 _Avoid_: discovery page, swipe app
 
 **Onboarding**:

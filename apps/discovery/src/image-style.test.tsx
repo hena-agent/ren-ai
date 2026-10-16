@@ -132,7 +132,7 @@ test("style changes and reloads preserve Like and Pass, contact input and candid
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "01012345678" } });
   fireEvent.click(screen.getByRole("button", { name: "애니메" }));
-  expect(screen.getByRole("textbox").getAttribute("value")).toBe("01012345678");
+  expect(screen.getByRole("textbox").getAttribute("value")).toBe("010-1234-5678");
   expect(
     screen
       .getByRole("list", { name: "관심을 전할 페르소나" })

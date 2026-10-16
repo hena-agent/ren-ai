@@ -71,6 +71,61 @@ input:not([type="checkbox"]) {
   background: var(--surface);
   font-size: 16px;
 }
+.phone-field {
+  display: flex;
+  min-height: 52px;
+  border: 1px solid #cdd2da;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.phone-field:focus-within {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.phone-field :focus-visible {
+  outline: none;
+}
+/* The transparent native select covers the compact label so taps open the platform's list. */
+.country-picker {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 14px;
+  border-right: 1px solid var(--line);
+  border-radius: 11px 0 0 11px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+.country-picker::after {
+  width: 6px;
+  height: 6px;
+  margin-top: -4px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  content: "";
+  transform: rotate(45deg);
+}
+.country-picker:focus-within {
+  background: var(--canvas);
+}
+.country-picker select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
+}
+.phone-field input:not([type="checkbox"]) {
+  flex: 1;
+  min-width: 0;
+  min-height: auto;
+  border: 0;
+  border-radius: 0 11px 11px 0;
+  background: transparent;
+}
 .field-hint {
   margin: 0;
   color: var(--muted);

@@ -11,7 +11,7 @@ import { bindTestHandle, startTestHandle } from "../../test/reset.test-helper.ts
 test("sending the reset Greeting does not schedule a follow-up until the User replies", async () => {
   const { root, personaDirectory } = await messagingFixture("reset-follow-");
   const fake = fakeMessages();
-  const handle = "tester@example.com";
+  const handle = "+821012345678";
   let offset = 0;
   const clock = Effect.runSync(Clock.Clock);
   try {

@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { normalizeHandle } from "./index.ts";
-import { Email, Handle } from "./shapes.ts";
+import { Email } from "./shapes.ts";
 
 describe("Handle", () => {
   it.each([
@@ -10,24 +10,22 @@ describe("Handle", () => {
     ["01012345678", "+821012345678"],
     [" 01012345678 ", "+821012345678"],
     ["+82 10-1234-5678", "+821012345678"],
-    ["02 123 4567", "+8221234567"],
-    ["031 123 4567", "+82311234567"],
-    ["070 1234 5678", "+827012345678"],
+    ["+1 415 555 0100", "+14155550100"],
+    ["+81 90-1234-5678", "+819012345678"],
     ["  A.User@EXAMPLE.COM  ", "a.user@example.com"],
   ])("normalizes %s to %s", (input, normalized) => {
     expect(normalizeHandle(input)).toBe(normalized);
-    expect(Schema.decodeUnknownSync(Handle)(normalized)).toBe(normalized);
   });
 
   it.each([
     null,
     12,
     "",
-    "0101234567",
     "010123456789",
     "010-12x4-5678",
-    "+1 2025550123",
     "010+12345678",
+    "02 123 4567",
+    "070 1234 5678",
     "a@",
     "a b@example.com",
   ])("rejects invalid Handle %s", (input) => {
@@ -42,11 +40,4 @@ describe("Handle", () => {
     expect(() => Schema.decodeUnknownSync(Email)("h@example.com.")).toThrow("Expected");
     expect(Schema.decodeUnknownSync(Email)("h@example.com.net")).toBe("h@example.com.net");
   });
-
-  it.each(["+8210123456780", "x+821012345678", "x821012345678", "+8231123456", "+8231abcdefg"])(
-    "rejects invalid canonical phone %s",
-    (invalid) => {
-      expect(() => Schema.decodeUnknownSync(Handle)(invalid)).toThrow("Expected");
-    },
-  );
 });

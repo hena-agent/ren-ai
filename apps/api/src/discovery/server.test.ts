@@ -155,7 +155,7 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                handle: "waiting@example.com",
+                handle: "+821012345678",
                 locale: "ko",
                 privacyNoticeVersion: discoveryNotice.version,
                 turnstileToken: "human",
@@ -168,7 +168,7 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
           expect(yield* sql`SELECT persona_id FROM discovery_like`).toHaveLength(1);
           const directory = yield* conversations;
           const operator = yield* makeOperator(directory, () => Effect.void);
-          expect(yield* operator.remove("waiting@example.com")).toBe("removed");
+          expect(yield* operator.remove("+821012345678")).toBe("removed");
           expect(yield* sql`SELECT id FROM discovery_registration`).toEqual([]);
           expect(yield* sql`SELECT persona_id FROM discovery_like`).toEqual([]);
           expect(yield* sql`SELECT id FROM send`).toEqual([]);

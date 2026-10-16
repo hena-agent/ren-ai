@@ -72,9 +72,9 @@ test("registry persists state on the Durable Object across recreation", async ()
     const profiles = await call(runtime, "/discovery/personas");
     expect(profiles.status).toBe(200);
     expect(await profiles.json()).toHaveLength(2);
-    expect((await register(runtime, "person1@example.com")).status).toBe(200);
-    expect((await register(runtime, "person1@example.com")).status).toBe(200);
-    expect((await register(runtime, "person2@example.com")).status).toBe(200);
+    expect((await register(runtime, "+821012345678")).status).toBe(200);
+    expect((await register(runtime, "+821012345678")).status).toBe(200);
+    expect((await register(runtime, "+821087654321")).status).toBe(200);
     expect(
       (
         await call(runtime, "/management/discovery", {
@@ -87,18 +87,16 @@ test("registry persists state on the Durable Object across recreation", async ()
     });
     const listed = await contactEntries(() => listing.text());
     expect(listed.entries).toHaveLength(2);
-    const registrationID = listed.entries.find(
-      (entry) => entry.handle === "person1@example.com",
-    )!.id;
+    const registrationID = listed.entries.find((entry) => entry.handle === "+821012345678")!.id;
     const otherRegistrationID = listed.entries.find(
-      (entry) => entry.handle === "person2@example.com",
+      (entry) => entry.handle === "+821087654321",
     )!.id;
     const auth = { Authorization: "Bearer management-test", "Content-Type": "application/json" };
     expect(
       (
         await call(runtime, "/__fixture/test-handle", {
           method: "POST",
-          body: JSON.stringify({ handle: "person1@example.com" }),
+          body: JSON.stringify({ handle: "+821012345678" }),
         })
       ).status,
     ).toBe(200);
@@ -139,16 +137,16 @@ test("registry persists state on the Durable Object across recreation", async ()
     const state = await call(runtime, "/__fixture/state");
     expect(await state.json()).toEqual({
       registrations: [
-        { id: registrationID, handle: "person1@example.com" },
-        { id: otherRegistrationID, handle: "person2@example.com" },
+        { id: registrationID, handle: "+821012345678" },
+        { id: otherRegistrationID, handle: "+821087654321" },
       ].toSorted((left, right) => left.handle.localeCompare(right.handle)),
       selections: [
         { requestId: "00000000-0000-4000-8000-000000000001" },
         { requestId: "00000000-0000-4000-8000-000000000002" },
       ],
       assignments: [
-        { personaID: "luna", handle: "person2@example.com" },
-        { personaID: "sora", handle: "person1@example.com" },
+        { personaID: "luna", handle: "+821087654321" },
+        { personaID: "sora", handle: "+821012345678" },
       ],
     });
 

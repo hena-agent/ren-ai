@@ -1,10 +1,14 @@
 import { useRef, useState } from "react";
-import { discoveryNotices, normalizeHandle } from "@ren-ai/onboarding";
+import { Schema } from "effect";
+import { discoveryNotices, MobileNumber } from "@ren-ai/onboarding";
 import { Turnstile } from "@ren-ai/onboarding/turnstile";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
 import { useCopy, useLocale } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
+import { PhoneField } from "./phone-field.tsx";
+
+const isMobileNumber = Schema.is(MobileNumber);
 
 function siteKey() {
   return import.meta.env.VITE_TURNSTILE_SITE_KEY || "1x00000000000000000000BB";
@@ -32,18 +36,20 @@ export function JoinForm({
   const { locale } = useLocale();
   const discoveryNotice = discoveryNotices[locale];
   const [conversationLanguage, setConversationLanguage] = useState<Locale>(locale);
-  const [contact, setContact] = useState<{ input: string; consentLanguage: Locale | null }>({
-    input: "",
-    consentLanguage: null,
-  });
+  const [contact, setContact] = useState<{
+    phone: string | undefined;
+    checked: boolean;
+    consentLanguage: Locale | null;
+  }>({ phone: undefined, checked: false, consentLanguage: null });
   const [token, setToken] = useState<string | null>("");
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState(false);
   const submitting = useRef(false);
-  const handle = normalizeHandle(contact.input);
-  const invalid = contact.input.length > 0 && !handle;
+  const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
+  const invalid = contact.checked && contact.phone !== undefined && !handle;
   async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    setContact((current) => ({ ...current, checked: true }));
     if (
       submitting.current ||
       !handle ||
@@ -95,14 +101,11 @@ export function JoinForm({
       <form onSubmit={(event) => void submit(event)}>
         <div className="contact-fields">
           <label htmlFor="handle">{copy.handle}</label>
-          <input
-            id="handle"
-            autoComplete="username"
-            inputMode="text"
-            value={contact.input}
-            onChange={(event) => setContact({ ...contact, input: event.target.value })}
-            aria-invalid={invalid}
-            aria-describedby={invalid ? "handle-error" : "handle-hint"}
+          <PhoneField
+            value={contact.phone}
+            onChange={(phone) => setContact((current) => ({ ...current, phone, checked: false }))}
+            onBlur={() => setContact((current) => ({ ...current, checked: true }))}
+            invalid={invalid}
             disabled={pending}
           />
           <p className="field-hint" id="handle-hint">
