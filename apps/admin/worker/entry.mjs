@@ -3,6 +3,16 @@ import { cloudflareAdmin } from "../src/cloudflare-admin.ts";
 import { catalogHandler } from "../src/catalog-handler.ts";
 import { adminRequest } from "../src/admin-request.ts";
 import { adminHealth } from "../src/service-health.ts";
+import { createHash, timingSafeEqual } from "node:crypto";
+
+/** @param {string} value */
+const authDigest = (value) => createHash("sha256").update(value).digest();
+/** @param {string} value */
+const base64 = (value) => {
+  let bytes = "";
+  for (const byte of new TextEncoder().encode(value)) bytes += String.fromCharCode(byte);
+  return btoa(bytes);
+};
 
 /** @extends {DurableObject<import('../src/cloudflare-admin.ts').AdminEnv>} */
 export class PersonaAdmin extends DurableObject {
@@ -13,9 +23,17 @@ export class PersonaAdmin extends DurableObject {
   }
   /** @override @param {Request} request */
   async fetch(request) {
-    if (new URL(request.url).pathname === "/health") {
+    if (new URL(request.url).pathname === "/_internal/editor-ready") {
+      const authorization = request.headers.get("authorization") ?? "";
+      if (
+        !timingSafeEqual(
+          authDigest(authorization),
+          authDigest(`Basic ${base64(`admin:${this.env.ADMIN_PASSWORD}`)}`),
+        )
+      )
+        return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
       await this.ready;
-      return new Response(null, { status: 204 });
+      return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
     }
     return (await this.ready).fetch(request);
   }
@@ -43,7 +61,12 @@ export default {
       return adminRequest(request, () =>
         adminHealth(request, env, () =>
           editor(env).fetch(
-            new Request("https://admin.internal/health", { signal: AbortSignal.timeout(4000) }),
+            new Request("https://admin.internal/_internal/editor-ready", {
+              headers: {
+                Authorization: `Basic ${base64(`admin:${env.ADMIN_PASSWORD}`)}`,
+              },
+              signal: AbortSignal.timeout(4000),
+            }),
           ),
         ),
       );
