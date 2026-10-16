@@ -69,6 +69,7 @@ export const createExecutionHealth = (
         const response = await fetcher(new URL("/health", configuration.apiMsgUrl), {
           headers: { Authorization: `Bearer ${configuration.managementToken}` },
           signal: AbortSignal.timeout(10_000),
+          redirect: "manual",
         });
         if (response.status !== 200 && response.status !== 503)
           throw Object.assign(new Error("Executor health is unavailable"), {
@@ -77,7 +78,9 @@ export const createExecutionHealth = (
           });
         try {
           const body = await response.json();
-          parseHealth(body, "api-msg");
+          const health = parseHealth(body, "api-msg");
+          if (response.status !== (health.status === "ready" ? 200 : 503))
+            throw new Error("Executor health status is inconsistent");
           return Schema.decodeUnknownSync(Facts)(body);
         } catch (cause) {
           throw Object.assign(new Error("Invalid executor health response", { cause }), {
