@@ -192,6 +192,15 @@ Admin management uses `APPLICATION_API_URL=https://api-app.renai.im` and
 `VITE_DISCOVERY_API_URL=https://api-app.renai.im`. Discovery profile reads use
 api-app's `/discovery/personas`; the browser does not bind D1 or run a catalog API.
 
+Admin sends `POST /management/catalog/refresh` with `TOKEN_MANAGEMENT` after
+committing catalog edits. This route belongs to api-app, not the Mac executor;
+it loads the latest authenticated Admin catalog and synchronizes active native
+session folders. Live State/Memory and retained folders are preserved. The
+route returns 204 after synchronization, 503 on failure (with a request ID),
+and rejects writes during bootstrap. Duplicate notifications are safe. Catalog
+loading runs at execution startup and on notifications, never on heartbeats.
+Admin retains and retries unacknowledged notifications across restarts.
+
 No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
 ## Services and credentials

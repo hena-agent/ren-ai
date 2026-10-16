@@ -117,6 +117,23 @@ and `TOKEN_MANAGEMENT` to match the Worker's. Deploy that application
 configuration separately. Verify unauthenticated `/` returns 401, authenticated
 editing works, and only published current image references are public.
 
+Committed persona saves (including publication changes) notify
+`APPLICATION_API_URL` at `POST /management/catalog/refresh` using the existing
+`TOKEN_MANAGEMENT`. Deploy the receiving api-app endpoint before enabling the
+Admin sender. The application loads its catalog on startup and on these
+notifications, never on its heartbeat. Draft editing and image-progress reads
+do not notify. No persona-deletion operation is currently exposed by Admin.
+
+Admin durably records notification intent before committing to D1. A committed
+save remains successful if the messaging application is unavailable: the editor
+shows that application is pending, and the shared Durable Object alarm retries
+delivery after 5 seconds, with exponential backoff capped at 5 minutes. A new
+save immediately attempts delivery of the latest catalog. Delivery and saves
+are serialized; acknowledgements cannot discard a newer pending change.
+An interrupted commit can cause a harmless extra refresh of the committed
+catalog. Alarms prioritize the earliest image or notification work. Pending
+delivery contains request correlation and retry metadata, never persona text.
+
 ## Storage and recovery
 
 ### Waiting people and first contact

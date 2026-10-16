@@ -242,6 +242,7 @@ export function renderPage({
   draft,
   error = "",
   saved,
+  catalogPending,
   seed,
   portraitInstructions,
   portraitOperation,
@@ -262,6 +263,7 @@ export function renderPage({
 }: PageContent & {
   error?: string;
   saved?: boolean;
+  catalogPending?: boolean | undefined;
   inspections?: readonly InspectionRow[];
   contactView?: ContactView;
 }) {
@@ -320,6 +322,12 @@ export function renderPage({
               </p>
             )}
             {saved && <output className="notice success">{copy.saved}</output>}
+            {catalogPending && (
+              <output className="notice">
+                저장된 카탈로그의 메시징 서버 적용을 기다리고 있습니다. 연결이 복구되면 자동으로
+                재시도합니다.
+              </output>
+            )}
             {imageJob && (
               <div data-image-progress>
                 {(imageJobs ?? [{ job: imageJob, position: queuePosition! }]).map(

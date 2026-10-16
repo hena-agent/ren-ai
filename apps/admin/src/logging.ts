@@ -218,12 +218,18 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
 export const requestId = () => scope.getStore()!.requestId;
 export const captureLogging = () => AsyncLocalStorage.snapshot();
 
-export function loggedJob<T>(id: string, fields: LogFields, run: () => Promise<T>, log: Log) {
+export function loggedJob<T>(
+  id: string,
+  fields: LogFields,
+  run: () => Promise<T>,
+  log: Log,
+  route = "/image-jobs/:id",
+) {
   return scope.run(
     {
       requestId: id,
       method: "ALARM",
-      route: "/image-jobs/:id",
+      route,
       fields,
       secrets: [],
       reported: new Map(),
