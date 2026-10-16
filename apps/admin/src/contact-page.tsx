@@ -137,10 +137,6 @@ function TestStarts({
               </option>
             ))}
           </select>
-          <label className="contact-confirm">
-            <input type="checkbox" name="confirm" value="yes" required /> 고른 페르소나로 지금 첫
-            연락을 시작합니다.
-          </label>
           <button type="submit">지금 시작</button>
         </form>
       ))}
@@ -154,29 +150,17 @@ function DirectSelection({ view }: { view: ContactView }) {
       action="/waitlist"
       method="post"
       className="contact-selection"
+      aria-label="대기자 직접 선정"
     >
-      <h2>대기자 직접 선정</h2>
-      <p>
-        아래 목록에서 대기자를 선택하세요. Like한 페르소나를 무작위로 배정하고, 동일하게 5분~1시간
-        뒤 첫 연락을 예약합니다.
-      </p>
       <input type="hidden" name="action" value="select-specific" />
       <input type="hidden" name="requestId" value={view.directRequestId} />
       {view.directAttempted &&
         view.registrationIDs.map((id) => (
           <input key={id} type="hidden" name="registrationIDs" value={id} />
         ))}
-      <label className="contact-confirm">
-        <input type="checkbox" name="confirm" value="yes" required /> 선택한 대기자의 독점 배정·첫
-        연락 예약을 실행합니다.
-      </label>
       <button type="submit" disabled={!view.directAttempted && !view.snapshot?.eligibleCount}>
         {view.directAttempted ? "같은 직접 선정 요청 확인" : "선택한 대기자 선정하기"}
       </button>
-      <p className="hint">
-        선정 시점에 배정 가능한 선택 인원만 처리합니다. 실패 시 같은 요청으로 재시도하며, 선택하지
-        않은 대기자는 선정하지 않습니다.
-      </p>
     </form>
   );
 }
@@ -186,46 +170,51 @@ export function ContactPage({ view }: { view: ContactView }) {
   );
   return (
     <section className="contact-management" aria-label="대기자와 첫 연락 관리">
-      <p>
-        한 페르소나는 한 사용자에게만 배정됩니다. 선정 후 5분~1시간 사이에 첫 인사를 시도합니다.
-      </p>
-      <a href={view.tab === "waitlist" ? "/waitlist" : "/first-contacts"}>상태 새로고침</a>
-      {view.tab === "waitlist" && (
-        <form action="/waitlist" method="post" className="contact-selection">
-          <p>
+      <div className="contact-summary">
+        {view.tab === "waitlist" && (
+          <p className="contact-eligible">
             선정 가능한 대기자 <strong>{view.snapshot?.eligibleCount ?? "확인 불가"}</strong>명
           </p>
-          <input type="hidden" name="requestId" value={view.requestId} />
-          <label htmlFor="contact-count">선정할 인원</label>
-          <input
-            id="contact-count"
-            type="number"
-            name="count"
-            min="1"
-            max="100"
-            required
-            defaultValue={view.count}
-          />
-          <label className="contact-confirm">
-            <input type="checkbox" name="confirm" value="yes" required /> 무작위 선정·독점 배정·첫
-            연락 예약을 실행합니다.
-          </label>
-          <button
-            type="submit"
-            disabled={!view.attempted && (!view.snapshot || view.snapshot.eligibleCount === 0)}
+        )}
+        <a href={view.tab === "waitlist" ? "/waitlist" : "/first-contacts"}>상태 새로고침</a>
+      </div>
+      {view.tab === "waitlist" && (
+        <div className="contact-actions">
+          <form
+            action="/waitlist"
+            method="post"
+            className="contact-selection"
+            aria-label="무작위 선정"
           >
-            {view.attempted ? "같은 선정 요청 확인" : "N명 선정하기"}
-          </button>
-          <p className="hint">
-            후보가 부족하면 가능한 인원만 선정합니다. 실패 시 같은 요청 ID로 재제출하면 중복
-            선정하지 않습니다.
-          </p>
-        </form>
+            <input type="hidden" name="requestId" value={view.requestId} />
+            <label htmlFor="contact-count">인원</label>
+            <input
+              id="contact-count"
+              type="number"
+              name="count"
+              min="1"
+              max="100"
+              required
+              defaultValue={view.count}
+            />
+            <span>명</span>
+            <button
+              type="submit"
+              className="secondary"
+              disabled={!view.attempted && (!view.snapshot || view.snapshot.eligibleCount === 0)}
+            >
+              {view.attempted ? "같은 선정 요청 확인" : "무작위 선정"}
+            </button>
+          </form>
+          <DirectSelection view={view} />
+        </div>
       )}
+      <p className="hint contact-policy">
+        Like한 페르소나를 무작위로 독점 배정하고, 선정 후 5분~1시간 뒤 첫 연락을 예약합니다.
+      </p>
       {view.tab === "waitlist" && view.snapshot && (
         <TestStarts entries={view.snapshot.entries} requestId={view.startRequestId} />
       )}
-      {view.tab === "waitlist" && <DirectSelection view={view} />}
       {view.selection && (
         <section aria-label="이번 선정 결과">
           <h2>

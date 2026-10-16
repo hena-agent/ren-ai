@@ -308,9 +308,11 @@ export function renderPage({
           </header>
           <main id="main" className={record ? "persona-workbench" : undefined}>
             <div className="page-heading" hidden={Boolean(record)}>
-              <p className="eyebrow">{copy.eyebrow}</p>
+              <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
               <h1>{heading(contactView, inspections)}</h1>
-              <p className="description">{copy.description}</p>
+              <p className="description">
+                {contactView ? "대기자 선정과 첫 연락 진행 상태를 관리합니다." : copy.description}
+              </p>
             </div>
             {error && (
               <p className="notice error" role="alert">
