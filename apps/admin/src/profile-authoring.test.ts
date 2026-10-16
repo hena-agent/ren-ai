@@ -78,8 +78,8 @@ test("saving name and private document edits preserves all photos without invoki
   });
   portrait.mockClear();
   const name = "수정한 이름";
-  const description = original
-    .description!.replace("짧은 검은 머리", "긴 갈색 머리")
+  const description = original.description
+    .replace("짧은 검은 머리", "긴 갈색 머리")
     .replace(`이름: ${original.name}`, `이름: ${name}`);
   expect(description).not.toBe(original.description);
   const updated = `${description}\n\n새롭게 덧붙인 공개 문장입니다.`;

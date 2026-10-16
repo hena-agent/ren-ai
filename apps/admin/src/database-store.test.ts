@@ -3,7 +3,7 @@ import { serializePersona } from "@ren-ai/personas";
 import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
 import { initialDocuments, portraitImage } from "../test/fixtures.ts";
 import { getTableConfig } from "drizzle-orm/sqlite-core";
-import { personaImages } from "./database-schema.ts";
+import { personaImages, personaVersions, personas } from "./database-schema.ts";
 
 test("an empty D1 Catalog accepts an atomic document save and rejects stale snapshots", async () => {
   const { store } = await cloudflareFixture();
@@ -106,6 +106,11 @@ test("publication and owned-image validation fail before a document commit", asy
 test("the relational schema enforces photo ownership and supports records whose gender is derived from Markdown", async () => {
   const { db, store } = await cloudflareFixture();
   const config = getTableConfig(personaImages);
+  const versionShape = getTableConfig(personaVersions);
+  expect(versionShape.primaryKeys.map((key) => key.columns.map((column) => column.name))).toEqual([
+    ["personaId", "version"],
+  ]);
+  expect(versionShape.foreignKeys[0]!.reference().foreignTable).toBe(personas);
   expect(config.indexes.map((index) => index.config.unique)).toEqual([true]);
   expect(config.foreignKeys[0]!.reference().foreignColumns.map((column) => column.name)).toEqual([
     "id",
@@ -118,5 +123,12 @@ test("the relational schema enforces photo ownership and supports records whose 
   const record = { ...databasePersona };
   delete record.gender;
   await store.save(record, initialDocuments, { persona: "" });
+  await expect(
+    db
+      .prepare("INSERT INTO persona_versions VALUES (?, 1, 'must not overwrite', 1, NULL)")
+      .bind(record.id)
+      .run(),
+  ).rejects.toThrow("UNIQUE");
+  expect((await store.version(record.id, 1)).markdown).toBe(record.description);
   expect((await store.get(record.id)).gender).toBeUndefined();
 });

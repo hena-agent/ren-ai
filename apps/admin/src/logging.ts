@@ -7,6 +7,8 @@ export interface LogFields {
   stage?: string;
   intent?: string;
   personaId?: string;
+  personaVersion?: number;
+  restoredFrom?: number;
   style?: string;
   poseIndex?: number;
   model?: string;
@@ -185,7 +187,7 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
   const path = new URL(request.url).pathname;
   const route = /^\/personas\/[a-zA-Z0-9_-]+$/.test(path)
     ? "/personas/:id"
-    : ["/", "/new", "/personas", "/api/personas", "/inspection"].includes(path)
+    : ["/", "/new", "/personas", "/api/personas", "/inspection", "/health"].includes(path)
       ? path
       : "/other";
   return scope.run(

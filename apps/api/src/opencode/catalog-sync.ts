@@ -8,6 +8,9 @@ import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { managedFolder, sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { managedSessions } from "./managed-sessions.ts";
+import { awaitPersonaAgent } from "./agent-readiness.ts";
+import { randomUUID } from "node:crypto";
+import { contactLog } from "../discovery/diagnostics.ts";
 
 type Client = Effect.Success<ReturnType<typeof OpenCode.make>>;
 
@@ -45,6 +48,35 @@ const resolvePersona = Effect.fn("resolvePersona")(function* (
   return preserved;
 });
 
+const applyPersona = Effect.fn("applyPersona")(function* (
+  client: Client,
+  root: string,
+  folderID: string,
+  persona: PersonaRecord,
+  groundRules: string,
+  requestId: string,
+) {
+  const started = performance.now();
+  yield* client
+    .rpc(sessionFolders)
+    .update(
+      { folderID, snapshot: renderSnapshot(persona, groundRules) },
+      { location: { directory: root } },
+    );
+  yield* awaitPersonaAgent(client.agent, sessionDirectory(root, folderID), persona);
+  contactLog({
+    requestId,
+    level: "info",
+    operation: "catalog.sync",
+    stage: "persona.apply",
+    personaId: persona.id,
+    sessionId: folderID,
+    ...(persona.version !== undefined && { personaVersion: persona.version }),
+    outcome: "completed",
+    durationMs: performance.now() - started,
+  });
+});
+
 const synchronize = Effect.fn("synchronize")(function* (
   client: Client,
   root: string,
@@ -52,6 +84,7 @@ const synchronize = Effect.fn("synchronize")(function* (
   groundRules: string,
 ) {
   const sql = yield* SqlClient.SqlClient;
+  const requestId = randomUUID();
   const active = yield* sql<{
     session_id: string;
     persona_id: string;
@@ -90,12 +123,7 @@ const synchronize = Effect.fn("synchronize")(function* (
     if (!missing) updates.set(session.id, persona);
   }
   for (const [folderID, persona] of updates)
-    yield* client
-      .rpc(sessionFolders)
-      .update(
-        { folderID, snapshot: renderSnapshot(persona, groundRules) },
-        { location: { directory: root } },
-      );
+    yield* applyPersona(client, root, folderID, persona, groundRules, requestId);
   return undefined;
 });
 
@@ -114,20 +142,23 @@ export const catalogRefresher = (
 ) => {
   let revision: string | undefined;
   return {
-    refresh: Effect.fn("refreshCatalog")(function* (groundRules: string) {
-      const snapshot = yield* Effect.tryPromise(load);
-      const changed = snapshot.revision !== revision;
-      const next = new Map(snapshot.personas);
-      for (const [id, persona] of next) {
-        const current = personas.get(id);
-        if (current && current.description === persona.description)
-          next.set(id, { ...persona, memory: current.memory });
-      }
-      yield* withLifecycle(synchronize(client, root, next, groundRules));
-      if (!changed) return;
-      personas.clear();
-      for (const [id, persona] of next) personas.set(id, persona);
-      revision = snapshot.revision;
-    }),
+    refresh: (groundRules: string) =>
+      withLifecycle(
+        Effect.gen(function* () {
+          const snapshot = yield* Effect.tryPromise(load);
+          const changed = snapshot.revision !== revision;
+          const next = new Map(snapshot.personas);
+          for (const [id, persona] of next) {
+            const current = personas.get(id);
+            if (current && current.description === persona.description)
+              next.set(id, { ...persona, memory: current.memory });
+          }
+          yield* synchronize(client, root, next, groundRules);
+          if (!changed) return;
+          personas.clear();
+          for (const [id, persona] of next) personas.set(id, persona);
+          revision = snapshot.revision;
+        }),
+      ),
   };
 };

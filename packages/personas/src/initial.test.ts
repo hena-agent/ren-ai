@@ -31,11 +31,9 @@ async function setup() {
   const root = await mkdtemp(join(tmpdir(), "persona-initial-"));
   roots.push(root);
   const store = await createPersonaStore(root);
-  const persona = parsePersona(
-    "harin",
-    await readFile(new URL("../catalog/harin.md", import.meta.url), "utf8"),
+  const persona = await store.create(
+    parsePersona("harin", await readFile(new URL("../catalog/harin.md", import.meta.url), "utf8")),
   );
-  await store.create(persona);
   return { root, store, persona, expected: { persona: serializePersona(persona) } };
 }
 

@@ -179,7 +179,7 @@ test("verification rejects a successful SQL response that leaves no imported Per
   const source = await readImportSource(local.root);
   const target = await cloudflareFixture();
   await target.db.exec(
-    "CREATE TRIGGER remove_import AFTER INSERT ON personas BEGIN DELETE FROM personas WHERE id = NEW.id; END",
+    "CREATE TRIGGER remove_import AFTER INSERT ON persona_versions BEGIN DELETE FROM personas WHERE id = NEW.personaId; END",
   );
   const { stdout, stderr } = captureWorkerLogs();
   await expect(

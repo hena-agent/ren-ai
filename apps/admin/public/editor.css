@@ -2,6 +2,41 @@
   max-width: 1440px;
   padding-top: 24px;
 }
+.version-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.version-heading h1 {
+  font-size: 24px;
+}
+.version-list {
+  display: grid;
+  gap: 8px;
+  margin: 24px 0;
+}
+.version-list a {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+}
+.version-list a[aria-current="page"] {
+  border-color: var(--accent);
+  background: var(--field);
+}
+.version-list time,
+.version-list span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.version-history .improvement-comparison textarea {
+  min-height: 320px;
+}
 .improvement-controls,
 .public-profile-editor {
   padding: 20px 16px;
