@@ -40,7 +40,7 @@ This repo enforces seven gates. They are not advisory. `bun run ci` runs all of 
 
 Before running checks, activate the Node version in `.nvmrc` (`nvm use`) and verify it with `node --version`. Vitest uses Node from `PATH`, even when launched through Bun; Node 22 cannot parse OpenCode's `await using` syntax.
 
-Run `bun run ci` once, at the end of the implementation after focused checks and final review. Use targeted tests and individual checks during development; report any failures from the final CI run without rerunning the full CI command.
+Use focused checks during development. Run `bun run ci` once after implementation and final review; batch any fixes, rerun only affected checks, and report unresolved failures.
 
 | Gate                  | Threshold      | Enforced by                 |
 | --------------------- | -------------- | --------------------------- |
