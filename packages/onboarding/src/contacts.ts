@@ -1,8 +1,13 @@
 import { Schema } from "effect";
+import { PublicLanguages } from "@ren-ai/personas/languages";
 
 const identifier = Schema.String.check(
   Schema.isPattern(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/),
 );
+export const ConversationLanguages = Schema.Struct({
+  languages: Schema.optionalKey(PublicLanguages),
+  lastStateChange: Schema.optionalKey(Schema.Struct({ reason: Schema.String, at: Schema.String })),
+});
 export const ContactState = Schema.Literals([
   "waiting",
   "scheduled",

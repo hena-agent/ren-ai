@@ -15,6 +15,8 @@ import type { SqlClient } from "effect/unstable/sql";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
+import { conversationLanguages } from "./discovery/conversation-languages.ts";
+import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -93,6 +95,16 @@ export async function createExecutionRuntime(
     const catalogSync = catalogRefresher(host.client, execution.directory, catalog.load, personas);
     return {
       refreshCatalog: catalogSync.refresh(groundRules),
+      languages: conversationLanguages((sessionID) =>
+        host.client
+          .rpc(sessionFolders)
+          .read({ folderID: sessionID }, { location: { directory: execution.directory } })
+          .pipe(
+            Effect.mapError(
+              (cause) => new Error("Conversation State could not be read", { cause }),
+            ),
+          ),
+      ),
       tick: Effect.gen(function* () {
         yield* host.heartbeat.intake;
         yield* contacts.tick;
@@ -173,7 +185,9 @@ export async function createExecutionRuntime(
           );
         }
       }
-      await open();
+      const runtime = await open();
+      if (url.pathname === "/operator/languages" && request.method === "GET")
+        return run(runtime.languages(request));
       url.pathname = url.pathname.slice("/operator".length);
       return operator!.handler(new Request(url, request));
     },

@@ -1,8 +1,13 @@
 import { Schema } from "effect";
 import { Handle } from "./shapes.ts";
 import disclosure from "./discovery-notice.json";
+import englishDisclosure from "./discovery-notice.en.json";
+import japaneseDisclosure from "./discovery-notice.ja.json";
+import { PublicLanguages } from "@ren-ai/personas/languages";
 
 export const discoveryNotice = disclosure;
+export const DiscoveryLocale = Schema.Literals(["ko", "en", "ja"]);
+export const discoveryNotices = { ko: disclosure, en: englishDisclosure, ja: japaneseDisclosure };
 
 const text = Schema.String.check(Schema.isNonEmpty());
 const id = text.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/));
@@ -24,6 +29,7 @@ export const PublicPersona = Schema.Struct({
   id,
   name: text,
   bio: text,
+  languages: Schema.optionalKey(PublicLanguages),
   publicProfile: Schema.optionalKey(Schema.String),
   imageUrl: photo,
   portraits: Schema.optionalKey(
@@ -47,7 +53,8 @@ export type PublicPersona = typeof PublicPersona.Type;
 
 export const DiscoveryRequest = Schema.Struct({
   handle: Handle,
-  locale: Schema.Literal("ko"),
+  locale: DiscoveryLocale,
+  conversationLanguage: Schema.optionalKey(DiscoveryLocale),
   privacyNoticeVersion: text,
   turnstileToken: text,
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
