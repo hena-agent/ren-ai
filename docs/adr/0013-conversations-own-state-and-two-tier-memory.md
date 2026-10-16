@@ -25,9 +25,12 @@ life plus per-user memories. The operator selected independent runtime State and
   memory mutations have durable replay receipts; completed choices are not rerolled after interruption.
 - Long-term records can become faded or forgotten. Fading retains only the remaining gist; forgetting
   removes content from current recall. These changes update short-term Memory in the same commit.
-  Conversation history and previous storage revisions remain operational records, not current recall.
-- One private revision snapshot owns the current documents and replay receipts. An atomic pointer
-  publishes the revision; root Markdown files are views. Native export/restore includes the runtime snapshot.
+  Conversation history remains an operational record, not current recall.
+- `STATE.md`, `MEMORY.md` and `long-term/<id>.md` own the current data as ordinary Markdown files.
+  There is no second JSON source, version directory or symlink view. Replay receipts are separate
+  execution metadata. A temporary write-ahead record contains only changed files and receipts; reads
+  finish interrupted writes before accessing the documents, and completed writes delete that record.
+  Native export/restore reads the current Markdown and includes its values and replay receipts.
 - OpenCode checkpoint summaries supplement the real history. They do not replace file Memory, and current
   State and memory clarity override stale summaries and search results.
 
@@ -39,4 +42,7 @@ existing lifelong session/reset model. A future shared-life product decision wou
 
 Keeping only OpenCode summaries would make selective retrieval and forgetting indistinguishable from
 transcript compression. Explicit short/long-term Memory supports both without discarding the actual history.
-Immutable revisions keep paired changes and receipts coherent without introducing another database.
+The original immutable revision scheme copied every memory on each mutation or dice call and kept
+all copies indefinitely. The operator rejected that clutter. Authoritative Markdown with a transient
+write-ahead record keeps paired changes and receipts recoverable without retaining memory history
+or introducing another database. Reads and writes share a per-Conversation process lock.
