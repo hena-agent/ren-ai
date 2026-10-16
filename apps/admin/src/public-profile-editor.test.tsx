@@ -112,6 +112,7 @@ test("public items edit the single Markdown source, reorder, remove, and preserv
 
 test("fact rows have independent labels and values, can be removed, and noncanonical Markdown stays editable", async () => {
   await workspace();
+  await edit(control("추가할 항목"), "라이프스타일");
   await click("항목 추가");
   await click("정보 추가");
   await edit(control("정보 이름"), "직업");
@@ -137,6 +138,34 @@ test("fact rows have independent labels and values, can be removed, and noncanon
   );
   await edit(control("내용 · 기존 Markdown"), "원문을 유지하며 수정.");
   expect(sections()[0]?.body).toBe("원문을 유지하며 수정.");
+});
+
+test("basic information uses fixed optional fields and preserves extra public facts", async () => {
+  await workspace("소개.\n\n### 기본 정보\n\n- 직업: 도예가\n- MBTI: INFP");
+  expect(control("직업 ·").value).toBe("도예가");
+  expect(control("나이 ·").value).toBe("");
+  await edit(control("나이 ·"), "27세");
+  await edit(control("지역 ·"), "서울");
+  await edit(control("직업 ·"), "사진가");
+  expect(sections()[0]?.body).toContain("- 직업: 사진가");
+  await edit(control("나이 ·"), "");
+  expect(sections()[0]?.body).not.toContain("나이:");
+  await edit(control("정보 내용"), "ENFP");
+  expect(sections()[0]?.body).toContain("- MBTI: ENFP");
+  await click("정보 삭제");
+  expect(sections()[0]?.body).not.toContain("MBTI");
+  expect(sections()[0]?.body).toContain("- 지역: 서울");
+  act(() => destroyDocumentEditors());
+  await workspace("소개.\n\n### 기본 정보\n\n작성 중인 원문");
+  expect(control("내용 · 기존 Markdown").value).toBe("작성 중인 원문");
+  await edit(control("내용 · 기존 Markdown"), "- 직업: 도예가");
+  expect(control("직업 ·").value).toBe("도예가");
+  act(() => destroyDocumentEditors());
+  await workspace();
+  await click("항목 추가");
+  expect(control("직업 ·").value).toBe("");
+  await edit(control("직업 ·"), "도예가");
+  expect(sections()[0]?.body).toBe("- 직업: 도예가");
 });
 
 test("invalid public boundaries disable item editing; image work locks all item controls", async () => {

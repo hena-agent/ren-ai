@@ -60,7 +60,7 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
                 name: "하연",
                 bio: "함께 요리해요.",
                 imageUrl: "https://example.net/hayeon.png",
-                publicProfile: "함께 요리해요.",
+                profile: { introduction: "함께 요리해요.", sections: [] },
               },
             ]);
             const imageUrl = await store.saveImage({
@@ -99,7 +99,7 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
                 anime: `${remoteCatalog.url}${imageUrl}`,
                 photo: `${remoteCatalog.url}${photoUrl}`,
               },
-              publicProfile: "함께 요리해요.",
+              profile: { introduction: "함께 요리해요.", sections: [] },
             };
             const catalog = await fetch(`${base}/discovery/personas`);
             expect(await catalog.json()).toEqual([publicProfileEntry]);
@@ -126,12 +126,23 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               description: withPublicProfile("Private character source", publicProfile),
             });
             const enriched = await (await fetch(`${base}/discovery/personas`)).text();
-            expect(JSON.parse(enriched)).toMatchObject([{ publicProfile }]);
+            expect(JSON.parse(enriched)).toMatchObject([
+              {
+                profile: {
+                  introduction: "함께 요리해요.",
+                  sections: [
+                    { type: "text", title: "같이 하고 싶은 일", body: "• 베이킹\n• 산책" },
+                  ],
+                },
+              },
+            ]);
             for (const field of [
               "descriptionVersion",
               "Private character source",
               "memory",
               "prompt",
+              "publicProfile",
+              "###",
             ])
               expect(enriched).not.toContain(field);
             const filename = imageUrl.split("/").at(-1)!;

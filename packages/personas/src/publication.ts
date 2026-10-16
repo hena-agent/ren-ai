@@ -5,6 +5,8 @@ import { requirePublicProfile } from "./profile.ts";
 import { validateInitialDocuments, validateInitialMemory } from "./initial.ts";
 import type { InitialDocuments } from "./initial.ts";
 import { stateStatus } from "./state-diagnostics.ts";
+import { projectPublicProfile } from "./profile-projection.ts";
+import { profileSectionKind } from "./profile-sections.ts";
 
 export function initialTraits(source: string) {
   return Object.fromEntries(
@@ -41,13 +43,19 @@ export function publicationIssues(
   const source = persona.description ?? persona.prompt;
   try {
     const sheet = parseCharacterDescription(source);
-    requirePublicProfile(source);
+    const parts = requirePublicProfile(source);
+    if (
+      projectPublicProfile(parts.publicMarkdown).sections.some(
+        (section) => section.type === "text" && profileSectionKind(section.title) !== "text",
+      )
+    )
+      throw new Error("public fields");
     if (sheet.name !== persona.name || (persona.gender && sheet.gender !== persona.gender))
       throw new Error("identity");
   } catch {
     issues.push({
       tab: "persona",
-      message: "Persona의 필수 형식·이름·성별·공개 자기소개를 확인해 주세요.",
+      message: "Persona의 필수 형식·이름·성별·공개 자기소개·공개 정보 목록을 확인해 주세요.",
     });
   }
   if (!persona.imageUrl)

@@ -222,7 +222,8 @@ export async function createPersonaStore(directory: string) {
           imageUrl,
           ...(portraits === undefined ? {} : { portraits }),
           ...(secondaryPortraits === undefined ? {} : { secondaryPortraits }),
-          publicProfile: publicProfile!,
+          profile: projectPublicProfile(publicProfile!),
         })),
   };
 }
+import { projectPublicProfile } from "./profile-projection.ts";

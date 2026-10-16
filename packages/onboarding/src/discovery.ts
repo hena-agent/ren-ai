@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { PublicProfile } from "@ren-ai/personas/public-profile";
 import { Handle } from "./shapes.ts";
 import disclosure from "./discovery-notice.json";
 
@@ -24,7 +25,7 @@ export const PublicPersona = Schema.Struct({
   id,
   name: text,
   bio: text,
-  publicProfile: Schema.optionalKey(Schema.String),
+  profile: Schema.optionalKey(PublicProfile),
   imageUrl: photo,
   portraits: Schema.optionalKey(
     Schema.Struct({ anime: Schema.optionalKey(photo), photo: Schema.optionalKey(photo) }).check(

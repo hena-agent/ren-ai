@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Effect } from "effect";
+import { Effect, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { IncomingMessage, Messages } from "@ren-ai/imsg";
@@ -49,6 +49,7 @@ export const intake = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const pollLock = yield* Semaphore.make(1);
     const beforeReset = yield* resetBoundary(messages);
     const listeners = new Set<(conversation: Conversation) => void>();
     const signal = (conversation: Conversation) => {
@@ -267,9 +268,11 @@ export const intake = (
           yield* receive(row);
       }
     });
-    const heartbeat = Effect.all([poll, changes.poll], { concurrency: "unbounded" }).pipe(
-      Effect.asVoid,
-    );
+    // Live notifications and periodic polls share the admission cursor. Edit
+    // observation stays outside this lock because it can itself deliver a reset.
+    const heartbeat = Effect.all([pollLock.withPermit(poll), changes.poll], {
+      concurrency: "unbounded",
+    }).pipe(Effect.asVoid);
     if (startImmediately) yield* heartbeat;
     return {
       resetPending: Effect.forEach(

@@ -93,6 +93,8 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
               }),
           };
           const overrides = scriptedOverrides(llm, model);
+          // This story drives the finite failure heartbeat itself. Advancing its
+          // clock must not also replay thousands of unrelated Intake polls.
           const host = yield* startMessagingHost(
             join(root, "isolated"),
             {
@@ -107,6 +109,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
             fakeMessages().messages,
             fakeGestures().gestures,
             notifications,
+            false,
           );
           const TestClock = heartbeatClock(host.heartbeat.failedTurns);
           const bind = (sessionID: string, handle: string) =>

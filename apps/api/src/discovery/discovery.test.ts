@@ -64,7 +64,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                 name: "소라",
                 bio: "밤에는 음악을 만들어요.",
                 imageUrl: "https://example.org/sora.jpg",
-                publicProfile: "밤에는 음악을 만들어요.",
+                profile: { introduction: "밤에는 음악을 만들어요.", sections: [] },
               },
             ]);
             const submit = (likedPersonaIDs = ["sora"]) =>

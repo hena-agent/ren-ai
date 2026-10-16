@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { PersonaError } from "@ren-ai/personas";
 import { characterValidationFields } from "./generation-failure.ts";
 
 export interface LogFields {
@@ -140,6 +141,7 @@ export function reportFailure(
   emit({
     ...fields,
     ...(error instanceof GenerationError && error.fields),
+    ...(error instanceof PersonaError && { code: error.kind }),
     ...(!(error instanceof GenerationError) &&
       "code" in root &&
       typeof root.code === "string" && { code: root.code }),
@@ -178,7 +180,11 @@ export async function operation<T>(stage: string, fields: LogFields, run: () => 
     });
     return result;
   } catch (error) {
-    reportFailure(error, { ...fields, stage, durationMs: performance.now() - start });
+    reportFailure(
+      error,
+      { ...fields, stage, durationMs: performance.now() - start },
+      error instanceof PersonaError ? "warn" : "error",
+    );
     throw error;
   }
 }

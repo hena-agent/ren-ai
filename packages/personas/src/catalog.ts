@@ -1,6 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { Schema } from "effect";
 import { splitPersonaMarkdown } from "./profile.ts";
+import { projectPublicProfile } from "./profile-projection.ts";
+import type { PublicProfile } from "./public-profile.ts";
 
 const Row = Schema.Struct({
   id: Schema.String,
@@ -15,7 +17,7 @@ interface Profile {
   id: string;
   name: string;
   bio: string;
-  publicProfile: string;
+  profile: PublicProfile;
   portraits: Partial<Record<Style, string>>;
   secondaryPortraits: { style: Style; imageUrl: string }[];
 }
@@ -40,7 +42,7 @@ export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
         id: row.id,
         name: row.name,
         bio,
-        publicProfile: publicMarkdown,
+        profile: projectPublicProfile(publicMarkdown),
         portraits: {},
         secondaryPortraits: [],
       };

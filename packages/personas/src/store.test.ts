@@ -167,7 +167,7 @@ test("publishing exposes only card fields, editing persists, and unpublishing re
         name: "미라 수정",
         bio: "그림을 그리며 파리에서 살아요.",
         imageUrl: "https://example.net/mira.png",
-        publicProfile: harin.publicProfile,
+        profile: { introduction: harin.bio, sections: [] },
       },
     ]);
     expect((await (await createPersonaStore(root)).get("mira")).published).toBe(true);
@@ -224,7 +224,7 @@ test("a published persona needs a bio but not a profile photo", async () => {
         name: "미라",
         bio: "그림을 그리며 파리에서 살아요.",
         imageUrl: "",
-        publicProfile: harin.publicProfile,
+        profile: { introduction: harin.bio, sections: [] },
       },
     ]);
   } finally {

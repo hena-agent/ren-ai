@@ -91,10 +91,28 @@
   border: 1px solid var(--line);
   border-radius: 20px;
 }
-.public-persona-preview .profile-facts ul {
-  padding-left: 18px;
+.public-persona-preview .profile-facts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
 }
-.public-persona-preview .profile-answer {
+.public-persona-preview .profile-facts > div {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+}
+.public-persona-preview .profile-facts dt {
+  color: var(--muted);
+}
+.public-persona-preview .profile-facts dd {
+  margin: 0;
+}
+.public-persona-preview .public-profile-sections p,
+.public-persona-preview .profile-facts dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.public-persona-preview .profile-prompt {
   padding: 16px;
   margin: 12px 0;
   background: var(--field);
