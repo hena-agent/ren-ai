@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { TestLLM } from "@opencode/ai/testing";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { expect, test } from "vitest";
-import { discoveryNotice } from "@ren-ai/onboarding";
+import { discoveryNotice, ContactSelection } from "@ren-ai/onboarding";
 import { fakeGestures, fakeMessages, messageGateway } from "@ren-ai/imsg/testing";
 import { servePublic } from "@ren-ai/transport/listener";
 import { createGateway } from "../../api-msg/src/gateway.ts";
@@ -167,7 +167,8 @@ test.each(["sent", "uncertain"] as const)(
               const select = { requestId: "00000000-0000-4000-8000-000000000028", count: 1 };
               const selected = await send("/management/discovery/select", select);
               expect(selected.status).toBe(200);
-              expect(await selected.json()).toMatchObject({
+              const selection = Schema.decodeUnknownSync(ContactSelection)(await selected.json());
+              expect(selection).toMatchObject({
                 requestId: select.requestId,
                 requested: 1,
               });
@@ -208,6 +209,13 @@ test.each(["sent", "uncertain"] as const)(
                 memory: await readFile(join(session, "MEMORY.md"), "utf8"),
               });
               const initial = await files();
+              const languageUrl = `https://app/operator/languages?registrationID=${selection.entries[0]!.id}`;
+              expect((await runtime.dispatchFetch(languageUrl)).status).toBe(401);
+              const languageResponse = await runtime.dispatchFetch(languageUrl, {
+                headers: { authorization: "Bearer management-secret" },
+              });
+              expect(languageResponse.status).toBe(200);
+              expect(await languageResponse.json()).toEqual({});
               expect(parseInitialState(initial.state).mood).toBe(50);
               expect(initial.memory).toContain("initial Memory");
               await executionState(runtime, "/__fixture/catalog");

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile, readdir } from "node:fs/promises";
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -22,7 +22,7 @@ test("a failed storage commit keeps the old documents and a lost acknowledgement
     await memory.run("update_memory", original, "before", "first");
     const before = await memory.context();
     const failing = vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
-      if (String(target).endsWith("/.memory/current"))
+      if (String(target).endsWith("/.memory/pending.json"))
         throw Object.assign(new Error("private persistence payload"), { code: "ENOSPC" });
       await rename(source, target);
     });
@@ -32,15 +32,20 @@ test("a failed storage commit keeps the old documents and a lost acknowledgement
     );
     expect(await memory.context()).toBe(before);
     failing.mockRestore();
-    await rm(join(root, "long-term"));
-    await mkdir(join(root, "long-term"));
-    await expect(memory.run("update_memory", next, "commit", "next")).rejects.toThrow(/directory/);
-    expect(await memory.context()).toContain("새로운 작업");
-    await rm(join(root, "long-term"), { recursive: true });
+    const remove = fs.rm;
+    const acknowledgement = vi.spyOn(fs, "rm").mockImplementation(async (path, options) => {
+      if (String(path).endsWith("/.memory/pending.json")) throw new Error("Acknowledgement lost");
+      await remove(path, options);
+    });
+    await expect(memory.run("update_memory", next, "commit", "next")).rejects.toThrow(
+      "Acknowledgement lost",
+    );
+    acknowledgement.mockRestore();
     expect(await conversationMemory(root).run("update_memory", next, "commit", "next")).toBe(
       "Short-term Memory updated",
     );
     expect(await readFile(join(root, "MEMORY.md"), "utf8")).toContain("새로운 작업");
+    expect(await readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
   } finally {
     vi.restoreAllMocks();
     await rm(root, { recursive: true, force: true });

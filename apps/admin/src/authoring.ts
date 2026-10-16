@@ -48,6 +48,7 @@ export function readIntent(form: FormData) {
     intent === "inspect" ||
     intent === "improve" ||
     intent === "state" ||
+    intent === "languages" ||
     intent === "memory"
   )
     return intent;

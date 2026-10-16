@@ -5,8 +5,8 @@ import { Schema } from "effect";
 import type { Persona } from "@ren-ai/personas";
 import { folderSnapshot } from "./protocol.ts";
 import { sessionDirectory } from "./paths.ts";
-import { conversationMemory, readRuntime, runtimeDocuments, memoryToolNames } from "./memory.ts";
-import { lockedMemory } from "./memory-files.ts";
+import { conversationMemory, runtimeDocuments, memoryToolNames } from "./memory.ts";
+import { lockedMemory, readRuntime } from "./memory-files.ts";
 
 export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
@@ -105,21 +105,22 @@ const publish = async (target: string, contents: ReadonlyArray<readonly [string,
 
 export const folderFiles = (root: string) => {
   const path = (folderID: string) => sessionDirectory(root, folderID);
-  const read = async (folderID: string) => {
-    const target = path(folderID);
-    const persona = Schema.decodeUnknownSync(folderSnapshot.fields.persona)(
-      JSON.parse(await readFile(join(target, "persona.json"), "utf8")),
-    );
-    const runtime = await readRuntime(target);
-    const documents = runtime ? runtimeDocuments(runtime) : await readDocuments(target);
-    return {
-      persona,
-      agent: await readFile(join(target, ".opencode", "agents", `${persona.id}.md`), "utf8"),
-      rules: await readFile(join(target, "AGENTS.md"), "utf8"),
-      ...(documents && { documents }),
-      ...(runtime && { runtime }),
-    };
-  };
+  const read = (folderID: string) =>
+    lockedMemory(path(folderID), async () => {
+      const target = path(folderID);
+      const persona = Schema.decodeUnknownSync(folderSnapshot.fields.persona)(
+        JSON.parse(await readFile(join(target, "persona.json"), "utf8")),
+      );
+      const runtime = await readRuntime(target);
+      const documents = runtime ? runtimeDocuments(runtime) : await readDocuments(target);
+      return {
+        persona,
+        agent: await readFile(join(target, ".opencode", "agents", `${persona.id}.md`), "utf8"),
+        rules: await readFile(join(target, "AGENTS.md"), "utf8"),
+        ...(documents && { documents }),
+        ...(runtime && { runtime }),
+      };
+    });
   return {
     path,
     exists: async (folderID: string) => (await lstat(path(folderID)).catch(absent)) !== undefined,

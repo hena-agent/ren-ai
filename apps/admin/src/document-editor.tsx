@@ -2,6 +2,7 @@ import { stateStatus } from "@ren-ai/personas";
 import type { InitialDocuments, PersonaRecord } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
 import { documentStatus } from "./document-diagnostics.ts";
+import { LanguagePanel } from "./language-panel.tsx";
 import { ImprovementControls } from "./improvement-controls.tsx";
 import { ProfileHelp } from "./profile-help.tsx";
 
@@ -193,6 +194,11 @@ export function DocumentEditor({
               </button>
             </div>
           </div>
+          {key === "state" && (
+            <div data-language-panel>
+              <LanguagePanel source={source} documents={documents} locked={locked} />
+            </div>
+          )}
           <div className="document-source" data-initial-document={key}>
             <div data-initial-markdown-editor />
             <textarea

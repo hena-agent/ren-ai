@@ -451,3 +451,22 @@ button:disabled {
     padding-block: 24px;
   }
 }
+/* Language settings stay compact alongside the photo-style control. */
+.locale-picker select {
+  max-width: 7.5rem;
+  padding: 0.4rem;
+  border: 1px solid #d7d7d7;
+  border-radius: 0.5rem;
+  color: inherit;
+  background: white;
+  font: inherit;
+}
+.profile-languages ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0.4rem 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}

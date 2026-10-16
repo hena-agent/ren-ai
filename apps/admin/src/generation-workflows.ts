@@ -1,4 +1,10 @@
-import { decodePersona, PersonaError, inspectPersona } from "@ren-ai/personas";
+import {
+  decodePersona,
+  PersonaError,
+  inspectPersona,
+  parseInitialState,
+  serializeInitialState,
+} from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import { authorPersona, characterOf } from "./authoring.ts";
 import type { ProfileGenerator } from "./generation.ts";
@@ -53,10 +59,10 @@ async function characterDraft(seed: string, previous: PersonaRecord, generator: 
 export async function generateTextDraft(
   persona: ReturnType<typeof authorPersona>,
   draft: Draft,
-  intent: "character" | "introduction" | "profile" | "improve" | "state" | "memory",
+  intent: "character" | "introduction" | "profile" | "improve" | "state" | "languages" | "memory",
   generator: ProfileGenerator,
 ) {
-  if (intent === "state" || intent === "memory") {
+  if (intent === "state" || intent === "memory" || intent === "languages") {
     const source = characterOf(persona);
     const inspected = inspectPersona(persona);
     if (inspected.status !== "current" || inspected.profileNeeded)
@@ -64,12 +70,27 @@ export async function generateTextDraft(
         "invalid",
         "Persona의 형식·이름·성별·공개 자기소개를 먼저 정리해 주세요.",
       );
-    const generated = await operation(`${intent}.generate`, {}, () => generator[intent](source));
+    const target = intent === "languages" ? "state" : intent;
+    const generated = await operation(`${intent}.generate`, {}, () => generator[target](source));
+    const documents = documentsOf(draft);
+    let content = generated;
+    if (intent === "languages") {
+      const proficiency = parseInitialState(generated).languageProficiency;
+      if (!proficiency || !Object.keys(proficiency).length)
+        throw new PersonaError(
+          "invalid",
+          "제안된 언어 실력이 없습니다. Persona의 언어 배경을 작성해 주세요.",
+        );
+      content = serializeInitialState({
+        ...parseInitialState(documents.state),
+        languageProficiency: proficiency,
+      });
+    }
     return {
       ...draft,
       preview: serializePersona(persona),
-      tab: intent,
-      initial: { ...draft.initial, preview: { ...documentsOf(draft), [intent]: generated } },
+      tab: target,
+      initial: { ...draft.initial, preview: { ...documents, [target]: content } },
       imageEditing: true,
     };
   }

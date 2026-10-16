@@ -4,6 +4,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@ren-ai/personas/languages": fileURLToPath(
+        new URL("../../packages/personas/src/languages.ts", import.meta.url),
+      ),
       "@ren-ai/personas/profile-sections": fileURLToPath(
         new URL("../../packages/personas/src/profile-sections.ts", import.meta.url),
       ),

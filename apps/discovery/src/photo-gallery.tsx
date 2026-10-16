@@ -1,4 +1,4 @@
-import copy from "./copy.json";
+import { useCopy } from "./locale.tsx";
 
 export function GalleryControls({
   count,
@@ -11,6 +11,7 @@ export function GalleryControls({
   disabled?: boolean;
   onChange: (index: number) => void;
 }) {
+  const copy = useCopy();
   if (count <= 1) return null;
   return (
     <div className="gallery-controls">

@@ -105,6 +105,23 @@ test("a persisted reservation starts only when due and records web consent witho
   );
 });
 
+test("the first greeting receives the separately persisted conversation preference without changing consent language", async () => {
+  await withContactDatabase(
+    Effect.gen(function* () {
+      const f = yield* setup;
+      yield* f.sql`INSERT INTO discovery_language VALUES (${f.id}, 'ja')`;
+      yield* f.due;
+      yield* f.worker.tick;
+      expect(f.prompt.mock.calls[0]?.[0].text).toContain('preferred-language="ja"');
+      expect(yield* f.sql`SELECT locale, consent_language FROM user`).toEqual([
+        { locale: "ko", consent_language: "ko" },
+      ]);
+      yield* f.worker.tick;
+      expect(f.prompt).toHaveBeenCalledOnce();
+    }),
+  );
+});
+
 test("uncertain sends are observed after restart, never submitted again", async () => {
   await withContactDatabase(
     Effect.gen(function* () {

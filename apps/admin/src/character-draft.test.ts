@@ -13,6 +13,9 @@ import { createProfileGenerator } from "./generation.ts";
 import copy from "./copy.json";
 import { acceptedReview, characterResponse } from "../test/character.ts";
 import { draftTokens } from "./draft.ts";
+import { parseInitialState, languageBackground } from "@ren-ai/personas";
+import { scores } from "../test/initial.ts";
+import { modelReply } from "../test/sub-portraits.ts";
 
 test("a brief idea creates an editable private character draft without saving or publishing it", async () => {
   const drafting = vi.fn<typeof generator.character>().mockResolvedValue(authoredCharacter);
@@ -132,4 +135,30 @@ test("the AI draft adapter requests the whole Markdown document and validates it
     );
     await expect(model.character("아이디어")).rejects.toThrow("Invalid persona Markdown");
   }
+});
+
+test("new drafts carry fixed native background separately from operator-reviewable initial proficiency", async () => {
+  const description = character.description.replace(
+    "성별: 여성",
+    "성별: 여성\n주 사용 언어: ko\n모국어: ko",
+  );
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      modelReply(
+        JSON.stringify({
+          persona: description,
+          state: { ...scores, languageProficiency: { ko: "fluent", en: "beginner" } },
+          memory: "# 현재 생활\n\n영어를 배우고 있다.",
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(acceptedReview());
+  const model = createProfileGenerator({ key: "private-key", fetcher });
+  const draft = await model.character("영어를 배우는 하린");
+  expect(languageBackground(draft.description)).toEqual({ primary: "ko", native: ["ko"] });
+  expect(parseInitialState(draft.initial.state).languageProficiency).toEqual({
+    ko: "fluent",
+    en: "beginner",
+  });
 });

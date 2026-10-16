@@ -67,6 +67,18 @@ test("health checks are rate limited and keep native facts separate from credent
         { name: "disk-nearly-full" },
         { name: "screen-locked" },
       ]);
+      const docker = yield* createExecutionHealth(configuration, undefined, fetcher);
+      fetcher.mockResolvedValue(
+        Response.json({
+          service: "api-msg",
+          revision: "development",
+          status: "ready",
+          diskNearlyFull: false,
+          screenLocked: null,
+        }),
+      );
+      yield* docker.tick;
+      expect(yield* sql`SELECT name FROM application_alert`).toEqual([{ name: "screen-locked" }]);
       const restarted = yield* createExecutionHealth(configuration, undefined, fetcher);
       fetcher.mockResolvedValue(
         Response.json({
@@ -81,7 +93,7 @@ test("health checks are rate limited and keep native facts separate from credent
       expect(yield* sql`SELECT name FROM application_alert`).toEqual([]);
     }),
   );
-  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher).toHaveBeenCalledTimes(3);
   expect(fetcher.mock.calls[0]![1]?.headers).toEqual({ Authorization: "Bearer management-secret" });
 });
 

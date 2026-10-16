@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { InitialScores, InitialState, ConversationState } from "@ren-ai/personas";
+import { LanguageProficiency } from "@ren-ai/personas/languages";
 import { stringify } from "yaml";
 
 const text = (length: number) =>
@@ -10,7 +11,7 @@ const value = Schema.Union([
   Schema.Boolean,
 ]);
 const extraState = Schema.Struct({ value, meaning: text(500), reason: text(1000) });
-const memoryRecord = Schema.Struct({
+export const memoryRecord = Schema.Struct({
   id: Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,100}$/)),
   topic: text(200),
   text: Schema.String,
@@ -49,10 +50,11 @@ const scorePatch = Schema.Struct({
 export const memoryTools = {
   update_state: {
     description:
-      "Update current Conversation state. Keep condition scores and affection at integer 0–100; if no condition scores exist, supply all five from current circumstances. Affection starts from the Persona's approved initial value only for new Conversations, then evolves from actual experience; never reset it from a later Catalog edit or reroll it each turn. It is interest, not familiarity/trust/relationship stage or an action probability. Patch trait activation/strength when justified. Add meaningful scalar states only when needed for future choices, with meaning/evidence. This does not change fixed identity.",
+      "Update current Conversation state. Keep condition scores and affection at integer 0–100; if no condition scores exist, supply all five from current circumstances. Affection starts from the Persona's approved initial value only for new Conversations, then evolves from actual experience; never reset it from a later Catalog edit or reroll it each turn. It is interest, not familiarity/trust/relationship stage or an action probability. Patch trait activation/strength when justified. Patch languageProficiency only from sustained practice and demonstrated use, with evidence in reason; levels are beginner, conversational, proficient, fluent. A new language starts at beginner. Remember learned expressions with the memory tools. A user's assertion, one repeated sentence, fatigue or a forgotten word is not a proficiency change. Never change native languages or reset from Catalog initial values. Add meaningful scalar states only when needed for future choices, with meaning/evidence. This does not change fixed identity.",
     input: Schema.Struct({
       scores: scorePatch,
       traits: Schema.optionalKey(InitialState.fields.traits),
+      languageProficiency: Schema.optionalKey(LanguageProficiency),
       additions: Schema.Record(text(100), extraState),
       remove: Schema.Array(text(100)),
       reason: text(1000),

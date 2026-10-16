@@ -5,7 +5,10 @@ import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import { parseHealth } from "@ren-ai/transport/health";
 
-const Facts = Schema.Struct({ diskNearlyFull: Schema.Boolean, screenLocked: Schema.Boolean });
+const Facts = Schema.Struct({
+  diskNearlyFull: Schema.Boolean,
+  screenLocked: Schema.NullOr(Schema.Boolean),
+});
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow health and notification failures into payload-free diagnostics
 const diagnose = (cause: unknown, stage: string) => {
@@ -92,7 +95,11 @@ export const createExecutionHealth = (
         Effect.flatMap((facts) =>
           Effect.all([
             facts.diskNearlyFull ? raise("disk-nearly-full") : clear("disk-nearly-full"),
-            facts.screenLocked ? raise("screen-locked") : clear("screen-locked"),
+            facts.screenLocked === null
+              ? Effect.void
+              : facts.screenLocked
+                ? raise("screen-locked")
+                : clear("screen-locked"),
             clear("executor-unavailable"),
           ]),
         ),

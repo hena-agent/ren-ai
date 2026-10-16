@@ -142,7 +142,7 @@ test("invalid state and memory updates never change the last committed Conversat
   }
 });
 
-test("corrupt snapshots, invalid revisions and incomplete initial documents fail closed", async () => {
+test("corrupt execution records and incomplete or invalid Markdown fail closed", async () => {
   const root = await mkdtemp(join(tmpdir(), "memory-corrupt-"));
   try {
     const memory = conversationMemory(root);
@@ -157,18 +157,13 @@ test("corrupt snapshots, invalid revisions and incomplete initial documents fail
     await rm(join(root, "MEMORY.md"));
     await memory.roll("create", "first");
     await expect(memory.restore({ private: "payload" })).rejects.toThrow("snapshot");
-    await writeFile(join(root, ".memory", "current", "snapshot.json"), "not JSON: private");
-    await expect(memory.context()).rejects.toThrow("snapshot");
-    await writeFile(
-      join(root, ".memory", "current", "snapshot.json"),
-      JSON.stringify({ private: "payload" }),
-    );
-    await expect(memory.context()).rejects.toThrow("snapshot");
-    await rm(join(root, ".memory", "current"));
-    await symlink("../outside", join(root, ".memory", "current"));
-    await expect(memory.context()).rejects.toThrow("revision");
-    await rm(join(root, ".memory", "current"));
-    await mkdir(join(root, ".memory", "current"));
+    const receipts = join(root, ".memory", "receipts.json");
+    await writeFile(receipts, "not JSON: private");
+    await expect(memory.context()).rejects.toThrow("memory files");
+    await writeFile(receipts, JSON.stringify({ private: "payload" }));
+    await expect(memory.context()).rejects.toThrow("memory files");
+    await rm(receipts);
+    await mkdir(receipts);
     await expect(memory.context()).rejects.toThrow("could not be read");
     const alias = join(root, "alias");
     const empty = join(root, "empty");

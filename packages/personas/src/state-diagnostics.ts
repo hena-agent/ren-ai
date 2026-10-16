@@ -3,6 +3,7 @@ import { isMap, isScalar, parseDocument } from "yaml";
 import type { ParsedNode } from "yaml";
 import { InitialState } from "./initial.ts";
 import { parseCharacterDescription } from "./character-format.ts";
+import { languageBackground } from "./languages.ts";
 
 function issueAt(source: string, message: string, start: number, end: number) {
   return { message, start, end, line: source.slice(0, start).split("\n").length };
@@ -43,9 +44,23 @@ function fieldMessage(path: readonly PropertyKey[]) {
   if (field === "active") return "active: true 또는 false만 사용할 수 있습니다.";
   if (field === "persistence") return "persistence: lasting이어야 합니다.";
   if (field === "traits") return "traits: 특성 이름을 key로 가진 객체가 필요합니다.";
+  if (path.includes("languageProficiency"))
+    return "languageProficiency: 언어 코드별 beginner · conversational · proficient · fluent 중 하나를 작성해 주세요.";
   if (path.length === 0)
     return "State는 컨디션 5개·초기 호감도 affection·traits를 포함한 YAML 객체여야 합니다.";
   return `${path.map(String).join(".")}: 필수 항목 또는 허용된 필드인지 확인해 주세요.`;
+}
+
+function languageIssue(state: typeof InitialState.Type, source: string) {
+  const background = languageBackground(source);
+  const levels = state.languageProficiency;
+  if (
+    levels &&
+    background &&
+    (!levels[background.primary] || background.native.some((code) => levels[code] !== "fluent"))
+  )
+    return "주 사용 언어의 실력이 필요하며, 모국어 실력은 fluent여야 합니다.";
+  return undefined;
 }
 
 function stateIssues(source: string, personaSource?: string) {
@@ -103,6 +118,9 @@ function stateIssues(source: string, personaSource?: string) {
     ];
   }
   const issues: ReturnType<typeof issueAt>[] = [];
+  const language = languageIssue(state, personaSource);
+  if (language)
+    issues.push(location(source, document.contents, ["languageProficiency"], offset, language));
   for (const trait of hidden) {
     if (state.traits[trait.name]?.strength !== trait.strength)
       issues.push(
