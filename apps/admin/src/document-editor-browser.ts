@@ -7,6 +7,7 @@ import { PublicPersonaPreview } from "./public-persona-preview.tsx";
 import { markdownEditor } from "./markdown-editor.ts";
 import { bindDocumentTabs } from "./document-tabs.ts";
 import { updateEditorDiagnostics } from "./editor-diagnostics.ts";
+import { PublicProfileEditor } from "./public-profile-editor.tsx";
 
 const Images = Schema.Array(
   Schema.Struct({ style: Schema.Literals(["anime", "photo"]), imageUrl: Schema.String }),
@@ -50,6 +51,20 @@ export function bindDocumentEditor(form: HTMLFormElement) {
   const label = editor.querySelector<HTMLElement>("[data-document-status]")!;
   const window = form.ownerDocument.defaultView!;
   const view = markdownEditor(editor.querySelector<HTMLElement>("[data-markdown-editor]")!, source);
+  const profileEditor = createRoot(
+    editor.querySelector<HTMLElement>("[data-public-profile-editor]")!,
+  );
+  const renderProfileEditor = () =>
+    profileEditor.render(
+      createElement(PublicProfileEditor, {
+        source: source.value,
+        locked: source.readOnly,
+        onChange: (value: string) => {
+          source.value = value;
+          source.dispatchEvent(new window.Event("input", { bubbles: true }));
+        },
+      }),
+    );
   const state = form.querySelector<HTMLTextAreaElement>('[name="stateSource"]')!;
   const memory = form.querySelector<HTMLTextAreaElement>('[name="memorySource"]')!;
   const initialViews = [state, memory].map((field) => {
@@ -79,8 +94,6 @@ export function bindDocumentEditor(form: HTMLFormElement) {
     );
     editor.dataset["format"] = result.state;
     label.textContent = result.label;
-    editor.querySelector<HTMLButtonElement>("[data-document-convert]")!.hidden =
-      result.state === "valid" || result.state === "empty";
     updateEditorDiagnostics(
       view,
       source,
@@ -119,6 +132,7 @@ export function bindDocumentEditor(form: HTMLFormElement) {
   };
   let timer = 0;
   const schedule = () => {
+    renderProfileEditor();
     for (const [field, current] of [
       [source, view],
       [state, initialViews[0]!],
@@ -140,8 +154,10 @@ export function bindDocumentEditor(form: HTMLFormElement) {
     form.removeEventListener("input", schedule);
     form.removeEventListener("photos-updated", update);
     preview?.unmount();
+    profileEditor.unmount();
     for (const current of [view, ...initialViews]) current.destroy();
     editors.delete(form);
   });
   update();
+  renderProfileEditor();
 }

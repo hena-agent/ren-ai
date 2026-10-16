@@ -78,7 +78,7 @@ test("editor diagnostics select the real error in Persona without a document pre
         locked={false}
         editing
         action="/personas/legacy"
-        conversion={{ source: "old", additions: ["보강한 설정"] }}
+        conversion={{ source: "old", result: source, additions: ["보강한 설정"] }}
       />
     </form>,
   );
@@ -101,7 +101,7 @@ test("editor diagnostics select the real error in Persona without a document pre
   expect(() => stale.click()).not.toThrow();
   expect(view.state.selection.main.from).toBe(0);
   expect(form.querySelector("[data-document-mode]")).toBeNull();
-  expect(form.querySelector(".conversion-report")?.textContent).toContain("보강한 설정");
+  expect(form.querySelector(".improvement-result")?.textContent).toContain("보강한 설정");
   destroyDocumentEditors();
   bindDocumentEditor(document.createElement("form"));
 });

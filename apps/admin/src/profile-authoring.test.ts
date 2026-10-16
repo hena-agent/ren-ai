@@ -78,8 +78,8 @@ test("saving name and private document edits preserves all photos without invoki
   });
   portrait.mockClear();
   const name = "수정한 이름";
-  const description = original
-    .description!.replace("짧은 검은 머리", "긴 갈색 머리")
+  const description = original.description
+    .replace("짧은 검은 머리", "긴 갈색 머리")
     .replace(`이름: ${original.name}`, `이름: ${name}`);
   expect(description).not.toBe(original.description);
   const updated = `${description}\n\n새롭게 덧붙인 공개 문장입니다.`;
@@ -155,6 +155,42 @@ test("public rewriting derives results from the same Markdown document and prese
   expect(result.bio).toBe("천천히 알아가요.");
   expect(result.portraits).toEqual(original.portraits);
   expect(rewrite).toHaveBeenCalledTimes(1);
+});
+
+test("malformed public facts fail at the real save boundary with correlated private-safe diagnostics", async () => {
+  const { admin, store, route, original, editing, logs } = await savedPreview();
+  const description = withPublicProfile(
+    original.description,
+    "소개.\n\n### 기본 정보\n- 운영자만-아는-입력",
+  );
+  const response = await admin(
+    request(route, {
+      ...character,
+      description,
+      draft: tokenOf(editing),
+      published: "on",
+      intent: "save",
+    }),
+  );
+  expect(response.status).toBe(400);
+  const requestId = response.headers.get("x-request-id");
+  expect(requestId).toBeTruthy();
+  const failures = logs.filter(
+    (entry) => entry.requestId === requestId && entry.event === "operation.failed",
+  );
+  expect(failures).toHaveLength(1);
+  expect(failures[0]).toMatchObject({
+    level: "warn",
+    stage: "persona.save",
+    code: "invalid",
+    personaId: original.id,
+    intent: "save",
+  });
+  expect(failures[0]?.error?.message).toContain("공개 정보");
+  expect(JSON.stringify(failures)).not.toContain("운영자만-아는-입력");
+  expect(JSON.stringify(failures)).not.toContain(splitPersonaMarkdown(description).privateMarkdown);
+  expect(await response.text()).toContain(`요청 ID: ${requestId}`);
+  expect(await store.get(original.id)).toEqual(original);
 });
 
 test("intro-only rewriting preserves the persona's custom sections and the native profile writer requests Markdown", async () => {

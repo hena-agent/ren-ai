@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, vi } from "vitest";
 import { createPersonaStore } from "./store.ts";
-import { decodePersona } from "./model.ts";
+import { decodePersona, serializePersona } from "./model.ts";
 import { withPublicProfile } from "./profile.ts";
 
 vi.mock("node:fs/promises", async () => ({
@@ -13,6 +13,7 @@ vi.mock("node:fs/promises", async () => ({
 }));
 
 const harin = decodePersona({
+  version: 1,
   id: "mira",
   name: "미라",
   bio: "그림을 그리며 파리에서 살아요.",
@@ -23,6 +24,74 @@ const harin = decodePersona({
   openingLine: "Introduce yourself to the new user.",
   memory: "Remember the paintings we discussed.",
   prompt: withPublicProfile("You are Mira, a painter in Paris.", "그림을 그리며 파리에서 살아요."),
+});
+
+test("document versions survive reopening, ignore metadata-only edits and preserve immutable rollback history", async () => {
+  const root = await mkdtemp(join(tmpdir(), "persona-versions-"));
+  try {
+    const store = await createPersonaStore(root);
+    const first = await store.create(harin);
+    await store.update({ ...first, name: "metadata name" });
+    expect(await store.versions(first.id)).toHaveLength(1);
+    const current = await store.get(first.id);
+    const docs = { state: "", memory: "" };
+    const second = await store.save(
+      { ...current, description: `${current.description}\n\n새 소개.` },
+      docs,
+      { persona: serializePersona(current) },
+    );
+    expect(second.version).toBe(2);
+    const reopened = await createPersonaStore(root);
+    expect((await reopened.version(first.id, 1)).markdown).toBe(first.description);
+    const restored = await reopened.save(first, docs, {
+      persona: await reopened.source(first.id),
+      initial: docs,
+      restoredFrom: 1,
+    });
+    expect(restored.version).toBe(3);
+    expect((await reopened.versions(first.id))[0]).toMatchObject({ version: 3, restoredFrom: 1 });
+    expect((await reopened.version(first.id, 2)).markdown).toBe(second.description);
+    await rm(join(root, `${first.id}.md`));
+    expect((await reopened.create(restored)).version).toBe(3);
+    expect(await reopened.versions(first.id)).toHaveLength(3);
+    await expect(reopened.version(first.id, 99)).rejects.toMatchObject({ kind: "not_found" });
+    await expect(reopened.versions("../escape")).rejects.toMatchObject({ kind: "invalid" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an unsuccessful history cleanup still rolls back initial documents and preserves the original commit cause", async () => {
+  const root = await mkdtemp(join(tmpdir(), "version-rollback-"));
+  try {
+    const store = await createPersonaStore(root);
+    const docs = { state: "original State", memory: "original Memory" };
+    const first = await store.save(harin, docs, { persona: "" });
+    const rename = files.rename;
+    const unlink = files.unlink;
+    const cause = new Error("Persona commit unavailable");
+    vi.spyOn(files, "rename").mockImplementation((from, to) =>
+      to === join(root, `${harin.id}.md`) ? Promise.reject(cause) : rename(from, to),
+    );
+    vi.spyOn(files, "unlink").mockImplementation((path) =>
+      typeof path === "string" && path.endsWith("/2.json")
+        ? Promise.reject(new Error("History cleanup unavailable"))
+        : unlink(path),
+    );
+    await expect(
+      store.save(
+        { ...first, description: `${first.description}\n\nChanged.` },
+        { state: "new State", memory: "new Memory" },
+        { persona: serializePersona(first), initial: docs },
+      ),
+    ).rejects.toMatchObject({ name: "AggregateError", cause });
+    expect(await store.get(first.id)).toEqual(first);
+    expect(await store.initial(first.id)).toEqual(docs);
+    expect(await store.versions(first.id)).toHaveLength(1);
+  } finally {
+    vi.restoreAllMocks();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("inspection diagnostics retain transport causes without payload-bearing messages or stack headers", async () => {
@@ -98,7 +167,7 @@ test("publishing exposes only card fields, editing persists, and unpublishing re
         name: "미라 수정",
         bio: "그림을 그리며 파리에서 살아요.",
         imageUrl: "https://example.net/mira.png",
-        publicProfile: harin.publicProfile,
+        profile: { introduction: harin.bio, sections: [] },
       },
     ]);
     expect((await (await createPersonaStore(root)).get("mira")).published).toBe(true);
@@ -155,7 +224,7 @@ test("a published persona needs a bio but not a profile photo", async () => {
         name: "미라",
         bio: "그림을 그리며 파리에서 살아요.",
         imageUrl: "",
-        publicProfile: harin.publicProfile,
+        profile: { introduction: harin.bio, sections: [] },
       },
     ]);
   } finally {
@@ -274,6 +343,13 @@ test("storage failures are surfaced without overwriting the previous definition"
     expect(await store.get("mira")).toEqual(harin);
     vi.spyOn(files, "link").mockRejectedValueOnce(new Error("link unavailable"));
     await expect(store.create({ ...harin, id: "new" })).rejects.toThrow("link unavailable");
+    vi.spyOn(files, "link").mockRejectedValueOnce(
+      Object.assign(new Error("racing create"), { code: "EEXIST" }),
+    );
+    await expect(store.create({ ...harin, id: "racing" })).rejects.toMatchObject({
+      kind: "conflict",
+      message: "이미 사용 중인 ID입니다.",
+    });
     expect(await store.list()).toEqual([harin]);
     vi.spyOn(files, "unlink").mockRejectedValueOnce(new Error("cleanup unavailable"));
     await expect(store.create({ ...harin, id: "kept" })).rejects.toThrow("cleanup unavailable");

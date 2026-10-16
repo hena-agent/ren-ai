@@ -15,7 +15,7 @@ const publicPersona = {
   name: "Sora",
   bio: "A musician",
   imageUrl: "/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png",
-  publicProfile: "A musician",
+  profile: { introduction: "A musician", sections: [] },
 };
 
 test("builds catalog and executor configuration with bootstrap enabled by default", async () => {

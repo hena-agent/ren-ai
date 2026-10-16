@@ -64,6 +64,7 @@ test("restore uses archived persona, agent and ground rules even after the catal
                   remote.client.agent.list({ location: restored.info.location }),
                 )
               ).data.find((agent) => agent.id === "persona1")?.system,
+            { timeout: 5_000 },
           )
           .toBe("You are the archived photographer.");
       });

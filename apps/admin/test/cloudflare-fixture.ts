@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import journal from "../drizzle/meta/_journal.json" with { type: "json" };
 import { Miniflare } from "miniflare";
 import { afterEach } from "vitest";
 import { decodePersona } from "@ren-ai/personas";
@@ -21,6 +22,7 @@ export const databasePersona = decodePersona({
 export async function cloudflareFixture(
   workerSource?: string,
   assetsSource = "export default {fetch(){return new Response('asset')}}",
+  beforeVersions?: (db: Awaited<ReturnType<Miniflare["getD1Database"]>>) => Promise<void>,
 ) {
   const runtime = new Miniflare({
     workers: [
@@ -76,12 +78,13 @@ export async function cloudflareFixture(
   runtimes.push(runtime);
   const db = await runtime.getD1Database("DB");
   const bucket = await runtime.getR2Bucket("IMAGES");
-  const ddl = await readFile(
-    new URL("../drizzle/0000_chilly_warpath.sql", import.meta.url),
-    "utf8",
-  );
-  await db.batch(
-    ddl.split("--> statement-breakpoint").map((statement) => db.prepare(statement.trim())),
-  );
+  for (const migration of journal.entries) {
+    const file = `${migration.tag}.sql`;
+    if (file === "0001_persona_versions.sql") await beforeVersions?.(db);
+    const ddl = await readFile(new URL(`../drizzle/${file}`, import.meta.url), "utf8");
+    await db.batch(
+      ddl.split("--> statement-breakpoint").map((statement) => db.prepare(statement.trim())),
+    );
+  }
   return { runtime, db, bucket, store: databaseStore(db, bucket) };
 }

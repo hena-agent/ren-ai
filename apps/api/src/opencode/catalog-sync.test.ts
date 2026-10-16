@@ -41,6 +41,7 @@ test(
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* expectProfile(host, "수아 수정");
       expect(yield* host.read(retained.id)).toEqual(old);
+      // Native location/config initialization is asynchronous even after the RPC completes.
       yield* Effect.promise(async () => {
         await expect
           .poll(
@@ -50,6 +51,7 @@ test(
                   host.remote.client.agent.list({ location: active.location }),
                 )
               ).data.find((agent) => agent.id === "persona1")?.system,
+            { timeout: 5_000 },
           )
           .toBe(updated.prompt);
       });

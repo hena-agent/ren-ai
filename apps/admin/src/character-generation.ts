@@ -8,6 +8,7 @@ import { GenerationError, operation, protect, validationFailure } from "./loggin
 import type { LogFields } from "./logging.ts";
 import { GeneratedPersona, generatedInitial } from "./initial-generation.ts";
 import initialPolicy from "./initial-policy.json";
+import { profileWriting } from "./profile-writing.ts";
 
 const Review = Schema.Struct({
   issues: Schema.Array(Schema.String.check(Schema.isPattern(/\S/))).check(Schema.isMaxLength(12)),
@@ -21,13 +22,20 @@ type Request = (
   schema?: JsonSchema.JsonSchema,
 ) => Promise<{ text: string; fields: LogFields }>;
 
-async function author(request: Request, seed: string, gender?: "female" | "male", name?: string) {
-  const original = `${seed}${gender ? `\nSELECTED GENDER: ${gender}` : ""}${name ? `\nSAVED NAME: ${name}` : ""}`;
+async function author(
+  request: Request,
+  seed: string,
+  gender?: "female" | "male",
+  name?: string,
+  instructions = "",
+) {
+  protect(seed, instructions);
+  const original = `${seed}${gender ? `\nSELECTED GENDER: ${gender}` : ""}${name ? `\nSAVED NAME: ${name}\nIMPROVEMENT REQUEST:\n${instructions}` : ""}`;
   let diagnostic: LogFields = {};
   const create = (repair?: { document: string; issues: readonly string[] }) =>
     operation(repair ? "character.repair" : "character.draft", {}, async () => {
       const response = await request(
-        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${policy.reference}\n\n${profilePolicy.genderDirection}${name ? "" : `\n\n${initialPolicy.generate}\n\n${initialPolicy.affection}\n\npersona는 완성된 Persona Markdown, state는 컨디션 5개와 초기 호감도 affection, memory는 초기 생활 기억인 JSON 객체를 한 요청에서 작성해. Persona 본문에는 상태·기억을 넣지 마. 보정도 이 JSON 객체 전체를 반환해.`}`,
+        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${policy.reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n\n${initialPolicy.generate}\n\n${initialPolicy.affection}\n\npersona는 완성된 Persona Markdown, state는 컨디션 5개와 초기 호감도 affection, memory는 초기 생활 기억인 JSON 객체를 한 요청에서 작성해. Persona 본문에는 상태·기억을 넣지 마. 보정도 이 JSON 객체 전체를 반환해.`}`,
         repair
           ? `${original}\n\nDOCUMENT:\n${repair.document}\n\nISSUES:\n${JSON.stringify(repair.issues)}`
           : original,
@@ -81,7 +89,7 @@ async function author(request: Request, seed: string, gender?: "female" | "male"
   const review = (document: string) =>
     operation("character.review", {}, async () => {
       const response = await request(
-        `${policy.review}\n\n${policy.reference}\n\n${profilePolicy.genderDirection}${name ? "" : `\n${initialPolicy.affection}\n세 문서의 인물 일관성, 초기 상태와 생활 기억의 적합성도 함께 검수해. 생활 보강은 허용하지만 사용자 경험·약속은 없어야 한다.`}`,
+        `${policy.review}\n\n${policy.reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n${initialPolicy.affection}\n세 문서의 인물 일관성, 초기 상태와 생활 기억의 적합성도 함께 검수해. 생활 보강은 허용하지만 사용자 경험·약속은 없어야 한다.`}`,
         `${original}\n\nDOCUMENT:\n${document}`,
         Schema.toJsonSchemaDocument(Review).schema,
       );
@@ -130,4 +138,5 @@ export async function generateCharacter(
 export const convertCharacter = (
   request: Request,
   source: { name: string; description: string; gender?: "female" | "male" },
-) => author(request, source.description, source.gender, source.name);
+  instructions?: string,
+) => author(request, source.description, source.gender, source.name, instructions);

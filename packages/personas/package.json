@@ -6,8 +6,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./profile": "./src/profile.ts",
+    "./profile-sections": "./src/profile-sections.ts",
+    "./public-profile": "./src/public-profile.ts",
+    "./profile-projection": "./src/profile-projection.ts",
     "./catalog": "./src/catalog.ts",
-    "./markdown": "./src/markdown.tsx"
+    "./public-profile-view": "./src/public-profile-view.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -17,7 +20,6 @@
     "mdast-util-from-markdown": "2.1.0",
     "mdast-util-to-string": "4.0.0",
     "react": "19.2.4",
-    "react-markdown": "10.1.0",
     "yaml": "2.8.2"
   },
   "devDependencies": {

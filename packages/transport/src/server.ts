@@ -2,6 +2,7 @@ import { Layer } from "effect";
 import { HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcSerialization } from "effect/unstable/rpc";
 import { authorize } from "./authorization.ts";
+export { authorize } from "./authorization.ts";
 
 export const rpcRouter = (
   routes: Layer.Layer<never, never, HttpRouter.HttpRouter | RpcSerialization.RpcSerialization>,
