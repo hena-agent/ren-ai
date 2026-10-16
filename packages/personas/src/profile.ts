@@ -21,13 +21,6 @@ export function markdownHeadings(markdown: string) {
 
 export const publicHeading = "공개 프로필";
 
-export function markdownDefinitions(markdown: string) {
-  return parseMarkdown(markdown)
-    .children.filter((node) => node.type === "definition")
-    .map((node) => markdown.slice(node.position!.start.offset, node.position!.end.offset))
-    .join("\n");
-}
-
 export function splitPersonaMarkdown(markdown: string) {
   markdown = markdown.replace(/\r\n?/g, "\n");
   const document = parseMarkdown(markdown);

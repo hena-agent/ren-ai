@@ -1,10 +1,9 @@
-export function ProfileFactFields({
-  body,
-  onChange,
-}: {
+export interface ProfileFactProps {
   body: string;
   onChange: (body: string) => void;
-}) {
+}
+
+export function ProfileFactFields({ body, onChange }: ProfileFactProps) {
   const rows = body ? body.split("\n") : [];
   if (rows.some((row) => !/^- [^:\n]*:.*$/.test(row)))
     return (

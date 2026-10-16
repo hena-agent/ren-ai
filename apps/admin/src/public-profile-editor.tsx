@@ -8,6 +8,7 @@ import {
 } from "@ren-ai/personas/profile-sections";
 import type { ProfileSection } from "@ren-ai/personas/profile-sections";
 import { ProfileFactFields } from "./profile-fact-fields.tsx";
+import { BasicProfileFields } from "./basic-profile-fields.tsx";
 
 function editableProfile(source: string) {
   try {
@@ -30,7 +31,7 @@ function SectionFields({
       <label>
         {kind === "answer" ? "질문" : "제목"}
         <input
-          value={kind === "answer" ? section.title.slice(4) : section.title}
+          value={kind === "answer" ? section.title.slice(3).trimStart() : section.title}
           required
           pattern="[^\r\n]+"
           onInput={(event) =>
@@ -44,7 +45,12 @@ function SectionFields({
           }
         />
       </label>
-      {kind === "facts" ? (
+      {section.title === "기본 정보" ? (
+        <BasicProfileFields
+          body={section.body}
+          onChange={(body) => onChange({ ...section, body })}
+        />
+      ) : kind === "facts" ? (
         <ProfileFactFields
           body={section.body}
           onChange={(body) => onChange({ ...section, body })}

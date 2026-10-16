@@ -18,6 +18,49 @@ const point = (x: number, pointerId = 1, y = 0) => ({
   button: 0,
 });
 
+test("the swipe caption uses only explicitly disclosed basic keys, never inferring them from prose", () => {
+  const actions = {
+    onChoose: vi.fn<(like: boolean) => void>(),
+    onOpen: vi.fn<(persona: typeof profile) => void>(),
+  };
+  const view = render(
+    <Card
+      persona={{
+        ...profile,
+        profile: {
+          introduction: profile.bio,
+          sections: [
+            { type: "interests", title: "관심사", items: ["재즈"] },
+            {
+              type: "basics",
+              title: "기본 정보",
+              items: [
+                { key: "age", label: "나이", value: "27세" },
+                { key: "occupation", label: "직업", value: "도예가" },
+                { key: "location", label: "지역", value: "서울" },
+              ],
+            },
+          ],
+        },
+      }}
+      {...actions}
+    />,
+  );
+  expect(screen.getByRole("heading", { name: "예린 · 27세" })).toBeTruthy();
+  expect(screen.getByText("도예가 · 서울")).toBeTruthy();
+  view.rerender(
+    <Card
+      persona={{
+        ...profile,
+        profile: { introduction: "27세, 서울에 사는 도예가예요.", sections: [] },
+      }}
+      {...actions}
+    />,
+  );
+  expect(screen.getByRole("heading", { name: "예린" })).toBeTruthy();
+  expect(view.container.querySelector(".profile-meta")).toBeNull();
+});
+
 test("a swipe commits exactly one choice and only the up-arrow opens details", () => {
   const select = vi.fn<(like: boolean) => void>();
   const open = vi.fn<(persona: typeof profile) => void>();

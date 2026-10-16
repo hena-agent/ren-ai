@@ -183,7 +183,7 @@ test("generation is a private preview until saving; publishing exposes only the 
       bio: introduction,
       imageUrl: persisted.imageUrl,
       portraits: persisted.portraits,
-      publicProfile: introduction,
+      profile: { introduction, sections: [] },
     },
   ]);
   expect(listed).not.toContain("비공개 설정");
