@@ -15,7 +15,7 @@ import { serializePersona } from "@ren-ai/personas";
 import { draftTokens } from "./draft.ts";
 
 const profile =
-  "천천히 알아가요.\n\n### 관심사\n\n- 산책\n- 재즈\n\n### 문답: 완벽한 일요일은?\n\n늦잠 자고 동네 책방에 가요.";
+  "천천히 알아가요.\n\n### 라이프스타일\n\n주말엔 늦잠을 자고 동네를 걸어요.\n\n### 관심사\n\n산책, 재즈\n\n### 문답: 완벽한 일요일은?\n\n늦잠 자고 동네 책방에 가요.";
 const updated = withPublicProfile(character.description, profile);
 
 async function setup() {
@@ -66,6 +66,7 @@ test("improvement automatically updates the draft, survives reload and saves wit
           ...fields,
           description: updated,
           draft: tokenOf(page),
+          published: "on",
           intent: "save",
         }),
       )
@@ -79,8 +80,8 @@ test("improvement automatically updates the draft, survives reload and saves wit
   );
 });
 
-test("profile-only improvement preserves private edits and the result remains directly editable", async () => {
-  const { admin, fields, rewrite, convert } = await setup();
+test("profile-only improvement preserves private edits and the result remains directly editable and publishable", async () => {
+  const { admin, fields, rewrite, convert, store } = await setup();
   const source = character.description.replace("짧은 검은 머리", "긴 갈색 머리");
   const response = await admin(
     request("/personas/legacy", {
@@ -110,7 +111,19 @@ test("profile-only improvement preserves private edits and the result remains di
     }),
   );
   expect(inspected.status).toBe(200);
-  expect(await inspected.text()).toContain("직접 편집한 내용");
+  const inspectedPage = await inspected.text();
+  expect(inspectedPage).toContain("직접 편집한 내용");
+  const saved = await admin(
+    request("/personas/legacy", {
+      ...fields,
+      description: changed,
+      draft: tokenOf(inspectedPage),
+      published: "on",
+      intent: "save",
+    }),
+  );
+  expect(saved.status).toBe(303);
+  expect((await store.get("legacy")).description).toBe(changed);
 });
 
 test("obsolete proposal intents are rejected and stale saved snapshots cannot be improved", async () => {
@@ -216,4 +229,33 @@ test("improvement input is narrowed at the form boundary and bounded", () => {
   const upload = new FormData();
   upload.set("improvementInstructions", new Blob(["input"]), "prompt.txt");
   expect(() => captureImprovement(upload, draft)).toThrow("개선 범위");
+});
+
+test("improvement rejects invalid results with shared document diagnostics before replacing drafts", async () => {
+  const { admin, fields, convert, logs } = await setup();
+  for (const result of [
+    { ...character, name: "다른 이름" },
+    { ...character, description: "" },
+    { ...character, description: character.description.replace("## 말투", "## 잘못된 섹션") },
+    {
+      ...character,
+      description: character.description.replace(`이름: ${character.name}`, "이름: 다른 이름"),
+    },
+  ]) {
+    convert.mockResolvedValueOnce({ ...result, additions: [] });
+    const response = await admin(request("/personas/legacy", { ...fields, intent: "improve" }));
+    expect(response.status).toBe(503);
+    expect(preview(await response.text()).description).toBe(character.description);
+    const failure = logs.find(
+      (entry) =>
+        entry.requestId === response.headers.get("X-Request-ID") &&
+        entry.event === "operation.failed",
+    );
+    expect(failure?.stage).toBe("persona.improve");
+    expect(failure?.code).toBe(
+      result.name !== character.name ? "improvement_identity_mismatch" : "invalid_character",
+    );
+    expect(JSON.stringify(failure)).not.toContain(fields.improvementInstructions);
+    expect(JSON.stringify(failure)).not.toContain(character.description);
+  }
 });

@@ -1,9 +1,9 @@
-import { markdownHeadings, splitPersonaMarkdown } from "@ren-ai/personas/profile";
+import { markdownHeadings, splitPersonaMarkdown } from "./profile.ts";
 import {
   CharacterFormatError,
   parseCharacterDescription,
   privateSectionTitles,
-} from "@ren-ai/personas";
+} from "./character-format.ts";
 
 type Heading = ReturnType<typeof markdownHeadings>[number];
 const issueAt = (source: string, section: string, message: string, start: number, end: number) => ({
