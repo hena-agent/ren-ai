@@ -70,29 +70,41 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.details-content > p + p {
+.details-content p + p {
   margin-top: 20px;
 }
-.details-content > h3 {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
+.details-content .public-profile-section h3 {
   font-size: 17px;
   color: var(--ink);
 }
-.details-content > ul {
+.details-content .profile-interests ul {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   padding: 0;
   list-style: none;
 }
-.details-content > ul > li {
+.details-content .profile-interests li {
   padding: 8px 14px;
   background: var(--canvas);
   border-radius: 24px;
   overflow-wrap: anywhere;
   max-width: 100%;
+}
+.details-content .public-profile-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.details-content .profile-answer {
+  padding: 20px;
+  background: var(--canvas);
+  border-radius: 16px;
+}
+.details-content .profile-facts ul {
+  padding-left: 20px;
+  display: grid;
+  gap: 12px;
 }
 .details-content blockquote {
   margin: 16px 0;
