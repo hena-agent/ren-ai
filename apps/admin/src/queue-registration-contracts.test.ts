@@ -97,9 +97,7 @@ test("an older failed job view displays the newest approved editing photos and j
   const newest = await finishedJob(admin, jobUrl(second));
   const oldView = await (await admin(request(path))).text();
   for (const image of personaImages(preview(newest)))
-    expect(oldView).toContain(
-      `src="${image.imageUrl.replace(/^\/discovery\/images\//, "/images/")}"`,
-    );
+    expect(oldView).toContain(`src="${image.imageUrl}"`);
   expect((await admin(request(`${path}/extra`))).status).toBe(404);
   expect((await admin(request(`/prefix${path}`))).status).toBe(404);
 });

@@ -29,7 +29,7 @@ export function Preview({ persona }: { persona: PersonaRecord }) {
               <Fragment key={style}>
                 <div className={`portrait-pane portrait-${style}`}>
                   <img
-                    src={portraits[style]!.replace(/^\/discovery\/images\//, "/images/")}
+                    src={portraits[style]}
                     alt={`${persona.name} ${copy.styles[style]}`}
                     width={800}
                     height={1000}
@@ -44,7 +44,7 @@ export function Preview({ persona }: { persona: PersonaRecord }) {
         </div>
       ) : persona.imageUrl ? (
         <img
-          src={persona.imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+          src={persona.imageUrl}
           alt={`${persona.name} 프로필`}
           width={800}
           height={1000}
@@ -96,13 +96,13 @@ export function Comparison({
               .map(({ imageUrl, main }, index) => (
                 <figure className="image-option" key={imageUrl}>
                   <a
-                    href={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+                    href={imageUrl}
                     target="_blank"
                     rel="noreferrer"
                     aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 사진 크게 보기`}
                   >
                     <img
-                      src={imageUrl.replace(/^\/discovery\/images\//, "/images/")}
+                      src={imageUrl}
                       alt={`${persona.name} ${copy.styles[style]} · ${main ? "메인" : `추가 ${index}`}`}
                       width={800}
                       height={1000}

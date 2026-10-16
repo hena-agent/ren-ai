@@ -47,9 +47,8 @@ test("generated images survive restart, use immutable filenames and become publi
     ];
     for (const image of images) {
       const path = await store.saveImage(image);
-      expect(path).toMatch(new RegExp(`^/discovery/images/[0-9a-f-]{36}\\.${image.extension}$`));
+      expect(path).toMatch(new RegExp(`^/images/[0-9a-f-]{36}\\.${image.extension}$`));
       const filename = path.split("/").at(-1)!;
-      expect((await store.publicImage(filename)).status).toBe(404);
       const privateRead = await store.image(filename);
       expect(privateRead.status).toBe(200);
       expect(privateRead.headers.get("content-type")).toBe(image.mimeType);
@@ -60,11 +59,11 @@ test("generated images survive restart, use immutable filenames and become publi
       await store.create(saved);
       const reopened = await createPersonaStore(root);
       expect(await reopened.get(image.extension)).toEqual(saved);
-      expect((await reopened.publicImage(filename)).status).toBe(200);
+      expect((await reopened.image(filename)).status).toBe(200);
       const unreferenced = await store.saveImage(image);
-      expect((await reopened.publicImage(unreferenced.split("/").at(-1)!)).status).toBe(404);
+      expect((await reopened.image(unreferenced.split("/").at(-1)!)).status).toBe(200);
       await reopened.update({ ...saved, published: false });
-      expect((await reopened.publicImage(filename)).status).toBe(404);
+      expect((await reopened.image(filename)).status).toBe(200);
     }
     const first = await store.saveImage(images[0]!);
     const second = await store.saveImage(images[0]!);

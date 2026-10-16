@@ -32,7 +32,7 @@ export async function saveImage(directory: string, image: Portrait) {
   const target = join(directory, "images");
   await mkdir(target, { recursive: true });
   await writeFile(join(target, filename), image.bytes, { flag: "wx" });
-  return `/discovery/images/${filename}`;
+  return `/images/${filename}`;
 }
 
 export async function imageResponse(directory: string, filename: string) {

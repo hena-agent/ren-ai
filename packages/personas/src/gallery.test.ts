@@ -93,7 +93,7 @@ test("independent images allow partial main styles but reject empty mains, inval
     );
 });
 
-test("public images are authorized by current independent metadata and survive restart without proposal records", async () => {
+test("direct image URLs survive restart and remain available after profile references change", async () => {
   const root = await mkdtemp(join(tmpdir(), "independent-public-"));
   try {
     const store = await createPersonaStore(root);
@@ -113,12 +113,12 @@ test("public images are authorized by current independent metadata and survive r
     expect(await reopened.get(persona.id)).toEqual(record);
     expect((await reopened.publicList())[0]?.secondaryPortraits).toEqual(record.secondaryPortraits);
     for (const image of personaImages(record))
-      expect((await reopened.publicImage(image.imageUrl.split("/").at(-1)!)).status).toBe(200);
-    expect((await reopened.publicImage(urls[3]!.split("/").at(-1)!)).status).toBe(404);
+      expect((await reopened.image(image.imageUrl.split("/").at(-1)!)).status).toBe(200);
+    expect((await reopened.image(urls[3]!.split("/").at(-1)!)).status).toBe(200);
     await reopened.update({ ...record, secondaryPortraits: [] });
-    expect((await reopened.publicImage(urls[2]!.split("/").at(-1)!)).status).toBe(404);
+    expect((await reopened.image(urls[2]!.split("/").at(-1)!)).status).toBe(200);
     await reopened.update({ ...record, published: false });
-    expect((await reopened.publicImage(urls[0]!.split("/").at(-1)!)).status).toBe(404);
+    expect((await reopened.image(urls[0]!.split("/").at(-1)!)).status).toBe(200);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

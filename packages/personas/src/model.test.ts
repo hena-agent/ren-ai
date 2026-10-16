@@ -57,7 +57,7 @@ test("frontmatter rejects unknown keys and incorrect types before producing a pe
 
 test("portrait pairs require two complete safe URLs and survive serialization", () => {
   const portraits = {
-    anime: "/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png",
+    anime: "/images/01234567-89ab-cdef-0123-456789abcdef.png",
     photo: "https://example.net/photo.jpg",
   };
   expect(parsePersona(persona.id, serializePersona({ ...persona, portraits })).portraits).toEqual(
@@ -101,7 +101,7 @@ test("malformed files retain actionable parse errors and cannot hide frontmatter
 });
 
 test("owned portrait URLs must match the complete service path while legacy descriptions remain optional", () => {
-  const path = "/discovery/images/01234567-89ab-cdef-0123-456789abcdef.png";
+  const path = "/images/01234567-89ab-cdef-0123-456789abcdef.png";
   expect(decodePersona({ ...persona, imageUrl: path }).imageUrl).toBe(path);
   for (const imageUrl of [
     `/prefix${path}`,

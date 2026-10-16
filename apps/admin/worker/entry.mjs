@@ -30,12 +30,7 @@ export default {
   fetch(request, env) {
     const path = new URL(request.url).pathname;
     if (path === "/health") return adminRequest(request, () => adminHealth(request, env));
-    if (
-      path === "/api/catalog" ||
-      path === "/api/personas" ||
-      path.startsWith("/discovery/images/")
-    )
-      return catalogHandler(request, env);
+    if (path === "/api/catalog" || path === "/api/personas") return catalogHandler(request, env);
     return adminRequest(request, () => {
       const namespace =
         env.ADMIN_JURISDICTION === "local" ? env.ADMIN : env.ADMIN.jurisdiction("us");

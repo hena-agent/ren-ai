@@ -8,6 +8,7 @@
     "./profile": "./src/profile.ts",
     "./profile-sections": "./src/profile-sections.ts",
     "./catalog": "./src/catalog.ts",
+    "./image-url": "./src/image-url.ts",
     "./markdown": "./src/markdown.tsx"
   },
   "scripts": {

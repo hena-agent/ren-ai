@@ -6,6 +6,7 @@ import type { ManagementClient } from "./contact-client.ts";
 export interface AdminOptions {
   generator?: ProfileGenerator;
   script?: string;
+  localImages?: boolean;
   log?: Log;
   persistence?: AdminPersistence;
   management?: ManagementClient;

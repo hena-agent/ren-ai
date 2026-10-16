@@ -104,7 +104,7 @@ test("queued and finished displays use truthful waiting time and only retry fail
   expect(document.querySelectorAll("button")).toHaveLength(0);
   job.state = "failed";
   job.finishedAt = 8000;
-  job.tasks[0]!.imageUrl = "/discovery/images/owned.jpg";
+  job.tasks[0]!.imageUrl = "https://persona-images.renai.im/owned.jpg";
   document.body.innerHTML = renderToStaticMarkup(
     <ImageJobPanel job={job} position={-1} now={15000} />,
   );
@@ -113,7 +113,9 @@ test("queued and finished displays use truthful waiting time and only retry fail
   );
   expect(document.querySelector("[data-queue-status]")?.textContent).toContain("실패한 사진");
   expect(document.querySelector(".queue-totals small")?.textContent).toBe("7초 경과");
-  expect(document.querySelector("img")?.getAttribute("src")).toBe("/images/owned.jpg");
+  expect(document.querySelector("img")?.getAttribute("src")).toBe(
+    "https://persona-images.renai.im/owned.jpg",
+  );
   const buttons = document.querySelectorAll<HTMLButtonElement>('[value="retry-image"]');
   expect(buttons).toHaveLength(2);
   expect(buttons[0]?.getAttribute("formaction")).toBe("/image-jobs/job-identifier/retry?image=2");

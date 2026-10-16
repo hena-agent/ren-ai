@@ -39,13 +39,15 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
   const wake = () => wakeAlarm(storage, Date.now() + 1);
   const management = managementClient(env.APPLICATION_API_URL ?? "", env.TOKEN_MANAGEMENT ?? "");
   const delivery = catalogDelivery(storage, management.refreshCatalog);
-  const store = databaseStore(env.DB, env.IMAGES);
+  const localImages = env.ADMIN_JURISDICTION === "local";
+  const store = databaseStore(env.DB, env.IMAGES, localImages ? "/images/" : undefined);
   const handle = createAdmin(
     { ...store, save: (...args) => delivery.save(() => store.save(...args)) },
     env.ADMIN_PASSWORD,
     `${css}\n${editorCss}`,
     {
       script,
+      localImages,
       log: workerLog,
       generator: createProfileGenerator({
         key: env.GEMINI_API_KEY ?? "",

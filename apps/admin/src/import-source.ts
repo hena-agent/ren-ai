@@ -59,7 +59,7 @@ export async function readImportSource(directory: string): Promise<ImportSource>
     );
     const images: ImportImage[] = [];
     for (const key of (await imageNames(join(directory, "images"))).toSorted()) {
-      imageKey(`/discovery/images/${key}`);
+      imageKey(`/images/${key}`);
       const file = join(directory, "images", key);
       const mimeType = key.endsWith(".png")
         ? "image/png"

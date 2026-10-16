@@ -18,6 +18,15 @@ const Snapshot = Schema.Struct({
   ),
 });
 
+function runtimePersona(record: (typeof Snapshot.Type.personas)[number]) {
+  const persona = parsePersona(record.id, record.source);
+  return {
+    ...persona,
+    ...(record.state.trim() &&
+      record.memory.trim() && { initial: { state: record.state, memory: record.memory } }),
+  };
+}
+
 export function catalogClient(connection: CatalogConnection, fetcher: typeof fetch = fetch) {
   const base = new URL(connection.url);
   if (
@@ -27,42 +36,6 @@ export function catalogClient(connection: CatalogConnection, fetcher: typeof fet
       !(base.protocol === "http:" && ["127.0.0.1", "localhost"].includes(base.hostname)))
   )
     throw new Error("Catalog URL must use credential-free HTTPS or local HTTP");
-  const imageUrl = (url: string) =>
-    url.startsWith("/discovery/images/") ? new URL(url, base).href : url;
-  const publicImages = (
-    persona: Pick<
-      PublicPersona,
-      "imageUrl" | "portraits" | "secondaryPortraits" | "portraitGallery"
-    >,
-  ) => ({
-    imageUrl: imageUrl(persona.imageUrl),
-    ...(persona.portraits && {
-      portraits: Object.fromEntries(
-        Object.entries(persona.portraits).map(([style, url]) => [style, imageUrl(url)]),
-      ),
-    }),
-    ...(persona.secondaryPortraits && {
-      secondaryPortraits: persona.secondaryPortraits.map((photo) => ({
-        ...photo,
-        imageUrl: imageUrl(photo.imageUrl),
-      })),
-    }),
-    ...(persona.portraitGallery && {
-      portraitGallery: persona.portraitGallery.map((pair) => ({
-        anime: imageUrl(pair.anime),
-        photo: imageUrl(pair.photo),
-      })),
-    }),
-  });
-  const runtimePersona = (record: (typeof Snapshot.Type.personas)[number]) => {
-    const persona = parsePersona(record.id, record.source);
-    return {
-      ...persona,
-      ...publicImages(persona),
-      ...(record.state.trim() &&
-        record.memory.trim() && { initial: { state: record.state, memory: record.memory } }),
-    };
-  };
   const request = async (path: string, authenticated = false) => {
     const response = await fetcher(new URL(path, base), {
       ...(authenticated && { headers: { Authorization: `Bearer ${connection.token}` } }),
@@ -99,21 +72,10 @@ export function catalogClient(connection: CatalogConnection, fetcher: typeof fet
         const profiles = Schema.decodeUnknownSync(Schema.Array(PublicPersona))(
           await response.json(),
         );
-        return profiles.map((persona) => ({ ...persona, ...publicImages(persona) }));
+        return profiles;
       } catch {
         throw new Error("Invalid public Catalog response");
       }
-    },
-    publicImage: async (filename: string) => {
-      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:png|jpg|webp)$/.test(filename))
-        return new Response(null, { status: 404 });
-      const response = await fetcher(new URL(`/discovery/images/${filename}`, base), {
-        signal: AbortSignal.timeout(10_000),
-        redirect: "manual",
-      });
-      if (response.status >= 300 && response.status < 400)
-        throw new Error("Catalog image redirect refused");
-      return response;
     },
   };
 }

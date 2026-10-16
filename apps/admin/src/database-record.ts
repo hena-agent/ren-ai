@@ -3,6 +3,7 @@ import { personas, personaImages, personaVersions } from "./database-schema.ts";
 import { getTableColumns, and, eq } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { protect } from "./logging.ts";
+import { personaImageBase } from "@ren-ai/personas/image-url";
 
 export const currentPersonaRows = (db: DrizzleD1Database) =>
   db
@@ -19,12 +20,13 @@ export const currentPersonaRows = (db: DrizzleD1Database) =>
 export function recordOf(
   row: typeof personas.$inferSelect & { markdown: string },
   photos: readonly (typeof personaImages.$inferSelect)[],
+  imageBase = personaImageBase,
 ) {
   protect(row.markdown, row.state, row.memory, row.memoryInstruction, row.openingLine);
   const portraits = Object.fromEntries(
     photos
       .filter((photo) => photo.position === 0)
-      .map((photo) => [photo.style, `/discovery/images/${photo.objectKey}`]),
+      .map((photo) => [photo.style, `${imageBase}${photo.objectKey}`]),
   );
   const record = decodePersona({
     id: row.id,
@@ -44,7 +46,7 @@ export function recordOf(
     ...(photos.length && { portraits }),
     secondaryPortraits: photos
       .filter((photo) => photo.position > 0)
-      .map((photo) => ({ style: photo.style, imageUrl: `/discovery/images/${photo.objectKey}` })),
+      .map((photo) => ({ style: photo.style, imageUrl: `${imageBase}${photo.objectKey}` })),
   });
   return { ...record, version: row.currentVersion, description: row.markdown };
 }

@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { Schema } from "effect";
 import { splitPersonaMarkdown } from "./profile.ts";
+import { personaImageBase } from "./image-url.ts";
 
 const Row = Schema.Struct({
   id: Schema.String,
@@ -21,7 +22,10 @@ interface Profile {
 }
 
 /** The same public projection serves Admin and Discovery, without reading State/Memory. */
-export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
+export async function readPublicCatalog(
+  db: Pick<D1Database, "prepare">,
+  imageBase = personaImageBase,
+) {
   const result = await db
     .prepare(`
     SELECT p.id, p.name, v.markdown, i.style, i.objectKey, i.position
@@ -47,7 +51,7 @@ export async function readPublicCatalog(db: Pick<D1Database, "prepare">) {
       profiles.set(row.id, profile);
     }
     if (row.style === null) continue;
-    const imageUrl = `/discovery/images/${row.objectKey}`;
+    const imageUrl = `${imageBase}${row.objectKey}`;
     if (row.position === 0) profile.portraits[row.style] = imageUrl;
     else profile.secondaryPortraits.push({ style: row.style, imageUrl });
   }

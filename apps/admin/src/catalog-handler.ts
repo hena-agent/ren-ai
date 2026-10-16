@@ -18,16 +18,16 @@ export function catalogHandler(request: Request, env: AdminEnv) {
       const pathname = new URL(request.url).pathname;
       if (request.method !== "GET")
         return new Response(null, { status: 405, headers: { Allow: "GET" } });
-      const store = databaseStore(env.DB, env.IMAGES);
+      const store = databaseStore(
+        env.DB,
+        env.IMAGES,
+        env.ADMIN_JURISDICTION === "local" ? new URL("/images/", request.url).href : undefined,
+      );
       try {
         if (pathname === "/api/personas")
           return Response.json(await operation("persona.publicList", {}, store.publicList), {
             headers: { "Cache-Control": "no-store" },
           });
-        if (pathname.startsWith("/discovery/images/"))
-          return await operation("image.publicRead", {}, () =>
-            store.publicImage(pathname.slice("/discovery/images/".length)),
-          );
         if (
           !env.TOKEN_CATALOG ||
           !timingSafeEqual(

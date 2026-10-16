@@ -133,7 +133,7 @@ test("registry persists state on the Durable Object across recreation", async ()
     expect(await replayedSelection.json()).toEqual(await firstSelection.json());
     expect((await select({ ...selection, count: 2 })).status).toBe(503);
     expect((await call(runtime, "/discovery/unknown")).status).toBe(404);
-    expect(await (await call(runtime, "/discovery/images/test.jpg")).text()).toBe("image");
+    expect((await call(runtime, "/discovery/images/test.jpg")).status).toBe(404);
     expect((await call(runtime, "/unknown")).status).toBe(404);
 
     const state = await call(runtime, "/__fixture/state");

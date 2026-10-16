@@ -13,7 +13,6 @@ import {
 import type { PersonaRecord } from "./model.ts";
 import { imageResponse, saveImage } from "./images.ts";
 import type { Portrait } from "./images.ts";
-import { personaImages } from "./portraits.ts";
 import { inspectPersonaFiles } from "./inspection.ts";
 import { legacyPersonaDraft } from "./legacy.ts";
 import { readInitialFiles, writeInitialFiles, prepareInitialFiles } from "./initial-files.ts";
@@ -199,19 +198,6 @@ export async function createPersonaStore(directory: string) {
     update: (input: PersonaRecord) => write(input, false),
     saveImage: (image: Portrait) => saveImage(directory, image),
     image: (filename: string) => imageResponse(directory, filename),
-    publicImage: async (filename: string) => {
-      if (
-        !(await list()).some(
-          (persona) =>
-            persona.published &&
-            personaImages(persona).some(
-              (image) => image.imageUrl === `/discovery/images/${filename}`,
-            ),
-        )
-      )
-        return new Response(null, { status: 404 });
-      return imageResponse(directory, filename);
-    },
     publicList: async () =>
       (await list())
         .filter((persona) => persona.published)
