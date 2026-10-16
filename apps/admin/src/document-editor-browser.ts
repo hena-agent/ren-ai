@@ -1,8 +1,7 @@
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { Schema } from "effect";
-import { publicationIssues, stateStatus } from "@ren-ai/personas";
-import { documentStatus } from "./document-diagnostics.ts";
+import { documentStatus, publicationIssues, stateStatus } from "@ren-ai/personas";
 import { PublicPersonaPreview } from "./public-persona-preview.tsx";
 import { markdownEditor } from "./markdown-editor.ts";
 import { bindDocumentTabs } from "./document-tabs.ts";

@@ -157,10 +157,10 @@ test("public rewriting derives results from the same Markdown document and prese
   expect(rewrite).toHaveBeenCalledTimes(1);
 });
 
-test("malformed public facts fail at the real save boundary with correlated private-safe diagnostics", async () => {
+test("missing required persona section fails at the real save boundary with correlated private-safe diagnostics", async () => {
   const { admin, store, route, original, editing, logs } = await savedPreview();
   const description = withPublicProfile(
-    original.description,
+    original.description.replace("## 말투", "## 다른 제목"),
     "소개.\n\n### 기본 정보\n- 운영자만-아는-입력",
   );
   const response = await admin(
@@ -186,10 +186,14 @@ test("malformed public facts fail at the real save boundary with correlated priv
     personaId: original.id,
     intent: "save",
   });
-  expect(failures[0]?.error?.message).toContain("공개 정보");
+  const line = description.slice(0, description.indexOf("## 공개 프로필")).split("\n").length;
+  expect(failures[0]?.error?.message).toContain(`${line}행 · 문서 구조:`);
+  expect(failures[0]?.error?.message).toContain("필수 섹션을 추가해 주세요: 말투");
   expect(JSON.stringify(failures)).not.toContain("운영자만-아는-입력");
   expect(JSON.stringify(failures)).not.toContain(splitPersonaMarkdown(description).privateMarkdown);
-  expect(await response.text()).toContain(`요청 ID: ${requestId}`);
+  const html = await response.text();
+  expect(html).toContain(`요청 ID: ${requestId}`);
+  expect(html).toContain(`${line}행 · 문서 구조:`);
   expect(await store.get(original.id)).toEqual(original);
 });
 

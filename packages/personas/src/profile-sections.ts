@@ -10,10 +10,3 @@ export function readProfileSections(markdown: string) {
     })),
   };
 }
-
-export function profileSectionKind(title: string) {
-  if (title.startsWith("문답:")) return "answer";
-  if (title === "관심사") return "interests";
-  if (["기본 정보", "라이프스타일", "관계 스타일"].includes(title)) return "facts";
-  return "text";
-}

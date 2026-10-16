@@ -1,11 +1,12 @@
 import {
   PersonaError,
-  parseCharacterDescription,
+  CharacterFormatError,
+  documentStatus,
   serializePersona,
   versionedPersona,
 } from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
-import { requirePublicProfile, withPublicProfile } from "@ren-ai/personas/profile";
+import { withPublicProfile } from "@ren-ai/personas/profile";
 import { characterOf, authorPersona } from "./authoring.ts";
 import type { Draft } from "./draft.ts";
 import type { ProfileGenerator } from "./generation.ts";
@@ -31,33 +32,31 @@ export async function improvePersona(
 ): Promise<Draft> {
   const input = draft.improvementInput!;
   const result = await operation("persona.improve", {}, async () => {
-    if (input.scope === "profile") {
-      const profile = await generator.profile(characterOf(persona), input.instructions);
-      protect(profile);
-      const description = withPublicProfile(persona.description!, profile);
-      requirePublicProfile(description);
-      return {
-        description,
-        additions: ["공개 프로필을 개선했습니다. 비공개 인물 설정은 유지했습니다."],
-      };
-    }
-    const improved = await generator.convert(characterOf(persona), input.instructions);
+    const improved =
+      input.scope === "profile"
+        ? {
+            description: withPublicProfile(
+              persona.description!,
+              await generator.profile(characterOf(persona), input.instructions),
+            ),
+            additions: ["공개 프로필을 개선했습니다. 비공개 인물 설정은 유지했습니다."],
+          }
+        : await generator.convert(characterOf(persona), input.instructions);
     protect(improved.description, ...improved.additions);
-    let sheet: ReturnType<typeof parseCharacterDescription>;
-    try {
-      sheet = parseCharacterDescription(improved.description);
-      requirePublicProfile(improved.description);
-    } catch (cause) {
-      throw validationFailure("Invalid improved Persona", { code: "invalid_character" }, cause);
-    }
-    if (
-      improved.name !== persona.name ||
-      sheet.name !== persona.name ||
-      (persona.gender && sheet.gender !== persona.gender)
-    )
+    if ("name" in improved && improved.name !== persona.name)
       throw new GenerationError("Improvement changed persona identity", {
         code: "improvement_identity_mismatch",
       });
+    const status = documentStatus(improved.description, persona.name, persona.gender);
+    if (status.state !== "valid")
+      throw validationFailure(
+        "Invalid improved Persona",
+        { code: "invalid_character" },
+        new CharacterFormatError(
+          status.issues[0]?.section ?? "",
+          status.issues[0]?.message ?? "Persona 문서가 비어 있습니다.",
+        ),
+      );
     return improved;
   });
   protect(result.description, ...result.additions);

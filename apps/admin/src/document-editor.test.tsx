@@ -4,11 +4,10 @@ import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { diagnosticCount } from "@codemirror/lint";
 import { withPublicProfile } from "@ren-ai/personas/profile";
-import { renderCharacterSheet } from "@ren-ai/personas";
+import { documentStatus, publicationIssues, renderCharacterSheet } from "@ren-ai/personas";
 import { sheet } from "../test/character.ts";
 import { legacy } from "../test/fixtures.ts";
 import { useBrowser } from "../test/browser.ts";
-import { documentStatus } from "./document-diagnostics.ts";
 import { DocumentEditor } from "./document-editor.tsx";
 import { bindDocumentEditor, destroyDocumentEditors } from "./document-editor-browser.ts";
 import { markdownEditor } from "./markdown-editor.ts";
@@ -22,6 +21,38 @@ const persona = {
   description: source,
   descriptionVersion: 2,
 };
+
+test("editor and publication accept public prose and lists under every section title", () => {
+  for (const content of [
+    "### 기본 정보\n직접 작성한 소개예요.",
+    "### 기본 정보\n- 직업:",
+    "### 기본 정보\n- 직업: 도예가\n- 직업: 사진가",
+    "### 관심사\n재즈, 산책",
+    "### 라이프스타일\n- 주말:",
+    "### 관계 스타일\n연락은 자주 해요.",
+    "### 문답:\n답변만 있어요.",
+    "### 문답: &nbsp;\n답변만 있어요.",
+  ]) {
+    const description = withPublicProfile(source, `소개.\n\n${content}`);
+    const result = documentStatus(description, sheet.name, sheet.gender);
+    expect(
+      publicationIssues({ ...persona, description }).filter((issue) => issue.tab === "persona"),
+    ).toEqual([]);
+    expect(result).toMatchObject({ state: "valid", issues: [] });
+  }
+  for (const content of [
+    "### 관심사\n- 재즈\n- 산책",
+    "### 기본 정보\n- 직업: 도예가",
+    "### 문답: 쉬는 날은?\n산책해요.",
+    "### 자유 제목\n자유롭게 써요.",
+  ]) {
+    const description = withPublicProfile(source, `소개.\n\n${content}`);
+    expect(documentStatus(description, sheet.name, sheet.gender).state).toBe("valid");
+    expect(
+      publicationIssues({ ...persona, description }).filter((issue) => issue.tab === "persona"),
+    ).toEqual([]);
+  }
+});
 
 test("diagnostics distinguish drafts and old content, group missing sections, and point to actual offending ranges", () => {
   expect(documentStatus(" \n", "").state).toBe("empty");
@@ -97,6 +128,13 @@ test("editor diagnostics select the real error in Persona without a document pre
   expect(
     view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to),
   ).toContain("자율성: 101");
+  field.value = withPublicProfile(source, "소개.\n\n### 관심사\n재즈, 산책");
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  await vi.waitFor(() =>
+    expect(form.querySelector("[data-document-status]")?.textContent).toBe("형식 정상"),
+  );
+  expect(diagnosticCount(view.state)).toBe(0);
+  expect(form.querySelector("[data-document-issues]")?.textContent).toBe("");
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" } });
   expect(() => stale.click()).not.toThrow();
   expect(view.state.selection.main.from).toBe(0);

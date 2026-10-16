@@ -50,6 +50,7 @@ test("publication validates real document content, metadata identity, traits and
     { ...persona, name: "다른 이름" },
     { ...persona, gender: "male" as const },
     { ...persona, prompt: "bad", description: "bad" },
+    { ...persona, prompt: "", description: "" },
     { ...persona, imageUrl: "" },
   ])
     expect(publicationIssues(changed, documents).some((issue) => issue.tab === "persona")).toBe(
@@ -84,24 +85,21 @@ test("publication validates real document content, metadata identity, traits and
   ).toThrow(/특성 이름/);
 });
 
-test("new public saves validate structured fields without rejecting reads of existing public prose", () => {
+test("public saves accept free-form sections as well as structured lists", () => {
   for (const content of [
     "### 기본 정보\n직접 작성한 소개예요.",
     "### 기본 정보\n- 직업:",
     "### 기본 정보\n- 직업: 도예가\n- 직업: 사진가",
     "### 관심사\n재즈, 산책",
+    "### 라이프스타일\n주말엔 늦잠을 자고 동네를 걸어요.",
+    "### 관계 스타일\n바빠도 안부는 전해요.",
     "### 문답:\n답변만 있어요.",
     "### 문답: &nbsp;\n답변만 있어요.",
   ]) {
     const description = withPublicProfile(source, `소개.\n\n${content}`);
     const record = decodePersona({ ...persona, published: true, description });
     expect(record.published).toBe(true);
-    expect(publicationIssues(record, documents)).toEqual([
-      {
-        tab: "persona",
-        message: "Persona의 필수 형식·이름·성별·공개 자기소개·공개 정보 목록을 확인해 주세요.",
-      },
-    ]);
+    expect(publicationIssues(record, documents)).toEqual([]);
   }
 });
 
