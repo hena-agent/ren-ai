@@ -110,6 +110,13 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
   expect(controls.storeHandler).toHaveBeenCalledTimes(3);
   expect((await app.fetch(new Request("https://api-app.example/rpc"))).status).toBe(503);
   expect((await app.fetch(new Request("https://api-app.example/operator/users"))).status).toBe(503);
+  expect(
+    (
+      await app.fetch(
+        new Request("https://api-app.example/management/catalog/refresh", { method: "POST" }),
+      )
+    ).status,
+  ).toBe(503);
   await app.tick();
   expect(controls.runtime).not.toHaveBeenCalled();
   await app.close();
@@ -137,6 +144,11 @@ test("registry remains usable with execution down; the next alarm retries execut
   expect((await app.fetch(new Request("https://app/rpc"))).status).toBe(200);
   expect((await app.fetch(new Request("https://app/operator/users"))).status).toBe(200);
   expect(runtime.fetch).toHaveBeenCalledTimes(2);
+  expect(
+    (await app.fetch(new Request("https://app/management/catalog/refresh", { method: "POST" })))
+      .status,
+  ).toBe(200);
+  expect(runtime.fetch.mock.calls.at(-1)![0].url).toBe("https://app/management/catalog/refresh");
   runtime.tick.mockRejectedValueOnce(new Error("tick failed"));
   runtime.close.mockRejectedValueOnce(new Error("cleanup failed"));
   await expect(app.tick()).rejects.toThrow("tick failed");

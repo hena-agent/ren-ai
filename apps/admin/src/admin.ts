@@ -57,7 +57,7 @@ export function createAdmin(
   store: PersonaStore,
   password: string,
   stylesheet: string,
-  { generator, script, log, persistence, management }: AdminOptions = {},
+  { generator, script, log, persistence, management, catalogPending }: AdminOptions = {},
 ) {
   if (!password.trim()) throw new Error("ADMIN_PASSWORD is required");
   const expected = createHash("sha256")
@@ -396,7 +396,7 @@ export function createAdmin(
             JSON.stringify(draft!.initial?.preview) !== JSON.stringify(draft!.initial?.base),
         }
       : { personas: await operation("persona.list", {}, store.list) };
-    return html(renderPage({ ...content, saved }));
+    return html(renderPage({ ...content, saved, catalogPending: await catalogPending?.() }));
   };
 
   const handle = async (request: Request): Promise<Response> => {

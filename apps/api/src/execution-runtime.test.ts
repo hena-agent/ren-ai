@@ -145,7 +145,6 @@ test("does not start for rejected operator access; publishes callback before rem
       "catalog",
       "remote",
       "folders",
-      "refresh",
       "intake",
       "contacts",
       "followUps",
@@ -164,10 +163,52 @@ test("does not start for rejected operator access; publishes callback before rem
     expect(await forwarded.text()).toBe("payload");
     await runtime.tick();
     expect(control.events.filter((event) => event === "catalog")).toHaveLength(1);
+    expect(control.events).not.toContain("refresh");
   } finally {
     await runtime.close();
   }
   expect(control.events.slice(-3)).toEqual(["operator.close", "remote.close", "callback.close"]);
+});
+
+test("only authenticated POST notifications refresh the Catalog, without running a heartbeat", async () => {
+  const runtime = await open();
+  const notify = (method = "POST", token = "management-secret") =>
+    runtime.fetch(
+      new Request("https://app/management/catalog/refresh", {
+        method,
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+  try {
+    expect((await notify("POST", "wrong")).status).toBe(401);
+    expect(control.events).toEqual([]);
+    expect((await notify("GET")).status).toBe(405);
+    expect(control.events).toEqual([]);
+    expect((await notify()).status).toBe(204);
+    expect(control.events).toEqual(["catalog", "remote", "folders", "refresh"]);
+    expect((await notify()).status).toBe(204);
+    expect(control.events.filter((event) => event === "refresh")).toHaveLength(2);
+    expect(control.operator).not.toHaveBeenCalled();
+    control.failure = "refresh";
+    const diagnostic = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      const failure = await notify();
+      expect(failure.status).toBe(503);
+      const requestId = failure.headers.get("x-request-id");
+      expect(await failure.json()).toMatchObject({ error: "Catalog refresh failed", requestId });
+      const events = diagnostic.mock.calls.map(([line]) => String(line)).join("");
+      expect(events).toContain(requestId);
+      expect(events).toContain('"operation":"catalog.refresh"');
+      expect(events).toContain('"stage":"catalog.sync"');
+      expect(events).toContain('"causeName":"Error"');
+      expect(events).not.toContain("failed refresh");
+      expect(events).not.toContain("management-secret");
+    } finally {
+      diagnostic.mockRestore();
+    }
+  } finally {
+    await runtime.close();
+  }
 });
 
 test("propagates boot failure and releases partially acquired resources", async () => {

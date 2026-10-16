@@ -275,6 +275,50 @@ function PersonaList({ personas }: { personas: readonly PersonaRecord[] }) {
   );
 }
 
+function PageNotices({
+  error,
+  saved,
+  catalogPending,
+  imageJob,
+  imageJobs,
+  queuePosition,
+  queueObservedAt,
+}: Pick<EditorFields, "imageJob" | "imageJobs" | "queuePosition" | "queueObservedAt"> & {
+  error: string;
+  saved?: boolean;
+  catalogPending?: boolean;
+}) {
+  return (
+    <>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      {saved && <output className="notice success">{copy.saved}</output>}
+      {catalogPending && (
+        <output className="notice">
+          저장된 카탈로그의 메시징 서버 적용을 기다리고 있습니다. 연결이 복구되면 자동으로
+          재시도합니다.
+        </output>
+      )}
+      {imageJob && (
+        <div data-image-progress>
+          {(imageJobs ?? [{ job: imageJob, position: queuePosition! }]).map((entry, index) => (
+            <ImageJobPanel
+              key={entry.job.id}
+              job={entry.job}
+              position={entry.position}
+              now={queueObservedAt!}
+              titleId={index === 0 ? "image-queue-title" : `image-queue-${entry.job.id}`}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function renderPage({
   personas,
   record,
@@ -282,6 +326,7 @@ export function renderPage({
   draft,
   error = "",
   saved,
+  catalogPending,
   seed,
   portraitInstructions,
   portraitOperation,
@@ -304,6 +349,7 @@ export function renderPage({
 }: PageContent & {
   error?: string;
   saved?: boolean;
+  catalogPending?: boolean | undefined;
   inspections?: readonly InspectionRow[];
   contactView?: ContactView;
   versionView?: VersionView;
@@ -357,27 +403,15 @@ export function renderPage({
                 {contactView ? "대기자 선정과 첫 연락 진행 상태를 관리합니다." : copy.description}
               </p>
             </div>
-            {error && (
-              <p className="notice error" role="alert">
-                {error}
-              </p>
-            )}
-            {saved && <output className="notice success">{copy.saved}</output>}
-            {imageJob && (
-              <div data-image-progress>
-                {(imageJobs ?? [{ job: imageJob, position: queuePosition! }]).map(
-                  (entry, index) => (
-                    <ImageJobPanel
-                      key={entry.job.id}
-                      job={entry.job}
-                      position={entry.position}
-                      now={queueObservedAt!}
-                      titleId={index === 0 ? "image-queue-title" : `image-queue-${entry.job.id}`}
-                    />
-                  ),
-                )}
-              </div>
-            )}
+            <PageNotices
+              error={error}
+              saved={saved}
+              catalogPending={catalogPending}
+              imageJob={imageJob}
+              imageJobs={imageJobs}
+              queuePosition={queuePosition}
+              queueObservedAt={queueObservedAt}
+            />
             {versionView ? (
               <VersionPage {...versionView} />
             ) : contactView ? (

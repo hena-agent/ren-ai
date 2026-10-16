@@ -96,7 +96,11 @@ export const createCloudflareApplication = async (
               configuration.bootstrapOnly,
             );
           if (configuration.bootstrapOnly && isWriteRequest(request)) return bootstrapResponse();
-          if (path.startsWith("/rpc") || path.startsWith("/operator/")) {
+          if (
+            path.startsWith("/rpc") ||
+            path.startsWith("/operator/") ||
+            path === "/management/catalog/refresh"
+          ) {
             if (configuration.bootstrapOnly) return bootstrapResponse();
             return (await execution()).fetch(request);
           }

@@ -164,12 +164,12 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
       },
       personas,
     );
-    const refresh = refresher.refresh(fixture.groundRules);
+    const refresh = refresher.refresh(fixture.groundRules).pipe(Effect.catchCause(Effect.logError));
     const watch = () =>
       Effect.forkScoped(
         Effect.gen(function* () {
           while (true) {
-            yield* refresh.pipe(Effect.catchCause(Effect.logError));
+            yield* refresh;
             yield* Effect.sleep("1 second");
           }
         }),

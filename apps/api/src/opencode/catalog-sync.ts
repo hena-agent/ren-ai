@@ -142,23 +142,20 @@ export const catalogRefresher = (
 ) => {
   let revision: string | undefined;
   return {
-    refresh: (groundRules: string) =>
-      withLifecycle(
-        Effect.gen(function* () {
-          const snapshot = yield* Effect.tryPromise(load);
-          const changed = snapshot.revision !== revision;
-          const next = new Map(snapshot.personas);
-          for (const [id, persona] of next) {
-            const current = personas.get(id);
-            if (current && current.description === persona.description)
-              next.set(id, { ...persona, memory: current.memory });
-          }
-          yield* synchronize(client, root, next, groundRules);
-          if (!changed) return;
-          personas.clear();
-          for (const [id, persona] of next) personas.set(id, persona);
-          revision = snapshot.revision;
-        }),
-      ),
+    refresh: Effect.fn("refreshCatalog")(function* (groundRules: string) {
+      const snapshot = yield* Effect.tryPromise(load);
+      const changed = snapshot.revision !== revision;
+      const next = new Map(snapshot.personas);
+      for (const [id, persona] of next) {
+        const current = personas.get(id);
+        if (current && current.description === persona.description)
+          next.set(id, { ...persona, memory: current.memory });
+      }
+      yield* synchronize(client, root, next, groundRules);
+      if (!changed) return;
+      personas.clear();
+      for (const [id, persona] of next) personas.set(id, persona);
+      revision = snapshot.revision;
+    }, withLifecycle),
   };
 };

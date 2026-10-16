@@ -70,8 +70,11 @@ export function catalogClient(connection: CatalogConnection, fetcher: typeof fet
       redirect: "manual",
     });
     if (!response.ok)
-      throw new Error(
-        `Catalog request failed (${response.status}; request ${response.headers.get("x-request-id") ?? "unavailable"})`,
+      throw Object.assign(
+        new Error(
+          `Catalog request failed (${response.status}; request ${response.headers.get("x-request-id") ?? "unavailable"})`,
+        ),
+        { code: "CATALOG_REQUEST_FAILED", upstreamStatus: response.status },
       );
     return response;
   };
