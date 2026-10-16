@@ -139,7 +139,7 @@ test("does not start for rejected operator access; publishes callback before rem
     };
     expect((await runtime.fetch(new Request("https://app/rpc"))).status).toBe(503);
     await runtime.tick();
-    expect(control.requests).toEqual(["https://api-msg.example/imsg/rpc"]);
+    expect(control.requests).toEqual(["https://api-msg.example/imsg/rpc/"]);
     expect(control.callback).toHaveBeenCalledTimes(1);
     expect(control.events).toEqual([
       "catalog",

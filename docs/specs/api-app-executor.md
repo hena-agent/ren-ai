@@ -11,7 +11,7 @@ Status: implementation contract approved in the operator conversation.
 - The Persona Catalog stays in the existing Admin D1. New conversation
   documents use its initial State/Memory; running OpenCode documents continue
   evolving without being reset to initial documents.
-- `api-msg` is a DB-free authenticated Mac execution gateway. It performs
+- `api-msg` is a DB-free authenticated execution gateway in Docker on the Mac. It performs
   OpenCode/imsg operations, but owns no user/admission policy or durable journal.
 - The current `main` has moved the application to `apps/api` and the native
   gateway to `apps/imsg`, and Discovery is now the only onboarding site.
@@ -28,8 +28,10 @@ Status: implementation contract approved in the operator conversation.
 - Cloudflare calls Mac `/imsg/rpc` using `TOKEN_MANAGEMENT`. The Mac forwards the
   existing imsg protocol to fixed `IMSG_URL` using `IMSG_TOKEN`; no protocol change
   is imposed on the independently deployed imsg gateway.
-- Mac `/health` returns safe disk/screen health facts to the application, never
-  credentials, contact details or message contents.
+- Executor `/health` returns its filesystem disk usage and a nullable screen-lock
+  observation, never credentials, contact details or message contents. Docker
+  reports `screenLocked: null` because it cannot inspect the Mac GUI; an unavailable
+  observation must not clear an existing screen-lock alert.
 - Conversation/session IDs and stable operation/tool/message IDs are recorded
   centrally before external effects. A repeated command cannot create a second
   greeting or repeat an uncertain send. The executor does not retry side effects.
@@ -58,8 +60,8 @@ Status: implementation contract approved in the operator conversation.
   reject conflicts. Never assume the running Mac database is empty.
 - Initial Cloudflare application deployment is bootstrap-only. The old intake
   must be paused and state verified before one new intake is enabled.
-- Public default application domain: `api-app.renai.im` in Ambivalent Co.
-  The DB-free Mac execution domain is `api.renai.im`; current upstreams
+- Public default application domain: `api.renai.im` on Cloudflare in Ambivalent Co.
+  The DB-free executor runs in Docker on the Mac at `api-msg.renai.im`; current upstreams
   remain `oc.renai.im` and `imsg.renai.im`. Do not restore retired hostnames.
 - Runtime secrets are server-only; browser Site key remains the GitHub variable.
 - Logs correlate requests/operations and record safe stage/cause/outcome metadata,

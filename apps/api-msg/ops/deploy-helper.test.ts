@@ -41,10 +41,10 @@ const fixture = async (mode: string) => {
   for (const name of payload) await writeFile(join(root, name), `old-${name}`);
   await checksums(root);
   await writeFile(
-    join(root, "bin/bun"),
-    `#!/bin/bash\ncount_file="$API_MSG_PROBE_COUNT"\ncount=$(cat "$count_file" 2>/dev/null || printf '0')\ncount=$((count + 1))\nprintf '%s' "$count" > "$count_file"\ncase "$API_MSG_PROBE_MODE:$count" in all-fail:*|fail-after-first:2) exit 1;; esac\n`,
+    join(bin, "docker"),
+    `#!/bin/bash\ncase "$*" in *' build api-msg') exit 0;; *' up -d --no-deps --wait api-msg') printf '%s\\n' "$*" >> "$LAUNCH_LOG"; exit 0;; esac\ncount_file="$API_MSG_PROBE_COUNT"\ncount=$(cat "$count_file" 2>/dev/null || printf '0')\ncount=$((count + 1))\nprintf '%s' "$count" > "$count_file"\ncase "$API_MSG_PROBE_MODE:$count" in all-fail:*|fail-after-first:2) exit 1;; esac\n`,
   );
-  await chmod(join(root, "bin/bun"), 0o700);
+  await chmod(join(bin, "docker"), 0o700);
   for (const name of payload) {
     const body = name.endsWith(".js") ? `new-${name}` : `new-meta-${name}`;
     await writeFile(join(bundle, name), body);
@@ -89,7 +89,7 @@ const runUpdater = (testCase: Awaited<ReturnType<typeof fixture>>) =>
     encoding: "utf8",
   });
 
-test("api-msg updater verifies main provenance, installs payload and restarts only its own agent", async () => {
+test("api-msg updater verifies main provenance, installs payload and replaces only its Docker service", async () => {
   const state = await fixture("healthy");
   try {
     runUpdater(state);
@@ -98,8 +98,8 @@ test("api-msg updater verifies main provenance, installs payload and restarts on
     expect(await readFile(state.calls, "utf8")).toContain(
       "--source-ref refs/heads/main --source-digest cafef00d --deny-self-hosted-runners",
     );
-    expect(await readFile(state.launches, "utf8")).toContain("gui/");
-    expect(await readFile(state.launches, "utf8")).toContain("im.renai.api-msg");
+    expect(await readFile(state.launches, "utf8")).toContain("up -d --no-deps --wait api-msg");
+    expect(await readFile(state.launches, "utf8")).not.toContain("cloudflared");
   } finally {
     await rm(state.base, { recursive: true, force: true });
   }

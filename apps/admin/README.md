@@ -177,7 +177,7 @@ preparation are never automatically repeated. Inspect the API's recorded
 session/send before recovery; deleting a user through the operator removes the
 registration and releases the assignment.
 
-Set Worker `APPLICATION_API_URL=https://api-app.renai.im` (declared in Wrangler)
+Set Worker `APPLICATION_API_URL=https://api.renai.im` (declared in Wrangler)
 and runtime secret `TOKEN_MANAGEMENT`, matching the application's
 `TOKEN_MANAGEMENT`. Use a different value from `TOKEN_CATALOG`. Tokens remain
 server-side; Admin authenticates the operator and enforces same-origin POSTs.
