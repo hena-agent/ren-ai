@@ -22,6 +22,7 @@ const entry = (state: typeof ContactState.Type = "waiting"): typeof ContactEntry
 const idle = {
   start: vi.fn<ManagementClient["start"]>(),
   refreshCatalog: vi.fn<ManagementClient["refreshCatalog"]>(),
+  languages: vi.fn<ManagementClient["languages"]>(async () => ({})),
 };
 const setup = async (client?: ManagementClient) => {
   const f = await fixture();
@@ -116,10 +117,12 @@ test("a waiting test handle starts now with a chosen liked persona", async () =>
     entries: [scheduled],
   }));
   const { admin } = await setup({
+    ...idle,
     list: async () => ({ entries: [entry(), tester], eligibleCount: 2 }),
     select: async (input) => ({ ...input, requested: input.count, entries: [] }),
     start,
     refreshCatalog: idle.refreshCatalog,
+    languages: idle.languages,
   });
   const page = await (await admin(request("/waitlist"))).text();
   expect(page).toContain("테스트 연락처 바로 시작");

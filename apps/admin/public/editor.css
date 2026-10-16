@@ -367,3 +367,14 @@
     gap: 12px;
   }
 }
+.language-panel {
+  padding: 0.75rem 0;
+  font-size: 0.85rem;
+}
+.language-panel p {
+  color: var(--muted);
+}
+.language-panel code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
