@@ -25,6 +25,7 @@
     "@lezer/highlight": "1.2.5",
     "@ren-ai/onboarding": "workspace:*",
     "@ren-ai/personas": "workspace:*",
+    "@ren-ai/transport": "workspace:*",
     "drizzle-orm": "0.45.4",
     "effect": "4.0.0-rc.112",
     "image-size": "2.0.4",

@@ -13,6 +13,8 @@ const catalog = [
 
 const fakeUpstreams: typeof fetch = async (input) => {
   const url = new URL(input instanceof Request ? input.url : input.toString());
+  if (url.hostname === "api-msg.example" && url.pathname === "/health")
+    return Response.json({ service: "api-msg", revision: "development", status: "ready" });
   if (url.hostname === "admin.example" && url.pathname === "/api/personas")
     return Response.json(catalog);
   if (url.hostname === "admin.example" && url.pathname === "/api/catalog")

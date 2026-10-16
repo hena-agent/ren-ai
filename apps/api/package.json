@@ -14,6 +14,7 @@
     "state:import": "bun ops/import-application-state.ts",
     "build:worker": "bun scripts/build-worker.mjs",
     "deploy": "wrangler deploy",
+    "check:health": "bun ops/check-health.ts",
     "start": "bun run dev",
     "dev": "wrangler dev --config wrangler.jsonc --port ${API_APP_PORT:-4879} --inspector-port ${API_APP_INSPECTOR_PORT:-5879}",
     "opencode:config": "bun run ops/location-config.ts",

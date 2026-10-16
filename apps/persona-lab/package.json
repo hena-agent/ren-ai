@@ -18,6 +18,7 @@
     "@radix-ui/react-dropdown-menu": "2.1.24",
     "@radix-ui/react-select": "2.3.7",
     "@ren-ai/persona-engine": "workspace:*",
+    "@ren-ai/transport": "workspace:*",
     "ai": "7.0.113",
     "react": "19.2.4",
     "react-dom": "19.2.4",

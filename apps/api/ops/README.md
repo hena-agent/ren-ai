@@ -62,6 +62,18 @@ imsg protocol.
 
 ## Discovery and Admin
 
+`GET /health` identifies `api-app` and the exact source revision embedded in the
+Worker. Database readiness and authenticated `api-msg` readiness are separate:
+an unavailable, unauthorized or wrong-service executor makes overall health
+`degraded` (HTTP 503), even while public Catalog reads remain available.
+`bootstrapOnly` reports the intake setting separately. Local runs use revision
+`development`; responses exclude credentials and upstream payloads.
+
+CI checks the running Worker service and exact revision. It records degraded
+dependency health without blocking artifact publication: the Mac updater needs
+the completed CI run before it can install that artifact. Verify executor health
+again after the Mac update before declaring an end-to-end deployment ready.
+
 `renai.im` is the Discovery app in `apps/discovery`, and `admin.renai.im` is the
 Catalog and authoring Worker in `apps/admin`. GitHub Actions deploys both after the
 quality gates; see the [Discover setup](../../../apps/discovery/README.md) and

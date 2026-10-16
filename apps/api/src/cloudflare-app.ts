@@ -8,6 +8,8 @@ import type { CloudflareBindings, CloudflareConfiguration } from "./cloudflare-c
 import { createExecutionRuntime } from "./execution-runtime.ts";
 import { applicationRequest } from "./application-request.ts";
 import { stateTransfer } from "./state-transfer.ts";
+import { healthResponse, probeHealth } from "@ren-ai/transport/health";
+import { contactLog } from "./discovery/diagnostics.ts";
 
 export interface CloudflareApplication {
   readonly store: ApplicationStore;
@@ -20,11 +22,36 @@ export interface CloudflareApplication {
 const isWriteRequest = (request: Request) =>
   request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS";
 
-const health = (bootstrapOnly: boolean) =>
-  Response.json(
-    { database: "ready", storage: "durable-object-sqlite", bootstrapOnly },
-    { headers: { "Cache-Control": "no-store" } },
+const health = async (
+  request: Request,
+  configuration: CloudflareConfiguration,
+  fetcher: typeof fetch,
+) => {
+  const started = performance.now();
+  const executor = await probeHealth(
+    configuration.execution.apiMsgUrl,
+    "api-msg",
+    configuration.execution.managementToken,
+    fetcher,
   );
+  if (executor.status !== "ready")
+    contactLog({
+      requestId: request.headers.get("X-Operation-ID") ?? crypto.randomUUID(),
+      operation: "api-app.health",
+      stage: "executor.probe",
+      outcome: "failed",
+      durationMs: performance.now() - started,
+      level: executor.status === "unauthorized" ? "warn" : "error",
+      code: `executor_${executor.status}`,
+      status: 503,
+    });
+  return healthResponse("api-app", executor.status === "ready" ? "ready" : "degraded", {
+    database: "ready",
+    storage: "durable-object-sqlite",
+    bootstrapOnly: configuration.bootstrapOnly,
+    executor,
+  });
+};
 
 const bootstrapResponse = () =>
   Response.json(
@@ -60,7 +87,7 @@ export const createCloudflareApplication = async (
         applicationRequest(incoming, async (request) => {
           const path = new URL(request.url).pathname;
           if (path === "/health" && request.method === "GET")
-            return health(configuration.bootstrapOnly);
+            return health(request, configuration, fetcher);
           if (path.startsWith("/management/state/"))
             return stateTransfer(
               request,

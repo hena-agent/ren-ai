@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
+import { healthResponse } from "@ren-ai/transport/health";
 
 /** Initialization and DO transport fail outside the application's normal request boundary. */
 export async function applicationTransport(request: Request, run: () => Promise<Response>) {
@@ -18,6 +19,14 @@ export async function applicationTransport(request: Request, run: () => Promise<
       status: 503,
       ...contactCause(cause),
     });
+    if (new URL(request.url).pathname === "/health") {
+      const response = healthResponse("api-app", "degraded", {
+        application: "unavailable",
+        requestId,
+      });
+      response.headers.set("X-Request-ID", requestId);
+      return response;
+    }
     return Response.json(
       { error: "Application is unavailable", requestId },
       { status: 503, headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" } },

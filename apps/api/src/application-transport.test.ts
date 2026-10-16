@@ -21,6 +21,20 @@ test("initialization and transport failure retain correlation and safe cause wit
       error: "Application is unavailable",
       requestId: response.headers.get("x-request-id"),
     });
+    const health = await applicationTransport(
+      new Request("https://app.example/health"),
+      async () => {
+        throw new Error("private initialization failure");
+      },
+    );
+    expect(health.status).toBe(503);
+    expect(await health.json()).toEqual({
+      service: "api-app",
+      revision: "development",
+      status: "degraded",
+      application: "unavailable",
+      requestId: health.headers.get("x-request-id"),
+    });
     const logs = JSON.stringify(stderr.mock.calls);
     expect(logs).toContain("DB_UNAVAILABLE");
     expect(logs).not.toContain("private-credential");

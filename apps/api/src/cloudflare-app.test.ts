@@ -4,7 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import type { Mock } from "vitest";
 import { createCloudflareApplication } from "./cloudflare-app.ts";
 import type { CloudflareBindings } from "./cloudflare-config.ts";
-import { executionBindings } from "../test/execution-bindings.ts";
+import { executionBindings, readyApplicationHealth } from "../test/execution-bindings.ts";
 
 type RuntimeDouble = {
   fetch: Mock<(request: Request) => Promise<Response>>;
@@ -45,7 +45,8 @@ const bindings: CloudflareBindings = {
   TOKEN_MANAGEMENT: "management-token",
   API_MSG_URL: "https://api-msg.example",
 };
-const fetcher: typeof fetch = async () => Response.json({ success: true });
+const fetcher: typeof fetch = async () =>
+  Response.json({ service: "api-msg", revision: "development", status: "ready" });
 const settledRuntime = () => {
   const result = controls.runtime.mock.settledResults.at(-1);
   if (result?.type !== "fulfilled") throw new Error("Execution did not open");
@@ -64,11 +65,7 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
   expect(app.store).toBeDefined();
   expect(app.configuration.bootstrapOnly).toBe(true);
   const health = await app.fetch(new Request("https://api-app.example/health"));
-  expect(await health.json()).toEqual({
-    database: "ready",
-    storage: "durable-object-sqlite",
-    bootstrapOnly: true,
-  });
+  expect(await health.json()).toEqual(readyApplicationHealth);
   expect(health.headers.get("cache-control")).toBe("no-store");
   expect(
     (await app.fetch(new Request("https://api-app.example/management/state/export"))).status,
@@ -148,6 +145,41 @@ test("registry remains usable with execution down; the next alarm retries execut
   await app.tick();
   await app.close();
   expect(controls.closeStore).toHaveBeenCalledOnce();
+});
+
+test("a live database cannot conceal an executor URL serving the wrong application", async () => {
+  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  const app = await createCloudflareApplication(storage, bindings, "rules", async () =>
+    Response.json({
+      service: "old-app",
+      revision: "development",
+      status: "ready",
+      private: "private-marker",
+    }),
+  );
+  try {
+    const response = await app.fetch(new Request("https://api-app.example/health"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    expect(await response.json()).toEqual({
+      service: "api-app",
+      revision: "development",
+      status: "degraded",
+      database: "ready",
+      storage: "durable-object-sqlite",
+      bootstrapOnly: true,
+      executor: { status: "unexpected_response" },
+    });
+    expect(JSON.stringify(stderr.mock.calls)).toContain(response.headers.get("x-request-id"));
+    expect(JSON.stringify(stderr.mock.calls)).toContain("executor_unexpected_response");
+    expect(
+      (await app.fetch(new Request("https://api-app.example/discovery/personas"))).status,
+    ).toBe(200);
+    expect(controls.runtime).not.toHaveBeenCalled();
+  } finally {
+    stderr.mockRestore();
+    await app.close();
+  }
 });
 
 test("closes the SQL store even when execution scope cleanup rejects", async () => {
