@@ -123,11 +123,11 @@ export const catalogRefresher = (
         if (current && current.description === persona.description)
           next.set(id, { ...persona, memory: current.memory });
       }
-      yield* withLifecycle(synchronize(client, root, next, groundRules));
+      yield* synchronize(client, root, next, groundRules);
       if (!changed) return;
       personas.clear();
       for (const [id, persona] of next) personas.set(id, persona);
       revision = snapshot.revision;
-    }),
+    }, withLifecycle),
   };
 };

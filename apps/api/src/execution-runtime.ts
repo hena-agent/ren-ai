@@ -92,8 +92,8 @@ export async function createExecutionRuntime(
     const contacts = yield* firstContacts(host, messages, host.conversations, execution.model);
     const catalogSync = catalogRefresher(host.client, execution.directory, catalog.load, personas);
     return {
+      refreshCatalog: catalogSync.refresh(groundRules),
       tick: Effect.gen(function* () {
-        yield* catalogSync.refresh(groundRules);
         yield* host.heartbeat.intake;
         yield* contacts.tick;
         yield* host.heartbeat.followUps;
@@ -141,6 +141,38 @@ export async function createExecutionRuntime(
         )
       )
         return new Response("Unauthorized", { status: 401 });
+      if (url.pathname === "/management/catalog/refresh") {
+        if (request.method !== "POST")
+          return new Response(null, { status: 405, headers: { Allow: "POST" } });
+        const start = performance.now();
+        const requestId = randomUUID();
+        const fields = { requestId, operation: "catalog.refresh", stage: "catalog.sync" };
+        try {
+          await run((await open()).refreshCatalog);
+          contactLog({
+            ...fields,
+            outcome: "completed",
+            durationMs: performance.now() - start,
+            level: "info",
+          });
+          return new Response(null, { status: 204, headers: { "X-Request-ID": requestId } });
+        } catch (cause) {
+          contactLog({
+            ...fields,
+            ...contactCause(cause),
+            outcome: "failed",
+            durationMs: performance.now() - start,
+            level: "error",
+          });
+          return Response.json(
+            { error: "Catalog refresh failed", requestId },
+            {
+              status: 503,
+              headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" },
+            },
+          );
+        }
+      }
       await open();
       url.pathname = url.pathname.slice("/operator".length);
       return operator!.handler(new Request(url, request));

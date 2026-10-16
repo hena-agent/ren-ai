@@ -12,6 +12,7 @@ opening-line: Say hello
 memory: Remember.
 ---
 You are Sora.
+${revision === "initial" ? "" : "Updated character instructions."}
 
 ## 공개 프로필
 
