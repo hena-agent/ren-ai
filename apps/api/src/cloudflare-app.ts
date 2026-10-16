@@ -29,7 +29,7 @@ const health = async (
   configuration: CloudflareConfiguration,
   fetcher: typeof fetch,
 ) => {
-  const requestId = request.headers.get("X-Operation-ID") ?? crypto.randomUUID();
+  const requestId = request.headers.get("X-Operation-ID")!;
   const databaseStarted = performance.now();
   let database: "ready" | "unavailable" = "ready";
   try {

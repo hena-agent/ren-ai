@@ -1,4 +1,7 @@
 import { fromPartial } from "@total-typescript/shoehorn";
+import { Effect } from "effect";
+import { SqlClient } from "effect/unstable/sql";
+import { SqliteClient } from "@effect/sql-sqlite-node";
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Mock } from "vitest";
@@ -35,7 +38,12 @@ vi.mock("./application-store.ts", () => ({
   createApplicationStore: async () => {
     if (controls.failStore) throw new Error("registry startup failed");
     return {
-      run: controls.storeRun,
+      run: async (effect: Effect.Effect<void, Error, SqlClient.SqlClient>) => {
+        await controls.storeRun();
+        return Effect.runPromise(
+          Effect.scoped(effect).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+        );
+      },
       handler: controls.storeHandler,
       close: controls.closeStore,
     };
@@ -200,41 +208,49 @@ test("registry remains usable with execution down; the next alarm retries execut
   expect(controls.closeStore).toHaveBeenCalledOnce();
 });
 
-test("a live database cannot conceal an executor URL serving the wrong application", async () => {
-  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-  const app = await createCloudflareApplication(storage, bindings, "rules", async () =>
-    Response.json({
-      service: "old-app",
-      revision: "development",
-      status: "ready",
-      private: "private-marker",
-    }),
-  );
-  try {
-    const response = await app.fetch(new Request("https://api-app.example/health"));
-    expect(response.status).toBe(503);
-    expect(response.headers.get("x-request-id")).toBeTruthy();
-    expect(await response.json()).toEqual({
-      service: "api-app",
-      revision: "development",
-      status: "degraded",
-      database: "ready",
-      storage: "durable-object-sqlite",
-      bootstrapOnly: true,
-      executor: { status: "unexpected_response" },
-    });
-    expect(JSON.stringify(stderr.mock.calls)).toContain(response.headers.get("x-request-id"));
-    expect(JSON.stringify(stderr.mock.calls)).toContain("executor_unexpected_response");
-    expect(JSON.stringify(stderr.mock.calls)).not.toContain("private-marker");
-    expect(
-      (await app.fetch(new Request("https://api-app.example/discovery/personas"))).status,
-    ).toBe(200);
-    expect(controls.runtime).not.toHaveBeenCalled();
-  } finally {
-    stderr.mockRestore();
-    await app.close();
-  }
-});
+test.each([200, 401])(
+  "executor HTTP %s failures remain separate from database readiness",
+  async (status) => {
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const app = await createCloudflareApplication(storage, bindings, "rules", async () =>
+      Response.json(
+        {
+          service: "old-app",
+          revision: "development",
+          status: "ready",
+          private: "private-marker",
+        },
+        { status },
+      ),
+    );
+    try {
+      const response = await app.fetch(new Request("https://api-app.example/health"));
+      expect(response.status).toBe(503);
+      expect(response.headers.get("x-request-id")).toBeTruthy();
+      expect(await response.json()).toEqual({
+        service: "api-app",
+        revision: "development",
+        status: "degraded",
+        database: "ready",
+        storage: "durable-object-sqlite",
+        bootstrapOnly: true,
+        executor: { status: status === 401 ? "unauthorized" : "unexpected_response" },
+      });
+      expect(JSON.stringify(stderr.mock.calls)).toContain(response.headers.get("x-request-id"));
+      expect(JSON.stringify(stderr.mock.calls)).toContain(
+        status === 401 ? "executor_unauthorized" : "executor_unexpected_response",
+      );
+      expect(JSON.stringify(stderr.mock.calls)).not.toContain("private-marker");
+      expect(
+        (await app.fetch(new Request("https://api-app.example/discovery/personas"))).status,
+      ).toBe(200);
+      expect(controls.runtime).not.toHaveBeenCalled();
+    } finally {
+      stderr.mockRestore();
+      await app.close();
+    }
+  },
+);
 
 test("closes the SQL store even when execution scope cleanup rejects", async () => {
   const app = await createCloudflareApplication(storage, executionBindings, "rules", fetcher);

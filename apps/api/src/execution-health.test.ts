@@ -85,32 +85,43 @@ test("health checks are rate limited and keep native facts separate from credent
   expect(fetcher.mock.calls[0]![1]?.headers).toEqual({ Authorization: "Bearer management-secret" });
 });
 
-test("health and notification failures record safe diagnostics before recovery", async () => {
-  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(new Response(null, { status: 503 }))
-    .mockResolvedValueOnce(new Response(null, { status: 401 }))
-    .mockRejectedValueOnce("private failure input");
-  try {
-    await run(
-      Effect.gen(function* () {
-        const health = yield* createExecutionHealth(configuration, "https://hook.example", fetcher);
-        yield* health.tick;
-        yield* health.raise("other-alert");
-        const sql = yield* SqlClient.SqlClient;
-        expect(
-          yield* sql`SELECT name FROM application_alert WHERE name = 'executor-unavailable'`,
-        ).toHaveLength(1);
-      }),
-    );
-    const logs = JSON.stringify(stderr.mock.calls);
-    expect(logs).toContain("executor.health");
-    expect(logs).toContain("alert.delivery");
-    expect(logs).toContain('\\"status\\":503');
-    expect(logs).not.toContain("management-secret");
-    expect(logs).not.toContain("private failure input");
-  } finally {
-    stderr.mockRestore();
-  }
-});
+test.each([502, 503, 200])(
+  "health HTTP %s and notification failures record safe diagnostics before recovery",
+  async (status) => {
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        status === 200
+          ? Response.json({ service: "api-msg", revision: "development", status: "degraded" })
+          : new Response(null, { status }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockRejectedValueOnce("private failure input");
+    try {
+      await run(
+        Effect.gen(function* () {
+          const health = yield* createExecutionHealth(
+            configuration,
+            "https://hook.example",
+            fetcher,
+          );
+          yield* health.tick;
+          yield* health.raise("other-alert");
+          const sql = yield* SqlClient.SqlClient;
+          expect(
+            yield* sql`SELECT name FROM application_alert WHERE name = 'executor-unavailable'`,
+          ).toHaveLength(1);
+        }),
+      );
+      const logs = JSON.stringify(stderr.mock.calls);
+      expect(logs).toContain("executor.health");
+      expect(logs).toContain("alert.delivery");
+      expect(logs).toContain(`\\"status\\":${status}`);
+      expect(logs).not.toContain("management-secret");
+      expect(logs).not.toContain("private failure input");
+    } finally {
+      stderr.mockRestore();
+    }
+  },
+);
