@@ -8,6 +8,7 @@ export const readyApplicationHealth = {
   storage: "durable-object-sqlite",
   bootstrapOnly: true,
   executor: { service: "api-msg", revision: "development", status: "ready" },
+  applicationRuntime: { revision: "development", status: "ready" },
 };
 
 export const executionBindings: CloudflareBindings = {
