@@ -72,8 +72,6 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
       if (url.pathname !== "/waitlist" || request.headers.get("origin") !== url.origin)
         throw new PersonaError("invalid", "이 관리 화면에서 제출한 요청만 허용됩니다.");
       const form = await request.formData();
-      if (form.get("confirm") !== "yes")
-        throw new PersonaError("invalid", "선정과 첫 연락 예약을 확인해 주세요.");
       view.selection = await (form.get("action") === "start"
         ? start(form, client)
         : select(form, view, client));

@@ -6,8 +6,8 @@ dist/
 .gates-check/
 .stryker-tmp/
 reports/mutation/
-.env
-.dev.vars
+.env*
+!.env.example
 .wrangler/
 apps/admin/public/pending.js
 apps/persona-lab/data/

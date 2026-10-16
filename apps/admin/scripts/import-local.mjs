@@ -19,7 +19,6 @@ try {
   const source = await readImportSource(directory);
   proxy = await getPlatformProxy({
     configPath: fileURLToPath(new URL("../wrangler.jsonc", import.meta.url)),
-    envFiles: [],
     remoteBindings: false,
   });
   const report = await importCatalog(

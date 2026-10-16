@@ -65,7 +65,7 @@ Admin과 저장 API에는 비밀번호 인증과 동일 출처 폼 제출 검사
 bun dev
 ```
 
-프런트엔드는 `http://127.0.0.1:3867`, api-app은 `http://127.0.0.1:4879`, DB 없는 api-msg executor는 `http://127.0.0.1:4700`이다. Discovery에는 별도 카탈로그 Worker나 4873 listener가 없다. 로컬 서비스 및 개발용 token 설정은 각 앱의 `.env.development`와 Admin의 `.dev.vars`를 사용한다. api-app은 `BOOTSTRAP_ONLY=true`로 시작하므로 공개 목록 조회는 가능하지만 등록 쓰기와 실행은 차단된다.
+프런트엔드는 `http://127.0.0.1:3867`, api-app은 `http://127.0.0.1:4879`, DB 없는 api-msg executor는 `http://127.0.0.1:4700`이다. Discovery에는 별도 카탈로그 Worker나 4873 listener가 없다. 로컬 서비스 및 개발용 token 설정은 각 앱의 `.env.example`을 복사한 `.env` 하나를 사용한다. `TOKEN_CATALOG`는 Admin과 api-app에서, `TOKEN_MANAGEMENT`는 Admin·api-app·api-msg에서 각각 일치시킨다. api-app 예시는 `BOOTSTRAP_ONLY=true`로 시작하므로 공개 목록 조회는 가능하지만 등록 쓰기와 실행은 차단된다.
 
 실제 iMessage API에도 같은 경로를 연결하고 기존 `server.sqlite`에 새 테이블을 추가했다. 공개 배포에서는 실제 Turnstile 키, API URL과 CORS origin을 맞춰야 한다. 기존 사이트는 이후 삭제했다(ADR-0015).
 

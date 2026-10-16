@@ -76,9 +76,9 @@ test("authenticated Admin lists, confirms and displays exclusive selection and r
   expect(page).toContain("private@example.net");
   expect(page).toContain("선정 가능한 대기자");
   const key = /name="requestId" value="([^"]+)"/.exec(page)![1]!;
-  const submitted = await admin(
-    request("/waitlist", { requestId: key, count: "1", confirm: "yes" }),
-  );
+  expect(page).not.toContain('name="confirm"');
+  expect(page).not.toContain("persona.md");
+  const submitted = await admin(request("/waitlist", { requestId: key, count: "1" }));
   expect(submitted.status).toBe(200);
   expect(await submitted.text()).toContain("실제 선정 1명");
   expect(select).toHaveBeenCalledWith({ requestId: key, count: 1 });
@@ -127,7 +127,7 @@ test("a waiting test handle starts now with a chosen liked persona", async () =>
       page,
     )![1]!;
   const fields = { action: "start", requestId: key, registrationID: tester.id, personaID: "harin" };
-  const started = await admin(request("/waitlist", { ...fields, confirm: "yes" }));
+  const started = await admin(request("/waitlist", fields));
   expect(started.status).toBe(200);
   expect(await started.text()).toContain("실제 선정 1명");
   expect(start).toHaveBeenCalledWith({
@@ -135,7 +135,10 @@ test("a waiting test handle starts now with a chosen liked persona", async () =>
     registrationID: tester.id,
     personaID: "harin",
   });
-  for (const invalid of [fields, { ...fields, confirm: "yes", registrationID: "private" }])
+  for (const invalid of [
+    { ...fields, personaID: "" },
+    { ...fields, registrationID: "private" },
+  ])
     expect((await admin(request("/waitlist", invalid))).status).toBe(400);
   expect(start).toHaveBeenCalledTimes(1);
 });
@@ -166,7 +169,6 @@ test("operators select checked waiters with the same scheduling API and keep exa
     action: "select-specific",
     requestId,
     registrationIDs: chosen.id,
-    confirm: "yes",
   };
   const failed = await admin(request("/waitlist", fields));
   expect(failed.status).toBe(503);
@@ -239,7 +241,7 @@ test("a refused or unsupported test start explains the outcome", async () => {
   expect((await malformed.admin(request("/waitlist", input))).status).toBe(503);
 });
 
-test("invalid and cross-origin confirmations never select users", async () => {
+test("invalid and cross-origin submissions never select users", async () => {
   const select = vi.fn<ManagementClient["select"]>(async (input) => ({
     requestId: input.requestId,
     requested: input.count,
@@ -250,11 +252,7 @@ test("invalid and cross-origin confirmations never select users", async () => {
     select,
     ...idle,
   });
-  for (const fields of [
-    { count: "0", confirm: "yes" },
-    { count: "1.5", confirm: "yes" },
-    { count: "1" },
-  ]) {
+  for (const fields of [{ count: "0" }, { count: "1.5" }, { count: "101" }]) {
     expect((await admin(request("/waitlist", { requestId: randomUUID(), ...fields }))).status).toBe(
       400,
     );
