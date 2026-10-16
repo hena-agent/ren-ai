@@ -97,7 +97,15 @@ export function managementClient(
         );
       }
     },
-    select: async (input) => selection(await request("/management/discovery/select", input)),
+    select: async (input) =>
+      selection(
+        await request(
+          input.registrationIDs
+            ? "/management/discovery/select-specific"
+            : "/management/discovery/select",
+          input,
+        ),
+      ),
     start: async (input) => selection(await request("/management/discovery/start", input)),
   };
 }

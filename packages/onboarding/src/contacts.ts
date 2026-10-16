@@ -35,6 +35,13 @@ export const ContactSnapshot = Schema.Struct({
 export const SelectContacts = Schema.Struct({
   requestId: identifier,
   count: Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 100 })),
+  registrationIDs: Schema.optionalKey(
+    Schema.Array(identifier).check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(100),
+      Schema.isUnique(),
+    ),
+  ),
 });
 export const StartContact = Schema.Struct({
   requestId: identifier,

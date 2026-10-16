@@ -126,13 +126,19 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
     const select = (input: typeof SelectContacts.Type, requestId: string) =>
       Effect.gen(function* () {
         const decoded = Schema.decodeUnknownSync(SelectContacts)(input);
+        if (decoded.registrationIDs && decoded.registrationIDs.length !== decoded.count)
+          return yield* Effect.fail(new Error("Selection count must match selected registrations"));
         const [previous] = yield* recorded(decoded.requestId);
         if (previous && previous.requested !== decoded.count)
           return yield* Effect.fail(new Error("Selection request conflict"));
         if (!previous) {
           const now = yield* Clock.currentTimeMillis;
           const { entries, available } = yield* snapshot;
-          const waiting = entries.filter((row) => row.eligible);
+          const waiting = entries.filter(
+            (row) =>
+              row.eligible &&
+              (!decoded.registrationIDs || decoded.registrationIDs.includes(row.id)),
+          );
           yield* sql`INSERT INTO discovery_selection VALUES (${decoded.requestId}, ${decoded.count}, ${now})`;
           let count = 0;
           while (waiting.length && count < decoded.count) {

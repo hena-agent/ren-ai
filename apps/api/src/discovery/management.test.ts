@@ -181,6 +181,40 @@ test("management starts a test handle now, refusing other handles with a correla
   );
 });
 
+test("direct selection validates explicit targets instead of falling back to random selection", async () => {
+  await withContactDatabase(
+    Effect.gen(function* () {
+      const f = yield* contactFixture;
+      const selected = yield* f.register("chosen@example.net");
+      yield* f.register("other@example.net", ["harin"]);
+      const handler = contactManagement(f.store, "secret", () => {});
+      const call = (registrationIDs?: readonly string[]) =>
+        handler(
+          new Request("https://api.test/management/discovery/select-specific", {
+            method: "POST",
+            headers: { Authorization: "Bearer secret" },
+            body: JSON.stringify({
+              requestId: randomUUID(),
+              count: 1,
+              ...(registrationIDs && { registrationIDs }),
+            }),
+          }),
+        );
+      yield* Effect.promise(async () => {
+        for (const ids of [undefined, [], ["bad"], [selected, selected]])
+          expect((await call(ids)).status).toBe(400);
+        const result = await call([selected]);
+        expect(result.status).toBe(200);
+        expect(await result.json()).toMatchObject({
+          requested: 1,
+          entries: [{ id: selected, state: "scheduled" }],
+        });
+      });
+      expect(yield* f.sql`SELECT * FROM discovery_contact`).toHaveLength(1);
+    }),
+  );
+});
+
 test("runtime diagnostics emit JSON and narrow non-Error and unsafe provider metadata", () => {
   expect(contactCause("private payload").causeName).toBe("Error");
   expect(typeof contactCause("private payload").stack).toBe("string");

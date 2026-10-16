@@ -91,6 +91,19 @@ export const contactManagement =
     if (request.method !== "POST") return failure("not_found", 404);
     if (path === "/management/discovery/select")
       return commit("selection", SelectContacts, (input) => store.select(input, requestId));
+    if (path === "/management/discovery/select-specific")
+      return commit(
+        "selection",
+        Schema.Struct({
+          ...SelectContacts.fields,
+          registrationIDs: Schema.Array(SelectContacts.fields.requestId).check(
+            Schema.isMinLength(1),
+            Schema.isMaxLength(100),
+            Schema.isUnique(),
+          ),
+        }),
+        (input) => store.select(input, requestId),
+      );
     if (path === "/management/discovery/start")
       return commit("start", StartContact, (input) => store.start(input, requestId));
     return failure("not_found", 404);
