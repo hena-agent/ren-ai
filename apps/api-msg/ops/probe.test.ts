@@ -77,3 +77,12 @@ test("executor probe hides network error details", async () => {
     probeExecutor("http://127.0.0.1:4700", "private-token", failedFetch),
   ).rejects.toThrow("health request failed");
 });
+
+test.each([null, false])("executor probe accepts screen state %s", async (screenLocked) => {
+  const facts = { diskNearlyFull: false, screenLocked };
+  const fetcher: typeof fetch = async () =>
+    Response.json({ ...facts, service: "api-msg", revision: "development", status: "ready" });
+  await expect(probeExecutor("http://127.0.0.1:4700", "private-token", fetcher)).resolves.toEqual(
+    facts,
+  );
+});

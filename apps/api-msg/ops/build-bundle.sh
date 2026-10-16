@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build portable JavaScript only; Mac Bun is supplied by the one-time installer.
+# Build portable JavaScript; the Docker image supplies the pinned Bun runtime.
 set -euo pipefail
 ops="$(cd "$(dirname "$0")" && pwd)"
 output="${1:?Usage: build-bundle.sh NEW-OUTPUT-DIRECTORY}"

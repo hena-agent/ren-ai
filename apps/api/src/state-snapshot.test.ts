@@ -79,6 +79,25 @@ test("deferred source snapshots commit successful reads and rollback schema fail
   ).rejects.toThrow("Invalid state identifier");
 });
 
+test("state transfers exclude Cloudflare-owned tables without inspecting or restoring them", async () => {
+  const internalTables = Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    for (const name of ["_cf_METADATA", "__cf_KV"]) {
+      yield* sql.unsafe(`CREATE TABLE "${name}" (id INTEGER)`);
+      yield* sql.unsafe(`INSERT INTO "${name}" VALUES (1)`);
+    }
+  });
+  const snapshot = await run(internalTables.pipe(Effect.andThen(exportApplicationState)));
+  expect(snapshot.tables.map((table) => table.name)).not.toContain("_cf_METADATA");
+  expect(snapshot.tables.map((table) => table.name)).not.toContain("__cf_KV");
+  await run(
+    internalTables.pipe(
+      Effect.andThen(importApplicationState(snapshot)),
+      Effect.map((result) => expect(result.repeated).toBe(false)),
+    ),
+  );
+});
+
 test("restore refuses nonempty targets, unknown schemas, incomplete rows and conflicting archives", async () => {
   const empty = await run(exportApplicationState);
   const cases = [

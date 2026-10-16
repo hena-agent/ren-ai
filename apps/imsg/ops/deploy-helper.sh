@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared attested-artifact installer for the unchanged imsg and api-msg services.
+# Attested-artifact installer: native imsg and Docker api-msg.
 set -euo pipefail
 profile="${1:?Usage: deploy-helper.sh imsg|api-msg INSTALLED-HOME}"
 root="${2:?Usage: deploy-helper.sh imsg|api-msg INSTALLED-HOME}"
@@ -16,10 +16,9 @@ case "$profile" in
     ;;
   api-msg)
     artifact=api-msg-bundle
-    gateway="gui/$(id -u)/im.renai.api-msg"
     payload=(api-msg.js api-msg-verify.js api-msg.graph.json api-msg-verify.graph.json artifact.info)
     runtime=(api-msg.js api-msg-verify.js)
-    probe_command=("$root/bin/bun" "--env-file=$root/api-msg.env" "$root/api-msg-verify.js")
+    probe_command=(docker compose -f "$root/compose.yml" exec -T api-msg bun /app/api-msg-verify.js)
     ;;
   *) echo 'Unknown deploy profile' >&2; exit 2 ;;
 esac
@@ -102,7 +101,14 @@ rehash() {
   mv -f "$root/.SHA256SUMS.next" "$root/SHA256SUMS"
 }
 
-restart() { launchctl kickstart -k "$gateway" || true; }
+restart() {
+  if [[ "$profile" == api-msg ]]; then
+    docker compose -f "$root/compose.yml" build api-msg &&
+      docker compose -f "$root/compose.yml" up -d --no-deps --wait api-msg
+  else
+    launchctl kickstart -k "$gateway" || true
+  fi
+}
 
 unchanged=1
 for name in "${runtime[@]}"; do
@@ -144,8 +150,7 @@ else
 fi
 put "$staging/bundle"
 rehash
-restart
-if probe "${DEPLOY_PROBE_ATTEMPTS:-10}"; then
+if restart && probe "${DEPLOY_PROBE_ATTEMPTS:-10}"; then
   printf '%s\n' "$sha" > "$deploy/deployed"
   rm -f "$deploy/deferred"
   if [[ "$profile" == imsg ]]; then
@@ -158,8 +163,7 @@ fi
 log "Probe failed: $(reason)"
 put "$deploy/previous"
 cp -p "$deploy/previous/SHA256SUMS" "$root/SHA256SUMS"
-restart
-if ((healthy)) && probe "${DEPLOY_PROBE_ATTEMPTS:-10}"; then
+if restart && ((healthy)) && probe "${DEPLOY_PROBE_ATTEMPTS:-10}"; then
   printf '%s\n' "$sha" > "$deploy/rejected"
   if [[ "$profile" == imsg ]]; then
     log "Rolled back $sha: its gateway failed the probe; waiting for a newer commit"
