@@ -3,6 +3,7 @@ import { catalogHandler } from "./catalog-handler.ts";
 import type { AdminEnv } from "./cloudflare-admin.ts";
 import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
 import { initialDocuments, portraitImage } from "../test/fixtures.ts";
+import { withPublicProfile } from "@ren-ai/personas/profile";
 
 const fixture = async () => {
   const resources = await cloudflareFixture();
@@ -24,6 +25,10 @@ test("public Catalog reads current image associations, including anime-only and 
   await store.save(
     {
       ...databasePersona,
+      description: withPublicProfile(
+        databasePersona.description!,
+        "안녕하세요. **하린**이에요.\n\n### 기본 정보\n- 직업: 도예가\n\n### 관심사\n- 재즈\n\n### 문답: 완벽한 일요일은?\n책방에 가요.",
+      ),
       published: true,
       imageUrl,
       portraits: { anime: imageUrl },
@@ -41,6 +46,18 @@ test("public Catalog reads current image associations, including anime-only and 
       imageUrl,
       portraits: { anime: imageUrl },
       secondaryPortraits: [{ style: "anime", imageUrl: secondary }],
+      profile: {
+        introduction: "안녕하세요. 하린이에요.",
+        sections: [
+          {
+            type: "basics",
+            title: "기본 정보",
+            items: [{ key: "occupation", label: "직업", value: "도예가" }],
+          },
+          { type: "interests", title: "관심사", items: ["재즈"] },
+          { type: "prompt", question: "완벽한 일요일은?", answer: "책방에 가요." },
+        ],
+      },
     },
   ]);
   await db.exec("DELETE FROM persona_images");
@@ -49,6 +66,20 @@ test("public Catalog reads current image associations, including anime-only and 
   const profiles = await updated.text();
   expect(JSON.parse(profiles)).toMatchObject([{ id: databasePersona.id, imageUrl: "" }]);
   expect(profiles).not.toContain('"portraits"');
+  for (const privateField of ["비공개", "publicProfile", "###", "**", '"state"', '"memory"'])
+    expect(profiles).not.toContain(privateField);
+  await db
+    .prepare("UPDATE persona_versions SET markdown = ? WHERE personaId = ? AND version = 1")
+    .bind(
+      withPublicProfile(databasePersona.description!, "소개.\n\n### 기본 정보\n도예가로 일해요."),
+      databasePersona.id,
+    )
+    .run();
+  const prose = await read();
+  expect(prose.status).toBe(200);
+  expect(await prose.json()).toMatchObject([
+    { profile: { sections: [{ type: "text", title: "기본 정보", body: "도예가로 일해요." }] } },
+  ]);
 });
 
 test("Catalog HTTP separates public profiles and images from the authenticated atomic private snapshot", async () => {

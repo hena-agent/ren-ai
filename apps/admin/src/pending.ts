@@ -14,6 +14,7 @@ export function bindPending(
   bindPortraitDialog(form);
   let pending = false;
   const status = form.querySelector<HTMLOutputElement>("[data-pending]");
+  const improvement = form.querySelector<HTMLOutputElement>("[data-improvement-pending]");
   form.addEventListener("submit", (event) => {
     if (event.defaultPrevented) return;
     if (pending) {
@@ -29,6 +30,7 @@ export function bindPending(
     syncGender(form);
     form.setAttribute("aria-busy", "true");
     const intent = event.submitter?.getAttribute("value");
+    if (improvement && intent === "improve") improvement.textContent = "초안을 개선하고 있습니다…";
     if (
       submitImage &&
       ["generate", "portrait", "subportrait", "regenerate", "retry-image"].includes(String(intent))
@@ -44,6 +46,7 @@ export function bindPending(
     pending = false;
     form.removeAttribute("aria-busy");
     if (status) status.textContent = "";
+    if (improvement) improvement.textContent = "";
   };
   form.ownerDocument.defaultView!.addEventListener("pageshow", reset);
   form.addEventListener("image-queue-error", reset);

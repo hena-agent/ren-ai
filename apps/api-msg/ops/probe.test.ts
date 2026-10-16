@@ -14,7 +14,15 @@ test("executor probe authenticates a real local health response without exposing
       return;
     }
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ diskNearlyFull: false, screenLocked: true }));
+    response.end(
+      JSON.stringify({
+        service: "api-msg",
+        revision: "development",
+        status: "ready",
+        diskNearlyFull: false,
+        screenLocked: false,
+      }),
+    );
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -23,7 +31,7 @@ test("executor probe authenticates a real local health response without exposing
   try {
     await expect(
       probeExecutor(`http://127.0.0.1:${address.port}`, "private-token"),
-    ).resolves.toEqual({ diskNearlyFull: false, screenLocked: true });
+    ).resolves.toEqual({ diskNearlyFull: false, screenLocked: false });
     await expect(probeExecutor(`http://127.0.0.1:${address.port}`, "wrong-token")).rejects.toThrow(
       "401",
     );
@@ -37,6 +45,26 @@ test.each([
   { status: 503, body: "private response text", expected: "503" },
   { status: 200, body: "{}", expected: "invalid" },
   { status: 200, body: "not-json", expected: "invalid" },
+  {
+    status: 200,
+    body: JSON.stringify({ service: "old-api", revision: "development", status: "ready" }),
+    expected: "invalid",
+  },
+  {
+    status: 200,
+    body: JSON.stringify({ service: "api-msg", revision: "a".repeat(40), status: "ready" }),
+    expected: "invalid",
+  },
+  {
+    status: 200,
+    body: JSON.stringify({ service: "api-msg", revision: "development", status: "ready" }),
+    expected: "invalid",
+  },
+  {
+    status: 200,
+    body: JSON.stringify({ service: "api-msg", revision: "development", status: "degraded" }),
+    expected: "invalid",
+  },
 ])("executor probe rejects status $status safely", async ({ status, body, expected }) => {
   const fetcher: typeof fetch = async () => new Response(body, { status });
   await expect(probeExecutor("http://127.0.0.1:4700", "private-token", fetcher)).rejects.toThrow(
@@ -48,4 +76,13 @@ test("executor probe hides network error details", async () => {
   await expect(
     probeExecutor("http://127.0.0.1:4700", "private-token", failedFetch),
   ).rejects.toThrow("health request failed");
+});
+
+test.each([null, false])("executor probe accepts screen state %s", async (screenLocked) => {
+  const facts = { diskNearlyFull: false, screenLocked };
+  const fetcher: typeof fetch = async () =>
+    Response.json({ ...facts, service: "api-msg", revision: "development", status: "ready" });
+  await expect(probeExecutor("http://127.0.0.1:4700", "private-token", fetcher)).resolves.toEqual(
+    facts,
+  );
 });

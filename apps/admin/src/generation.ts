@@ -5,6 +5,7 @@ import policy from "./policy.json";
 import { GenerationError, operation, protect, safeText, validationFailure } from "./logging.ts";
 import { generateCharacter, convertCharacter } from "./character-generation.ts";
 import { generateInitialDocument } from "./initial-generation.ts";
+import { profileWriting } from "./profile-writing.ts";
 
 type Character = {
   readonly name: string;
@@ -20,8 +21,11 @@ export interface ProfileGenerator {
     gender?: NonNullable<PersonaRecord["gender"]>,
   ) => Promise<Character & { initial: InitialDocuments }>;
   introduction: (character: Character) => Promise<string>;
-  profile: (character: Character) => Promise<string>;
-  convert: (character: Character) => Promise<Character & { additions: readonly string[] }>;
+  profile: (character: Character, instructions?: string) => Promise<string>;
+  convert: (
+    character: Character,
+    instructions?: string,
+  ) => Promise<Character & { additions: readonly string[] }>;
   state: (character: Character) => Promise<string>;
   memory: (character: Character) => Promise<string>;
   portrait: (
@@ -221,7 +225,8 @@ export function createProfileGenerator({
   };
   return {
     character: (seed, gender) => generateCharacter(characterRequest, seed, gender),
-    convert: (character) => convertCharacter(characterRequest, character),
+    convert: (character, instructions) =>
+      convertCharacter(characterRequest, character, instructions),
     state: (character) => generateInitialDocument(characterRequest, character.description, "state"),
     memory: (character) =>
       generateInitialDocument(characterRequest, character.description, "memory"),
@@ -240,11 +245,11 @@ export function createProfileGenerator({
         });
       return text;
     },
-    profile: async (character) => {
+    profile: async (character, instructions = "") => {
       const { parts } = await request(
         textModel,
-        "이 Persona가 실제 데이팅 프로필에 올릴 공개 Markdown만 작성해. 첫 문단은 짧은 1인칭 자기소개 필수. 나머지는 그 사람이 원하는 제목·문단·목록·문답을 자유롭게 고르고 ### 제목부터 써. 모든 항목을 채우지 마. 원래 공개하지 않은 취미·개인 정보는 비어 있어도 정상이며 요청 없이 보충하지 마. 내부 수치·숨겨진 특성·생성 지침·상대와의 기억은 공개하지 마. 코드 블록이나 ## 공개 프로필 경계 없이 공개 내용만 반환해.",
-        characterText(character),
+        `현재 공개 글과 운영자가 편집한 사실·말투를 기준으로 공개 프로필을 개선해. 운영자 요청 범위에서만 바꾸고 기존 항목을 중복 추가하지 마. 요청이 비어 있으면 부족한 정보와 구성을 보강해. 코드 블록이나 ## 공개 프로필 경계 없이 공개 Markdown만 반환해.\n${profileWriting}`,
+        `${characterText(character)}\n\nIMPROVEMENT REQUEST:\n${instructions}`,
         "text",
       );
       return visibleText(parts);

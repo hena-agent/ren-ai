@@ -1,6 +1,7 @@
-import { Effect, Layer, Queue, Stream } from "effect";
+import { Effect, Layer, Queue, Stream, Result } from "effect";
 import { RpcServer } from "effect/unstable/rpc";
-import { rpcRouter } from "@ren-ai/transport/server";
+import { authorize, rpcRouter } from "@ren-ai/transport/server";
+import { healthResponse } from "@ren-ai/transport/health";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
 import type { Gestures } from "../gestures/gestures.ts";
 import { messagingApi } from "./protocol.ts";
@@ -55,10 +56,84 @@ export const messageGateway = (messages: Messages, token: string, gestures: Gest
     read: ({ handle }) => gestures.read(handle).pipe(Effect.mapError(String)),
     react: ({ handle, tapback }) => gestures.react(handle, tapback).pipe(Effect.mapError(String)),
   });
-  return rpcRouter(
+  const rpc = rpcRouter(
     RpcServer.layerHttp({ group: messagingApi, path: "/rpc", protocol: "http" }).pipe(
       Layer.provide(handlers),
     ),
     token,
   );
+  const authorizedHealth = authorize(async (request) => {
+    if (request.method !== "GET") {
+      const requestId = crypto.randomUUID();
+      process.stderr.write(
+        `${JSON.stringify({
+          service: "imsg",
+          requestId,
+          operation: "health",
+          stage: "routing",
+          outcome: "rejected",
+          level: "warn",
+          status: 405,
+        })}\n`,
+      );
+      return new Response(null, {
+        status: 405,
+        headers: {
+          Allow: "GET",
+          "Cache-Control": "no-store",
+          "X-Request-ID": requestId,
+        },
+      });
+    }
+    const requestId = crypto.randomUUID();
+    const start = performance.now();
+    const result = await Effect.runPromise(
+      messages
+        .after(0, 1)
+        .pipe(Effect.andThen(gestures.probe()), Effect.timeout("3 seconds"), Effect.result),
+    );
+    if (Result.isFailure(result))
+      process.stderr.write(
+        `${JSON.stringify({
+          service: "imsg",
+          requestId,
+          operation: "health",
+          stage: "messages.probe",
+          outcome: "failed",
+          level: "error",
+          durationMs: performance.now() - start,
+          causeName: result.failure.name === "TimeoutError" ? "TimeoutError" : "Error",
+          ...("code" in result.failure &&
+            typeof result.failure.code === "string" &&
+            /^[A-Z0-9_]{1,64}$/.test(result.failure.code) && { causeCode: result.failure.code }),
+        })}\n`,
+      );
+    const response = healthResponse("imsg", Result.isSuccess(result) ? "ready" : "degraded");
+    response.headers.set("X-Request-ID", requestId);
+    return response;
+  }, token);
+  const health = async (request: Request) => {
+    const response = await authorizedHealth(request);
+    response.headers.set("Cache-Control", "no-store");
+    if (response.headers.has("X-Request-ID")) return response;
+    const requestId = crypto.randomUUID();
+    response.headers.set("X-Request-ID", requestId);
+    process.stderr.write(
+      `${JSON.stringify({
+        service: "imsg",
+        requestId,
+        operation: "health",
+        stage: "authorization",
+        outcome: "rejected",
+        level: "warn",
+        status: response.status,
+      })}\n`,
+    );
+    return response;
+  };
+  return {
+    dispose: rpc.dispose,
+    handler: (request: Request) =>
+      new URL(request.url).pathname === "/health" ? health(request) : rpc.handler(request),
+  };
 };

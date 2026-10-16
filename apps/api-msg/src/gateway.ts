@@ -1,5 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { checkMacHealth, type MacHealth } from "./health.ts";
+import { healthResponse as serviceHealth } from "@ren-ai/transport/health";
+import { checkExecutorHealth, type ExecutorHealth } from "./health.ts";
 
 export type GatewayConfig = {
   managementToken: string;
@@ -13,7 +14,7 @@ type LogFields = Record<string, string | number | string[]>;
 export type GatewayOptions = {
   config: GatewayConfig;
   fetcher?: typeof fetch;
-  health?: () => Promise<MacHealth>;
+  health?: () => Promise<ExecutorHealth>;
   log?: (level: Level, event: LogFields) => void;
   now?: () => number;
   id?: () => string;
@@ -110,7 +111,7 @@ export const createGateway = (options: GatewayOptions) => {
   const opencodeUrl = configuredUrl(config.opencodeUrl);
   const imsgUrl = configuredUrl(config.imsgUrl);
   const fetcher = options.fetcher ?? fetch;
-  const health = options.health ?? checkMacHealth;
+  const health = options.health ?? checkExecutorHealth;
   const now = options.now ?? Date.now;
   const id = options.id ?? randomUUID;
   const log =
@@ -165,6 +166,7 @@ export const createGateway = (options: GatewayOptions) => {
       finish(stage, outcome, response.status, level, error);
       const headers = new Headers(response.headers);
       headers.set("x-request-id", requestId);
+      if (url.pathname === "/health") headers.set("Cache-Control", "no-store");
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -186,7 +188,7 @@ export const createGateway = (options: GatewayOptions) => {
       return healthResponse(health, requestId, complete);
     }
     const isOpenCode = url.pathname.startsWith("/opencode/");
-    const isImsg = url.pathname === "/imsg/rpc";
+    const isImsg = op === "imsg";
     if (isImsg && request.method !== "POST") {
       return complete(
         new Response("Method not allowed", { status: 405 }),
@@ -223,7 +225,7 @@ export const createGateway = (options: GatewayOptions) => {
 
 const operation = (path: string) => {
   if (path.startsWith("/opencode/")) return "opencode";
-  if (path === "/imsg/rpc") return "imsg";
+  if (path === "/imsg/rpc" || path === "/imsg/rpc/") return "imsg";
   if (path === "/health") return "health";
   return "routing";
 };
@@ -237,20 +239,26 @@ type Complete = (
 ) => Response;
 
 const healthResponse = async (
-  health: () => Promise<MacHealth>,
+  health: () => Promise<ExecutorHealth>,
   requestId: string,
   complete: Complete,
 ) => {
   try {
     const facts = await health();
-    return complete(Response.json(facts), "health", "success", "info");
+    const ready = !facts.diskNearlyFull && !facts.screenLocked;
+    return complete(
+      serviceHealth("api-msg", ready ? "ready" : "degraded", facts),
+      "health",
+      ready ? "success" : "degraded",
+      ready ? "info" : "warn",
+    );
   } catch (error) {
     const cause = error instanceof Error ? error : new Error("UnknownError");
     return complete(
-      Response.json(
-        { error: "Health check failed", requestId, ...safeError(cause, "HEALTH_CHECK_FAILED") },
-        { status: 500 },
-      ),
+      serviceHealth("api-msg", "degraded", {
+        error: "Health check failed",
+        requestId,
+      }),
       "health",
       "failure",
       "error",
@@ -290,11 +298,16 @@ const forward = async (
     const level: Level =
       upstream.status >= 500 ? "error" : upstream.status >= 400 ? "warn" : "info";
     const outcome = upstream.status >= 400 ? "http_failure" : "success";
+    const responseHeaders = new Headers(upstream.headers);
+    stripHopByHop(responseHeaders);
+    // Fetch already decodes the body; the upstream's wire metadata no longer applies.
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
     return complete(
       new Response(upstream.body, {
         status: upstream.status,
         statusText: upstream.statusText,
-        headers: upstream.headers,
+        headers: responseHeaders,
       }),
       "upstream",
       outcome,

@@ -14,4 +14,6 @@ export type PersonaStore = Pick<
   | "publicList"
   | "inspect"
   | "importDraft"
+  | "versions"
+  | "version"
 >;

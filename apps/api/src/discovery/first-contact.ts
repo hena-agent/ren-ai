@@ -20,6 +20,7 @@ interface Contact {
   startedAt: number | null;
   requestId: string;
   locale: string;
+  conversationLanguage: string | null;
   consentVersion: string;
   consentAt: number;
 }
@@ -97,7 +98,12 @@ export const firstContacts = (
           yield* host.sessions.prompt({
             sessionID: session.id,
             id: SessionMessage.ID.make(`msg_discovery_${row.id}`),
-            text: conversationStarted(now, persona!.openingLine, persona!.timeZone),
+            text: conversationStarted(
+              now,
+              persona!.openingLine,
+              persona!.timeZone,
+              row.conversationLanguage ?? undefined,
+            ),
           });
         });
         const outcome = yield* Effect.result(execution);
@@ -177,10 +183,11 @@ export const firstContacts = (
     const tick = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const rows =
-        yield* sql<Contact>`SELECT r.id, r.handle, r.locale, r.consent_version AS consentVersion,
+        yield* sql<Contact>`SELECT r.id, r.handle, r.locale, l.conversation_language AS conversationLanguage, r.consent_version AS consentVersion,
       r.created_at AS consentAt, c.persona_id AS personaID, c.session_id AS sessionID, c.state,
       c.started_at AS startedAt, c.request_id AS requestId
-      FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
+       FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
+       LEFT JOIN discovery_language l ON l.registration_id = r.id
       WHERE (c.state = 'scheduled' AND c.scheduled_at <= ${now}) OR c.state IN ('preparing','greeting','review') ORDER BY c.scheduled_at`;
       for (const row of rows) {
         const result = yield* Effect.result(

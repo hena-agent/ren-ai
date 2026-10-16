@@ -101,18 +101,19 @@ test("editor diagnostics select the real error in Persona without a document pre
   expect(() => stale.click()).not.toThrow();
   expect(view.state.selection.main.from).toBe(0);
   expect(form.querySelector("[data-document-mode]")).toBeNull();
-  expect(form.querySelector(".conversion-report")?.textContent).toContain("보강한 설정");
+  expect(form.querySelector(".improvement-diff")?.textContent).toContain("보강한 설정");
   destroyDocumentEditors();
   bindDocumentEditor(document.createElement("form"));
 });
 
-test("source rendering preserves read-only editing and response nonce with shared accessible defaults", () => {
+test("source rendering preserves prompt-only drafts, read-only editing and response nonce with shared accessible defaults", () => {
   document.head.innerHTML = '<meta name="style-nonce" content="test-nonce">';
+  const { description: _description, ...promptOnly } = legacy;
   document.body.innerHTML = renderToStaticMarkup(
     <form>
       <span data-editor-change-state />
       <DocumentEditor
-        persona={{ ...legacy, name: sheet.name, gender: sheet.gender, description: source }}
+        persona={{ ...promptOnly, name: sheet.name, gender: sheet.gender, prompt: source }}
         locked
         editing={false}
         action="/personas"

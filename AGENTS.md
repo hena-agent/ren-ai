@@ -38,6 +38,12 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 This repo enforces seven gates. They are not advisory. `bun run ci` runs all of them and CI blocks on it.
 
+Before running checks, activate the Node version in `.nvmrc` (`nvm use`) and verify it with `node --version`. Vitest uses Node from `PATH`, even when launched through Bun; Node 22 cannot parse OpenCode's `await using` syntax.
+
+Use focused checks during development. Run `bun run ci` once after implementation and final review; batch any fixes, rerun only affected checks, and report unresolved failures.
+
+Serialize coverage and `verify-gates` runs within one checkout. Wait for other runs to finish: Vitest shares its report directory, and `verify-gates` temporarily plants and deletes source fixtures.
+
 | Gate                  | Threshold      | Enforced by                 |
 | --------------------- | -------------- | --------------------------- |
 | Cyclomatic complexity | < 22           | oxlint `eslint/complexity`  |
@@ -82,6 +88,7 @@ The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/
 - Generate self-presentation: photos the persona would choose for a dating profile and a first-person introduction they would actually write. Express private emotional darkness only as a subtle undertone. Vary selfies, friend-taken snapshots, travel/full-body and everyday pictures instead of imposing headshot framing or illustrating internal pathology.
 - New persona creation defaults to female, with the male option disabled in both the UI and creation boundary. Keep the character and image prompts capable of representing either gender; legacy records without a gender continue using their descriptions.
 - When changing authoring or image generation, read the latest workflow section in `docs/specs/persona-discovery-admin.md` for reference, retry and publication behavior.
+- Keep native/primary language background in Persona, operator-approved initial proficiency in State, learned expressions in Memory, and proficiency growth in the individual Conversation's State. Never copy Catalog edits into an existing Conversation. Discovery exposes only initial proficiency and does not translate public persona writing; screen locale, consent locale, and preferred conversation language are separate.
 
 ## Logging
 
@@ -91,6 +98,13 @@ The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/
 - Log a failure's diagnostic once per operation, with a completion summary at the request boundary. Observe each parallel task so a sibling failure remains visible after the request has returned.
 - Keep credentials, authorization headers, signed drafts, handles, conversation text, private persona descriptions, prompts and image bytes/base64 out of logs. Allowlist provider diagnostic fields, redact echoed secrets/private inputs and bound diagnostic strings. Replace payload-bearing schema/JSON errors with a safe summary and retain stack frames separately.
 - Test failure logging through the real request/task boundary: assert correlation, stage/cause metadata and sensitive-data exclusion alongside the existing recovery behavior.
+
+## Service health
+
+- Every HTTP API provides `GET /health` with `service`, `revision` (the full source commit embedded in the running artifact; `development` locally), and `status` (`ready` or `degraded`). Use `@ren-ai/transport/health`; retain the service's authentication boundary and send `Cache-Control: no-store`.
+- Return HTTP 200 for ready and 503 for degraded. Report required dependency readiness separately so a live database cannot conceal an unavailable executor. Keep credentials, user data, private paths and upstream payloads out of health responses.
+- Deployment checks verify the expected service and exact artifact revision, not just HTTP success. Mac post-restart probes require the running artifact's revision and readiness. Artifact publication alone does not prove Mac installation or tunnel routing.
+- Worker CI may verify identity while dependencies are still rolling out: Mac updaters consume completed CI artifacts. Record degraded readiness explicitly and verify it after the Mac update before declaring the end-to-end rollout complete.
 
 ## Ports
 

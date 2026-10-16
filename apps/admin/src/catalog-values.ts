@@ -9,7 +9,6 @@ export const personaContent = (record: PersonaRecord, documents: InitialDocument
   name: record.name,
   gender: record.gender ?? null,
   descriptionVersion: record.descriptionVersion ?? null,
-  markdown: record.description!,
   timeZone: record.timeZone,
   language: record.language,
   openingLine: record.openingLine,

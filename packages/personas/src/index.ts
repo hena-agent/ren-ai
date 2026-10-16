@@ -18,6 +18,13 @@ export {
 export { initialTraits, checkInitialPersona, publicationIssues } from "./publication.ts";
 export { stateStatus } from "./state-diagnostics.ts";
 export {
+  LanguageCode,
+  LanguageProficiency,
+  LanguageBackground,
+  languageBackground,
+  languageSummary,
+} from "./languages.ts";
+export {
   InitialState,
   ConversationState,
   InitialScores,
@@ -28,3 +35,5 @@ export {
   validateInitialDocuments,
   validateInitialMemory,
 } from "./initial.ts";
+export { PersonaVersion, nextPersonaVersion, requireVersion } from "./versions.ts";
+export type { VersionSummary, SaveSnapshot } from "./versions.ts";

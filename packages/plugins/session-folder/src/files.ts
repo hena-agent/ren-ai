@@ -5,8 +5,8 @@ import { Schema } from "effect";
 import type { Persona } from "@ren-ai/personas";
 import { folderSnapshot } from "./protocol.ts";
 import { sessionDirectory } from "./paths.ts";
-import { conversationMemory, readRuntime, runtimeDocuments, memoryToolNames } from "./memory.ts";
-import { lockedMemory } from "./memory-files.ts";
+import { conversationMemory, runtimeDocuments, memoryToolNames } from "./memory.ts";
+import { lockedMemory, readRuntime } from "./memory-files.ts";
 
 export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
@@ -23,6 +23,7 @@ export const loadGroundRules = () =>
 export const renderSnapshot = (persona: Persona, rules: string): typeof folderSnapshot.Type => ({
   persona: {
     id: persona.id,
+    ...(persona.version !== undefined && { version: persona.version }),
     timeZone: persona.timeZone,
     language: persona.language,
     openingLine: persona.openingLine,
@@ -37,8 +38,7 @@ export const renderSnapshot = (persona: Persona, rules: string): typeof folderSn
 const directory = async (path: string) => {
   await mkdir(path, { recursive: true, mode: 0o700 });
   const stat = await lstat(path);
-  if (!stat.isDirectory() || stat.isSymbolicLink())
-    throw new Error("Session folder must be a real directory");
+  if (!stat.isDirectory()) throw new Error("Session folder must be a real directory");
 };
 
 const absent = (error: Error & { code?: string }) => {
@@ -105,21 +105,22 @@ const publish = async (target: string, contents: ReadonlyArray<readonly [string,
 
 export const folderFiles = (root: string) => {
   const path = (folderID: string) => sessionDirectory(root, folderID);
-  const read = async (folderID: string) => {
-    const target = path(folderID);
-    const persona = Schema.decodeUnknownSync(folderSnapshot.fields.persona)(
-      JSON.parse(await readFile(join(target, "persona.json"), "utf8")),
-    );
-    const runtime = await readRuntime(target);
-    const documents = runtime ? runtimeDocuments(runtime) : await readDocuments(target);
-    return {
-      persona,
-      agent: await readFile(join(target, ".opencode", "agents", `${persona.id}.md`), "utf8"),
-      rules: await readFile(join(target, "AGENTS.md"), "utf8"),
-      ...(documents && { documents }),
-      ...(runtime && { runtime }),
-    };
-  };
+  const read = (folderID: string) =>
+    lockedMemory(path(folderID), async () => {
+      const target = path(folderID);
+      const persona = Schema.decodeUnknownSync(folderSnapshot.fields.persona)(
+        JSON.parse(await readFile(join(target, "persona.json"), "utf8")),
+      );
+      const runtime = await readRuntime(target);
+      const documents = runtime ? runtimeDocuments(runtime) : await readDocuments(target);
+      return {
+        persona,
+        agent: await readFile(join(target, ".opencode", "agents", `${persona.id}.md`), "utf8"),
+        rules: await readFile(join(target, "AGENTS.md"), "utf8"),
+        ...(documents && { documents }),
+        ...(runtime && { runtime }),
+      };
+    });
   return {
     path,
     exists: async (folderID: string) => (await lstat(path(folderID)).catch(absent)) !== undefined,
@@ -131,12 +132,15 @@ export const folderFiles = (root: string) => {
       await directory(join(root, "sessions"));
       const prior = await readFile(join(target, "persona.json"), "utf8").catch(absent);
       const existingDocuments = snapshot.documents ? await readDocuments(target) : undefined;
-      if (
-        prior &&
-        Schema.decodeUnknownSync(folderSnapshot.fields.persona)(JSON.parse(prior)).id !==
-          snapshot.persona.id
-      )
+      const previous = prior
+        ? Schema.decodeUnknownSync(folderSnapshot.fields.persona)(JSON.parse(prior))
+        : undefined;
+      if (previous && previous.id !== snapshot.persona.id)
         throw new Error("A session's persona cannot change");
+      if ((previous?.version ?? 0) > (snapshot.persona.version ?? 0))
+        throw new Error(
+          "A session's Persona version cannot go backwards; restore as a new version",
+        );
       await publish(target, [
         [join(".opencode", "agents", `${snapshot.persona.id}.md`), snapshot.agent],
         ["AGENTS.md", snapshot.rules],

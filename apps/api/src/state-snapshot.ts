@@ -34,7 +34,7 @@ const optionalTables = new Set(["failed_turn", "application_alert"]);
 const schemaTables = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const tables = yield* sql<{ name: string }>`SELECT name FROM sqlite_master WHERE type = 'table'
-    AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__cf_%'
+    AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*' AND name NOT GLOB '__cf_*'
     AND name NOT IN ('effect_sql_migrations', 'application_import') ORDER BY name`;
   return yield* Effect.forEach(tables, (table) =>
     Effect.gen(function* () {

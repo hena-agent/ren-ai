@@ -13,7 +13,7 @@ const disabledPlugins = Schema.decodeUnknownSync(
 await writeFile(
   destination,
   locationConfig({
-    callback: process.env["REN_AI_CALLBACK_URL"] ?? "https://api-app.renai.im/rpc",
+    callback: process.env["REN_AI_CALLBACK_URL"] ?? "https://api.renai.im/rpc",
     disabledPlugins,
   }),
   { flag: "wx", mode: 0o600 },

@@ -43,8 +43,8 @@
 
 `bun run ci` passed using the repository-required Bun 1.4.2:
 
-- 1,223 tests passed.
-- 100% statements, branches, functions and lines; 204 files fully covered.
+- 1,322 tests passed after integration with current `main`.
+- 100% statements, branches, functions and lines; 226 files fully covered.
 - Formatting, lint, type checking, dead-code checks, duplication checks,
   exception reporting, Discovery build and gate enforcement checks passed.
 - `git diff --check` passed.

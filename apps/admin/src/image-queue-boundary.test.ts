@@ -199,9 +199,9 @@ test("a second failure keeps the edited prompt on only its failed photo for the 
   try {
     window.document.body.innerHTML = failed;
     expect(
-      [...window.document.querySelectorAll<HTMLTextAreaElement>("dialog textarea")].map(
-        (input) => input.value,
-      ),
+      [
+        ...window.document.querySelectorAll<HTMLTextAreaElement>("[data-portrait-dialog] textarea"),
+      ].map((input) => input.value),
     ).toEqual(["edited failed prompt", "completed sibling"]);
   } finally {
     await window.happyDOM.close();

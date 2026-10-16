@@ -58,7 +58,7 @@ test("request schemas reject missing, empty, duplicate, uncanonical and unsafe s
             { likedPersonaIDs: ["../secret"] },
             { handle: "010-1234-5678" },
             { handle: "A@EXAMPLE.NET" },
-            { locale: "en" },
+            { locale: "de" },
             { turnstileToken: "" },
           ]) {
             const result = await post(web, { ...input, ...changed });

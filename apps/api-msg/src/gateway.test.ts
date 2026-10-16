@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createGateway, type GatewayConfig, type GatewayOptions } from "./gateway.ts";
-import { checkMacHealth, nativeCommand } from "./health.ts";
+import { checkExecutorHealth, nativeCommand } from "./health.ts";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import { gzipSync } from "node:zlib";
 
 const config: GatewayConfig = {
   managementToken: "shared-secret",
@@ -12,6 +15,39 @@ const config: GatewayConfig = {
 const request = (path: string, init: RequestInit = {}) =>
   new Request(`https://gateway.test${path}`, init);
 const authorized = { authorization: "Bearer shared-secret" };
+
+it("forwards fetched compressed JSON without stale wire-encoding headers", async () => {
+  const payload = { version: "2.0.19" };
+  const compressed = gzipSync(JSON.stringify(payload));
+  const server = createServer((_request, response) => {
+    response.writeHead(200, {
+      "content-type": "application/json",
+      "content-encoding": "gzip",
+      "content-length": compressed.length,
+      connection: "close, x-upstream-only",
+      "x-upstream-only": "private-hop",
+    });
+    response.end(compressed);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("OS port allocation failed");
+  try {
+    const handler = createGateway({
+      config: { ...config, opencodeUrl: `http://127.0.0.1:${address.port}` },
+      log: () => {},
+    });
+    const response = await handler(request("/opencode/api/info", { headers: authorized }));
+    expect(response.headers.get("content-encoding")).toBeNull();
+    expect(response.headers.get("content-length")).toBeNull();
+    expect(response.headers.get("x-upstream-only")).toBeNull();
+    expect(await response.json()).toEqual(payload);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
 
 describe("authenticated execution gateway", () => {
   it("rejects browser requests before invoking upstream", async () => {
@@ -33,6 +69,7 @@ describe("authenticated execution gateway", () => {
       );
       expect(response.status).toBe(401);
       expect(response.headers.get("x-request-id")).toBeTruthy();
+      expect(response.headers.get("cache-control")).toBe("no-store");
     },
   );
 
@@ -117,36 +154,39 @@ describe("authenticated execution gateway", () => {
     );
   });
 
-  it("forwards the exact imsg RPC body once with its dedicated bearer credential", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("rpc", { status: 202 }));
-    const handler = createGateway({ config, fetcher });
-    const response = await handler(
-      request("/imsg/rpc", {
-        method: "POST",
-        headers: {
-          ...authorized,
-          "content-type": "application/json",
-          cookie: "private-cookie",
-          host: "forged.test",
-          connection: "x-remove-me, invalid token",
-          "x-remove-me": "hop-value",
-        },
-        body: '{"private":"payload"}',
-      }),
-    );
-    const sent = fetcher.mock.calls[0]?.[0];
-    expect(sent).toBeInstanceOf(Request);
-    if (!(sent instanceof Request)) throw new Error("Expected Request");
-    expect(sent.url).toBe("https://imsg.test/rpc");
-    expect(sent.headers.get("authorization")).toBe("Bearer imsg-secret");
-    expect(sent.headers.get("cookie")).toBeNull();
-    expect(sent.headers.get("host")).not.toBe("forged.test");
-    expect(sent.headers.get("connection")).toBeNull();
-    expect(sent.headers.get("x-remove-me")).toBeNull();
-    expect(await sent.text()).toBe('{"private":"payload"}');
-    expect(response.status).toBe(202);
-    expect(fetcher).toHaveBeenCalledTimes(1);
-  });
+  it.each(["/imsg/rpc", "/imsg/rpc/"])(
+    "forwards the exact RPC body at %s once with its dedicated bearer credential",
+    async (path) => {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("rpc", { status: 202 }));
+      const handler = createGateway({ config, fetcher });
+      const response = await handler(
+        request(path, {
+          method: "POST",
+          headers: {
+            ...authorized,
+            "content-type": "application/json",
+            cookie: "private-cookie",
+            host: "forged.test",
+            connection: "x-remove-me, invalid token",
+            "x-remove-me": "hop-value",
+          },
+          body: '{"private":"payload"}',
+        }),
+      );
+      const sent = fetcher.mock.calls[0]?.[0];
+      expect(sent).toBeInstanceOf(Request);
+      if (!(sent instanceof Request)) throw new Error("Expected Request");
+      expect(sent.url).toBe("https://imsg.test/rpc");
+      expect(sent.headers.get("authorization")).toBe("Bearer imsg-secret");
+      expect(sent.headers.get("cookie")).toBeNull();
+      expect(sent.headers.get("host")).not.toBe("forged.test");
+      expect(sent.headers.get("connection")).toBeNull();
+      expect(sent.headers.get("x-remove-me")).toBeNull();
+      expect(await sent.text()).toBe('{"private":"payload"}');
+      expect(response.status).toBe(202);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("streams upstream body and preserves status and cancellation signal", async () => {
     const controller = new AbortController();
@@ -328,9 +368,12 @@ describe("authenticated execution gateway", () => {
   it("returns only health facts and records check failures in the response", async () => {
     const facts = { diskNearlyFull: false, screenLocked: true };
     const success = createGateway({ config, health: async () => facts });
-    expect(await (await success(request("/health", { headers: authorized }))).json()).toEqual(
-      facts,
-    );
+    expect(await (await success(request("/health", { headers: authorized }))).json()).toEqual({
+      ...facts,
+      service: "api-msg",
+      revision: "development",
+      status: "degraded",
+    });
     const failure = createGateway({
       config,
       health: async () => {
@@ -339,7 +382,7 @@ describe("authenticated execution gateway", () => {
       id: () => "health-1",
     });
     const failed = await failure(request("/health", { headers: authorized }));
-    expect(failed.status).toBe(500);
+    expect(failed.status).toBe(503);
     expect(await failed.text()).not.toContain("secret detail");
     expect(failed.headers.get("x-request-id")).toBe("health-1");
     const errorFailure = createGateway({
@@ -348,7 +391,24 @@ describe("authenticated execution gateway", () => {
         throw new Error("private");
       },
     });
-    expect((await errorFailure(request("/health", { headers: authorized }))).status).toBe(500);
+    expect((await errorFailure(request("/health", { headers: authorized }))).status).toBe(503);
+    const ready = createGateway({
+      config,
+      health: async () => ({ diskNearlyFull: false, screenLocked: null }),
+    });
+    const response = await ready(request("/health", { headers: authorized }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({
+      service: "api-msg",
+      revision: "development",
+      status: "ready",
+    });
+    const diskFull = createGateway({
+      config,
+      health: async () => ({ diskNearlyFull: true, screenLocked: false }),
+    });
+    expect((await diskFull(request("/health", { headers: authorized }))).status).toBe(503);
   });
 
   it("reports native Mac disk and screen checks, failing safely per probe", async () => {
@@ -356,14 +416,20 @@ describe("authenticated execution gateway", () => {
       .fn<(command: string, args: string[]) => Promise<string>>()
       .mockResolvedValueOnce("disk / 80% ok")
       .mockResolvedValueOnce('"CGSSessionScreenIsLocked"=Yes');
-    expect(await checkMacHealth(run)).toEqual({ diskNearlyFull: false, screenLocked: true });
+    expect(await checkExecutorHealth(run, "darwin")).toEqual({
+      diskNearlyFull: false,
+      screenLocked: true,
+    });
     expect(run).toHaveBeenNthCalledWith(1, "/bin/df", ["-Pk", "/"]);
     expect(run).toHaveBeenNthCalledWith(2, "/usr/sbin/ioreg", ["-n", "Root", "-d1"]);
     const broken = vi
       .fn<(command: string, args: string[]) => Promise<string>>()
       .mockRejectedValue(new Error("failed"));
-    expect(await checkMacHealth(broken)).toEqual({ diskNearlyFull: true, screenLocked: false });
-    expect(await checkMacHealth(async () => "Filesystem 90% full")).toEqual({
+    expect(await checkExecutorHealth(broken, "darwin")).toEqual({
+      diskNearlyFull: true,
+      screenLocked: null,
+    });
+    expect(await checkExecutorHealth(async () => "Filesystem 90% full", "darwin")).toEqual({
       diskNearlyFull: true,
       screenLocked: false,
     });

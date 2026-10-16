@@ -64,7 +64,7 @@ in Admin, api-app and api-msg. Replace the example tokens together.
 
 Open http://127.0.0.1:3867 to browse. Profile reads use `/discovery/personas` on api-app on every request, so newly published catalog entries appear without rebuilding Discovery. Owned images retain Admin's publication-checked URLs. Waiting registration uses the same api-app. Local settings live in `apps/admin/.env`, `apps/api/.env` and `apps/api-msg/.env`. `BOOTSTRAP_ONLY=true` allows public profile reads but deliberately blocks registration writes and execution until an operator explicitly enables the cutover.
 
-For public hosting, configure Discovery's `VITE_DISCOVERY_API_URL=https://api-app.renai.im` and real `VITE_TURNSTILE_SITE_KEY`, and api-app's matching `TURNSTILE_SECRET`. api-app serves `/discovery/personas` from the current Admin Catalog and `/discovery/waitlist` through its application Durable Object. Discovery serves browser assets only and opens no separate catalog listener. See the app `.env.example` files for configuration.
+For public hosting, configure Discovery's `VITE_DISCOVERY_API_URL=https://api.renai.im` and real `VITE_TURNSTILE_SITE_KEY`, and api-app's matching `TURNSTILE_SECRET`. api-app serves `/discovery/personas` from the current Admin Catalog and `/discovery/waitlist` through its application Durable Object. Its DB-free executor runs in Docker on the Mac at `api-msg.renai.im`. Discovery serves browser assets only and opens no separate catalog listener. See the app `.env.example` files for configuration.
 
 Quality checks use Node 24 from `.nvmrc` and Bun 1.4.2 from `package.json`.
 The artifact tests enforce the exact Bun version. To use it without changing your

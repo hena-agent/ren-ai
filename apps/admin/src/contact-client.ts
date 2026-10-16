@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { ContactSnapshot, ContactSelection } from "@ren-ai/onboarding";
+import { ContactSnapshot, ContactSelection, ConversationLanguages } from "@ren-ai/onboarding";
 import type { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
@@ -9,6 +9,7 @@ export interface ManagementClient {
   select: (input: typeof SelectContacts.Type) => Promise<typeof ContactSelection.Type>;
   start: (input: typeof StartContact.Type) => Promise<typeof ContactSelection.Type>;
   refreshCatalog: () => Promise<void>;
+  languages: (registrationID: string) => Promise<typeof ConversationLanguages.Type>;
 }
 
 async function selection(response: Response) {
@@ -87,6 +88,20 @@ export function managementClient(
     return response;
   };
   return {
+    languages: async (registrationID) => {
+      const response = await request(
+        `/operator/languages?registrationID=${encodeURIComponent(registrationID)}`,
+      );
+      try {
+        return Schema.decodeUnknownSync(ConversationLanguages)(await response.json());
+      } catch (cause) {
+        throw validationFailure(
+          "현재 언어 실력 응답이 올바르지 않습니다.",
+          { code: "management_schema" },
+          cause,
+        );
+      }
+    },
     list: async () => {
       const response = await request("/management/discovery");
       try {

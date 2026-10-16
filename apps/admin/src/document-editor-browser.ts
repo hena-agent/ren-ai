@@ -7,6 +7,8 @@ import { PublicPersonaPreview } from "./public-persona-preview.tsx";
 import { markdownEditor } from "./markdown-editor.ts";
 import { bindDocumentTabs } from "./document-tabs.ts";
 import { updateEditorDiagnostics } from "./editor-diagnostics.ts";
+import { bindDocumentTools } from "./document-tools-browser.ts";
+import { LanguagePanel } from "./language-panel.tsx";
 
 const Images = Schema.Array(
   Schema.Struct({ style: Schema.Literals(["anime", "photo"]), imageUrl: Schema.String }),
@@ -50,8 +52,10 @@ export function bindDocumentEditor(form: HTMLFormElement) {
   const label = editor.querySelector<HTMLElement>("[data-document-status]")!;
   const window = form.ownerDocument.defaultView!;
   const view = markdownEditor(editor.querySelector<HTMLElement>("[data-markdown-editor]")!, source);
+  bindDocumentTools(editor, view);
   const state = form.querySelector<HTMLTextAreaElement>('[name="stateSource"]')!;
   const memory = form.querySelector<HTMLTextAreaElement>('[name="memorySource"]')!;
+  const languages = createRoot(editor.querySelector<HTMLElement>("[data-language-panel]")!);
   const initialViews = [state, memory].map((field) => {
     field.hidden = true;
     return markdownEditor(
@@ -79,8 +83,6 @@ export function bindDocumentEditor(form: HTMLFormElement) {
     );
     editor.dataset["format"] = result.state;
     label.textContent = result.label;
-    editor.querySelector<HTMLButtonElement>("[data-document-convert]")!.hidden =
-      result.state === "valid" || result.state === "empty";
     updateEditorDiagnostics(
       view,
       source,
@@ -89,6 +91,13 @@ export function bindDocumentEditor(form: HTMLFormElement) {
       () => selectTab("persona"),
     );
     const stateResult = stateStatus(state.value, source.value);
+    languages.render(
+      createElement(LanguagePanel, {
+        source: source.value,
+        documents: { state: state.value, memory: memory.value },
+        locked: source.readOnly || result.state !== "valid",
+      }),
+    );
     const statePane = form.querySelector<HTMLElement>("#pane-state")!;
     statePane.dataset["stateFormat"] = stateResult.state;
     statePane.querySelector<HTMLElement>("[data-state-status]")!.textContent = stateResult.label;
@@ -140,6 +149,7 @@ export function bindDocumentEditor(form: HTMLFormElement) {
     form.removeEventListener("input", schedule);
     form.removeEventListener("photos-updated", update);
     preview?.unmount();
+    languages.unmount();
     for (const current of [view, ...initialViews]) current.destroy();
     editors.delete(form);
   });

@@ -46,10 +46,12 @@ import { html } from "./html-response.ts";
 import { generationFailureMessage } from "./generation-failure.ts";
 import { imageJobRoute } from "./image-job-routes.ts";
 import { uploadRoute } from "./upload-route.ts";
+import { versionRoutes } from "./version-routes.ts";
 const documentFields = (draft: Draft) => ({
   documents: documentsOf(draft),
   tab: draft.tab,
   showIdea: Boolean(draft.characterPending),
+  improvementInput: draft.improvementInput,
 });
 export function createAdmin(
   store: PersonaStore,
@@ -160,7 +162,7 @@ export function createAdmin(
         if (valid.published && !valid.imageUrl)
           throw new PersonaError("invalid", "공개하려면 소개와 프로필 이미지가 필요합니다.");
         const documents = documentsOf(draft);
-        await operation("persona.save", {}, () =>
+        const saved = await operation("persona.save", {}, () =>
           store.save(valid, documents, {
             persona: draft.base,
             ...(draft.initial?.base && { initial: draft.initial.base }),
@@ -169,8 +171,8 @@ export function createAdmin(
         );
         subDrafts.set(draft.id, {
           id: draft.id,
-          base: serializePersona(valid),
-          preview: serializePersona(valid),
+          base: serializePersona(saved),
+          preview: serializePersona(saved),
           initial: { base: documents, preview: documents },
         });
         return new Response(null, {
@@ -207,12 +209,6 @@ export function createAdmin(
             conversion: draft.conversion,
           }),
         );
-      if (
-        intent === "convert" &&
-        (persona.name !== previewOf(draft, emptyPersona).name ||
-          persona.gender !== previewOf(draft, emptyPersona).gender)
-      )
-        throw new PersonaError("invalid", copy.identityError);
       if (!generator) return unconfigured(persona, draft);
       const next = await generateTextDraft(persona, draft, intent, generator);
       await assertSnapshot(store, draft);
@@ -427,6 +423,14 @@ export function createAdmin(
         return contactRoutes(request, management);
       if (url.pathname === "/upload-image")
         return await uploadRoute(request, url, store, tokens, subDrafts, busy, queue.pending);
+      const versionResponse = await versionRoutes(request, url, {
+        store,
+        tokens,
+        drafts: subDrafts,
+        busy,
+        pending: queue.pending,
+      });
+      if (versionResponse) return versionResponse;
       const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
       if (resource) return resource;
       const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/(?:retry|delete|clear))?$/.exec(url.pathname);

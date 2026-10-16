@@ -130,6 +130,7 @@ test("a pending registration cannot repeat, and failure retains the form for a f
   expect(submit).toHaveBeenLastCalledWith({
     handle: "ena.user@example.net",
     locale: "ko",
+    conversationLanguage: "ko",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["ena"],
     turnstileToken: "fresh",

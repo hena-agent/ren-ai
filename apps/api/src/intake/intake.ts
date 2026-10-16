@@ -265,6 +265,8 @@ export const intake = (
       }
       yield* queue.drain(receive);
     });
+    // Live notifications and periodic polls share the admission cursor. Edit
+    // observation stays outside this lock because it can itself deliver a reset.
     const heartbeat = Effect.all([pollLock.withPermit(poll), changes.poll], {
       concurrency: "unbounded",
     }).pipe(Effect.asVoid);

@@ -10,6 +10,35 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+test("the browser validates structured profiles, discards Markdown payloads and accepts the deployed older shape", async () => {
+  const persona = { id: "first", name: "하린", bio: "소개", imageUrl: "" };
+  const profile = {
+    introduction: "내가 쓴 소개예요.",
+    sections: [{ type: "interests", title: "관심사", items: ["재즈"] }],
+  };
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetcher);
+  const signal = new AbortController().signal;
+  fetcher.mockResolvedValueOnce(
+    Response.json([{ ...persona, profile, publicProfile: "obsolete Markdown", prompt: "private" }]),
+  );
+  expect(await discoveryClient.profiles(signal)).toEqual([{ ...persona, profile }]);
+  fetcher.mockResolvedValueOnce(
+    Response.json([{ ...persona, publicProfile: "old public Markdown" }]),
+  );
+  expect(await discoveryClient.profiles(signal)).toEqual([persona]);
+  for (const sections of [
+    [{ type: "interests", title: "관심사", items: "재즈" }],
+    [{ type: "prompt", question: "질문", answer: "" }],
+    [{ type: "html", body: "<script>bad()</script>" }],
+  ]) {
+    fetcher.mockResolvedValueOnce(
+      Response.json([{ ...persona, profile: { ...profile, sections } }]),
+    );
+    await expect(discoveryClient.profiles(signal)).rejects.toThrow(/profile/);
+  }
+});
+
 test("a later profile read requests api-app again and includes newly published personas", async () => {
   const profile = { id: "first", name: "First", bio: "Public profile", imageUrl: "" };
   const added = { ...profile, id: "added", name: "Added" };
@@ -110,7 +139,7 @@ test("choices survive a reload and corrupt or inaccessible browser storage is sa
 });
 
 test("profiles and registration use api-app while portraits retain their catalog origin", async () => {
-  vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api-app.renai.im/");
+  vi.stubEnv("VITE_DISCOVERY_API_URL", "https://api.renai.im/");
   vi.resetModules();
   const { discoveryClient: deployed } = await import("./client.ts");
   const imageUrl =
@@ -162,7 +191,7 @@ test("profiles and registration use api-app while portraits retain their catalog
     anime: "https://photos.example.net/mixed/",
     photo: imageUrl,
   });
-  expect(fetcher.mock.calls[0]?.[0]).toBe("https://api-app.renai.im/discovery/personas");
+  expect(fetcher.mock.calls[0]?.[0]).toBe("https://api.renai.im/discovery/personas");
   fetcher.mockResolvedValueOnce(Response.json({ status: "waiting" }));
   expect(
     await deployed.join({
@@ -173,7 +202,7 @@ test("profiles and registration use api-app while portraits retain their catalog
       turnstileToken: "verified",
     }),
   ).toEqual({ status: "waiting" });
-  expect(fetcher.mock.calls[1]?.[0]).toBe("https://api-app.renai.im/discovery/waitlist");
+  expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.renai.im/discovery/waitlist");
   vi.unstubAllEnvs();
   vi.resetModules();
 });

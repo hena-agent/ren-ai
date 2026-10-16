@@ -7,6 +7,7 @@ declare global {
         element: HTMLElement,
         options: {
           sitekey: string;
+          language?: string;
           callback: (token: string) => void;
           "expired-callback": () => void;
           "error-callback": () => void;
@@ -21,9 +22,11 @@ declare global {
 export function Turnstile({
   onToken,
   siteKey,
+  language,
 }: {
   onToken: (token: string | null) => void;
   siteKey: string;
+  language?: "ko" | "en" | "ja";
 }) {
   const element = useRef<HTMLDivElement>(null);
 
@@ -34,6 +37,7 @@ export function Turnstile({
       if (window.turnstile) {
         widget = window.turnstile.render(element.current!, {
           sitekey: siteKey,
+          ...(language && { language }),
           callback: onToken,
           "expired-callback": () => onToken(""),
           "error-callback": fail,
@@ -59,7 +63,7 @@ export function Turnstile({
       script.removeEventListener("error", fail);
       script.remove();
     };
-  }, [onToken, siteKey]);
+  }, [onToken, siteKey, language]);
 
   return <div ref={element} />;
 }

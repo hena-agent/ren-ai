@@ -7,6 +7,7 @@ import { modelReply } from "../test/sub-portraits.ts";
 import { deferred, queuedRequest, jobUrl, finishedJob } from "../test/queue.ts";
 import { checkInitialPersona, parseInitialState } from "@ren-ai/personas";
 import policy from "./initial-policy.json";
+import { serializeInitialState } from "@ren-ai/personas";
 
 const path = "/personas/harin";
 const token = async (admin: Awaited<ReturnType<typeof initialFixture>>["admin"]) =>
@@ -21,6 +22,64 @@ async function fields(setup: Awaited<ReturnType<typeof initialFixture>>) {
     memorySource: initialDocs.memory,
   };
 }
+
+test("language-only AI proposals preserve all other initial values, Memory and photos until an operator saves", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+    modelReply(
+      JSON.stringify({
+        ...scores,
+        affection: 99,
+        languageProficiency: { ko: "fluent", en: "beginner" },
+      }),
+    ),
+  );
+  const setup = await initialFixture(createProfileGenerator({ key: "private-key", fetcher }));
+  const original = await setup.store.get("harin");
+  const submitted = await fields(setup);
+  const response = await setup.admin(request(path, { ...submitted, intent: "languages" }));
+  expect(response.status).toBe(200);
+  const markup = await response.text();
+  expect(markup).toContain("영어 — 입문");
+  const draft = draftTokens("test-password").decode(tokenOf(markup));
+  const proposed = documentsOf(draft);
+  expect(parseInitialState(proposed.state)).toEqual({
+    ...parseInitialState(initialDocs.state),
+    languageProficiency: { ko: "fluent", en: "beginner" },
+  });
+  expect(proposed.memory).toBe(initialDocs.memory);
+  expect(await setup.store.initial("harin")).toBeUndefined();
+  const edited = serializeInitialState({
+    ...parseInitialState(proposed.state),
+    languageProficiency: { ko: "fluent", en: "conversational" },
+  });
+  expect(
+    (
+      await setup.admin(
+        request(path, {
+          ...submitted,
+          draft: tokenOf(markup),
+          stateSource: edited,
+          intent: "save",
+        }),
+      )
+    ).status,
+  ).toBe(303);
+  expect(
+    parseInitialState((await setup.store.initial("harin"))!.state).languageProficiency?.["en"],
+  ).toBe("conversational");
+  expect((await setup.store.get("harin")).portraits).toEqual(original.portraits);
+  expect(JSON.stringify(setup.logs)).not.toContain("languageProficiency");
+});
+
+test("an absent language proposal leaves the previous documents available for retry", async () => {
+  const setup = await initialFixture();
+  const response = await setup.admin(
+    request(path, { ...(await fields(setup)), intent: "languages" }),
+  );
+  expect(response.status).toBe(400);
+  expect(await response.text()).toContain("제안된 언어 실력이 없습니다");
+  expect(await setup.store.initial("harin")).toBeUndefined();
+});
 
 test("three documents save together and both initial downloads require authentication", async () => {
   const setup = await initialFixture();
