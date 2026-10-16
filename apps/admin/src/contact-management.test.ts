@@ -140,6 +140,71 @@ test("a waiting test handle starts now with a chosen liked persona", async () =>
   expect(start).toHaveBeenCalledTimes(1);
 });
 
+test("operators select checked waiters with the same scheduling API and keep exact retry targets", async () => {
+  const chosen = entry();
+  const reserved = entry("scheduled");
+  const select = vi
+    .fn<ManagementClient["select"]>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementation(async (input) => ({
+      requestId: input.requestId,
+      requested: input.count,
+      entries: [],
+    }));
+  const { admin } = await setup({
+    list: async () => ({ entries: [chosen, reserved], eligibleCount: 1 }),
+    select,
+    ...idle,
+  });
+  const page = await (await admin(request("/waitlist"))).text();
+  expect(page).toContain("대기자 직접 선정");
+  expect(page).toContain('form="contact-direct-selection"');
+  expect(page).toContain(`name="registrationIDs" value="${chosen.id}"`);
+  expect(page).toContain(`disabled="" name="registrationIDs" value="${reserved.id}"`);
+  const requestId = randomUUID();
+  const fields = {
+    action: "select-specific",
+    requestId,
+    registrationIDs: chosen.id,
+    confirm: "yes",
+  };
+  const failed = await admin(request("/waitlist", fields));
+  expect(failed.status).toBe(503);
+  const retry = await failed.text();
+  expect(retry).toContain("같은 직접 선정 요청 확인");
+  expect(retry).toContain(`name="registrationIDs" value="${chosen.id}"`);
+  expect(retry).toContain(`name="requestId" value="${requestId}"`);
+  expect((await admin(request("/waitlist", fields))).status).toBe(200);
+  expect(select).toHaveBeenLastCalledWith({ requestId, count: 1, registrationIDs: [chosen.id] });
+  expect((await admin(request("/waitlist", { ...fields, registrationIDs: "" }))).status).toBe(400);
+});
+
+test("direct selections use a separate endpoint so an older API cannot randomly select other waiters", async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ requestId: randomUUID(), requested: 1, entries: [] }))
+    .mockResolvedValueOnce(Response.json({ entries: [], eligibleCount: 0 }));
+  const client = managementClient("https://api.test", "secret-token", fetcher);
+  const input = { requestId: randomUUID(), count: 1, registrationIDs: [randomUUID()] };
+  const { admin } = await setup(client);
+  expect(
+    (
+      await admin(
+        request("/waitlist", {
+          action: "select-specific",
+          requestId: input.requestId,
+          registrationIDs: input.registrationIDs[0]!,
+          confirm: "yes",
+        }),
+      )
+    ).status,
+  ).toBe(200);
+  expect(fetcher.mock.calls[0]?.[0]).toEqual(
+    new URL("https://api.test/management/discovery/select-specific"),
+  );
+  expect(fetcher.mock.calls[0]?.[1]?.body).toBe(JSON.stringify(input));
+});
+
 test("a refused or unsupported test start explains the outcome", async () => {
   const input = {
     action: "start",

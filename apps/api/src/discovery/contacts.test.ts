@@ -83,6 +83,39 @@ test("a waiting test handle starts now with its chosen available Like, once per 
   );
 });
 
+test("direct selection only reserves checked eligible registrations with the normal random delay", async () => {
+  await withContactDatabase(
+    Effect.gen(function* () {
+      const { store, register, sql } = yield* contactFixture;
+      const checked = yield* register("checked@example.net", ["luna", "harin"]);
+      const blocked = yield* register("blocked@example.net", ["jiwoo"]);
+      const unchecked = yield* register("unchecked@example.net", ["jiwoo"]);
+      yield* sql`INSERT INTO blocked VALUES ('blocked@example.net', 1)`;
+      const input = {
+        requestId: randomUUID(),
+        count: 3,
+        registrationIDs: [checked, blocked, randomUUID()],
+      };
+      const before = Date.now();
+      const selected = yield* store.select(input, "direct-request");
+      expect(selected.requested).toBe(3);
+      expect(selected.entries.map((row) => row.id)).toEqual([checked]);
+      expect(["luna", "harin"]).toContain(selected.entries[0]!.persona!.id);
+      expect(selected.entries[0]!.state).toBe("scheduled");
+      expect(selected.entries[0]!.scheduledAt).toBeGreaterThanOrEqual(before + 300_000);
+      expect(selected.entries[0]!.scheduledAt).toBeLessThanOrEqual(Date.now() + 3_600_000);
+      expect(yield* store.select(input, "retry")).toEqual(selected);
+      expect((yield* store.list).entries.find((row) => row.id === unchecked)?.eligible).toBe(true);
+      expect(yield* sql`SELECT * FROM discovery_contact`).toHaveLength(1);
+      expect(
+        yield* store
+          .select({ ...input, requestId: randomUUID(), count: 1 }, "mismatch")
+          .pipe(Effect.flip),
+      ).toEqual(new Error("Selection count must match selected registrations"));
+    }),
+  );
+});
+
 test("a test start that loses its persona to a concurrent claim leaves no reservation", async () => {
   await withContactDatabase(
     Effect.gen(function* () {

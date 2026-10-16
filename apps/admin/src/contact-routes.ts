@@ -10,17 +10,29 @@ import { GenerationError, operation, reportFailure, requestId } from "./logging.
 
 const select = (form: FormData, view: ContactView, client: ManagementClient) => {
   let input: typeof SelectContacts.Type;
+  const specific = form.get("action") === "select-specific";
+  const registrationIDs = form.getAll("registrationIDs");
   try {
     input = Schema.decodeUnknownSync(SelectContacts)({
       requestId: form.get("requestId"),
-      count: Number(form.get("count")),
+      count: specific ? registrationIDs.length : Number(form.get("count")),
+      ...(specific && { registrationIDs }),
     });
   } catch {
-    throw new PersonaError("invalid", "선정 인원은 1~100 사이 정수여야 합니다.");
+    throw new PersonaError(
+      "invalid",
+      "선정 인원은 1~100 사이 정수여야 하며, 직접 선정할 대기자는 1~100명 골라 주세요.",
+    );
   }
-  view.requestId = input.requestId;
-  view.count = input.count;
-  view.attempted = true;
+  if (input.registrationIDs) {
+    view.directRequestId = input.requestId;
+    view.registrationIDs = input.registrationIDs;
+    view.directAttempted = true;
+  } else {
+    view.requestId = input.requestId;
+    view.count = input.count;
+    view.attempted = true;
+  }
   return operation("management.select", {}, () => client.select(input));
 };
 
@@ -45,6 +57,8 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
     tab: url.pathname === "/waitlist" ? "waitlist" : "first-contacts",
     requestId: randomUUID(),
     startRequestId: randomUUID(),
+    directRequestId: randomUUID(),
+    registrationIDs: [],
     count: 1,
   };
   const render = (error = "", status = 200) =>

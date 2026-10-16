@@ -9,6 +9,9 @@ export interface ContactView {
   tab: "waitlist" | "first-contacts";
   requestId: string;
   startRequestId: string;
+  directRequestId: string;
+  registrationIDs: readonly string[];
+  directAttempted?: boolean;
   count: number;
   attempted?: boolean;
   snapshot?: typeof ContactSnapshot.Type;
@@ -38,13 +41,20 @@ const time = (at: number) =>
     timeStyle: "short",
     timeZone: "Asia/Seoul",
   }).format(at);
-function Rows({ entries }: { entries: readonly (typeof ContactEntry.Type)[] }) {
+function Rows({
+  entries,
+  selection,
+}: {
+  entries: readonly (typeof ContactEntry.Type)[];
+  selection?: ContactView;
+}) {
   return (
     <div className="contact-table">
       <table>
         <caption>연락처·Like·배정·첫 연락 상태</caption>
         <thead>
           <tr>
+            {selection && <th scope="col">선정</th>}
             <th scope="col">연락처 / 등록</th>
             <th scope="col">Like한 페르소나</th>
             <th scope="col">배정 / 예정 시각</th>
@@ -54,6 +64,21 @@ function Rows({ entries }: { entries: readonly (typeof ContactEntry.Type)[] }) {
         <tbody>
           {entries.map((entry) => (
             <tr key={entry.id}>
+              {selection && (
+                <td>
+                  <label className="contact-confirm">
+                    <input
+                      type="checkbox"
+                      name="registrationIDs"
+                      value={entry.id}
+                      form="contact-direct-selection"
+                      aria-label={`${entry.handle} 선정`}
+                      defaultChecked={selection.registrationIDs.includes(entry.id)}
+                      disabled={!entry.eligible || selection.directAttempted}
+                    />
+                  </label>
+                </td>
+              )}
               <th scope="row">
                 <span className="contact-handle">{entry.handle}</span>
                 {entry.testHandle && <small>테스트 연락처</small>}
@@ -122,6 +147,39 @@ function TestStarts({
     </section>
   );
 }
+function DirectSelection({ view }: { view: ContactView }) {
+  return (
+    <form
+      id="contact-direct-selection"
+      action="/waitlist"
+      method="post"
+      className="contact-selection"
+    >
+      <h2>대기자 직접 선정</h2>
+      <p>
+        아래 목록에서 대기자를 선택하세요. Like한 페르소나를 무작위로 배정하고, 동일하게 5분~1시간
+        뒤 첫 연락을 예약합니다.
+      </p>
+      <input type="hidden" name="action" value="select-specific" />
+      <input type="hidden" name="requestId" value={view.directRequestId} />
+      {view.directAttempted &&
+        view.registrationIDs.map((id) => (
+          <input key={id} type="hidden" name="registrationIDs" value={id} />
+        ))}
+      <label className="contact-confirm">
+        <input type="checkbox" name="confirm" value="yes" required /> 선택한 대기자의 독점 배정·첫
+        연락 예약을 실행합니다.
+      </label>
+      <button type="submit" disabled={!view.directAttempted && !view.snapshot?.eligibleCount}>
+        {view.directAttempted ? "같은 직접 선정 요청 확인" : "선택한 대기자 선정하기"}
+      </button>
+      <p className="hint">
+        선정 시점에 배정 가능한 선택 인원만 처리합니다. 실패 시 같은 요청으로 재시도하며, 선택하지
+        않은 대기자는 선정하지 않습니다.
+      </p>
+    </form>
+  );
+}
 export function ContactPage({ view }: { view: ContactView }) {
   const entries = view.snapshot?.entries.filter(
     (row) => view.tab === "waitlist" || row.state !== "waiting",
@@ -167,6 +225,7 @@ export function ContactPage({ view }: { view: ContactView }) {
       {view.tab === "waitlist" && view.snapshot && (
         <TestStarts entries={view.snapshot.entries} requestId={view.startRequestId} />
       )}
+      {view.tab === "waitlist" && <DirectSelection view={view} />}
       {view.selection && (
         <section aria-label="이번 선정 결과">
           <h2>
@@ -177,7 +236,7 @@ export function ContactPage({ view }: { view: ContactView }) {
       )}
       {entries ? (
         entries.length ? (
-          <Rows entries={entries} />
+          <Rows entries={entries} {...(view.tab === "waitlist" && { selection: view })} />
         ) : (
           <p className="empty">
             {view.tab === "waitlist" ? "대기 등록이 없습니다." : "첫 연락 예약이 없습니다."}
