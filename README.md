@@ -32,17 +32,18 @@ and [Admin runbook](apps/admin/README.md).
 
 Admin creates OpenCode personas from a name and detailed private character description. A brief idea can generate an editable AI character draft. AI writes a first-person dating-profile introduction and creates self-chosen profile photos in LovePlus-inspired Japanese 2D anime and near-photorealistic styles. Operators choose the image count, then add, regenerate or delete independent photos. IDs and runtime instructions are managed internally. `apps/discovery` supports style selection, swipe, Like / Pass and web-consented waiting registration. Admin then selects waiting people, or starts a waiting test handle right away.
 
-Start Admin with a password:
+Copy `apps/admin/.env.example` to `apps/admin/.env`, set `ADMIN_PASSWORD` and
+the other local credentials there, then start Admin:
 
 ```sh
-ADMIN_PASSWORD='<operator password>' bun run --cwd apps/admin dev
+bun run --cwd apps/admin dev
 ```
 
 Open http://127.0.0.1:3729 and sign in as `admin`. New personas default to **여성**; the **남성 · 준비 중** option is disabled, with the same restriction at the creation boundary. Write a name and detailed description directly, or enter a brief idea to create an editable AI draft. **프로필 생성** defaults to one photo per style (two images total). The options dialog lets you explicitly choose one to six per style and shows the actual total before confirmation. Afterwards, **이미지 추가** makes photos only in the selected style, defaulting to one. Each photo has **이 이미지 다시 생성** (one replacement) and **이 이미지 삭제**. Other photos and the introduction are preserved. **자기소개만 다시 쓰기** updates the biography without image calls. Save with publication enabled to expose the preview in Discovery. An unfinished character can be saved privately. Descriptions stay private; first-message and memory instructions derive from service rules, and the OpenCode prompt incorporates the description.
 
 Every image-generation action opens an image-options dialog with one optional prompt **per actual photo**. Two additional photos have two inputs; two per style initially have four. Confirm it to start paid generation; each blank prompt uses normal character/style/reference direction. The count defaults to one and increases only when the operator selects more. A failed retry retains that photo's prompt; choosing a new action starts at one with blank inputs. Prompt text remains in private editing drafts and the operational queue, excluded from persona files, public API responses and logs. Editing a name or description disables image-only actions and reveals **원본 변경 후 전체 프로필 갱신**; regenerate the whole profile before saving a changed definition.
 
-Admin uses `GEMINI_API_KEY`, or the existing key in `apps/persona-lab/.env` when unset. Its default models are `gemini-3.8-flash` for introductions and `gemini-3.1-flash-image` for 4:5 portraits. Override them with `ADMIN_TEXT_MODEL` / `ADMIN_IMAGE_MODEL`, and the provider's API base with `GEMINI_API_URL`. Keys stay on the server. Admin renders HTML and bundles only its small progress script in memory at startup.
+Admin uses `GEMINI_API_KEY` from `apps/admin/.env` locally and Wrangler secrets in production. Its default models are `gemini-3.8-flash` for introductions and `gemini-3.1-flash-image` for 4:5 portraits. Override them with `ADMIN_TEXT_MODEL` / `ADMIN_IMAGE_MODEL`, and the provider's API base with `GEMINI_API_URL`. Keys stay on the server. Admin renders HTML and bundles only its small progress script in memory at startup.
 
 All initial, additional and regeneration images share one process-local FIFO worker and run **one at a time**. Browser submissions are acknowledged promptly and open an authenticated `/image-jobs/<id>` progress screen. It shows running and waiting batches together, per-photo states, elapsed time and completed thumbnails. Operators can queue more additions or individual regenerations for the same persona while generation is running, and polling preserves an open options dialog. Capacity includes completed photos plus waiting/running additions within each style's six-photo limit. Each batch adopts the latest preview at worker start so earlier photos survive. Reloading restores active progress; source editing, deletion and saving stay locked until all that persona's work finishes. Queue IDs and task state remain private operational metadata.
 
@@ -56,10 +57,12 @@ Run Admin, api-app, api-msg and Discovery together with root `bun dev`. Discover
 opens one frontend listener on port 3867. It requests public profiles and
 registrations from api-app on port 4879; api-app reads the current public Catalog
 from Admin on port 3729. The local api-msg gateway listens on port 4700. Local
-config uses `.env.development` files and development-only credentials; it must
-not be deployed.
+config uses one gitignored `.env` per app. Copy each app's `.env.example` to
+`.env` before starting; these local settings must not be deployed. Keep
+`TOKEN_CATALOG` identical in Admin and api-app, and `TOKEN_MANAGEMENT` identical
+in Admin, api-app and api-msg. Replace the example tokens together.
 
-Open http://127.0.0.1:3867 to browse. Profile reads use `/discovery/personas` on api-app on every request, so newly published catalog entries appear without rebuilding Discovery. Owned images retain Admin's publication-checked URLs. Waiting registration uses the same api-app. Set local persona credentials in `apps/admin/.dev.vars`; the API Worker's local settings are in `apps/api/.env.development` and the executor's are in `apps/api-msg/.env.development`. `BOOTSTRAP_ONLY=true` allows public profile reads but deliberately blocks registration writes and execution until an operator explicitly enables the cutover.
+Open http://127.0.0.1:3867 to browse. Profile reads use `/discovery/personas` on api-app on every request, so newly published catalog entries appear without rebuilding Discovery. Owned images retain Admin's publication-checked URLs. Waiting registration uses the same api-app. Local settings live in `apps/admin/.env`, `apps/api/.env` and `apps/api-msg/.env`. `BOOTSTRAP_ONLY=true` allows public profile reads but deliberately blocks registration writes and execution until an operator explicitly enables the cutover.
 
 For public hosting, configure Discovery's `VITE_DISCOVERY_API_URL=https://api-app.renai.im` and real `VITE_TURNSTILE_SITE_KEY`, and api-app's matching `TURNSTILE_SECRET`. api-app serves `/discovery/personas` from the current Admin Catalog and `/discovery/waitlist` through its application Durable Object. Discovery serves browser assets only and opens no separate catalog listener. See the app `.env.example` files for configuration.
 

@@ -95,7 +95,8 @@ From the repository root, `bun dev` includes `@ren-ai/api-msg#dev` alongside
 `@ren-ai/api-app#dev`. The executor listens at `http://127.0.0.1:4700`;
 export `API_MSG_PORT` to change it and update api-app's `API_MSG_URL` accordingly.
 
-Development loads `apps/api-msg/.env.development` with local-only credentials.
+Copy `apps/api-msg/.env.example` to `apps/api-msg/.env`. Bun loads `.env`
+automatically during development; keep credentials out of Git.
 Export `TOKEN_MANAGEMENT`, `OPENCODE_URL`, `OPENCODE_AUTHORIZATION`, `IMSG_URL`,
 and `IMSG_TOKEN` to override them. `TOKEN_MANAGEMENT` must match api-app and the OpenCode plugin environment.
 The default upstreams are local OpenCode at `http://127.0.0.1:4096` and imsg

@@ -8,9 +8,10 @@ explicitly imported into local D1/R2 with the one-off command below.
 
 ## Local development
 
-Copy `.dev.vars.example` to `.dev.vars` and set local credentials. `PORT` is a
-process environment variable; its default remains 3729. The Wrangler debugger uses
-`http://127.0.0.1:5729`; export `ADMIN_INSPECTOR_PORT` to override it.
+Copy `.env.example` to `.env` and set local credentials. Bun loads process settings
+and Wrangler loads Worker bindings from that same file. `PORT` defaults to 3729;
+`ADMIN_INSPECTOR_PORT` defaults to 5729. Set either in `.env` or export it before
+starting development. Production secrets are managed separately by Wrangler.
 
 ```sh
 bun run --cwd apps/admin db:local
@@ -173,7 +174,7 @@ Keep value A for `TOKEN_CATALOG` identical in both apps, and value B for
 values can be retained; changing the names does not require generating new
 credentials. If management has not been configured, create only value B.
 
-Replace these settings in local `.dev.vars`, protected application environment
+Replace these settings in local `.env`, protected application environment
 files, deployment/secret-manager settings and any local setup files:
 
 | App                   | Remove old name         | Set new name with its existing value |

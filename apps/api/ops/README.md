@@ -13,10 +13,11 @@ Local `bun dev` serves api-app at `http://127.0.0.1:4879` and its Wrangler
 debugger at `http://127.0.0.1:5879`. Export `API_APP_PORT` or
 `API_APP_INSPECTOR_PORT` to override these process-level settings.
 
-The root `bun dev` starts both api-app and api-msg. api-app loads the checked-in
-`.env.development` and connects to `http://127.0.0.1:4700` with the matching
-local `TOKEN_MANAGEMENT`. Private `.dev.vars` overrides these Worker bindings.
-Bootstrap mode remains enabled until explicitly configured for execution.
+The root `bun dev` starts both api-app and api-msg. Copy each app's `.env.example`
+to `.env` before starting. api-app loads local Worker bindings from `.env` and
+connects to `http://127.0.0.1:4700`. Keep `TOKEN_MANAGEMENT` identical in Admin,
+api-app and api-msg, and `TOKEN_CATALOG` identical in Admin and api-app.
+The example keeps bootstrap mode enabled until explicitly configured for execution.
 
 CI deploys api-app only from `main` after every quality gate, then probes its
 safe health and public Catalog endpoints. The production Wrangler config sets
@@ -42,7 +43,7 @@ target is rejected. `GET /management/state/export` is an authenticated private
 verification snapshot. Archives contain handles and conversation text: keep
 them out of Git/logs and preserve IDs, bookmarks and uncertain sends.
 
-Copy `apps/api/.dev.vars.example` to `.dev.vars` for local Worker development.
+Copy `apps/api/.env.example` to `apps/api/.env` for local Worker development.
 `bun run dev` listens on `API_APP_PORT` (default 4879). Local state belongs to
 Wrangler's DO persistence, never a running Mac `server.sqlite`. Local bootstrap
 mode remains enabled by default; production's `false` setting is in

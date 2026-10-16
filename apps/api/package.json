@@ -15,7 +15,7 @@
     "build:worker": "bun scripts/build-worker.mjs",
     "deploy": "wrangler deploy",
     "start": "bun run dev",
-    "dev": "wrangler dev --config wrangler.jsonc --env-file .env.development --port ${API_APP_PORT:-4879} --inspector-port ${API_APP_INSPECTOR_PORT:-5879}",
+    "dev": "wrangler dev --config wrangler.jsonc --port ${API_APP_PORT:-4879} --inspector-port ${API_APP_INSPECTOR_PORT:-5879}",
     "opencode:config": "bun run ops/location-config.ts",
     "opencode:proxy": "bun run ops/patch-opencode-proxy.ts",
     "migration:export-legacy": "bun run ops/offline-export.ts",
