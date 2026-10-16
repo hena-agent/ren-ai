@@ -10,7 +10,7 @@ const value = Schema.Union([
   Schema.Boolean,
 ]);
 const extraState = Schema.Struct({ value, meaning: text(500), reason: text(1000) });
-const memoryRecord = Schema.Struct({
+export const memoryRecord = Schema.Struct({
   id: Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,100}$/)),
   topic: text(200),
   text: Schema.String,

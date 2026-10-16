@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile, readdir, lstat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test, vi } from "vitest";
@@ -52,6 +52,55 @@ test("a conversation persists state and short-term memory together with replay r
     expect(current).toContain("내일 상대에게 진행 상황");
     expect(await readFile(join(root, "STATE.md"), "utf8")).toContain("energy: 45");
     expect(await readFile(join(root, "MEMORY.md"), "utf8")).toContain("내일 상대에게 진행 상황");
+    expect(await readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
+    expect((await lstat(join(root, "STATE.md"))).isSymbolicLink()).toBe(false);
+    expect((await lstat(join(root, "MEMORY.md"))).isSymbolicLink()).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Markdown edits are authoritative after tool updates and dice writes only execution receipts", async () => {
+  const root = await mkdtemp(join(tmpdir(), "memory-markdown-source-"));
+  try {
+    const memory = conversationMemory(root);
+    const input = {
+      topic: "취향",
+      text: "차를 좋아한다.",
+      summary: "차 취향",
+      clarity: "clear",
+      reason: "상대가 말했다.",
+    };
+    const { id } = Schema.decodeUnknownSync(
+      Schema.fromJsonString(Schema.Struct({ id: Schema.String })),
+    )(await memory.run("remember", input, "learn", "first"));
+    const statePath = join(root, "STATE.md");
+    const longPath = join(root, "long-term", `${id}.md`);
+    const state = (await readFile(statePath, "utf8")).replace(
+      "additional: {}",
+      "additional:\n  note:\n    value: true\n    meaning: 수정한 상태\n    reason: 직접 확인",
+    );
+    const longTerm = (await readFile(longPath, "utf8")).replace(
+      "차를 좋아한다.",
+      "커피를 좋아한다.",
+    );
+    await writeFile(statePath, state);
+    await writeFile(join(root, "MEMORY.md"), "# 현재 생활\n\n직접 수정한 기억.");
+    await writeFile(longPath, longTerm);
+    const restarted = conversationMemory(root);
+    expect(await restarted.context()).toContain("수정한 상태");
+    expect(await restarted.context()).toContain("직접 수정한 기억");
+    expect(await restarted.run("search_memory", { query: "커피" }, "search", "next")).toContain(
+      "커피를 좋아한다",
+    );
+    const before = await lstat(longPath);
+    const stateBefore = await lstat(statePath);
+    await restarted.roll("roll", "next", () => 0.3);
+    expect((await lstat(longPath)).ino).toBe(before.ino);
+    expect((await lstat(statePath)).ino).toBe(stateBefore.ino);
+    expect(await readFile(statePath, "utf8")).toBe(state);
+    expect(await readFile(longPath, "utf8")).toBe(longTerm);
+    expect(await readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
