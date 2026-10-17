@@ -135,25 +135,34 @@ export async function createExecutionRuntime(
     };
   });
   let ready: Promise<Effect.Success<typeof boot>> | undefined;
+  let initialized = false;
   const open = () => {
     if (ready) return ready;
     const started = performance.now();
     const requestId = randomUUID();
-    ready = run(boot).catch((cause) => {
-      contactLog({
-        requestId,
-        operation: "api-app.execution",
-        stage: "execution.startup",
-        outcome: "failed",
-        durationMs: performance.now() - started,
-        level: "error",
-        ...contactCause(cause),
+    ready = run(boot)
+      .then((runtime) => {
+        initialized = true;
+        return runtime;
+      })
+      .catch((cause) => {
+        contactLog({
+          requestId,
+          operation: "api-app.execution",
+          stage: "execution.startup",
+          outcome: "failed",
+          durationMs: performance.now() - started,
+          level: "error",
+          ...contactCause(cause),
+        });
+        throw cause;
       });
-      throw cause;
-    });
     return ready;
   };
   return {
+    get initialized() {
+      return initialized;
+    },
     tick: async () => {
       const runtime = await open();
       await run(runtime.tick);

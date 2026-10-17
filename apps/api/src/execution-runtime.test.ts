@@ -256,11 +256,13 @@ test("does not start for rejected operator access; publishes callback before rem
     expect((await runtime.fetch(new Request("https://app/operator/users"))).status).toBe(401);
     expect(control.events).toEqual([]);
     control.startup = async () => {
+      expect(runtime.initialized).toBe(false);
       const response = await runtime.fetch(new Request("https://app/rpc", { method: "POST" }));
       expect(await response.text()).toBe("callback");
     };
     expect((await runtime.fetch(new Request("https://app/rpc"))).status).toBe(503);
     await runtime.tick();
+    expect(runtime.initialized).toBe(true);
     expect(control.requests).toEqual(["https://api-msg.example/imsg/rpc/"]);
     expect(control.callback).toHaveBeenCalledTimes(1);
     expect(control.events).toEqual([
@@ -339,6 +341,7 @@ test("propagates boot failure and releases partially acquired resources", async 
   const runtime = await open();
   control.failure = "remote";
   await expect(runtime.tick()).rejects.toThrow("failed remote");
+  expect(runtime.initialized).toBe(false);
   await runtime.close();
   expect(control.events).toEqual(["catalog", "remote", "remote.close", "callback.close"]);
 });
@@ -351,11 +354,17 @@ test("observes a callback-triggered boot rejection without an unhandled promise"
   await runtime.close();
 });
 
-test("a failed heartbeat is surfaced and the same scope can still be closed", async () => {
+test("a failed first heartbeat retains successful initialization and retries without booting again", async () => {
   const runtime = await open();
+  expect(runtime.initialized).toBe(false);
   control.failure = "health";
   await expect(runtime.tick()).rejects.toThrow("failed health");
+  expect(runtime.initialized).toBe(true);
   expect(control.events).toContain("failedTurns");
+  control.failure = "";
+  await runtime.tick();
+  expect(control.events.filter((event) => event === "catalog")).toHaveLength(1);
+  expect(control.events).not.toContain("callback.close");
   await runtime.close();
   expect(control.events).toContain("operator.close");
 });
