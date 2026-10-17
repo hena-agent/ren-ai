@@ -37,13 +37,14 @@ export async function photoValues(record: PersonaRecord, bucket: ImageBucket) {
   return Promise.all(
     personaImages(record).map(async (photo) => {
       const objectKey = imageKey(photo.imageUrl);
+      const position = counts[photo.style]++;
       const object = await bucket.head(objectKey);
       if (!object) throw new PersonaError("invalid", "저장된 사진을 찾을 수 없습니다.");
       return {
         personaId: record.id,
         objectKey,
         style: photo.style,
-        position: counts[photo.style]++,
+        position,
         mimeType: object.httpMetadata!.contentType!,
         size: object.size,
       };

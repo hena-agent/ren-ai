@@ -48,5 +48,8 @@
       "version": "1.4.2",
       "onFail": "error"
     }
+  },
+  "patchedDependencies": {
+    "@opencode/schema@2.0.19": "patches/@opencode%2Fschema@2.0.19.patch"
   }
 }
