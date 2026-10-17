@@ -172,11 +172,15 @@ export const migrate = Effect.gen(function* () {
       }),
       "025_relationship_endings": relationshipSchema,
       "026_registration_history": registrationHistorySchema,
-      "027_reply_arrivals": sql`CREATE TABLE reply_arrival (
+      "027_discovery_profile": sql`CREATE TABLE discovery_profile (
+        registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
+        name TEXT, age INTEGER, gender TEXT
+      )`,
+      "028_reply_arrivals": sql`CREATE TABLE reply_arrival (
         session_id TEXT NOT NULL, message_id TEXT NOT NULL, quiet_until INTEGER NOT NULL,
         seen INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (session_id, message_id)
       )`,
-      "028_edit_observations": sql`CREATE TABLE intake_edit (
+      "029_edit_observations": sql`CREATE TABLE intake_edit (
         session_id TEXT NOT NULL, guid TEXT NOT NULL, text TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY (session_id, guid)
       )`,

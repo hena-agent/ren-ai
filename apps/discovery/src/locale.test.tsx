@@ -80,7 +80,12 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   expect(within(initialLanguages).getAllByRole("listitem")).toHaveLength(2);
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "01012345678" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+    target: { value: "01012345678" },
+  });
+  fireEvent.change(screen.getByLabelText("이름 (선택)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByLabelText("만 나이 (선택)"), { target: { value: "28" } });
+  fireEvent.change(screen.getByLabelText("성별 (선택)"), { target: { value: "male" } });
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.change(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }), {
     target: { value: "ja" },
@@ -93,6 +98,9 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Mobile number" }).value).toBe(
     "010-1234-5678",
   );
+  expect(screen.getByLabelText<HTMLInputElement>("Name (optional)").value).toBe("민수");
+  expect(screen.getByLabelText<HTMLInputElement>("Age in years (optional)").value).toBe("28");
+  expect(screen.getByLabelText<HTMLSelectElement>("Gender (optional)").value).toBe("male");
   const country = screen.getByRole<HTMLSelectElement>("combobox", { name: "Country code" });
   expect(country.value).toBe("KR");
   expect(within(country).getByRole("option", { name: "🇰🇷 South Korea +82" })).toBeTruthy();
@@ -116,6 +124,9 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
     handle: "+821012345678",
     locale: "ja",
     conversationLanguage: "ja",
+    name: "민수",
+    age: 28,
+    gender: "male",
     privacyNoticeVersion: discoveryNotices.ja.version,
     turnstileToken: "human",
     likedPersonaIDs: ["harin"],

@@ -129,10 +129,18 @@ test("style changes and reloads preserve Like and Pass, contact input and candid
   render(<App client={{ ...client, join }} />);
   await screen.findByRole("heading", { name: "미라" });
   expect(screen.queryByRole("heading", { name: "어떤 느낌으로 만나볼까요?" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "01012345678" } });
+  fireEvent.click(
+    screen
+      .getByRole("navigation", { name: "페르소나 탐색 메뉴" })
+      .querySelector(".contact-button")!,
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+    target: { value: "01012345678" },
+  });
   fireEvent.click(screen.getByRole("button", { name: "애니메" }));
-  expect(screen.getByRole("textbox").getAttribute("value")).toBe("010-1234-5678");
+  expect(screen.getByRole("textbox", { name: "휴대전화 번호" }).getAttribute("value")).toBe(
+    "010-1234-5678",
+  );
   expect(
     screen
       .getByRole("list", { name: "관심을 전할 페르소나" })

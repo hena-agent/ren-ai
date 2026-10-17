@@ -67,7 +67,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                 profile: { introduction: "밤에는 음악을 만들어요.", sections: [] },
               },
             ]);
-            const submit = (likedPersonaIDs = ["sora"]) =>
+            const submit = (likedPersonaIDs = ["sora"], name = "민수") =>
               web.handler(
                 new Request("http://localhost/discovery/waitlist", {
                   method: "POST",
@@ -76,6 +76,9 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                     handle: "+821012345678",
                     locale: "ko",
                     conversationLanguage: "ja",
+                    name,
+                    age: 28,
+                    gender: "male",
                     privacyNoticeVersion: discoveryNotice.version,
                     turnstileToken: "human",
                     likedPersonaIDs,
@@ -86,7 +89,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
             const response = await submit();
             expect(response.status).toBe(200);
             expect(await response.json()).toEqual({ status: "waiting" });
-            expect((await submit()).status).toBe(200);
+            expect((await submit(["sora"], "다른 이름")).status).toBe(200);
           } finally {
             await web.dispose();
           }
@@ -109,6 +112,11 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
         expect(yield* sql`SELECT conversation_language FROM discovery_language`).toEqual([
           { conversation_language: "ja" },
         ]);
+        expect(yield* sql`SELECT name, age, gender FROM discovery_profile`).toEqual([
+          { name: "민수", age: 28, gender: "male" },
+        ]);
+        yield* sql`DELETE FROM discovery_registration`;
+        expect(yield* sql`SELECT * FROM discovery_profile`).toEqual([]);
         expect(yield* sql`SELECT id FROM conversation`).toEqual([]);
         expect(yield* sql`SELECT id FROM send`).toEqual([]);
       }),

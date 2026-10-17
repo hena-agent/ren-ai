@@ -9,6 +9,10 @@ import { withLifecycle } from "./lifecycle.ts";
 
 interface Origin {
   readonly startedAt: number;
+  readonly conversationLanguage: string | null;
+  readonly name: string | null;
+  readonly age: number | null;
+  readonly gender: string | null;
 }
 
 export const rebuilder = (
@@ -41,8 +45,12 @@ export const rebuilder = (
               } else if (!(yield* directory.rebuilding(conversation))) {
                 return "present" as const;
               }
-              const [origin] = yield* sql<Origin>`SELECT conversation.started_at AS startedAt
+              const [origin] = yield* sql<Origin>`SELECT conversation.started_at AS startedAt,
+                l.conversation_language AS conversationLanguage, p.name, p.age, p.gender
           FROM user JOIN conversation ON conversation.user_id = user.id
+          LEFT JOIN discovery_registration r ON r.handle = user.handle
+          LEFT JOIN discovery_language l ON l.registration_id = r.id
+          LEFT JOIN discovery_profile p ON p.registration_id = r.id
           WHERE conversation.id = ${conversation.id} AND conversation.session_id = ${conversation.sessionID}`;
               return {
                 conversation,
@@ -65,7 +73,13 @@ export const rebuilder = (
         yield* host.sessions.prompt({
           sessionID: Session.ID.make(conversation.sessionID),
           id: SessionMessage.ID.make(`msg_started_${conversation.sessionID}`),
-          text: conversationStarted(origin.startedAt, persona.openingLine, persona.timeZone),
+          text: conversationStarted(
+            origin.startedAt,
+            persona.openingLine,
+            persona.timeZone,
+            origin.conversationLanguage ?? undefined,
+            origin,
+          ),
         });
         yield* replay(conversation);
         yield* directory.rebuilt(conversation);

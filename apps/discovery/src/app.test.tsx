@@ -84,7 +84,9 @@ test("an existing user is directed to the assigned conversation instead of a new
   await screen.findByRole("heading", { name: "하린" });
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "010-9876-5432" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+    target: { value: "010-9876-5432" },
+  });
   fireEvent.click(screen.getByRole("checkbox"));
   act(() => verified("active"));
   fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));

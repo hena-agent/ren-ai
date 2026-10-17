@@ -55,8 +55,22 @@ export const conversationStarted = (
   openingLine: string,
   timeZone: string,
   preferredLanguage?: string,
+  profile?: { name: string | null; age: number | null; gender: string | null },
 ) =>
-  `<conversation-started at="${timestamp(at, timeZone)}"${preferredLanguage ? ` preferred-language="${attribute(preferredLanguage)}"` : ""}/>\n${openingLine}\n<notice>${words(webConsent)}</notice>`;
+  `<conversation-started at="${timestamp(at, timeZone)}"${preferredLanguage ? ` preferred-language="${attribute(preferredLanguage)}"` : ""}${profile ? profileAttributes(profile) : ""}/>\n${openingLine}\n<notice>${words(webConsent)}</notice>`;
+
+const profileAttributes = (profile: {
+  name: string | null;
+  age: number | null;
+  gender: string | null;
+}) =>
+  Object.entries({ name: profile.name, age: profile.age, gender: profile.gender })
+    .filter(([, value]) => value !== null)
+    .map(
+      ([key, value]) =>
+        ` user-${key}="${attribute(String(value)).replaceAll("<", "‹").replaceAll(">", "›")}"`,
+    )
+    .join("");
 
 export const sentByYou = (text: string, date: number, timeZone: string) =>
   `<sent-by-you at="${timestamp(date, timeZone)}">${words(text)}</sent-by-you>`;

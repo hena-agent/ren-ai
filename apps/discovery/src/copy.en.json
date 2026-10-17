@@ -1,4 +1,13 @@
 {
+  "optionalProfile": "A little about you (optional)",
+  "optionalProfileHint": "You can leave these blank. If provided, your persona can use them from the first greeting.",
+  "profileName": "Name (optional)",
+  "profileAge": "Age in years (optional)",
+  "profileGender": "Gender (optional)",
+  "genderUnset": "Not specified",
+  "genderFemale": "Female",
+  "genderMale": "Male",
+  "genderOther": "Other",
   "languageSetting": "Display language",
   "reselectionTitle": "Start fresh with another persona",
   "reselectionIntro": "Use the same iMessage address that received your link. There may be a wait before the first message.",
