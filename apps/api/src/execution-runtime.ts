@@ -17,6 +17,9 @@ import { randomUUID } from "node:crypto";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 import { conversationLanguages } from "./discovery/conversation-languages.ts";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
+import { runtimeStatus, runtimeStatusRequest } from "./conversations/runtime-status.ts";
+import { prepareMessaging } from "./application-tools.ts";
+import type { Persona } from "@ren-ai/personas";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -46,6 +49,42 @@ export async function createExecutionRuntime(
   );
   let callback: ReturnType<typeof applicationGateway> | undefined;
   let operator: ReturnType<typeof operatorHandler> | undefined;
+  const remoteConfiguration = {
+    baseUrl: execution.openCodeUrl,
+    authorization: `Bearer ${execution.managementToken}`,
+    directory: execution.directory,
+    model: execution.model,
+    groundRules,
+  };
+  let inspector: Promise<ReturnType<typeof runtimeStatusRequest>> | undefined;
+  const inspect = () =>
+    (inspector ??= run(
+      Effect.gen(function* () {
+        // Inspect metadata without starting intake, synchronizing folders or resuming model work.
+        const personas = new Map<string, Persona>();
+        const remote = yield* remoteHost(remoteConfiguration, personas);
+        const messages = yield* remoteMessages({
+          url: execution.imsgRpcUrl,
+          token: execution.managementToken,
+        });
+        const { endings } = yield* prepareMessaging(personas, messages, messages.gestures);
+        const status = yield* runtimeStatus(
+          remote,
+          (id) =>
+            remote.client.session.active().pipe(
+              Effect.map((states) => Boolean(states[id])),
+              Effect.mapError(
+                (cause) => new Error("OpenCode active sessions unavailable", { cause }),
+              ),
+            ),
+          endings,
+        );
+        return runtimeStatusRequest(status, (effect) => Effect.runPromise(effect));
+      }),
+    ).catch((cause) => {
+      inspector = undefined;
+      throw cause;
+    }));
   const boot = Effect.gen(function* () {
     const { personas } = yield* Effect.tryPromise(catalog.load);
     const messages = yield* remoteMessages({
@@ -59,16 +98,7 @@ export async function createExecutionRuntime(
         Effect.gen(function* () {
           callback = applicationGateway(tools, health, execution.managementToken);
           yield* Effect.addFinalizer(() => Effect.promise(callback!.dispose));
-          const remote = yield* remoteHost(
-            {
-              baseUrl: execution.openCodeUrl,
-              authorization: `Bearer ${execution.managementToken}`,
-              directory: execution.directory,
-              model: execution.model,
-              groundRules,
-            },
-            personas,
-          );
+          const remote = yield* remoteHost(remoteConfiguration, personas);
           yield* syncFolders(remote.client, execution.directory, personas, groundRules);
           return remote;
         }),
@@ -98,6 +128,9 @@ export async function createExecutionRuntime(
         yield* host.heartbeat.followUps;
         yield* host.heartbeat.failedTurns;
         yield* health.tick;
+        yield* Effect.all([host.heartbeat.stopped, host.heartbeat.endings], {
+          concurrency: "unbounded",
+        });
       }),
     };
   });
@@ -140,6 +173,7 @@ export async function createExecutionRuntime(
         )
       )
         return new Response("Unauthorized", { status: 401 });
+      if (url.pathname === "/operator/conversations") return (await inspect())(request);
       if (url.pathname === "/management/catalog/refresh") {
         if (request.method !== "POST")
           return new Response(null, { status: 405, headers: { Allow: "POST" } });

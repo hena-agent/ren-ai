@@ -3,17 +3,21 @@ import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { timestamp } from "../transcript/transcript.ts";
+import { stopSession } from "./stop.ts";
 
 export const retainedSessions = (host: PersonaRuntime) => {
   const stop = (sessionID: string, title: string) =>
     Effect.gen(function* () {
       const id = Session.ID.make(sessionID);
-      yield* host.sessions.interrupt(id);
-      yield* host.sessions.wait(id);
-      for (const item of yield* host.sessions.inbox(id))
-        yield* host.sessions.cancelInbox({ sessionID: id, inboxID: item.id });
+      yield* stopSession(host, sessionID);
       yield* host.sessions.rename({ sessionID: id, title });
-    }).pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void));
+    }).pipe(
+      Effect.catch((error) =>
+        "_tag" in error && error["_tag"] === "Session.NotFoundError"
+          ? Effect.void
+          : Effect.fail(error),
+      ),
+    );
   return Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const resume = Effect.gen(function* () {

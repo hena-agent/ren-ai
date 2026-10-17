@@ -10,6 +10,7 @@ import { makeOperator } from "./operator/operator.ts";
 import { failedTurns, type FailureAlerts } from "./opencode/failed-turns.ts";
 import { setupRebuilding } from "./conversations/rebuild.ts";
 import { retainedSessions } from "./conversations/retained.ts";
+import { stoppedConversations } from "./conversations/stop.ts";
 
 export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
   personas: ReadonlyMap<string, Persona>,
@@ -19,8 +20,14 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
   alerts: FailureAlerts,
 ) =>
   Effect.gen(function* () {
-    const { tools, directory, pace, sends } = yield* prepareMessaging(personas, messages, gestures);
+    const { tools, directory, pace, sends, endings } = yield* prepareMessaging(
+      personas,
+      messages,
+      gestures,
+    );
     const host = yield* connect(tools);
+    const stopped = yield* stoppedConversations(host);
+    yield* stopped.resume;
     const follow = yield* followUps(
       directory.active,
       (personaID) => host.personas.get(personaID)!.timeZone,
@@ -44,8 +51,8 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       follow.received,
       follow.sent,
       failed.forget,
+      pace.onNew,
     );
-    incoming.onNew((conversation) => pace.onNew(conversation.sessionID));
     const operator = yield* makeOperator(
       directory,
       (sessionID) =>
@@ -61,6 +68,13 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       conversations: directory,
       intake: incoming,
       operator,
-      heartbeat: { intake: incoming.poll, followUps: follow.tick, failedTurns: failed.tick },
+      endingOperations: endings,
+      heartbeat: {
+        intake: incoming.poll,
+        followUps: follow.tick,
+        failedTurns: failed.tick,
+        endings: endings.tick,
+        stopped: stopped.tick,
+      },
     };
   });

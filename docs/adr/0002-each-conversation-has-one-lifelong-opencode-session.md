@@ -11,6 +11,7 @@ The conversation as it exists in iMessage, read through imsg, is the record. The
 
 ## Consequences
 
+- New arrivals interrupt typing and invalidate drafts from model contexts that have not seen them. The application durably acknowledges only message IDs included in the model's context and waits for four quiet seconds after the latest observed arrival before typing a replacement, so a burst receives one considered reply. Model thinking time counts toward that pause; already-sent messages still follow normal delivery reconciliation. Observation continues during slow admission, and edits retain their IDs and observed revisions in the durable intake queue until admitted, so a restart or failed submission cannot lose an interruption or strand a reply.
 - OpenCode resumes an interrupted turn by asking the model again, not by replaying its tool call, and an imsg send can't be made safe to repeat. So each send is recorded before it goes out. A send whose outcome is unknown holds back the conversation's next send until iMessage shows whether it went out. If it did, the waiting send is dropped and the persona is told.
 - Anything from the service handle that appears in the conversation without the persona sending it is shown to her as her own message, so her memory never disagrees with the record.
 - Compaction is her memory. Our compaction hook writes the summary from the persona's own instructions, because OpenCode's built-in summary prompt is written for resuming coding work.

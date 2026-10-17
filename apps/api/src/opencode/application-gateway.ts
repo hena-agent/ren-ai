@@ -17,6 +17,8 @@ export const applicationGateway = (
     catalog: () => Effect.succeed([...tools.personas.values()]),
     send: ({ sessionID, text, callID }) =>
       tools.send(sessionID, text, callID).pipe(action, Effect.mapError(String)),
+    endConversation: ({ sessionID, farewell, callID }) =>
+      tools.endConversation(sessionID, farewell, callID).pipe(action, Effect.mapError(String)),
     wait: ({ sessionID, seconds }) =>
       Stream.fromEffect(action(tools.wait(sessionID, seconds))).pipe(
         Stream.merge(Stream.fromEffectRepeat(Effect.sleep("20 seconds").pipe(Effect.as(""))), {
@@ -29,7 +31,8 @@ export const applicationGateway = (
     react: ({ sessionID, tapback, callID }) =>
       tools.react(sessionID, tapback, callID).pipe(action, Effect.mapError(String)),
     handle: ({ sessionID }) => tools.handleForSession(sessionID).pipe(Effect.mapError(String)),
-    context: ({ sessionID }) => tools.onContext(sessionID).pipe(Effect.mapError(String)),
+    context: ({ sessionID, messageIDs }) =>
+      tools.onContext(sessionID, messageIDs).pipe(Effect.mapError(String)),
     status: ({ sessionID }) => tools.lastMessageStatus(sessionID).pipe(Effect.mapError(String)),
     sends: ({ sessionID }) => tools.settledSends(sessionID).pipe(Effect.mapError(String)),
     alert: ({ name, detail }) => alerts.raise(name, detail),

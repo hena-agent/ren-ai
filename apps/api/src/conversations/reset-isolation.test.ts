@@ -24,7 +24,12 @@ test.each([false, true])(
         Effect.gen(function* () {
           const llm = yield* scriptedPersona();
           let pause = true;
+          let shouldReply = false;
           yield* llm.serve(() => {
+            if (shouldReply) {
+              shouldReply = false;
+              return TestLLM.tool("new-reply", "send", { text: "Fresh conversation reply" });
+            }
             if (!pause) return TestLLM.text("done", "done");
             pause = false;
             return TestLLM.tool("long-wait", "wait", { seconds: 3300 });
@@ -90,11 +95,15 @@ test.each([false, true])(
           expect(JSON.stringify(yield* host.sessions.messages({ sessionID: id }))).toContain(
             "edited after reset",
           );
-        }).pipe(Effect.timeout("10 seconds")),
+          shouldReply = true;
+          yield* fake.text(handle, "can you reply now?", Date.now());
+          yield* host.sessions.wait(id);
+          expect(fake.bubbles).toContainEqual({ handle, text: "Fresh conversation reply" });
+        }).pipe(Effect.timeout("20 seconds")),
       );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   },
-  15_000,
+  25_000,
 );

@@ -7,12 +7,20 @@ interface PluginConfig {
   readonly personas: ReadonlyMap<string, Persona>;
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined, Error>;
   readonly read?: (sessionID: string) => Effect.Effect<string, Error>;
+  readonly endConversation?: (
+    sessionID: string,
+    farewell: string,
+    callID: string,
+  ) => Effect.Effect<string, Error>;
   readonly react?: (
     sessionID: string,
     tapback: Tapback,
     callID: string,
   ) => Effect.Effect<string, Error>;
-  readonly onContext?: (sessionID: string) => Effect.Effect<void, Error>;
+  readonly onContext?: (
+    sessionID: string,
+    messageIDs: readonly string[],
+  ) => Effect.Effect<void, Error>;
   readonly lastMessageStatus?: (
     sessionID: string,
   ) => Effect.Effect<OutgoingStatus | undefined, Error>;

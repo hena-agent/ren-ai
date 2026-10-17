@@ -98,6 +98,7 @@ test("a deleted session heals on the next message and an operator rebuild replac
           () => Effect.void,
           () => Effect.void,
           () => Effect.void,
+          () => Effect.void,
         );
         expect(restarted.recovery).toBeDefined();
         const resumed = (yield* host.conversations.byHandle("restore@example.com"))!;

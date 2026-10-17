@@ -42,6 +42,7 @@ import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
 import type { AdminOptions } from "./admin-options.ts";
 import { contactRoutes } from "./contact-routes.ts";
+import { conversationRoutes } from "./conversation-routes.ts";
 import { html } from "./html-response.ts";
 import { generationFailureMessage } from "./generation-failure.ts";
 import { imageJobRoute } from "./image-job-routes.ts";
@@ -437,6 +438,8 @@ export function createAdmin(
         return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
       if (["/waitlist", "/first-contacts"].includes(url.pathname))
         return contactRoutes(request, management);
+      if (url.pathname.startsWith("/conversations"))
+        return conversationRoutes(request, management?.conversations);
       if (url.pathname === "/upload-image")
         return await uploadRoute(request, url, store, tokens, subDrafts, busy, queue.pending);
       const versionResponse = await versionRoutes(request, url, {

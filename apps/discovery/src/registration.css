@@ -61,6 +61,17 @@
   font-size: 13px;
   font-weight: 600;
 }
+.optional-profile {
+  margin: 24px 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.optional-profile legend {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
 input:not([type="checkbox"]) {
   width: 100%;
   min-height: 52px;

@@ -3,8 +3,18 @@ import { ContactSnapshot, ContactSelection, ConversationLanguages } from "@ren-a
 import type { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
+import { ConversationList, ConversationDetail, ConversationRuntime } from "@ren-ai/onboarding";
+import type { ConversationQuery, ConversationRecovery } from "@ren-ai/onboarding";
+
+export interface ConversationClient {
+  list: (input: typeof ConversationQuery.Type) => Promise<typeof ConversationList.Type>;
+  detail: (id: number, registrationsBefore?: string) => Promise<typeof ConversationDetail.Type>;
+  runtime: (id: number) => Promise<typeof ConversationRuntime.Type>;
+  recover: (input: typeof ConversationRecovery.Type) => Promise<void>;
+}
 
 export interface ManagementClient {
+  conversations?: ConversationClient;
   list: () => Promise<typeof ContactSnapshot.Type>;
   select: (input: typeof SelectContacts.Type) => Promise<typeof ContactSelection.Type>;
   start: (input: typeof StartContact.Type) => Promise<typeof ContactSelection.Type>;
@@ -31,7 +41,10 @@ export function managementClient(
 ): ManagementClient {
   const request = async (
     path: string,
-    input?: typeof SelectContacts.Type | typeof StartContact.Type,
+    input?:
+      | typeof SelectContacts.Type
+      | typeof StartContact.Type
+      | typeof ConversationRecovery.Type,
     method = input ? "POST" : "GET",
   ) => {
     protect(token);
@@ -72,8 +85,12 @@ export function managementClient(
     if (response.status === 409)
       throw new PersonaError(
         "conflict",
-        "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 상태를 새로고침해 확인해 주세요.",
+        path.startsWith("/operator/conversations")
+          ? "종료·전송 상태가 변경되었거나 결과가 아직 불확실합니다. 상태를 다시 확인해 주세요."
+          : "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 상태를 새로고침해 확인해 주세요.",
       );
+    if (response.status === 404 && path.startsWith("/management/conversations/"))
+      throw new PersonaError("not_found", "대화를 찾을 수 없습니다.");
     if (!response.ok) {
       const upstream = response.headers.get("x-request-id");
       const operationId =
@@ -88,6 +105,31 @@ export function managementClient(
     return response;
   };
   return {
+    conversations: {
+      list: async (input) => {
+        const params = new URLSearchParams({ filter: input.filter, search: input.search });
+        if (input.before !== undefined) params.set("before", String(input.before));
+        return conversationResponse(
+          ConversationList,
+          await request(`/management/conversations?${params}`),
+        );
+      },
+      detail: async (id, registrationsBefore) =>
+        conversationResponse(
+          ConversationDetail,
+          await request(
+            `/management/conversations/${id}${registrationsBefore ? `?registrationsBefore=${encodeURIComponent(registrationsBefore)}` : ""}`,
+          ),
+        ),
+      runtime: async (id) =>
+        conversationResponse(
+          ConversationRuntime,
+          await request(`/operator/conversations?id=${id}`),
+        ),
+      recover: async (input) => {
+        await request("/operator/conversations", input);
+      },
+    },
     languages: async (registrationID) => {
       const response = await request(
         `/operator/languages?registrationID=${encodeURIComponent(registrationID)}`,
@@ -128,4 +170,16 @@ export function managementClient(
       await request("/management/catalog/refresh", undefined, "POST");
     },
   };
+}
+
+async function conversationResponse<A>(schema: Schema.Codec<A>, response: Response): Promise<A> {
+  try {
+    return Schema.decodeUnknownSync(schema)(await response.json());
+  } catch (cause) {
+    throw validationFailure(
+      "대화 상태 응답 형식이 올바르지 않습니다.",
+      { code: "management_schema" },
+      cause,
+    );
+  }
 }

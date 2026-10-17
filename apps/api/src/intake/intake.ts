@@ -47,17 +47,20 @@ export const intake = (
   sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error> = () =>
     Effect.void,
   reset: (row: IncomingMessage) => Effect.Effect<void, Error> = () => Effect.void,
+  arriving: (sessionID: string, messageID: string) => Effect.Effect<void, Error> = () =>
+    Effect.void,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const pollLock = yield* Semaphore.make(1);
+    const drainLock = yield* Semaphore.make(1);
     const queue = yield* intakeQueue;
     const beforeReset = yield* resetBoundary(messages);
     const listeners = new Set<(conversation: Conversation) => void>();
     const signal = (conversation: Conversation) => {
       for (const listener of listeners) listener(conversation);
     };
-    const changes = yield* watchEdits(messages, prompt, timeZone, signal);
+    const changes = yield* watchEdits(messages, queue.enqueueEdit, timeZone, signal, arriving);
     const bookmark = () =>
       Effect.map(
         sql<Bookmark>`SELECT row_id AS rowID, date FROM bookmark WHERE id = 1`,
@@ -78,11 +81,19 @@ export const intake = (
       yield* save(current);
     }
     let last = current;
+    const fromPreviousRelationship = (conversation: Conversation, row: IncomingMessage) =>
+      Effect.map(
+        sql`SELECT 1 FROM send WHERE handle = ${row.handle} AND conversation_id != ${conversation.id}
+        AND (guid = ${row.guid} OR (guid IS NULL AND content = ${row.text}
+          AND recorded_at <= ${row.createdAt} AND state IN ('recorded', 'uncertain'))) LIMIT 1`,
+        (rows) => rows.length > 0,
+      );
     const outgoing = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!reconcile) return;
         const conversation = yield* byHandle(row.handle);
         if (!conversation) return;
+        if (yield* fromPreviousRelationship(conversation, row)) return;
         const matched = yield* reconcile(conversation, row);
         const status = yield* messages.sendStatus(row.guid);
         if (matched || status === "failed") return;
@@ -90,6 +101,7 @@ export const intake = (
         const seen =
           yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
         if (seen.length) return;
+        yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
         yield* prompt(
           conversation.sessionID,
           promptID(conversation.sessionID, row.guid),
@@ -139,6 +151,7 @@ export const intake = (
       });
     const replayOutgoing = (conversation: Conversation, row: IncomingMessage, seen: boolean) =>
       Effect.gen(function* () {
+        if (yield* fromPreviousRelationship(conversation, row)) return false;
         if ((yield* messages.sendStatus(row.guid)) === "failed") return false;
         if (seen) return true;
         yield* prompt(
@@ -184,6 +197,7 @@ export const intake = (
           } else {
             firstReply ??= row.createdAt;
             if (!seen.length) {
+              yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
               const rendered = yield* content(row, previous, timeZone(conversation.personaID));
               yield* prompt(
                 conversation.sessionID,
@@ -199,12 +213,17 @@ export const intake = (
         }
         if ((yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID) return;
         if (previous !== null) {
-          yield* sql`UPDATE conversation SET last_received_at = ${previous} WHERE id = ${conversation.id}`;
+          yield* sql`UPDATE conversation SET last_received_at = ${previous}, first_received_at = COALESCE(first_received_at, ${firstReply}) WHERE id = ${conversation.id}`;
           yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${firstReply}) WHERE handle = ${conversation.handle}`;
         }
         if (latestReply > lastSentAt) yield* received(conversation, latestReply);
         if (latestSend > Math.max(latestReply, lastSentAt)) yield* sent(conversation, latestSend);
       });
+    const predatesRelationship = (conversation: Conversation, row: IncomingMessage) =>
+      sql`SELECT 1 FROM conversation WHERE id = ${conversation.id} AND started_at > ${row.createdAt}
+        AND EXISTS(SELECT 1 FROM conversation old WHERE old.user_id = conversation.user_id AND old.ended_at IS NOT NULL)`.pipe(
+        Effect.map((rows) => rows.length > 0),
+      );
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (row.tapback && !row.tapback.added) {
@@ -221,6 +240,7 @@ export const intake = (
         }
         const conversation = yield* byHandle(row.handle);
         if (conversation) {
+          if (yield* predatesRelationship(conversation, row)) return;
           const seen =
             yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
           if (seen.length) {
@@ -229,6 +249,7 @@ export const intake = (
           const earlier = yield* sql<{
             date: number | null;
           }>`SELECT last_received_at AS date FROM conversation WHERE id = ${conversation.id}`;
+          yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
           const rendered = yield* content(row, earlier[0]!.date, timeZone(conversation.personaID));
           yield* prompt(
             conversation.sessionID,
@@ -238,12 +259,12 @@ export const intake = (
           );
           yield* Effect.gen(function* () {
             yield* markSeen(conversation.sessionID, row.guid);
-            yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt} WHERE id = ${conversation.id}`;
+            yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt}, first_received_at = COALESCE(first_received_at, ${row.createdAt}) WHERE id = ${conversation.id}`;
             yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
             yield* received(conversation, row.createdAt);
           }).pipe(sql.withTransaction);
-          changes.remember(conversation, row);
+          yield* changes.remember(conversation, row);
           signal(conversation);
           return;
         }
@@ -263,13 +284,36 @@ export const intake = (
       if (acknowledged) {
         last = { rowID: acknowledged.id, date: acknowledged.createdAt };
       }
-      yield* queue.drain(receive);
+      for (const row of batch) {
+        if (row.fromMe || row.tapback?.added === false) continue;
+        if (yield* beforeReset(row)) continue;
+        const conversation = yield* byHandle(row.handle);
+        if (conversation && !(yield* predatesRelationship(conversation, row)))
+          yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
+      }
     });
     // Live notifications and periodic polls share the admission cursor. Edit
     // observation stays outside this lock because it can itself deliver a reset.
-    const heartbeat = Effect.all([pollLock.withPermit(poll), changes.poll], {
+    const observe = Effect.all([pollLock.withPermit(poll), changes.poll], {
       concurrency: "unbounded",
-    }).pipe(Effect.asVoid);
+    });
+    const heartbeat = observe.pipe(
+      Effect.andThen(
+        Effect.raceFirst(
+          drainLock.withPermit(
+            queue.drain(receive, (handle, entry) =>
+              Effect.gen(function* () {
+                if ((yield* byHandle(handle))?.sessionID !== entry.sessionID) return;
+                yield* prompt(entry.sessionID, entry.id, entry.text);
+              }),
+            ),
+          ),
+          // Admission can wait on media or the remote executor. Keep observing
+          // arrivals during that wait, even when the caller is the single DO alarm.
+          Effect.forever(Effect.sleep("1 second").pipe(Effect.andThen(observe))),
+        ),
+      ),
+    );
     if (startImmediately) yield* heartbeat;
     return {
       resetPending: Effect.forEach(

@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
 import { Schema } from "effect";
-import { discoveryNotices, MobileNumber } from "@ren-ai/onboarding";
+import { DiscoveryRequest, discoveryNotices, MobileNumber } from "@ren-ai/onboarding";
+import { OptionalProfile } from "./optional-profile.tsx";
 import { Turnstile } from "@ren-ai/onboarding/turnstile";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
+import { ReselectionError } from "./client.ts";
 import { useCopy, useLocale } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
 import { PhoneField } from "./phone-field.tsx";
@@ -43,7 +45,8 @@ export function JoinForm({
   }>({ phone: undefined, touched: false, consentLanguage: null });
   const [token, setToken] = useState<string | null>("");
   const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState(false);
+  const [failure, setFailure] = useState<false | "registration" | "reselection">(false);
+  const reselecting = Boolean(reselection().reselectionToken);
   const submitting = useRef(false);
   const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
   const invalid = contact.touched && !handle;
@@ -55,25 +58,40 @@ export function JoinForm({
       !handle ||
       contact.consentLanguage !== locale ||
       !token ||
-      !liked.length
+      !liked.length ||
+      !event.currentTarget.checkValidity()
     )
       return;
+    const {
+      name: rawName,
+      age,
+      gender,
+    } = Schema.decodeUnknownSync(
+      Schema.Struct({ name: Schema.String, age: Schema.String, gender: Schema.String }),
+    )(Object.fromEntries(new FormData(event.currentTarget)));
+    const name = rawName.trim();
     submitting.current = true;
     setPending(true);
     onBusyChange?.(true);
     setFailure(false);
     try {
-      const answer = await client.join({
-        handle,
-        locale,
-        conversationLanguage,
-        privacyNoticeVersion: discoveryNotice.version,
-        likedPersonaIDs: liked.map((persona) => persona.id),
-        turnstileToken: token,
-      });
+      const answer = await client.join(
+        Schema.decodeUnknownSync(DiscoveryRequest)({
+          handle,
+          locale,
+          conversationLanguage,
+          privacyNoticeVersion: discoveryNotice.version,
+          likedPersonaIDs: liked.map((persona) => persona.id),
+          turnstileToken: token,
+          ...(name && { name }),
+          ...(age && { age: Number(age) }),
+          ...(gender && { gender }),
+          ...reselection(),
+        }),
+      );
       onSuccess(answer.status);
-    } catch {
-      setFailure(true);
+    } catch (cause) {
+      setFailure(cause instanceof ReselectionError ? "reselection" : "registration");
     } finally {
       submitting.current = false;
       setPending(false);
@@ -88,8 +106,8 @@ export function JoinForm({
         {copy.back}
       </button>
       <p className="form-step">{copy.joinStep}</p>
-      <h1 id="join-title">{copy.joinTitle}</h1>
-      <p className="join-intro">{copy.joinIntro}</p>
+      <h1 id="join-title">{reselecting ? copy.reselectionTitle : copy.joinTitle}</h1>
+      <p className="join-intro">{reselecting ? copy.reselectionIntro : copy.joinIntro}</p>
       <ul className="liked-list" aria-label={copy.selected}>
         {liked.map((persona) => (
           <li key={persona.id}>
@@ -123,6 +141,7 @@ export function JoinForm({
             )}
           </div>
         </div>
+        <OptionalProfile disabled={pending} />
         <label htmlFor="conversation-language">{copy.conversationLanguage}</label>
         <select
           id="conversation-language"
@@ -174,7 +193,7 @@ export function JoinForm({
         )}
         {failure && (
           <p className="form-error" role="alert">
-            {copy.joinFailure}
+            {failure === "reselection" ? copy.reselectionFailure : copy.joinFailure}
           </p>
         )}
         <button
@@ -188,4 +207,9 @@ export function JoinForm({
       </form>
     </section>
   );
+}
+
+function reselection() {
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("reselect");
+  return token ? { reselectionToken: token } : {};
 }

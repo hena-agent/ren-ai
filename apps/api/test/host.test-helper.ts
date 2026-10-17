@@ -77,7 +77,14 @@ const expectNativePersonaAgent = (agent: {
     system: "You are Persona1. Speak Korean.\n\n## 공개 프로필\n\nA Korean university student.",
     description: "번호 받았으니까 먼저 연락해 봐",
   });
-  expectScopedPermissions(agent.permissions.slice(-10), ["send", "read", "react", "wait", "dice"]);
+  expectScopedPermissions(agent.permissions.slice(-11), [
+    "send",
+    "read",
+    "react",
+    "wait",
+    "end_conversation",
+    "dice",
+  ]);
 };
 
 export const model = SessionRunnerModel.resolved(
@@ -109,6 +116,7 @@ export const startScriptedMessagingHost = (
   messages: Messages,
   gestures: Gestures,
   withImages = false,
+  polling = true,
 ) =>
   startMessagingHost(
     join(root, "isolated"),
@@ -151,6 +159,7 @@ export const startScriptedMessagingHost = (
     messages,
     gestures,
     silentAlerts,
+    polling,
   );
 
 export const bindConversation = (

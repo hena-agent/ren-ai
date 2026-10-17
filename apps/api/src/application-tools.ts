@@ -8,6 +8,7 @@ import { notReacted } from "./transcript/transcript.ts";
 import type { Persona } from "@ren-ai/personas";
 import type { Messages, Gestures } from "@ren-ai/imsg";
 import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
+import { conversationEndings } from "./conversations/end.ts";
 
 export type MessagingTools = {
   readonly [
@@ -25,8 +26,9 @@ export const prepareMessaging = (
     yield* migrate;
     const sql = yield* SqlClient.SqlClient;
     const directory = yield* conversations;
-    const pace = timing();
+    const pace = yield* timing;
     const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
+    const endings = yield* conversationEndings(directory, sends, messages, gestures, personas);
     const seenAtRequest = new Map<string, string | undefined>();
     const inConversation = (
       sessionID: string,
@@ -42,6 +44,7 @@ export const prepareMessaging = (
       );
     const tools: MessagingTools = {
       personas,
+      endConversation: endings.end,
       handleForSession: (sessionID) =>
         directory.bySession(sessionID).pipe(
           Effect.map((conversation) => (conversation ? conversation.handle : undefined)),
@@ -51,8 +54,9 @@ export const prepareMessaging = (
         inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
       wait: (sessionID, seconds) =>
         inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, seconds)),
-      onContext: (sessionID) =>
+      onContext: (sessionID, messageIDs) =>
         Effect.gen(function* () {
+          yield* pace.seen(sessionID, messageIDs);
           const seen = yield* sql<{
             guid: string;
           }>`SELECT guid FROM intake_seen WHERE session_id = ${sessionID} ORDER BY rowid DESC LIMIT 1`;
@@ -85,5 +89,5 @@ export const prepareMessaging = (
           ),
       settledSends: (sessionID) => sends.results(sessionID),
     };
-    return { tools, directory, pace, sends };
+    return { tools, directory, pace, sends, endings };
   });

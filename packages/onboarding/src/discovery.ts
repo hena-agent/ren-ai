@@ -56,8 +56,12 @@ export const DiscoveryRequest = Schema.Struct({
   handle: MobileNumber,
   locale: DiscoveryLocale,
   conversationLanguage: Schema.optionalKey(DiscoveryLocale),
+  name: Schema.optionalKey(text.check(Schema.isTrimmed(), Schema.isMaxLength(100))),
+  age: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0))),
+  gender: Schema.optionalKey(Schema.Literals(["female", "male", "other"])),
   privacyNoticeVersion: text,
   turnstileToken: text,
+  reselectionToken: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;

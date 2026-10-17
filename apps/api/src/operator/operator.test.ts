@@ -116,7 +116,7 @@ test("removal of a waiting registration deletes it and its Likes without a sessi
       yield* migrate;
       const sql = yield* SqlClient.SqlClient;
       const registration = "00000000-0000-4000-8000-000000000001";
-      yield* sql`INSERT INTO discovery_registration VALUES (${registration}, ${input.handle}, 'ko', 'v1', 1)`;
+      yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at) VALUES (${registration}, ${input.handle}, 'ko', 'v1', 1)`;
       yield* sql`INSERT INTO discovery_like VALUES (${registration}, 'persona1')`;
       const directory = yield* conversations;
       const removed: string[] = [];

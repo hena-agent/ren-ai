@@ -59,12 +59,15 @@ const remoteOptions = (config: RemoteConfig) =>
       personas: new Map(),
       send: (sessionID, text, callID) =>
         api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
+      endConversation: (sessionID, farewell, callID) =>
+        api.endConversation({ sessionID, farewell, callID }).pipe(Effect.mapError(failure)),
       wait: (sessionID, seconds) => waitForResult(api, sessionID, seconds),
       read: (sessionID) => api.read({ sessionID }).pipe(Effect.mapError(failure)),
       react: (sessionID, tapback, callID) =>
         api.react({ sessionID, tapback, callID }).pipe(Effect.mapError(failure)),
       handleForSession: (sessionID) => api.handle({ sessionID }).pipe(Effect.mapError(failure)),
-      onContext: (sessionID) => api.context({ sessionID }).pipe(Effect.mapError(failure)),
+      onContext: (sessionID, messageIDs) =>
+        api.context({ sessionID, messageIDs }).pipe(Effect.mapError(failure)),
       lastMessageStatus: (sessionID) => api.status({ sessionID }).pipe(Effect.mapError(failure)),
       settledSends: (sessionID) => api.sends({ sessionID }).pipe(Effect.mapError(failure)),
       health: {
