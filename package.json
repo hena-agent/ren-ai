@@ -9,7 +9,8 @@
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
-    "ci": "bun run ci:checks && bun run verify-gates",
+    "ci": "bun run ci:checks && bun run verify-gates && bun run ci:native",
+    "ci:native": "bash apps/rustpush/check.sh",
     "ci:checks": "bun run format:check && bun run lint && bun run typecheck && bun run knip && bun run dup && bun run exceptions && bun run --cwd apps/discovery build && bun run test",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

@@ -18,11 +18,16 @@ const gateway = `gui/${process.getuid?.()}/im.renai.imsg`;
 const payload = [
   "imsg.js",
   "verify.js",
-  "messages-ui.applescript",
+  "ren-rustpush",
   "imsg.graph.json",
   "verify.graph.json",
+  "artifact.info",
 ];
 const executable = { mode: 0o700 };
+const contentsOf = (file: string, version: string) =>
+  file === "artifact.info"
+    ? `architecture=${execFileSync("uname", ["-m"], { encoding: "utf8" }).trim()}\ntransport=rustpush\n`
+    : `${version}\n`;
 
 /** A deployable bundle whose gateway identifies itself by its code; graphs are metadata. */
 const bundle = (directory: string, version: string, files = payload, graphs = version) => {
@@ -30,7 +35,11 @@ const bundle = (directory: string, version: string, files = payload, graphs = ve
   const contents = join(directory, name);
   mkdirSync(contents);
   for (const file of files)
-    writeFileSync(join(contents, file), `${file.endsWith(".graph.json") ? graphs : version}\n`);
+    writeFileSync(
+      join(contents, file),
+      contentsOf(file, file.endsWith(".graph.json") ? graphs : version),
+      executable,
+    );
   const archive = join(directory, `${name}.tar.gz`);
   execFileSync("tar", ["-czf", archive, "-C", contents, "."]);
   return archive;
@@ -68,7 +77,7 @@ function mac() {
   const log = join(directory, "commands");
   mkdirSync(join(root, "bin"), { recursive: true });
   mkdirSync(bin);
-  for (const name of payload) writeFileSync(join(root, name), "old\n");
+  for (const name of payload) writeFileSync(join(root, name), contentsOf(name, "old"), executable);
   writeFileSync(
     join(root, "bin/bun"),
     `#!/bin/bash
@@ -153,12 +162,12 @@ esac
   return { directory, root, update, commands, installed, state, checksums, leftovers };
 }
 
-it("deploys an attested main bundle once, keeping the binaries and restorable checksums", () => {
+it("deploys the gateway and Rustpush together, keeping Bun and restorable checksums", () => {
   const fixture = mac();
   const result = fixture.update({ bundle: bundle(fixture.directory, "new"), healthy: "new old" });
   expect(result).toMatchObject({ status: 0 });
   expect(result.stdout).toContain(`Deployed ${sha}`);
-  for (const name of payload) expect(fixture.installed(name)).toBe("new\n");
+  for (const name of payload) expect(fixture.installed(name)).toBe(contentsOf(name, "new"));
   expect(fixture.installed("bin/bun")).toContain("probe");
   expect(fixture.state("deployed")).toBe(`${sha}\n`);
   expect(readFileSync(join(fixture.root, "deploy/previous/imsg.js"), "utf8")).toBe("old\n");
@@ -219,8 +228,7 @@ it("refuses an unattested or incomplete bundle before replacing anything", () =>
     healthy: "partial old",
   });
   expect(incomplete.status).not.toBe(0);
-  expect(incomplete.stdout).toContain("lacks messages-ui.applescript");
-  for (const name of payload) expect(fixture.installed(name)).toBe("old\n");
+  for (const name of payload) expect(fixture.installed(name)).toBe(contentsOf(name, "old"));
   expect(fixture.commands()).not.toMatch(/probe|launchctl/);
   for (const marker of ["deployed", "rejected", "deferred"])
     expect(fixture.state(marker)).toBeNull();
@@ -247,7 +255,7 @@ it("rolls back a gateway that fails its probe and never retries that commit", ()
   expect(result.status).toBe(1);
   expect(result.stdout).toContain("Probe failed: error: probe refused broken");
   expect(result.stdout).toContain(`Rolled back ${sha}: its gateway failed the probe`);
-  for (const name of payload) expect(fixture.installed(name)).toBe("old\n");
+  for (const name of payload) expect(fixture.installed(name)).toBe(contentsOf(name, "old"));
   expect(fixture.checksums()).toBe(true);
   expect(fixture.state("rejected")).toBe(`${sha}\n`);
   expect(fixture.state("deployed")).toBeNull();

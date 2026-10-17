@@ -1,5 +1,5 @@
 #!/bin/bash
-# The JavaScript payload that runs on the installed Bun: what CI deploys automatically.
+# The JavaScript payload, packaged with the native bridge by build-mac.sh.
 set -euo pipefail
 ops="$(cd "$(dirname "$0")" && pwd)"
 output="${1:?Usage: build-bundle.sh NEW-OUTPUT-DIRECTORY}"
@@ -9,4 +9,3 @@ mkdir -p "$output"
 bun build --target=bun --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/imsg.js" --metafile="$output/imsg.graph.json" "$ops/imsg-entry.ts"
 bun build --target=bun --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/verify.js" --metafile="$output/verify.graph.json" "$ops/imsg-verify.ts"
 bun "$ops/verify-mac-graph.ts" "$output/imsg.graph.json" "$output/verify.graph.json"
-cp "$ops/../src/gestures/messages-ui.applescript" "$output/messages-ui.applescript"

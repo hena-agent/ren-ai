@@ -23,4 +23,4 @@ if [[ -e "$root/deploy" ]]; then
   bash "$ops/write-deploy-plist.sh" "$root/bin/bun" "$root" "$deploy_plist"
   /usr/bin/plutil -lint "$deploy_plist"
 fi
-echo 'Restored WITHOUT STARTING. Complete Apple sign-in, history sync, Fleet enrollment/PPPC verification before switching imsg.renai.im.'
+echo 'Restored WITHOUT STARTING. Verify Rustpush session restoration and the service handle before switching imsg.renai.im.'

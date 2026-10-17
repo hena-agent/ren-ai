@@ -1,0 +1,130 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -12,2 +12,3 @@
+ [dependencies]
++nac-validation = { path = "../matrix/nac-validation" }
+ plist = "1.7.0"
+diff --git a/src/activation.rs b/src/activation.rs
+--- a/src/activation.rs
++++ b/src/activation.rs
+@@ -45,10 +45,1 @@
+-    include_cert!("4056631661436364584235346952193"),
+-    include_cert!("4056631661436364584235346952194"),
+-    include_cert!("4056631661436364584235346952195"),
+-    include_cert!("4056631661436364584235346952196"),
+-    include_cert!("4056631661436364584235346952197"),
+-    include_cert!("4056631661436364584235346952198"),
+-    include_cert!("4056631661436364584235346952199"),
+-    include_cert!("4056631661436364584235346952200"),
+-    include_cert!("4056631661436364584235346952201"),
+-    include_cert!("4056631661436364584235346952208"),
++    (include_bytes!("../certs/legacy-fairplay/fairplay.crt"), include_bytes!("../certs/legacy-fairplay/fairplay.pem")),
+diff --git a/src/macos.rs b/src/macos.rs
+--- a/src/macos.rs
++++ b/src/macos.rs
+@@ -93,27 +93,4 @@
+     async fn generate_validation_data(&self) -> Result<Vec<u8>, PushError> {
+-
+-        let url = get_bag(IDS_BAG, "id-validation-cert").await?.into_string().unwrap();
+-        let key = REQWEST.get(url)
+-            .send().await?;
+-        let response: CertsResponse = plist::from_bytes(&key.bytes().await?)?;
+-        let certs: Vec<u8> = response.cert.into();
+-
+-        let mut output_req = vec![];
+-        let mut ctx = ValidationCtx::new(&certs, &mut output_req, &self.inner)?;
+-
+-        let init = SessionInfoRequest {
+-            session_info_request: output_req.into()
+-        };
+-
+-        let info = plist_to_buf(&init)?;
+-        let url = get_bag(IDS_BAG, "id-initialize-validation").await?.into_string().unwrap();
+-        let activation = REQWEST.post(url)
+-            .body(info)
+-            .send().await?;
+-
+-        let response: SessionInfoResponse = plist::from_bytes(&activation.bytes().await?)?;
+-        let output: Vec<u8> = response.session_info.into();
+-        ctx.key_establishment(&output)?;
+-
+-        Ok(ctx.sign()?)
++        nac_validation::generate_validation_data()
++            .map_err(|error| PushError::IoError(std::io::Error::other(error)))
+     }
+diff --git a/src/aps.rs b/src/aps.rs
+--- a/src/aps.rs
++++ b/src/aps.rs
+@@ -1193,1 +1193,3 @@
+-        self.topics_channel.try_send((self.topics.clone(), false)).expect("APS backed up??");
++        if let Err(tokio::sync::mpsc::error::TrySendError::Full(_)) = self.topics_channel.try_send((self.topics.clone(), false)) {
++            panic!("APS topic queue full");
++        }
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -52,2 +52,2 @@
+-pub use ids::user::{IDSUser, register, IDSUserIdentity, IDSNGMIdentity, PrivateDeviceInfo, SupportAlert, SupportAction, ReportMessage};
+-pub use ids::identity_manager::{SendJob, MessageTarget, IdentityManager, KeyCache};
++pub use ids::user::{IDSError, IDSUser, register, IDSUserIdentity, IDSNGMIdentity, PrivateDeviceInfo, SupportAlert, SupportAction, ReportMessage};
++pub use ids::identity_manager::{SendJob, SendResult, MessageTarget, IdentityManager, KeyCache};
+diff --git a/src/aps.rs b/src/aps.rs
+--- a/src/aps.rs
++++ b/src/aps.rs
+@@ -1311,1 +1311,1 @@
+-    pub async fn new(config: Arc<dyn OSConfig>, state: Option<APSState>) -> (APSConnection, Option<PushError>) {
++    pub async fn new(config: Arc<dyn OSConfig>, state: Option<APSState>, persist_notification: Box<dyn Fn(&APSMessage) + Send + Sync>) -> (APSConnection, Option<PushError>) {
+@@ -1351,1 +1351,2 @@
+-                    Ok(APSMessage::Notification { id, topic: _, token: _, payload: _, channel: _ }) => {
++                    Ok(notification @ APSMessage::Notification { id, .. }) => {
++                        persist_notification(&notification);
+diff --git a/src/ids/identity_manager.rs b/src/ids/identity_manager.rs
+--- a/src/ids/identity_manager.rs
++++ b/src/ids/identity_manager.rs
+@@ -991,1 +991,1 @@
+-        let mut job_spawned = tokio::spawn(job.send_targets(message_targets, 0));
++        let mut job_spawned = AbortOnDropHandle::new(tokio::spawn(job.send_targets(message_targets, 0)));
+@@ -1100,1 +1100,1 @@
+-    pub handle: Option<JoinHandle<Result<(), PushError>>>,
++    pub handle: Option<AbortOnDropHandle<Result<(), PushError>>>,
+@@ -1242,13 +1242,7 @@
+-                // will bail early if refresh_targets is empty
+-                let new_targets = self.identity.refresh_handles(self.topic, &handle, &refresh_targets).await?;
+-                remain_targets.extend(new_targets);
+-
+-                if retry_count == 5 {
+-                    for target in remain_targets {
+-                        let _ = self.status.send((target, SendResult::TimedOut));
+-                    }
+-                    info!("Retry failed {}", encode_hex(&uuid));
+-                    return Ok(())
++                // Never resubmit an uncertain message. Refresh keys for the next distinct send.
++                if !refresh_targets.is_empty() {
++                    self.identity.invalidate_id_cache().await;
+                 }
+-
+-                self.send_targets(remain_targets, retry_count + 1).await?;
++                for target in remain_targets.into_iter().chain(refresh_targets) {
++                    let _ = self.status.send((target, SendResult::TimedOut));
++                }
+diff --git a/src/aps.rs b/src/aps.rs
+--- a/src/aps.rs
++++ b/src/aps.rs
+@@ -640,1 +640,7 @@
+ impl APSMessage {
++    pub fn ack_for(self, id: i32) -> Option<u8> {
++        match self {
++            Self::Ack { for_id, status, .. } if for_id == id => Some(status),
++            _ => None,
++        }
++    }
+@@ -1474,1 +1483,2 @@
+         let my_id = id.unwrap_or_else(|| new_aps_id());
++        let responses = self.subscribe().await;
+@@ -1482,4 +1492,1 @@
+-        let status = self.wait_for_timeout(self.subscribe().await, |msg| {
+-            let APSMessage::Ack { token: _token, for_id: _, status } = msg else { return None };
+-            Some(status)
+-        }).await?;
++        let status = self.wait_for_timeout(responses, |msg| msg.ack_for(my_id)).await?;
