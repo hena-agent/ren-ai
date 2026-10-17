@@ -42,7 +42,10 @@ export const applicationApi = RpcGroup.make(
     success: Schema.UndefinedOr(Schema.String),
     error: Schema.String,
   }),
-  Rpc.make("context", { payload: session, error: Schema.String }),
+  Rpc.make("context", {
+    payload: { ...session, messageIDs: Schema.Array(Schema.String) },
+    error: Schema.String,
+  }),
   Rpc.make("status", {
     payload: session,
     success: Schema.UndefinedOr(outgoingStatus),

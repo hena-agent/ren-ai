@@ -16,6 +16,7 @@ export const setupRebuilding = (
   received: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
   sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
   forget: (sessionID: string) => Effect.Effect<void>,
+  arriving: (sessionID: string, messageID: string) => Effect.Effect<void, Error>,
 ) =>
   Effect.gen(function* () {
     let restore: (handle: string) => Effect.Effect<void, Error>;
@@ -40,6 +41,7 @@ export const setupRebuilding = (
       false,
       sent,
       reset.receive,
+      arriving,
     );
     const recovery = yield* rebuilder(directory, host, incoming.replay);
     restore = (handle) =>

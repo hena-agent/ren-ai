@@ -29,7 +29,8 @@ export const applicationGateway = (
     react: ({ sessionID, tapback, callID }) =>
       tools.react(sessionID, tapback, callID).pipe(action, Effect.mapError(String)),
     handle: ({ sessionID }) => tools.handleForSession(sessionID).pipe(Effect.mapError(String)),
-    context: ({ sessionID }) => tools.onContext(sessionID).pipe(Effect.mapError(String)),
+    context: ({ sessionID, messageIDs }) =>
+      tools.onContext(sessionID, messageIDs).pipe(Effect.mapError(String)),
     status: ({ sessionID }) => tools.lastMessageStatus(sessionID).pipe(Effect.mapError(String)),
     sends: ({ sessionID }) => tools.settledSends(sessionID).pipe(Effect.mapError(String)),
     alert: ({ name, detail }) => alerts.raise(name, detail),

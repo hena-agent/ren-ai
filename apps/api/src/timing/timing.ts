@@ -1,13 +1,21 @@
 import { Clock, Deferred, Effect } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 
 /** Each notification belongs to one session, including across a Conversation's reset. */
-export const timing = () => {
+export const timing = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
   const pending = new Map<string, Deferred.Deferred<void>>();
-  const onNew = (id: string) => {
-    const signal = pending.get(id);
-    pending.delete(id);
-    if (signal) Effect.runSync(Deferred.succeed(signal, undefined));
-  };
+  const onNew = (id: string, messageID: string) =>
+    Effect.gen(function* () {
+      const until = (yield* Clock.currentTimeMillis) + 4000;
+      const rows =
+        yield* sql`INSERT OR IGNORE INTO reply_arrival (session_id, message_id, quiet_until)
+      VALUES (${id}, ${messageID}, ${until}) RETURNING message_id`;
+      if (!rows.length) return;
+      const signal = pending.get(id);
+      pending.delete(id);
+      if (signal) yield* Deferred.succeed(signal, undefined);
+    });
   const during = <A, E, R>(id: string, action: Effect.Effect<A, E, R>) =>
     Effect.gen(function* () {
       let signal = pending.get(id);
@@ -15,6 +23,9 @@ export const timing = () => {
         signal = yield* Deferred.make<void>();
         pending.set(id, signal);
       }
+      const unseen =
+        yield* sql`SELECT 1 FROM reply_arrival WHERE session_id = ${id} AND seen = 0 LIMIT 1`;
+      if (unseen.length) return "new" as const;
       const result = yield* Effect.race(action, Effect.as(Deferred.await(signal), "new" as const));
       return (yield* Deferred.isDone(signal)) ? "new" : result;
     });
@@ -29,5 +40,18 @@ export const timing = () => {
         ? `paused ${elapsed}s, cut short by something new`
         : `paused ${duration}s`;
     });
-  return { onNew, during, wait };
-};
+  const quiet = (id: string) =>
+    Effect.gen(function* () {
+      const [latest] = yield* sql<{
+        until: number | null;
+      }>`SELECT MAX(quiet_until) AS until FROM reply_arrival WHERE session_id = ${id}`;
+      const until = latest!.until;
+      if (until === null) return;
+      yield* Effect.sleep(Math.max(0, until - (yield* Clock.currentTimeMillis)));
+    });
+  const seen = (id: string, messageIDs: readonly string[]) =>
+    sql`UPDATE reply_arrival SET seen = 1 WHERE session_id = ${id} AND ${sql.in("message_id", messageIDs)}`.pipe(
+      Effect.asVoid,
+    );
+  return { onNew, during, wait, quiet, seen };
+});

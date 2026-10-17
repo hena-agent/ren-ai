@@ -44,8 +44,8 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       follow.received,
       follow.sent,
       failed.forget,
+      pace.onNew,
     );
-    incoming.onNew((conversation) => pace.onNew(conversation.sessionID));
     const operator = yield* makeOperator(
       directory,
       (sessionID) =>

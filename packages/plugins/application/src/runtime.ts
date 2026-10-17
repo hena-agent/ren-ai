@@ -64,7 +64,8 @@ const remoteOptions = (config: RemoteConfig) =>
       react: (sessionID, tapback, callID) =>
         api.react({ sessionID, tapback, callID }).pipe(Effect.mapError(failure)),
       handleForSession: (sessionID) => api.handle({ sessionID }).pipe(Effect.mapError(failure)),
-      onContext: (sessionID) => api.context({ sessionID }).pipe(Effect.mapError(failure)),
+      onContext: (sessionID, messageIDs) =>
+        api.context({ sessionID, messageIDs }).pipe(Effect.mapError(failure)),
       lastMessageStatus: (sessionID) => api.status({ sessionID }).pipe(Effect.mapError(failure)),
       settledSends: (sessionID) => api.sends({ sessionID }).pipe(Effect.mapError(failure)),
       health: {

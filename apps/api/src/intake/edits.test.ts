@@ -7,6 +7,7 @@ import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 import { intake } from "./intake.ts";
+import { timing } from "../timing/timing.ts";
 
 const user = (handle: string) => ({
   handle,
@@ -32,6 +33,78 @@ const capture = (prompts: string[]) => (_session: string, _id: string, text: str
     prompts.push(text);
   });
 const zone = () => "Asia/Seoul";
+
+test.each([false, true])(
+  "failed edit admission survives restart and a later edit (accepted: %s)",
+  async (accepted) => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const { start, directory, conversation, fake } = yield* setup("retry-edit@example.com");
+        let pace = yield* timing;
+        let fail = true;
+        const attempts: string[] = [];
+        const admitted = new Map<string, string>();
+        const begin = () =>
+          intake(
+            fake.messages,
+            directory.byHandle,
+            (sessionID, id, text) =>
+              Effect.gen(function* () {
+                if (text.includes(">first edit</edited>")) {
+                  attempts.push(id);
+                  if (fail) {
+                    fail = false;
+                    if (accepted) {
+                      admitted.set(id, text);
+                      yield* pace.seen(sessionID, [...admitted.keys()]);
+                    }
+                    yield* Effect.fail(new Error("admission disconnected"));
+                  }
+                }
+                admitted.set(id, text);
+                yield* pace.seen(sessionID, [...admitted.keys()]);
+              }),
+            zone,
+            undefined,
+            undefined,
+            undefined,
+            true,
+            undefined,
+            undefined,
+            pace.onNew,
+          );
+        const first = yield* begin();
+        const row = yield* fake.text(conversation.handle, "original", start);
+        yield* first.poll;
+        yield* fake.edit(row.guid, "first edit");
+        yield* first.poll;
+        pace = yield* timing;
+        const restarted = yield* begin();
+        yield* fake.edit(row.guid, "second edit");
+        yield* restarted.poll;
+        expect(yield* pace.during(conversation.sessionID, Effect.succeed("stale reply"))).toBe(
+          "new",
+        );
+        yield* TestClock.adjust("30 seconds");
+        yield* restarted.poll;
+        expect(attempts).toHaveLength(2);
+        expect(attempts[0]).toBe(attempts[1]);
+        expect([...admitted.values()]).toEqual([
+          expect.stringContaining(">original</message>"),
+          expect.stringContaining(">first edit</edited>"),
+          expect.stringContaining('was="first edit"'),
+        ]);
+        expect(yield* pace.during(conversation.sessionID, Effect.succeed("updated reply"))).toBe(
+          "updated reply",
+        );
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
+        Effect.provide(TestClock.layer()),
+      ),
+    );
+  },
+);
 
 test("polls only active Conversations, reports each change once and stops after the window", async () => {
   await Effect.runPromise(
@@ -74,7 +147,7 @@ test("polls only active Conversations, reports each change once and stops after 
         expect(prompts[1]?.id).toBe(
           `msg_edit_${createHash("sha256").update([first.sessionID, a.guid, 'old "text"', 'edited "text"', "1"].join("\0")).digest("hex")}`,
         );
-        expect(reads).toEqual([first.handle, first.handle, first.handle]);
+        expect(reads).toEqual([first.handle, first.handle]);
         yield* TestClock.adjust("1 second");
         yield* incoming.poll;
         expect(prompts).toHaveLength(2);
@@ -132,7 +205,7 @@ test("polls only active Conversations, reports each change once and stops after 
   );
 });
 
-test("restart takes current text as baseline, so changes while down are missed", async () => {
+test("restart preserves the observed baseline and catches changes made while down", async () => {
   const prompts: string[] = [];
   await Effect.runPromise(
     Effect.gen(function* () {
@@ -157,16 +230,17 @@ test("restart takes current text as baseline, so changes while down are missed",
           const incoming = yield* begin();
           yield* TestClock.adjust("1 second");
           yield* incoming.poll;
-          expect(prompts).toHaveLength(3);
+          expect(prompts).toHaveLength(5);
           expect(
-            prompts.every((text) => !text.startsWith("<edited") && !text.startsWith("<unsent")),
+            prompts.some((text) => text.includes('was="first"') && text.includes("while down")),
           ).toBe(true);
+          expect(prompts.some((text) => text.startsWith("<unsent"))).toBe(true);
           yield* fake.edit(row.guid, "after restart");
           yield* fake.edit(removed.guid, "not revived");
           yield* TestClock.adjust("1 second");
           yield* incoming.poll;
-          expect(prompts[3]).toContain('was="while down"');
-          expect(prompts).toHaveLength(4);
+          expect(prompts[5]).toContain('was="while down"');
+          expect(prompts).toHaveLength(6);
         }),
       );
     }).pipe(

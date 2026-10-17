@@ -29,7 +29,7 @@ export const outbox = (
   personas: ReadonlyMap<string, Pick<Persona, "timeZone">>,
   active: (conversation: Conversation) => Effect.Effect<boolean, Error> = () =>
     Effect.succeed(true),
-  pace?: ReturnType<typeof timing>,
+  pace?: Effect.Success<typeof timing>,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -189,16 +189,19 @@ export const outbox = (
             if (stopped) return stopped;
             const extra = yield* Random.nextBetween(1000, 2000);
             const duration = Math.min(15000, text.length * 250 + extra);
-            const typingStarted = yield* Clock.currentTimeMillis;
-            const type = gestures.typing(conversation.handle, text, duration).pipe(
-              Effect.catch(() =>
-                Effect.gen(function* () {
-                  const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
-                  yield* Effect.sleep(Math.max(0, duration - elapsed));
-                  return true;
-                }),
-              ),
-            );
+            const type = Effect.gen(function* () {
+              if (pace) yield* pace.quiet(conversation.sessionID);
+              const typingStarted = yield* Clock.currentTimeMillis;
+              return yield* gestures.typing(conversation.handle, text, duration).pipe(
+                Effect.catch(() =>
+                  Effect.gen(function* () {
+                    const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
+                    yield* Effect.sleep(Math.max(0, duration - elapsed));
+                    return true;
+                  }),
+                ),
+              );
+            });
             const ready = pace ? yield* pace.during(conversation.sessionID, type) : yield* type;
             if (ready !== true) return notSent("a new message arrived");
             const recorded = yield* recordAttempt(conversation, "text", text, callID);
