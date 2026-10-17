@@ -21,6 +21,15 @@ type Request = typeof request.Type;
 
 type Answer = object | "hang" | "exit";
 
+const ioFailure = (code: "ENOENT" | "EPIPE") =>
+  PlatformError.systemError({
+    _tag: code === "ENOENT" ? "NotFound" : "Unknown",
+    module: "ChildProcess",
+    method: "io",
+    pathOrDescriptor: "/private/apple-state/secret",
+    cause: Object.assign(new Error("private spawn input"), { code }),
+  });
+
 /** A scripted `ren-rustpush rpc`: answers requests, emits events and records acknowledgements. */
 export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
   const requests: Request[] = [];
@@ -29,6 +38,7 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
   const answers = new Map<string, Answer[]>();
   let processes: Array<{ write: (text: string) => void; exit: () => void }> = [];
   let spawnFailures = 0;
+  let writeFailures = 0;
   let silentStart = false;
   let spool = 0;
   const spawner = ChildProcessSpawner.make((command) =>
@@ -36,15 +46,7 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
       if (!ChildProcess.isStandardCommand(command)) return yield* Effect.die("Unexpected pipeline");
       if (spawnFailures > 0) {
         spawnFailures--;
-        return yield* Effect.fail(
-          PlatformError.systemError({
-            _tag: "NotFound",
-            module: "ChildProcess",
-            method: "spawn",
-            pathOrDescriptor: "/private/apple-state/secret",
-            cause: Object.assign(new Error("private spawn input"), { code: "ENOENT" }),
-          }),
-        );
+        return yield* Effect.fail(ioFailure("ENOENT"));
       }
       spawned.push({
         command: command.command,
@@ -88,7 +90,11 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
         isRunning: Effect.succeed(true),
         kill: () => Effect.sync(() => process.exit()),
         stdin: Sink.forEach((bytes: Uint8Array) =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
+            if (writeFailures > 0) {
+              writeFailures--;
+              return yield* Effect.fail(ioFailure("EPIPE"));
+            }
             for (const line of new TextDecoder().decode(bytes).split("\n").filter(Boolean))
               respond(line);
           }),
@@ -111,6 +117,7 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
     answer: (method: string, ...next: Answer[]) =>
       answers.set(method, [...(answers.get(method) ?? []), ...next]),
     failSpawns: (count: number) => (spawnFailures = count),
+    failWrites: (count: number) => (writeFailures = count),
     holdStart: (hold: boolean) => (silentStart = hold),
     /** The bridge's next notification for the gateway; returns its spool name. */
     deliver: (message: BridgeMessage) => {

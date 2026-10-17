@@ -50,6 +50,20 @@ async fn partial_rejection_followed_by_submission_failure_remains_uncertain() {
 }
 
 #[tokio::test]
+async fn submission_failure_without_device_results_preserves_its_cause() {
+    let (sender, results) = broadcast::channel::<(String, SendResult)>(1);
+    drop(sender);
+    let task = AbortOnDropHandle::new(tokio::spawn(async { Err(PushError::APSAckError(8)) }));
+    assert_eq!(
+        submitted("them", false, Ok(results), String::clone, Some(task))
+            .await
+            .unwrap_err()
+            .cause["code"],
+        8
+    );
+}
+
+#[tokio::test]
 async fn unanimous_rejection_requires_successful_completion_and_cancellation_stops_work() {
     for panic in [false, true] {
         let (sender, results) = broadcast::channel(1);

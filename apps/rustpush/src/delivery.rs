@@ -46,7 +46,7 @@ pub async fn submitted<T: Clone>(
     };
     // A closed result channel is not proof that every device answered: the task may have failed.
     // No-reply operations also require the submission task to finish successfully.
-    if no_reply || matches!(outcome, Ok(Delivery::Failed(_) | Delivery::Rejected(_))) {
+    if no_reply || !matches!(outcome, Ok(Delivery::Sent)) {
         if let Some(task) = completion {
             task.await
                 .map_err(|_| Failure::new("send", "submission_task_failed"))?

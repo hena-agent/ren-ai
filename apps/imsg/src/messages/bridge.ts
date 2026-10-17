@@ -165,7 +165,10 @@ export const startBridge = (
           }),
         );
         connection = current;
-        yield* Stream.fromQueue(current.input).pipe(Stream.run(child.stdin), Effect.forkScoped);
+        const writer = yield* Stream.fromQueue(current.input).pipe(
+          Stream.run(child.stdin),
+          Effect.forkScoped,
+        );
         const lines = yield* child.stdout.pipe(
           Stream.decodeText,
           Stream.splitLines,
@@ -173,14 +176,20 @@ export const startBridge = (
           Effect.forkScoped,
         );
         // The bridge answers only once its Apple session is restored; requests wait for that.
-        yield* write("handles", {}, false).pipe(
+        const handshakeId = randomUUID();
+        yield* observe(
+          "rustpush.handshake",
+          write("handles", {}, false, handshakeId),
+          () => ({}),
+          handshakeId,
+        ).pipe(
           Effect.andThen(Effect.sync(() => (current.ready = true))),
           Effect.andThen(log("info", { stage: "bridge.start", outcome: "ready" })),
           Effect.andThen(alerts.clear("rustpush-bridge")),
-          Effect.ignore,
+          Effect.catch(() => current.kill),
           Effect.forkScoped,
         );
-        yield* Fiber.join(lines);
+        yield* Effect.raceFirst(Fiber.join(lines), Fiber.join(writer));
       }),
     );
     const restart = options.restartMillis ?? 1000;

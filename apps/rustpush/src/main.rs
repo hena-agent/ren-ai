@@ -116,7 +116,7 @@ async fn run(args: &[String], request_id: &str) -> Result<(), Failure> {
         client: session.client,
         connection: session.connection,
     };
-    command::require_handle(&handle, &rpc::Native::handles(&native).await?)?;
+    command::require_handle(&handle, &native.client.identity.get_handles().await)?;
     let input = tokio::io::BufReader::new(tokio::io::stdin());
     let state = rpc::Session {
         native: Arc::new(native),

@@ -207,3 +207,31 @@ test("an unresponsive bridge times out and is restarted without retrying its sen
     }),
   );
 });
+
+test("a transient startup probe failure restarts the bridge and permits recovery", async () => {
+  const h = harness();
+  h.bridge.answer("handles", { stage: "apns", cause: { code: "timeout" } });
+  await h.run((call) =>
+    Effect.gen(function* () {
+      yield* ready(call);
+      expect(h.bridge.spawned).toHaveLength(2);
+      expect(yield* call("react", {})).toEqual({ status: "sent" });
+    }),
+  );
+});
+
+test("a failed stdin write is diagnosed and restarts the bridge without resubmitting", async () => {
+  const h = harness(bridgeFixture(), 0, 100);
+  await h.run((call) =>
+    Effect.gen(function* () {
+      yield* ready(call);
+      h.bridge.failWrites(1);
+      expect(yield* call("send", {}).pipe(Effect.flip)).toMatchObject({ _tag: "BridgeLost" });
+      yield* ready(call);
+      expect(h.bridge.spawned).toHaveLength(2);
+      expect(h.bridge.requests.filter((request) => request.method === "send")).toHaveLength(0);
+    }),
+  );
+  expect(h.logs.filter((line) => line.includes('"code":"EPIPE"'))).toHaveLength(1);
+  expect(h.logs.join()).not.toContain("private spawn input");
+});

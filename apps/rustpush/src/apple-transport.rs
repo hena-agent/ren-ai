@@ -14,9 +14,9 @@ pub struct Apple {
 
 impl Native for Apple {
     async fn handles(&self) -> Result<Vec<String>, Failure> {
-        let apns = self.connection.resource_state.borrow().clone();
-        let registration = self.client.identity.resource_state.borrow().clone();
-        crate::readiness::probe(&apns, &registration, async {
+        let apns = self.connection.resource_state.subscribe();
+        let registration = self.client.identity.resource_state.subscribe();
+        crate::readiness::probe(apns, registration, async {
             let mut replies = self.connection.subscribe().await;
             self.connection.send(APSMessage::Ping).await?;
             self.connection
