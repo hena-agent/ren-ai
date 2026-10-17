@@ -2970,6 +2970,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 
@@ -4215,6 +4216,7 @@ dependencies = [
  "getrandom 0.3.3",
  "js-sys",
  "rand 0.9.4",
+ "serde",
  "uuid-macro-internal",
  "wasm-bindgen",
 ]

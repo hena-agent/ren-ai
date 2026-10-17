@@ -27,11 +27,16 @@ struct Fake {
     sent: Mutex<Vec<MessageInst>>,
     deliveries: Mutex<VecDeque<Result<Delivery, Failure>>>,
     hang_sends: std::sync::atomic::AtomicBool,
+    offline: std::sync::atomic::AtomicBool,
 }
 
 impl Native for Fake {
-    async fn handles(&self) -> Vec<String> {
-        vec![US.to_owned()]
+    async fn handles(&self) -> Result<Vec<String>, Failure> {
+        if self.offline.load(std::sync::atomic::Ordering::Relaxed) {
+            Err(Failure::new("apns", "not_ready"))
+        } else {
+            Ok(vec![US.to_owned()])
+        }
     }
 
     async fn decode(&self, raw: APSMessage) -> Result<Option<MessageInst>, Failure> {
@@ -184,7 +189,8 @@ impl Harness {
         }
     }
 
-    async fn request(&mut self, line: Value) {
+    async fn request(&mut self, mut line: Value) {
+        line["requestId"] = json!(GUID);
         self.input
             .write_all(format!("{line}\n").as_bytes())
             .await
@@ -253,7 +259,7 @@ async fn requests_send_from_the_service_handle_and_reject_invalid_input() {
     let uncertain = h.call(3, "send", send.clone()).await;
     assert_eq!(
         uncertain["error"],
-        json!({"stage": "send", "cause": {"code": "unconfirmed"}})
+        json!({"stage": "send", "cause": {"code": "unconfirmed"}, "requestId": GUID.to_lowercase()})
     );
     assert_eq!(
         h.call(4, "send", send).await["result"],

@@ -75,7 +75,9 @@ registration path; enabling/disabling it is an operator account-setting decision
 ./target/debug/ren-rustpush rpc mailto:hi@renai.im
 ```
 
-The gateway owns bridge stdin/stdout. Requests have `{id, method, params}`; replies
+The gateway owns bridge stdin/stdout. Requests have `{id, requestId, method, params}`;
+`requestId` is a gateway-generated UUID shared by gateway/native diagnostics and
+returned on errors. Replies
 have the same `id` and either `result` or a sanitized `error`. Methods are `handles`,
 `send`, `typing`, `read`, `react` and `ack`. The selected local handle is immutable
 for the process and must already be registered. Incoming events are emitted as
@@ -95,6 +97,9 @@ and downloaded images are private state and are Git-ignored. File writes use
 atomic replacement and fsync. Upstream diagnostic logging is not enabled because
 it can contain account details and message payloads.
 
+Readiness requires generated APNs and IDS resources plus a bounded live APNs ping;
+cached registration handles alone do not establish readiness.
+
 ## Build provenance
 
 `prepare.sh` checks out pinned dependencies into the repository's ignored dependency
@@ -111,6 +116,11 @@ The patch replaces the nonfunctional public hardware-validation stub with native
 NAC, selects the included legacy activation certificate explicitly, exposes send
 acknowledgement outcomes, tolerates a closed topic queue during shutdown, and
 adds an incoming-notification persistence callback before the APNs acknowledgement.
+It also disables automatic retries of unconfirmed submissions, makes send tasks
+abort on owner cancellation, and subscribes before sending while matching APNs
+acknowledgements to their exact notification ID. A closed result channel counts as
+unanimous rejection only after the submission task completes successfully; numeric
+provider rejection codes remain available in diagnostics.
 No generated placeholder activation keys are used.
 
 Rust 1.95 is pinned because this Rustpush revision uses atomic APIs unavailable in

@@ -1,11 +1,13 @@
 use crate::diagnostics::Failure;
 use rustpush::{MessageInst, PushError, SendResult};
 use tokio::sync::broadcast;
+use tokio_util::task::AbortOnDropHandle;
 
 #[derive(Debug, PartialEq)]
 pub enum Delivery {
     Sent,
     Failed(&'static str),
+    Rejected(Vec<i64>),
 }
 
 pub fn recipient(message: &MessageInst) -> Result<String, Failure> {
@@ -30,16 +32,28 @@ pub async fn submitted<T: Clone>(
     no_reply: bool,
     result: Result<broadcast::Receiver<(T, SendResult)>, PushError>,
     participant: impl Fn(&T) -> String,
+    completion: Option<AbortOnDropHandle<Result<(), PushError>>>,
 ) -> Result<Delivery, Failure> {
     let results = match result {
         Err(PushError::NoValidTargets) => return Ok(Delivery::Failed("no_imessage")),
         Err(error) => return Err(Failure::push("send", error)),
         Ok(results) => results,
     };
-    if no_reply {
-        return Ok(Delivery::Sent);
+    let outcome = if no_reply {
+        Ok(Delivery::Sent)
+    } else {
+        outcome(recipient, results, participant).await
+    };
+    // A closed result channel is not proof that every device answered: the task may have failed.
+    // No-reply operations also require the submission task to finish successfully.
+    if no_reply || matches!(outcome, Ok(Delivery::Failed(_) | Delivery::Rejected(_))) {
+        if let Some(task) = completion {
+            task.await
+                .map_err(|_| Failure::new("send", "submission_task_failed"))?
+                .map_err(|error| Failure::push("send", error))?;
+        }
     }
-    outcome(recipient, results, participant).await
+    outcome
 }
 
 /// Any recipient device accepting the message sends it; only unanimous rejection fails it.
@@ -48,7 +62,7 @@ pub async fn outcome<T: Clone>(
     mut results: broadcast::Receiver<(T, SendResult)>,
     participant: impl Fn(&T) -> String,
 ) -> Result<Delivery, Failure> {
-    let (mut rejected, mut unconfirmed) = (false, false);
+    let (mut rejected, mut unconfirmed) = (Vec::new(), false);
     loop {
         let (target, result) = match results.recv().await {
             Ok(item) => item,
@@ -63,12 +77,12 @@ pub async fn outcome<T: Clone>(
         }
         match result {
             SendResult::Sent => return Ok(Delivery::Sent),
-            SendResult::APSError(_) => rejected = true,
+            SendResult::APSError(code) => rejected.push(code),
             SendResult::TimedOut => unconfirmed = true,
         }
     }
-    if rejected && !unconfirmed {
-        Ok(Delivery::Failed("rejected"))
+    if !rejected.is_empty() && !unconfirmed {
+        Ok(Delivery::Rejected(rejected))
     } else {
         Err(Failure::new("send", "unconfirmed"))
     }

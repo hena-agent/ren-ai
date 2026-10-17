@@ -13,8 +13,20 @@ pub struct Apple {
 }
 
 impl Native for Apple {
-    async fn handles(&self) -> Vec<String> {
-        self.client.identity.get_handles().await
+    async fn handles(&self) -> Result<Vec<String>, Failure> {
+        let apns = self.connection.resource_state.borrow().clone();
+        let registration = self.client.identity.resource_state.borrow().clone();
+        crate::readiness::probe(&apns, &registration, async {
+            let mut replies = self.connection.subscribe().await;
+            self.connection.send(APSMessage::Ping).await?;
+            self.connection
+                .wait_for(&mut replies, |message| {
+                    matches!(message, APSMessage::Pong).then_some(())
+                })
+                .await
+        })
+        .await?;
+        Ok(self.client.identity.get_handles().await)
     }
 
     async fn decode(&self, raw: APSMessage) -> Result<Option<MessageInst>, Failure> {
@@ -46,12 +58,17 @@ impl Native for Apple {
 
     async fn send(&self, mut message: MessageInst) -> Result<Delivery, Failure> {
         let recipient = delivery::recipient(&message)?;
-        let result = self.client.send(&mut message).await.map(|job| job.process);
+        let result = self.client.send(&mut message).await;
+        let (result, completion) = match result {
+            Ok(job) => (Ok(job.process), job.handle),
+            Err(error) => (Err(error), None),
+        };
         delivery::submitted(
             &recipient,
             message.message.get_nr() == Some(true),
             result,
             |target| target.participant.clone(),
+            completion,
         )
         .await
     }

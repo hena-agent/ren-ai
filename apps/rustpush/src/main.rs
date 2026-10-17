@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod apns_tests;
 mod codec;
 mod command;
 mod delivery;
@@ -10,6 +12,7 @@ mod io;
 mod local_config;
 #[path = "apple-transport.rs"]
 mod native;
+mod readiness;
 mod rpc;
 #[path = "apple-session.rs"]
 mod session;
@@ -113,7 +116,7 @@ async fn run(args: &[String], request_id: &str) -> Result<(), Failure> {
         client: session.client,
         connection: session.connection,
     };
-    command::require_handle(&handle, &rpc::Native::handles(&native).await)?;
+    command::require_handle(&handle, &rpc::Native::handles(&native).await?)?;
     let input = tokio::io::BufReader::new(tokio::io::stdin());
     let state = rpc::Session {
         native: Arc::new(native),

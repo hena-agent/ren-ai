@@ -1,4 +1,5 @@
 import { Clock, Data, Deferred, Effect, Exit, Fiber, Queue, Scope, Stream } from "effect";
+import { randomUUID } from "node:crypto";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { parseFrame, type BridgeMessage, type BridgeResult } from "./bridge-protocol.ts";
 import { observe } from "../diagnostics.ts";
@@ -13,6 +14,7 @@ export class BridgeRejected extends Data.TaggedError("BridgeRejected")<{
   readonly message: string;
   readonly stage: string;
   readonly code: string;
+  readonly requestId: string;
 }> {}
 
 /** The bridge exited after receiving the request: its outcome is uncertain. */
@@ -68,7 +70,7 @@ export const startBridge = (
       | undefined;
     let sequence = 0;
     // Synchronous, so a closing bridge either sees this request as pending or refuses it.
-    const write = (method: string, params: object, requireReady = true) =>
+    const write = (method: string, params: object, requireReady = true, requestId = randomUUID()) =>
       Effect.suspend((): Effect.Effect<BridgeResult, BridgeError> => {
         if (!connection || (requireReady && !connection.ready))
           return Effect.fail(new BridgeUnavailable({ message: "Messaging bridge is not running" }));
@@ -78,13 +80,13 @@ export const startBridge = (
         pending.set(id, reply);
         Queue.offerUnsafe(
           connection.input,
-          new TextEncoder().encode(`${JSON.stringify({ id, method, params })}\n`),
+          new TextEncoder().encode(`${JSON.stringify({ id, method, params, requestId })}\n`),
         );
         return Deferred.await(reply).pipe(
           Effect.timeoutOrElse({
             duration: options.requestMillis ?? 125_000,
             orElse: () =>
-              log("error", { stage: "request.timeout", request_id: id, outcome: "uncertain" }).pipe(
+              log("error", { stage: "request.timeout", requestId, outcome: "uncertain" }).pipe(
                 Effect.andThen(active.kill),
                 Effect.andThen(
                   Effect.fail(
@@ -98,9 +100,17 @@ export const startBridge = (
       });
     const call = (method: string, params: object) =>
       // Restored notifications can arrive before the handles handshake completes.
-      observe(`rustpush.rpc.${method}`, write(method, params, method !== "ack"), () => ({
-        pending: pending.size,
-      }));
+      Effect.suspend(() => {
+        const requestId = randomUUID();
+        return observe(
+          `rustpush.rpc.${method}`,
+          write(method, params, method !== "ack", requestId),
+          () => ({
+            pending: pending.size,
+          }),
+          requestId,
+        );
+      });
     const dispatch = (line: string) =>
       Effect.gen(function* () {
         const frame = yield* Effect.try(() => parseFrame(line));
@@ -120,14 +130,15 @@ export const startBridge = (
           yield* Deferred.succeed(wait, frame.result);
           return;
         }
-        const { stage, cause: detail } = frame.error;
+        const { stage, cause: detail, requestId } = frame.error;
         const code = String(detail["code"] ?? detail["kind"] ?? "unknown");
         yield* Deferred.fail(
           wait,
           new BridgeRejected({
-            message: `Messaging bridge rejected the request at ${stage}`,
+            message: `Messaging bridge rejected the request at ${stage} (request ${requestId})`,
             stage,
             code,
+            requestId,
           }),
         );
       }).pipe(Effect.catch(() => log("error", { stage: "frame.decode", cause: "invalid_frame" })));
@@ -169,7 +180,7 @@ export const startBridge = (
           Effect.ignore,
           Effect.forkScoped,
         );
-        yield* Fiber.await(lines);
+        yield* Fiber.join(lines);
       }),
     );
     const restart = options.restartMillis ?? 1000;
@@ -178,13 +189,17 @@ export const startBridge = (
       let delay = restart;
       let failures = 0;
       for (;;) {
+        const requestId = randomUUID();
         const started = yield* Clock.currentTimeMillis;
-        const exit = yield* Effect.exit(run);
-        const quick = (yield* Clock.currentTimeMillis) - started < healthy;
+        const exit = yield* Effect.exit(observe("rustpush.process", run, () => ({}), requestId));
+        const durationMs = (yield* Clock.currentTimeMillis) - started;
+        const quick = durationMs < healthy;
         failures = quick ? failures + 1 : 1;
         delay = quick ? Math.min(delay * 2, 30_000) : restart;
         yield* log("error", {
           stage: "bridge.exit",
+          requestId,
+          durationMs,
           outcome: Exit.isSuccess(exit) ? "exited" : "spawn_failed",
           restartMillis: delay,
         });

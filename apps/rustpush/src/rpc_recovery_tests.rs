@@ -3,6 +3,55 @@ use crate::delivery::outcome;
 use rustpush::SendResult;
 use tokio::sync::broadcast;
 
+#[tokio::test]
+async fn readiness_reports_a_disconnected_apple_session_and_recovers() {
+    let mut h = Harness::start(Fake::default(), REDELIVER, |_| {}).await;
+    h.fake
+        .offline
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    let response = h.call(1, "handles", json!({})).await;
+    assert_eq!(response["error"]["stage"], "apns");
+    assert_eq!(response["error"]["cause"]["code"], "not_ready");
+    assert_eq!(
+        response["error"]["requestId"]
+            .as_str()
+            .unwrap()
+            .to_uppercase(),
+        GUID
+    );
+    h.fake
+        .offline
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(
+        h.call(2, "handles", json!({})).await["result"]["handles"][0],
+        US
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn a_rejected_send_returns_provider_codes_without_resubmitting() {
+    let fake = Fake::default();
+    fake.deliveries
+        .lock()
+        .unwrap()
+        .push_back(Ok(Delivery::Rejected(vec![5000, 5001])));
+    let mut h = Harness::start(fake, REDELIVER, |_| {}).await;
+    let response = h
+        .call(
+            1,
+            "send",
+            json!({"guid": GUID, "to": THEM, "text": "private"}),
+        )
+        .await;
+    assert_eq!(
+        response["result"],
+        json!({"status": "failed", "code": "rejected", "providerCodes": [5000, 5001]})
+    );
+    assert_eq!(h.fake.sent.lock().unwrap().len(), 1);
+    h.finish().await;
+}
+
 #[tokio::test(start_paused = true)]
 async fn unresponsive_submissions_time_out_without_retrying() {
     let fake = Fake::default();
@@ -158,7 +207,7 @@ async fn only_unanimous_rejection_by_the_recipient_fails_a_send() {
         decide(1, vec![(THEM, SendResult::APSError(5000))])
             .await
             .unwrap(),
-        Delivery::Failed("rejected")
+        Delivery::Rejected(vec![5000])
     );
     for results in [
         vec![],

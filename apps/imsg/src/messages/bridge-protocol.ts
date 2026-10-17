@@ -58,6 +58,7 @@ const frame = Schema.fromJsonString(
     Schema.Struct({
       id: Schema.Number,
       error: Schema.Struct({
+        requestId: Schema.String.check(Schema.isUUID()),
         stage: Schema.String,
         cause: Schema.Record(
           Schema.String,

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Layer, Queue, Schema, Scope, Sink, Stream } from "effect";
+import { Effect, Layer, PlatformError, Queue, Schema, Scope, Sink, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { vi } from "vitest";
 import type { BridgeMessage } from "../src/messages/bridge-protocol.ts";
@@ -12,6 +12,7 @@ export const service = "mailto:hi@renai.im";
 const request = Schema.fromJsonString(
   Schema.Struct({
     id: Schema.Number,
+    requestId: Schema.String,
     method: Schema.String,
     params: Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Boolean])),
   }),
@@ -35,7 +36,15 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
       if (!ChildProcess.isStandardCommand(command)) return yield* Effect.die("Unexpected pipeline");
       if (spawnFailures > 0) {
         spawnFailures--;
-        return yield* Effect.die("spawn failed");
+        return yield* Effect.fail(
+          PlatformError.systemError({
+            _tag: "NotFound",
+            module: "ChildProcess",
+            method: "spawn",
+            pathOrDescriptor: "/private/apple-state/secret",
+            cause: Object.assign(new Error("private spawn input"), { code: "ENOENT" }),
+          }),
+        );
       }
       spawned.push({
         command: command.command,
@@ -66,7 +75,12 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
               : { status: "sent" });
         if (answer === "exit") process.exit();
         else if (answer !== "hang")
-          emit({ id: parsed.id, ...("stage" in answer ? { error: answer } : { result: answer }) });
+          emit({
+            id: parsed.id,
+            ...("stage" in answer
+              ? { error: { ...answer, requestId: parsed.requestId } }
+              : { result: answer }),
+          });
       };
       return ChildProcessSpawner.makeHandle({
         pid: ChildProcessSpawner.ProcessId(processes.length),

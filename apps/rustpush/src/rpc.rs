@@ -17,7 +17,7 @@ use tokio::{
 
 /// The Apple session behind the bridge. An `Err` from `send` means the outcome is uncertain.
 pub trait Native: Send + Sync + 'static {
-    fn handles(&self) -> impl Future<Output = Vec<String>> + Send;
+    fn handles(&self) -> impl Future<Output = Result<Vec<String>, Failure>> + Send;
     fn decode(
         &self,
         raw: APSMessage,
@@ -48,6 +48,8 @@ type Output = mpsc::UnboundedSender<Value>;
 
 #[derive(Deserialize)]
 struct Request {
+    #[serde(rename = "requestId")]
+    request_id: uuid::Uuid,
     id: u64,
     method: String,
     #[serde(default)]
@@ -125,6 +127,9 @@ fn delivery(delivery: Delivery) -> Value {
     match delivery {
         Delivery::Sent => json!({"status": "sent"}),
         Delivery::Failed(code) => json!({"status": "failed", "code": code}),
+        Delivery::Rejected(codes) => {
+            json!({"status": "failed", "code": "rejected", "providerCodes": codes})
+        }
     }
 }
 
@@ -135,7 +140,7 @@ async fn call<N: Native>(
     input: Value,
 ) -> Result<Value, Failure> {
     let message = match method {
-        "handles" => return Ok(json!({"handles": native.handles().await})),
+        "handles" => return Ok(json!({"handles": native.handles().await?})),
         "send" => {
             let p: Text = params(input)?;
             guid(&p.guid)?;
@@ -164,11 +169,11 @@ async fn call<N: Native>(
     native.send(message).await.map(delivery)
 }
 
-fn reply(id: u64, result: Result<Value, Failure>) -> Value {
+fn reply(id: u64, result: Result<Value, Failure>, request_id: &str) -> Value {
     match result {
         Ok(result) => json!({"id": id, "result": result}),
         Err(failure) => {
-            json!({"id": id, "error": {"stage": failure.stage, "cause": failure.cause}})
+            json!({"id": id, "error": {"stage": failure.stage, "cause": failure.cause, "requestId": request_id}})
         }
     }
 }
@@ -363,6 +368,7 @@ pub async fn serve<N: Native>(
             continue;
         };
         if request.method == "ack" {
+            let request_id = request.request_id.to_string();
             let result = params::<Ack>(request.params).map(|ack| {
                 let waiting = acks
                     .lock()
@@ -370,7 +376,10 @@ pub async fn serve<N: Native>(
                     .remove(&ack.spool);
                 json!({"acknowledged": waiting.is_some_and(|waiting| waiting.send(()).is_ok())})
             });
-            let _ = sender.send(reply(request.id, result));
+            if let Err(failure) = &result {
+                report("warn", "ack", &request_id, failure);
+            }
+            let _ = sender.send(reply(request.id, result, &request_id));
             continue;
         }
         let (native, handle, sender) = (
@@ -379,7 +388,7 @@ pub async fn serve<N: Native>(
             sender.clone(),
         );
         jobs.spawn(async move {
-            let request_id = uuid::Uuid::new_v4().to_string();
+            let request_id = request.request_id.to_string();
             let started = Instant::now();
             let operation = match request.method.as_str() {
                 "handles" | "send" | "typing" | "read" | "react" => request.method.as_str(),
@@ -403,16 +412,24 @@ pub async fn serve<N: Native>(
                     failure,
                 );
             }
+            let rejected = result.as_ref().is_ok_and(|value| value["status"] == "failed");
+            if let Ok(value) = &result {
+                if rejected {
+                    report("warn", operation, &request_id, &Failure {
+                        stage: "send", cause: json!({"code": value["code"], "providerCodes": value["providerCodes"]}),
+                    });
+                }
+            }
             eprintln!(
                 "{}",
                 json!({
                     "level": "info", "service": "rustpush", "request_id": request_id,
                     "operation": operation, "stage": "complete",
-                    "outcome": if result.is_ok() { "success" } else { "failure" },
+                    "outcome": if result.is_ok() && !rejected { "success" } else { "failure" },
                     "duration_ms": started.elapsed().as_millis(),
                 })
             );
-            let _ = sender.send(reply(request.id, result));
+            let _ = sender.send(reply(request.id, result, &request_id));
         });
     }
     // The gateway is gone: nobody can record in-flight outcomes, so stop instead of draining.

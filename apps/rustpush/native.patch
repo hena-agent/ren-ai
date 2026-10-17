@@ -79,3 +79,52 @@ diff --git a/src/aps.rs b/src/aps.rs
 -                    Ok(APSMessage::Notification { id, topic: _, token: _, payload: _, channel: _ }) => {
 +                    Ok(notification @ APSMessage::Notification { id, .. }) => {
 +                        persist_notification(&notification);
+diff --git a/src/ids/identity_manager.rs b/src/ids/identity_manager.rs
+--- a/src/ids/identity_manager.rs
++++ b/src/ids/identity_manager.rs
+@@ -991,1 +991,1 @@
+-        let mut job_spawned = tokio::spawn(job.send_targets(message_targets, 0));
++        let mut job_spawned = AbortOnDropHandle::new(tokio::spawn(job.send_targets(message_targets, 0)));
+@@ -1100,1 +1100,1 @@
+-    pub handle: Option<JoinHandle<Result<(), PushError>>>,
++    pub handle: Option<AbortOnDropHandle<Result<(), PushError>>>,
+@@ -1242,13 +1242,7 @@
+-                // will bail early if refresh_targets is empty
+-                let new_targets = self.identity.refresh_handles(self.topic, &handle, &refresh_targets).await?;
+-                remain_targets.extend(new_targets);
+-
+-                if retry_count == 5 {
+-                    for target in remain_targets {
+-                        let _ = self.status.send((target, SendResult::TimedOut));
+-                    }
+-                    info!("Retry failed {}", encode_hex(&uuid));
+-                    return Ok(())
++                // Never resubmit an uncertain message. Refresh keys for the next distinct send.
++                if !refresh_targets.is_empty() {
++                    self.identity.invalidate_id_cache().await;
+                 }
+-
+-                self.send_targets(remain_targets, retry_count + 1).await?;
++                for target in remain_targets.into_iter().chain(refresh_targets) {
++                    let _ = self.status.send((target, SendResult::TimedOut));
++                }
+diff --git a/src/aps.rs b/src/aps.rs
+--- a/src/aps.rs
++++ b/src/aps.rs
+@@ -640,1 +640,7 @@
+ impl APSMessage {
++    pub fn ack_for(self, id: i32) -> Option<u8> {
++        match self {
++            Self::Ack { for_id, status, .. } if for_id == id => Some(status),
++            _ => None,
++        }
++    }
+@@ -1474,1 +1483,2 @@
+         let my_id = id.unwrap_or_else(|| new_aps_id());
++        let responses = self.subscribe().await;
+@@ -1482,4 +1492,1 @@
+-        let status = self.wait_for_timeout(self.subscribe().await, |msg| {
+-            let APSMessage::Ack { token: _token, for_id: _, status } = msg else { return None };
+-            Some(status)
+-        }).await?;
++        let status = self.wait_for_timeout(responses, |msg| msg.ack_for(my_id)).await?;

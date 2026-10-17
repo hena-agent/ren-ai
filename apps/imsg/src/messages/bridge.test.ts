@@ -116,6 +116,9 @@ test("requests wait for the restored session and carry their answers back", asyn
   expect(rejection[0]).toContain('"stage":"rustpush.rpc.send"');
   expect(rejection[0]).toMatch(/"requestId":"[0-9a-f-]{36}"/);
   expect(rejection[0]).toContain('"durationMs":');
+  const requestId = h.bridge.requests.find((request) => request.method === "send")?.requestId;
+  expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(rejection[0]).toContain(`"requestId":"${requestId}"`);
   expect(h.logs.join()).not.toContain("private-handle");
   expect(h.logs.join()).not.toContain("private-text");
 });
@@ -183,6 +186,12 @@ test("an exiting bridge leaves its requests in doubt and is restarted, alerting 
   );
   expect(h.alerts).toContain("raise:rustpush-bridge");
   expect(h.alerts.at(-1)).toBe("clear:rustpush-bridge");
+  const failure = h.logs.filter((line) => line.includes('"code":"ENOENT"'));
+  expect(failure).toHaveLength(1);
+  expect(failure[0]).toContain('"operation":"rustpush.process"');
+  expect(failure[0]).toMatch(/"requestId":"[0-9a-f-]{36}"/);
+  expect(h.logs.join()).not.toContain("private spawn input");
+  expect(h.logs.join()).not.toContain("/private/apple-state/secret");
 });
 
 test("an unresponsive bridge times out and is restarted without retrying its send", async () => {

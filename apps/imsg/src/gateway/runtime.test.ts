@@ -45,6 +45,18 @@ test("the independently configured Mac service starts with only messaging creden
             token: "only-messaging",
           });
           yield* Effect.promise(() => vi.waitFor(() => Effect.runPromise(remote.probe())));
+          const health = () =>
+            fetch(`${listenerUrl(gateway.listener)}/health`, {
+              headers: { Authorization: "Bearer only-messaging" },
+            });
+          bridge.answer("handles", { stage: "apns", cause: { code: "not_ready" } });
+          const degraded = yield* Effect.promise(health);
+          expect(degraded.status).toBe(503);
+          expect(degraded.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
+          expect(yield* Effect.promise(() => degraded.json())).toMatchObject({
+            status: "degraded",
+          });
+          expect((yield* Effect.promise(health)).status).toBe(200);
           expect(bridge.spawned[0]).toEqual({
             command: join(directory, "ren-rustpush"),
             args: ["rpc", service],

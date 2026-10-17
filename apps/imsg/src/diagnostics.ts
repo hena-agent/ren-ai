@@ -6,9 +6,10 @@ export const observe = <A, E extends Error, R>(
   operation: string,
   body: Effect.Effect<A, E, R>,
   metrics: () => Record<string, number>,
+  correlation?: string,
 ) =>
   Effect.gen(function* () {
-    const requestId = randomUUID();
+    const requestId = correlation ?? randomUUID();
     const started = yield* Clock.currentTimeMillis;
     return yield* body.pipe(
       Effect.onExit((exit) =>
