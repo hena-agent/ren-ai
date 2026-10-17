@@ -29,18 +29,28 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           admitted: number;
           occupied: number;
           testHandle: number;
+          endedAt: number | null;
+          endingComplete: number | null;
         }>`SELECT r.id, r.handle, r.created_at AS createdAt, c.state, c.persona_id AS personaID,
-      c.scheduled_at AS scheduledAt, c.request_id AS requestId,
+      c.scheduled_at AS scheduledAt, c.request_id AS requestId, v.ended_at AS endedAt,
+      EXISTS(SELECT 1 FROM send s WHERE s.conversation_id = v.id AND s.tool_call_id = e.call_id || ':notice:' || e.notice_attempt AND s.state IN ('sent','delivered')) AS endingComplete,
       EXISTS(SELECT 1 FROM blocked WHERE handle = r.handle) OR EXISTS(SELECT 1 FROM removal WHERE handle = r.handle)
         OR EXISTS(SELECT 1 FROM reset WHERE handle = r.handle AND complete = 0) AS unavailable,
-      EXISTS(SELECT 1 FROM user WHERE handle = r.handle AND joined_at IS NOT NULL) AS admitted,
-      EXISTS(SELECT 1 FROM user WHERE handle = r.handle) OR EXISTS(SELECT 1 FROM persona_assignment WHERE handle = r.handle) AS occupied,
+      EXISTS(SELECT 1 FROM user u WHERE u.handle = r.handle AND u.joined_at IS NOT NULL
+        AND (EXISTS(SELECT 1 FROM conversation c WHERE c.user_id = u.id AND c.ended_at IS NULL)
+          OR NOT EXISTS(SELECT 1 FROM conversation c WHERE c.user_id = u.id AND c.ended_at IS NOT NULL))) AS admitted,
+      EXISTS(SELECT 1 FROM user u WHERE u.handle = r.handle AND (u.persona_id IS NOT NULL
+        OR NOT EXISTS(SELECT 1 FROM conversation c WHERE c.user_id = u.id AND c.ended_at IS NOT NULL)))
+        OR EXISTS(SELECT 1 FROM persona_assignment WHERE handle = r.handle) AS occupied,
       EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle
-      FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id ORDER BY r.created_at, r.id`;
+      FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id
+      LEFT JOIN conversation v ON v.session_id = c.session_id LEFT JOIN conversation_end e ON e.conversation_id = v.id
+      WHERE r.archived_at IS NULL ORDER BY r.created_at, r.id`;
         const likes = yield* sql<{
           registrationID: string;
           personaID: string;
-        }>`SELECT registration_id AS registrationID, persona_id AS personaID FROM discovery_like`;
+        }>`SELECT l.registration_id AS registrationID, l.persona_id AS personaID FROM discovery_like l
+          JOIN discovery_registration r ON r.id = l.registration_id WHERE r.archived_at IS NULL`;
         const taken = yield* sql<{ id: string }>`SELECT persona_id AS id FROM persona_assignment
       UNION SELECT COALESCE(conversation.persona_id, user.persona_id) FROM user
       LEFT JOIN conversation ON conversation.user_id = user.id`;
@@ -84,6 +94,9 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
             scheduledAt: row.scheduledAt,
             requestId: row.requestId,
             testHandle: row.testHandle === 1,
+            ...(row.endedAt !== null && {
+              relationshipEnd: { at: row.endedAt, noticeDelivered: row.endingComplete === 1 },
+            }),
           } satisfies typeof ContactEntry.Type;
         });
         return {

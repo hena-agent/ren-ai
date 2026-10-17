@@ -3,6 +3,7 @@ import { discoveryNotice } from "@ren-ai/onboarding";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { JoinForm } from "./join-form.tsx";
 import type { DiscoveryClient } from "./client.ts";
+import { ReselectionError } from "./client.ts";
 
 const liked = [
   {
@@ -35,8 +36,36 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/");
   delete window.turnstile;
   vi.unstubAllEnvs();
+});
+
+test("reselection submits the private fragment token with the existing address and normal consent", async () => {
+  const token = "a".repeat(64);
+  window.history.replaceState(null, "", `/#reselect=${token}`);
+  submit.mockResolvedValueOnce({ status: "waiting" });
+  mount();
+  fill("existing@example.com");
+  await act(async () =>
+    fireEvent.submit(screen.getByRole("button", { name: "동의하고 대기 등록" }).closest("form")!),
+  );
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({ handle: "existing@example.com", reselectionToken: token }),
+  );
+  expect(done).toHaveBeenCalledWith("waiting");
+});
+
+test("reselection identifies the new relationship flow and explains an invalid or stale private link", async () => {
+  window.history.replaceState(null, "", `/#reselect=${"b".repeat(64)}`);
+  submit.mockRejectedValueOnce(new ReselectionError("invalid link"));
+  mount();
+  expect(screen.getByRole("heading", { name: "다른 페르소나와 새롭게 시작해요" })).toBeDefined();
+  fill();
+  await act(async () =>
+    fireEvent.submit(screen.getByRole("button", { name: "동의하고 대기 등록" }).closest("form")!),
+  );
+  expect(screen.getByRole("alert").textContent).toContain("이 재선택 링크를 사용할 수 없어요");
 });
 
 function mount(selected = liked) {

@@ -32,6 +32,9 @@ export const ContactEntry = Schema.Struct({
   scheduledAt: Schema.NullOr(Schema.Number),
   requestId: Schema.NullOr(Schema.String),
   testHandle: Schema.optionalKey(Schema.Boolean),
+  relationshipEnd: Schema.optionalKey(
+    Schema.Struct({ at: Schema.Number, noticeDelivered: Schema.Boolean }),
+  ),
 });
 export const ContactSnapshot = Schema.Struct({
   entries: Schema.Array(ContactEntry),

@@ -69,6 +69,25 @@ test("registry persists state on the Durable Object across recreation", async ()
   const persistence = await mkdtemp(join(tmpdir(), "api-app-store-"));
   try {
     let runtime = await openRuntime(persistence);
+    const migrated = await call(runtime, "/__fixture/legacy-registration");
+    expect(migrated.status).toBe(200);
+    expect(await migrated.json()).toEqual({
+      registrations: [
+        { id: "original", archived_at: 200 },
+        { id: "next", archived_at: null },
+      ],
+      likes: [{ registration_id: "original", persona_id: "seoyul" }],
+      languages: [{ registration_id: "original", conversation_language: "ko" }],
+      contacts: [
+        {
+          registration_id: "original",
+          persona_id: "seoyul",
+          selection_id: "selection-original",
+          state: "active",
+        },
+      ],
+      violations: [],
+    });
     const profiles = await call(runtime, "/discovery/personas");
     expect(profiles.status).toBe(200);
     expect(await profiles.json()).toHaveLength(2);

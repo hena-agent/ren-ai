@@ -23,7 +23,7 @@ export const contactFixture = Effect.gen(function* () {
   const register = (handle: string, likes = ["luna"]) =>
     Effect.gen(function* () {
       const id = randomUUID();
-      yield* sql`INSERT INTO discovery_registration VALUES (${id}, ${handle}, 'ko', 'web-consent', 123)`;
+      yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at) VALUES (${id}, ${handle}, 'ko', 'web-consent', 123)`;
       for (const persona of likes)
         yield* sql`INSERT INTO discovery_like VALUES (${id}, ${persona})`;
       return id;
@@ -36,7 +36,7 @@ export const dueContact = (handle: string, personaID: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const registration = randomUUID();
-    yield* sql`INSERT INTO discovery_registration VALUES (${registration}, ${handle}, 'ko', 'v1', 1)`;
+    yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at) VALUES (${registration}, ${handle}, 'ko', 'v1', 1)`;
     yield* sql`INSERT INTO discovery_selection VALUES (${registration}, 1, 1)`;
     yield* sql`INSERT INTO persona_assignment VALUES (${personaID}, ${handle})`;
     yield* sql`INSERT INTO discovery_contact

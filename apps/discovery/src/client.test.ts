@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
-import { discoveryClient } from "./client.ts";
+import { discoveryClient, ReselectionError } from "./client.ts";
 import { readChoices, saveChoices } from "./choices.ts";
 
 afterEach(() => {
@@ -98,6 +98,8 @@ test("the browser client reads the catalog and validates the real registration a
   await expect(discoveryClient.profiles(signal)).rejects.toThrow("Profiles unavailable");
   fetcher.mockResolvedValueOnce(new Response(null, { status: 400 }));
   await expect(discoveryClient.join(request)).rejects.toThrow("Registration unavailable");
+  fetcher.mockResolvedValueOnce(Response.json("reselection", { status: 400 }));
+  await expect(discoveryClient.join(request)).rejects.toBeInstanceOf(ReselectionError);
   fetcher.mockResolvedValueOnce(Response.json({ status: "sent" }));
   await expect(discoveryClient.join(request)).rejects.toThrow(/status/);
   fetcher.mockResolvedValueOnce(

@@ -15,6 +15,7 @@ export type DiscoveryClient = {
   profiles: (signal: AbortSignal) => Promise<readonly PublicPersona[]>;
   join: (request: DiscoveryRequest) => Promise<DiscoveryAnswer>;
 };
+export class ReselectionError extends Error {}
 
 export const discoveryClient: DiscoveryClient = {
   profiles: async (signal) => {
@@ -28,7 +29,12 @@ export const discoveryClient: DiscoveryClient = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
     });
-    if (!response.ok) throw new Error("Registration unavailable");
+    if (!response.ok) {
+      const reselection = await response.text();
+      if (reselection.trim() === '"reselection"')
+        throw new ReselectionError("Reselection link unavailable");
+      throw new Error("Registration unavailable");
+    }
     return Schema.decodeUnknownSync(DiscoveryAnswer)(await response.json());
   },
 };
