@@ -57,7 +57,7 @@ export function LanguagePanel({
       </p>
       <code>languageProficiency: {"{ ko: fluent, en: beginner }"}</code>
       <p>
-        Persona의 정체성·외형에서 성별 다음 줄에 ‘주 사용 언어: ko’, ‘모국어: ko’를 작성할 수
+        Persona의 정체성·외형에서 생년월일 다음 줄에 ‘주 사용 언어: ko’, ‘모국어: ko’를 작성할 수
         있습니다. 실력 단계는 beginner · conversational · proficient · fluent입니다.
       </p>
       <button

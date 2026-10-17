@@ -16,7 +16,7 @@ const original = decodePersona({
   name: sheet.name,
   gender: "female" as const,
   description: withPublicProfile(
-    "혼자 사진을 찍는 하린. 말수가 적고 자기 시간을 소중히 여긴다.",
+    `## 정체성·외형\n\n이름: ${sheet.name}\n성별: 여성\n생년월일: ${sheet.birthDate}\n\n혼자 사진을 찍는 하린. 말수가 적고 자기 시간을 소중히 여긴다.`,
     legacy.bio,
   ),
   published: true,

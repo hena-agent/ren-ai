@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PublicProfileView } from "@ren-ai/personas/public-profile-view";
 import { projectPublicProfile } from "@ren-ai/personas/profile-projection";
 import { splitPersonaMarkdown } from "@ren-ai/personas/profile";
+import { ageOn, birthDateOf } from "@ren-ai/personas/birth-date";
 import type { PersonaImage } from "@ren-ai/personas";
 
 export function PublicPersonaPreview({
@@ -20,12 +21,19 @@ export function PublicPersonaPreview({
   const photos = images.filter((image) => image.style === style);
   const selected = Math.min(index, Math.max(0, photos.length - 1));
   let profile;
+  let age: number | undefined;
   let invalid = false;
   try {
     const markdown = splitPersonaMarkdown(source).publicMarkdown;
     if (markdown) profile = projectPublicProfile(markdown);
   } catch {
     invalid = true;
+  }
+  try {
+    const birthDate = birthDateOf(source);
+    if (birthDate) age = ageOn(birthDate);
+  } catch {
+    age = undefined;
   }
   return (
     <section className="public-persona-preview" aria-label="사용자에게 보이는 프로필">
@@ -81,7 +89,10 @@ export function PublicPersonaPreview({
         </div>
       )}
       <div className="public-profile-body">
-        <h2>{name || "새 페르소나"}</h2>
+        <h2>
+          {name || "새 페르소나"}
+          {age !== undefined && `, ${age}`}
+        </h2>
         {invalid ? (
           <p>공개 프로필의 형식을 확인해 주세요.</p>
         ) : profile ? (

@@ -62,8 +62,10 @@ export function catalogClient(connection: CatalogConnection, fetcher: typeof fet
         const personas = new Map(entries);
         if (personas.size !== entries.length) throw new Error("Duplicate persona ID");
         return { revision: snapshot.revision, personas };
-      } catch {
-        throw new Error("Invalid private Catalog response");
+      } catch (cause) {
+        throw Object.assign(new Error("Invalid private Catalog response", { cause }), {
+          code: "CATALOG_INVALID_PRIVATE_RESPONSE",
+        });
       }
     },
     publicList: async () => {
@@ -73,8 +75,10 @@ export function catalogClient(connection: CatalogConnection, fetcher: typeof fet
           await response.json(),
         );
         return profiles;
-      } catch {
-        throw new Error("Invalid public Catalog response");
+      } catch (cause) {
+        throw Object.assign(new Error("Invalid public Catalog response", { cause }), {
+          code: "CATALOG_INVALID_PUBLIC_RESPONSE",
+        });
       }
     },
   };

@@ -20,6 +20,7 @@ import type { InitialDocuments } from "./initial.ts";
 import { publicationIssues } from "./publication.ts";
 import { parseInitialState } from "./initial.ts";
 import { languageSummary } from "./languages.ts";
+import { ageOn, birthDateOf } from "./birth-date.ts";
 import { nextPersonaVersion, requireVersion } from "./versions.ts";
 import type { SaveSnapshot } from "./versions.ts";
 import { historyFor, readVersions, writeVersionFiles } from "./version-files.ts";
@@ -216,12 +217,14 @@ export async function createPersonaStore(directory: string) {
               prompt,
             }) => {
               const initial = await readInitialFiles(directory, id);
+              const birthDate = birthDateOf(prompt);
               const languages = initial?.state.trim()
                 ? languageSummary(prompt, parseInitialState(initial.state).languageProficiency)
                 : undefined;
               return {
                 id,
                 name,
+                ...(birthDate && { age: ageOn(birthDate) }),
                 bio,
                 imageUrl,
                 ...(portraits === undefined ? {} : { portraits }),

@@ -10,6 +10,9 @@ export default defineConfig({
       "@ren-ai/personas/languages": fileURLToPath(
         new URL("../../packages/personas/src/languages.ts", import.meta.url),
       ),
+      "@ren-ai/personas/birth-date": fileURLToPath(
+        new URL("../../packages/personas/src/birth-date.ts", import.meta.url),
+      ),
       "@ren-ai/personas/profile-sections": fileURLToPath(
         new URL("../../packages/personas/src/profile-sections.ts", import.meta.url),
       ),

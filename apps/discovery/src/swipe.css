@@ -74,18 +74,6 @@
   object-fit: cover;
   pointer-events: none;
 }
-.profile-label {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  color: var(--ink);
-  background: #fffffff2;
-  font-size: 11px;
-  font-weight: 600;
-  pointer-events: none;
-}
 .profile-caption {
   position: absolute;
   inset: auto 0 0;

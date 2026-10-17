@@ -241,8 +241,11 @@ they serve other authentication/provider purposes. Public
   profile listing; draft and unreferenced images are also accessible by URL.
   Unpublishing or removing a reference does not revoke an image URL. Originals remain.
   New UUID-keyed uploads use `Cache-Control: public, max-age=31536000, immutable`.
-  Local development uses authenticated `/images/<key>` against local R2; local
-  Catalog responses resolve those URLs against the Admin request origin.
+  Local development serves `/images/<key>` publicly from local R2 at the Worker
+  edge, matching the production bucket's direct-public-image behavior for drafts,
+  unpublished personas and unreferenced originals. This route exists only with
+  `ADMIN_JURISDICTION=local`; editor and private API routes remain authenticated.
+  Local Catalog responses resolve those URLs against the Admin request origin.
 - Each alarm processes one photo. Persist `generating` before a paid call and
   checkpoint the completed URL and preview together. An interrupted in-flight
   photo needs an operator-confirmed retry; completed siblings and deduplication

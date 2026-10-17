@@ -30,7 +30,7 @@ function ProfileCaption({ persona }: { persona: PublicPersona }) {
     persona.profile?.sections.flatMap((section) =>
       section.type === "basics" ? section.items : [],
     ) ?? [];
-  const age = facts.find((fact) => fact.key === "age")?.value;
+  const age = persona.age;
   const metadata = ["occupation", "location"]
     .map((key) => facts.find((fact) => fact.key === key)?.value)
     .filter(Boolean)
@@ -39,7 +39,7 @@ function ProfileCaption({ persona }: { persona: PublicPersona }) {
     <div className="profile-caption">
       <h2>
         {persona.name}
-        {age && ` · ${age}`}
+        {age !== undefined && `, ${age}`}
       </h2>
       {metadata && <p className="profile-meta">{metadata}</p>}
       <p>{persona.bio}</p>
@@ -216,7 +216,6 @@ export function Card({
                 onChange={setImage}
                 disabled={exit !== undefined}
               />
-              <span className="profile-label">{copy.profileLabel}</span>
               {(drag > 24 || exit === "like") && (
                 <span className="swipe-stamp like-stamp" aria-hidden="true">
                   LIKE

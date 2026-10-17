@@ -5,12 +5,12 @@ import {
   serializePersona,
   versionedPersona,
 } from "@ren-ai/personas";
-import type { PersonaRecord } from "@ren-ai/personas";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import { characterOf, authorPersona } from "./authoring.ts";
 import type { Draft } from "./draft.ts";
 import type { ProfileGenerator } from "./generation.ts";
 import { operation, GenerationError, protect, validationFailure } from "./logging.ts";
+import { birthDateOf } from "@ren-ai/personas/birth-date";
 
 export function captureImprovement(form: FormData, draft: Draft): Draft {
   const scope = form.get("improvementScope") ?? "persona";
@@ -26,17 +26,18 @@ export function captureImprovement(form: FormData, draft: Draft): Draft {
 }
 
 export async function improvePersona(
-  persona: PersonaRecord,
+  persona: ReturnType<typeof authorPersona>,
   draft: Draft,
   generator: ProfileGenerator,
 ): Promise<Draft> {
   const input = draft.improvementInput!;
+  const originalBirthDate = birthDateOf(persona.description);
   const result = await operation("persona.improve", {}, async () => {
     const improved =
       input.scope === "profile"
         ? {
             description: withPublicProfile(
-              persona.description!,
+              persona.description,
               await generator.profile(characterOf(persona), input.instructions),
             ),
             additions: ["공개 프로필을 개선했습니다. 비공개 인물 설정은 유지했습니다."],
@@ -57,6 +58,10 @@ export async function improvePersona(
           status.issues[0]?.message ?? "Persona 문서가 비어 있습니다.",
         ),
       );
+    if (originalBirthDate && birthDateOf(improved.description) !== originalBirthDate)
+      throw new GenerationError("Improvement changed persona birth date", {
+        code: "improvement_identity_mismatch",
+      });
     return improved;
   });
   protect(result.description, ...result.additions);
@@ -71,7 +76,7 @@ export async function improvePersona(
     tab: "persona",
     imageEditing: true,
     conversion: {
-      source: persona.description!,
+      source: persona.description,
       additions: result.additions,
     },
   };

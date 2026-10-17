@@ -5,6 +5,19 @@ import { useCopy } from "./locale.tsx";
 import { ProfileLanguages } from "./profile-languages.tsx";
 import { PublicProfileView } from "@ren-ai/personas/public-profile-view";
 
+function profileWithoutLegacyAge(profile: NonNullable<StyledPersona["profile"]>) {
+  return {
+    ...profile,
+    sections: profile.sections
+      .map((section) =>
+        section.type === "basics"
+          ? { ...section, items: section.items.filter((item) => item.key !== "age") }
+          : section,
+      )
+      .filter((section) => section.type !== "basics" || section.items.length > 0),
+  };
+}
+
 function DetailsGallery({
   persona,
   image,
@@ -77,7 +90,10 @@ export function ProfileDetails({
   return (
     <section className="profile-details" aria-labelledby="details-title">
       <div className="details-toolbar">
-        <h2 id="details-title">{persona.name}</h2>
+        <span className="details-toolbar-name" aria-hidden="true">
+          {persona.name}
+          {persona.age !== undefined && `, ${persona.age}`}
+        </span>
         <button
           className="details-close"
           ref={close}
@@ -97,9 +113,16 @@ export function ProfileDetails({
           disabled={disabled}
         />
         <div className="details-content">
-          <span className="details-label">{copy.profileLabel}</span>
+          <h2 id="details-title" className="details-name">
+            {persona.name}
+            {persona.age !== undefined && `, ${persona.age}`}
+          </h2>
+          {persona.profile ? (
+            <PublicProfileView profile={profileWithoutLegacyAge(persona.profile)} />
+          ) : (
+            <p>{persona.bio}</p>
+          )}
           <ProfileLanguages persona={persona} />
-          {persona.profile ? <PublicProfileView profile={persona.profile} /> : <p>{persona.bio}</p>}
         </div>
       </div>
     </section>

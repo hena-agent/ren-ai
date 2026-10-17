@@ -13,6 +13,7 @@ import { splitPersonaMarkdown, withPublicProfile } from "@ren-ai/personas/profil
 import { captureImprovement } from "./persona-improvement.ts";
 import { serializePersona } from "@ren-ai/personas";
 import { draftTokens } from "./draft.ts";
+import { birthDateOf } from "@ren-ai/personas/birth-date";
 
 const profile =
   "천천히 알아가요.\n\n### 라이프스타일\n\n주말엔 늦잠을 자고 동네를 걸어요.\n\n### 관심사\n\n산책, 재즈\n\n### 문답: 완벽한 일요일은?\n\n늦잠 자고 동네 책방에 가요.";
@@ -42,6 +43,7 @@ async function setup() {
 test("improvement automatically updates the draft, survives reload and saves without changing photos or initial siblings", async () => {
   const { admin, store, convert, fields } = await setup();
   const original = await store.get("legacy");
+  expect(birthDateOf(updated)).toBe(birthDateOf(character.description));
   const proposal = await admin(request("/personas/legacy", { ...fields, intent: "improve" }));
   expect(proposal.status).toBe(200);
   const page = await proposal.text();
@@ -78,6 +80,46 @@ test("improvement automatically updates the draft, survives reload and saves wit
   expect(await (await admin(request("/personas/legacy"))).text()).not.toContain(
     "data-improvement-source",
   );
+});
+
+test("persona improvement completes a missing or invalid birthday and saves the reviewed date with existing photos and initial documents", async () => {
+  const { admin, store, convert } = await setup();
+  for (const description of [
+    character.description.replace(/^생년월일: .*\n/m, ""),
+    character.description.replace("1998-04-12", "1998-02-30"),
+  ]) {
+    await store.update({
+      ...(await store.get("legacy")),
+      description,
+      prompt: description,
+      published: false,
+    });
+    const page = await (await admin(request("/personas/legacy"))).text();
+    const response = await admin(
+      request("/personas/legacy", {
+        ...character,
+        description,
+        draft: tokenOf(page),
+        intent: "improve",
+      }),
+    );
+    expect(response.status).toBe(200);
+    const improvedPage = await response.text();
+    expect(birthDateOf(preview(improvedPage).description!)).toBe("1998-04-12");
+    const saved = await admin(
+      request("/personas/legacy", {
+        ...character,
+        description: preview(improvedPage).description!,
+        draft: tokenOf(improvedPage),
+        published: "on",
+        intent: "save",
+      }),
+    );
+    expect(saved.status).toBe(303);
+    expect(birthDateOf((await store.get("legacy")).description!)).toBe("1998-04-12");
+    expect(await store.initial("legacy")).toEqual(initialDocuments);
+  }
+  expect(convert).toHaveBeenCalledTimes(2);
 });
 
 test("profile-only improvement preserves private edits and the result remains directly editable and publishable", async () => {
@@ -235,6 +277,7 @@ test("improvement rejects invalid results with shared document diagnostics befor
   const { admin, fields, convert, logs } = await setup();
   for (const result of [
     { ...character, name: "다른 이름" },
+    { ...character, description: character.description.replace("1998-04-12", "1998-04-13") },
     { ...character, description: "" },
     { ...character, description: character.description.replace("## 말투", "## 잘못된 섹션") },
     {
@@ -253,9 +296,12 @@ test("improvement rejects invalid results with shared document diagnostics befor
     );
     expect(failure?.stage).toBe("persona.improve");
     expect(failure?.code).toBe(
-      result.name !== character.name ? "improvement_identity_mismatch" : "invalid_character",
+      result.name !== character.name || result.description.includes("1998-04-13")
+        ? "improvement_identity_mismatch"
+        : "invalid_character",
     );
     expect(JSON.stringify(failure)).not.toContain(fields.improvementInstructions);
     expect(JSON.stringify(failure)).not.toContain(character.description);
+    expect(JSON.stringify(failure)).not.toContain("1998-04-13");
   }
 });

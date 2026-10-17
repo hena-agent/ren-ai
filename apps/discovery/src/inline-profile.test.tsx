@@ -16,7 +16,7 @@ const people = ["하린", "지우"].map((name, index) => ({
 }));
 const client = { profiles: async () => people, join: async () => ({ status: "waiting" as const }) };
 const likedButton = (name: string) =>
-  within(screen.getByRole("list", { name: "좋아요한 페르소나" })).getByRole("button", {
+  within(screen.getByRole("list", { name: "좋아한 사람" })).getByRole("button", {
     name: `${name} 프로필 보기`,
   });
 afterEach(() => {
