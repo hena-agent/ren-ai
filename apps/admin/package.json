@@ -6,7 +6,7 @@
   "main": "./worker/entry.mjs",
   "scripts": {
     "build": "bun scripts/build.mjs",
-    "dev": "wrangler dev --port ${PORT:-3729} --inspector-port ${ADMIN_INSPECTOR_PORT:-5729} --var ADMIN_JURISDICTION:local",
+    "dev": "wrangler dev --local-upstream localhost:${PORT:-3729} --port ${PORT:-3729} --inspector-port ${ADMIN_INSPECTOR_PORT:-5729} --var ADMIN_JURISDICTION:local",
     "deploy": "wrangler deploy",
     "db:generate": "drizzle-kit generate",
     "db:local": "wrangler d1 migrations apply DB --local",
