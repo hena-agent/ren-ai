@@ -49,5 +49,5 @@ export const stoppedConversations = (host: PersonaRuntime, log: ContactLog = con
         });
       }),
     );
-    return { tick, resume: sql`UPDATE conversation_end SET stopped_at = NULL`.pipe(Effect.asVoid) };
+    return { tick, resume: tick };
   });

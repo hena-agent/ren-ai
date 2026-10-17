@@ -70,7 +70,7 @@ const safeErrorNames = new Set([
   "RequestAbortedError",
 ]);
 
-const safeError = (error: Error, code: string) => {
+export const safeError = (error: Error, code: string) => {
   const safeName = safeErrorNames.has(error.name) ? error.name : "Error";
   const errorCode = "code" in error && typeof error.code === "string" ? error.code : code;
   const safeCode = /^[A-Z][A-Z0-9_]{0,63}$/.test(errorCode) ? errorCode : code;
@@ -81,6 +81,10 @@ const safeError = (error: Error, code: string) => {
     .slice(0, 8)
     .map((line) => line.trim().slice(0, 200));
   return { cause: safeName, code: safeCode, ...(stackFrames?.length ? { stackFrames } : {}) };
+};
+
+export const logEvent = (level: Level, event: LogFields) => {
+  (level === "info" ? process.stdout : process.stderr).write(`${JSON.stringify(event)}\n`);
 };
 
 const stripHopByHop = (headers: Headers) => {
@@ -114,12 +118,7 @@ export const createGateway = (options: GatewayOptions) => {
   const health = options.health ?? checkExecutorHealth;
   const now = options.now ?? Date.now;
   const id = options.id ?? randomUUID;
-  const log =
-    options.log ??
-    ((level, event) => {
-      const line = JSON.stringify(event);
-      (level === "info" ? process.stdout : process.stderr).write(`${line}\n`);
-    });
+  const log = options.log ?? logEvent;
   const emit = (level: Level, fields: LogFields) =>
     log(level, { service: "api-msg", timestamp: new Date(now()).toISOString(), level, ...fields });
 

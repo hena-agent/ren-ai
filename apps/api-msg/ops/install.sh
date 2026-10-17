@@ -7,7 +7,7 @@ root="${API_MSG_HOME:-$HOME/Library/Application Support/ren-ai-api-msg}"
 [[ "$root" == /* && ! -e "$root" ]] || { echo 'A new absolute api-msg directory is required' >&2; exit 1; }
 docker info > /dev/null
 grep -q '^TOKEN_MANAGEMENT=.' "$config" && grep -q '^OPENCODE_AUTHORIZATION=.' "$config" && grep -q '^IMSG_TOKEN=.' "$config" || { echo 'TOKEN_MANAGEMENT, OPENCODE_AUTHORIZATION and IMSG_TOKEN are required' >&2; exit 1; }
-if grep -qEv '^([[:space:]]*#.*|[[:space:]]*|TOKEN_MANAGEMENT=[^[:space:]]+|OPENCODE_URL=[^[:space:]]+|OPENCODE_AUTHORIZATION="Basic [^"]+"|IMSG_URL=[^[:space:]]+|IMSG_TOKEN=[^[:space:]]+)$' "$config"; then
+if grep -qEv '^([[:space:]]*#.*|[[:space:]]*|TOKEN_MANAGEMENT=[^[:space:]]+|APPLICATION_API_URL=[^[:space:]]+|OPENCODE_URL=[^[:space:]]+|OPENCODE_AUTHORIZATION="Basic [^"]+"|IMSG_URL=[^[:space:]]+|IMSG_TOKEN=[^[:space:]]+)$' "$config"; then
   echo 'Unexpected api-msg environment setting; use only the documented executor variables' >&2
   exit 1
 fi

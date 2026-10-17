@@ -71,6 +71,29 @@ const openWorker = async (
 const send = (runtime: Miniflare, path: string, init?: Parameters<Miniflare["dispatchFetch"]>[1]) =>
   runtime.dispatchFetch(`https://api-app.example${path}`, init);
 
+test("intake wake authenticates before scheduling and survives replacement without starting the Mac", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "api-app-wake-"));
+  try {
+    let runtime = await openWorker(persistence, false);
+    expect((await send(runtime, "/management/intake/wake", { method: "POST" })).status).toBe(401);
+    const headers = { Authorization: "Bearer management-secret" };
+    expect((await send(runtime, "/management/intake/wake", { headers })).status).toBe(405);
+    expect(
+      (await send(runtime, "/management/intake/wake", { method: "POST", headers })).status,
+    ).toBe(202);
+    await stopRuntimes();
+    runtime = await openWorker(persistence, false);
+    const watch = await send(runtime, "/management/intake/watch", { headers });
+    expect(watch.status).toBe(200);
+    expect(await watch.json()).toEqual({ rowID: 0, watched: [] });
+    expect(watch.headers.get("Cache-Control")).toBe("no-store");
+    expect((await send(runtime, "/management/intake/watch")).status).toBe(401);
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
+
 test("public reads work without private secrets while management and registration fail closed", async () => {
   const persistence = await mkdtemp(join(tmpdir(), "api-app-public-"));
   try {

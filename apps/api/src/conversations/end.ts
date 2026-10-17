@@ -122,8 +122,8 @@ export const conversationEndings = (
         for (const row of rows) {
           const requestId = randomUUID();
           const start = performance.now();
-          yield* sql`UPDATE conversation_end SET last_checked =
-            (SELECT MAX(last_checked) + 1 FROM conversation_end) WHERE conversation_id = ${row.id}`;
+          yield* sql`UPDATE conversation_end SET last_checked = MAX(${yield* Clock.currentTimeMillis},
+            (SELECT MAX(last_checked) + 1 FROM conversation_end)) WHERE conversation_id = ${row.id}`;
           const result = yield* Effect.result(finish(row).pipe(Effect.timeout("3 seconds")));
           if (Result.isFailure(result))
             log({

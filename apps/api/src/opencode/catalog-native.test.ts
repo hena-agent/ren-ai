@@ -285,7 +285,7 @@ test(
 );
 
 test(
-  "the next bounded refresh reconciles native sessions created after the catalog revision",
+  "maintenance reconciles native sessions created after the Catalog revision from its durable cache",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const retained = yield* beginRetainingParent(host);
@@ -296,9 +296,10 @@ test(
         prompt: "You have the cobalt blue notebook.",
       });
       yield* Effect.promise(() => fixture.store.update(updated));
-      yield* host.watch();
+      yield* host.refresh;
       yield* expectProfile(host, "수아 수정");
       const child = yield* host.nativeChild(retained.parent);
+      yield* host.reconcile;
       yield* expectPrompt(host, child.id, updated.prompt);
       expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
     }),

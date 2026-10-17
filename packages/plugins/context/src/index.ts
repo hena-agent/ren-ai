@@ -30,9 +30,13 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
             const persona = yield* getPersona(options, event.agent, ctx.location.directory);
             if (!persona) return;
             const now = yield* Clock.currentTimeMillis;
-            const status = yield* (
-              options.lastMessageStatus?.(event.sessionID) ?? Effect.succeed(undefined)
+            const snapshot = yield* (
+              options.context?.(
+                event.sessionID,
+                event.messages.flatMap((entry) => entry.id ?? []),
+              ) ?? Effect.succeed(undefined)
             );
+            const status = snapshot?.status;
             const state = status?.readAt ?? (status?.delivered ? "delivered" : "sent");
             const removed = cleanContext(
               event,
@@ -57,8 +61,8 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
               );
               event.system.push({ type: "text", text: memory });
             }
-            if (options.settledSends) {
-              const sends = yield* options.settledSends(event.sessionID);
+            if (snapshot) {
+              const sends = snapshot.sends;
               for (const [index, entry] of event.messages.entries()) {
                 const content = entry.content.map((part) => {
                   if (part.type === "tool-result") {
@@ -98,11 +102,6 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                 };
               }
             }
-            if (options.onContext)
-              yield* options.onContext(
-                event.sessionID,
-                event.messages.map((entry) => entry.id).filter((id) => id !== undefined),
-              );
             yield* Effect.forEach(removed, (name) =>
               options.health.raise("unexpected-tool", `OpenCode offered disallowed tool: ${name}`),
             );

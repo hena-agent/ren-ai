@@ -22,8 +22,10 @@ export const retainedSessions = (host: PersonaRuntime) => {
     const sql = yield* SqlClient.SqlClient;
     const resume = Effect.gen(function* () {
       for (const row of yield* sql<{ sessionID: string; title: string }>`
-        SELECT session_id AS sessionID, title FROM retained_session`)
+        SELECT session_id AS sessionID, title FROM retained_session WHERE stopped = 0`) {
         yield* stop(row.sessionID, row.title);
+        yield* sql`UPDATE retained_session SET stopped = 1 WHERE session_id = ${row.sessionID}`;
+      }
     });
     const retainRemoved = (sessionID: string, handle: string) =>
       Effect.gen(function* () {

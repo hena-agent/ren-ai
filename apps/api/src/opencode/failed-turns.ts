@@ -6,6 +6,13 @@ import type { PersonaRuntime } from "./runtime.ts";
 import type { Conversation, conversations } from "../conversations/conversations.ts";
 
 type Directory = Effect.Success<typeof conversations>;
+const selectedSessions = (
+  conversations: readonly Conversation[],
+  sessionIDs: readonly string[],
+) => ({
+  selected: conversations.filter((row) => sessionIDs.includes(row.sessionID)),
+  priority: new Set(sessionIDs),
+});
 type Failure = {
   session_id: string;
   fingerprint: string;
@@ -37,7 +44,12 @@ const resume = (host: PersonaRuntime, directory: Directory, sessionID: string) =
   );
 
 /** Finite heartbeat reconciliation; all deadlines and probe rotation survive actor replacement. */
-export const failedTurns = (host: PersonaRuntime, directory: Directory, alerts: FailureAlerts) =>
+export const failedTurns = (
+  host: PersonaRuntime,
+  directory: Directory,
+  alerts: FailureAlerts,
+  eager = true,
+) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const lock = yield* Semaphore.make(1);
@@ -117,6 +129,7 @@ export const failedTurns = (host: PersonaRuntime, directory: Directory, alerts: 
           Effect.catchTag("Session.NotFoundError", () => Effect.succeed(Option.none())),
         );
         if (Option.isNone(session)) {
+          yield* sql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
           yield* forget(sessionID);
           return [];
         }
@@ -183,47 +196,55 @@ export const failedTurns = (host: PersonaRuntime, directory: Directory, alerts: 
         ];
         return { selected, priority };
       });
-    const tick = Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      const conversations = yield* directory.all();
-      const active = new Set(conversations.map((conversation) => conversation.sessionID));
-      const failures = yield* sql<Failure>`SELECT * FROM failed_turn ORDER BY retry_at, session_id`;
-      for (const row of failures) if (!active.has(row.session_id)) yield* forget(row.session_id);
-      const batch = yield* inspections(
-        conversations,
-        failures.filter((row) => active.has(row.session_id)),
-      );
-      for (const conversation of batch.selected) {
-        let released: string[] = [];
-        yield* directory.admit(
-          conversation.sessionID,
-          reconcile(conversation, now).pipe(
-            Effect.tap((ids) =>
-              Effect.sync(() => {
-                released = ids;
-              }),
+    const inspect = (sessionIDs?: readonly string[]) =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        const conversations = yield* directory.all();
+        const active = new Set(conversations.map((conversation) => conversation.sessionID));
+        const failures =
+          yield* sql<Failure>`SELECT * FROM failed_turn ORDER BY retry_at, session_id`;
+        for (const row of failures) if (!active.has(row.session_id)) yield* forget(row.session_id);
+        const batch = sessionIDs
+          ? selectedSessions(conversations, sessionIDs)
+          : yield* inspections(
+              conversations,
+              failures.filter((row) => active.has(row.session_id)),
+            );
+        for (const conversation of batch.selected) {
+          let released: string[] = [];
+          yield* directory.admit(
+            conversation.sessionID,
+            reconcile(conversation, now).pipe(
+              Effect.tap((ids) =>
+                Effect.sync(() => {
+                  released = ids;
+                }),
+              ),
             ),
-          ),
-        );
-        for (const sessionID of released) yield* resume(host, directory, sessionID);
-        if (!batch.priority.has(conversation.sessionID))
-          yield* sql`INSERT INTO recovery_scan (id, conversation_id) VALUES (1, ${conversation.id})
+          );
+          for (const sessionID of released) yield* resume(host, directory, sessionID);
+          if (!batch.priority.has(conversation.sessionID))
+            yield* sql`INSERT INTO recovery_scan (id, conversation_id) VALUES (1, ${conversation.id})
             ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id`;
-      }
-      const rows = yield* pending();
-      const providers = rows.filter((row) => !row.quota);
-      if (
-        !providers.some((row) => row.provider_alerted) &&
-        providers.some((row) => now - row.failed_at >= 10 * 60_000)
-      ) {
-        yield* alerts.raise(provider, "Provider failing for 10 minutes");
-        yield* sql`UPDATE failed_turn SET provider_alerted = 1 WHERE quota = 0 AND review = 0`;
-      }
-      const due = rows.filter((row) => row.retry_at <= now);
-      const selected = due.slice(0, rows.some((row) => row.quota) ? 1 : 20);
-      for (const row of selected) yield* dispatch(row, now);
-    });
-
-    yield* tick;
-    return { tick: lock.withPermit(tick), forget };
+        }
+        const rows = yield* pending();
+        const providers = rows.filter((row) => !row.quota);
+        if (
+          !providers.some((row) => row.provider_alerted) &&
+          providers.some((row) => now - row.failed_at >= 10 * 60_000)
+        ) {
+          yield* alerts.raise(provider, "Provider failing for 10 minutes");
+          yield* sql`UPDATE failed_turn SET provider_alerted = 1 WHERE quota = 0 AND review = 0`;
+        }
+        const due = rows.filter((row) => row.retry_at <= now);
+        const selected = due.slice(0, rows.some((row) => row.quota) ? 1 : 20);
+        for (const row of selected) yield* dispatch(row, now);
+      });
+    const tick = inspect();
+    if (eager) yield* tick;
+    return {
+      tick: lock.withPermit(tick),
+      check: (ids: readonly string[]) => lock.withPermit(inspect(ids)),
+      forget,
+    };
   });

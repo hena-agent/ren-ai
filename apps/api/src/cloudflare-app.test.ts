@@ -66,6 +66,24 @@ const settledRuntime = () => {
   return result.value;
 };
 
+test("an unconfigured management boundary cannot expose edit baselines or accept wake hints", async () => {
+  const app = await createCloudflareApplication(
+    storage,
+    { ...bindings, TOKEN_MANAGEMENT: "", BOOTSTRAP_ONLY: "false" },
+    "rules",
+    fetcher,
+  );
+  try {
+    expect((await app.fetch(new Request("https://app/management/intake/watch"))).status).toBe(503);
+    expect(
+      (await app.fetch(new Request("https://app/management/intake/wake", { method: "POST" })))
+        .status,
+    ).toBe(503);
+  } finally {
+    await app.close();
+  }
+});
+
 afterEach(() => {
   controls.failStore = false;
   controls.failDatabase = false;

@@ -15,6 +15,7 @@ export const persona = Schema.Struct({
 export type Persona = typeof persona.Type;
 
 export const applicationApi = RpcGroup.make(
+  Rpc.make("observe", { payload: session, error: Schema.String }),
   Rpc.make("catalog", { success: Schema.Array(persona), error: Schema.String }),
   Rpc.make("send", {
     payload: { ...session, text: Schema.String, callID: Schema.String },
@@ -24,12 +25,6 @@ export const applicationApi = RpcGroup.make(
   Rpc.make("endConversation", {
     payload: { ...session, farewell: Schema.String, callID: Schema.String },
     success: Schema.String,
-    error: Schema.String,
-  }),
-  Rpc.make("wait", {
-    payload: { ...session, seconds: Schema.Number },
-    success: Schema.String,
-    stream: true,
     error: Schema.String,
   }),
   Rpc.make("read", {
@@ -49,22 +44,16 @@ export const applicationApi = RpcGroup.make(
   }),
   Rpc.make("context", {
     payload: { ...session, messageIDs: Schema.Array(Schema.String) },
-    error: Schema.String,
-  }),
-  Rpc.make("status", {
-    payload: session,
-    success: Schema.UndefinedOr(outgoingStatus),
-    error: Schema.String,
-  }),
-  Rpc.make("sends", {
-    payload: session,
-    success: Schema.Array(
-      Schema.Struct({
-        toolCallID: Schema.NullOr(Schema.String),
-        state: Schema.String,
-        updatedAt: Schema.Number,
-      }),
-    ),
+    success: Schema.Struct({
+      status: Schema.UndefinedOr(outgoingStatus),
+      sends: Schema.Array(
+        Schema.Struct({
+          toolCallID: Schema.NullOr(Schema.String),
+          state: Schema.String,
+          updatedAt: Schema.Number,
+        }),
+      ),
+    }),
     error: Schema.String,
   }),
   Rpc.make("alert", {

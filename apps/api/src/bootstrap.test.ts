@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { NodeServices } from "@effect/platform-node";
 import {
@@ -89,11 +89,9 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
               .react({ sessionID: "existing", tapback: "love", callID: "reaction" })
               .pipe(Effect.flip),
           ).toBe("Error: Application is in migration mode");
-          expect(
-            yield* client
-              .wait({ sessionID: "existing", seconds: 60 })
-              .pipe(Stream.runDrain, Effect.flip),
-          ).toBe("Error: Application is in migration mode");
+          expect(yield* client.observe({ sessionID: "existing" }).pipe(Effect.flip)).toBe(
+            "Error: Application is in migration mode",
+          );
           expect(external).toEqual([]);
         }).pipe(
           Effect.provide(SqliteClient.layer({ filename: ":memory:" })),

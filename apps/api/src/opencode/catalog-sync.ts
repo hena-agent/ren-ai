@@ -11,6 +11,7 @@ import { managedSessions } from "./managed-sessions.ts";
 import { awaitPersonaAgent } from "./agent-readiness.ts";
 import { randomUUID } from "node:crypto";
 import { contactLog } from "../discovery/diagnostics.ts";
+import { cachedCatalog } from "../personas/cached-catalog.ts";
 
 type Client = Effect.Success<ReturnType<typeof OpenCode.make>>;
 
@@ -57,12 +58,19 @@ const applyPersona = Effect.fn("applyPersona")(function* (
   requestId: string,
 ) {
   const started = performance.now();
+  const snapshot = renderSnapshot(persona, groundRules);
+  const existing = yield* client
+    .rpc(sessionFolders)
+    .read({ folderID }, { location: { directory: root } });
+  if (
+    existing.agent === snapshot.agent &&
+    existing.rules === snapshot.rules &&
+    JSON.stringify(existing.persona) === JSON.stringify(snapshot.persona)
+  )
+    return;
   yield* client
     .rpc(sessionFolders)
-    .update(
-      { folderID, snapshot: renderSnapshot(persona, groundRules) },
-      { location: { directory: root } },
-    );
+    .update({ folderID, snapshot }, { location: { directory: root } });
   yield* awaitPersonaAgent(client.agent, sessionDirectory(root, folderID), persona);
   contactLog({
     requestId,
@@ -140,22 +148,26 @@ export const catalogRefresher = (
   load: () => Promise<{ revision: string; personas: Map<string, PersonaRecord> }>,
   personas: Map<string, PersonaRecord>,
 ) => {
-  let revision: string | undefined;
-  return {
-    refresh: Effect.fn("refreshCatalog")(function* (groundRules: string) {
-      const snapshot = yield* Effect.tryPromise(load);
-      const changed = snapshot.revision !== revision;
+  const apply = (groundRules: string, refresh: boolean) =>
+    Effect.gen(function* () {
+      const saved = yield* cachedCatalog(load, groundRules);
+      const snapshot = yield* refresh ? saved.fresh : saved.current;
       const next = new Map(snapshot.personas);
       for (const [id, persona] of next) {
         const current = personas.get(id);
         if (current && current.description === persona.description)
           next.set(id, { ...persona, memory: current.memory });
       }
-      yield* synchronize(client, root, next, groundRules);
-      if (!changed) return;
+      yield* saved.synchronize(
+        { ...snapshot, personas: next },
+        synchronize(client, root, next, groundRules),
+        true,
+      );
       personas.clear();
       for (const [id, persona] of next) personas.set(id, persona);
-      revision = snapshot.revision;
-    }, withLifecycle),
+    }).pipe(withLifecycle);
+  return {
+    refresh: (groundRules: string) => apply(groundRules, true),
+    reconcile: (groundRules: string) => apply(groundRules, false),
   };
 };

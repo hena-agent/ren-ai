@@ -5,7 +5,8 @@ const required = (name) => {
   return value;
 };
 
-const { createGateway } = await import("../src/index.ts");
+const { createGateway, runApplicationWatch } = await import("../src/index.ts");
+const { Effect } = await import("effect");
 const handler = createGateway({
   config: {
     managementToken: required("TOKEN_MANAGEMENT"),
@@ -20,6 +21,14 @@ const server = Bun.serve({
   port: Number(process.env.PORT ?? 4700),
   fetch: handler,
 });
+Effect.runFork(
+  runApplicationWatch(
+    process.env.APPLICATION_API_URL ?? "https://api.renai.im",
+    required("TOKEN_MANAGEMENT"),
+    process.env.IMSG_URL ?? "https://imsg.renai.im/rpc",
+    required("IMSG_TOKEN"),
+  ),
+);
 process.stdout.write(
   `${JSON.stringify({ service: "api-msg", event: "listening", url: server.url.href })}\n`,
 );
