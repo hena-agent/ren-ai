@@ -16,11 +16,23 @@ import { versionedPersona, inspectPersona } from "@ren-ai/personas";
 import { savedPreview, preview } from "../test/sub-portraits.ts";
 import { splitPersonaMarkdown, withPublicProfile } from "@ren-ai/personas/profile";
 import { useBrowser } from "../test/browser.ts";
+import { ageOn } from "@ren-ai/personas/birth-date";
 
 useBrowser();
 const profile =
   "천천히 알아가요.\n\n### 내가 편해지는 순간\n조용히 같이 있을 때요.\n\n### 작은 부탁\n답장은 늦어도 괜찮아요.";
 const document = withPublicProfile(character.description, profile);
+
+const savePublicSource = (context: Awaited<ReturnType<typeof savedPreview>>, description: string) =>
+  context.admin(
+    request(context.route, {
+      ...character,
+      description,
+      draft: tokenOf(context.editing),
+      published: "on",
+      intent: "save",
+    }),
+  );
 
 test("the designer has one source input and a safe paragraph preview without block forms", async () => {
   const { admin, store } = await fixture();
@@ -36,6 +48,18 @@ test("the designer has one source input and a safe paragraph preview without blo
   expect(globalThis.document.querySelector("[data-public-preview]")?.textContent).not.toContain(
     "관심사",
   );
+});
+
+test("public preview derives age from explicit identity DOB even when other private sheet fields are invalid", async () => {
+  const { admin, store } = await fixture();
+  const source = withPublicProfile(
+    character.description.replace("## 말투", "## 잘못된 섹션"),
+    "천천히 알아가요.",
+  );
+  await store.create({ ...legacy, name: character.name, description: source, prompt: source });
+  const page = await (await admin(request("/personas/legacy"))).text();
+  expect(page).toContain(`${character.name}, ${ageOn("1998-04-12")}`);
+  expect(page).toContain("천천히 알아가요.");
 });
 
 test("editing, deleting and adding public Markdown preserve private settings, pictures and intentional omissions", async () => {
@@ -140,6 +164,28 @@ test("publishing invalid Markdown preserves source input, diagnostics and saved 
   expect(await store.get(original.id)).toEqual(original);
 });
 
+test.each([
+  ["missing DOB", character.description.replace(/^생년월일: .*\n/m, ""), "생년월일"],
+  ["invalid Gregorian DOB", character.description.replace("1998-04-12", "1998-02-30"), "생년월일"],
+  [
+    "handwritten public age",
+    withPublicProfile(character.description, "소개\n\n### 기본 정보\n- 나이: 28"),
+    "나이",
+  ],
+])(
+  "public save boundary reports %s and preserves the source",
+  async (_label, description, issue) => {
+    const context = await savedPreview();
+    const { store, original } = context;
+    const response = await savePublicSource(context, description);
+    expect(response.status).toBe(400);
+    const page = await response.text();
+    expect(page).toContain("오류");
+    expect(page).toContain(issue);
+    expect(await store.get(original.id)).toEqual(original);
+  },
+);
+
 test("public rewriting derives results from the same Markdown document and preserves photos", async () => {
   const rewrite = vi.fn<typeof generator.profile>().mockResolvedValue(profile);
   const { admin, route, editing, original } = await savedPreview({
@@ -158,20 +204,13 @@ test("public rewriting derives results from the same Markdown document and prese
 });
 
 test("missing required persona section fails at the real save boundary with correlated private-safe diagnostics", async () => {
-  const { admin, store, route, original, editing, logs } = await savedPreview();
+  const context = await savedPreview();
+  const { store, original, logs } = context;
   const description = withPublicProfile(
     original.description.replace("## 말투", "## 다른 제목"),
     "소개.\n\n### 기본 정보\n- 운영자만-아는-입력",
   );
-  const response = await admin(
-    request(route, {
-      ...character,
-      description,
-      draft: tokenOf(editing),
-      published: "on",
-      intent: "save",
-    }),
-  );
+  const response = await savePublicSource(context, description);
   expect(response.status).toBe(400);
   const requestId = response.headers.get("x-request-id");
   expect(requestId).toBeTruthy();

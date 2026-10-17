@@ -50,14 +50,24 @@ test("conversion reports the rejected section and rule without leaking generated
   const { admin, store, logs } = await fixture(
     createProfileGenerator({ key: "private-key", fetcher }),
   );
-  await store.create({ ...legacy, name: sheet.name, gender: "female" });
+  const confirmedSource = withPublicProfile(
+    `## 정체성·외형\n\n이름: ${sheet.name}\n성별: 여성\n생년월일: ${sheet.birthDate}\n\nPrivate identity`,
+    legacy.bio,
+  );
+  await store.create({
+    ...legacy,
+    name: sheet.name,
+    gender: "female",
+    description: confirmedSource,
+    prompt: confirmedSource,
+  });
   const before = await store.get(legacy.id);
   const token = tokenOf(await (await admin(request(`/personas/${legacy.id}`))).text());
   const response = await admin(
     request(`/personas/${legacy.id}`, {
       draft: token,
       name: sheet.name,
-      description: legacy.prompt,
+      description: confirmedSource,
       gender: "female",
       intent: "improve",
     }),
@@ -80,7 +90,7 @@ test("conversion reports the rejected section and rule without leaking generated
     validationSection: "문자 예시",
     validationRule: "sample_count",
   });
-  for (const value of [secret, output, token, "private-key", legacy.prompt])
+  for (const value of [secret, output, token, "private-key", confirmedSource])
     expect(JSON.stringify(logs)).not.toContain(value);
 });
 

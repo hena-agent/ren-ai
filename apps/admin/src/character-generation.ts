@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import type { JsonSchema } from "effect";
 import { parseCharacterDescription } from "@ren-ai/personas";
+import { birthDateOf } from "@ren-ai/personas/birth-date";
 import { requirePublicProfile } from "@ren-ai/personas/profile";
 import policy from "./character-policy.json";
 import profilePolicy from "./policy.json";
@@ -31,11 +32,16 @@ async function author(
 ) {
   protect(seed, instructions);
   const original = `${seed}${gender ? `\nSELECTED GENDER: ${gender}` : ""}${name ? `\nSAVED NAME: ${name}\nIMPROVEMENT REQUEST:\n${instructions}` : ""}`;
+  const originalBirthDate = name ? birthDateOf(seed) : undefined;
+  const reference = policy.reference.replace(
+    "{{CURRENT_DATE_UTC}}",
+    new Date().toISOString().slice(0, 10),
+  );
   let diagnostic: LogFields = {};
   const create = (repair?: { document: string; issues: readonly string[] }) =>
     operation(repair ? "character.repair" : "character.draft", {}, async () => {
       const response = await request(
-        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${policy.reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n\n${initialPolicy.generate}\n\n${initialPolicy.affection}\n\n${languageDirection}\n\npersona는 완성된 Persona Markdown, state는 컨디션 5개와 초기 호감도 affection 및 languageProficiency, memory는 초기 생활 기억인 JSON 객체를 한 요청에서 작성해. Persona 본문에는 상태·기억을 넣지 마. 보정도 이 JSON 객체 전체를 반환해.`}`,
+        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n\n${initialPolicy.generate}\n\n${initialPolicy.affection}\n\n${languageDirection}\n\npersona는 완성된 Persona Markdown, state는 컨디션 5개와 초기 호감도 affection 및 languageProficiency, memory는 초기 생활 기억인 JSON 객체를 한 요청에서 작성해. Persona 본문에는 상태·기억을 넣지 마. 보정도 이 JSON 객체 전체를 반환해.`}`,
         repair
           ? `${original}\n\nDOCUMENT:\n${repair.document}\n\nISSUES:\n${JSON.stringify(repair.issues)}`
           : original,
@@ -70,6 +76,11 @@ async function author(
             ...diagnostic,
             code: "character_name_mismatch",
           });
+        if (originalBirthDate && sheet.birthDate !== originalBirthDate)
+          throw new GenerationError("Character birth date does not match saved identity", {
+            ...diagnostic,
+            code: "character_birth_date_mismatch",
+          });
         return {
           name: sheet.name,
           description: description.trim(),
@@ -90,7 +101,7 @@ async function author(
   const review = (document: string) =>
     operation("character.review", {}, async () => {
       const response = await request(
-        `${policy.review}\n\n${policy.reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n${initialPolicy.affection}\n세 문서의 인물 일관성, 초기 상태와 생활 기억의 적합성도 함께 검수해. 생활 보강은 허용하지만 사용자 경험·약속은 없어야 한다.`}`,
+        `${policy.review}\n\n${reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n${initialPolicy.affection}\n세 문서의 인물 일관성, 초기 상태와 생활 기억의 적합성도 함께 검수해. 생활 보강은 허용하지만 사용자 경험·약속은 없어야 한다.`}`,
         `${original}\n\nDOCUMENT:\n${document}`,
         Schema.toJsonSchemaDocument(Review).schema,
       );

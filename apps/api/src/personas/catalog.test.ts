@@ -12,6 +12,7 @@ test("public Catalog reads stay fresh and preserve direct image URLs", async () 
   const profile = {
     id: "sora",
     name: "Sora",
+    age: 27,
     bio: "Public introduction",
     imageUrl: owned,
     portraits: { anime: owned, photo: external },

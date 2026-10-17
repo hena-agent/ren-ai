@@ -29,6 +29,7 @@ const photo = Schema.String.pipe(
 export const PublicPersona = Schema.Struct({
   id,
   name: text,
+  age: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
   bio: text,
   languages: Schema.optionalKey(PublicLanguages),
   profile: Schema.optionalKey(PublicProfile),

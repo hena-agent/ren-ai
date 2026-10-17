@@ -19,6 +19,8 @@ import {
 } from "../test/fixtures.ts";
 import copy from "./copy.json";
 import { preview } from "../test/sub-portraits.ts";
+import { ageOn } from "@ren-ai/personas/birth-date";
+import { sheet } from "../test/character.ts";
 
 test("the authoring form asks for name and a long description, with no internal configuration fields", async () => {
   const { admin } = await fixture();
@@ -180,6 +182,7 @@ test("generation is a private preview until saving; publishing exposes only the 
     {
       id,
       name: character.name,
+      age: ageOn(sheet.birthDate),
       bio: introduction,
       imageUrl: persisted.imageUrl,
       portraits: persisted.portraits,

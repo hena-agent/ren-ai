@@ -6,6 +6,7 @@ import { parseInitialState } from "./initial.ts";
 import { languageSummary, type PublicLanguages } from "./languages.ts";
 import { projectPublicProfile } from "./profile-projection.ts";
 import type { PublicProfile } from "./public-profile.ts";
+import { ageOn, birthDateOf } from "./birth-date.ts";
 
 const Row = Schema.Struct({
   id: Schema.String,
@@ -20,6 +21,7 @@ type Style = "anime" | "photo";
 interface Profile {
   id: string;
   name: string;
+  age?: number;
   bio: string;
   languages?: typeof PublicLanguages.Type;
   profile: PublicProfile;
@@ -46,12 +48,14 @@ export async function readPublicCatalog(
     let profile = profiles.get(row.id);
     if (!profile) {
       const { bio, publicMarkdown } = splitPersonaMarkdown(row.markdown);
+      const birthDate = birthDateOf(row.markdown);
       const languages = row.state.trim()
         ? languageSummary(row.markdown, parseInitialState(row.state).languageProficiency)
         : undefined;
       profile = {
         id: row.id,
         name: row.name,
+        ...(birthDate && { age: ageOn(birthDate) }),
         bio,
         ...(languages && { languages }),
         profile: projectPublicProfile(publicMarkdown),

@@ -58,3 +58,30 @@ test("repeated inspection and previews reuse parsing with a bounded process-loca
   expect(parse("original")).not.toBe(original);
   expect(parsed).toBe(67);
 });
+
+test("public fact rows cannot duplicate identity age or expose a birthday", () => {
+  for (const label of ["나이", "생년월일", "Age", "birthDate", "date of birth"]) {
+    expect(() =>
+      requirePublicProfile(
+        withPublicProfile("Private", `소개.\n\n### 기본 정보\n- ${label}: 1998-04-12`),
+      ),
+    ).toThrow("정체성의 생년월일");
+  }
+  for (const content of [
+    "나이: 28",
+    "나이 28세",
+    "생년월일: 1998-04-12",
+    "### 생년월일\n1998-04-12",
+    "- 직업: 도예가\n\n나이: 28",
+    "```text\n나이: 28\n```\n\n나이: 28",
+  ]) {
+    expect(() =>
+      requirePublicProfile(withPublicProfile("Private", `소개.\n\n### 기본 정보\n${content}`)),
+    ).toThrow("정체성의 생년월일");
+  }
+  expect(
+    requirePublicProfile(
+      withPublicProfile("Private\n- 나이: 27", "소개.\n\n### 기억\n27살에 도예를 시작했어요."),
+    ),
+  ).toHaveProperty("bio", "소개.");
+});

@@ -1,6 +1,7 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toString } from "mdast-util-to-string";
 import { cacheMarkdown } from "./markdown-cache.ts";
+import { isIdentityFact } from "./public-profile.ts";
 const parseMarkdown = cacheMarkdown((source: string) => fromMarkdown(source));
 
 export function markdownHeadings(markdown: string) {
@@ -49,7 +50,27 @@ export function requirePublicProfile(markdown: string) {
   const parts = splitPersonaMarkdown(markdown);
   if (!parts.privateMarkdown || !parts.bio)
     throw new Error("persona.md의 공개 프로필은 짧은 자기소개 문단으로 시작해야 합니다.");
+  if (publicIdentityFields(markdown).length)
+    throw new Error("나이·생년월일은 공개 항목에 쓰지 말고 정체성의 생년월일을 작성해 주세요.");
   return parts;
+}
+
+/** Explicit public fact rows cannot duplicate the private source of calendar age. */
+export function publicIdentityFields(source: string) {
+  const document = parseMarkdown(source);
+  const boundary = document.children.find(
+    (node) => node.type === "heading" && node.depth === 2 && toString(node) === publicHeading,
+  );
+  if (!boundary) return [];
+  return document.children
+    .flatMap((node) => (node.type === "list" ? node.children : [node]))
+    .filter(
+      (node) =>
+        node.position!.start.offset! > boundary.position!.end.offset! &&
+        (node.type === "listItem" || node.type === "paragraph" || node.type === "heading") &&
+        toString(node).split("\n").some(isIdentityFact),
+    )
+    .map((node) => ({ start: node.position!.start.offset!, end: node.position!.end.offset! }));
 }
 
 export const withPublicProfile = (markdown: string, publicMarkdown: string) =>

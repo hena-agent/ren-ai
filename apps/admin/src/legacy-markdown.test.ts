@@ -22,6 +22,7 @@ test("explicit legacy conversion keeps original publication choices, guards stal
   expect(draft.publicProfile).not.toContain("관심사");
   expect(draft.publicProfile).toContain("책방 구경");
   expect(draft.imageUrl).toBe(legacy.imageUrl);
+  const operatorProfile = draft.publicProfile!.replace(/^- age: 28$/m, "");
   const input = {
     name: draft.name,
     description: withPublicProfile(
@@ -30,7 +31,7 @@ test("explicit legacy conversion keeps original publication choices, guards stal
         name: draft.name,
         appearance: splitPersonaMarkdown(draft.description!).privateMarkdown,
       }),
-      draft.publicProfile!,
+      operatorProfile,
     ),
     draft: tokenOf(page),
     published: "on",
