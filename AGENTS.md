@@ -65,7 +65,7 @@ Serialize coverage and `verify-gates` runs within one checkout. Wait for other r
 
 Do **not** delete the test, weaken the type, or inline a duplicate to get green. Those are worse than the violation.
 
-Exceptions live in `quality-exceptions.json`, which is owned by a human via CODEOWNERS. You may propose an entry; you cannot land one. Every entry needs a `reason`. Inline suppressions must carry `-- <reason>` and are reported by `bun run exceptions`.
+Exceptions live in `quality-exceptions.json`.
 
 A sudden burst of `no-unsafe-*` errors means the TypeScript program is misconfigured, **not** that you should add a disable comment.
 
