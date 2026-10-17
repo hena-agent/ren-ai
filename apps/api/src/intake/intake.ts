@@ -81,11 +81,19 @@ export const intake = (
       yield* save(current);
     }
     let last = current;
+    const fromPreviousRelationship = (conversation: Conversation, row: IncomingMessage) =>
+      Effect.map(
+        sql`SELECT 1 FROM send WHERE handle = ${row.handle} AND conversation_id != ${conversation.id}
+        AND (guid = ${row.guid} OR (guid IS NULL AND content = ${row.text}
+          AND recorded_at <= ${row.createdAt} AND state IN ('recorded', 'uncertain'))) LIMIT 1`,
+        (rows) => rows.length > 0,
+      );
     const outgoing = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!reconcile) return;
         const conversation = yield* byHandle(row.handle);
         if (!conversation) return;
+        if (yield* fromPreviousRelationship(conversation, row)) return;
         const matched = yield* reconcile(conversation, row);
         const status = yield* messages.sendStatus(row.guid);
         if (matched || status === "failed") return;
@@ -143,6 +151,7 @@ export const intake = (
       });
     const replayOutgoing = (conversation: Conversation, row: IncomingMessage, seen: boolean) =>
       Effect.gen(function* () {
+        if (yield* fromPreviousRelationship(conversation, row)) return false;
         if ((yield* messages.sendStatus(row.guid)) === "failed") return false;
         if (seen) return true;
         yield* prompt(
@@ -204,12 +213,17 @@ export const intake = (
         }
         if ((yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID) return;
         if (previous !== null) {
-          yield* sql`UPDATE conversation SET last_received_at = ${previous} WHERE id = ${conversation.id}`;
+          yield* sql`UPDATE conversation SET last_received_at = ${previous}, first_received_at = COALESCE(first_received_at, ${firstReply}) WHERE id = ${conversation.id}`;
           yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${firstReply}) WHERE handle = ${conversation.handle}`;
         }
         if (latestReply > lastSentAt) yield* received(conversation, latestReply);
         if (latestSend > Math.max(latestReply, lastSentAt)) yield* sent(conversation, latestSend);
       });
+    const predatesRelationship = (conversation: Conversation, row: IncomingMessage) =>
+      sql`SELECT 1 FROM conversation WHERE id = ${conversation.id} AND started_at > ${row.createdAt}
+        AND EXISTS(SELECT 1 FROM conversation old WHERE old.user_id = conversation.user_id AND old.ended_at IS NOT NULL)`.pipe(
+        Effect.map((rows) => rows.length > 0),
+      );
     const receive = (row: IncomingMessage) =>
       Effect.gen(function* () {
         if (row.tapback && !row.tapback.added) {
@@ -226,6 +240,7 @@ export const intake = (
         }
         const conversation = yield* byHandle(row.handle);
         if (conversation) {
+          if (yield* predatesRelationship(conversation, row)) return;
           const seen =
             yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
           if (seen.length) {
@@ -244,7 +259,7 @@ export const intake = (
           );
           yield* Effect.gen(function* () {
             yield* markSeen(conversation.sessionID, row.guid);
-            yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt} WHERE id = ${conversation.id}`;
+            yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt}, first_received_at = COALESCE(first_received_at, ${row.createdAt}) WHERE id = ${conversation.id}`;
             yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
             yield* received(conversation, row.createdAt);
@@ -273,7 +288,7 @@ export const intake = (
         if (row.fromMe || row.tapback?.added === false) continue;
         if (yield* beforeReset(row)) continue;
         const conversation = yield* byHandle(row.handle);
-        if (conversation)
+        if (conversation && !(yield* predatesRelationship(conversation, row)))
           yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
       }
     });

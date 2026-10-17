@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { Migrator, SqlClient } from "effect/unstable/sql";
+import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -169,11 +170,13 @@ export const migrate = Effect.gen(function* () {
         )`;
         yield* sql`CREATE INDEX intake_pending_handle ON intake_pending(handle, id)`;
       }),
-      "025_reply_arrivals": sql`CREATE TABLE reply_arrival (
+      "025_relationship_endings": relationshipSchema,
+      "026_registration_history": registrationHistorySchema,
+      "027_reply_arrivals": sql`CREATE TABLE reply_arrival (
         session_id TEXT NOT NULL, message_id TEXT NOT NULL, quiet_until INTEGER NOT NULL,
         seen INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (session_id, message_id)
       )`,
-      "026_edit_observations": sql`CREATE TABLE intake_edit (
+      "028_edit_observations": sql`CREATE TABLE intake_edit (
         session_id TEXT NOT NULL, guid TEXT NOT NULL, text TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY (session_id, guid)
       )`,

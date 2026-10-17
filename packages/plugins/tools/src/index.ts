@@ -20,6 +20,19 @@ export const toolsPlugin = (options: PersonaPluginOptions) =>
     effect: (ctx) =>
       Effect.gen(function* () {
         if (!inPersonaLocation(ctx.location.directory, options.personaDirectory)) return;
+        if (options.endConversation) {
+          const end = options.endConversation;
+          yield* ctx.tool.transform((editor) =>
+            editor.add({
+              name: "end_conversation",
+              ...messagingToolDefinitions.end_conversation,
+              output: Schema.String,
+              options: { codemode: false },
+              execute: ({ farewell }, context) =>
+                toolResult(end(context.sessionID, farewell, context.id)),
+            }),
+          );
+        }
         if (options.send) {
           const send = options.send;
           const wait = options.wait;

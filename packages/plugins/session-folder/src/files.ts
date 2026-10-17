@@ -10,11 +10,13 @@ import { lockedMemory, readRuntime } from "./memory-files.ts";
 
 export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
-  ...["send", "read", "react", "wait", "dice", ...memoryToolNames].map((action) => ({
-    action,
-    resource: "*",
-    effect: "allow" as const,
-  })),
+  ...["send", "read", "react", "wait", "end_conversation", "dice", ...memoryToolNames].map(
+    (action) => ({
+      action,
+      resource: "*",
+      effect: "allow" as const,
+    }),
+  ),
 ];
 
 export const loadGroundRules = () =>

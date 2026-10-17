@@ -6,6 +6,7 @@ import type { Tapback } from "@ren-ai/imsg/protocol";
 import type { Persona } from "@ren-ai/personas";
 import { notReacted, notSent, sent } from "../transcript/transcript.ts";
 import type { timing } from "../timing/timing.ts";
+import { introduceRelationship } from "../conversations/introduction.ts";
 
 export type { Tapback } from "@ren-ai/imsg/protocol";
 
@@ -30,6 +31,7 @@ export const outbox = (
   active: (conversation: Conversation) => Effect.Effect<boolean, Error> = () =>
     Effect.succeed(true),
   pace?: Effect.Success<typeof timing>,
+  { reportLate = true, typing = true }: { reportLate?: boolean; typing?: boolean } = {},
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -53,6 +55,10 @@ export const outbox = (
         SELECT ${conversation.handle}, id, ${kind}, ${content}, ${callID}, 'recorded', ${targetGUID}, ${now}, ${now}
         FROM conversation WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID}
           AND rebuilding = 0 AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = ${conversation.handle})
+          AND (ended_at IS NULL OR EXISTS (SELECT 1 FROM conversation_end e
+            WHERE e.conversation_id = conversation.id AND e.consumed_at IS NULL
+            AND ((${callID} = e.call_id || ':farewell:' || e.farewell_attempt AND e.farewell_pending = 1 AND ${content} = e.farewell)
+              OR (${callID} = e.call_id || ':notice:' || e.notice_attempt AND e.notice_pending = 1 AND ${content} = e.notice))))
         RETURNING id, recorded_at AS recordedAt`;
         return rows[0];
       });
@@ -118,6 +124,7 @@ export const outbox = (
         const existing =
           yield* sql`SELECT id FROM send WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
         if (existing.length) return prefix("this call was already recorded");
+        if (!reportLate) return undefined;
         const earlier = yield* pending(conversation);
         if (!earlier) return undefined;
         // A missing row is not a rejection; only an observed outcome releases this fence.
@@ -140,6 +147,19 @@ export const outbox = (
       });
     return {
       reconcile,
+      exclusive: <A, E>(conversation: Conversation, action: Effect.Effect<A, E>) =>
+        PartitionedSemaphore.withPermit(locks, conversation.id)(action),
+      delivery: (conversation: Conversation, callID: string) =>
+        Effect.gen(function* () {
+          const [row] = yield* sql<SendRow>`SELECT id, kind, state, content, guid, late,
+          notification_pending AS notificationPending, recorded_at AS recordedAt,
+          updated_at AS updatedAt, tool_call_id AS toolCallID FROM send
+          WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
+          if (!row) return undefined;
+          if (row.state === "recorded" || row.state === "uncertain")
+            return (yield* check(conversation, row)).state;
+          return row.state;
+        }),
       onSent: (listener: (conversation: Conversation) => Effect.Effect<void, Error>) => {
         sentListeners.add(listener);
       },
@@ -179,12 +199,15 @@ export const outbox = (
             return `reacted ${tapback}`;
           }),
         ),
-      send: (conversation: Conversation, text: string, callID: string) =>
+      send: (conversation: Conversation, body: string, callID: string) =>
         PartitionedSemaphore.withPermit(
           locks,
           conversation.id,
         )(
           Effect.gen(function* () {
+            const text = yield* introduceRelationship(conversation, body).pipe(
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
             const stopped = yield* before(conversation, "text", text, callID);
             if (stopped) return stopped;
             const extra = yield* Random.nextBetween(1000, 2000);
@@ -202,7 +225,11 @@ export const outbox = (
                 ),
               );
             });
-            const ready = pace ? yield* pace.during(conversation.sessionID, type) : yield* type;
+            const ready = !typing
+              ? true
+              : pace
+                ? yield* pace.during(conversation.sessionID, type)
+                : yield* type;
             if (ready !== true) return notSent("a new message arrived");
             const recorded = yield* recordAttempt(conversation, "text", text, callID);
             if (!recorded) return notSent("this Conversation is unavailable");

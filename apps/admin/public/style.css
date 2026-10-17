@@ -14,6 +14,12 @@
   color: var(--ink);
   line-height: 1.6;
 }
+.conversation-session {
+  display: inline-block;
+  max-width: 32ch;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
 .image-queue {
   margin-bottom: 28px;
   padding: 24px;

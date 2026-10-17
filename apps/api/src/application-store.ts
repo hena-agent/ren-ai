@@ -9,6 +9,9 @@ import { contacts } from "./discovery/contacts.ts";
 import { contactManagement } from "./discovery/management.ts";
 import { makeDiscoveryWeb } from "./discovery/discovery.ts";
 import type { PublicPersona } from "@ren-ai/onboarding";
+import { authorize } from "@ren-ai/transport/server";
+import { conversationStatus } from "./conversations/status.ts";
+import { conversationRecords } from "./conversations/http.ts";
 
 export interface ApplicationStoreConfig {
   readonly catalog: () => Promise<readonly PublicPersona[]>;
@@ -49,6 +52,11 @@ export const createApplicationStore = async (
       }),
     );
     const management = contactManagement(contactsStore, config.managementToken);
+    const statusStore = await run(conversationStatus(config.catalog));
+    const records = conversationRecords(statusStore, (effect) => Effect.runPromise(effect));
+    const privateRecords = config.managementToken
+      ? authorize(records, config.managementToken)
+      : async () => new Response("Unauthorized", { status: 401 });
     const httpContext = Context.make(HttpClient.HttpClient, config.httpClient);
     return {
       context,
@@ -56,6 +64,7 @@ export const createApplicationStore = async (
       handler: (request) => {
         const path = new URL(request.url).pathname;
         if (path.startsWith("/discovery/")) return discovery.handler(request, httpContext);
+        if (path.startsWith("/management/conversations")) return privateRecords(request);
         if (path.startsWith("/management/")) return management(request);
         return Promise.resolve(new Response("Not Found", { status: 404 }));
       },

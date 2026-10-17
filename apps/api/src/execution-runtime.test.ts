@@ -7,6 +7,8 @@ import { cloudflareConfiguration } from "./cloudflare-config.ts";
 import { createExecutionRuntime } from "./execution-runtime.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
+import { Session } from "@opencode/schema/session";
+import type { SessionActiveOutput } from "@opencode/client/effect/api";
 
 const control = vi.hoisted(() => ({
   events: [] as string[],
@@ -17,6 +19,8 @@ const control = vi.hoisted(() => ({
   operator: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("operator")),
   folderRead: vi.fn<() => Effect.Effect<typeof folderSnapshot.Type, Error>>(),
   languageFailure: undefined as Error | undefined,
+  activeRead: vi.fn<() => Effect.Effect<SessionActiveOutput, Error>>(),
+  activeProbe: vi.fn<(id: Session.ID) => Effect.Effect<boolean, Error>>(),
 }));
 
 const step = (name: string) =>
@@ -67,7 +71,7 @@ vi.mock("./opencode/remote.ts", () => ({
       yield* Effect.addFinalizer(() => step("remote.close"));
       yield* Effect.promise(() => control.startup());
       yield* step("remote");
-      return { client: {} };
+      return { client: { session: { active: control.activeRead } } };
     }),
 }));
 vi.mock("./opencode/catalog-sync.ts", () => ({
@@ -76,6 +80,18 @@ vi.mock("./opencode/catalog-sync.ts", () => ({
 }));
 vi.mock("./discovery/first-contact.ts", () => ({
   firstContacts: () => Effect.succeed({ tick: step("contacts") }),
+}));
+vi.mock("./conversations/runtime-status.ts", () => ({
+  runtimeStatus: (_host: object, active: (id: Session.ID) => Effect.Effect<boolean, Error>) =>
+    Effect.sync(() => {
+      control.activeProbe.mockImplementation(active);
+      return {};
+    }),
+  runtimeStatusRequest:
+    (_service: object, run: (effect: Effect.Effect<void>) => Promise<void>) => async () => {
+      await run(Effect.void);
+      return new Response("conversation-status");
+    },
 }));
 vi.mock("./discovery/conversation-languages.ts", () => ({
   conversationLanguages:
@@ -97,16 +113,24 @@ vi.mock("./application.ts", () => ({
   ) =>
     create({}).pipe(
       Effect.map(() => ({
-        client: { rpc: () => ({ read: control.folderRead }) },
+        client: {
+          rpc: () => ({ read: control.folderRead }),
+          session: { active: control.activeRead },
+        },
         operator: {},
         conversations: {},
         heartbeat: {
+          endings: step("endings"),
+          stopped: step("stopped"),
           intake: step("intake"),
           followUps: step("followUps"),
           failedTurns: step("failedTurns"),
         },
       })),
     ),
+}));
+vi.mock("./application-tools.ts", () => ({
+  prepareMessaging: () => Effect.succeed({ endings: {} }),
 }));
 
 const open = () =>
@@ -144,6 +168,59 @@ beforeEach(() => {
   control.operator.mockClear();
   control.folderRead.mockReset();
   control.languageFailure = undefined;
+  control.activeRead.mockReset().mockReturnValue(Effect.succeed({}));
+  control.activeProbe.mockReset();
+});
+
+test("operator conversation status authenticates before boot and reads actual executor activity without prompting", async () => {
+  const runtime = await open();
+  try {
+    const url = "https://app/operator/conversations?id=1";
+    expect((await runtime.fetch(new Request(url))).status).toBe(401);
+    expect(control.events).toEqual([]);
+    const response = await runtime.fetch(
+      new Request(url, { headers: { authorization: "Bearer management-secret" } }),
+    );
+    expect(await response.text()).toBe("conversation-status");
+    expect(control.events).not.toContain("catalog");
+    expect(control.events).not.toContain("folders");
+    expect(control.events).not.toContain("intake");
+    const id = Session.ID.make("ses_status");
+    control.activeRead.mockReturnValueOnce(Effect.succeed({ [id]: { type: "running" } }));
+    expect(await Effect.runPromise(control.activeProbe(id))).toBe(true);
+    expect(await Effect.runPromise(control.activeProbe(id))).toBe(false);
+    const cause = new Error("executor failed");
+    control.activeRead.mockReturnValueOnce(Effect.fail(cause));
+    const failure = await Effect.runPromise(control.activeProbe(id).pipe(Effect.flip));
+    expect(failure.cause).toBe(cause);
+    expect(
+      await (
+        await runtime.fetch(
+          new Request(url, { headers: { authorization: "Bearer management-secret" } }),
+        )
+      ).text(),
+    ).toBe("conversation-status");
+  } finally {
+    await runtime.close();
+  }
+});
+
+const operatorConversationRequest = () =>
+  new Request("https://app/operator/conversations?id=1", {
+    headers: { authorization: "Bearer management-secret" },
+  });
+
+test("a failed metadata inspector can be retried without starting a messaging application", async () => {
+  const runtime = await open();
+  try {
+    control.failure = "remote";
+    await expect(runtime.fetch(operatorConversationRequest())).rejects.toThrow("failed remote");
+    control.failure = "";
+    expect((await runtime.fetch(operatorConversationRequest())).status).toBe(200);
+    expect(control.events).not.toContain("intake");
+  } finally {
+    await runtime.close();
+  }
 });
 
 test("authenticated language reads use the configured executor location and preserve upstream failure causes", async () => {
@@ -195,6 +272,8 @@ test("does not start for rejected operator access; publishes callback before rem
       "followUps",
       "failedTurns",
       "health",
+      "stopped",
+      "endings",
     ]);
     const request = new Request("https://app/operator/users?limit=1", {
       method: "POST",

@@ -4,6 +4,7 @@ import { discoveryNotices, MobileNumber } from "@ren-ai/onboarding";
 import { Turnstile } from "@ren-ai/onboarding/turnstile";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
+import { ReselectionError } from "./client.ts";
 import { useCopy, useLocale } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
 import { PhoneField } from "./phone-field.tsx";
@@ -43,7 +44,8 @@ export function JoinForm({
   }>({ phone: undefined, touched: false, consentLanguage: null });
   const [token, setToken] = useState<string | null>("");
   const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState(false);
+  const [failure, setFailure] = useState<false | "registration" | "reselection">(false);
+  const reselecting = Boolean(reselection().reselectionToken);
   const submitting = useRef(false);
   const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
   const invalid = contact.touched && !handle;
@@ -70,10 +72,11 @@ export function JoinForm({
         privacyNoticeVersion: discoveryNotice.version,
         likedPersonaIDs: liked.map((persona) => persona.id),
         turnstileToken: token,
+        ...reselection(),
       });
       onSuccess(answer.status);
-    } catch {
-      setFailure(true);
+    } catch (cause) {
+      setFailure(cause instanceof ReselectionError ? "reselection" : "registration");
     } finally {
       submitting.current = false;
       setPending(false);
@@ -88,8 +91,8 @@ export function JoinForm({
         {copy.back}
       </button>
       <p className="form-step">{copy.joinStep}</p>
-      <h1 id="join-title">{copy.joinTitle}</h1>
-      <p className="join-intro">{copy.joinIntro}</p>
+      <h1 id="join-title">{reselecting ? copy.reselectionTitle : copy.joinTitle}</h1>
+      <p className="join-intro">{reselecting ? copy.reselectionIntro : copy.joinIntro}</p>
       <ul className="liked-list" aria-label={copy.selected}>
         {liked.map((persona) => (
           <li key={persona.id}>
@@ -174,7 +177,7 @@ export function JoinForm({
         )}
         {failure && (
           <p className="form-error" role="alert">
-            {copy.joinFailure}
+            {failure === "reselection" ? copy.reselectionFailure : copy.joinFailure}
           </p>
         )}
         <button
@@ -188,4 +191,9 @@ export function JoinForm({
       </form>
     </section>
   );
+}
+
+function reselection() {
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("reselect");
+  return token ? { reselectionToken: token } : {};
 }
