@@ -16,7 +16,7 @@ const listed = [
   },
 ];
 const input = {
-  handle: "hello@example.net",
+  handle: "+821012345678",
   locale: "ko",
   privacyNoticeVersion: discoveryNotice.version,
   turnstileToken: "human",
@@ -57,7 +57,9 @@ test("request schemas reject missing, empty, duplicate, uncanonical and unsafe s
             { likedPersonaIDs: ["luna", "luna"] },
             { likedPersonaIDs: ["../secret"] },
             { handle: "010-1234-5678" },
-            { handle: "A@EXAMPLE.NET" },
+            { handle: "hello@example.net" },
+            { handle: "+8221234567" },
+            { handle: "+827012345678" },
             { locale: "de" },
             { turnstileToken: "" },
             { name: " " },
@@ -84,6 +86,25 @@ test("request schemas reject missing, empty, duplicate, uncanonical and unsafe s
         }
       });
       expect(yield* sql`SELECT id FROM discovery_registration`).toEqual([]);
+    }),
+  );
+});
+
+test("mobile numbers from any country register in international form", async () => {
+  await run(
+    Effect.gen(function* () {
+      const { web, sql } = yield* setup();
+      yield* Effect.tryPromise(async () => {
+        try {
+          for (const handle of ["+14155550100", "+819012345678"])
+            expect((await post(web, { ...input, handle })).status).toBe(200);
+        } finally {
+          await web.dispose();
+        }
+      });
+      expect(
+        yield* sql<{ handle: string }>`SELECT handle FROM discovery_registration ORDER BY handle`,
+      ).toEqual([{ handle: "+14155550100" }, { handle: "+819012345678" }]);
     }),
   );
 });
@@ -207,17 +228,17 @@ test("blocked and removing handles stay unavailable, while existing conversation
   await run(
     Effect.gen(function* () {
       const { web, sql } = yield* setup();
-      yield* sql`INSERT INTO blocked (handle, blocked_at) VALUES ('blocked@example.net', 1)`;
-      yield* sql`INSERT INTO removal (handle, session_id) VALUES ('removing@example.net', 'removed-session')`;
-      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, joined_at) VALUES ('active@example.net', 'ko', 'v1', 'ko', 1, 2)`;
+      yield* sql`INSERT INTO blocked (handle, blocked_at) VALUES ('+821011112222', 1)`;
+      yield* sql`INSERT INTO removal (handle, session_id) VALUES ('+821033334444', 'removed-session')`;
+      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, joined_at) VALUES ('+821055556666', 'ko', 'v1', 'ko', 1, 2)`;
       yield* Effect.tryPromise(async () => {
         try {
-          for (const handle of ["blocked@example.net", "removing@example.net"]) {
+          for (const handle of ["+821011112222", "+821033334444"]) {
             const response = await post(web, { ...input, handle });
             expect(response.status).toBe(400);
             expect(await response.json()).toBe("unavailable");
           }
-          const response = await post(web, { ...input, handle: "active@example.net" });
+          const response = await post(web, { ...input, handle: "+821055556666" });
           expect(response.status).toBe(200);
           expect(await response.json()).toEqual({ status: "active" });
         } finally {
@@ -278,7 +299,7 @@ test("one IP is limited after five attempts and other visitors can still registe
           const limited = await post(web, input);
           expect(limited.status).toBe(400);
           expect(await limited.json()).toBe("try_later");
-          expect((await post(web, { ...input, handle: "other@example.net" }, "other")).status).toBe(
+          expect((await post(web, { ...input, handle: "+821087654321" }, "other")).status).toBe(
             200,
           );
           const withoutIP = new Request("http://localhost/discovery/waitlist", {

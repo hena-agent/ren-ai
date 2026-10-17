@@ -167,6 +167,7 @@ test("eligibility excludes blocked, removed, resetting, admitted, pending and un
       const { store, register, sql, profiles } = yield* contactFixture;
       for (const handle of ["blocked", "removed", "reset", "active", "pending", "gone", "ready"])
         yield* register(`${handle}@example.net`, [handle === "gone" ? "missing" : "jiwoo"]);
+      yield* register("no-likes@example.net", []);
       yield* sql`INSERT INTO blocked VALUES ('blocked@example.net', 1)`;
       yield* sql`INSERT INTO removal VALUES ('removed@example.net', 'old-session')`;
       yield* sql`INSERT INTO reset (guid, handle, row_id, date, session_id) VALUES ('reset', 'reset@example.net', 1, 1, 'reset-session')`;

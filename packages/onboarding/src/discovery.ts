@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { PublicProfile } from "@ren-ai/personas/public-profile";
-import { Handle } from "./shapes.ts";
+import { MobileNumber } from "./shapes.ts";
 import disclosure from "./discovery-notice.json";
 import englishDisclosure from "./discovery-notice.en.json";
 import japaneseDisclosure from "./discovery-notice.ja.json";
@@ -53,7 +53,7 @@ export const PublicPersona = Schema.Struct({
 export type PublicPersona = typeof PublicPersona.Type;
 
 export const DiscoveryRequest = Schema.Struct({
-  handle: Handle,
+  handle: MobileNumber,
   locale: DiscoveryLocale,
   conversationLanguage: Schema.optionalKey(DiscoveryLocale),
   name: Schema.optionalKey(text.check(Schema.isTrimmed(), Schema.isMaxLength(100))),
@@ -61,6 +61,7 @@ export const DiscoveryRequest = Schema.Struct({
   gender: Schema.optionalKey(Schema.Literals(["female", "male", "other"])),
   privacyNoticeVersion: text,
   turnstileToken: text,
+  reselectionToken: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;

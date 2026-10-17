@@ -165,7 +165,14 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           "Persona1 · +821012345678",
         );
         expect((yield* llm.requests())[0]!.tools.map((tool) => tool.name).toSorted()).toEqual(
-          conversationTools(["dice", "react", "read", "send", "wait"]).toSorted(),
+          conversationTools([
+            "dice",
+            "end_conversation",
+            "react",
+            "read",
+            "send",
+            "wait",
+          ]).toSorted(),
         );
         let orphanAttempt = false;
         yield* llm.serve((request) => {
@@ -185,6 +192,26 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           JSON.stringify(yield* application.sessions.messages({ sessionID: orphan.id })),
         ).toContain("No Conversation for session");
         expect(local.bubbles).toHaveLength(1);
+        let ended = false;
+        yield* llm.serve(() => {
+          if (!ended) {
+            ended = true;
+            return TestLLM.tool("end-remote", "end_conversation", {
+              farewell: "이제 대화를 끝낼게요.",
+            });
+          }
+          return TestLLM.text("stopped", "answer");
+        });
+        yield* application.sessions.prompt({
+          sessionID: session.id,
+          text: "end this relationship",
+        });
+        yield* application.sessions.wait(session.id);
+        expect(yield* application.conversations.byHandle("+821012345678")).toBeUndefined();
+        yield* application.heartbeat.endings;
+        expect(local.bubbles).toHaveLength(3);
+        expect(local.bubbles[1]?.text).toBe("이제 대화를 끝낼게요.");
+        expect(local.bubbles[2]?.text).toContain("#reselect=");
         disconnected = true;
         const otherDirectory = join(root, "other-project");
         yield* Effect.promise(() => mkdir(otherDirectory));

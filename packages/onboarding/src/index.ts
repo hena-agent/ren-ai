@@ -1,4 +1,13 @@
 export { normalizeHandle } from "./handle.ts";
+export { MobileNumber } from "./shapes.ts";
+export {
+  ConversationQuery,
+  ConversationRecovery,
+  ConversationEntry,
+  ConversationList,
+  ConversationDetail,
+  ConversationRuntime,
+} from "./conversations.ts";
 export {
   ContactState,
   ContactEntry,

@@ -103,8 +103,8 @@ test("pending registration disables navigation until a recoverable failure compl
       .getByRole("button", { name: /연락받기/ })
       .getAttribute("aria-current"),
   ).toBe("page");
-  fireEvent.change(screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }), {
-    target: { value: "person@example.com" },
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+    target: { value: "01012345678" },
   });
   expect(currentTabs()).toEqual([null, null, "page"]);
   fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
@@ -116,7 +116,7 @@ test("pending registration disables navigation until a recoverable failure compl
   expect(screen.getByRole("alert").textContent).toContain("등록하지 못했어요.");
   for (const button of within(navigation).getAllByRole("button"))
     expect(button.hasAttribute("disabled")).toBe(false);
-  expect(
-    screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }).getAttribute("value"),
-  ).toBe("person@example.com");
+  expect(screen.getByRole("textbox", { name: "휴대전화 번호" }).getAttribute("value")).toBe(
+    "010-1234-5678",
+  );
 });

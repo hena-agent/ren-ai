@@ -1,4 +1,4 @@
-import { Message, ToolResultPart } from "@opencode/ai";
+import { ToolResultPart } from "@opencode/ai";
 import { Plugin } from "@opencode/plugin/effect";
 import { Clock, Effect } from "effect";
 import {
@@ -41,6 +41,10 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                 ...(["send", "read", "react", "wait"] as const).filter(
                   (name) => options[name] && isMessagingTool(name, event.tools[name]),
                 ),
+                ...(options.endConversation &&
+                isMessagingTool("end_conversation", event.tools["end_conversation"])
+                  ? ["end_conversation"]
+                  : []),
                 ...(isDiceTool(event.tools["dice"]) ? ["dice"] : []),
                 ...memoryToolNames.filter((name) => isMemoryTool(name, event.tools[name])),
               ]),
@@ -83,14 +87,15 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                   }
                   return part;
                 });
-                event.messages[index] = Message.make({
+                // Core owns media assets; revalidating with this SDK copy rejects their class identity.
+                event.messages[index] = {
                   id: entry.id,
                   role: entry.role,
                   content,
                   metadata: entry.metadata,
                   providerMetadata: entry.providerMetadata,
                   native: entry.native,
-                });
+                };
               }
             }
             if (options.onContext) yield* options.onContext(event.sessionID);

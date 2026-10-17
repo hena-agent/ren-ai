@@ -33,6 +33,12 @@ const setup = async (client?: ManagementClient) => {
   });
   return { admin, logs };
 };
+const readOnlyContacts = (entries: readonly (typeof ContactEntry.Type)[]) =>
+  setup({
+    list: async () => ({ entries, eligibleCount: 0 }),
+    select: async (input) => ({ ...input, requested: input.count, entries: [] }),
+    ...idle,
+  });
 
 test("waitlist reads use Workers-supported redirect mode and reject redirects without forwarding credentials", async () => {
   const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
@@ -367,11 +373,7 @@ test("empty lists and all first-contact states render without losing status dist
     persona: { id: "missing", name: "missing" },
     requestId: "task-id",
   }));
-  const { admin } = await setup({
-    list: async () => ({ entries: rows, eligibleCount: 0 }),
-    select: async (input) => ({ ...input, requested: input.count, entries: [] }),
-    ...idle,
-  });
+  const { admin } = await readOnlyContacts(rows);
   const page = await (await admin(request("/first-contacts"))).text();
   for (const label of [
     "대화 준비 중",
@@ -384,13 +386,22 @@ test("empty lists and all first-contact states render without losing status dist
     "예정 시각 없음",
   ])
     expect(page).toContain(label);
-  const empty = await setup({
-    list: async () => ({ entries: [], eligibleCount: 0 }),
-    select: async (input) => ({ ...input, requested: input.count, entries: [] }),
-    ...idle,
-  });
+  const empty = await readOnlyContacts([]);
   expect(await (await empty.admin(request("/waitlist"))).text()).toContain("대기 등록이 없습니다");
   expect(await (await empty.admin(request("/first-contacts"))).text()).toContain(
     "첫 연락 예약이 없습니다",
   );
+});
+
+test("ended relationships distinguish delivered and pending notices without exposing current-language actions", async () => {
+  const rows = [false, true].map((noticeDelivered) => ({
+    ...entry("active"),
+    relationshipEnd: { at: 100, noticeDelivered },
+  }));
+  const { admin } = await readOnlyContacts(rows);
+  const page = await (await admin(request("/first-contacts"))).text();
+  expect(page).toContain("관계 종료");
+  expect(page).toContain("재선택 안내 발송 완료");
+  expect(page).toContain("종료 안내 발송 확인 필요");
+  expect(page).not.toContain("현재 언어 실력");
 });

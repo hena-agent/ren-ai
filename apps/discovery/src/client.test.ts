@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
-import { discoveryClient } from "./client.ts";
+import { discoveryClient, ReselectionError } from "./client.ts";
 import { readChoices, saveChoices } from "./choices.ts";
 
 afterEach(() => {
@@ -79,7 +79,7 @@ test("the browser client reads the catalog and validates the real registration a
   ]);
   expect(fetcher).toHaveBeenCalledWith("/discovery/personas", { signal, cache: "no-store" });
   const request = {
-    handle: "a@example.org",
+    handle: "+821012345678",
     locale: "ko",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["nari"],
@@ -98,6 +98,8 @@ test("the browser client reads the catalog and validates the real registration a
   await expect(discoveryClient.profiles(signal)).rejects.toThrow("Profiles unavailable");
   fetcher.mockResolvedValueOnce(new Response(null, { status: 400 }));
   await expect(discoveryClient.join(request)).rejects.toThrow("Registration unavailable");
+  fetcher.mockResolvedValueOnce(Response.json("reselection", { status: 400 }));
+  await expect(discoveryClient.join(request)).rejects.toBeInstanceOf(ReselectionError);
   fetcher.mockResolvedValueOnce(Response.json({ status: "sent" }));
   await expect(discoveryClient.join(request)).rejects.toThrow(/status/);
   fetcher.mockResolvedValueOnce(
@@ -195,7 +197,7 @@ test("profiles and registration use api-app while portraits retain their catalog
   fetcher.mockResolvedValueOnce(Response.json({ status: "waiting" }));
   expect(
     await deployed.join({
-      handle: "a@example.org",
+      handle: "+821012345678",
       locale: "ko",
       privacyNoticeVersion: discoveryNotice.version,
       likedPersonaIDs: ["nari"],

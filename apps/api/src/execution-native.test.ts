@@ -156,7 +156,7 @@ test.each(["sent", "uncertain"] as const)(
                   body: JSON.stringify(body),
                 });
               const registered = await send("/discovery/waitlist", {
-                handle: "native@example.com",
+                handle: "+821012345678",
                 locale: "ko",
                 privacyNoticeVersion: discoveryNotice.version,
                 turnstileToken: "human",
@@ -186,7 +186,7 @@ test.each(["sent", "uncertain"] as const)(
               expect(startupCallbacks).toBe(1);
               const bubbles =
                 outcome === "sent"
-                  ? [{ handle: "native@example.com", text: "안녕, 실제 네이티브 인사야 🙂" }]
+                  ? [{ handle: "+821012345678", text: "안녕, 실제 네이티브 인사야 🙂" }]
                   : [];
               await expect
                 .poll(async () => (await executionState(runtime!)).sends[0]?.state, {

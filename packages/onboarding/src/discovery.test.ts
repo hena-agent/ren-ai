@@ -71,7 +71,7 @@ test("public galleries retain complete image pairs and reject unsafe or partial 
 
 test("a discovery registration requires contact, consent, verification and unique valid liked IDs", () => {
   const request = {
-    handle: "person@example.com",
+    handle: "+821012345678",
     locale: "ko",
     privacyNoticeVersion: "v1",
     turnstileToken: "human",
@@ -90,6 +90,7 @@ test("a discovery registration requires contact, consent, verification and uniqu
   for (const input of [
     {},
     { ...request, handle: "invalid" },
+    { ...request, handle: "person@example.com" },
     { ...request, privacyNoticeVersion: "" },
     { ...request, turnstileToken: "" },
     { ...request, likedPersonaIDs: [] },
@@ -99,6 +100,30 @@ test("a discovery registration requires contact, consent, verification and uniqu
     expect(() => decode(input)).toThrow(
       /handle|privacyNoticeVersion|turnstileToken|likedPersonaIDs/,
     );
+});
+
+const registeredHandle = (handle: string) =>
+  Schema.decodeUnknownSync(DiscoveryRequest)({
+    handle,
+    locale: "en",
+    privacyNoticeVersion: "v1",
+    turnstileToken: "human",
+    likedPersonaIDs: ["harin"],
+  }).handle;
+
+test("a discovery registration accepts any country's mobile number in canonical international form only", () => {
+  for (const mobile of ["+821012345678", "+819012345678", "+14155550100", "+447400123456"])
+    expect(registeredHandle(mobile)).toBe(mobile);
+  for (const handle of [
+    "+8221234567",
+    "+827012345678",
+    "010-1234-5678",
+    "01012345678",
+    "+82 10 1234 5678",
+    "+82010123456789",
+    "x+821012345678",
+  ])
+    expect(() => registeredHandle(handle)).toThrow(/handle/);
 });
 
 test("independent public images accept either main style and ten mixed secondary images, rejecting malformed independent fields", () => {

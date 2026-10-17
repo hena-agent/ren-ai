@@ -84,10 +84,13 @@ export const firstContacts = (
               yield* update(row.id, "blocked");
               return false;
             }
-            const current = yield* sql`SELECT 1 FROM discovery_registration WHERE id = ${row.id}`;
+            const current =
+              yield* sql`SELECT 1 FROM discovery_registration WHERE id = ${row.id} AND archived_at IS NULL`;
             if (!current.length) return false;
             yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, persona_id, joined_at)
-          VALUES (${row.handle}, ${row.locale}, ${row.consentVersion}, ${row.locale}, ${row.consentAt}, ${row.personaID}, ${now})`;
+          VALUES (${row.handle}, ${row.locale}, ${row.consentVersion}, ${row.locale}, ${row.consentAt}, ${row.personaID}, ${now})
+          ON CONFLICT(handle) DO UPDATE SET locale = excluded.locale,
+            persona_id = excluded.persona_id, joined_at = COALESCE(user.joined_at, excluded.joined_at), replied_at = NULL`;
             yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
           VALUES ((SELECT id FROM user WHERE handle = ${row.handle}), ${row.personaID}, ${session.id}, ${now})`;
             yield* sql`UPDATE discovery_contact SET session_id = ${session.id}, started_at = ${now}, state = 'greeting' WHERE registration_id = ${row.id}`;
@@ -193,7 +196,7 @@ export const firstContacts = (
        FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
         LEFT JOIN discovery_language l ON l.registration_id = r.id
         LEFT JOIN discovery_profile p ON p.registration_id = r.id
-      WHERE (c.state = 'scheduled' AND c.scheduled_at <= ${now}) OR c.state IN ('preparing','greeting','review') ORDER BY c.scheduled_at`;
+       WHERE r.archived_at IS NULL AND ((c.state = 'scheduled' AND c.scheduled_at <= ${now}) OR c.state IN ('preparing','greeting','review')) ORDER BY c.scheduled_at`;
       for (const row of rows) {
         const result = yield* Effect.result(
           directory.withHandle(row.handle)(row.state === "scheduled" ? start(row) : observe(row)),

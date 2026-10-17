@@ -16,9 +16,9 @@ test("operator commands mark test handles and preserve their sessions on removal
         const api = operatorHandler(host.operator);
         yield* Effect.addFinalizer(() => Effect.promise(api.dispose));
         const connection = yield* serveTestOperator(api.handler);
-        expect(
-          yield* runOperatorCli(["test-handle", " TESTER@EXAMPLE.COM "], connection),
-        ).toContain("Test handle");
+        expect(yield* runOperatorCli(["test-handle", " 010-1234-5678 "], connection)).toContain(
+          "Test handle",
+        );
         const old = yield* host.createSession("persona1");
         yield* host.conversations.create(registration(handle, old.id));
         yield* fake.text(handle, "/reset", Date.now());
@@ -29,7 +29,7 @@ test("operator commands mark test handles and preserve their sessions on removal
         expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
         expect((yield* host.sessions.get(old.id)).title).toContain(" · reset ");
         expect((yield* host.sessions.get(fresh)).title).toMatch(
-          /^Persona1 · tester@example\.com · removed \d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}$/,
+          /^Persona1 · \+821012345678 · removed \d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}$/,
         );
         expect(yield* runOperatorCli(["remove", handle], connection)).toBe(`No User for ${handle}`);
         expect(yield* runOperatorCli(["untest-handle", handle], connection)).toContain("Unmarked");

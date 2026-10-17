@@ -44,7 +44,7 @@ test("a visitor likes a profile, enters a handle and consent, and really joins t
   choose(true);
   await screen.findByRole("heading", { name: "지우" });
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
     target: { value: "010-1234-5678" },
   });
   fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
@@ -84,8 +84,8 @@ test("an existing user is directed to the assigned conversation instead of a new
   await screen.findByRole("heading", { name: "하린" });
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }), {
-    target: { value: "existing@example.com" },
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+    target: { value: "010-9876-5432" },
   });
   fireEvent.click(screen.getByRole("checkbox"));
   act(() => verified("active"));

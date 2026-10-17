@@ -193,9 +193,19 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
   const path = new URL(request.url).pathname;
   const route = /^\/personas\/[a-zA-Z0-9_-]+$/.test(path)
     ? "/personas/:id"
-    : ["/", "/new", "/personas", "/api/personas", "/inspection", "/health"].includes(path)
-      ? path
-      : "/other";
+    : /^\/conversations\/\d+$/.test(path)
+      ? "/conversations/:id"
+      : [
+            "/",
+            "/new",
+            "/personas",
+            "/api/personas",
+            "/inspection",
+            "/health",
+            "/conversations",
+          ].includes(path)
+        ? path
+        : "/other";
   return scope.run(
     {
       requestId: randomUUID(),

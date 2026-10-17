@@ -39,7 +39,7 @@ const artifact = `${name}-artifact`;
 const containers = [];
 let started = false;
 /** @param {string[]} args */
-const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", timeout: 60_000 });
+const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", timeout: 180_000 });
 const auth = `Authorization: Basic ${Buffer.from("opencode:isolated-regression-password").toString("base64")}`;
 /** @param {string} path @param {object | undefined} body @param {number} port */
 function request(path, body, port = 4096) {
@@ -116,7 +116,7 @@ try {
           models: {
             probe: {
               name: "Probe",
-              capabilities: { tools: true, input: ["text"], output: ["text"] },
+              capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
               limit: { context: 100000, output: 1000 },
             },
           },
@@ -253,6 +253,15 @@ try {
     lastSession = session;
     request(`api/session/${session}/prompt`, {
       text: `compiled-case:${index}`,
+      ...(index === 7
+        ? {
+            files: [
+              {
+                uri: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+              },
+            ],
+          }
+        : {}),
     });
     request(`api/experimental/session/${session}/wait`, {});
     assert.equal(
@@ -309,6 +318,10 @@ try {
     "Primary model requests must be observed for every compiled case",
   );
   assert(modelRequests.every((body) => JSON.stringify(body).includes("Isolated test persona.")));
+  assert(
+    modelRequests.some((body) => JSON.stringify(body).includes("image_url")),
+    "A photo must reach the provider through the separately loaded context plugin",
+  );
   assert(
     modelRequests.every((body) => JSON.stringify(body).includes("Isolated native ground rules.")),
   );

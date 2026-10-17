@@ -31,7 +31,7 @@ Every persona the service can play. Only published personas appear in Discovery;
 _Avoid_: roster, lineup, persona list
 
 **Ground rules**:
-The instructions every persona follows regardless of who she is, such as never acting like an AI and how to read events on her phone.
+The instructions every persona follows regardless of who she is: Ren AI's service context, truthful identity and capability boundaries, how to read events on her phone, and how to use State and Memory.
 _Avoid_: system prompt, guidelines, policy
 
 **User**:
@@ -47,7 +47,7 @@ The handle every persona texts from.
 _Avoid_: persona handle, sender, bot account
 
 **Discovery**:
-Browsing published personas' public profiles, Liking or Passing each, and joining the waitlist with a handle and web consent.
+Browsing published personas' public profiles, Liking or Passing each, and joining the waitlist with a phone-number handle and web consent. Discovery never asks for an Apple ID email.
 _Avoid_: discovery page, swipe app
 
 **Onboarding**:
@@ -63,8 +63,16 @@ The first message a persona sends a new user.
 _Avoid_: welcome message, intro
 
 **Conversation**:
-The 1:1 iMessage thread between one user and one persona.
+A user's distinct 1:1 relationship with one persona over iMessage. A later relationship with another persona is a new Conversation even when it shares the same iMessage thread.
 _Avoid_: chat, thread, session (a session is OpenCode's)
+
+**Relationship ending**:
+A persona's permanent decision to end her Conversation with one user. It is distinct from declining a suggestion, taking a break, or blocking the user from the service.
+_Avoid_: ban, reset, pause
+
+**Reselection**:
+A user choosing other personas through Discovery after a Relationship ending, followed by Selection and a new Conversation. The previous Conversation's private memories and judgments belong only to that previous relationship.
+_Avoid_: persona switch, reset, relationship restart
 
 **Memory**:
 What a persona remembers of her life and one conversation. It includes short-term and long-term memory; neither carries over to another conversation.
