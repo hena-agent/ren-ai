@@ -25,13 +25,17 @@ export const observe = <A, E extends Error, R>(
             const failure = exit.cause.reasons.find((reason) => reason["_tag"] === "Fail")?.error;
             const error = failure?.cause instanceof Error ? failure.cause : failure;
             const code = error && "code" in error ? error.code : undefined;
+            const stage = error && "stage" in error ? error.stage : undefined;
             yield* Effect.logError({
               ...fields,
               outcome: "failed",
               causeName: error?.constructor.name ?? "InterruptedOrDefect",
               ...(typeof code === "number" ||
-              (typeof code === "string" && /^[A-Z0-9_-]{1,80}$/.test(code))
+              (typeof code === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(code))
                 ? { code }
+                : {}),
+              ...(typeof stage === "string" && /^[a-z_]{1,80}$/.test(stage)
+                ? { causeStage: stage }
                 : {}),
               stack: error?.stack
                 ?.split("\n")

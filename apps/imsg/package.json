@@ -13,8 +13,6 @@
     "start:gateway": "bun run ops/imsg-entry.ts",
     "verify": "bun run ops/imsg-verify.ts",
     "verify:mac-bundle": "bun run ops/verify-mac-graph.ts",
-    "mdm:profile": "bun run ops/mdm/profile-entry.ts",
-    "mdm:enrollment": "bun run ops/mdm/enrollment-entry.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

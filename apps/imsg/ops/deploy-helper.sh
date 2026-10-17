@@ -1,5 +1,5 @@
 #!/bin/bash
-# Attested-artifact installer: native imsg and Docker api-msg.
+# Attested-artifact installer: Rustpush messaging gateway and Docker api-msg.
 set -euo pipefail
 profile="${1:?Usage: deploy-helper.sh imsg|api-msg INSTALLED-HOME}"
 root="${2:?Usage: deploy-helper.sh imsg|api-msg INSTALLED-HOME}"
@@ -10,8 +10,8 @@ case "$profile" in
   imsg)
     artifact=imsg-bundle
     gateway="gui/$(id -u)/im.renai.imsg"
-    payload=(imsg.js verify.js messages-ui.applescript imsg.graph.json verify.graph.json)
-    runtime=(imsg.js verify.js messages-ui.applescript)
+    payload=(imsg.js verify.js ren-rustpush imsg.graph.json verify.graph.json artifact.info)
+    runtime=(imsg.js verify.js ren-rustpush)
     probe_command=("$root/bin/bun" "--env-file=$root/imsg.env" "$root/verify.js")
     ;;
   api-msg)
@@ -75,7 +75,11 @@ mkdir "$staging/bundle"
 tar -xzf "$staging/$artifact.tar.gz" -C "$staging/bundle"
 (
   cd "$staging/bundle"
-  if [[ "$profile" == api-msg ]]; then
+  if [[ "$profile" == imsg ]]; then
+    grep -qx "architecture=$(uname -m)" artifact.info
+    grep -qx 'transport=rustpush' artifact.info
+    [[ -x ren-rustpush ]]
+  else
     verifier="$script_dir/verify-artifact.sh"
     [[ -f "$verifier" ]] || verifier="$script_dir/../../api-msg/ops/verify-artifact.sh"
     bash "$verifier" "$staging/bundle"

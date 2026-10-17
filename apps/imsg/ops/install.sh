@@ -40,5 +40,5 @@ process.stdout.write(JSON.stringify({
 }));
 ' "$root" | /usr/bin/plutil -convert xml1 -o "$plist" -
 /usr/bin/plutil -lint "$plist"
-echo "Installed WITHOUT STARTING. Stable permission identities: $root/bin/bun and $root/bin/imsg"
-echo 'Enroll in Fleet, deliver profiles, retire old intake at the approved cutover, then explicitly bootstrap this GUI LaunchAgent.'
+echo "Installed WITHOUT STARTING. Run RUSTPUSH_STATE_DIR=$root/rustpush $root/ren-rustpush login locally."
+echo 'Verify the registered service handle and retire old intake at the approved cutover, then explicitly bootstrap this LaunchAgent.'

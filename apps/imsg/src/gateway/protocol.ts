@@ -17,13 +17,8 @@ const since = { ...handle, since: Schema.Number };
 const cursor = {
   rowID: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
 };
-export const incomingMessage = Schema.Struct({
-  id: Schema.Number,
-  guid: Schema.String,
-  handle: Schema.String,
-  createdAt: Schema.Number,
-  text: Schema.String,
-  fromMe: Schema.Boolean,
+/** The optional parts of a message row beyond its text. */
+export const messageDetail = Schema.Struct({
   attachments: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
@@ -43,6 +38,15 @@ export const incomingMessage = Schema.Struct({
   ),
   replyToGuid: Schema.optionalKey(Schema.String),
   payload: Schema.optionalKey(Schema.Literals(["location", "app"])),
+});
+export const incomingMessage = Schema.Struct({
+  id: Schema.Number,
+  guid: Schema.String,
+  handle: Schema.String,
+  createdAt: Schema.Number,
+  text: Schema.String,
+  fromMe: Schema.Boolean,
+  ...messageDetail.fields,
 });
 
 export const messagingApi = RpcGroup.make(

@@ -57,9 +57,37 @@ jobs:
       # Plants bad files; use a separate checkout from tests/build.
       - run: bun run verify-gates
 
+  native:
+    name: Rustpush checks and build
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: brew install protobuf
+      - run: bash apps/rustpush/prepare.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/rustpush/target
+          key: rustpush-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/rustpush/Cargo.lock', 'apps/rustpush/native.patch', 'apps/rustpush/rust-toolchain.toml') }}
+      - run: cargo install cargo-llvm-cov --version 0.8.5 --locked
+      - run: cargo install rust-code-analysis-cli --version 0.0.25 --locked
+      - run: bash apps/rustpush/check.sh
+      - run: cargo build --release --locked
+        working-directory: apps/rustpush
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rustpush-native
+          path: apps/rustpush/target/release/ren-rustpush
+          if-no-files-found: error
+
   gates:
     name: Quality gates
-    needs: [checks, verify]
+    needs: [checks, verify, native]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
@@ -68,9 +96,11 @@ jobs:
         env:
           CHECKS: ${{ needs.checks.result }}
           VERIFY: ${{ needs.verify.result }}
+          NATIVE: ${{ needs.native.result }}
         run: |
           test "$CHECKS" = success
           test "$VERIFY" = success
+          test "$NATIVE" = success
 
   # The Messages Mac pulls this attested bundle itself (apps/imsg/ops/update.sh);
   # nothing here can reach the Mac.
@@ -78,7 +108,7 @@ jobs:
     name: Build imsg bundle
     needs: gates
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 10
     permissions:
       contents: read
@@ -93,7 +123,12 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - run: bash apps/imsg/ops/build-bundle.sh "$RUNNER_TEMP/imsg-bundle"
+      - uses: actions/download-artifact@v8
+        with:
+          name: rustpush-native
+          path: native
+      - run: chmod 700 native/ren-rustpush
+      - run: bash apps/imsg/ops/build-mac.sh "$RUNNER_TEMP/imsg-bundle" "$PWD/native/ren-rustpush"
       - run: tar -czf imsg-bundle.tar.gz -C "$RUNNER_TEMP/imsg-bundle" .
       - uses: actions/attest-build-provenance@v4
         with:

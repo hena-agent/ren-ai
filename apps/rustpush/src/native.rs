@@ -1,0 +1,65 @@
+use crate::{
+    diagnostics::Failure,
+    rpc::{outcome, Delivery, Native},
+};
+use rustpush::{APSConnection, APSMessage, Attachment, IMClient, MessageInst, PushError};
+use std::{fs::File, time::Duration};
+
+/// The live Apple session: the only code that talks to Apple's servers.
+pub struct Apple {
+    pub client: IMClient,
+    pub connection: APSConnection,
+}
+
+impl Native for Apple {
+    async fn handles(&self) -> Vec<String> {
+        self.client.identity.get_handles().await
+    }
+
+    async fn decode(&self, raw: APSMessage) -> Result<Option<MessageInst>, Failure> {
+        self.client
+            .handle(raw)
+            .await
+            .map_err(|e| Failure::push("decode", e))
+    }
+
+    async fn certify(&self, message: &MessageInst) -> Result<(), Failure> {
+        let Some(context) = &message.certified_context else {
+            return Ok(());
+        };
+        self.client
+            .identity
+            .certify_delivery("com.apple.madrid", context, message.send_delivered)
+            .await
+            .map_err(|e| Failure::push("certify_delivery", e))
+    }
+
+    async fn download(&self, attachment: &Attachment, file: &mut File) -> Result<(), Failure> {
+        tokio::time::timeout(
+            Duration::from_secs(120),
+            attachment.get_attachment(&self.connection, file, |_, _| {}),
+        )
+        .await
+        .map_err(|_| Failure::new("attachment_download", "timeout"))?
+        .map_err(|e| Failure::push("attachment_download", e))
+    }
+
+    async fn send(&self, mut message: MessageInst) -> Result<Delivery, Failure> {
+        let sender = message.sender.clone().unwrap_or_default();
+        let recipient = message
+            .conversation
+            .as_ref()
+            .and_then(|conversation| conversation.participants.iter().find(|p| **p != sender))
+            .cloned()
+            .unwrap_or_default();
+        let job = match self.client.send(&mut message).await {
+            Err(PushError::NoValidTargets) => return Ok(Delivery::Failed("no_imessage")),
+            Err(error) => return Err(Failure::push("send", error)),
+            Ok(job) => job,
+        };
+        if message.message.get_nr() == Some(true) {
+            return Ok(Delivery::Sent);
+        }
+        outcome(&recipient, job.process, |target| target.participant.clone()).await
+    }
+}
