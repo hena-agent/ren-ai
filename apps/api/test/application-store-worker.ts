@@ -3,6 +3,8 @@ import { Effect, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
 import { createApplicationStore, type ApplicationStore } from "../src/application-store.ts";
+import { SqliteClient } from "@effect/sql-sqlite-do";
+import { registrationSchemaProbe } from "./registration-schema.test-helper.ts";
 
 interface RegistryNamespace {
   idFromName: (name: string) => string;
@@ -50,6 +52,15 @@ export class Registry extends DurableObject<Environment> {
 
   override async fetch(request: Request) {
     const path = new URL(request.url).pathname;
+    if (path === "/__fixture/legacy-registration") {
+      return Response.json(
+        await Effect.runPromise(
+          Effect.scoped(registrationSchemaProbe).pipe(
+            Effect.provide(SqliteClient.layer({ storage: this.ctx.storage })),
+          ),
+        ),
+      );
+    }
     const store = await this.application();
     if (path === "/__fixture/test-handle") {
       const { handle } = Schema.decodeUnknownSync(Schema.Struct({ handle: Schema.String }))(
@@ -99,7 +110,9 @@ export class Registry extends DurableObject<Environment> {
 
 export default {
   fetch(request: Request, env: Environment) {
-    const id = env.REGISTRY.idFromName("application");
+    const id = env.REGISTRY.idFromName(
+      new URL(request.url).pathname === "/__fixture/legacy-registration" ? "legacy" : "application",
+    );
     return env.REGISTRY.get(id).fetch(request);
   },
 };

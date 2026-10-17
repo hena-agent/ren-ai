@@ -18,6 +18,7 @@ export const conversations = Effect.gen(function* () {
         conversation.session_id AS sessionID FROM conversation
         JOIN user ON user.id = conversation.user_id
         WHERE ${sql(column)} = ${value}
+          AND conversation.ended_at IS NULL
           AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
       (rows) => rows[0],
     );
@@ -38,10 +39,10 @@ export const conversations = Effect.gen(function* () {
     all: () => sql<Conversation>`SELECT conversation.id, user.handle, conversation.persona_id AS personaID,
       conversation.session_id AS sessionID FROM conversation
       JOIN user ON user.id = conversation.user_id
-      WHERE NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
+        WHERE conversation.ended_at IS NULL AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
     replaceSession: (conversation: Conversation, sessionID: string) =>
       sql`UPDATE conversation SET session_id = ${sessionID}, rebuilding = 1 WHERE id = ${conversation.id}
-        AND session_id = ${conversation.sessionID} AND NOT EXISTS
+        AND session_id = ${conversation.sessionID} AND ended_at IS NULL AND NOT EXISTS
         (SELECT 1 FROM blocked WHERE blocked.handle = ${conversation.handle}) RETURNING id`,
     rebuilt: (conversation: Conversation) =>
       sql`UPDATE conversation SET rebuilding = 0 WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID}`,
@@ -64,6 +65,7 @@ export const conversations = Effect.gen(function* () {
           WHERE conversation.id = ${conversation.id} AND user.handle = ${conversation.handle}
           AND conversation.session_id = ${conversation.sessionID}
           AND conversation.rebuilding = 0
+          AND conversation.ended_at IS NULL
           AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
         (rows) => rows.length > 0,
       ),

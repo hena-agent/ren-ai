@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { Migrator, SqlClient } from "effect/unstable/sql";
+import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -169,6 +170,8 @@ export const migrate = Effect.gen(function* () {
         )`;
         yield* sql`CREATE INDEX intake_pending_handle ON intake_pending(handle, id)`;
       }),
+      "025_relationship_endings": relationshipSchema,
+      "026_registration_history": registrationHistorySchema,
     }),
   });
 });

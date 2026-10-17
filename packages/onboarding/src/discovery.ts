@@ -58,6 +58,7 @@ export const DiscoveryRequest = Schema.Struct({
   conversationLanguage: Schema.optionalKey(DiscoveryLocale),
   privacyNoticeVersion: text,
   turnstileToken: text,
+  reselectionToken: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;

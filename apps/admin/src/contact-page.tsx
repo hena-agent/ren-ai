@@ -86,7 +86,7 @@ function Rows({
                 <span className="contact-handle">{entry.handle}</span>
                 {entry.testHandle && <small>테스트 연락처</small>}
                 <small>{time(entry.createdAt)}</small>
-                {entry.state === "active" && (
+                {entry.state === "active" && !entry.relationshipEnd && (
                   <a href={`/first-contacts?languages=${entry.id}`}>현재 언어 실력</a>
                 )}
               </th>
@@ -104,8 +104,15 @@ function Rows({
                 )}
               </td>
               <td>
-                <strong>{labels[entry.state]}</strong>
-                <small>{reasons[entry.reason]}</small>
+                <strong>{entry.relationshipEnd ? "관계 종료" : labels[entry.state]}</strong>
+                <small>
+                  {entry.relationshipEnd
+                    ? entry.relationshipEnd.noticeDelivered
+                      ? "재선택 안내 발송 완료"
+                      : "종료 안내 발송 확인 필요"
+                    : reasons[entry.reason]}
+                </small>
+                {entry.relationshipEnd && <small>{time(entry.relationshipEnd.at)}</small>}
                 {entry.requestId && <small>요청 ID: {entry.requestId}</small>}
               </td>
             </tr>

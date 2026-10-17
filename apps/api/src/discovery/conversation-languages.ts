@@ -42,7 +42,7 @@ export const conversationLanguages =
           const sql = yield* SqlClient.SqlClient;
           const [row] = yield* sql<{ sessionID: string }>`SELECT c.session_id AS sessionID
       FROM discovery_registration r JOIN user u ON u.handle = r.handle
-      JOIN conversation c ON c.user_id = u.id WHERE r.id = ${registrationID}`;
+      JOIN conversation c ON c.user_id = u.id WHERE r.id = ${registrationID} AND r.archived_at IS NULL AND c.ended_at IS NULL`;
           if (!row) return undefined;
           const snapshot = yield* read(row.sessionID);
           const languages = yield* Effect.try(() => {

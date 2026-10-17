@@ -21,6 +21,11 @@ export const applicationApi = RpcGroup.make(
     success: Schema.String,
     error: Schema.String,
   }),
+  Rpc.make("endConversation", {
+    payload: { ...session, farewell: Schema.String, callID: Schema.String },
+    success: Schema.String,
+    error: Schema.String,
+  }),
   Rpc.make("wait", {
     payload: { ...session, seconds: Schema.Number },
     success: Schema.String,
