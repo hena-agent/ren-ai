@@ -31,6 +31,8 @@ test("forward migration leaves exactly the PRD app tables", async () => {
         "blocked",
         "bookmark",
         "conversation",
+        "conversation_end",
+        "conversation_recovery",
         "discovery_contact",
         "discovery_language",
         "discovery_like",

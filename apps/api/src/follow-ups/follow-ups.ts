@@ -39,7 +39,8 @@ export const followUps = (
           SELECT wake_pending AS wakePending, followed_up AS followedUp, unanswered
           FROM follow_up JOIN conversation ON conversation.id = follow_up.conversation_id
           WHERE conversation_id = ${conversation.id} AND conversation.session_id = ${conversation.sessionID}
-            AND (conversation.reset_guid IS NULL OR conversation.last_received_at IS NOT NULL)`;
+         AND conversation.ended_at IS NULL
+         AND (conversation.reset_guid IS NULL OR conversation.last_received_at IS NOT NULL)`;
         if (!row) return;
         const first = row.wakePending === 1 && row.followedUp === 0;
         const unanswered = row.unanswered + (first ? 1 : 0);
@@ -57,7 +58,7 @@ export const followUps = (
             AND state IN ('sent', 'delivered')), 0)) AS at
         FROM conversation JOIN user ON user.id = conversation.user_id
         LEFT JOIN follow_up ON follow_up.conversation_id = conversation.id
-        WHERE user.replied_at IS NOT NULL AND follow_up.conversation_id IS NULL`;
+        WHERE conversation.ended_at IS NULL AND user.replied_at IS NOT NULL AND follow_up.conversation_id IS NULL`;
       for (const row of missing) {
         const wake = yield* next(row.at, false);
         yield* sql`INSERT OR IGNORE INTO follow_up (conversation_id, last_sent_at, next_wake_at)
@@ -71,7 +72,8 @@ export const followUps = (
           user.handle, conversation.persona_id AS personaID FROM follow_up
           JOIN conversation ON conversation.id = follow_up.conversation_id
           JOIN user ON user.id = conversation.user_id
-          WHERE follow_up.next_wake_at IS NOT NULL AND user.replied_at IS NOT NULL
+           WHERE follow_up.next_wake_at IS NOT NULL AND user.replied_at IS NOT NULL
+             AND conversation.ended_at IS NULL
             AND follow_up.next_wake_at <= ${now}
             AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)
           ORDER BY follow_up.next_wake_at LIMIT 1`;

@@ -109,7 +109,7 @@ You are Persona1.
             sessionID: session.id,
           });
           expect(session.permissions?.map((rule) => rule.action)).toEqual(
-            conversationTools(["*", "send", "wait", "read", "react", "dice"]),
+            conversationTools(["*", "send", "wait", "read", "react", "end_conversation", "dice"]),
           );
           const row = yield* imessage.text(conversation.handle, "hey", Date.now());
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
@@ -139,7 +139,14 @@ You are Persona1.
           expect(
             (yield* llm.requests()).every((request) =>
               request.tools.every((tool) =>
-                conversationTools(["send", "wait", "read", "react", "dice"]).includes(tool.name),
+                conversationTools([
+                  "send",
+                  "wait",
+                  "read",
+                  "react",
+                  "end_conversation",
+                  "dice",
+                ]).includes(tool.name),
               ),
             ),
           ).toBe(true);

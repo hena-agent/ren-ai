@@ -7,6 +7,11 @@ interface PluginConfig {
   readonly personas: ReadonlyMap<string, Persona>;
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined, Error>;
   readonly read?: (sessionID: string) => Effect.Effect<string, Error>;
+  readonly endConversation?: (
+    sessionID: string,
+    farewell: string,
+    callID: string,
+  ) => Effect.Effect<string, Error>;
   readonly react?: (
     sessionID: string,
     tapback: Tapback,

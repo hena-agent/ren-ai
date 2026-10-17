@@ -9,6 +9,12 @@ const definition = <A>(description: string, schema: Schema.Codec<A>) => {
 };
 
 export const messagingToolDefinitions = {
+  end_conversation: definition(
+    "Permanently end only this Conversation when you no longer want a relationship. Records the ending and sends your farewell plus Ren AI's reselection notice. The User can choose another persona. Do not send the farewell separately or use this for a temporary break or a declined suggestion.",
+    Schema.Struct({
+      farewell: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1000)),
+    }),
+  ),
   send: definition(
     "Send one iMessage bubble to this Conversation's User",
     Schema.Struct({ text: Schema.String }),

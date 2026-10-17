@@ -41,6 +41,10 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                 ...(["send", "read", "react", "wait"] as const).filter(
                   (name) => options[name] && isMessagingTool(name, event.tools[name]),
                 ),
+                ...(options.endConversation &&
+                isMessagingTool("end_conversation", event.tools["end_conversation"])
+                  ? ["end_conversation"]
+                  : []),
                 ...(isDiceTool(event.tools["dice"]) ? ["dice"] : []),
                 ...memoryToolNames.filter((name) => isMemoryTool(name, event.tools[name])),
               ]),

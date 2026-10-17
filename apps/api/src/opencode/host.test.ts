@@ -294,7 +294,14 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(yield* host.conversations.byHandle(first.handle)).toEqual(first);
           expect(yield* host.conversations.bySession(session.id)).toEqual(first);
           expect(yield* host.conversations.bySession("missing")).toBeUndefined();
-          expectScopedPermissions(session.permissions, ["send", "wait", "read", "react", "dice"]);
+          expectScopedPermissions(session.permissions, [
+            "send",
+            "wait",
+            "read",
+            "react",
+            "end_conversation",
+            "dice",
+          ]);
           const signals: number[] = [];
           host.intake.onNew((conversation) => signals.push(conversation.id));
           yield* imessage.text(first.handle, "안녕", Date.parse("2026-09-25T11:52:00Z"));
@@ -308,7 +315,14 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
           ).toEqual(
             Array.from({ length: 4 }, () =>
-              conversationTools(["dice", "react", "read", "send", "wait"]).toSorted(),
+              conversationTools([
+                "dice",
+                "end_conversation",
+                "react",
+                "read",
+                "send",
+                "wait",
+              ]).toSorted(),
             ),
           );
           expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
@@ -412,7 +426,14 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           });
           yield* host.sessions.wait(permissive.id).pipe(Effect.timeout("20 seconds"));
           expect((yield* llm.requests()).at(-1)?.tools.map((tool) => tool.name)).toEqual(
-            conversationTools(["dice", "react", "read", "send", "wait"]).toSorted(),
+            conversationTools([
+              "dice",
+              "end_conversation",
+              "react",
+              "read",
+              "send",
+              "wait",
+            ]).toSorted(),
           );
           expect(alerts).toContain("unexpected-tool: OpenCode offered disallowed tool: intruder");
           step = 0;
