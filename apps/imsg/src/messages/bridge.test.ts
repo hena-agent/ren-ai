@@ -157,7 +157,7 @@ test("a bridge that ran long enough restarts promptly without alerting", async (
     Effect.gen(function* () {
       yield* ready(call);
       for (let exit = 0; exit < 3; exit++) {
-        h.bridge.exit();
+        h.bridge.end();
         yield* ready(call);
       }
     }),

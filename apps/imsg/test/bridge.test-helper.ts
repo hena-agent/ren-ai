@@ -36,7 +36,7 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
   const spawned: Array<{ command: string; args: ReadonlyArray<string>; env: object }> = [];
   const acknowledged: string[] = [];
   const answers = new Map<string, Answer[]>();
-  let processes: Array<{ write: (text: string) => void; exit: () => void }> = [];
+  let processes: Array<{ write: (text: string) => void; exit: () => void; end: () => void }> = [];
   let spawnFailures = 0;
   let writeFailures = 0;
   let silentStart = false;
@@ -57,7 +57,15 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
       const write = (text: string) =>
         Queue.offerUnsafe(output, new TextEncoder().encode(`${text}\n`));
       const emit = (value: object) => write(JSON.stringify(value));
-      const process = { write, exit: () => Effect.runFork(Queue.shutdown(output)) };
+      let ended = false;
+      const process = {
+        write,
+        exit: () => Effect.runFork(Queue.shutdown(output)),
+        end: () => {
+          ended = true;
+          write("");
+        },
+      };
       processes.push(process);
       yield* Effect.addFinalizer(() => Effect.sync(() => process.exit()));
       const respond = (line: string) => {
@@ -101,7 +109,7 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
           }),
         ),
         getInputFd: () => Sink.drain,
-        stdout: Stream.fromQueue(output),
+        stdout: Stream.fromQueue(output).pipe(Stream.takeUntil(() => ended)),
         getOutputFd: () => Stream.empty,
         stderr: Stream.empty,
         unref: Effect.succeed(Effect.void),
@@ -132,6 +140,7 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
       processes = processes.slice(0, -1);
     },
     running: () => processes.length,
+    end: () => processes.at(-1)?.end(),
   };
 };
 
