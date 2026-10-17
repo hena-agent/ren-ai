@@ -86,11 +86,7 @@ export async function createExecutionRuntime(
       throw cause;
     }));
   const boot = Effect.gen(function* () {
-    const { personas } = yield* Effect.tryPromise(catalog.load).pipe(
-      Effect.tapError((cause) =>
-        Effect.sync(() => Object.assign(cause, { debugStage: "catalog.load" })),
-      ),
-    );
+    const { personas } = yield* Effect.tryPromise(catalog.load);
     const messages = yield* remoteMessages({
       url: execution.imsgRpcUrl,
       token: execution.managementToken,
@@ -103,15 +99,13 @@ export async function createExecutionRuntime(
           callback = applicationGateway(tools, health, execution.managementToken);
           yield* Effect.addFinalizer(() => Effect.promise(callback!.dispose));
           const remote = yield* remoteHost(remoteConfiguration, personas);
-          yield* syncFolders(remote.client, execution.directory, personas, groundRules).pipe(
-            Effect.mapError((cause) => new Error("[DEBUG-cutover] folders.sync", { cause })),
-          );
+          yield* syncFolders(remote.client, execution.directory, personas, groundRules);
           return remote;
         }),
       messages,
       messages.gestures,
       health,
-    ).pipe(Effect.mapError((cause) => new Error("[DEBUG-cutover] application.start", { cause })));
+    );
     operator = operatorHandler(host.operator);
     yield* Effect.addFinalizer(() => Effect.promise(operator!.dispose));
     const contacts = yield* firstContacts(host, messages, host.conversations, execution.model);
@@ -182,17 +176,10 @@ export async function createExecutionRuntime(
       if (url.pathname === "/operator/conversations") return (await inspect())(request);
       if (url.pathname === "/management/catalog/refresh") {
         if (request.method !== "POST")
-          return new Response(null, {
-            status: 405,
-            headers: { Allow: "POST" },
-          });
+          return new Response(null, { status: 405, headers: { Allow: "POST" } });
         const start = performance.now();
         const requestId = randomUUID();
-        const fields = {
-          requestId,
-          operation: "catalog.refresh",
-          stage: "catalog.sync",
-        };
+        const fields = { requestId, operation: "catalog.refresh", stage: "catalog.sync" };
         try {
           await run((await open()).refreshCatalog);
           contactLog({
@@ -201,10 +188,7 @@ export async function createExecutionRuntime(
             durationMs: performance.now() - start,
             level: "info",
           });
-          return new Response(null, {
-            status: 204,
-            headers: { "X-Request-ID": requestId },
-          });
+          return new Response(null, { status: 204, headers: { "X-Request-ID": requestId } });
         } catch (cause) {
           contactLog({
             ...fields,
@@ -217,33 +201,12 @@ export async function createExecutionRuntime(
             { error: "Catalog refresh failed", requestId },
             {
               status: 503,
-              headers: {
-                "X-Request-ID": requestId,
-                "Cache-Control": "no-store",
-              },
+              headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" },
             },
           );
         }
       }
-      const runtime = await open().catch((cause: Error) => {
-        if (request.headers.get("X-Rustpush-Diagnostic") !== "startup") throw cause;
-        const chain = [];
-        for (let error: Error | undefined = cause; error && chain.length < 6;) {
-          chain.push({
-            ...contactCause(error),
-            ...("debugStage" in error && { debugStage: error.debugStage }),
-            ...(error.message.startsWith("[DEBUG-cutover]") && {
-              stage: error.message,
-            }),
-            limits: /too many subrequests|cpu time|memory limit|i\/o on behalf/i.test(
-              error.message,
-            ),
-          });
-          error = error.cause instanceof Error ? error.cause : undefined;
-        }
-        return Response.json({ diagnostic: "[DEBUG-cutover]", chain }, { status: 503 });
-      });
-      if (runtime instanceof Response) return runtime;
+      const runtime = await open();
       if (url.pathname === "/operator/languages" && request.method === "GET")
         return run(runtime.languages(request));
       url.pathname = url.pathname.slice("/operator".length);

@@ -336,6 +336,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@opencode/schema@2.0.19": "patches/@opencode%2Fschema@2.0.19.patch",
+  },
   "overrides": {
     "@effect/platform-node-shared": "4.0.0-rc.112",
   },
