@@ -9,6 +9,21 @@
       "path": "apps/api/src/operator-entry.ts",
       "reason": "Bun CLI process shim; typed operator command is tested through its socket",
       "added": "2026-09-27"
+    },
+    {
+      "path": "apps/rustpush/src/main.rs",
+      "reason": "Native process bootstrap and live session wiring; command validation and transport decisions are tested separately.",
+      "added": "2026-10-17"
+    },
+    {
+      "path": "apps/rustpush/src/apple-session.rs",
+      "reason": "Live Apple authentication, registration and upstream persistence callback wiring; durable state and notification handling are tested separately.",
+      "added": "2026-10-17"
+    },
+    {
+      "path": "apps/rustpush/src/apple-transport.rs",
+      "reason": "Thin adapter to live Apple network APIs; readiness, delivery classification, deadlines and RPC recovery are tested separately.",
+      "added": "2026-10-17"
     }
   ],
   "duplication": [],

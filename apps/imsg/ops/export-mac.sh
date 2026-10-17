@@ -24,4 +24,4 @@ tar -cpf "$output/imsg-installation.tar" -C "$root" .
   cd "$output"
   shasum -a 256 imsg-installation.tar > SHA256SUMS
 )
-echo 'Mac service artifact, token and logs exported. Apple Messages account/history and MDM enrollment remain attended setup; no OpenCode credentials included.'
+echo 'Mac artifact, Apple session, durable history, attachment spool, tokens and logs exported privately; no OpenCode credentials included.'

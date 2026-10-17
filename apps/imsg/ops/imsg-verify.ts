@@ -30,4 +30,4 @@ await Effect.runPromise(
     }),
   ).pipe(Effect.provide(FetchHttpClient.layer)),
 );
-process.stdout.write("Authenticated Messages DB/UI probe passed; no message sent.\n");
+process.stdout.write("Authenticated Rustpush session probe passed; no message sent.\n");

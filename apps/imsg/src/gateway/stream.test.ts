@@ -1,8 +1,8 @@
 import { expect, test, vi } from "vitest";
 import { Deferred, Effect } from "effect";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
-import { fixture as imsgFixture } from "../messages/imsg.fake.ts";
-import { makeImsgMessages } from "../messages/imsg.ts";
+import { fakeMessages } from "../messages/messages.fake.ts";
+import type { Messages } from "../messages/messages.ts";
 
 test("an idle HTTP stream flushes readiness immediately and heartbeats every twenty seconds", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -63,44 +63,34 @@ test("stopping the client stream prevents further deliveries while the client sc
   }
 });
 
-test("canceling HTTP follow stops the native imsg watch instead of leaving background history probes", async () => {
+test("canceling HTTP follow stops the history follower instead of leaving it running", async () => {
+  const local = fakeMessages();
+  let started = 0;
+  let stopped = 0;
+  const messages: Messages = {
+    ...local.messages,
+    follow: (rowID, receive) =>
+      Effect.map(local.messages.follow(rowID, receive), (stop) => {
+        started++;
+        return () => {
+          stopped++;
+          stop();
+        };
+      }),
+  };
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  const imsg = imsgFixture();
+  const fixture = gatewayFixture(messages);
   try {
-    await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const messages = yield* makeImsgMessages({
-            raise: () => Effect.void,
-            clear: () => Effect.void,
-          });
-          const fixture = gatewayFixture(messages);
-          yield* Effect.addFinalizer(() => Effect.promise(fixture.server.dispose));
-          const response = yield* Effect.promise(() =>
-            fixture.request("follow", { rowID: 10, date: null }),
-          );
-          const reader = response.body!.getReader();
-          yield* Effect.promise(() => reader.read());
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(imsg.commands.some((command) => command.method === "watch.subscribe")).toBe(
-                true,
-              ),
-            ),
-          );
-          yield* Effect.promise(() => reader.cancel());
-          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(100));
-          const before = imsg.commands.filter(
-            (command) => command.method === "messages.after",
-          ).length;
-          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(30_000));
-          expect(
-            imsg.commands.filter((command) => command.method === "messages.after"),
-          ).toHaveLength(before);
-        }),
-      ).pipe(Effect.provide(imsg.dependencies)),
-    );
+    const response = await fixture.request("follow", { rowID: 0, date: null });
+    const reader = response.body!.getReader();
+    await reader.read();
+    await vi.waitFor(() => expect(started).toBe(1));
+    expect(stopped).toBe(0);
+    await reader.cancel();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(stopped).toBe(1);
   } finally {
+    await fixture.server.dispose();
     vi.useRealTimers();
   }
 });
