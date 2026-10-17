@@ -6,7 +6,7 @@ The executor forwards authenticated requests to the existing `https://oc.renai.i
 and `https://imsg.renai.im/rpc` upstreams. It has no application database or
 Turnstile credentials.
 
-The executor also watches imsg's existing stream and recent-message edits, coalesces wake hints to `APPLICATION_API_URL`, and retries failed delivery. Cloudflare owns the bookmark, edit baselines, admission and all business decisions. Idle observation does not poll the Worker. See [ADR-0018](../../../docs/adr/0018-the-mac-observes-and-waits-cloudflare-decides-and-stores.md) and the [coordinated plugin/Worker release](../../api/ops/README.md#event-driven-execution-release-adr-0018).
+The executor also watches imsg's existing stream and recent-message edits, coalesces wake hints to `APPLICATION_API_URL`, and retries failed delivery. Cloudflare owns the bookmark, edit baselines, admission and all business decisions. Idle observation does not poll the Worker. See [ADR-0019](../../../docs/adr/0019-the-mac-observes-and-waits-cloudflare-decides-and-stores.md) and the [coordinated plugin/Worker release](../../api/ops/README.md#event-driven-execution-release-adr-0019).
 
 ## One-time provisioning
 

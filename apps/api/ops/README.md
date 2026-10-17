@@ -294,7 +294,7 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
 The Mac messaging service is a separate package with its own [runbook](../../imsg/ops/README.md): artifact build, installation, tunnel, Fleet permissions and relocation.
 
-## Event-driven execution release (ADR-0018)
+## Event-driven execution release (ADR-0019)
 
 The Worker and application plugins must be released together: streaming `wait`, `status` and `sends` RPCs have been replaced by local waiting and a combined finite `context` response. The context request carries the actual model-visible message IDs. Terminal execution notifications use `observe`.
 
