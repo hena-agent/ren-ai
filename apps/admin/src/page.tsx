@@ -16,6 +16,7 @@ import type { ContactView } from "./contact-page.tsx";
 import { UploadDialog } from "./upload-controls.tsx";
 import { VersionPage } from "./version-page.tsx";
 import type { VersionView } from "./version-page.tsx";
+import { ConversationPage, type ConversationView } from "./conversation-page.tsx";
 
 interface EditorFields {
   documents?: InitialDocuments | undefined;
@@ -319,6 +320,40 @@ function PageNotices({
   );
 }
 
+function Navigation({
+  record,
+  contactView,
+  conversationView,
+}: {
+  record: PersonaRecord | undefined;
+  contactView: ContactView | undefined;
+  conversationView: ConversationView | undefined;
+}) {
+  return (
+    <nav aria-label={copy.navigation}>
+      <a href="/" aria-current={record || contactView || conversationView ? undefined : "page"}>
+        {copy.list}
+      </a>
+      <a className="new-link" href="/new">
+        + {copy.new}
+      </a>
+      <a href="/inspection">전체 검사</a>
+      <a href="/waitlist" aria-current={contactView?.tab === "waitlist" ? "page" : undefined}>
+        대기자
+      </a>
+      <a
+        href="/first-contacts"
+        aria-current={contactView?.tab === "first-contacts" ? "page" : undefined}
+      >
+        첫 연락
+      </a>
+      <a href="/conversations" aria-current={conversationView ? "page" : undefined}>
+        대화 상태
+      </a>
+    </nav>
+  );
+}
+
 export function renderPage({
   personas,
   record,
@@ -346,6 +381,7 @@ export function renderPage({
   showIdea,
   contactView,
   versionView,
+  conversationView,
 }: PageContent & {
   error?: string;
   saved?: boolean;
@@ -353,6 +389,7 @@ export function renderPage({
   inspections?: readonly InspectionRow[];
   contactView?: ContactView;
   versionView?: VersionView;
+  conversationView?: ConversationView;
 }) {
   return (
     "<!doctype html>" +
@@ -373,30 +410,17 @@ export function renderPage({
             <a className="brand" href="/">
               {copy.brand}
             </a>
-            <nav aria-label={copy.navigation}>
-              <a href="/" aria-current={record || contactView ? undefined : "page"}>
-                {copy.list}
-              </a>
-              <a className="new-link" href="/new">
-                + {copy.new}
-              </a>
-              <a href="/inspection">전체 검사</a>
-              <a
-                href="/waitlist"
-                aria-current={contactView?.tab === "waitlist" ? "page" : undefined}
-              >
-                대기자
-              </a>
-              <a
-                href="/first-contacts"
-                aria-current={contactView?.tab === "first-contacts" ? "page" : undefined}
-              >
-                첫 연락
-              </a>
-            </nav>
+            <Navigation
+              record={record}
+              contactView={contactView}
+              conversationView={conversationView}
+            />
           </header>
           <main id="main" className={record || versionView ? "persona-workbench" : undefined}>
-            <div className="page-heading" hidden={Boolean(record || versionView)}>
+            <div
+              className="page-heading"
+              hidden={Boolean(record || versionView || conversationView)}
+            >
               <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
               <h1>{heading(contactView, inspections)}</h1>
               <p className="description">
@@ -412,7 +436,9 @@ export function renderPage({
               queuePosition={queuePosition}
               queueObservedAt={queueObservedAt}
             />
-            {versionView ? (
+            {conversationView ? (
+              <ConversationPage view={conversationView} />
+            ) : versionView ? (
               <VersionPage {...versionView} />
             ) : contactView ? (
               <ContactPage view={contactView} />
