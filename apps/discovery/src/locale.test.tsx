@@ -80,7 +80,12 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   expect(within(initialLanguages).getAllByRole("listitem")).toHaveLength(2);
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "language@example.org" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }), {
+    target: { value: "language@example.org" },
+  });
+  fireEvent.change(screen.getByLabelText("이름 (선택)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByLabelText("만 나이 (선택)"), { target: { value: "28" } });
+  fireEvent.change(screen.getByLabelText("성별 (선택)"), { target: { value: "male" } });
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.change(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }), {
     target: { value: "ja" },
@@ -90,7 +95,12 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   });
   expect(document.documentElement.lang).toBe("en");
   expect(localStorage.getItem("renai.locale")).toBe("en");
-  expect(screen.getByRole<HTMLInputElement>("textbox").value).toBe("language@example.org");
+  expect(
+    screen.getByRole<HTMLInputElement>("textbox", { name: "Phone number or Apple ID email" }).value,
+  ).toBe("language@example.org");
+  expect(screen.getByLabelText<HTMLInputElement>("Name (optional)").value).toBe("민수");
+  expect(screen.getByLabelText<HTMLInputElement>("Age in years (optional)").value).toBe("28");
+  expect(screen.getByLabelText<HTMLSelectElement>("Gender (optional)").value).toBe("male");
   expect(
     screen.getByRole<HTMLSelectElement>("combobox", { name: "Preferred conversation language" })
       .value,
@@ -111,6 +121,9 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
     handle: "language@example.org",
     locale: "ja",
     conversationLanguage: "ja",
+    name: "민수",
+    age: 28,
+    gender: "male",
     privacyNoticeVersion: discoveryNotices.ja.version,
     turnstileToken: "human",
     likedPersonaIDs: ["harin"],

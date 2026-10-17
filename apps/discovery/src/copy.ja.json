@@ -1,4 +1,13 @@
 {
+  "optionalProfile": "あなたについて（任意）",
+  "optionalProfileHint": "すべて空欄でも大丈夫です。入力すると、最初の挨拶からペルソナが参考にします。",
+  "profileName": "名前（任意）",
+  "profileAge": "満年齢（任意）",
+  "profileGender": "性別（任意）",
+  "genderUnset": "選択しない",
+  "genderFemale": "女性",
+  "genderMale": "男性",
+  "genderOther": "その他",
   "languageSetting": "表示言語",
   "languageStorageFailure": "表示言語を保存できませんでした。現在の選択はそのまま使えます。",
   "languages": "話せる言語",

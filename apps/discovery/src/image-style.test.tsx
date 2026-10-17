@@ -130,9 +130,13 @@ test("style changes and reloads preserve Like and Pass, contact input and candid
   await screen.findByRole("heading", { name: "미라" });
   expect(screen.queryByRole("heading", { name: "어떤 느낌으로 만나볼까요?" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "01012345678" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }), {
+    target: { value: "01012345678" },
+  });
   fireEvent.click(screen.getByRole("button", { name: "애니메" }));
-  expect(screen.getByRole("textbox").getAttribute("value")).toBe("01012345678");
+  expect(
+    screen.getByRole("textbox", { name: "전화번호 또는 Apple ID 이메일" }).getAttribute("value"),
+  ).toBe("01012345678");
   expect(
     screen
       .getByRole("list", { name: "관심을 전할 페르소나" })
