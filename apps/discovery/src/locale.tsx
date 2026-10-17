@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import ko from "./copy.json";
 import en from "./copy.en.json";
 import ja from "./copy.ja.json";
+import { LanguageSelect } from "./language-select.tsx";
 
 export type Locale = "ko" | "en" | "ja";
 const messages = { ko, en, ja } satisfies Record<Locale, typeof ko>;
@@ -53,24 +54,12 @@ export function LocalePicker() {
     <div className="locale-picker">
       <label>
         <span className="sr-only">{copy.languageSetting}</span>
-        <select
-          aria-label={copy.languageSetting}
+        <LanguageSelect
           value={locale}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            if (supported(value)) choose(value);
-          }}
-        >
-          <option value="ko" lang="ko">
-            한국어
-          </option>
-          <option value="en" lang="en">
-            English
-          </option>
-          <option value="ja" lang="ja">
-            日本語
-          </option>
-        </select>
+          label={copy.languageSetting}
+          className="header-language-select"
+          onValueChange={choose}
+        />
       </label>
       {storageFailure && <output className="storage-warning">{copy.languageStorageFailure}</output>}
     </div>

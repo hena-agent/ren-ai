@@ -57,6 +57,9 @@
   display: grid;
   gap: 8px;
 }
+.contact-fields + .contact-fields {
+  margin-top: 24px;
+}
 .contact-fields label {
   font-size: 13px;
   font-weight: 600;
@@ -72,7 +75,8 @@
   font-size: 14px;
   font-weight: 600;
 }
-input:not([type="checkbox"]) {
+input:not([type="checkbox"]),
+.optional-profile select {
   width: 100%;
   min-height: 52px;
   padding: 12px 14px;

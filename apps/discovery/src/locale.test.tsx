@@ -3,9 +3,11 @@ import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotices } from "@ren-ai/onboarding";
 import { App } from "./app.tsx";
 import { LocalePicker, LocaleProvider } from "./locale.tsx";
+import { LanguageSelect } from "./language-select.tsx";
+import type { Locale } from "./locale.tsx";
 import { ProfileLanguages } from "./profile-languages.tsx";
 import type { DiscoveryClient } from "./client.ts";
-import { choose } from "../test/choose.ts";
+import { choose, selectLanguage } from "../test/choose.ts";
 import { JoinForm } from "./join-form.tsx";
 
 afterEach(() => {
@@ -39,7 +41,9 @@ function detectLocale() {
       <LocalePicker />
     </LocaleProvider>,
   );
-  const locale = screen.getByRole<HTMLSelectElement>("combobox").value;
+  const label = screen.getByRole("combobox").textContent;
+  const locales = { 한국어: "ko", English: "en", 日本語: "ja" };
+  const locale = Object.entries(locales).find(([language]) => label?.includes(language))?.[1];
   view.unmount();
   return locale;
 }
@@ -87,12 +91,8 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   fireEvent.change(screen.getByLabelText("만 나이 (선택)"), { target: { value: "28" } });
   fireEvent.change(screen.getByLabelText("성별 (선택)"), { target: { value: "male" } });
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.change(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }), {
-    target: { value: "ja" },
-  });
-  fireEvent.change(screen.getByRole("combobox", { name: "화면 언어" }), {
-    target: { value: "en" },
-  });
+  selectLanguage("대화하고 싶은 언어", "日本語");
+  selectLanguage("화면 언어", "English");
   expect(document.documentElement.lang).toBe("en");
   expect(localStorage.getItem("renai.locale")).toBe("en");
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Mobile number" }).value).toBe(
@@ -105,15 +105,12 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   expect(country.value).toBe("KR");
   expect(within(country).getByRole("option", { name: "🇰🇷 South Korea +82" })).toBeTruthy();
   expect(
-    screen.getByRole<HTMLSelectElement>("combobox", { name: "Preferred conversation language" })
-      .value,
-  ).toBe("ja");
+    screen.getByRole("combobox", { name: "Preferred conversation language" }).textContent,
+  ).toContain("日本語");
   expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
   expect(screen.getByText(discoveryNotices.en.aiNotice)).toBeTruthy();
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.change(screen.getByRole("combobox", { name: "Display language" }), {
-    target: { value: "ja" },
-  });
+  selectLanguage("Display language", "日本語");
   expect(screen.getByText(discoveryNotices.ja.aiNotice)).toBeTruthy();
   expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
   fireEvent.click(screen.getByRole("checkbox"));
@@ -150,7 +147,7 @@ test("localized proficiency includes all languages in details and keeps unset pr
   expect(screen.queryByRole("region")).toBeNull();
 });
 
-test("blocked storage retains the chosen language and invalid select events do not change it", () => {
+test("blocked storage retains the chosen display language", () => {
   vi.stubGlobal("localStorage", {
     getItem: () => null,
     setItem: () => {
@@ -162,16 +159,27 @@ test("blocked storage retains the chosen language and invalid select events do n
       <LocalePicker />
     </LocaleProvider>,
   );
-  const select = screen.getByRole("combobox");
-  fireEvent.change(select, { target: { value: "en" } });
+  selectLanguage("화면 언어", "English");
   expect(document.documentElement.lang).toBe("en");
   expect(screen.getByRole("status").textContent).toContain("could not be saved");
-  fireEvent.change(select, { target: { value: "invalid" } });
-  expect(document.documentElement.lang).toBe("en");
   view.unmount();
   render(<LocalePicker />);
-  fireEvent.change(screen.getByRole("combobox"), { target: { value: "ja" } });
-  expect(screen.getByRole<HTMLSelectElement>("combobox").value).toBe("ko");
+  expect(screen.getByRole("combobox", { name: "화면 언어" }).textContent).toContain("한국어");
+  selectLanguage("화면 언어", "日本語");
+  expect(screen.getByRole("combobox", { name: "화면 언어" }).textContent).toContain("한국어");
+});
+
+test("a disabled language control cannot open or change its value, and selection resumes when enabled", () => {
+  const changeLanguage = vi.fn<(locale: Locale) => void>();
+  const view = render(
+    <LanguageSelect value="ko" label="Language" onValueChange={changeLanguage} disabled />,
+  );
+  fireEvent.click(screen.getByRole("combobox", { name: "Language" }));
+  expect(screen.queryByRole("listbox")).toBeNull();
+  expect(changeLanguage).not.toHaveBeenCalled();
+  view.rerender(<LanguageSelect value="ko" label="Language" onValueChange={changeLanguage} />);
+  selectLanguage("Language", "English");
+  expect(changeLanguage).toHaveBeenCalledWith("en");
 });
 
 test("conversation language choices are explicit and consent can be withdrawn", () => {
@@ -183,13 +191,14 @@ test("conversation language choices are explicit and consent can be withdrawn", 
       onSuccess={vi.fn<(status: "waiting" | "active") => void>()}
     />,
   );
-  const language = screen.getByRole<HTMLSelectElement>("combobox", { name: "대화하고 싶은 언어" });
-  for (const value of ["en", "ko"]) {
-    fireEvent.change(language, { target: { value } });
-    expect(language.value).toBe(value);
-  }
-  fireEvent.change(language, { target: { value: "invalid" } });
-  expect(language.value).toBe("ko");
+  selectLanguage("대화하고 싶은 언어", "English");
+  expect(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }).textContent).toContain(
+    "English",
+  );
+  selectLanguage("대화하고 싶은 언어", "한국어");
+  expect(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }).textContent).toContain(
+    "한국어",
+  );
   const consent = screen.getByRole<HTMLInputElement>("checkbox");
   fireEvent.click(consent);
   expect(consent.checked).toBe(true);

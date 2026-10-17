@@ -116,6 +116,7 @@
       "name": "@ren-ai/discovery",
       "version": "0.0.0",
       "dependencies": {
+        "@radix-ui/react-select": "2.3.7",
         "@ren-ai/onboarding": "workspace:*",
         "@ren-ai/personas": "workspace:*",
         "effect": "4.0.0-rc.112",

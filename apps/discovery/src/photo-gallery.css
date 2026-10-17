@@ -68,9 +68,6 @@
   color: #fff;
   background: #10131866;
 }
-.profile-card[data-gallery="true"] .profile-label {
-  top: 48px;
-}
 .details-media {
   position: relative;
 }

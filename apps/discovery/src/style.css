@@ -3,6 +3,7 @@
 @import "./swipe.css";
 @import "./photo-gallery.css";
 @import "./profile-details.css";
+@import "./language-select.css";
 
 :root {
   --canvas: #f4f5f7;
@@ -26,7 +27,8 @@ body {
   margin: 0;
 }
 button,
-input {
+input,
+select {
   font: inherit;
 }
 button {
@@ -450,16 +452,6 @@ button:disabled {
   .onboarding-view {
     padding-block: 24px;
   }
-}
-/* Language settings stay compact alongside the photo-style control. */
-.locale-picker select {
-  max-width: 7.5rem;
-  padding: 0.4rem;
-  border: 1px solid #d7d7d7;
-  border-radius: 0.5rem;
-  color: inherit;
-  background: white;
-  font: inherit;
 }
 .profile-languages ul {
   display: flex;
