@@ -34,6 +34,13 @@ vi.mock("./discovery/management.ts", () => ({
 vi.mock("./discovery/discovery.ts", () => ({
   makeDiscoveryWeb: () => Effect.succeed({ handler: discoveryHandler, dispose }),
 }));
+vi.mock("./conversations/status.ts", () => ({
+  conversationStatus: () =>
+    Effect.succeed({
+      list: () => Effect.succeed({ entries: [], nextBefore: null }),
+      detail: () => Effect.succeed(undefined),
+    }),
+}));
 
 const storage = fromPartial<DurableObjectStorage>({
   sql: { exec: vi.fn<() => never>() },
@@ -62,10 +69,31 @@ test("retains the SQL context for effects, routes registry requests and closes s
     await (await store.handler(new Request("https://api.test/management/discovery"))).text(),
   ).toBe("management");
   expect((await store.handler(new Request("https://api.test/not-found"))).status).toBe(404);
+  const records = await store.handler(
+    new Request("https://api.test/management/conversations", {
+      headers: { Authorization: "Bearer test-token" },
+    }),
+  );
+  expect(records.status).toBe(200);
+  expect(await records.json()).toEqual({ entries: [], nextBefore: null });
+  expect(
+    (await store.handler(new Request("https://api.test/management/conversations"))).status,
+  ).toBe(401);
   expect(discoveryHandler).toHaveBeenCalledTimes(1);
   expect(managementHandler).toHaveBeenCalledTimes(1);
   await store.close();
   expect(dispose).toHaveBeenCalledTimes(1);
+});
+
+test("conversation records fail closed when the application's management token is unconfigured", async () => {
+  const store = await createApplicationStore(storage, { ...config, managementToken: "" });
+  try {
+    const response = await store.handler(new Request("https://api.test/management/conversations"));
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe("Unauthorized");
+  } finally {
+    await store.close();
+  }
 });
 
 test("closes the SQLite scope if startup assignment validation fails", async () => {
