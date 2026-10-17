@@ -10,7 +10,7 @@ const definition = <A>(description: string, schema: Schema.Codec<A>) => {
 
 export const messagingToolDefinitions = {
   send: definition(
-    "Send one iMessage bubble to this Conversation's User",
+    "Send one iMessage bubble to this Conversation's User. Before replying to newly received messages, you must first call read and wait for its result. Call read and send sequentially, never in parallel.",
     Schema.Struct({ text: Schema.String }),
   ),
   wait: definition(
@@ -20,7 +20,7 @@ export const messagingToolDefinitions = {
     }),
   ),
   read: definition(
-    "Mark this Conversation's messages read now",
+    "Mark this Conversation's messages read now. Before replying to newly received messages, you must call read and wait for its result before calling send. Call read and send sequentially, never in parallel.",
     Schema.Record(Schema.String, Schema.Never),
   ),
   react: definition(

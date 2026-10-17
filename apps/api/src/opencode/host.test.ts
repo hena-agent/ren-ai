@@ -303,7 +303,9 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(JSON.stringify(yield* llm.requests())).toContain(
             '<message at=\\"2026-09-25 Fri 01:52\\">안녕</message>',
           );
-          expect(toolDescription).toBe("Send one iMessage bubble to this Conversation's User");
+          expect(toolDescription).toBe(
+            "Send one iMessage bubble to this Conversation's User. Before replying to newly received messages, you must first call read and wait for its result. Call read and send sequentially, never in parallel.",
+          );
           expect(
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
           ).toEqual(
