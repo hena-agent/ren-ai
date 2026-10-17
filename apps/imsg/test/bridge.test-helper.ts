@@ -97,6 +97,7 @@ export const bridgeFixture = (handles: ReadonlyArray<string> = [service]) => {
             }
             for (const line of new TextDecoder().decode(bytes).split("\n").filter(Boolean))
               respond(line);
+            return yield* Effect.void;
           }),
         ),
         getInputFd: () => Sink.drain,

@@ -1,6 +1,14 @@
 use super::*;
 use std::time::Duration;
 
+fn rejection() -> broadcast::Receiver<(String, SendResult)> {
+    let (sender, results) = broadcast::channel(1);
+    assert!(sender
+        .send(("them".to_owned(), SendResult::APSError(5000)))
+        .is_ok());
+    results
+}
+
 #[tokio::test]
 async fn submissions_distinguish_rejection_uncertainty_and_no_reply_operations() {
     for (error, expected) in [
@@ -36,11 +44,7 @@ async fn submissions_distinguish_rejection_uncertainty_and_no_reply_operations()
 
 #[tokio::test]
 async fn partial_rejection_followed_by_submission_failure_remains_uncertain() {
-    let (sender, results) = broadcast::channel(2);
-    assert!(sender
-        .send(("them".to_owned(), SendResult::APSError(5000)))
-        .is_ok());
-    drop(sender);
+    let results = rejection();
     let task = AbortOnDropHandle::new(tokio::spawn(async { Err(PushError::APSAckError(7)) }));
     let failure = submitted("them", false, Ok(results), String::clone, Some(task))
         .await
@@ -66,11 +70,7 @@ async fn submission_failure_without_device_results_preserves_its_cause() {
 #[tokio::test]
 async fn unanimous_rejection_requires_successful_completion_and_cancellation_stops_work() {
     for panic in [false, true] {
-        let (sender, results) = broadcast::channel(1);
-        assert!(sender
-            .send(("them".to_owned(), SendResult::APSError(5000)))
-            .is_ok());
-        drop(sender);
+        let results = rejection();
         let task = AbortOnDropHandle::new(tokio::spawn(async move {
             assert!(!panic, "synthetic task failure");
             Ok(())
