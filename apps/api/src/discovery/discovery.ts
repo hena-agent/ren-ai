@@ -58,7 +58,7 @@ export const makeDiscoveryWeb = ({
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const limit = submissionLimit();
+    const limit = yield* submissionLimit;
     const profiles = (requestId: string) =>
       Effect.gen(function* () {
         const started = performance.now();
@@ -163,9 +163,28 @@ export const makeDiscoveryWeb = ({
           Effect.gen(function* () {
             const request = yield* HttpServerRequest.HttpServerRequest;
             const now = yield* Clock.currentTimeMillis;
-            if (limit(request.headers["cf-connecting-ip"], now))
+            const requestId = operationID(request.headers["x-operation-id"]);
+            if (
+              yield* limit(request.headers["cf-connecting-ip"], now).pipe(
+                Effect.tapError((cause) =>
+                  Effect.sync(() =>
+                    contactLog({
+                      requestId,
+                      operation: "discovery.registration",
+                      stage: "registration.limit",
+                      code: "storage",
+                      level: "error",
+                      outcome: "failed",
+                      durationMs: 0,
+                      ...contactCause(cause),
+                    }),
+                  ),
+                ),
+                Effect.mapError(() => "storage" as const),
+              )
+            )
               return yield* Effect.fail("try_later" as const);
-            return yield* join(payload, operationID(request.headers["x-operation-id"]));
+            return yield* join(payload, requestId);
           }),
         ),
     );

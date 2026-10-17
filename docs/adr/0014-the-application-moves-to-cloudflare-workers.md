@@ -4,6 +4,8 @@ status: accepted
 
 # The application moves to Cloudflare Workers, with its state in one Durable Object
 
+The scheduling, waiting and startup decisions below are revised by [ADR-0018](0018-the-mac-observes-and-waits-cloudflare-decides-and-stores.md). Cloudflare remains the authoritative application store.
+
 The stateful application (`apps/api`, served at `api.renai.im`) moves from a long-lived Bun process in Docker on the Messages Mac (ADR-0010) to Cloudflare Workers as `@ren-ai/api-app`, with its SQLite Durable Object as the sole owner of application state. The separate DB-free `@ren-ai/api-msg` executor runs in Docker on the Messages Mac at `api-msg.renai.im`; it forwards to the existing OpenCode and imsg upstreams. Workers has no long-lived processes. A Durable Object restarts on every deploy, and each outbound connection keeps it alive for at most 15 minutes ([research](../specs/workers-replatform-research.md)). The move therefore changes how the application waits, not what it does. This revises ADR-0010's Docker application service and ADR-0006's SQLite file and nightly backups.
 
 ## Decision

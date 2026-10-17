@@ -184,6 +184,22 @@ export const migrate = Effect.gen(function* () {
         session_id TEXT NOT NULL, guid TEXT NOT NULL, text TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY (session_id, guid)
       )`,
+      "030_event_scheduling": Effect.gen(function* () {
+        yield* sql`CREATE TABLE application_work (name TEXT PRIMARY KEY, due INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, generation INTEGER NOT NULL DEFAULT 0)`;
+        yield* sql`CREATE TABLE application_clock (name TEXT PRIMARY KEY, at INTEGER NOT NULL)`;
+        yield* sql`ALTER TABLE intake_edit ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`;
+        yield* sql`CREATE INDEX intake_edit_expiry ON intake_edit(created_at)`;
+        yield* sql`CREATE INDEX contact_due ON discovery_contact(scheduled_at) WHERE state = 'scheduled'`;
+        yield* sql`CREATE INDEX follow_up_due ON follow_up(next_wake_at) WHERE next_wake_at IS NOT NULL`;
+        yield* sql`CREATE INDEX failure_due ON failed_turn(retry_at) WHERE review = 0`;
+        yield* sql`CREATE INDEX intake_due ON intake_pending(retry_at)`;
+        yield* sql`ALTER TABLE retained_session ADD COLUMN stopped INTEGER NOT NULL DEFAULT 0`;
+        yield* sql`CREATE TABLE context_seen (session_id TEXT PRIMARY KEY, guid TEXT)`;
+        yield* sql`CREATE TABLE runtime_catalog (id INTEGER PRIMARY KEY CHECK(id=1), revision TEXT NOT NULL, payload TEXT NOT NULL, synced TEXT)`;
+        yield* sql`CREATE TABLE discovery_attempt (ip TEXT NOT NULL, at INTEGER NOT NULL)`;
+        yield* sql`CREATE INDEX discovery_attempt_ip ON discovery_attempt(ip, at)`;
+        yield* sql`CREATE INDEX discovery_attempt_expiry ON discovery_attempt(at)`;
+      }),
     }),
   });
 });

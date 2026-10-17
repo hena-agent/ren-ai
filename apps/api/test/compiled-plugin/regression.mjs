@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { setTimeout } from "node:timers/promises";
 import { Schema } from "effect";
 import { Session } from "@opencode/schema";
 import { folderFiles, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
@@ -31,7 +32,7 @@ const sessionData = (text) =>
     ),
   )(text).data;
 
-// Explicit integration entry: node apps/api/test/compiled-plugin/regression.mjs
+// Explicit integration entry: bun apps/api/test/compiled-plugin/regression.mjs
 // Requires the locally built plugin artifact and compiled CLI images, not live services or credentials.
 const root = mkdtempSync(join(tmpdir(), "compiled-persona-plugin-"));
 const name = `ren-ai-plugin-regression-${randomUUID()}`;
@@ -263,6 +264,19 @@ try {
           }
         : {}),
     });
+    if (seconds === 3300) {
+      let running = false;
+      for (let attempt = 0; attempt < 100 && !running; attempt++) {
+        running = request(`api/session/${session}/message`, undefined).includes(
+          '"status":"running"',
+        );
+        if (!running) await setTimeout(100);
+      }
+      assert(running, "The compiled local wait must start before the interrupting input");
+      request(`api/session/${session}/prompt`, {
+        text: "A newly admitted message interrupts the local wait.",
+      });
+    }
     request(`api/experimental/session/${session}/wait`, {});
     assert.equal(
       sessionData(request(`api/session/${session}`, undefined)).title,
@@ -271,16 +285,17 @@ try {
     const history = request(`api/session/${session}/message`, undefined);
     assert(!history.includes("Cannot convert a symbol to a number"), history);
     if (index > 6) assert(history.includes(`isolated ${seconds} completed`), history);
+    else if (seconds === 3300) assert(history.includes("cut short by something new"), history);
     else if (typeof seconds === "number" && seconds > 0 && seconds <= 3300)
-      assert(history.includes(`isolated wait completed: ${seconds}`), history);
+      assert(history.includes(`paused ${seconds}s`), history);
     else assert(history.includes('"status":"error"'), history);
   }
-  assert.deepEqual(
-    Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.Number)))(
-      request("waits", undefined, 4710),
-    ),
-    [5.5, 3300],
+  const calls = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.String)))(
+    request("calls", undefined, 4710),
   );
+  assert(calls.includes("context"));
+  assert(calls.includes("observe"));
+  assert(!calls.some((tag) => ["wait", "status", "sends"].includes(tag)));
   request(`api/session/${lastSession}/compact`, {});
   request(`api/experimental/session/${lastSession}/wait`, {});
   assert(request(`api/session/${lastSession}/message`, undefined).includes("About him: isolated."));

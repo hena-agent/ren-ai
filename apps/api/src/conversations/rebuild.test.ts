@@ -77,7 +77,8 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
         const recovery = yield* rebuilder(host.conversations, host, host.intake.replay);
         expect(yield* recovery.rebuild(handle)).toBe("present");
         yield* host.sessions.remove(Session.ID.make(rebuilt.sessionID));
-        yield* recovery.missing;
+        yield* profileSql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
+        yield* recovery.pending;
         expect((yield* host.conversations.byHandle(handle))?.sessionID).not.toBe(rebuilt.sessionID);
         yield* host.conversations.block(handle);
         expect(yield* host.operator.rebuild(handle)).toBe("not_found");

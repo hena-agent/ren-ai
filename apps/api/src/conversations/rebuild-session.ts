@@ -89,6 +89,16 @@ export const rebuilder = (
     const missing = Effect.gen(function* () {
       for (const conversation of yield* directory.all()) yield* rebuild(conversation.handle);
     });
-    return { rebuild, missing };
+    const pending = Effect.gen(function* () {
+      const rows = yield* sql<{
+        handle: string;
+      }>`SELECT u.handle FROM conversation c JOIN user u ON u.id = c.user_id
+        WHERE c.rebuilding = 1 AND c.ended_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = u.handle)
+        AND NOT EXISTS (SELECT 1 FROM removal WHERE handle = u.handle)
+        ORDER BY c.id LIMIT 20`;
+      for (const row of rows) yield* rebuild(row.handle);
+    });
+    return { rebuild, missing, pending };
   });
 };

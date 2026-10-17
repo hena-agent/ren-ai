@@ -2,12 +2,13 @@ import { Plugin } from "@opencode/plugin/effect";
 import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { applicationApi, persona } from "./protocol.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import type { PersonaPluginOptions } from "./options.ts";
-import { waitForResult } from "./wait.ts";
+import { localWait } from "./wait.ts";
+import { observeTurns } from "./observe.ts";
 
 export const inPersonaLocation = (directory: string, root: string) => {
   return (
@@ -51,9 +52,24 @@ interface RemoteConfig {
   readonly token: string;
 }
 
-const remoteOptions = (config: RemoteConfig) =>
+const remoteOptions = <E>(
+  config: RemoteConfig,
+  events: Stream.Stream<{ type: string; data?: { sessionID: string; messageID?: string } }, E>,
+) =>
   Effect.gen(function* () {
     const api = yield* rpcClient(applicationApi, config);
+    const waiting = yield* localWait(
+      events.pipe(
+        Stream.filter(
+          (event) => event.type === "session.inbox.enqueued" && event.data?.messageID !== undefined,
+        ),
+        Stream.map((event) => ({
+          sessionID: event.data!.sessionID,
+          messageID: event.data!.messageID!,
+        })),
+      ),
+    );
+    yield* observeTurns(events, (sessionID) => api.observe({ sessionID }));
     const options: PersonaPluginOptions = {
       personaDirectory: config.directory,
       personas: new Map(),
@@ -61,20 +77,18 @@ const remoteOptions = (config: RemoteConfig) =>
         api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
       endConversation: (sessionID, farewell, callID) =>
         api.endConversation({ sessionID, farewell, callID }).pipe(Effect.mapError(failure)),
-      wait: (sessionID, seconds) => waitForResult(api, sessionID, seconds),
+      wait: waiting.wait,
       read: (sessionID) => api.read({ sessionID }).pipe(Effect.mapError(failure)),
       react: (sessionID, tapback, callID) =>
         api.react({ sessionID, tapback, callID }).pipe(Effect.mapError(failure)),
       handleForSession: (sessionID) => api.handle({ sessionID }).pipe(Effect.mapError(failure)),
-      onContext: (sessionID, messageIDs) =>
+      context: (sessionID, messageIDs) =>
         api.context({ sessionID, messageIDs }).pipe(Effect.mapError(failure)),
-      lastMessageStatus: (sessionID) => api.status({ sessionID }).pipe(Effect.mapError(failure)),
-      settledSends: (sessionID) => api.sends({ sessionID }).pipe(Effect.mapError(failure)),
       health: {
         raise: (name, detail) => api.alert({ name, detail }).pipe(Effect.catch(() => Effect.void)),
       },
     };
-    return options;
+    return { options, observed: waiting.observed };
   });
 
 type Factory = (options: PersonaPluginOptions) => Plugin.Plugin;
@@ -89,8 +103,39 @@ export const remotePlugin = (id: string, factory: Factory, config: RemoteConfig)
           !inPersonaLocation(ctx.location.directory, config.directory)
         )
           return;
-        const options = yield* remoteOptions(config);
-        yield* factory(options).effect(ctx);
+        const sessionID = managedFolder(resolve(config.directory), resolve(ctx.location.directory));
+        const remote = yield* remoteOptions(
+          config,
+          id === "ren-ai.tools"
+            ? ctx.event.subscribe().pipe(
+                Stream.map((event) => ({
+                  type: event.type,
+                  ...((event.type === "session.inbox.enqueued" ||
+                    event.type === "session.execution.failed" ||
+                    event.type === "session.execution.succeeded") &&
+                  event.data.sessionID === sessionID
+                    ? {
+                        data: {
+                          sessionID: event.data.sessionID,
+                          ...(event.type === "session.inbox.enqueued"
+                            ? { messageID: event.data.inboxID }
+                            : {}),
+                        },
+                      }
+                    : {}),
+                })),
+              )
+            : Stream.never,
+        );
+        yield* ctx.session.hook("context", (event) =>
+          Effect.sync(() =>
+            remote.observed(
+              event.sessionID,
+              event.messages.flatMap((entry) => entry.id ?? []),
+            ),
+          ),
+        );
+        yield* factory(remote.options).effect(ctx);
       }).pipe(Effect.orDie, Effect.provide(FetchHttpClient.layer)),
   });
 

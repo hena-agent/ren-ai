@@ -248,7 +248,7 @@ The Catalog is the Admin Worker's Drizzle/D1 database and starts empty. Set
 `PERSONA_CATALOG_URL` and `TOKEN_CATALOG` in the protected application
 env file; the token matches the Worker's `TOKEN_CATALOG`. There is no file mount
 or seed-copy step. See [Admin deployment](../../../apps/admin/README.md).
-The application polls revisions and synchronizes native folders. Publish new
+Admin pushes Catalog-change notifications; the application durably caches the revision and synchronizes native folders when it changes. Publish new
 personas before Discovery offers them.
 Missing IDs preserve existing session snapshots privately. Deploy the updated
 session-folder plugin before the application so new Conversations receive
@@ -295,6 +295,18 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
 The Mac messaging service is a separate package with its own [runbook](../../imsg/ops/README.md): artifact build, installation, tunnel, Fleet permissions and relocation.
 
+## Event-driven execution release (ADR-0018)
+
+The Worker and application plugins must be released together: streaming `wait`, `status` and `sends` RPCs have been replaced by local waiting and a combined finite `context` response. The context request carries the actual model-visible message IDs. Terminal execution notifications use `observe`.
+
+1. Stage the tested Worker and fresh plugin bundles using the session-folder installation procedure above. Preserve the existing plugin volume and export state during the planned pause. api-msg's CI artifact contains its observer; its protected `APPLICATION_API_URL` defaults to `https://api.renai.im` and uses the existing `TOKEN_MANAGEMENT`. Set it explicitly for staging/local operation. Its private environment is not changed by the automatic updater.
+2. Put the application in `BOOTSTRAP_ONLY=true`, interrupt/drain active OpenCode execution, and record uncertain sends. Keep Messages receiving. Install the fresh plugin location and recreate OpenCode with that location; retain the writable sessions volume and current State/Memory.
+3. Deploy the matching Worker in bootstrap mode, then enable execution. Confirm the installed api-msg revision matches its artifact. Its wake requests may retry while the Worker is paused. Send one authenticated `POST /management/intake/wake` after enabling execution to initialize/catch up intake promptly; a new empty application must establish its initial bookmark before accepting live Conversations.
+4. With a marked test Handle, verify burst replies, an interrupted local wait, an edit across a Worker restart, incoming messages received during the pause, scheduled first contact/follow-up, and failed-turn recovery. Confirm an idle alarm is approximately five minutes away and Catalog reads/folder writes do not repeat on actor replacement. Mac outage alerts now use a five-minute safety interval.
+5. Check public `/health` identity, exact artifact revision and readiness for api-app, api-msg and imsg. A published artifact or a degraded Worker-only smoke check is not an end-to-end rollout. For rollback, pause first and restore the matching Worker/plugin pair after reconciling send records.
+
+Cloudflare owns all application state. The Mac observer has no application database; on restart it fetches the authoritative bookmark/edit window and resumes observation. A 202 wake response means the wake was scheduled, not that a message was delivered or a persona replied.
+
 ## Initial cutover: planned pause, not two intakes
 
 1. Keep the old app running until ready. Stage the [Mac artifact/MDM](../../imsg/ops/README.md), Docker images and secrets. **Before starting the new application, even in bootstrap mode, apply/review the machine-Basic proxy adapter and verify valid/invalid authenticated native API access through public `https://oc.renai.im` plus existing browser/SSE/terminal behavior.** Only then stage reviewed plugin inventory/config and proceed to the planned pause. Recheck approved Korean onboarding copy/consent version and provider privacy facts before enabling onboarding. Do not infer renewal of a historical zero-retention agreement.
@@ -320,3 +332,5 @@ On the new host, `bash ops/restore-docker.sh VERIFIED-BACKUP NEW-CONFIG-DIRECTOR
 Repo tests prove the transfer and service contracts; operation tests exercise native snapshot exports, pagination, artifact graph rejection and proxy credential behavior. Validate scripts with `bash -n` and Compose with configured staging values. Image builds and private artifact/installer checks are safe before live deployment. Actual PPPC delivery, public hostname routing, old-version snapshot fidelity and native UI/model behavior require the attended staged checks above; they are not claimed complete by source tests.
 
 After changing runtime plugins, build the plugin image and run the compiled-plugin regression harness with the separate plugin-directory artifact layout. Its default path exercises cold activation and folder RPCs inside the compiled CLI using isolated fake services; `--preprovisioned` is only a debugging fallback. The former `/artifact/plugin` layout is obsolete. Cross-instance schema failures can escape embedded-runtime tests: keep every folder RPC input/output/error/event schema and the positive-number `wait` input behind opaque Standard Schema boundaries. Void folder operations return JSON `null` on the wire. `COMPILED_OPENCODE_IMAGE` can select the pinned CLI image when the local compatibility image is unavailable.
+
+From the repository root, with Bun 1.4.2, run `COMPILED_PLUGIN_IMAGE=ren-ai/plugin:local bun apps/api/test/compiled-plugin/regression.mjs`. The harness builds that plugin image; `--artifact-only` uses an already built image. It also verifies finite context responses, local wait deadlines and interruption by admitted input, and the absence of `wait`, `status` and `sends` RPC calls.

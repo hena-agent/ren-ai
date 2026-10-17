@@ -6,6 +6,8 @@ The executor forwards authenticated requests to the existing `https://oc.renai.i
 and `https://imsg.renai.im/rpc` upstreams. It has no application database or
 Turnstile credentials.
 
+The executor also watches imsg's existing stream and recent-message edits, coalesces wake hints to `APPLICATION_API_URL`, and retries failed delivery. Cloudflare owns the bookmark, edit baselines, admission and all business decisions. Idle observation does not poll the Worker. See [ADR-0018](../../../docs/adr/0018-the-mac-observes-and-waits-cloudflare-decides-and-stores.md) and the [coordinated plugin/Worker release](../../api/ops/README.md#event-driven-execution-release-adr-0018).
+
 ## One-time provisioning
 
 Docker must be running for the logged-in Mac user. The default installation is
@@ -17,7 +19,7 @@ another new absolute directory.
    executor on its private Compose network; port 4700 is not published to the host.
 2. Copy [`api-msg.env.example`](api-msg.env.example) to an owner-only private file.
    Use the Worker's `TOKEN_MANAGEMENT` and the existing OpenCode Basic header and
-   imsg token. Set the Worker's `API_MSG_URL=https://api-msg.renai.im`.
+   imsg token. Set `APPLICATION_API_URL=https://api.renai.im` and the Worker's `API_MSG_URL=https://api-msg.renai.im`.
 3. Install the latest attested `main` bundle:
 
    ```sh

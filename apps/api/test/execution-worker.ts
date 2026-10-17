@@ -54,6 +54,7 @@ export const executionWorker = async (persistence: string, executor: string, dir
 
 const State = Schema.Struct({
   catalogReads: Schema.Number,
+  alarm: Schema.NullOr(Schema.Number),
   contacts: Schema.Array(
     Schema.Struct({ state: Schema.String, session_id: Schema.NullOr(Schema.String) }),
   ),

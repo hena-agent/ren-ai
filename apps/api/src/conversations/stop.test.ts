@@ -13,7 +13,7 @@ import { conversationEndings } from "./end.ts";
 import { retainedSessions } from "./retained.ts";
 import type { ContactDiagnostic } from "../discovery/diagnostics.ts";
 
-test("termination stops execution, cancels pending inbox work and rechecks preserved sessions after restart", async () => {
+test("termination stops execution and cancels inbox work once across application restarts", async () => {
   await withContactDatabase(
     Effect.gen(function* () {
       const f = yield* relationshipFixture;
@@ -56,7 +56,7 @@ test("termination stops execution, cancels pending inbox work and rechecks prese
       expect(events).toHaveLength(3);
       yield* stopped.resume;
       yield* stopped.tick;
-      expect(events).toHaveLength(5);
+      expect(events).toHaveLength(3);
       expect(logs[0]).toMatchObject({
         stage: "session.stop",
         outcome: "completed",
@@ -115,6 +115,7 @@ test("termination stops execution, cancels pending inbox work and rechecks prese
       } finally {
         stderr.mockRestore();
       }
+      yield* f.sql`UPDATE conversation_end SET stopped_at = NULL WHERE conversation_id = ${f.conversation.id}`;
       const failedStop = yield* stoppedConversations(
         { ...host, sessions: { ...host.sessions, interrupt: () => Effect.fail(failure) } },
         (event) => logs.push(event),
@@ -187,7 +188,7 @@ test("session retention preserves and propagates an unrelated tagged executor fa
           rename: () => Effect.fail(failure),
         },
       });
-      yield* f.sql`INSERT INTO retained_session VALUES (${f.conversation.sessionID}, ${f.conversation.handle}, 'retained')`;
+      yield* f.sql`INSERT INTO retained_session (session_id, handle, title) VALUES (${f.conversation.sessionID}, ${f.conversation.handle}, 'retained')`;
       const retained = yield* retainedSessions(host);
       const result = yield* Effect.result(retained.resume);
       expect(Result.isFailure(result)).toBe(true);

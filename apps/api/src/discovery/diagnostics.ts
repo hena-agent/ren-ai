@@ -26,9 +26,10 @@ export const contactLog: ContactLog = (event) => {
 export function contactCause(cause: unknown) {
   const error = cause instanceof Error ? cause : new Error("Non-Error failure");
   const root = error.cause instanceof Error ? error.cause : error;
+  const coded = "code" in root ? root : error;
   const code =
-    "code" in root && typeof root.code === "string" && /^[A-Z0-9_-]{1,80}$/.test(root.code)
-      ? root.code
+    "code" in coded && typeof coded.code === "string" && /^[A-Z0-9_-]{1,80}$/.test(coded.code)
+      ? coded.code
       : undefined;
   return {
     causeName: root.constructor.name,

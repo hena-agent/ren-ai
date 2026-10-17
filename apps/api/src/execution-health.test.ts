@@ -1,8 +1,10 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect } from "effect";
+import { TestClock } from "effect/testing";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test, vi } from "vitest";
 import { createExecutionHealth } from "./execution-health.ts";
+import { migrate } from "./database.ts";
 
 const configuration = {
   apiMsgUrl: "https://executor.example",
@@ -14,7 +16,9 @@ const configuration = {
 };
 const run = <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =>
   Effect.runPromise(
-    Effect.scoped(effect).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+    Effect.scoped(migrate.pipe(Effect.andThen(effect))).pipe(
+      Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
+    ),
   );
 
 test("alerts are durable, deduplicated and never forward private detail", async () => {
@@ -78,6 +82,9 @@ test("health checks are rate limited and keep native facts separate from credent
         }),
       );
       yield* docker.tick;
+      expect(fetcher).toHaveBeenCalledOnce();
+      yield* TestClock.adjust("5 minutes");
+      yield* docker.tick;
       expect(yield* sql`SELECT name FROM application_alert`).toEqual([{ name: "screen-locked" }]);
       const restarted = yield* createExecutionHealth(configuration, undefined, fetcher);
       fetcher.mockResolvedValue(
@@ -89,9 +96,10 @@ test("health checks are rate limited and keep native facts separate from credent
           screenLocked: false,
         }),
       );
+      yield* TestClock.adjust("5 minutes");
       yield* restarted.tick;
       expect(yield* sql`SELECT name FROM application_alert`).toEqual([]);
-    }),
+    }).pipe(Effect.provide(TestClock.layer())),
   );
   expect(fetcher).toHaveBeenCalledTimes(3);
   expect(fetcher.mock.calls[0]![1]?.headers).toEqual({ Authorization: "Bearer management-secret" });

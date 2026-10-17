@@ -42,6 +42,33 @@ export function installPage(next: Document) {
   }
 }
 
+function updateActivity(next: Document) {
+  for (const panel of document.querySelectorAll<HTMLElement>("[data-image-job]")) {
+    const updated = [...next.querySelectorAll<HTMLElement>("[data-image-job]")].find(
+      (entry) => entry.dataset["imageJob"] === panel.dataset["imageJob"],
+    );
+    panel.dataset["jobActive"] = updated?.dataset["jobActive"] ?? "false";
+  }
+}
+
+function preservePrompt(next: Document, active: boolean) {
+  const dialog = document.querySelector<HTMLDialogElement>("[data-portrait-dialog]");
+  const editingPrompt = dialog?.open;
+  if (!active && editingPrompt) {
+    const observed = revision;
+    dialog.addEventListener(
+      "close",
+      () => {
+        setTimeout(() => {
+          if (observed === revision && dialog.isConnected) replacePage(next);
+        }, 0);
+      },
+      { once: true },
+    );
+  }
+  return editingPrompt;
+}
+
 function updatePage(next: Document) {
   const notice = next.querySelector(".notice.error");
   if (notice) {
@@ -49,7 +76,8 @@ function updatePage(next: Document) {
     document.querySelector("main")!.prepend(notice);
   }
   const active = next.querySelector('[data-job-active="true"]');
-  const editingPrompt = document.querySelector<HTMLDialogElement>("[data-portrait-dialog]")?.open;
+  updateActivity(next);
+  const editingPrompt = preservePrompt(next, Boolean(active));
   if (!next.querySelector("[data-image-progress]") || (!active && !editingPrompt)) {
     replacePage(next);
     return;
@@ -79,11 +107,10 @@ function updatePage(next: Document) {
 
 export function watchImageQueue() {
   clearTimeout(timer);
-  const job =
-    document.querySelector<HTMLElement>('[data-image-job][data-job-active="true"]') ??
-    (document.querySelector<HTMLDialogElement>("[data-portrait-dialog]")?.open
-      ? document.querySelector<HTMLElement>("[data-image-job]")
-      : null);
+  document.removeEventListener("visibilitychange", watchImageQueue);
+  document.addEventListener("visibilitychange", watchImageQueue);
+  if (document.hidden) return;
+  const job = document.querySelector<HTMLElement>('[data-image-job][data-job-active="true"]');
   if (!job) return;
   const observedRevision = revision;
   timer = setTimeout(() => {

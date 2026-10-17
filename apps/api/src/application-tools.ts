@@ -9,12 +9,14 @@ import type { Persona } from "@ren-ai/personas";
 import type { Messages, Gestures } from "@ren-ai/imsg";
 import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
 import { conversationEndings } from "./conversations/end.ts";
+import { scheduleWork } from "./scheduling.ts";
+import { promptID } from "./intake/message-id.ts";
 
 export type MessagingTools = {
   readonly [
     Key in Exclude<keyof PersonaPluginOptions, "personaDirectory" | "health">
   ]-?: NonNullable<PersonaPluginOptions[Key]>;
-};
+} & { readonly observe: (sessionID: string) => Effect.Effect<void, Error> };
 
 /** Preparing callbacks does not start intake, scheduling, or OpenCode execution. */
 export const prepareMessaging = (
@@ -29,7 +31,6 @@ export const prepareMessaging = (
     const pace = yield* timing;
     const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
     const endings = yield* conversationEndings(directory, sends, messages, gestures, personas);
-    const seenAtRequest = new Map<string, string | undefined>();
     const inConversation = (
       sessionID: string,
       action: (conversation: Conversation) => Effect.Effect<string, Error>,
@@ -43,6 +44,10 @@ export const prepareMessaging = (
         Effect.mapError((error) => new Error(String(error))),
       );
     const tools: MessagingTools = {
+      observe: (sessionID) =>
+        scheduleWork(`turn:${sessionID}`, Date.now()).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        ),
       personas,
       endConversation: endings.end,
       handleForSession: (sessionID) =>
@@ -54,13 +59,23 @@ export const prepareMessaging = (
         inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
       wait: (sessionID, seconds) =>
         inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, seconds)),
-      onContext: (sessionID, messageIDs) =>
+      context: (sessionID, messageIDs) =>
         Effect.gen(function* () {
           yield* pace.seen(sessionID, messageIDs);
           const seen = yield* sql<{
             guid: string;
           }>`SELECT guid FROM intake_seen WHERE session_id = ${sessionID} ORDER BY rowid DESC LIMIT 1`;
-          seenAtRequest.set(sessionID, seen[0]?.guid);
+          const guid = seen[0]?.guid;
+          const observed = guid && messageIDs.includes(promptID(sessionID, guid)) ? guid : null;
+          yield* sql`INSERT INTO context_seen (session_id, guid) VALUES (${sessionID}, ${observed})
+            ON CONFLICT(session_id) DO UPDATE SET guid = excluded.guid WHERE guid IS NOT excluded.guid`;
+          const conversation = yield* directory.bySession(sessionID);
+          return {
+            status: conversation
+              ? yield* messages.lastOutgoingStatus(conversation.handle)
+              : undefined,
+            sends: yield* sends.results(sessionID),
+          };
         }),
       read: (sessionID) =>
         Effect.gen(function* () {
@@ -75,19 +90,11 @@ export const prepareMessaging = (
         Effect.gen(function* () {
           const conversation = yield* directory.bySession(sessionID);
           if (!conversation) return notReacted("no Conversation for session");
-          return yield* sends.react(conversation, tapback, callID, seenAtRequest.get(sessionID));
+          const [seen] = yield* sql<{
+            guid: string | null;
+          }>`SELECT guid FROM context_seen WHERE session_id = ${sessionID}`;
+          return yield* sends.react(conversation, tapback, callID, seen?.guid ?? undefined);
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
-      lastMessageStatus: (sessionID) =>
-        directory
-          .bySession(sessionID)
-          .pipe(
-            Effect.flatMap((conversation) =>
-              conversation
-                ? messages.lastOutgoingStatus(conversation.handle)
-                : Effect.succeed(undefined),
-            ),
-          ),
-      settledSends: (sessionID) => sends.results(sessionID),
     };
     return { tools, directory, pace, sends, endings };
   });

@@ -28,11 +28,15 @@ test("forward migration leaves exactly the PRD app tables", async () => {
       ]);
       const appTables = names.filter((name) => name !== "effect_sql_migrations");
       expect(appTables).toEqual([
+        "application_clock",
+        "application_work",
         "blocked",
         "bookmark",
+        "context_seen",
         "conversation",
         "conversation_end",
         "conversation_recovery",
+        "discovery_attempt",
         "discovery_contact",
         "discovery_language",
         "discovery_like",
@@ -50,6 +54,7 @@ test("forward migration leaves exactly the PRD app tables", async () => {
         "reply_arrival",
         "reset",
         "retained_session",
+        "runtime_catalog",
         "send",
         "test_handle",
         "user",

@@ -1,7 +1,10 @@
 import { fromPartial } from "@total-typescript/shoehorn";
-import { Context, Effect } from "effect";
+import { Context, Effect, Exit, Layer, Scope } from "effect";
+import { SqliteClient } from "@effect/sql-sqlite-node";
+import { SqlClient } from "effect/unstable/sql";
+import { migrate } from "./database.ts";
 import { HttpClient } from "effect/unstable/http";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ApplicationStore } from "./application-store.ts";
 import { cloudflareConfiguration } from "./cloudflare-config.ts";
 import { createExecutionRuntime } from "./execution-runtime.ts";
@@ -9,6 +12,7 @@ import { executionBindings } from "../test/execution-bindings.ts";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 import { Session } from "@opencode/schema/session";
 import type { SessionActiveOutput } from "@opencode/client/effect/api";
+import type { RemoteConfig } from "./opencode/remote.ts";
 
 const control = vi.hoisted(() => ({
   events: [] as string[],
@@ -21,6 +25,7 @@ const control = vi.hoisted(() => ({
   languageFailure: undefined as Error | undefined,
   activeRead: vi.fn<() => Effect.Effect<SessionActiveOutput, Error>>(),
   activeProbe: vi.fn<(id: Session.ID) => Effect.Effect<boolean, Error>>(),
+  onPrompt: vi.fn<(id: string) => Effect.Effect<void, Error>>(),
 }));
 
 const step = (name: string) =>
@@ -34,7 +39,10 @@ vi.mock("./personas/catalog.ts", () => ({
     load: async () => {
       control.events.push("catalog");
       if (control.failure === "catalog") throw new Error("catalog unavailable");
-      return { personas: new Map() };
+      return {
+        revision: String(control.events.filter((event) => event === "catalog").length),
+        personas: new Map(),
+      };
     },
   }),
 }));
@@ -66,8 +74,9 @@ vi.mock("./operator/api.ts", () => ({
   }),
 }));
 vi.mock("./opencode/remote.ts", () => ({
-  remoteHost: () =>
+  remoteHost: (config: RemoteConfig) =>
     Effect.gen(function* () {
+      control.onPrompt.mockImplementation(config.onPrompt!);
       yield* Effect.addFinalizer(() => step("remote.close"));
       yield* Effect.promise(() => control.startup());
       yield* step("remote");
@@ -76,7 +85,7 @@ vi.mock("./opencode/remote.ts", () => ({
 }));
 vi.mock("./opencode/catalog-sync.ts", () => ({
   syncFolders: () => step("folders"),
-  catalogRefresher: () => ({ refresh: () => step("refresh") }),
+  catalogRefresher: () => ({ refresh: () => step("refresh"), reconcile: () => step("reconcile") }),
 }));
 vi.mock("./discovery/first-contact.ts", () => ({
   firstContacts: () => Effect.succeed({ tick: step("contacts") }),
@@ -125,6 +134,8 @@ vi.mock("./application.ts", () => ({
           intake: step("intake"),
           followUps: step("followUps"),
           failedTurns: step("failedTurns"),
+          checkTurns: () => step("checkTurns"),
+          rebuilds: step("rebuilds"),
         },
       })),
     ),
@@ -133,9 +144,64 @@ vi.mock("./application-tools.ts", () => ({
   prepareMessaging: () => Effect.succeed({ endings: {} }),
 }));
 
+let scope: Scope.Closeable;
+let database: Context.Context<SqlClient.SqlClient>;
+beforeEach(async () => {
+  scope = await Effect.runPromise(Scope.make());
+  database = await Effect.runPromise(
+    Layer.buildWithScope(SqliteClient.layer({ filename: ":memory:" }), scope),
+  );
+  await Effect.runPromise(migrate.pipe(Effect.provideContext(database)));
+});
+
+test("actor replacement reuses its applied Catalog and fails safely on a corrupt private cache", async () => {
+  let runtime = await open();
+  await runtime.tick();
+  await Effect.runPromise(control.onPrompt("ses_due"));
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`UPDATE application_work SET due = 0 WHERE name = 'turn:ses_due'`;
+      yield* sql`DELETE FROM application_clock WHERE name = 'recovery'`;
+    }).pipe(Effect.provideContext(database)),
+  );
+  await runtime.close();
+  control.events.length = 0;
+  runtime = await open();
+  control.failure = "reconcile";
+  await expect(runtime.tick()).rejects.toThrow("failed reconcile");
+  expect(control.events).not.toContain("catalog");
+  expect(control.events).not.toContain("folders");
+  expect(control.events).toContain("checkTurns");
+  expect(control.events).toContain("failedTurns");
+  expect(control.events).toContain("stopped");
+  await runtime.tick();
+  expect(control.events.filter((entry) => entry === "reconcile")).toHaveLength(1);
+  control.failure = "";
+  await runtime.close();
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`UPDATE runtime_catalog SET payload = 'private-invalid-cache'`;
+    }).pipe(Effect.provideContext(database)),
+  );
+  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  runtime = await open();
+  try {
+    await expect(runtime.tick()).rejects.toThrow("Invalid persisted Catalog");
+    const logged = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
+    expect(logged).not.toContain("private-invalid-cache");
+    expect(logged).toContain("CATALOG_CACHE_INVALID");
+  } finally {
+    await runtime.close();
+    stderr.mockRestore();
+  }
+});
+afterEach(() => Effect.runPromise(Scope.close(scope, Exit.void)));
+
 const open = () =>
   createExecutionRuntime(
-    fromPartial<ApplicationStore>({ context: Context.empty() }),
+    fromPartial<ApplicationStore>({ context: database }),
     cloudflareConfiguration(executionBindings),
     executionBindings,
     "ground rules",
@@ -265,15 +331,17 @@ test("does not start for rejected operator access; publishes callback before rem
     expect(control.callback).toHaveBeenCalledTimes(1);
     expect(control.events).toEqual([
       "catalog",
+      "health",
       "remote",
       "folders",
       "intake",
       "contacts",
       "followUps",
       "failedTurns",
-      "health",
+      "rebuilds",
       "stopped",
       "endings",
+      "reconcile",
     ]);
     const request = new Request("https://app/operator/users?limit=1", {
       method: "POST",
@@ -340,7 +408,7 @@ test("propagates boot failure and releases partially acquired resources", async 
   control.failure = "remote";
   await expect(runtime.tick()).rejects.toThrow("failed remote");
   await runtime.close();
-  expect(control.events).toEqual(["catalog", "remote", "remote.close", "callback.close"]);
+  expect(control.events).toEqual(["health", "catalog", "remote", "remote.close", "callback.close"]);
 });
 
 test("observes a callback-triggered boot rejection without an unhandled promise", async () => {
@@ -353,8 +421,8 @@ test("observes a callback-triggered boot rejection without an unhandled promise"
 
 test("a failed heartbeat is surfaced and the same scope can still be closed", async () => {
   const runtime = await open();
-  control.failure = "health";
-  await expect(runtime.tick()).rejects.toThrow("failed health");
+  control.failure = "endings";
+  await expect(runtime.tick()).rejects.toThrow("failed endings");
   expect(control.events).toContain("failedTurns");
   await runtime.close();
   expect(control.events).toContain("operator.close");

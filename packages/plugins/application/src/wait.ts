@@ -1,36 +1,81 @@
-import { Effect, Option, Stream } from "effect";
+import { Clock, Deferred, Effect, Stream } from "effect";
+import { observationFailure } from "./observe.ts";
 
-type WaitInput = { sessionID: string; seconds: number };
-export type WaitClient = { wait: (input: WaitInput) => Stream.Stream<string, string | Error> };
+interface Arrival {
+  sessionID: string;
+  messageID: string;
+}
 
-class ApplicationWaitError extends Error {}
-const failure = (error: string | Error) =>
-  new Error(error instanceof ApplicationWaitError ? error.message : String(error));
-
-export const waitForResult = (client: WaitClient, sessionID: string, seconds: number) => {
-  const deadline = Date.now() + Math.max(0, seconds) * 1000;
-  const retry = (): Effect.Effect<string, Error> => {
-    const remaining = Math.max(0, deadline - Date.now());
-    if (remaining === 0) return Effect.fail(new Error("Wait stream ended without a result"));
-    return Effect.sleep(Math.min(250, remaining)).pipe(
-      Effect.flatMap(() => {
-        const next = Math.max(0, (deadline - Date.now()) / 1000);
-        return next > 0 ? read(next) : Effect.fail(new Error("Wait stream ended without a result"));
+/** The in-process event bus emits only after durable admission. Context acknowledges exact IDs. */
+export const localWait = <E>(events: Stream.Stream<Arrival, E>) =>
+  Effect.gen(function* () {
+    const unseen = new Map<string, Set<string>>();
+    const observed = new Map<string, Set<string>>();
+    const pending = new Map<string, Deferred.Deferred<void, Error>>();
+    let unavailable = false;
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        unavailable = true;
+        for (const signal of pending.values())
+          Effect.runSync(Deferred.fail(signal, new Error("Local wait disposed")));
       }),
     );
-  };
-  const read: (remaining: number) => Effect.Effect<string, Error> = (remaining) =>
-    client.wait({ sessionID, seconds: remaining }).pipe(
-      Stream.filter((output) => output !== ""),
-      Stream.runLast,
-      Effect.flatMap((result) => (Option.isSome(result) ? Effect.succeed(result.value) : retry())),
-      Effect.mapError((error) =>
-        error instanceof Error ? error : new ApplicationWaitError(error),
+    yield* Effect.forever(
+      events.pipe(
+        Stream.runForEach(({ sessionID, messageID }) =>
+          Effect.gen(function* () {
+            unavailable = false;
+            if (observed.get(sessionID)?.has(messageID)) return;
+            const ids = unseen.get(sessionID) ?? new Set<string>();
+            ids.add(messageID);
+            unseen.set(sessionID, ids);
+            const signal = pending.get(sessionID);
+            if (signal) yield* Deferred.succeed(signal, undefined);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.sync(() => {
+            unavailable = true;
+            observationFailure(cause, "events.subscribe", crypto.randomUUID(), performance.now());
+            for (const signal of pending.values())
+              Effect.runSync(
+                Deferred.fail(signal, new Error("Local event subscription unavailable")),
+              );
+          }),
+        ),
+        Effect.andThen(Effect.sleep("1 second")),
       ),
-      Effect.catch((error) =>
-        error instanceof ApplicationWaitError ? Effect.fail(error) : retry(),
-      ),
-      Effect.mapError(failure),
-    );
-  return read(Math.max(0, seconds));
-};
+    ).pipe(Effect.forkScoped);
+    return {
+      observed: (sessionID: string, messageIDs: readonly string[]) => {
+        observed.set(sessionID, new Set(messageIDs));
+        for (const id of messageIDs) unseen.get(sessionID)?.delete(id);
+      },
+      wait: (sessionID: string, seconds: number) =>
+        Effect.gen(function* () {
+          if (unavailable)
+            return yield* Effect.fail(new Error("Local event subscription unavailable"));
+          const start = yield* Clock.currentTimeMillis;
+          const duration = Math.min(Math.max(0, seconds), 3300);
+          const signal = yield* Deferred.make<void, Error>();
+          pending.set(sessionID, signal);
+          const outcome = unseen.get(sessionID)?.size
+            ? "new"
+            : yield* Effect.raceFirst(
+                Effect.sleep(duration * 1000).pipe(Effect.as("timeout")),
+                Deferred.await(signal).pipe(Effect.as("new")),
+              ).pipe(
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    pending.delete(sessionID);
+                  }),
+                ),
+              );
+          pending.delete(sessionID);
+          const elapsed = Math.floor(((yield* Clock.currentTimeMillis) - start) / 1000);
+          return outcome === "new"
+            ? `paused ${elapsed}s, cut short by something new`
+            : `paused ${duration}s`;
+        }),
+    };
+  });

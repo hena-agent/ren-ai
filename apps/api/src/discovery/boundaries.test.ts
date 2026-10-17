@@ -2,7 +2,7 @@ import { Context, Effect } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { migrate } from "../database.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
@@ -318,6 +318,30 @@ test("one IP is limited after five attempts and other visitors can still registe
     }),
   );
 });
+
+test("rate-limit persistence failure denies registration with a payload-free diagnostic", () =>
+  run(
+    Effect.gen(function* () {
+      const { web, sql } = yield* setup();
+      yield* sql`CREATE TRIGGER fail_attempt BEFORE INSERT ON discovery_attempt BEGIN SELECT RAISE(ABORT, 'private limiter detail'); END`;
+      const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+      yield* Effect.promise(async () => {
+        try {
+          const response = await post(web, input);
+          expect(response.status).toBe(400);
+          expect(await response.json()).toBe("storage");
+          const logs = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
+          expect(logs).toContain('"stage":"registration.limit"');
+          expect(logs).toContain('"causeName":');
+          expect(logs).not.toMatch(/private limiter detail|821012345678|human/);
+        } finally {
+          stderr.mockRestore();
+          await web.dispose();
+        }
+      });
+      expect(yield* sql`SELECT id FROM discovery_registration`).toEqual([]);
+    }),
+  ));
 
 test("simultaneous requests for one handle cannot duplicate preferences", async () => {
   await run(

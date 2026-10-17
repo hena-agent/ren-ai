@@ -2,8 +2,8 @@
 import { Schema } from "effect";
 /** @type {Set<number>} */
 const seen = new Set();
-/** @type {number[]} */
-const waits = [];
+/** @type {string[]} */
+const calls = [];
 /** @type {string[]} */
 const actions = [];
 /** @type {object[]} */
@@ -24,10 +24,8 @@ const rpcRequest = Schema.fromJsonString(
       "catalog",
       "handle",
       "context",
-      "status",
-      "sends",
       "alert",
-      "wait",
+      "observe",
       "send",
       "read",
       "react",
@@ -121,7 +119,7 @@ globalThis[Symbol.for("ren-ai.compiled-plugin.fixture")] ??= Bun.serve({
   port: 4710,
   async fetch(request) {
     const path = new URL(request.url).pathname;
-    if (path === "/waits") return Response.json(waits);
+    if (path === "/calls") return Response.json(calls);
     if (path === "/catalogs") return Response.json(catalogs);
     if (path === "/actions") return Response.json(actions);
     if (path === "/requests") return Response.json(requests);
@@ -132,6 +130,7 @@ globalThis[Symbol.for("ren-ai.compiled-plugin.fixture")] ??= Bun.serve({
     const frames = [];
     for (const line of (await request.text()).trim().split("\n")) {
       const message = Schema.decodeUnknownSync(rpcRequest)(line);
+      calls.push(message.tag);
       if (message.tag === "catalog" && ++catalogs === 1)
         return new Response("Starting", { status: 503 });
       const values = {
@@ -146,32 +145,21 @@ globalThis[Symbol.for("ren-ai.compiled-plugin.fixture")] ??= Bun.serve({
           },
         ],
         handle: "isolated@example.com",
-        context: null,
-        status: null,
-        sends: [],
+        context: { status: null, sends: [] },
+        observe: null,
         alert: null,
         send: "isolated send completed",
         read: "isolated read completed",
         react: "isolated react completed",
       };
-      if (message.tag === "wait") {
-        if (typeof message.payload?.seconds !== "number")
-          throw new Error("Missing numeric wait argument");
-        waits.push(message.payload.seconds);
-        frames.push({
-          _tag: "Chunk",
-          requestId: message.id,
-          values: ["", `isolated wait completed: ${message.payload.seconds}`],
-        });
-      } else if (!(message.tag in values))
-        throw new Error(`Forbidden isolated action: ${message.tag}`);
+      if (!(message.tag in values)) throw new Error(`Forbidden isolated action: ${message.tag}`);
       if (["send", "read", "react"].includes(message.tag)) actions.push(message.tag);
       frames.push({
         _tag: "Exit",
         requestId: message.id,
         exit: {
           _tag: "Success",
-          value: message.tag === "wait" ? null : values[message.tag],
+          value: values[message.tag],
         },
       });
     }

@@ -1,62 +1,89 @@
-import { Effect, Stream } from "effect";
+import { Effect, Exit, Fiber, Queue, Scope, Stream } from "effect";
 import { expect, test, vi } from "vitest";
-import { waitForResult, type WaitClient } from "./wait.ts";
+import { localWait } from "./wait.ts";
+import { TestClock } from "effect/testing";
 
-test("wait keeps its final non-heartbeat result unchanged", async () => {
-  const wait = vi.fn<WaitClient["wait"]>(() => Stream.make("", "first", "", "last"));
-  await expect(Effect.runPromise(waitForResult({ wait }, "session", 5))).resolves.toBe("last");
-  expect(wait).toHaveBeenCalledOnce();
-  expect(wait).toHaveBeenCalledWith({ sessionID: "session", seconds: 5 });
-});
-
-test("wait retries a transport error and an empty EOF with a bounded backoff and remaining deadline", async () => {
-  const wait = vi
-    .fn<WaitClient["wait"]>()
-    .mockReturnValueOnce(Stream.fail(new Error("socket closed")))
-    .mockReturnValueOnce(Stream.empty)
-    .mockReturnValueOnce(Stream.make("resumed"));
-  const started = Date.now();
-  await expect(Effect.runPromise(waitForResult({ wait }, "session", 5))).resolves.toBe("resumed");
-  expect(wait).toHaveBeenCalledTimes(3);
-  expect(wait.mock.calls[0]?.[0].seconds).toBe(5);
-  expect(wait.mock.calls[1]?.[0].seconds).toBeLessThan(5);
-  expect(Date.now() - started).toBeGreaterThanOrEqual(400);
-});
-
-test("application rejection is not retried", async () => {
-  const wait = vi.fn<WaitClient["wait"]>(() => Stream.fail("wait rejected by application"));
-  await expect(Effect.runPromise(waitForResult({ wait }, "session", 5))).rejects.toThrow(
-    "wait rejected by application",
+test("local waits finish on their deadline or an admitted input for the same session", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const events = yield* Queue.unbounded<{ sessionID: string; messageID: string }>();
+        const local = yield* localWait(Stream.fromQueue(events));
+        expect(yield* local.wait("a", 0)).toBe("paused 0s");
+        local.observed("a", ["already-seen"]);
+        const waiting = yield* local.wait("a", 3300).pipe(Effect.forkScoped);
+        yield* Effect.yieldNow;
+        yield* Queue.offer(events, { sessionID: "a", messageID: "already-seen" });
+        yield* Queue.offer(events, { sessionID: "b", messageID: "other" });
+        yield* Effect.yieldNow;
+        expect(waiting.pollUnsafe()).toBeUndefined();
+        yield* Queue.offer(events, { sessionID: "a", messageID: "new" });
+        expect(yield* Fiber.join(waiting)).toContain("cut short by something new");
+        expect(yield* local.wait("a", 3300)).toContain("cut short by something new");
+        // Context assembled before the arrival must not acknowledge that arrival.
+        local.observed("a", ["already-seen"]);
+        expect(yield* local.wait("a", 3300)).toContain("cut short by something new");
+        local.observed("a", ["already-seen", "new"]);
+        const cancelled = yield* local.wait("a", 3300).pipe(Effect.forkScoped);
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(cancelled);
+        expect(yield* local.wait("a", 0)).toBe("paused 0s");
+        yield* Queue.offer(events, { sessionID: "a", messageID: "second" });
+        yield* Effect.yieldNow;
+        expect(yield* local.wait("a", 3300)).toContain("cut short by something new");
+      }),
+    ),
   );
-  expect(wait).toHaveBeenCalledOnce();
 });
 
-test("wait does not retry after its deadline expires", async () => {
-  const clock = vi
-    .spyOn(Date, "now")
-    .mockReturnValueOnce(1000)
-    .mockReturnValueOnce(1000)
-    .mockReturnValue(1010);
-  const wait = vi.fn<WaitClient["wait"]>(() => Stream.fail(new Error("socket closed")));
+test("a subscription failure wakes pending waits with an error and subsequent arrivals restore waiting", async () => {
+  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   try {
-    await expect(Effect.runPromise(waitForResult({ wait }, "session", 0.01))).rejects.toThrow(
-      "Wait stream ended without a result",
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const events = yield* Queue.unbounded<{ sessionID: string; messageID: string }, Error>();
+          let first = true;
+          const stream = Stream.suspend(() => {
+            if (!first) return Stream.make({ sessionID: "a", messageID: "recovered" });
+            first = false;
+            return Stream.fromQueue(events);
+          });
+          const local = yield* localWait(stream);
+          const waiting = yield* local.wait("a", 3300).pipe(Effect.forkScoped);
+          yield* Effect.yieldNow;
+          yield* Queue.fail(events, new Error("private subscription failure"));
+          expect(Exit.isFailure(yield* Fiber.await(waiting))).toBe(true);
+          expect(yield* local.wait("a", 1).pipe(Effect.flip)).toBeInstanceOf(Error);
+          yield* TestClock.adjust("1 second");
+          expect(yield* local.wait("a", 1)).toContain("cut short");
+          expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join("")).not.toContain(
+            "private",
+          );
+        }).pipe(Effect.provide(TestClock.layer())),
+      ),
     );
-    expect(wait).toHaveBeenCalledOnce();
   } finally {
-    clock.mockRestore();
+    stderr.mockRestore();
   }
 });
 
-test("an EOF arriving after the deadline does not open another wait request", async () => {
-  const clock = vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValue(2000);
-  const wait = vi.fn<WaitClient["wait"]>(() => Stream.empty);
-  try {
-    await expect(Effect.runPromise(waitForResult({ wait }, "session", 0.5))).rejects.toThrow(
-      "Wait stream ended without a result",
-    );
-    expect(wait).toHaveBeenCalledOnce();
-  } finally {
-    clock.mockRestore();
-  }
+test("disposing the plugin cancels an active tool wait and rejects later waits", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const lifetime = yield* Scope.make();
+        const local = yield* localWait(Stream.never).pipe(
+          Effect.provideService(Scope.Scope, lifetime),
+        );
+        const waiting = yield* local.wait("session", 3300).pipe(Effect.forkScoped);
+        yield* Effect.yieldNow;
+        yield* Scope.close(lifetime, Exit.void);
+        yield* Effect.yieldNow;
+        expect(waiting.pollUnsafe()).toBeDefined();
+        expect(Exit.isFailure(yield* Fiber.await(waiting))).toBe(true);
+        expect(yield* local.wait("session", 1).pipe(Effect.flip)).toBeInstanceOf(Error);
+      }),
+    ),
+  );
 });

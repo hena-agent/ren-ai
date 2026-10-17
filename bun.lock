@@ -104,7 +104,9 @@
       "name": "@ren-ai/api-msg",
       "version": "0.0.0",
       "dependencies": {
+        "@ren-ai/imsg": "workspace:*",
         "@ren-ai/transport": "workspace:*",
+        "effect": "4.0.0-rc.112",
       },
       "devDependencies": {
         "@types/node": "26.6.2",
