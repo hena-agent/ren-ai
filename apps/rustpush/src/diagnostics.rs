@@ -1,5 +1,17 @@
 use rustpush::PushError;
 use serde_json::{json, Value};
+use std::{future::Future, time::Duration};
+
+pub async fn push_with_timeout<T>(
+    stage: &'static str,
+    timeout: Duration,
+    operation: impl Future<Output = Result<T, PushError>>,
+) -> Result<T, Failure> {
+    tokio::time::timeout(timeout, operation)
+        .await
+        .map_err(|_| Failure::new(stage, "timeout"))?
+        .map_err(|error| Failure::push(stage, error))
+}
 
 #[derive(Debug)]
 pub struct Failure {
@@ -8,6 +20,10 @@ pub struct Failure {
 }
 
 impl Failure {
+    pub fn io_result<T>(stage: &'static str, result: std::io::Result<T>) -> Result<T, Self> {
+        result.map_err(|error| Self::io(stage, error))
+    }
+
     pub fn new(stage: &'static str, code: &'static str) -> Self {
         Self {
             stage,

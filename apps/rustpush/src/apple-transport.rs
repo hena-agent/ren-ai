@@ -1,8 +1,9 @@
 use crate::{
+    delivery::{self, Delivery},
     diagnostics::Failure,
-    rpc::{outcome, Delivery, Native},
+    rpc::Native,
 };
-use rustpush::{APSConnection, APSMessage, Attachment, IMClient, MessageInst, PushError};
+use rustpush::{APSConnection, APSMessage, Attachment, IMClient, MessageInst};
 use std::{fs::File, time::Duration};
 
 /// The live Apple session: the only code that talks to Apple's servers.
@@ -35,31 +36,23 @@ impl Native for Apple {
     }
 
     async fn download(&self, attachment: &Attachment, file: &mut File) -> Result<(), Failure> {
-        tokio::time::timeout(
+        crate::diagnostics::push_with_timeout(
+            "attachment_download",
             Duration::from_secs(120),
             attachment.get_attachment(&self.connection, file, |_, _| {}),
         )
         .await
-        .map_err(|_| Failure::new("attachment_download", "timeout"))?
-        .map_err(|e| Failure::push("attachment_download", e))
     }
 
     async fn send(&self, mut message: MessageInst) -> Result<Delivery, Failure> {
-        let sender = message.sender.clone().unwrap_or_default();
-        let recipient = message
-            .conversation
-            .as_ref()
-            .and_then(|conversation| conversation.participants.iter().find(|p| **p != sender))
-            .cloned()
-            .unwrap_or_default();
-        let job = match self.client.send(&mut message).await {
-            Err(PushError::NoValidTargets) => return Ok(Delivery::Failed("no_imessage")),
-            Err(error) => return Err(Failure::push("send", error)),
-            Ok(job) => job,
-        };
-        if message.message.get_nr() == Some(true) {
-            return Ok(Delivery::Sent);
-        }
-        outcome(&recipient, job.process, |target| target.participant.clone()).await
+        let recipient = delivery::recipient(&message)?;
+        let result = self.client.send(&mut message).await.map(|job| job.process);
+        delivery::submitted(
+            &recipient,
+            message.message.get_nr() == Some(true),
+            result,
+            |target| target.participant.clone(),
+        )
+        .await
     }
 }

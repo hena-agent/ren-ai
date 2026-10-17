@@ -5,6 +5,12 @@ import pathlib
 import sys
 
 root = pathlib.Path(__file__).resolve().parent
+repo = root.parent.parent
+exceptions = {
+    (repo / entry["path"]).resolve()
+    for entry in json.loads((repo / "quality-exceptions.json").read_text())["coverage"]
+    if entry["reason"].strip()
+}
 report = json.loads(pathlib.Path(sys.argv[1]).read_text())
 files = {
     pathlib.Path(file["filename"]).resolve(): file["summary"]
@@ -14,6 +20,9 @@ files = {
 failures = []
 for source in sorted((root / "src").glob("*.rs")):
     if source.stem.endswith("_tests"):
+        continue
+    if source in exceptions:
+        print(f"Human-owned coverage exception: {source.relative_to(repo)}")
         continue
     summary = files.get(source, {})
     for metric in ("lines", "functions", "regions"):

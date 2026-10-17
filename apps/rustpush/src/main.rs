@@ -1,13 +1,20 @@
 mod codec;
+mod command;
+mod delivery;
 mod diagnostics;
+mod io;
 // Upstream IOKit hardware reader, compiled unmodified; it is not owned code.
 #[allow(dead_code)]
 #[rustfmt::skip]
 #[path = "../../../node_modules/.cache/ren-rustpush/matrix/pkg/rustpushgo/src/local_config.rs"]
 mod local_config;
+#[path = "apple-transport.rs"]
 mod native;
 mod rpc;
+#[path = "apple-session.rs"]
 mod session;
+#[path = "session-state.rs"]
+mod session_state;
 mod store;
 
 use diagnostics::Failure;
@@ -77,44 +84,36 @@ async fn start() {
 }
 
 async fn run(args: &[String], request_id: &str) -> Result<(), Failure> {
-    let handle = match args {
-        [command] if command == "preflight" || command == "login" => None,
-        [command, handle] if command == "rpc" && handle.starts_with("mailto:") => Some(handle),
-        _ => {
-            eprintln!("Usage: ren-rustpush preflight | login | rpc mailto:SERVICE_HANDLE");
-            return Err(Failure::new("arguments", "invalid_command"));
-        }
-    };
+    let command = command::parse(args).inspect_err(|_| {
+        eprintln!("Usage: ren-rustpush preflight | login | rpc mailto:SERVICE_HANDLE")
+    })?;
     let path = std::env::var_os("RUSTPUSH_STATE_DIR")
         .map(PathBuf::from)
         .ok_or_else(|| Failure::new("arguments", "rustpush_state_dir_required"))?;
     let store = Arc::new(store::Store::open(path)?);
-    if args[0] == "preflight" {
+    if command == command::Command::Preflight {
         let (_connection, config, _inbox) = session::connect(store, request_id).await?;
-        let validation =
-            tokio::time::timeout(Duration::from_secs(60), config.generate_validation_data())
-                .await
-                .map_err(|_| Failure::new("validation", "timeout"))?
-                .map_err(|e| Failure::push("validation", e))?;
-        if validation.is_empty() {
-            return Err(Failure::new("validation", "empty_validation_data"));
-        }
-        return Ok(());
+        let validation = diagnostics::push_with_timeout(
+            "validation",
+            Duration::from_secs(60),
+            config.generate_validation_data(),
+        )
+        .await?;
+        return session_state::validation(&validation);
     }
-    let session = session::Session::open(store, handle.is_none(), request_id).await?;
+    let session =
+        session::Session::open(store, command == command::Command::Login, request_id).await?;
     session
         .store
         .save("push.plist", &*session.connection.state.read().await)?;
-    let Some(handle) = handle else {
+    let command::Command::Rpc(handle) = command else {
         return Ok(());
     };
     let native = native::Apple {
         client: session.client,
         connection: session.connection,
     };
-    if !rpc::Native::handles(&native).await.contains(handle) {
-        return Err(Failure::new("identity", "service_handle_not_registered"));
-    }
+    command::require_handle(&handle, &rpc::Native::handles(&native).await)?;
     let input = tokio::io::BufReader::new(tokio::io::stdin());
     let state = rpc::Session {
         native: Arc::new(native),

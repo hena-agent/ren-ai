@@ -1,5 +1,5 @@
-use crate::{codec, diagnostics::Failure, store::Store};
-use rustpush::{APSMessage, Attachment, MessageInst, SendResult};
+use crate::{codec, delivery::Delivery, diagnostics::Failure, store::Store};
+use rustpush::{APSMessage, Attachment, MessageInst};
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 use std::{
@@ -11,16 +11,9 @@ use std::{
 };
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt},
-    sync::{broadcast, mpsc, oneshot},
+    sync::{mpsc, oneshot},
     task::JoinSet,
 };
-
-/// The definitive outcome of a submitted message for its recipient.
-#[derive(Debug, PartialEq)]
-pub enum Delivery {
-    Sent,
-    Failed(&'static str),
-}
 
 /// The Apple session behind the bridge. An `Err` from `send` means the outcome is uncertain.
 pub trait Native: Send + Sync + 'static {
@@ -36,38 +29,6 @@ pub trait Native: Send + Sync + 'static {
         file: &mut File,
     ) -> impl Future<Output = Result<(), Failure>> + Send;
     fn send(&self, message: MessageInst) -> impl Future<Output = Result<Delivery, Failure>> + Send;
-}
-
-/// Any recipient device accepting the message sends it; only unanimous rejection fails it.
-pub async fn outcome<T: Clone>(
-    recipient: &str,
-    mut results: broadcast::Receiver<(T, SendResult)>,
-    participant: impl Fn(&T) -> String,
-) -> Result<Delivery, Failure> {
-    let (mut rejected, mut unconfirmed) = (false, false);
-    loop {
-        let (target, result) = match results.recv().await {
-            Ok(item) => item,
-            Err(broadcast::error::RecvError::Lagged(_)) => {
-                unconfirmed = true;
-                continue;
-            }
-            Err(broadcast::error::RecvError::Closed) => break,
-        };
-        if participant(&target) != recipient {
-            continue;
-        }
-        match result {
-            SendResult::Sent => return Ok(Delivery::Sent),
-            SendResult::APSError(_) => rejected = true,
-            SendResult::TimedOut => unconfirmed = true,
-        }
-    }
-    if rejected && !unconfirmed {
-        Ok(Delivery::Failed("rejected"))
-    } else {
-        Err(Failure::new("send", "unconfirmed"))
-    }
 }
 
 pub struct Timing {

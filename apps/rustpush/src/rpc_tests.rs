@@ -10,6 +10,7 @@ const US: &str = "mailto:service@example.test";
 const THEM: &str = "tel:+15550100";
 const GUID: &str = "5D4C3B2A-0000-4000-8000-000000000001";
 
+#[derive(Clone)]
 enum Script {
     Message(Box<MessageInst>),
     Nothing,
@@ -25,6 +26,7 @@ struct Fake {
     downloads: Mutex<u32>,
     sent: Mutex<Vec<MessageInst>>,
     deliveries: Mutex<VecDeque<Result<Delivery, Failure>>>,
+    hang_sends: std::sync::atomic::AtomicBool,
 }
 
 impl Native for Fake {
@@ -37,13 +39,13 @@ impl Native for Fake {
             panic!("spooled a non-notification");
         };
         let marker = payload.as_string().unwrap().to_owned();
-        let script = self
-            .decodes
-            .lock()
-            .unwrap()
-            .get_mut(&marker)
-            .unwrap()
-            .pop_front();
+        let mut decodes = self.decodes.lock().unwrap();
+        let scripts = decodes.get_mut(&marker).unwrap();
+        let script = if scripts.len() > 1 {
+            scripts.pop_front()
+        } else {
+            scripts.front().cloned()
+        };
         match script.unwrap() {
             Script::Message(message) => Ok(Some(*message)),
             Script::Nothing => Ok(None),
@@ -74,6 +76,9 @@ impl Native for Fake {
 
     async fn send(&self, message: MessageInst) -> Result<Delivery, Failure> {
         self.sent.lock().unwrap().push(message);
+        if self.hang_sends.load(std::sync::atomic::Ordering::Relaxed) {
+            std::future::pending::<()>().await;
+        }
         self.deliveries
             .lock()
             .unwrap()
@@ -298,6 +303,14 @@ async fn requests_send_from_the_service_handle_and_reject_invalid_input() {
             "invalid_recipient",
         ),
         ("read", json!({"to": THEM, "guid": "nope"}), "invalid_guid"),
+        ("typing", json!({}), "invalid_params"),
+        ("read", json!({}), "invalid_params"),
+        ("react", json!({}), "invalid_params"),
+        (
+            "read",
+            json!({"to": "invalid", "guid": GUID}),
+            "invalid_recipient",
+        ),
         (
             "react",
             json!({"to": "x", "guid": GUID, "tapback": "love", "text": ""}),

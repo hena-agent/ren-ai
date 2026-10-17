@@ -8,7 +8,10 @@ import tempfile
 
 source = pathlib.Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix="rustpush-gates-") as temporary:
-    root = pathlib.Path(temporary)
+    repo = pathlib.Path(temporary)
+    root = repo / "apps/rustpush"
+    root.mkdir(parents=True)
+    (repo / "quality-exceptions.json").write_text('{"coverage": []}')
     (root / "src").mkdir()
     (root / "target/src").mkdir(parents=True)
     for script in ("check-coverage.py", "check-metrics.py"):
@@ -34,6 +37,11 @@ with tempfile.TemporaryDirectory(prefix="rustpush-gates-") as temporary:
     check("check-coverage.py", False, coverage(0))
     check("check-coverage.py", False, coverage(0, 0))
     check("check-coverage.py", False, coverage(include=False))
+    (repo / "quality-exceptions.json").write_text(json.dumps({"coverage": [
+        {"path": "apps/rustpush/src/owned.rs", "reason": "fixture: human-owned platform edge"}
+    ]}))
+    check("check-coverage.py", True, coverage(0))
+    (repo / "quality-exceptions.json").write_text('{"coverage": []}')
 
     def metrics(cyclomatic=1, cognitive=0):
         report = {"metrics": {"cyclomatic": {"max": cyclomatic},

@@ -98,18 +98,48 @@ agent last, after local and public probes pass. State is in `deploy/deployed`,
 `deploy/rejected` and `deploy/deferred`; logs are in `deploy/logs`. Pause it with
 `launchctl bootout "gui/$(id -u)/im.renai.imsg-deploy"`.
 
-## Production cutover is pending
+## Attended production cutover
 
-Implementation and local tests do not authorize production cutover. The existing
-Mac updater expects the removed imsg/UI payload. At the separately approved pause,
-stop that updater and intake before replacing the installation and updater.
-Preserve application memory/state and reconcile every uncertain send first.
+The operator authorized completing the transport cutover on 2026-10-17. It remains
+pending until PR #104's gates pass and the paused-state checks below are complete.
+The existing Mac updater expects the removed imsg/UI payload; pause it before
+merging so it cannot attempt to install the new artifact using the old updater.
 
-A fresh Rustpush history does **not** import Messages.app history. Historical
-backfill and pause-period catch-up must be resolved and verified before switching
-production. Keep the old installation/data available for the attended rollback;
-do not run two live intake paths. Verify first contact, replies, read/typing/tapback,
-images, restart/replay, status reconciliation and public readiness before resuming.
+1. Put api-app in bootstrap-only mode and verify that the running Durable Object
+   reports it. Drain/stop active OpenCode turns before stopping the gateway, so no
+   text submission races the final snapshot. Pause both Mac deployment agents for
+   the attended change. Keep the tunnel route and service credentials.
+2. Export application state through `/management/state/export`. The route correctly
+   refuses a live export with HTTP 409. Preserve Conversation/session IDs,
+   `bookmark`, `intake_seen`, reset boundaries and the send ledger. Match every
+   uncertain send against the old gateway by GUID; retain unmatched uncertainty
+   without submitting it again.
+3. Capture all old gateway rows and each outgoing row's status, then stop the old
+   gateway. Back up its installation, launch/deploy plists and Messages database.
+   Seed a new Rustpush `history.sqlite` offline, retaining each row's **original
+   ID, GUID, handle, timestamp, text and details**, plus outgoing state/error/read
+   timestamp. Copy historical attachments into the new private home and replace
+   only their local paths. Do not retain a runtime dependency on Messages.app.
+4. Verify SQLite integrity, exact row/status equality, unique GUIDs, attachment
+   bytes, and `after(cursor, limit)` across every retained boundary. Verify new
+   inserts receive IDs above the old maximum. Do not reset the application cursor
+   or replay old prompts. A rehearsal on 2026-10-17 preserved 368 rows (maximum ID
+   370), all 205 outgoing statuses and four original image files; the final paused
+   snapshot must repeat these checks rather than reuse this live rehearsal.
+5. Install the attested combined artifact and the new updater into a fresh home.
+   Restore the tested Apple state while its bridge is stopped, preserving the
+   original private backup. Start only the new gateway, let its persisted/APNs
+   backlog catch up, and compare GUIDs against Messages received during the pause.
+   GUID deduplication must retain imported rows while appending genuinely new ones.
+6. Verify local and public health against the exact artifact revision. Exercise
+   first contact, replies, read/typing/tapback, images, restart/replay and send-status
+   reconciliation through api-msg and the existing application sessions. Resume
+   api-app and verify each pause-period inbound is admitted once. Start the new
+   deploy agent last, then retire the old executable and Messages automation.
+
+Keep the old installation/data as an offline rollback archive. If a post-switch
+send has an uncertain outcome, preserve the new history and reconcile it before
+an attended rollback; never resend automatically or run two live intake paths.
 
 ## Relocation
 

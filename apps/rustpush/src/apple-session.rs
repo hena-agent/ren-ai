@@ -1,4 +1,4 @@
-use crate::{diagnostics::Failure, local_config::LocalMacOSConfig, store::Store};
+use crate::{diagnostics::Failure, local_config::LocalMacOSConfig, session_state, store::Store};
 use keystore::{
     init_keystore,
     software::{NoEncryptor, SoftwareKeystore},
@@ -81,14 +81,17 @@ pub async fn connect(
             config.clone(),
             store.load("push.plist")?,
             Box::new(move |notification| {
-                let timestamp = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("system clock predates Unix epoch")
-                    .as_nanos();
-                let name = format!("inbox-{timestamp:020}-{}.plist", uuid::Uuid::new_v4());
-                save_or_exit(&incoming_store, &name, notification, &incoming_request_id);
-                // A disconnected consumer leaves the durable file for the next process.
-                let _ = notify.send(name);
+                if let Err(error) =
+                    session_state::notification(&incoming_store, notification, &notify)
+                {
+                    crate::rpc::report(
+                        "error",
+                        "persist_notification",
+                        &incoming_request_id,
+                        &error,
+                    );
+                    std::process::exit(1);
+                }
             }),
         ),
     )
@@ -103,23 +106,17 @@ pub async fn connect(
 
 impl Session {
     pub async fn open(store: Arc<Store>, login: bool, request_id: &str) -> Result<Self, Failure> {
-        let existing: Option<Identity> = store.load("identity.plist")?;
-        if existing.is_none() && !login {
-            return Err(Failure::new("identity", "run_login_first"));
-        }
+        let existing: Option<Identity> = session_state::restore(&store, login)?;
         let (connection, config, inbox) = connect(store.clone(), request_id).await?;
-        let mut state = if let Some(existing) = existing {
-            existing
-        } else {
+        let mut state = session_state::initialize(&store, existing, async {
             let user = sign_in(&connection, config.as_ref(), &store).await?;
             let identity = IDSNGMIdentity::new().map_err(|e| Failure::push("identity", e))?;
-            let state = Identity {
+            Ok(Identity {
                 users: vec![user],
                 identity,
-            };
-            store.save("identity.plist", &state)?;
-            state
-        };
+            })
+        })
+        .await?;
         if state.users.iter().any(|user| user.registration.is_empty()) {
             register(
                 config.as_ref(),

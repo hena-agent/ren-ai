@@ -49,9 +49,9 @@ Apple session. The operator supplied the test handle in chat.
 The same photo exposed a separate failure in the deployed OpenCode context plugin:
 reconstructing a message through the plugin's SDK rejected the core-created
 `Media.Asset` instance before provider dispatch. The model advertises image input.
-A synthetic-image compiled-plugin regression reproduced the failure; the local fix
-preserves core-created media while updating send results. This is separate from
-the verified Rustpush transport path and still needs deployment.
+A synthetic-image compiled-plugin regression reproduced the failure. PR #97's fix
+preserves core-created media while updating send results; it has been deployed and
+verified independently of the Rustpush transport cutover.
 
 ## Run
 
@@ -128,9 +128,12 @@ dependency resolution rejects upstream's now-yanked `zip` 2.x dependency.
 - Production-grade handling of upstream task panics and failures. The callback
   fails the process if persistence fails, and pending files survive restart, but
   end-to-end crash/replay behavior still needs verification.
-- Native coverage must reach 100% per owned production file. `check.sh` fails closed
-  on incomplete LLVM line/function/region coverage. Live Apple composition and
-  several error paths still fail this gate. No coverage exception has been added.
+- Native transport, delivery classification, command validation, state restoration,
+  persistence and diagnostics have 100% LLVM line/function/region coverage.
+  `check.sh` still fails on the live Apple adapters and process bootstrap. Narrow
+  exceptions for these three integration files have been proposed for the human-owned
+  `quality-exceptions.json`; the checker uses that same registry and never silently
+  excludes owned files.
 - Native complexity and file length use `rust-code-analysis-cli`; Clippy also
   enforces cognitive complexity and dead-code warnings. The shared duplication gate
   includes Rust. Native code has no TypeScript `any` escape hatch.
@@ -148,8 +151,10 @@ bash check.sh
 
 Tests cover explicit sender selection/fail-closed behavior, private atomic state
 restoration and exclusive access, durable queue replay order, and correlated
-failure diagnostics excluding private inputs. Live Apple behavior is recorded
-above separately from these automated checks.
+failure diagnostics excluding private inputs. Injected filesystem failures verify
+that incomplete state and images are not published. RPC tests cover unresponsive
+sends, invalid requests, closed gateway output and retained failed notifications.
+Live Apple behavior is recorded above separately from these automated checks.
 
 CI requires the native check job before publishing a Mac artifact. Its coverage
 failure is a merge blocker, even if the TypeScript checks pass. Production cutover

@@ -1,4 +1,104 @@
 use super::*;
+use crate::delivery::outcome;
+use rustpush::SendResult;
+use tokio::sync::broadcast;
+
+#[tokio::test(start_paused = true)]
+async fn unresponsive_submissions_time_out_without_retrying() {
+    let fake = Fake::default();
+    fake.hang_sends
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    let mut h = Harness::start(fake, RESCAN, |_| {}).await;
+    h.request(
+        json!({"id": 1, "method": "send", "params": {"guid": GUID, "to": THEM, "text": "private"}}),
+    )
+    .await;
+    while h.fake.sent.lock().unwrap().is_empty() {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_secs(121)).await;
+    let response = h.next().await;
+    assert_eq!(
+        response["error"]["cause"]["code"],
+        "timeout_outcome_uncertain"
+    );
+    assert_eq!(h.fake.sent.lock().unwrap().len(), 1);
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn a_closed_event_channel_never_counts_as_gateway_acknowledgement() {
+    let (output, receiver) = mpsc::unbounded_channel();
+    drop(receiver);
+    let failure = deliver(
+        "inbox-1.plist",
+        json!({}),
+        &output,
+        &Acks::default(),
+        &REDELIVER,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(failure.stage, "gateway");
+    assert_eq!(failure.cause["code"], "output_closed");
+}
+
+#[tokio::test]
+async fn unreadable_notifications_and_failed_gateway_writes_remain_spooled() {
+    let h = Harness::start(Fake::default(), REDELIVER, |_| {}).await;
+    let (output, receiver) = mpsc::unbounded_channel();
+    drop(receiver);
+    let inbound = Inbound {
+        native: h.fake.clone(),
+        store: h.store.clone(),
+        output,
+        acks: Acks::default(),
+        timing: REDELIVER,
+        request_id: "test".into(),
+    };
+    h.fake.decodes.lock().unwrap().insert(
+        "kept".into(),
+        VecDeque::from([Script::Message(Box::new(incoming(Message::Delivered)))]),
+    );
+    spool(&h.store, "kept.plist", "kept");
+    assert_eq!(
+        inbound.process("kept.plist").await.unwrap_err().stage,
+        "gateway"
+    );
+    assert!(h.store.load::<APSMessage>("kept.plist").unwrap().is_some());
+    assert!(h.fake.certified.lock().unwrap().is_empty());
+    std::fs::write(h.path.join("kept.plist"), b"invalid private state").unwrap();
+    assert_eq!(
+        inbound.process("kept.plist").await.unwrap_err().stage,
+        "state_decode"
+    );
+    assert!(h.path.join("kept.plist").exists());
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn an_unwritable_attachment_stays_unpublished_after_bounded_retries() {
+    let h = Harness::start(Fake::default(), REDELIVER, |_| {}).await;
+    let target = h.store.attachment("photo.heic").unwrap();
+    std::fs::create_dir(target.with_extension("partial")).unwrap();
+    let MessagePart::Attachment(attachment) = photo("image/heic").part else {
+        unreachable!()
+    };
+    let failure = download(
+        &*h.fake,
+        &h.store,
+        "photo.heic",
+        &attachment,
+        &REDELIVER,
+        "test",
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(failure.stage, "attachment_create");
+    assert!(!target.exists());
+    assert_eq!(*h.fake.downloads.lock().unwrap(), 0);
+    h.finish().await;
+}
 
 #[tokio::test]
 async fn failed_image_downloads_keep_the_notification_until_the_image_is_saved() {

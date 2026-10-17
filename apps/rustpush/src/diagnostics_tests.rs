@@ -9,6 +9,37 @@ fn http_error() -> reqwest::Error {
         .unwrap_err()
 }
 
+#[tokio::test(start_paused = true)]
+async fn bounded_provider_calls_preserve_codes_and_bound_unresponsive_work() {
+    async fn operation(outcome: Option<Result<u32, PushError>>) -> Result<u32, PushError> {
+        match outcome {
+            Some(result) => result,
+            None => std::future::pending().await,
+        }
+    }
+    let timeout = Duration::from_secs(1);
+    assert_eq!(
+        push_with_timeout("validation", timeout, operation(Some(Ok(42))))
+            .await
+            .unwrap(),
+        42
+    );
+    let failed = push_with_timeout(
+        "validation",
+        timeout,
+        operation(Some(Err(PushError::APSAckError(7)))),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(failed.cause["code"], 7);
+    assert_eq!(failed.stage, "validation");
+    let stalled = push_with_timeout("attachment_download", timeout, operation(None))
+        .await
+        .unwrap_err();
+    assert_eq!(stalled.cause["code"], "timeout");
+    assert_eq!(stalled.stage, "attachment_download");
+}
+
 #[test]
 fn nested_provider_failures_retain_codes_and_exclude_private_payloads() {
     let error = PushError::DoNotRetry(Box::new(PushError::CircleHTTPError(
