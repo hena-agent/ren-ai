@@ -19,25 +19,34 @@ interface WatchedConversation {
   readonly rows: Map<string, WatchedMessage>;
 }
 
-/** Only admitted messages are seeded on restart; changes made while down become the baseline. */
+/** Observed edits keep their original prompt IDs and retry through the durable intake queue. */
 export const watchEdits = (
   messages: Messages,
-  prompt: (sessionID: string, id: string, text: string) => Effect.Effect<void, Error>,
+  enqueue: (conversation: Conversation, id: string, text: string) => Effect.Effect<void, Error>,
   timeZone: (personaID: string) => string,
   signal: (conversation: Conversation) => void,
+  arriving: (sessionID: string, messageID: string) => Effect.Effect<void, Error>,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const watched = new Map<string, WatchedConversation>();
-    const remember = (conversation: Conversation, row: IncomingMessage) => {
-      if (!row.text) return;
-      let group = watched.get(conversation.sessionID);
-      if (!group) {
-        group = { conversation, rows: new Map() };
-        watched.set(conversation.sessionID, group);
-      }
-      group.rows.set(row.guid, { row, text: row.text, revision: 0 });
-    };
+    const remember = (conversation: Conversation, row: IncomingMessage) =>
+      Effect.gen(function* () {
+        yield* sql`INSERT OR IGNORE INTO intake_edit (session_id, guid, text, revision)
+        SELECT ${conversation.sessionID}, ${row.guid}, ${row.text}, 0 WHERE ${row.text} != ''`;
+        const [saved] = yield* sql<{
+          text: string;
+          revision: number;
+        }>`SELECT text, revision FROM intake_edit
+        WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
+        if (!saved?.text) return;
+        let group = watched.get(conversation.sessionID);
+        if (!group) {
+          group = { conversation, rows: new Map() };
+          watched.set(conversation.sessionID, group);
+        }
+        group.rows.set(row.guid, { row, text: saved.text, revision: saved.revision });
+      });
     const now = yield* Clock.currentTimeMillis;
     const active = yield* sql<Conversation>`SELECT conversation.id, user.handle,
       conversation.persona_id AS personaID, conversation.session_id AS sessionID
@@ -50,7 +59,7 @@ export const watchEdits = (
       const known = new Set(seen.map((item) => item.guid));
       const recent = yield* messages.recent(conversation.handle, now - editWindow);
       for (const row of recent) {
-        if (known.has(row.guid)) remember(conversation, row);
+        if (known.has(row.guid)) yield* remember(conversation, row);
       }
     }
     const inspect = (
@@ -73,10 +82,15 @@ export const watchEdits = (
             ),
           )
           .digest("hex")}`;
-        signal(group.conversation);
-        yield* prompt(group.conversation.sessionID, promptID, text);
+        yield* Effect.gen(function* () {
+          yield* enqueue(group.conversation, promptID, text);
+          yield* sql`UPDATE intake_edit SET text = ${currentText}, revision = ${revision}
+            WHERE session_id = ${group.conversation.sessionID} AND guid = ${guid}`;
+          yield* arriving(group.conversation.sessionID, promptID);
+        }).pipe(sql.withTransaction);
         entry.text = currentText;
         entry.revision = revision;
+        signal(group.conversation);
         if (!currentText) group.rows.delete(guid);
       });
     const poll = Effect.gen(function* () {

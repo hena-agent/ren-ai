@@ -21,12 +21,16 @@ test("late old-persona sends and pre-start incoming messages never become the ne
       const incoming = yield* intake(
         fake.messages,
         app.directory.byHandle,
-        (_session, _id, text) =>
-          Effect.sync(() => {
-            prompts.push(text);
-          }),
+        (session, id, text) =>
+          Effect.sync(() => prompts.push(text)).pipe(Effect.andThen(app.pace.seen(session, [id]))),
         () => "Asia/Seoul",
         app.sends.reconcile,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        app.pace.onNew,
       );
       yield* fake.text(old.handle, "before new relationship", now - 1);
       yield* fake.outgoing(old.handle, "known old reply", now + 1, "delivered", "old-guid");
@@ -36,6 +40,9 @@ test("late old-persona sends and pre-start incoming messages never become the ne
       expect(prompts).toHaveLength(1);
       expect(prompts[0]).toContain("hello new persona");
       expect(JSON.stringify(prompts)).not.toMatch(/before new|old reply|old private/);
+      expect(yield* app.pace.during(next.sessionID, Effect.succeed("new relationship reply"))).toBe(
+        "new relationship reply",
+      );
       yield* fake.outgoing(old.handle, "manual new reply", now + 4);
       yield* incoming.poll;
       expect(prompts.at(-1)).toContain("manual new reply");

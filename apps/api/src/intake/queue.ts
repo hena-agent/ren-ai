@@ -4,8 +4,15 @@ import { SqlClient } from "effect/unstable/sql";
 import type { IncomingMessage } from "@ren-ai/imsg";
 import { incomingMessage } from "@ren-ai/imsg/protocol";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
+import type { Conversation } from "../conversations/conversations.ts";
 
-const payload = Schema.fromJsonString(incomingMessage);
+const edit = Schema.Struct({
+  type: Schema.Literal("edit"),
+  sessionID: Schema.String,
+  id: Schema.String,
+  text: Schema.String,
+});
+const payload = Schema.fromJsonString(Schema.Union([incomingMessage, edit]));
 
 /** Acknowledge Mac rows atomically with durable admission; failures block only their Handle. */
 export const intakeQueue = Effect.gen(function* () {
@@ -20,7 +27,15 @@ export const intakeQueue = Effect.gen(function* () {
         yield* sql`UPDATE bookmark SET row_id = ${last.id}, date = ${last.createdAt} WHERE id = 1`;
       return last;
     }).pipe(sql.withTransaction);
-  const drain = (receive: (row: IncomingMessage) => Effect.Effect<void, Error>) =>
+  const enqueueEdit = (conversation: Conversation, id: string, text: string) =>
+    sql`INSERT OR IGNORE INTO intake_pending (guid, handle, payload) VALUES
+      (${id}, ${conversation.handle}, ${JSON.stringify({ type: "edit", sessionID: conversation.sessionID, id, text })})`.pipe(
+      Effect.asVoid,
+    );
+  const drain = (
+    receive: (row: IncomingMessage) => Effect.Effect<void, Error>,
+    receiveEdit: (handle: string, entry: typeof edit.Type) => Effect.Effect<void, Error>,
+  ) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const rows = yield* sql<{
@@ -47,7 +62,9 @@ export const intakeQueue = Effect.gen(function* () {
             const result = yield* Effect.forEach(group.slice(0, 25), (row) =>
               Effect.gen(function* () {
                 const message = yield* Schema.decodeUnknownEffect(payload)(row.payload);
-                yield* receive(message).pipe(Effect.timeout("30 seconds"));
+                yield* (
+                  "type" in message ? receiveEdit(row.handle, message) : receive(message)
+                ).pipe(Effect.timeout("30 seconds"));
                 yield* sql`DELETE FROM intake_pending WHERE id = ${row.id}`;
               }),
             ).pipe(Effect.result);
@@ -70,5 +87,5 @@ export const intakeQueue = Effect.gen(function* () {
         { concurrency: 4 },
       );
     });
-  return { enqueue, drain };
+  return { enqueue, enqueueEdit, drain };
 });

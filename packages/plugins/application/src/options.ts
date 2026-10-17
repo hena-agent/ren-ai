@@ -17,7 +17,10 @@ interface PluginConfig {
     tapback: Tapback,
     callID: string,
   ) => Effect.Effect<string, Error>;
-  readonly onContext?: (sessionID: string) => Effect.Effect<void, Error>;
+  readonly onContext?: (
+    sessionID: string,
+    messageIDs: readonly string[],
+  ) => Effect.Effect<void, Error>;
   readonly lastMessageStatus?: (
     sessionID: string,
   ) => Effect.Effect<OutgoingStatus | undefined, Error>;

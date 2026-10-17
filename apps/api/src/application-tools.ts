@@ -26,7 +26,7 @@ export const prepareMessaging = (
     yield* migrate;
     const sql = yield* SqlClient.SqlClient;
     const directory = yield* conversations;
-    const pace = timing();
+    const pace = yield* timing;
     const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
     const endings = yield* conversationEndings(directory, sends, messages, gestures, personas);
     const seenAtRequest = new Map<string, string | undefined>();
@@ -54,8 +54,9 @@ export const prepareMessaging = (
         inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
       wait: (sessionID, seconds) =>
         inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, seconds)),
-      onContext: (sessionID) =>
+      onContext: (sessionID, messageIDs) =>
         Effect.gen(function* () {
+          yield* pace.seen(sessionID, messageIDs);
           const seen = yield* sql<{
             guid: string;
           }>`SELECT guid FROM intake_seen WHERE session_id = ${sessionID} ORDER BY rowid DESC LIMIT 1`;

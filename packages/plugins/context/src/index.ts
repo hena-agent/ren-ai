@@ -98,7 +98,11 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                 };
               }
             }
-            if (options.onContext) yield* options.onContext(event.sessionID);
+            if (options.onContext)
+              yield* options.onContext(
+                event.sessionID,
+                event.messages.map((entry) => entry.id).filter((id) => id !== undefined),
+              );
             yield* Effect.forEach(removed, (name) =>
               options.health.raise("unexpected-tool", `OpenCode offered disallowed tool: ${name}`),
             );

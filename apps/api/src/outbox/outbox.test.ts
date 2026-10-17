@@ -316,7 +316,7 @@ test("each tapback is recorded before the UI acts, never replayed, and stale or 
   );
 });
 
-test("an inbound signal while typing cancels the draft before recording or sending", async () => {
+test("new arrivals cancel stale drafts and the replacement waits for quiet before typing", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -331,23 +331,38 @@ test("an inbound signal while typing cancels the draft before recording or sendi
           sessionID: "typing-session",
         });
         const fake = fakeMessages();
-        const pace = timing();
+        const pace = yield* timing;
+        let typings = 0;
         const ui = {
           ...fakeGestures().gestures,
           typing: (_handle: string, _text: string, millis: number) =>
-            Effect.as(Effect.sleep(millis), true),
+            Effect.gen(function* () {
+              typings++;
+              yield* Effect.sleep(millis);
+              return true;
+            }),
         };
         const sends = yield* outbox(fake.messages, ui, personas, directory.active, pace);
         const interrupted = yield* Effect.forkScoped(sends.send(conversation, "hello", "first"));
         yield* TestClock.adjust("1 second");
-        pace.onNew(`${conversation.sessionID}-other`);
+        yield* pace.onNew(`${conversation.sessionID}-other`, "other-message");
         expect(interrupted.pollUnsafe()).toBeUndefined();
-        pace.onNew(conversation.sessionID);
+        yield* pace.onNew(conversation.sessionID, "message");
         expect(yield* Fiber.join(interrupted)).toBe("not sent: a new message arrived");
         expect(fake.bubbles).toEqual([]);
         const sql = yield* SqlClient.SqlClient;
         expect(yield* sql`SELECT id FROM send`).toEqual([]);
+        expect(yield* sends.send(conversation, "stale follow-up", "stale")).toBe(
+          "not sent: a new message arrived",
+        );
+        expect(typings).toBe(1);
+        yield* pace.seen(conversation.sessionID, ["message"]);
         const completed = yield* Effect.forkScoped(sends.send(conversation, "hello", "second"));
+        yield* TestClock.adjust("3 seconds");
+        expect(typings).toBe(1);
+        expect(fake.bubbles).toEqual([]);
+        yield* TestClock.adjust("1 second");
+        expect(typings).toBe(2);
         yield* TestClock.adjust("4 seconds");
         expect(yield* Fiber.join(completed)).toBe("sent");
         expect(fake.bubbles).toEqual([{ handle: conversation.handle, text: "hello" }]);

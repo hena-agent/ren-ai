@@ -116,6 +116,7 @@ export const startScriptedMessagingHost = (
   messages: Messages,
   gestures: Gestures,
   withImages = false,
+  polling = true,
 ) =>
   startMessagingHost(
     join(root, "isolated"),
@@ -158,6 +159,7 @@ export const startScriptedMessagingHost = (
     messages,
     gestures,
     silentAlerts,
+    polling,
   );
 
 export const bindConversation = (
