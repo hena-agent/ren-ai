@@ -17,7 +17,7 @@ test.each([false, true])(
   async (concurrent) => {
     const { root, personaDirectory } = await messagingFixture("reset-isolation-");
     const fake = fakeMessages();
-    const handle = "tester@example.com";
+    const handle = "+821012345678";
     let resetOnRead = false;
     try {
       await runMessagingTest(

@@ -5,6 +5,15 @@ import { afterEach } from "vitest";
 import { decodePersona } from "@ren-ai/personas";
 import { databaseStore } from "../src/database-store.ts";
 import { femaleCharacter, legacy } from "./fixtures.ts";
+import type { AdminEnv } from "../src/cloudflare-admin.ts";
+
+export const adminBindings = (db: AdminEnv["DB"], bucket: AdminEnv["IMAGES"]): AdminEnv => ({
+  DB: db,
+  IMAGES: bucket,
+  ASSETS: { fetch: async () => new Response("asset") },
+  ADMIN_PASSWORD: "test-password",
+  TOKEN_CATALOG: "catalog",
+});
 
 const runtimes: Miniflare[] = [];
 afterEach(async () => {

@@ -21,7 +21,7 @@ test("a test handle resets Memory into a new session and keeps the old session f
         const id = Session.ID.make(fresh.sessionID);
         yield* host.sessions.wait(id);
         expect((yield* host.sessions.get(old.id)).title).toBe(
-          "Persona1 · tester@example.com · reset 2026-09-29 Tue 14:03",
+          "Persona1 · +821012345678 · reset 2026-09-29 Tue 14:03",
         );
         const listed = yield* Effect.promise(() =>
           host.web(new Request("http://opencode/api/session")).then((response) => response.text()),

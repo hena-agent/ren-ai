@@ -111,9 +111,7 @@ test("termination stops execution, cancels pending inbox work and rechecks prese
         });
         expect(capture.join("")).toContain(response.headers.get("x-request-id"));
         expect(capture.join("")).toContain("EXECUTOR_DOWN");
-        expect(capture.join("")).not.toMatch(
-          /private upstream payload|private cause|private@example/,
-        );
+        expect(capture.join("")).not.toMatch(/private upstream payload|private cause|821099999999/);
       } finally {
         stderr.mockRestore();
       }

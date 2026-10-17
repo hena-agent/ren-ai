@@ -104,9 +104,9 @@ test("operator records expose bounded searchable User–Persona–Session bindin
       expect((yield* request("/management/conversations/9999")).status).toBe(404);
       expect((yield* request("/management/conversations", "POST")).status).toBe(405);
       yield* f.ending.end(f.conversation.sessionID, "private farewell", "status");
-      expect((yield* status.list({ filter: "ended", search: "private@" })).entries[0]?.notice).toBe(
-        "queued",
-      );
+      expect(
+        (yield* status.list({ filter: "ended", search: "821099999999" })).entries[0]?.notice,
+      ).toBe("queued");
       const notice = (yield* f.sql<{ notice: string }>`SELECT notice FROM conversation_end`)[0]!
         .notice;
       yield* f.sql`INSERT INTO send(handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)

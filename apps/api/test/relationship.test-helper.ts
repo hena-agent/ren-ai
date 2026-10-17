@@ -16,7 +16,7 @@ export const relationshipFixture = Effect.gen(function* () {
   const app = yield* prepareMessaging(personas, fake.messages, ui.gestures);
   const sql = yield* SqlClient.SqlClient;
   const conversation = yield* app.directory.create({
-    handle: "private@example.com",
+    handle: "+821099999999",
     locale: "ko",
     consentLanguage: "ko",
     consentVersion: "v1",

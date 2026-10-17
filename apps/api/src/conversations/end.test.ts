@@ -102,7 +102,7 @@ test("ending validation and persistence failures are correlated without logging 
       expect(last.stack).toBeDefined();
       if (Result.isFailure(result)) expect(result.failure.message).toContain(last.requestId);
       expect(JSON.stringify(f.logs)).not.toMatch(
-        /private farewell|private@example|private failure|end-private/,
+        /private farewell|821099999999|private failure|end-private/,
       );
       expect(yield* f.app.directory.active(f.conversation)).toBe(true);
     }),
@@ -214,7 +214,7 @@ test("confirmed failed or rejected ending sends leave the relationship ended and
         });
         expect(f.fake.bubbles).toHaveLength(1);
         expect(f.fake.bubbles[0]?.text).toContain("[Ren AI]");
-        expect(JSON.stringify(f.logs)).not.toMatch(/private farewell|private@example|reselect=/);
+        expect(JSON.stringify(f.logs)).not.toMatch(/private farewell|821099999999|reselect=/);
         expect(yield* f.app.directory.byHandle(f.conversation.handle)).toBeUndefined();
       }),
     );

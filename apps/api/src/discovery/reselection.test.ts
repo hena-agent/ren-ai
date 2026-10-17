@@ -43,11 +43,11 @@ test("a delivered private reselection link admits another persona for the same U
           ]),
         );
         const app = yield* prepareMessaging(personas, fake.messages, ui.gestures);
-        const oldRegistrationID = yield* f.register("alma@example.com", ["luna"]);
+        const oldRegistrationID = yield* f.register("+821012345678", ["luna"]);
         yield* f.store.select({ requestId: randomUUID(), count: 1 }, "original-selection");
         yield* f.sql`UPDATE discovery_contact SET state = 'active', session_id = 'ses_old' WHERE registration_id = ${oldRegistrationID}`;
         const previous = yield* app.directory.create({
-          handle: "alma@example.com",
+          handle: "+821012345678",
           locale: "ko",
           consentVersion: "v1",
           consentLanguage: "ko",
@@ -95,9 +95,9 @@ test("a delivered private reselection link admits another persona for the same U
         const token = new URL(fake.bubbles[1]!.text.split("\n").at(-1)!).hash.slice(
           "#reselect=".length,
         );
-        expect(
-          (yield* submit({ handle: "someone@example.com", reselectionToken: token })).status,
-        ).toBe(400);
+        expect((yield* submit({ handle: "+821098765432", reselectionToken: token })).status).toBe(
+          400,
+        );
         expect((yield* submit({ likedPersonaIDs: ["luna"], reselectionToken: token })).status).toBe(
           400,
         );
@@ -116,7 +116,7 @@ test("a delivered private reselection link admits another persona for the same U
         expect(diagnostics.join("\n")).toContain('"stage":"registration.commit"');
         expect(diagnostics.join("\n")).toContain('"causeName":');
         expect(diagnostics.join("\n")).not.toMatch(
-          /private mutation payload|alma@example|reselect=|여기서 끝낼게요/,
+          /private mutation payload|821099999999|reselect=|여기서 끝낼게요/,
         );
         yield* f.sql`DROP TRIGGER fail_reselection`;
         for (let attempt = 0; attempt < 2; attempt++) {

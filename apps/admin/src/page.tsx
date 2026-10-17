@@ -324,10 +324,12 @@ function Navigation({
   record,
   contactView,
   conversationView,
+  recoveryAvailable,
 }: {
   record: PersonaRecord | undefined;
   contactView: ContactView | undefined;
   conversationView: ConversationView | undefined;
+  recoveryAvailable?: boolean;
 }) {
   return (
     <nav aria-label={copy.navigation}>
@@ -338,6 +340,7 @@ function Navigation({
         + {copy.new}
       </a>
       <a href="/inspection">전체 검사</a>
+      {recoveryAvailable && <a href="/editing-recovery">편집 기록 복구 파일</a>}
       <a href="/waitlist" aria-current={contactView?.tab === "waitlist" ? "page" : undefined}>
         대기자
       </a>
@@ -382,6 +385,7 @@ export function renderPage({
   contactView,
   versionView,
   conversationView,
+  recoveryAvailable,
 }: PageContent & {
   error?: string;
   saved?: boolean;
@@ -390,6 +394,7 @@ export function renderPage({
   contactView?: ContactView;
   versionView?: VersionView;
   conversationView?: ConversationView;
+  recoveryAvailable?: boolean;
 }) {
   return (
     "<!doctype html>" +
@@ -414,6 +419,7 @@ export function renderPage({
               record={record}
               contactView={contactView}
               conversationView={conversationView}
+              {...(recoveryAvailable !== undefined && { recoveryAvailable })}
             />
           </header>
           <main id="main" className={record || versionView ? "persona-workbench" : undefined}>

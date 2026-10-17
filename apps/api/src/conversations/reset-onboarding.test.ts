@@ -8,7 +8,7 @@ import {
   resetFixture,
 } from "../../test/reset.test-helper.ts";
 
-test.each(["i@ysm.dev", "+821092836686"])(
+test.each(["+821092836686", "+14155550100"])(
   "%s can onboard from the beginning after reset",
   async (handle) => {
     const f = await resetFixture("reset-onboarding-");

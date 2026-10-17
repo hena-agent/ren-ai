@@ -79,7 +79,7 @@ test("the browser client reads the catalog and validates the real registration a
   ]);
   expect(fetcher).toHaveBeenCalledWith("/discovery/personas", { signal, cache: "no-store" });
   const request = {
-    handle: "a@example.org",
+    handle: "+821012345678",
     locale: "ko",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["nari"],
@@ -197,7 +197,7 @@ test("profiles and registration use api-app while portraits retain their catalog
   fetcher.mockResolvedValueOnce(Response.json({ status: "waiting" }));
   expect(
     await deployed.join({
-      handle: "a@example.org",
+      handle: "+821012345678",
       locale: "ko",
       privacyNoticeVersion: discoveryNotice.version,
       likedPersonaIDs: ["nari"],

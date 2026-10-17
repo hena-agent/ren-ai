@@ -9,4 +9,5 @@ export interface AdminPersistence {
   saved?: AdminSnapshot | undefined;
   checkpoint: (snapshot: AdminSnapshot) => Promise<void>;
   wake: () => Promise<void>;
+  recovery?: () => Promise<Response>;
 }

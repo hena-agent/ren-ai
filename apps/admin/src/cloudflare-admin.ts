@@ -2,11 +2,13 @@ import type { D1Database, DurableObjectStorage } from "@cloudflare/workers-types
 import { createAdmin } from "./admin.ts";
 import { databaseStore } from "./database-store.ts";
 import { createProfileGenerator } from "./generation.ts";
-import { loggedJob, writeLog as workerLog } from "./logging.ts";
+import { loggedJob, operation, writeLog as workerLog } from "./logging.ts";
 import { editingStorage } from "./editing-storage.ts";
 import type { ImageBucket } from "./r2-images.ts";
 import { managementClient } from "./contact-client.ts";
 import { catalogDelivery, wakeAlarm } from "./catalog-delivery.ts";
+import { recoverEditing, downloadEditingRecovery } from "./editing-recovery.ts";
+import { restoreImageBatch } from "./image-batch.ts";
 
 export interface AdminEnv {
   ADMIN_JURISDICTION?: "us" | "local";
@@ -30,7 +32,7 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
     return response.text();
   };
   const editing = editingStorage(storage);
-  const [saved, css, editorCss, script] = await Promise.all([
+  const [loaded, css, editorCss, script] = await Promise.all([
     editing.load(),
     asset("style.css"),
     asset("editor.css"),
@@ -41,6 +43,22 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
   const delivery = catalogDelivery(storage, management.refreshCatalog);
   const localImages = env.ADMIN_JURISDICTION === "local";
   const store = databaseStore(env.DB, env.IMAGES, localImages ? "/images/" : undefined);
+  const generator = createProfileGenerator({
+    key: env.GEMINI_API_KEY ?? "",
+    ...(env.GEMINI_API_URL && { endpoint: env.GEMINI_API_URL }),
+    ...(env.ADMIN_TEXT_MODEL && { textModel: env.ADMIN_TEXT_MODEL }),
+    ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
+  });
+  const saved = await loggedJob(
+    crypto.randomUUID(),
+    {},
+    () =>
+      operation("editing.restore", {}, () =>
+        recoverEditing(storage, loaded, (batch) => restoreImageBatch(batch, generator, store)),
+      ),
+    workerLog,
+    "/startup",
+  );
   const handle = createAdmin(
     { ...store, save: (...args) => delivery.save(() => store.save(...args)) },
     env.ADMIN_PASSWORD,
@@ -49,13 +67,13 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
       script,
       localImages,
       log: workerLog,
-      generator: createProfileGenerator({
-        key: env.GEMINI_API_KEY ?? "",
-        ...(env.GEMINI_API_URL && { endpoint: env.GEMINI_API_URL }),
-        ...(env.ADMIN_TEXT_MODEL && { textModel: env.ADMIN_TEXT_MODEL }),
-        ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
-      }),
-      persistence: { saved, checkpoint: editing.save, wake },
+      generator,
+      persistence: {
+        saved,
+        checkpoint: editing.save,
+        wake,
+        recovery: () => downloadEditingRecovery(storage),
+      },
       management,
       catalogPending: delivery.pending,
     },
