@@ -79,6 +79,14 @@ test("a discovery registration requires contact, consent, verification and uniqu
   };
   const decode = Schema.decodeUnknownSync(DiscoveryRequest);
   expect(decode(request)).toEqual(request);
+  for (const fields of [
+    { name: "민수" },
+    { age: 28 },
+    { gender: "female" },
+    { gender: "male" },
+    { gender: "other" },
+  ])
+    expect(decode({ ...request, ...fields })).toEqual({ ...request, ...fields });
   for (const input of [
     {},
     { ...request, handle: "invalid" },

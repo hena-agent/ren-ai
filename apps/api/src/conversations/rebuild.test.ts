@@ -37,6 +37,10 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
       Effect.gen(function* () {
         const host = yield* quietTestHost(root, personaDirectory, fake.messages);
         const original = yield* host.createSession(persona.id);
+        const profileSql = yield* SqlClient.SqlClient;
+        yield* profileSql`INSERT INTO discovery_registration VALUES ('profile-registration', ${handle}, 'ko', 'v1', 123)`;
+        yield* profileSql`INSERT INTO discovery_profile VALUES ('profile-registration', '민수', 28, 'male')`;
+        yield* profileSql`INSERT INTO discovery_language VALUES ('profile-registration', 'ja')`;
         const conversation = yield* host.conversations.create({
           ...conversationInput,
           sessionID: original.id,
@@ -60,6 +64,10 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
           yield* host.sessions.messages({ sessionID: Session.ID.make(rebuilt.sessionID) }),
         );
         expect(transcript).toContain("<conversation-started");
+        expect(transcript).toContain(
+          'user-name=\\"민수\\" user-age=\\"28\\" user-gender=\\"male\\"',
+        );
+        expect(transcript).toContain('preferred-language=\\"ja\\"');
         expect(transcript).toContain("first");
         expect(transcript).toContain("her manual send");
         expect(transcript).toContain("later");

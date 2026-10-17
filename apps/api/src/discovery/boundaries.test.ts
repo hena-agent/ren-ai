@@ -60,6 +60,13 @@ test("request schemas reject missing, empty, duplicate, uncanonical and unsafe s
             { handle: "A@EXAMPLE.NET" },
             { locale: "de" },
             { turnstileToken: "" },
+            { name: " " },
+            { name: "a".repeat(101) },
+            { age: 0 },
+            { age: -1 },
+            { age: 1.5 },
+            { age: "28" },
+            { gender: "invalid" },
           ]) {
             const result = await post(web, { ...input, ...changed });
             expect(result.status).toBe(400);

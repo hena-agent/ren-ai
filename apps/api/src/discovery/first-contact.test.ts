@@ -110,9 +110,16 @@ test("the first greeting receives the separately persisted conversation preferen
     Effect.gen(function* () {
       const f = yield* setup;
       yield* f.sql`INSERT INTO discovery_language VALUES (${f.id}, 'ja')`;
+      yield* f.sql`INSERT INTO discovery_profile VALUES (${f.id}, '민수', 28, 'male')`;
       yield* f.due;
       yield* f.worker.tick;
       expect(f.prompt.mock.calls[0]?.[0].text).toContain('preferred-language="ja"');
+      expect(f.prompt.mock.calls[0]?.[0].text).toContain(
+        'user-name="민수" user-age="28" user-gender="male"',
+      );
+      expect(JSON.stringify(f.logs)).not.toContain("민수");
+      expect(f.prompt.mock.calls[0]?.[0].text).not.toContain("private@example.net");
+      expect(f.prompt.mock.calls[0]?.[0].text).not.toContain("user-id");
       expect(yield* f.sql`SELECT locale, consent_language FROM user`).toEqual([
         { locale: "ko", consent_language: "ko" },
       ]);

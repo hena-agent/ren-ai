@@ -169,6 +169,10 @@ export const migrate = Effect.gen(function* () {
         )`;
         yield* sql`CREATE INDEX intake_pending_handle ON intake_pending(handle, id)`;
       }),
+      "025_discovery_profile": sql`CREATE TABLE discovery_profile (
+        registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
+        name TEXT, age INTEGER, gender TEXT
+      )`,
     }),
   });
 });
