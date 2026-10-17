@@ -116,7 +116,7 @@ test("leaving a reading profile for contact and returning resumes the compact br
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: "지우 소개 전체 보기" }));
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  expect(screen.getByRole("textbox")).toBeTruthy();
+  expect(screen.getByRole("textbox", { name: "휴대전화 번호" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "좋아요" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "탐색으로 돌아가기" }));
   expect(screen.queryByRole("region", { name: "지우" })).toBeNull();
@@ -127,13 +127,17 @@ test("reading a liked profile during contact entry preserves the mounted form an
   await browse();
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  const input = screen.getByRole("textbox");
+  const input = screen.getByRole("textbox", { name: "휴대전화 번호" });
   fireEvent.change(input, { target: { value: "01012345678" } });
+  const name = screen.getByLabelText<HTMLInputElement>("이름 (선택)");
+  fireEvent.change(name, { target: { value: "민수" } });
   fireEvent.click(likedButton("하린"));
   expect(screen.getByRole("region", { name: "하린" })).toBeTruthy();
   expect(input.closest(".contact-surface")!.hasAttribute("hidden")).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
-  expect(screen.getByRole("textbox")).toBe(input);
+  expect(screen.getByRole("textbox", { name: "휴대전화 번호" })).toBe(input);
   expect(screen.queryByRole("button", { name: "좋아요" })).toBeNull();
   expect(input.getAttribute("value")).toBe("010-1234-5678");
+  expect(screen.getByLabelText("이름 (선택)")).toBe(name);
+  expect(name.value).toBe("민수");
 });

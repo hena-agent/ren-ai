@@ -21,6 +21,9 @@ interface Contact {
   requestId: string;
   locale: string;
   conversationLanguage: string | null;
+  name: string | null;
+  age: number | null;
+  gender: string | null;
   consentVersion: string;
   consentAt: number;
 }
@@ -106,6 +109,7 @@ export const firstContacts = (
               persona!.openingLine,
               persona!.timeZone,
               row.conversationLanguage ?? undefined,
+              row,
             ),
           });
         });
@@ -188,9 +192,10 @@ export const firstContacts = (
       const rows =
         yield* sql<Contact>`SELECT r.id, r.handle, r.locale, l.conversation_language AS conversationLanguage, r.consent_version AS consentVersion,
       r.created_at AS consentAt, c.persona_id AS personaID, c.session_id AS sessionID, c.state,
-      c.started_at AS startedAt, c.request_id AS requestId
+       c.started_at AS startedAt, c.request_id AS requestId, p.name, p.age, p.gender
        FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
-       LEFT JOIN discovery_language l ON l.registration_id = r.id
+        LEFT JOIN discovery_language l ON l.registration_id = r.id
+        LEFT JOIN discovery_profile p ON p.registration_id = r.id
        WHERE r.archived_at IS NULL AND ((c.state = 'scheduled' AND c.scheduled_at <= ${now}) OR c.state IN ('preparing','greeting','review')) ORDER BY c.scheduled_at`;
       for (const row of rows) {
         const result = yield* Effect.result(

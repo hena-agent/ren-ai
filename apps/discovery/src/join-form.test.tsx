@@ -142,6 +142,9 @@ test("a pending registration cannot repeat, and failure retains the form for a f
   expect(number().hasAttribute("disabled")).toBe(true);
   expect(country().hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("checkbox").hasAttribute("disabled")).toBe(true);
+  expect(
+    screen.getByRole("group", { name: "나에 대해 조금 더 (선택)" }).hasAttribute("disabled"),
+  ).toBe(true);
   expect(screen.getByRole("button", { name: /탐색으로 돌아가기/ }).hasAttribute("disabled")).toBe(
     true,
   );
@@ -285,6 +288,38 @@ test("a public deployment uses its configured Turnstile key", () => {
   vi.stubEnv("VITE_TURNSTILE_SITE_KEY", "public-invisible-key");
   mount();
   expect(key).toBe("public-invisible-key");
+});
+
+test("optional profile fields are independent, validated and retained through a failed submission", async () => {
+  submit.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "waiting" });
+  mount();
+  fill();
+  const name = screen.getByLabelText<HTMLInputElement>("이름 (선택)");
+  const age = screen.getByLabelText<HTMLInputElement>("만 나이 (선택)");
+  const gender = screen.getByLabelText<HTMLSelectElement>("성별 (선택)");
+  const form = name.form!;
+  expect(name.required || age.required || gender.required).toBe(false);
+  expect(gender.value).toBe("");
+  for (const value of ["0", "-1", "1.5"]) {
+    fireEvent.change(age, { target: { value } });
+    fireEvent.submit(form);
+  }
+  expect(submit).not.toHaveBeenCalled();
+  fireEvent.change(name, { target: { value: "  민수  " } });
+  fireEvent.change(age, { target: { value: "28" } });
+  fireEvent.change(gender, { target: { value: "other" } });
+  await act(async () => fireEvent.submit(form));
+  expect(submit.mock.calls[0]?.[0]).toMatchObject({ name: "민수", age: 28, gender: "other" });
+  expect(name.value).toBe("  민수  ");
+  expect(age.value).toBe("28");
+  expect(gender.value).toBe("other");
+  fireEvent.change(name, { target: { value: "  " } });
+  fireEvent.change(gender, { target: { value: "" } });
+  act(() => verification?.("fresh"));
+  await act(async () => fireEvent.submit(form));
+  expect(submit.mock.lastCall?.[0]).not.toHaveProperty("name");
+  expect(submit.mock.lastCall?.[0]).not.toHaveProperty("gender");
+  expect(submit.mock.lastCall?.[0].age).toBe(28);
 });
 
 test("verification alone cannot enable an unconsented submission, joining explains an incomplete number, and native navigation is prevented", () => {

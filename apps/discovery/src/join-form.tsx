@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Schema } from "effect";
-import { discoveryNotices, MobileNumber } from "@ren-ai/onboarding";
+import { DiscoveryRequest, discoveryNotices, MobileNumber } from "@ren-ai/onboarding";
+import { OptionalProfile } from "./optional-profile.tsx";
 import { Turnstile } from "@ren-ai/onboarding/turnstile";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
@@ -57,23 +58,37 @@ export function JoinForm({
       !handle ||
       contact.consentLanguage !== locale ||
       !token ||
-      !liked.length
+      !liked.length ||
+      !event.currentTarget.checkValidity()
     )
       return;
+    const {
+      name: rawName,
+      age,
+      gender,
+    } = Schema.decodeUnknownSync(
+      Schema.Struct({ name: Schema.String, age: Schema.String, gender: Schema.String }),
+    )(Object.fromEntries(new FormData(event.currentTarget)));
+    const name = rawName.trim();
     submitting.current = true;
     setPending(true);
     onBusyChange?.(true);
     setFailure(false);
     try {
-      const answer = await client.join({
-        handle,
-        locale,
-        conversationLanguage,
-        privacyNoticeVersion: discoveryNotice.version,
-        likedPersonaIDs: liked.map((persona) => persona.id),
-        turnstileToken: token,
-        ...reselection(),
-      });
+      const answer = await client.join(
+        Schema.decodeUnknownSync(DiscoveryRequest)({
+          handle,
+          locale,
+          conversationLanguage,
+          privacyNoticeVersion: discoveryNotice.version,
+          likedPersonaIDs: liked.map((persona) => persona.id),
+          turnstileToken: token,
+          ...(name && { name }),
+          ...(age && { age: Number(age) }),
+          ...(gender && { gender }),
+          ...reselection(),
+        }),
+      );
       onSuccess(answer.status);
     } catch (cause) {
       setFailure(cause instanceof ReselectionError ? "reselection" : "registration");
@@ -126,6 +141,7 @@ export function JoinForm({
             )}
           </div>
         </div>
+        <OptionalProfile disabled={pending} />
         <label htmlFor="conversation-language">{copy.conversationLanguage}</label>
         <select
           id="conversation-language"
