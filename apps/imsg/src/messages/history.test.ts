@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, expect, test } from "vitest";
 import { noIMessage, openHistory, uriOf } from "./history.ts";
 import { incoming, service } from "../../test/bridge.test-helper.ts";
@@ -149,10 +150,18 @@ test("tapbacks are rows, and only authors can edit or unsend", () => {
 });
 
 test("bounded catch-up preserves cursor order across a large unrelated backlog", () => {
-  const { history } = open();
+  const { history, directory } = open();
   try {
-    for (let i = 0; i < 10_000; i++)
-      history.apply(incoming(`mailto:user-${i}@example.com`, "history", i));
+    // Seed the query fixture in one commit instead of 10,000 durable event writes.
+    const fixture = new DatabaseSync(join(directory, "history.sqlite"));
+    try {
+      fixture.exec(`WITH RECURSIVE backlog(i) AS (
+        VALUES(0) UNION ALL SELECT i + 1 FROM backlog WHERE i < 9999
+      ) INSERT INTO message (guid, handle, created_at, text, from_me)
+        SELECT 'backlog-' || i, 'user-' || i || '@example.com', i, 'history', 0 FROM backlog`);
+    } finally {
+      fixture.close();
+    }
     const target = history.outgoing("target", handle, "latest inserted", 1);
     history.settle(target.guid, "sent");
     const first = history.after(9_999, 1);
