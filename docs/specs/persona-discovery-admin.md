@@ -115,7 +115,7 @@ bun dev
 - `description`을 OpenCode 파일의 선택적 frontmatter 필드로 추가했다. 기존 파일은 그대로 읽고, 편집 화면에서는 기존 프롬프트를 설명의 초기값으로 사용한다. 원본 설명과 런타임 설정은 공개 API에 포함되지 않는다.
 - Admin은 서명된 미리보기 상태를 폼에 보관한다. 생성 결과를 저장하기 전 기존 파일을 변경하지 않으며, 같은 캐릭터의 동시 작업과 오래된 편집 화면의 덮어쓰기를 거부한다.
 - 생성 이미지는 같은 페르소나 디렉터리의 `images/`에 고유 파일명으로 보관한다. PNG·JPEG·WebP 형식과 20MB 한도를 검사하며, 기존 파일을 덮어쓰지 않는다. 이전 후보는 재시도 실패 시에도 유지된다.
-- 운영 이미지는 `https://persona-images.renai.im/<objectKey>`에서 직접 제공한다. 공개 여부는 프로필 목록만 제어하며 사진 URL 접근을 회수하지 않는다. Admin의 `/images/`는 로컬 개발에서만 인증된 미리보기 경로로 사용한다.
+- 운영 이미지는 `https://persona-images.renai.im/<objectKey>`에서 직접 제공한다. 공개 여부는 프로필 목록만 제어하며 사진 URL 접근을 회수하지 않는다. Admin의 `/images/`는 로컬 개발에서만 같은 공개 이미지 동작을 로컬 R2로 제공한다.
 - 캐릭터 파일과 공개 프로필의 선택적 `portraits`에는 `anime`·`photo` 두 URL을 모두 보관한다. 공개 이미지 경로는 공개 캐릭터가 참조하는 두 이미지 모두 제공한다. 기존 `imageUrl`은 구 클라이언트 호환용으로 유지하며 서비스의 기본 스타일을 뜻하지 않는다. 새 Discovery는 사용자 스타일에 해당하는 이미지를 사용하고, 기존 단일 이미지 캐릭터는 기존 이미지로 표시한다. 별도 API 배포에서는 두 서비스 소유 경로 모두 API URL을 붙인다.
 - 기본 생성 모델은 공개 소개 **Gemini 3.8 Flash**, 이미지 **Gemini 3.1 Flash Image**, 4:5·1K다. 모델과 API 주소는 환경 변수로 바꿀 수 있으며, 실제 Gemini 요청으로 소개와 JPEG 이미지 생성을 확인했다. 이미지 생성에는 현재 [이미지 생성 가이드](https://ai.google.dev/gemini-api/docs/image-generation)와 [generateContent API 계약](https://ai.google.dev/api/generate-content)을 따른다.
 - 사용자 결정에 따라 Admin의 `GEMINI_API_KEY`가 없으면 `apps/persona-lab/.env`의 기존 키를 재사용한다. Admin 전용 키를 설정하면 우선하며, 키는 브라우저·페르소나 파일·로그에 포함하지 않는다.
@@ -213,7 +213,10 @@ bun dev
 D1은 objectKey를 저장하고 Persona·공개/비공개 Catalog는 절대 이미지 URL을 반환한다. 운영 Admin·API는 사진을 프록시하지 않는다.
 신규 UUID 키 업로드에는 1년 immutable 캐시 메타데이터를 설정한다. 생성 참조용 서버 원본 읽기는 R2 binding을 사용한다.
 초안·미참조 사진도 URL로 접근할 수 있으며 비공개 전환·참조 삭제가 기존 이미지 URL을 회수하지 않는다. 저장·공개 상태는 프로필 목록 반영만 제어한다.
-로컬 개발의 `/images/<key>`는 로컬 R2 조회용 인증 경로다. 이전 `/discovery/images/` 경로는 제공하지 않는다.
+로컬 개발의 `/images/<key>`는 Worker 경계에서 인증 없이 GET·HEAD를 제공하는 로컬 R2 경로다.
+운영 R2와 같이 초안·미참조 사진도 URL로 접근할 수 있으며, 편집 화면과 비공개 Catalog의 인증은 유지한다.
+Wrangler의 로컬 origin은 실제 로컬 Admin 포트로 명시해 공개 사진 URL에 배포용 호스트가 섞이지 않게 한다.
+이전 `/discovery/images/` 경로는 제공하지 않는다.
 아래 FIFO·편집 캐시·중복 요청 상태의 소유자는 프로세스 메모리에서 단일 SQLite Durable Object로 바뀌었다.
 사진별 alarm 처리와 private draft/task checkpoint를 사용한다. 중단된 유료 호출은 자동 반복하지 않으며,
 운영자가 해당 사진의 재시도를 확인해야 한다. 완성 사진은 유지하고, 중단된 공통 문서 준비의 의존 사진은 차단한다.
