@@ -8,6 +8,7 @@
 @import "./home-artwork.css";
 @import "./home-mobile.css";
 @import "./home-navigation.css";
+@import "./conversation-scene.css";
 @import "./interactions.css";
 
 :root {

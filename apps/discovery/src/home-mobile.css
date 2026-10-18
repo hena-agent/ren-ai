@@ -2,15 +2,9 @@
   .home-hero-copy,
   .home-how,
   .home-faq,
-  .home-footer {
+  .home-footer,
+  .home-conversation-copy {
     width: calc(100% - 64px);
-  }
-  .home-conversation-copy,
-  .home-story-copy {
-    padding-inline: 32px;
-  }
-  .home-conversation-stage {
-    min-height: 690px;
   }
   .home-faq {
     gap: 40px;
@@ -65,32 +59,20 @@
     padding: 16px 24px;
     font-size: 11px;
   }
-  .home-conversation,
-  .home-story {
-    grid-template-columns: 1fr;
+  .home-conversation {
     scroll-margin-top: 72px;
   }
-  .home-conversation-copy,
-  .home-story-copy {
-    padding: 64px 24px;
+  .home-conversation-copy {
+    width: calc(100% - 48px);
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding-block: 64px;
   }
   .home h2 {
     font-size: clamp(40px, 10.5vw, 64px);
   }
   .home-section-intro {
-    margin-top: 24px;
     font-size: 16px;
-  }
-  .home-conversation-stage {
-    min-height: 0;
-    padding: 48px 24px;
-  }
-  .home-story-photo {
-    height: auto;
-    aspect-ratio: 4 / 5;
-  }
-  .home-story-copy {
-    padding-bottom: 32px;
   }
   .home-how {
     padding-block: 48px 32px;

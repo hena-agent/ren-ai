@@ -15,19 +15,19 @@ three photographic panels with an expanding selection; mobile shows one complete
 portrait at a time, with explicit name selectors and a crossfade. Keep the primary
 CTA within a normal phone's first viewport. Keep reduced-motion changes immediate.
 
-The next scene demonstrates iMessage at a readable size, followed by an everyday
-portrait and an editorial statement. Use an existing raster device asset with a
-flattened, locale-specific screen;
-keep iOS chrome out of runtime HTML/CSS. Blue belongs to outgoing messages inside
-the demo, not the brand palette. Preserve an accessible transcript and a visible
-fictional-example disclosure. Asset provenance and export instructions live in
-`apps/discovery/design/README.md`.
+The next scene is a scroll-driven conversation, not a device mockup. A large
+everyday photograph drifts slowly while native HTML messages arrive at different
+scroll positions and settle into a readable thread. Use CSS view timelines and
+a sticky viewport for the layered parallax; leave scrolling native. Keep text
+unscaled and unrotated, at least 16px on a 320px phone. Blue belongs to outgoing
+messages inside the demo, not the brand palette. Keep the example caption at 14px
+and preserve the original accessible message order without live announcements.
+Asset provenance lives in `apps/discovery/design/README.md`.
 
-Judge conversation readability at its actual page size, not enlarged in an image
-viewer. Body text stays at least 16px on a 320px phone; use the available stage
-width, content-sized bubbles with explicit padding and high-density lossless
-artwork. Keep the example caption at 14px. Inspect the rendered Korean, English
-and Japanese artwork as well as checking its dimensions.
+The pinned scene completes its messages before the end of its scroll range so
+visitors can pause and read. Short viewports show a flowing conversation with
+gentle photographic parallax. Reduced motion and browsers without view timelines
+show all messages immediately in normal document flow, with no empty pinning space.
 
 Avoid repeated profile grids, miniature UI screenshots and tilted photo decorations.
 Finish with a confident red CTA section. Treat featured profiles as editorial
@@ -40,10 +40,12 @@ selection or Escape, restoring toggle focus on Escape.
 ## Interaction
 
 Use short, purposeful feedback: 120–180ms for controls and 180–240ms for movement.
+Scroll timelines use scroll progress rather than these control durations.
 Navigation has an animated active indicator; buttons visibly respond to presses.
 Preserve mounted browsing state and scroll positions when switching tabs.
 Hero portraits reveal once and transition on explicit selection; there is no
-automatic carousel. The conversation is a static composite, without live typing.
+automatic carousel. Conversation motion follows scroll position and reverses
+naturally when scrolling back; there is no autoplay or simulated live typing.
 Reduced motion shows immediate control states.
 Use native CSS before introducing animation dependencies.
 

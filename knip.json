@@ -15,9 +15,6 @@
     },
     "apps/api-msg": {
       "entry": ["ops/probe-entry.mjs"]
-    },
-    "apps/discovery": {
-      "ignoreBinaries": ["magick", "rsvg-convert"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],

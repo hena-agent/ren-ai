@@ -41,9 +41,13 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   selectLanguage("화면 언어", "English");
   expect(screen.getAllByRole("link", { name: "Meet the personas" })).toHaveLength(2);
   expect(screen.getByRole("navigation", { name: "About the service" })).toBeTruthy();
-  expect(document.querySelector(".conversation-artwork > img")?.getAttribute("src")).toBe(
-    "/landing/conversation-en.webp",
-  );
+  const englishConversation = screen.getByRole("figure", {
+    name: "An illustrative, fictional conversation",
+  });
+  expect(
+    within(englishConversation).getByText("Found a tiny bookshop on my way home"),
+  ).toBeTruthy();
+  expect(within(englishConversation).getAllByRole("listitem")).toHaveLength(3);
   expect(screen.getByText("Am I talking to a real person?")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.en.title)).toBeTruthy();
   expect(document.title).toBe("Ren AI — A little more to look forward to");
@@ -53,9 +57,11 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(screen.getByText(discoveryNotices.ja.title)).toBeTruthy();
   expect(document.documentElement.lang).toBe("ja");
   expect(document.title).toBe("Ren AI — 日常に、待ち遠しいメッセージを");
-  expect(document.querySelector(".conversation-artwork > img")?.getAttribute("src")).toBe(
-    "/landing/conversation-ja.webp",
-  );
+  expect(
+    within(screen.getByRole("figure", { name: "サービスを紹介する架空の会話例" })).getByText(
+      "帰り道に小さな本屋さんを見つけた",
+    ),
+  ).toBeTruthy();
 });
 
 test("portrait selection changes the featured scene without leaving the page or losing it on locale changes", () => {

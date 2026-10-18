@@ -3,7 +3,8 @@ import { Header } from "./chrome.tsx";
 import { useCopy } from "./locale.tsx";
 import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
 import { HomeNavigation } from "./home-navigation.tsx";
-import { HeroGallery, ConversationArtwork } from "./home-artwork.tsx";
+import { HeroGallery } from "./home-artwork.tsx";
+import { ConversationScene } from "./conversation-scene.tsx";
 
 function ExploreLink() {
   const copy = useCopy();
@@ -51,38 +52,19 @@ export function Home() {
 
         <section className="home-conversation" id="about" aria-labelledby="about-title">
           <div className="home-conversation-copy">
-            <p className="home-eyebrow">{home.aboutEyebrow}</p>
-            <h2 id="about-title">
-              {home.conversationTitle}
-              <span>{home.conversationAccent}</span>
-            </h2>
-            <p className="home-section-intro">{home.features[1]!.body}</p>
-            <p className="home-conversation-note">{home.features[2]!.body}</p>
+            <div>
+              <p className="home-eyebrow">{home.aboutEyebrow}</p>
+              <h2 id="about-title">
+                {home.conversationTitle}
+                <span>{home.conversationAccent}</span>
+              </h2>
+            </div>
+            <div>
+              <p className="home-section-intro">{home.features[1]!.body}</p>
+              <p className="home-conversation-note">{home.features[2]!.body}</p>
+            </div>
           </div>
-          <div className="home-conversation-stage">
-            <ConversationArtwork />
-          </div>
-        </section>
-
-        <section className="home-story" aria-labelledby="story-title">
-          <figure className="home-story-photo">
-            <img
-              src="/landing/seowoo-daily.webp"
-              width="640"
-              height="794"
-              alt={`한서우 ${copy.profilePhoto}`}
-              loading="lazy"
-            />
-            <figcaption>
-              <span lang="ko">한서우</span>
-              <span>{home.personaLabel}</span>
-            </figcaption>
-          </figure>
-          <div className="home-story-copy">
-            <p className="home-eyebrow">{home.profileNote}</p>
-            <h2 id="story-title">{home.aboutTitle}</h2>
-            <p className="home-section-intro">{home.features[0]!.body}</p>
-          </div>
+          <ConversationScene />
         </section>
 
         <section className="home-how" id="how-it-works" aria-labelledby="how-title">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useCopy, useLocale } from "./locale.tsx";
+import { useCopy } from "./locale.tsx";
 
 const portraits = [
   { image: "seoyeon", name: "한서연" },
@@ -41,27 +41,5 @@ export function HeroGallery() {
         ))}
       </fieldset>
     </div>
-  );
-}
-
-export function ConversationArtwork() {
-  const { home } = useCopy();
-  const { locale } = useLocale();
-  return (
-    <figure className="conversation-artwork" aria-label={home.exampleLabel}>
-      <img
-        src={`/landing/conversation-${locale}.webp`}
-        width="1452"
-        height="2888"
-        alt=""
-        loading="lazy"
-      />
-      <figcaption>{home.exampleNote}</figcaption>
-      <ol className="sr-only">
-        {home.messages.map((message) => (
-          <li key={message}>{message}</li>
-        ))}
-      </ol>
-    </figure>
   );
 }

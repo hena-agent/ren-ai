@@ -2,6 +2,7 @@
   position: absolute;
   inset: 0;
   background: var(--ink);
+  overflow: hidden;
 }
 .hero-portraits {
   display: flex;
@@ -82,23 +83,6 @@
 .hero-gallery-controls button:hover:not([aria-pressed="true"]) {
   background: var(--ink);
 }
-.conversation-artwork {
-  width: min(360px, 100%);
-  margin: 0;
-}
-.conversation-artwork > img {
-  display: block;
-  width: 100%;
-  height: auto;
-  filter: drop-shadow(0 24px 20px #20242b21);
-}
-.conversation-artwork figcaption {
-  margin: 28px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.7;
-  text-align: center;
-}
 @keyframes portrait-reveal {
   from {
     transform: scale(1.045);
@@ -107,6 +91,26 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+@keyframes hero-parallax {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(14%);
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .home-hero {
+      view-timeline-name: --hero;
+    }
+    .hero-portraits {
+      animation: hero-parallax 1ms linear both;
+      animation-timeline: --hero;
+      animation-range: exit 0% exit 100%;
+    }
   }
 }
 @media (max-width: 700px) {

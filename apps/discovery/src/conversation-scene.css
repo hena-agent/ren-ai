@@ -1,0 +1,243 @@
+.conversation-story {
+  --scene-header: 80px;
+  view-timeline-name: --conversation;
+  view-timeline-axis: block;
+  view-timeline-inset: var(--scene-header) 0;
+}
+.conversation-viewport {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 760px;
+  overflow: hidden;
+  background: var(--canvas);
+}
+.conversation-photo {
+  position: absolute;
+  inset: 0 34% 0 0;
+  margin: 0;
+  overflow: hidden;
+}
+.conversation-photo > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 32%;
+}
+.conversation-photo::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 62%, var(--canvas));
+  content: "";
+}
+.conversation-thread {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  align-self: center;
+  min-width: 0;
+  margin: 0;
+  padding: 56px clamp(28px, 4vw, 72px) 64px 16px;
+}
+.conversation-contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: var(--canvas);
+}
+.conversation-contact > img {
+  border: 2px solid white;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.conversation-contact > div {
+  display: flex;
+  flex-direction: column;
+}
+.conversation-contact strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+.conversation-contact > div > span,
+.conversation-platform {
+  color: var(--muted);
+  font-size: 14px;
+}
+.conversation-platform {
+  margin-left: auto;
+}
+.conversation-messages {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.conversation-message {
+  max-width: 88%;
+  padding: 16px 20px;
+  border-radius: 24px 24px 24px 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 24px #20242b08;
+}
+.conversation-message p {
+  margin: 0;
+  font-size: clamp(18px, 1.5vw, 23px);
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.conversation-message[data-direction="outgoing"] {
+  align-self: end;
+  border-radius: 24px 24px 6px 24px;
+  background: #0069df;
+  color: white;
+}
+.conversation-thread > figcaption {
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+@keyframes scene-photo-drift {
+  from {
+    transform: translateY(4%) scale(1.12);
+  }
+  to {
+    transform: translateY(-4%) scale(1.12);
+  }
+}
+@keyframes scene-thread-drift {
+  from {
+    transform: translateY(28px);
+  }
+  to {
+    transform: translateY(-24px);
+  }
+}
+@keyframes scene-message-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(56px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scene-message-settle {
+  from {
+    transform: translateY(24px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (max-width: 800px) {
+  .conversation-story {
+    --scene-header: 72px;
+  }
+}
+@media (max-width: 700px) {
+  .conversation-viewport {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .conversation-photo {
+    position: relative;
+    inset: auto;
+    height: 380px;
+    flex-shrink: 0;
+  }
+  .conversation-photo::after {
+    background: linear-gradient(180deg, transparent 65%, var(--canvas));
+  }
+  .conversation-thread {
+    width: 100%;
+    padding: 16px 20px 48px;
+  }
+  .conversation-contact {
+    margin-bottom: 20px;
+  }
+  .conversation-messages {
+    gap: 12px;
+  }
+  .conversation-message {
+    max-width: 92%;
+    padding: 12px 16px;
+  }
+  .conversation-message p {
+    font-size: clamp(16px, 4.5vw, 19px);
+  }
+  .conversation-thread > figcaption {
+    margin-top: 20px;
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .conversation-photo > img {
+      animation: scene-photo-drift 1ms linear both;
+      animation-timeline: --conversation;
+      animation-range: contain 0% contain 100%;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) and (min-height: 700px) {
+    .conversation-story {
+      height: 220svh;
+    }
+    .conversation-viewport {
+      position: sticky;
+      top: var(--scene-header);
+      height: calc(100svh - var(--scene-header));
+      min-height: 0;
+    }
+    .conversation-thread {
+      animation: scene-thread-drift 1ms linear both;
+      animation-timeline: --conversation;
+      animation-range: contain 0% contain 100%;
+    }
+    .conversation-message {
+      animation: scene-message-arrive 1ms var(--ease-out) both;
+      animation-timeline: --conversation;
+    }
+    .conversation-message:first-child {
+      animation-name: scene-message-settle;
+      animation-range: contain 0% contain 20%;
+    }
+    .conversation-message:nth-child(2) {
+      animation-range: contain 10% contain 32%;
+    }
+    .conversation-message:nth-child(3) {
+      animation-range: contain 30% contain 56%;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) and (min-height: 700px) and (max-width: 700px) {
+    .conversation-viewport {
+      display: block;
+    }
+    .conversation-photo {
+      position: absolute;
+      inset: 0 0 auto;
+      height: 42%;
+    }
+    .conversation-photo > img {
+      object-position: center 25%;
+    }
+    .conversation-thread {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+  }
+}
