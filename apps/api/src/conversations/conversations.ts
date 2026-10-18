@@ -1,5 +1,6 @@
 import { Clock, Effect, PartitionedSemaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { bindUsageSessions } from "../usage/schema.ts";
 
 export interface Conversation {
   readonly id: number;
@@ -41,9 +42,15 @@ export const conversations = Effect.gen(function* () {
       JOIN user ON user.id = conversation.user_id
         WHERE conversation.ended_at IS NULL AND NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.handle = user.handle)`,
     replaceSession: (conversation: Conversation, sessionID: string) =>
-      sql`UPDATE conversation SET session_id = ${sessionID}, rebuilding = 1 WHERE id = ${conversation.id}
+      Effect.gen(function* () {
+        yield* bindUsageSessions(sql);
+        const rows =
+          yield* sql`UPDATE conversation SET session_id = ${sessionID}, rebuilding = 1 WHERE id = ${conversation.id}
         AND session_id = ${conversation.sessionID} AND ended_at IS NULL AND NOT EXISTS
-        (SELECT 1 FROM blocked WHERE blocked.handle = ${conversation.handle}) RETURNING id`,
+        (SELECT 1 FROM blocked WHERE blocked.handle = ${conversation.handle}) RETURNING id`;
+        yield* bindUsageSessions(sql);
+        return rows;
+      }).pipe(sql.withTransaction),
     rebuilt: (conversation: Conversation) =>
       sql`UPDATE conversation SET rebuilding = 0 WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID}`,
     rebuilding: (conversation: Conversation) =>
@@ -83,6 +90,7 @@ export const conversations = Effect.gen(function* () {
           VALUES (${input.handle}, ${input.locale}, ${input.consentVersion}, ${input.consentLanguage}, ${now}, ${now})`;
         yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
           VALUES ((SELECT id FROM user WHERE handle = ${input.handle}), ${input.personaID}, ${input.sessionID}, ${now})`;
+        yield* bindUsageSessions(sql);
         return (yield* lookup("session_id", input.sessionID))!;
       }).pipe(sql.withTransaction),
   };

@@ -7,6 +7,7 @@ import { relationshipFixture } from "../../test/relationship.test-helper.ts";
 import { withContactDatabase } from "../discovery/contact.test-helper.ts";
 import { conversationStatus } from "./status.ts";
 import { conversationRecords } from "./http.ts";
+import { usageQueries } from "../usage/query.ts";
 
 test("operator records expose bounded searchable User–Persona–Session bindings and survive executor absence", async () => {
   await withContactDatabase(
@@ -24,7 +25,11 @@ test("operator records expose bounded searchable User–Persona–Session bindin
           personaID: "harin",
           sessionID: `ses_${index}`,
         });
-      const records = authorize(conversationRecords(status, Effect.runPromise), "operator-secret");
+      const usage = yield* usageQueries;
+      const records = authorize(
+        conversationRecords(status, Effect.runPromise, usage),
+        "operator-secret",
+      );
       const request = (path: string, method = "GET", authorized = true) =>
         Effect.promise(() =>
           records(
@@ -138,6 +143,7 @@ test("operator records expose bounded searchable User–Persona–Session bindin
           conversationRecords(
             broken,
             Effect.runPromise,
+            usage,
           )(new Request("https://api.test/management/conversations")),
         );
         expect(failed.status).toBe(503);

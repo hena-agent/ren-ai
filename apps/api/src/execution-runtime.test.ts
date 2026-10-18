@@ -11,8 +11,12 @@ import { createExecutionRuntime } from "./execution-runtime.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 import { Session } from "@opencode/schema/session";
-import type { SessionActiveOutput } from "@opencode/client/effect/api";
 import type { RemoteConfig } from "./opencode/remote.ts";
+import type {
+  SessionActiveOutput,
+  MessageListInput,
+  MessageListOutput,
+} from "@opencode/client/effect/api";
 
 const control = vi.hoisted(() => ({
   events: [] as string[],
@@ -26,6 +30,13 @@ const control = vi.hoisted(() => ({
   activeRead: vi.fn<() => Effect.Effect<SessionActiveOutput, Error>>(),
   activeProbe: vi.fn<(id: Session.ID) => Effect.Effect<boolean, Error>>(),
   onPrompt: vi.fn<(id: string) => Effect.Effect<void, Error>>(),
+  usageApi: undefined as
+    | {
+        messages: (input: MessageListInput) => Effect.Effect<MessageListOutput, Error>;
+        get: (id: Session.ID) => Effect.Effect<Session.Info, Error>;
+      }
+    | undefined,
+  removeSession: undefined as ((id: Session.ID) => Effect.Effect<void, Error>) | undefined,
 }));
 
 const step = (name: string) =>
@@ -57,6 +68,13 @@ vi.mock("@ren-ai/imsg/client", () => ({
 vi.mock("./execution-health.ts", () => ({
   createExecutionHealth: () => Effect.succeed({ tick: step("health") }),
 }));
+vi.mock("./usage/collect.ts", () => ({
+  usageCollector: (api: typeof control.usageApi) =>
+    Effect.sync(() => {
+      control.usageApi = api;
+      return { tick: Effect.void, session: () => step("usage.snapshot") };
+    }),
+}));
 vi.mock("./opencode/application-gateway.ts", () => ({
   applicationGateway: () => ({
     handler: control.callback,
@@ -80,7 +98,16 @@ vi.mock("./opencode/remote.ts", () => ({
       yield* Effect.addFinalizer(() => step("remote.close"));
       yield* Effect.promise(() => control.startup());
       yield* step("remote");
-      return { client: { session: { active: control.activeRead } } };
+      return {
+        client: {
+          session: { active: control.activeRead },
+          message: { list: () => Effect.fail(new Error("upstream usage failed")) },
+        },
+        sessions: {
+          get: () => Effect.succeed(fromPartial<Session.Info>({ id: "ses_usage" })),
+          remove: () => step("session.remove"),
+        },
+      };
     }),
 }));
 vi.mock("./opencode/catalog-sync.ts", () => ({
@@ -118,9 +145,16 @@ vi.mock("./discovery/conversation-languages.ts", () => ({
 vi.mock("./application.ts", () => ({
   startMessagingApplication: (
     _personas: Map<string, never>,
-    create: (tools: object) => Effect.Effect<object>,
+    create: (
+      tools: object,
+    ) => Effect.Effect<{ sessions: { remove: (id: Session.ID) => Effect.Effect<void, Error> } }>,
   ) =>
     create({}).pipe(
+      Effect.tap((host) =>
+        Effect.sync(() => {
+          control.removeSession = host.sessions.remove;
+        }),
+      ),
       Effect.map(() => ({
         client: {
           rpc: () => ({ read: control.folderRead }),
@@ -435,4 +469,29 @@ test("a failed first heartbeat retains successful initialization and retries wit
   expect(control.events).not.toContain("callback.close");
   await runtime.close();
   expect(control.events).toContain("operator.close");
+});
+
+test("executor accounting preserves upstream causes and requires a final snapshot before session removal", async () => {
+  const runtime = await open();
+  try {
+    await runtime.tick();
+    const id = Session.ID.make("ses_usage");
+    expect((await Effect.runPromise(control.usageApi!.get(id))).id).toBe(id);
+    const failure = await Effect.runPromise(
+      control.usageApi!.messages({ sessionID: id }).pipe(Effect.flip),
+    );
+    expect(failure.message).toBe("OpenCode usage history unavailable");
+    expect(failure.cause).toHaveProperty("message", "upstream usage failed");
+    const offset = control.events.length;
+    await Effect.runPromise(control.removeSession!(id));
+    expect(control.events.slice(offset)).toEqual(["usage.snapshot", "session.remove"]);
+    control.failure = "usage.snapshot";
+    const before = control.events.length;
+    await expect(Effect.runPromise(control.removeSession!(id))).rejects.toThrow(
+      "failed usage.snapshot",
+    );
+    expect(control.events.slice(before)).toEqual(["usage.snapshot"]);
+  } finally {
+    await runtime.close();
+  }
 });

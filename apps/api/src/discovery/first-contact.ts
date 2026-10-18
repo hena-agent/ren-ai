@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Clock, Effect, Result } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
+import { bindUsageSessions } from "../usage/schema.ts";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import type { Messages } from "@ren-ai/imsg";
@@ -93,6 +94,7 @@ export const firstContacts = (
             persona_id = excluded.persona_id, joined_at = COALESCE(user.joined_at, excluded.joined_at), replied_at = NULL`;
             yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
           VALUES ((SELECT id FROM user WHERE handle = ${row.handle}), ${row.personaID}, ${session.id}, ${now})`;
+            yield* bindUsageSessions(sql);
             yield* sql`UPDATE discovery_contact SET session_id = ${session.id}, started_at = ${now}, state = 'greeting' WHERE registration_id = ${row.id}`;
             return true;
           }).pipe(sql.withTransaction, withLifecycle);

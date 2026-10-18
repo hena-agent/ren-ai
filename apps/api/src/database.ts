@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { Migrator, SqlClient } from "effect/unstable/sql";
 import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
+import { usageSchema } from "./usage/schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -184,7 +185,8 @@ export const migrate = Effect.gen(function* () {
         session_id TEXT NOT NULL, guid TEXT NOT NULL, text TEXT NOT NULL,
         revision INTEGER NOT NULL, PRIMARY KEY (session_id, guid)
       )`,
-      "030_event_scheduling": Effect.gen(function* () {
+      "030_conversation_usage": usageSchema.pipe(Effect.provideService(SqlClient.SqlClient, sql)),
+      "031_event_scheduling": Effect.gen(function* () {
         yield* sql`CREATE TABLE application_work (name TEXT PRIMARY KEY, due INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, generation INTEGER NOT NULL DEFAULT 0)`;
         yield* sql`CREATE TABLE application_clock (name TEXT PRIMARY KEY, at INTEGER NOT NULL)`;
         yield* sql`ALTER TABLE intake_edit ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`;

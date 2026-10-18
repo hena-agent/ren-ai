@@ -22,6 +22,7 @@ import { prepareMessaging } from "./application-tools.ts";
 import type { Persona } from "@ren-ai/personas";
 import { cachedCatalog } from "./personas/cached-catalog.ts";
 import { scheduleWork, safetyInterval } from "./scheduling.ts";
+import { usageCollector } from "./usage/collect.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -91,6 +92,7 @@ export async function createExecutionRuntime(
       throw cause;
     }));
   const boot = Effect.gen(function* () {
+    let usage: Effect.Success<ReturnType<typeof usageCollector>>;
     const saved = yield* cachedCatalog(catalog.load, groundRules);
     const snapshot = yield* saved.current;
     const { personas } = snapshot;
@@ -109,7 +111,25 @@ export async function createExecutionRuntime(
             snapshot,
             syncFolders(remote.client, execution.directory, personas, groundRules),
           );
-          return remote;
+          usage = yield* usageCollector({
+            messages: (input) =>
+              remote.client.message
+                .list(input)
+                .pipe(
+                  Effect.mapError(
+                    (cause) => new Error("OpenCode usage history unavailable", { cause }),
+                  ),
+                ),
+            get: (id) => remote.sessions.get(id),
+          });
+          return {
+            ...remote,
+            sessions: {
+              ...remote.sessions,
+              remove: (sessionID: Parameters<typeof remote.sessions.remove>[0]) =>
+                usage.session(sessionID).pipe(Effect.andThen(remote.sessions.remove(sessionID))),
+            },
+          };
         }),
       messages,
       messages.gestures,
@@ -151,6 +171,7 @@ export async function createExecutionRuntime(
             UNION SELECT session_id AS sessionID FROM failed_turn WHERE review = 0 AND retry_at <= ${now}`;
         if (due.length) yield* host.heartbeat.checkTurns(due.map((row) => row.sessionID));
         yield* host.heartbeat.rebuilds;
+        yield* usage.tick;
         yield* Effect.all([host.heartbeat.stopped, host.heartbeat.endings], {
           concurrency: "unbounded",
         });
