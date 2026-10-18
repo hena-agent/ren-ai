@@ -83,7 +83,7 @@
   background: var(--ink);
 }
 .conversation-artwork {
-  width: min(320px, 66%);
+  width: min(360px, 100%);
   margin: 0;
 }
 .conversation-artwork > img {
@@ -93,9 +93,9 @@
   filter: drop-shadow(0 24px 20px #20242b21);
 }
 .conversation-artwork figcaption {
-  margin: 28px -20px 0;
+  margin: 28px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.7;
   text-align: center;
 }
@@ -135,8 +135,5 @@
   }
   .hero-scene img {
     object-position: 50% 25%;
-  }
-  .conversation-artwork {
-    width: min(300px, 72%);
   }
 }

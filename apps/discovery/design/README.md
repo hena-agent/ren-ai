@@ -5,8 +5,20 @@ Run `bun run design:assets` from this app after editing the transcript or artwor
 The offline exporter requires ImageMagick, `rsvg-convert` and Apple SD Gothic
 Neo (macOS). Review all three exported languages before shipping.
 
+Message text is 44px in a 726px-wide device coordinate system. Display the device
+at least 272px wide so messages stay above 16px; the 390px mobile layout displays
+them at approximately 21px. Export 1452×2888 lossless WebP, retaining 2× screen
+rasterization rather than shrinking the full device to 600px.
+
+Line breaks are art-directed per language. Export checks enforce transcript
+agreement, text fitting within each bubble, separation from the composer and the
+minimum message size. Bubble width comes from ImageMagick font measurements;
+height and text baselines come from line count, line height and explicit padding.
+
 `preview-desktop.webp` and `preview-mobile.webp` are review snapshots of the
 photo-led redesign's first viewport, not runtime assets.
+`preview-conversation.webp` records the conversation at a 390px-wide mobile
+layout and 2× device pixel ratio.
 
 `iphone.png` is the iPhone X portrait PNG from
 [pixelsign/html5-device-mockups](https://github.com/pixelsign/html5-device-mockups),

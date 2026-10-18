@@ -51,8 +51,8 @@ export function ConversationArtwork() {
     <figure className="conversation-artwork" aria-label={home.exampleLabel}>
       <img
         src={`/landing/conversation-${locale}.webp`}
-        width="600"
-        height="1193"
+        width="1452"
+        height="2888"
         alt=""
         loading="lazy"
       />

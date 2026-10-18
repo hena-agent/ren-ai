@@ -23,6 +23,12 @@ the demo, not the brand palette. Preserve an accessible transcript and a visible
 fictional-example disclosure. Asset provenance and export instructions live in
 `apps/discovery/design/README.md`.
 
+Judge conversation readability at its actual page size, not enlarged in an image
+viewer. Body text stays at least 16px on a 320px phone; use the available stage
+width, content-sized bubbles with explicit padding and high-density lossless
+artwork. Keep the example caption at 14px. Inspect the rendered Korean, English
+and Japanese artwork as well as checking its dimensions.
+
 Avoid repeated profile grids, miniature UI screenshots and tilted photo decorations.
 Finish with a confident red CTA section. Treat featured profiles as editorial
 selections; keep public persona writing in
