@@ -57,7 +57,7 @@ export function LocalePicker() {
         <LanguageSelect
           value={locale}
           label={copy.languageSetting}
-          className="header-language-select"
+          iconOnly
           onValueChange={choose}
         />
       </label>
