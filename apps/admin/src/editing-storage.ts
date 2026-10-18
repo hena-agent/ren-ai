@@ -6,6 +6,7 @@ import type { QueueSnapshot } from "./image-queue.ts";
 /** Store each draft and batch separately: one global JSON value hits the KV value limit. */
 export function editingStorage(storage: DurableObjectStorage) {
   let previous: AdminSnapshot | undefined;
+  let tail = Promise.resolve();
   return {
     load: async (): Promise<AdminSnapshot> => {
       const [drafts, jobs, keys, pending] = await Promise.all([
@@ -18,30 +19,38 @@ export function editingStorage(storage: DurableObjectStorage) {
         drafts: [...drafts].map(([key, draft]) => [key.slice(6), draft]),
         queue: { jobs: [...jobs.values()], keys: [...keys.values()], pending: pending ?? [] },
       };
-      return previous;
+      return structuredClone(previous);
     },
-    save: async (snapshot: AdminSnapshot) => {
-      const oldDrafts = new Map(previous?.drafts);
-      const oldJobs = new Map(previous?.queue.jobs.map((job) => [job.id, job]));
-      const oldKeys = new Map(previous?.queue.keys);
-      await storage.transaction(async (transaction) => {
-        const ids = new Set(snapshot.queue.jobs.map((job) => job.id));
-        for (const id of oldJobs.keys()) if (!ids.has(id)) await transaction.delete(`job:${id}`);
-        for (const [id, draft] of snapshot.drafts)
-          if (!same(oldDrafts.get(id), draft)) await transaction.put(`draft:${id}`, draft);
-        for (const job of snapshot.queue.jobs)
-          if (!same(oldJobs.get(job.id), job)) await transaction.put(`job:${job.id}`, job);
-        for (const [key, id] of snapshot.queue.keys)
-          if (oldKeys.get(key) !== id) {
-            const digest = Buffer.from(
-              await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)),
-            ).toString("hex");
-            await transaction.put(`key:${digest}`, [key, id]);
-          }
-        await transaction.put("pending", snapshot.queue.pending);
+    save: (value: AdminSnapshot) => {
+      // Detach mutable tasks before waiting behind another checkpoint.
+      const snapshot = structuredClone(value);
+      const next = tail.then(async () => {
+        if (same(previous, snapshot)) return undefined;
+        const oldDrafts = new Map(previous?.drafts);
+        const oldJobs = new Map(previous?.queue.jobs.map((job) => [job.id, job]));
+        const oldKeys = new Map(previous?.queue.keys);
+        await storage.transaction(async (transaction) => {
+          const ids = new Set(snapshot.queue.jobs.map((job) => job.id));
+          for (const id of oldJobs.keys()) if (!ids.has(id)) await transaction.delete(`job:${id}`);
+          for (const [id, draft] of snapshot.drafts)
+            if (!same(oldDrafts.get(id), draft)) await transaction.put(`draft:${id}`, draft);
+          for (const job of snapshot.queue.jobs)
+            if (!same(oldJobs.get(job.id), job)) await transaction.put(`job:${job.id}`, job);
+          for (const [key, id] of snapshot.queue.keys)
+            if (oldKeys.get(key) !== id) {
+              const digest = Buffer.from(
+                await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)),
+              ).toString("hex");
+              await transaction.put(`key:${digest}`, [key, id]);
+            }
+          if (!same(previous?.queue.pending, snapshot.queue.pending))
+            await transaction.put("pending", snapshot.queue.pending);
+        });
+        previous = snapshot;
+        return undefined;
       });
-      // Snapshot contains mutable tasks; detach it before the next transition.
-      previous = structuredClone(snapshot);
+      tail = next.catch(() => {});
+      return next;
     },
   };
 }
