@@ -88,6 +88,28 @@ test("all steps in an idle-delimited turn, including steered input, are durable 
       expect(JSON.stringify(first)).not.toMatch(/PRIVATE|private@example/);
       yield* collector.tick;
       expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
+      const hash = yield* sql`SELECT snapshot_hash FROM usage_session`;
+      const offline = yield* usageCollector({
+        messages: () => Effect.fail(new Error("offline")),
+        get: () => Effect.succeed(session),
+      });
+      yield* offline.tick;
+      expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 1 }]);
+      yield* collector.tick;
+      expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 0 }]);
+      expect(yield* sql`SELECT snapshot_hash FROM usage_session`).toEqual(hash);
+      expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
+      yield* sql`CREATE TRIGGER reject_usage BEFORE UPDATE ON usage_entry WHEN NEW.input = 999
+        BEGIN SELECT RAISE(ABORT, 'fixture failure'); END`;
+      pages[1] = assistant("msg_first", { tokens: { ...tokens, input: 101 } });
+      pages[3] = assistant("msg_second", { tokens: { ...tokens, input: 999 } });
+      yield* collector.tick;
+      expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
+      expect(yield* sql`SELECT snapshot_hash FROM usage_session`).toEqual(hash);
+      yield* sql`DROP TRIGGER reject_usage`;
+      pages[1] = assistant("msg_first");
+      pages[3] = assistant("msg_second");
+      yield* collector.tick;
       expect(yield* query(999)).toBeUndefined();
       yield* directory.replaceSession(conversation, "ses_replacement");
       expect((yield* query(conversation.id))!.sessions).toHaveLength(2);
