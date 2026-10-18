@@ -2,13 +2,14 @@ import { expect, test } from "vitest";
 import { parseInitialState, serializeInitialState, serializePersona } from "@ren-ai/personas";
 import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
 import { initialDocuments, portraitImage, fixture } from "../test/fixtures.ts";
+import { ageOn } from "@ren-ai/personas/birth-date";
 
 test("D1 and file Catalogs expose only approved initial language proficiency and fixed language labels", async () => {
   const cloud = await cloudflareFixture();
   const local = await fixture();
   const description = databasePersona.description!.replace(
-    "성별: 여성",
-    "성별: 여성\n주 사용 언어: ko\n모국어: ko",
+    "생년월일: 1998-04-12",
+    "생년월일: 1998-04-12\n주 사용 언어: ko\n모국어: ko",
   );
   const documents = {
     ...initialDocuments,
@@ -37,6 +38,9 @@ test("D1 and file Catalogs expose only approved initial language proficiency and
       native: ["ko"],
     });
     const json = JSON.stringify(profile);
+    expect(profile?.age).toBe(ageOn("1998-04-12"));
+    expect(json).not.toContain("1998-04-12");
+    expect(json).not.toContain("birthDate");
     for (const privateKey of ["affection", "traits", "state", "memory"])
       expect(profile).not.toHaveProperty(privateKey);
     expect(json).not.toContain("비공개");

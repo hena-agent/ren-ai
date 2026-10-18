@@ -11,7 +11,7 @@ import {
 } from "../test/fixtures.ts";
 import { createProfileGenerator } from "./generation.ts";
 import copy from "./copy.json";
-import { acceptedReview, characterResponse } from "../test/character.ts";
+import { acceptedReview, characterResponse, sheet } from "../test/character.ts";
 import { draftTokens } from "./draft.ts";
 import { parseInitialState, languageBackground } from "@ren-ai/personas";
 import { scores } from "../test/initial.ts";
@@ -139,8 +139,8 @@ test("the AI draft adapter requests the whole Markdown document and validates it
 
 test("new drafts carry fixed native background separately from operator-reviewable initial proficiency", async () => {
   const description = character.description.replace(
-    "성별: 여성",
-    "성별: 여성\n주 사용 언어: ko\n모국어: ko",
+    `생년월일: ${sheet.birthDate}`,
+    `생년월일: ${sheet.birthDate}\n주 사용 언어: ko\n모국어: ko`,
   );
   const fetcher = vi
     .fn<typeof fetch>()

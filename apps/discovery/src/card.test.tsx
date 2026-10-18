@@ -27,6 +27,7 @@ test("the swipe caption uses only explicitly disclosed basic keys, never inferri
     <Card
       persona={{
         ...profile,
+        age: 27,
         profile: {
           introduction: profile.bio,
           sections: [
@@ -46,8 +47,9 @@ test("the swipe caption uses only explicitly disclosed basic keys, never inferri
       {...actions}
     />,
   );
-  expect(screen.getByRole("heading", { name: "예린 · 27세" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "예린, 27" })).toBeTruthy();
   expect(screen.getByText("도예가 · 서울")).toBeTruthy();
+  expect(screen.queryByText("27세")).toBeNull();
   view.rerender(
     <Card
       persona={{

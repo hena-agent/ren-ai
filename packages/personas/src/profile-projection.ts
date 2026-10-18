@@ -1,7 +1,7 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toString } from "mdast-util-to-string";
 import { readProfileSections } from "./profile-sections.ts";
-import { basicProfileFields } from "./public-profile.ts";
+import { basicProfileFields, isIdentityFact } from "./public-profile.ts";
 import type { PublicProfile } from "./public-profile.ts";
 
 const plain = (source: string) =>
@@ -13,6 +13,9 @@ const plain = (source: string) =>
         : toString(node, { includeHtml: false }),
     )
     .join("\n\n")
+    .split("\n")
+    .filter((line) => !isIdentityFact(line.replace(/^• /, "")))
+    .join("\n")
     .trim();
 
 function listItems(body: string) {
@@ -36,6 +39,7 @@ function facts(items: readonly string[], basic: boolean) {
     const value = item.slice(colon + 1).trim();
     if (colon === -1 || !label || !value || seen.has(label)) return undefined;
     seen.add(label);
+    if (isIdentityFact(`${label}:`)) continue;
     const key = basic ? basicProfileFields.find((field) => field.label === label)?.key : undefined;
     rows.push({ label, value, ...(key && { key }) });
   }
@@ -71,7 +75,8 @@ export function projectPublicProfile(markdown: string): PublicProfile {
     introduction: plain(`${introduction}\n\n${definitions}`),
     sections: sections
       .map(({ title, body }) => ({ title, body: `${body}\n\n${definitions}` }))
-      .filter(({ body }) => plain(body))
-      .map(({ title, body }) => sectionOf(title, body)),
+      .filter(({ title, body }) => !isIdentityFact(title) && plain(body))
+      .map(({ title, body }) => sectionOf(title, body))
+      .filter((section) => section.type !== "basics" || section.items.length > 0),
   };
 }

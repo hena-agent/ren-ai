@@ -10,6 +10,14 @@ const profile = {
 };
 const pair = { anime: "https://example.net/anime.jpg", photo: "https://example.net/photo.jpg" };
 
+test("public age is an optional nonnegative integer during the API rollout", () => {
+  const decode = Schema.decodeUnknownSync(PublicPersona);
+  expect(decode(profile)).not.toHaveProperty("age");
+  expect(decode({ ...profile, age: 27 }).age).toBe(27);
+  for (const age of ["20대 중후반", 27.5, -1])
+    expect(() => decode({ ...profile, age })).toThrow(/age/);
+});
+
 test("profile section contracts require useful plain-text content and typed rows", () => {
   const decode = Schema.decodeUnknownSync(PublicPersona);
   for (const publicProfile of [

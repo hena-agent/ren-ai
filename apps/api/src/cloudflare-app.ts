@@ -144,11 +144,20 @@ export const createCloudflareApplication = async (
         }),
       tick: async () => {
         if (configuration.bootstrapOnly) return;
+        const current = execution();
         try {
-          await (await execution()).tick();
+          await (await current).tick();
         } catch (cause) {
-          if (runtime) await runtime.then((value) => value.close()).catch(() => {});
-          runtime = undefined;
+          const initialized = await current.then(
+            (value) => value.initialized,
+            () => false,
+          );
+          // Retrying startup may discard its partial scope. A failed heartbeat must
+          // not dispose the RPC server underneath unrelated, in-flight tool calls.
+          if (!initialized && runtime === current) {
+            runtime = undefined;
+            await current.then((value) => value.close()).catch(() => {});
+          }
           throw cause;
         }
       },

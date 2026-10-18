@@ -1,5 +1,6 @@
 import { fromPartial } from "@total-typescript/shoehorn";
-import { Effect } from "effect";
+import { Deferred, Effect, Exit } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
@@ -8,8 +9,13 @@ import type { Mock } from "vitest";
 import { createCloudflareApplication } from "./cloudflare-app.ts";
 import type { CloudflareBindings } from "./cloudflare-config.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
+import { applicationGateway } from "./opencode/application-gateway.ts";
+import { applicationApi } from "./opencode/application-protocol.ts";
+import { rpcClient } from "@ren-ai/transport/client";
+import type { MessagingTools } from "./application-tools.ts";
 
 type RuntimeDouble = {
+  initialized: boolean;
   fetch: Mock<(request: Request) => Promise<Response>>;
   tick: Mock<() => Promise<void>>;
   close: Mock<() => Promise<void>>;
@@ -26,6 +32,7 @@ const controls = vi.hoisted(() => ({
   ),
   closeStore: vi.fn<() => Promise<void>>(async () => undefined),
   runtime: vi.fn<() => Promise<RuntimeDouble>>(async () => ({
+    initialized: true,
     fetch: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("execution")),
     tick: vi.fn<() => Promise<void>>(async () => {}),
     close: vi.fn<() => Promise<void>>(async () => {}),
@@ -216,14 +223,74 @@ test("registry remains usable with execution down; the next alarm retries execut
       .status,
   ).toBe(200);
   expect(runtime.fetch.mock.calls.at(-1)![0].url).toBe("https://app/management/catalog/refresh");
-  runtime.tick.mockRejectedValueOnce(new Error("tick failed"));
+  runtime.initialized = false;
+  runtime.tick.mockRejectedValue(new Error("startup failed"));
   runtime.close.mockRejectedValueOnce(new Error("cleanup failed"));
-  await expect(app.tick()).rejects.toThrow("tick failed");
+  const startupFailures = await Promise.allSettled([app.tick(), app.tick()]);
+  expect(startupFailures).toEqual([
+    { status: "rejected", reason: new Error("startup failed") },
+    { status: "rejected", reason: new Error("startup failed") },
+  ]);
   expect(runtime.close).toHaveBeenCalledOnce();
   expect(controls.closeStore).not.toHaveBeenCalled();
   await app.tick();
   await app.close();
   expect(controls.closeStore).toHaveBeenCalledOnce();
+});
+
+test("a failed heartbeat preserves an active send RPC and retries on the same initialized runtime", async () => {
+  const entered = await Effect.runPromise(Deferred.make<void>());
+  const release = await Effect.runPromise(Deferred.make<void>());
+  const send = vi.fn<MessagingTools["send"]>(() =>
+    Effect.gen(function* () {
+      yield* Deferred.succeed(entered, undefined);
+      yield* Deferred.await(release);
+      return "sent";
+    }),
+  );
+  const gateway = applicationGateway(fromPartial({ send }), fromPartial({}), "management-secret");
+  const runtime: RuntimeDouble = {
+    initialized: true,
+    fetch: vi.fn<typeof gateway.handler>(gateway.handler),
+    tick: vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("heartbeat dependency failed"))
+      .mockResolvedValue(undefined),
+    close: vi.fn<typeof gateway.dispose>(gateway.dispose),
+  };
+  controls.runtime.mockResolvedValueOnce(runtime);
+  const app = await createCloudflareApplication(storage, executionBindings, "rules", fetcher);
+  try {
+    const pending = Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const client = yield* rpcClient(applicationApi, {
+          url: "https://app/rpc",
+          token: "management-secret",
+        });
+        return yield* client.send({ sessionID: "ses_active", text: "hello", callID: "send-once" });
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(FetchHttpClient.Fetch, (input, init) =>
+          app.fetch(new Request(input, init)),
+        ),
+        Effect.timeout("2 seconds"),
+      ),
+    );
+    await Effect.runPromise(Deferred.await(entered).pipe(Effect.timeout("2 seconds")));
+    await expect(app.tick()).rejects.toThrow("heartbeat dependency failed");
+    await Effect.runPromise(Deferred.succeed(release, undefined));
+    expect(await pending).toEqual(Exit.succeed("sent"));
+    expect(runtime.close).not.toHaveBeenCalled();
+    await app.tick();
+    expect(runtime.tick).toHaveBeenCalledTimes(2);
+    expect(controls.runtime).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledExactlyOnceWith("ses_active", "hello", "send-once");
+  } finally {
+    await app.close();
+    await gateway.dispose();
+  }
+  expect(runtime.close).toHaveBeenCalledOnce();
 });
 
 test.each([200, 401])(

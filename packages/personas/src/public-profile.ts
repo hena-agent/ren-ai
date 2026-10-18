@@ -1,8 +1,9 @@
 import { Schema } from "effect";
 
 const text = Schema.String.check(Schema.isPattern(/\S/));
+export const isIdentityFact = (value: string) =>
+  /^(?:나이|생년월일|age|birthDate|date of birth)(?:\s*[:：]|\s+\d|$)/i.test(value.trim());
 export const basicProfileFields = [
-  { key: "age", label: "나이" },
   { key: "occupation", label: "직업" },
   { key: "location", label: "지역" },
 ] as const;

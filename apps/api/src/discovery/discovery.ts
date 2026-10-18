@@ -18,7 +18,7 @@ import {
 import { submissionLimit } from "./rate-limit.ts";
 import { verifyTurnstile } from "./turnstile.ts";
 import { reselect, withoutEndedPersonas } from "./reselection.ts";
-import { contactCause, contactLog } from "./diagnostics.ts";
+import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
 
 const failure = Schema.Literals([
   "consent",
@@ -52,9 +52,11 @@ const discoveryApi = HttpApi.make(namespace).add(
 export const makeDiscoveryWeb = ({
   catalog,
   turnstileSecret,
+  log = contactLog,
 }: {
   catalog: () => Promise<readonly PublicPersona[]>;
   turnstileSecret: string;
+  log?: ContactLog;
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -69,7 +71,7 @@ export const makeDiscoveryWeb = ({
           Effect.flatMap(withoutEndedPersonas),
           Effect.tapError((cause) =>
             Effect.sync(() =>
-              contactLog({
+              log({
                 requestId,
                 operation: "discovery.catalog",
                 stage: "catalog.read",

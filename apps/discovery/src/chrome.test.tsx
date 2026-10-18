@@ -62,16 +62,15 @@ test("the app navigation exposes liked profiles and full details without turning
   endAnimation(document.querySelector(".profile-card")!);
   for (const button of within(navigation).getAllByRole("button"))
     expect(button.hasAttribute("disabled")).toBe(false);
-  const liked = screen.getByRole("list", { name: "좋아요한 페르소나" });
+  const liked = screen.getByRole("list", { name: "좋아한 사람" });
   expect(liked.textContent).toBe("하린");
-  fireEvent.click(within(navigation).getByRole("button", { name: "좋아요한 페르소나 1" }));
+  fireEvent.click(within(navigation).getByRole("button", { name: "좋아한 사람 1" }));
   expect(document.querySelector(".app-workspace")?.getAttribute("data-view")).toBe("liked");
   expect(currentTabs()).toEqual([null, "page", null]);
-  expect(
-    within(navigation)
-      .getByRole("button", { name: "좋아요한 페르소나 1" })
-      .getAttribute("aria-current"),
-  ).toBe("page");
+  const likedTab = within(navigation)
+    .getByRole("button", { name: "좋아한 사람 1" })
+    .getAttribute("aria-current");
+  expect(likedTab).toBe("page");
   fireEvent.click(within(liked).getByRole("button", { name: "하린 프로필 보기" }));
   const cancel = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
   fireEvent(screen.getByRole("region", { name: "하린" }), cancel);

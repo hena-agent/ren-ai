@@ -47,6 +47,34 @@ test("the real Worker and Durable Object serve bundled assets and correlate gene
   expect(await failed.text()).toContain(failed.headers.get("x-request-id")!);
 });
 
+test("local Worker-edge images are public from R2 while editor routes remain authenticated", async () => {
+  const local = await workerFixture();
+  const bucket = await local.runtime.getR2Bucket("IMAGES");
+  const filename = "01234567-89ab-cdef-0123-456789abcdef.png";
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  await bucket.put(filename, bytes, { httpMetadata: { contentType: "image/png" } });
+  const image = await local.runtime.dispatchFetch(`http://localhost:3729/images/${filename}`);
+  expect(image.status).toBe(200);
+  expect(image.headers.get("content-type")).toBe("image/png");
+  expect(new Uint8Array(await image.arrayBuffer())).toEqual(bytes);
+  const head = await local.runtime.dispatchFetch(`http://localhost:3729/images/${filename}`, {
+    method: "HEAD",
+  });
+  expect(head.status).toBe(200);
+  expect((await head.arrayBuffer()).byteLength).toBe(0);
+  expect(
+    (await local.runtime.dispatchFetch("http://localhost:3729/images/not-an-image.png")).status,
+  ).toBe(404);
+  expect(
+    (
+      await local.runtime.dispatchFetch(
+        "http://localhost:3729/images/11234567-89ab-cdef-0123-456789abcdef.png",
+      )
+    ).status,
+  ).toBe(404);
+  expect((await local.runtime.dispatchFetch("http://localhost:3729/new")).status).toBe(401);
+});
+
 test("Worker health reports degraded when its real editor Durable Object cannot initialize", async () => {
   await workerFixture();
   const worker = await readFile(new URL("../dist/worker/entry.js", import.meta.url), "utf8");

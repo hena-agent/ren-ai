@@ -2,6 +2,7 @@ import type { CharacterSheet } from "@ren-ai/personas";
 export const sheet = {
   name: "하린",
   gender: "female",
+  birthDate: "1998-04-12",
   appearance: "짧은 검은 머리와 차분한 분위기. 편한 옷을 고른다.",
   background: "사진을 좋아하며 혼자 새로운 장소를 찾아다녔다.",
   dailyLife: "사진전을 준비하며 촬영과 작품 고르기를 자기 속도로 이어간다.",

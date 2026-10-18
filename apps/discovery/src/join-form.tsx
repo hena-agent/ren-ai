@@ -9,6 +9,7 @@ import { ReselectionError } from "./client.ts";
 import { useCopy, useLocale } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
 import { PhoneField } from "./phone-field.tsx";
+import { LanguageSelect } from "./language-select.tsx";
 
 const isMobileNumber = Schema.is(MobileNumber);
 
@@ -142,24 +143,21 @@ export function JoinForm({
           </div>
         </div>
         <OptionalProfile disabled={pending} />
-        <label htmlFor="conversation-language">{copy.conversationLanguage}</label>
-        <select
-          id="conversation-language"
-          value={conversationLanguage}
-          disabled={pending}
-          aria-describedby="conversation-language-hint"
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            if (value === "ko" || value === "en" || value === "ja") setConversationLanguage(value);
-          }}
-        >
-          <option value="ko">한국어</option>
-          <option value="en">English</option>
-          <option value="ja">日本語</option>
-        </select>
-        <p id="conversation-language-hint" className="field-hint">
-          {copy.conversationLanguageHint}
-        </p>
+        <div className="contact-fields conversation-language-field">
+          <label htmlFor="conversation-language">{copy.conversationLanguage}</label>
+          <LanguageSelect
+            value={conversationLanguage}
+            id="conversation-language"
+            label={copy.conversationLanguage}
+            className="form-language-select"
+            disabled={pending}
+            describedBy="conversation-language-hint"
+            onValueChange={setConversationLanguage}
+          />
+          <p id="conversation-language-hint" className="field-hint">
+            {copy.conversationLanguageHint}
+          </p>
+        </div>
         <p className="ai-notice">{discoveryNotice.aiNotice}</p>
         <details className="privacy-disclosure">
           <summary>{copy.privacy}</summary>

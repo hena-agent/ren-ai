@@ -86,7 +86,7 @@ test("diagnostics distinguish drafts and old content, group missing sections, an
   expect(badSource.slice(invalid.issues[0]!.start, invalid.issues[0]!.end)).toContain(
     "자율성: 101",
   );
-  expect(invalid.issues[0]?.line).toBe(56);
+  expect(invalid.issues[0]?.line).toBe(57);
   expect(documentStatus(badSource.replaceAll("\n", "\r\n"), sheet.name)).toEqual(invalid);
   expect(documentStatus(`prefix\n${source}`, sheet.name).issues[0]?.section).toBe("문서 구조");
   expect(documentStatus(`${source}\n\n## 공개 프로필\n두 번째`, sheet.name).issues[0]?.start).toBe(

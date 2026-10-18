@@ -1,4 +1,4 @@
-import { markdownHeadings, splitPersonaMarkdown } from "./profile.ts";
+import { markdownHeadings, splitPersonaMarkdown, publicIdentityFields } from "./profile.ts";
 import {
   CharacterFormatError,
   parseCharacterDescription,
@@ -128,6 +128,16 @@ export function documentStatus(
         ),
       );
     const structure = privateStructure(source, headings, boundary, previousFormat);
+    for (const field of publicIdentityFields(source))
+      issues.push(
+        issueAt(
+          source,
+          "공개 프로필",
+          "나이·생년월일은 공개 항목에서 지우고 정체성의 생년월일을 작성해 주세요. 나이는 자동 계산됩니다.",
+          field.start,
+          field.end,
+        ),
+      );
     legacy = structure.legacy;
     issues.push(...structure.issues);
     if (!legacy && !issues.length) issues.push(...identityIssues(source, headings, name, gender));

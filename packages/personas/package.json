@@ -12,6 +12,7 @@
     "./catalog": "./src/catalog.ts",
     "./image-url": "./src/image-url.ts",
     "./languages": "./src/languages.ts",
+    "./birth-date": "./src/birth-date.ts",
     "./public-profile-view": "./src/public-profile-view.tsx"
   },
   "scripts": {

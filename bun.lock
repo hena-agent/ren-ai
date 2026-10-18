@@ -118,6 +118,7 @@
       "name": "@ren-ai/discovery",
       "version": "0.0.0",
       "dependencies": {
+        "@radix-ui/react-select": "2.3.7",
         "@ren-ai/onboarding": "workspace:*",
         "@ren-ai/personas": "workspace:*",
         "effect": "4.0.0-rc.112",
@@ -337,6 +338,9 @@
         "vitest": "5.0.1",
       },
     },
+  },
+  "patchedDependencies": {
+    "@opencode/schema@2.0.19": "patches/@opencode%2Fschema@2.0.19.patch",
   },
   "overrides": {
     "@effect/platform-node-shared": "4.0.0-rc.112",

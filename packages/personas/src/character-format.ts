@@ -3,6 +3,7 @@ import type { PersonaRecord } from "./model.ts";
 import { CharacterSheet, Stat } from "./character-sheet.ts";
 import { splitPersonaMarkdown, requirePublicProfile } from "./profile.ts";
 import { languageBackground } from "./languages.ts";
+import { BirthDate } from "./birth-date.ts";
 
 const descriptionVersion = 2;
 const sectionKeys = {
@@ -56,14 +57,20 @@ function checked<T>(section: string, detail: string, read: () => T, excerpt = ""
 
 function readIdentity(section: string, source: string) {
   const identity =
-    /^이름: ([^\n]+)\n성별: (여성|남성)(?:\n주 사용 언어: [^\n]+\n모국어: [^\n]+)?\n\n([\s\S]+)$/.exec(
+    /^이름: ([^\n]+)\n성별: (여성|남성)\n생년월일: ([^\n]+)(?:\n주 사용 언어: [^\n]+\n모국어: [^\n]+)?\n\n([\s\S]+)$/.exec(
       section,
     );
   if (!identity)
     throw invalid(
       "정체성·외형",
-      "이름: … / 성별: 여성 또는 남성 뒤에 빈 줄과 외형 설명이 필요합니다.",
+      "이름: … / 성별: 여성 또는 남성 / 생년월일: YYYY-MM-DD 뒤에 빈 줄과 외형 설명이 필요합니다.",
     );
+  const birthDate = checked(
+    "정체성·외형",
+    "생년월일은 YYYY-MM-DD 형식의 실제 날짜이며 미래일 수 없습니다.",
+    () => Schema.decodeUnknownSync(BirthDate)(identity[3]),
+    `생년월일: ${identity[3]}`,
+  );
   const background = checked(
     "정체성·외형",
     "주 사용 언어와 모국어에 유효한 언어 코드를 작성해 주세요.",
@@ -72,7 +79,8 @@ function readIdentity(section: string, source: string) {
   return {
     name: identity[1],
     gender: identity[2] === "여성" ? "female" : "male",
-    appearance: identity[3],
+    birthDate,
+    appearance: identity[4],
     ...(background && { languageBackground: background }),
   };
 }

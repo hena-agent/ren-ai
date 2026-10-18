@@ -46,7 +46,6 @@ test("public Markdown becomes ordered, typed plain-text sections with stable bas
         type: "basics",
         title: "기본 정보",
         items: [
-          { key: "age", label: "나이", value: "27세" },
           { key: "occupation", label: "직업", value: "도예가" },
           { key: "location", label: "지역", value: "서울" },
           { label: "MBTI", value: "INFP" },
@@ -85,6 +84,23 @@ test("HTML, reference definitions and Markdown formatting never become executabl
   expect(profile).toEqual({
     introduction: "안녕.",
     sections: [{ type: "text", title: "내 링크", body: "책방" }],
+  });
+});
+
+test("obsolete handwritten age and birthday basics are omitted without an empty information section", () => {
+  expect(
+    projectPublicProfile("소개.\n\n### 기본 정보\n- 나이: 20대 중후반\n- 생년월일: 1998-04-12"),
+  ).toEqual({
+    introduction: "소개.",
+    sections: [],
+  });
+  expect(
+    projectPublicProfile(
+      "소개.\n\n### 기본 정보\n나이: 28\n\n### 생년월일\n1998-04-12\n\n### 일상\n- 생년월일: 1998-04-12\n- 직업: 도예가",
+    ),
+  ).toEqual({
+    introduction: "소개.",
+    sections: [{ type: "text", title: "일상", body: "• 직업: 도예가" }],
   });
 });
 

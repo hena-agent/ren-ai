@@ -9,6 +9,7 @@ import policy from "./character-policy.json";
 import type { LogEntry } from "./logging.ts";
 import { parseInitialState } from "@ren-ai/personas";
 import initialPolicy from "./initial-policy.json";
+import { birthDateOf } from "@ren-ai/personas/birth-date";
 
 function failureOf(logs: readonly LogEntry[], response: Response) {
   const failures = logs.filter((entry) => entry.event === "operation.failed");
@@ -84,6 +85,10 @@ test("the real authoring boundary saves only a reviewed, editable persona descri
   expect(await new Request(...fetcher.mock.calls[0]!).text()).toContain(initialPolicy.affection);
   expect(await new Request(...fetcher.mock.calls[1]!).text()).toContain(initialPolicy.affection);
   expect(await new Request(...fetcher.mock.calls[1]!).text()).toContain(seed);
+  const generationRequest = await new Request(...fetcher.mock.calls[0]!).text();
+  expect(generationRequest).toContain(`오늘 UTC 날짜: ${new Date().toISOString().slice(0, 10)}`);
+  expect(generationRequest).not.toContain("{{CURRENT_DATE_UTC}}");
+  expect(birthDateOf(description)).toBe(sheet.birthDate);
   expect(
     logs.filter((entry) => entry.event === "operation.completed").map((entry) => entry.stage),
   ).toEqual(expect.arrayContaining(["character.draft", "character.review", "character.generate"]));
@@ -196,6 +201,39 @@ test("male personas with no hidden traits and endpoint scores retain their own i
   expect(result.description).toContain("자율성: 0");
   expect(result.description).toContain("감정 표현성: 100");
 });
+
+test("reviewed improvements cannot change the existing birth date", async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(characterResponse({ ...sheet, birthDate: "1999-04-12" }, true));
+  const model = createProfileGenerator({ key: "key", fetcher });
+  const source = withPublicProfile(renderCharacterSheet(sheet), "천천히 알아가는 쪽이 편해요.");
+  await expect(model.convert({ name: sheet.name, description: source })).rejects.toMatchObject({
+    fields: { code: "character_birth_date_mismatch" },
+  });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+test.each(["missing", "invalid"])(
+  "the real generation and review boundary completes an %s birthday",
+  async (kind) => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(characterResponse(sheet, true))
+      .mockResolvedValueOnce(acceptedReview());
+    const source = withPublicProfile(renderCharacterSheet(sheet), "천천히 알아가요.");
+    const description =
+      kind === "missing"
+        ? source.replace(/^생년월일: .*\n/m, "")
+        : source.replace(sheet.birthDate, "1998-02-30");
+    const result = await createProfileGenerator({ key: "key", fetcher }).convert({
+      name: sheet.name,
+      description,
+    });
+    expect(birthDateOf(result.description)).toBe(sheet.birthDate);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  },
+);
 
 test.each([
   {

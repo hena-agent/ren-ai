@@ -5,6 +5,7 @@ afterEach(cleanup);
 const persona = {
   id: "harin",
   name: "하린",
+  age: 27,
   bio: "천천히 알아가요.",
   imageUrl: "https://example.net/a.jpg",
 };
@@ -27,7 +28,10 @@ test("JSON sections render as semantic facts, interest chips and question cards 
             {
               type: "basics",
               title: "기본 정보",
-              items: [{ key: "occupation", label: "직업", value: "도예가" }],
+              items: [
+                { key: "age", label: "나이", value: "25–29세" },
+                { key: "occupation", label: "직업", value: "도예가" },
+              ],
             },
             { type: "interests", title: "관심사", items: ["재즈", "산책"] },
             { type: "lifestyle", title: "라이프스타일", items: [{ label: "주말", value: "산책" }] },
@@ -44,6 +48,16 @@ test("JSON sections render as semantic facts, interest chips and question cards 
     />,
   );
   expect(screen.getByText("직업").tagName).toBe("DT");
+  expect(screen.queryByText("25–29세")).toBeNull();
+  expect(screen.getByRole("heading", { level: 2, name: "하린, 27" })).toBeTruthy();
+  expect(view.container.querySelector(".details-toolbar .details-toolbar-name")?.textContent).toBe(
+    "하린, 27",
+  );
+  const media = view.container.querySelector(".details-media")!;
+  const introduction = screen.getByText("안녕하세요.");
+  expect(
+    media.compareDocumentPosition(introduction) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   expect(screen.getByText("도예가").tagName).toBe("DD");
   expect(view.container.querySelectorAll(".profile-interests li")).toHaveLength(2);
   expect(view.container.querySelector(".profile-prompt")?.textContent).toContain("책방에 가요.");
@@ -87,4 +101,29 @@ test("an introduction-only profile has no placeholder sections and JSON strings 
 test("responses from a running older API still show the public bio without a Markdown renderer", () => {
   render(<ProfileDetails {...fields} persona={persona} />);
   expect(screen.getByText(persona.bio)).toBeTruthy();
+});
+
+test("an older age-only section is omitted, without inventing a numeric age", () => {
+  const { age: _age, ...withoutAge } = persona;
+  render(
+    <ProfileDetails
+      {...fields}
+      persona={{
+        ...withoutAge,
+        profile: {
+          introduction: persona.bio,
+          sections: [
+            {
+              type: "basics",
+              title: "기본 정보",
+              items: [{ key: "age", label: "나이", value: "20대 중후반" }],
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  expect(screen.queryByText("20대 중후반")).toBeNull();
+  expect(screen.queryByText("기본 정보")).toBeNull();
+  expect(screen.getByRole("heading", { name: "하린" })).toBeTruthy();
 });

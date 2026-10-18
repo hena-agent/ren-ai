@@ -16,6 +16,8 @@ import {
 } from "../test/fixtures.ts";
 import copy from "./copy.json";
 import { renderPage } from "./page.tsx";
+import { ageOn } from "@ren-ai/personas/birth-date";
+import { sheet } from "../test/character.ts";
 
 test("incomplete list cards retain readable placeholders without image-management actions", async () => {
   const window = new Window();
@@ -99,6 +101,7 @@ test("both styles are saved together, survive restart and become public without 
     {
       id: record.id,
       name: character.name,
+      age: ageOn(sheet.birthDate),
       bio: record.bio,
       imageUrl: record.imageUrl,
       portraits: record.portraits,
