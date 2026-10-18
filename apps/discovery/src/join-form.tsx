@@ -10,6 +10,7 @@ import { useCopy, useLocale } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
 import { PhoneField } from "./phone-field.tsx";
 import { LanguageSelect } from "./language-select.tsx";
+import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
 
 const isMobileNumber = Schema.is(MobileNumber);
 
@@ -159,19 +160,7 @@ export function JoinForm({
           </p>
         </div>
         <p className="ai-notice">{discoveryNotice.aiNotice}</p>
-        <details className="privacy-disclosure">
-          <summary>{copy.privacy}</summary>
-          <h3>{discoveryNotice.title}</h3>
-          <p className="notice-version">{discoveryNotice.version}</p>
-          {discoveryNotice.sections.map((section) => (
-            <section key={section.title}>
-              <h4>{section.title}</h4>
-              {section.paragraphs.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
-            </section>
-          ))}
-        </details>
+        <PrivacyDisclosure />
         <label className="consent">
           <input
             type="checkbox"
