@@ -102,6 +102,22 @@ cached registration handles alone do not establish readiness.
 
 ## Build provenance
 
+Development and test builds retain line-table debug information for backtraces and
+disable incremental compilation to limit disk usage. Cargo shares intermediate
+artifacts across worktrees in `$CARGO_HOME/build/ren-ai-rustpush` (normally
+`~/.cargo/build/ren-ai-rustpush`). Run Cargo from `apps/rustpush` so it loads the
+local `.cargo/config.toml`. Final executables remain in each checkout's `target/`.
+Cargo reuses compatible dependencies; checkout-local path dependencies can still
+require rebuilding.
+
+Coverage intermediates use the shared build directory's `llvm-cov-target/`.
+`bash check.sh` locks the complete coverage operation across worktrees, including
+cleanup and report validation. Use that command for coverage; concurrent direct
+`cargo llvm-cov` invocations bypass the lock. Reports remain checkout-local.
+Avoid `cargo clean` while another worktree is building: it also clears shared
+intermediates. Old checkout-local `target/` directories from before this setup can
+be removed once builds and executables using them have stopped.
+
 `prepare.sh` checks out pinned dependencies into the repository's ignored dependency
 cache, `node_modules/.cache/ren-rustpush`, and applies `native.patch`:
 

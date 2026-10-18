@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
 [dependencies]
 rustpush = { path = "../../node_modules/.cache/ren-rustpush/rustpush" }
 keystore = { path = "../../node_modules/.cache/ren-rustpush/rustpush/keystore" }
