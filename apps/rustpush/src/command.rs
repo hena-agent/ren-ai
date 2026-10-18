@@ -1,5 +1,7 @@
 use crate::diagnostics::Failure;
 
+pub const SERVICE_HANDLE: &str = "mailto:hi@renai.im";
+
 #[derive(Debug, PartialEq)]
 pub enum Command {
     Preflight,
@@ -11,7 +13,7 @@ pub fn parse(args: &[String]) -> Result<Command, Failure> {
     match args {
         [command] if command == "preflight" => Ok(Command::Preflight),
         [command] if command == "login" => Ok(Command::Login),
-        [command, handle] if command == "rpc" && handle.starts_with("mailto:") => {
+        [command, handle] if command == "rpc" && handle == SERVICE_HANDLE => {
             Ok(Command::Rpc(handle.clone()))
         }
         _ => Err(Failure::new("arguments", "invalid_command")),

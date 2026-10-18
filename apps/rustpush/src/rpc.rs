@@ -1,5 +1,5 @@
 use crate::{codec, delivery::Delivery, diagnostics::Failure, store::Store};
-use rustpush::{APSMessage, Attachment, MessageInst};
+use rustpush::{APSMessage, Attachment, Message, MessageInst};
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 use std::{
@@ -45,6 +45,7 @@ pub const TIMING: Timing = Timing {
 
 type Acks = Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>;
 type Output = mpsc::UnboundedSender<Value>;
+const NOTIFICATION_HANDLE: &str = "mailto:noti@renai.im";
 
 #[derive(Deserialize)]
 struct Request {
@@ -59,6 +60,7 @@ struct Request {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Text {
+    from: String,
     guid: String,
     to: String,
     text: String,
@@ -133,6 +135,20 @@ fn delivery(delivery: Delivery) -> Value {
     }
 }
 
+async fn sender<N: Native>(native: &N, from: &str) -> Result<(), Failure> {
+    if from != crate::command::SERVICE_HANDLE && from != NOTIFICATION_HANDLE {
+        return Err(Failure::new("input", "invalid_sender"));
+    }
+    let handles = native.handles().await.map_err(|failure| Failure {
+        stage: "input",
+        cause: json!({"code": "sender_unavailable", "upstreamStage": failure.stage, "upstream": failure.cause}),
+    })?;
+    if !handles.iter().any(|handle| handle == from) {
+        return Err(Failure::new("input", "sender_not_registered"));
+    }
+    Ok(())
+}
+
 async fn call<N: Native>(
     native: &N,
     from: &str,
@@ -144,8 +160,9 @@ async fn call<N: Native>(
         "send" => {
             let p: Text = params(input)?;
             guid(&p.guid)?;
-            recipient(&p.to, from)?;
-            codec::text(from, &p.to, &p.guid, &p.text)
+            recipient(&p.to, &p.from)?;
+            sender(native, &p.from).await?;
+            codec::text(&p.from, &p.to, &p.guid, &p.text)
         }
         "typing" => {
             let p: Typing = params(input)?;
@@ -259,13 +276,31 @@ struct Inbound<N> {
     request_id: String,
 }
 
+fn addressed_to_service(raw: &APSMessage) -> bool {
+    let APSMessage::Notification { payload, .. } = raw else {
+        return false;
+    };
+    payload
+        .as_dictionary()
+        .and_then(|fields| fields.get("tP"))
+        .and_then(plist::Value::as_string)
+        .is_some_and(|target| target.eq_ignore_ascii_case(crate::command::SERVICE_HANDLE))
+}
+
 impl<N: Native> Inbound<N> {
     // A notification leaves the spool only after the gateway stored it and Apple was told.
     async fn process(&self, spool: &str) -> Result<(), Failure> {
         let Some(raw) = self.store.load::<APSMessage>(spool)? else {
             return Ok(());
         };
+        let for_service = addressed_to_service(&raw);
         if let Some(message) = self.native.decode(raw).await? {
+            // Notification replies have no inbox. Discard before saving their attachments;
+            // raw APNs state is still removed only after delivery certification succeeds.
+            if !for_service && !matches!(message.message, Message::Delivered | Message::Read) {
+                self.native.certify(&message).await?;
+                return self.store.remove(spool);
+            }
             let paths = saved(
                 &*self.native,
                 &self.store,

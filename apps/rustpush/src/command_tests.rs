@@ -6,8 +6,8 @@ fn explicit_commands_and_registered_service_handles_are_required() {
         (vec!["preflight"], Command::Preflight),
         (vec!["login"], Command::Login),
         (
-            vec!["rpc", "mailto:service@example.test"],
-            Command::Rpc("mailto:service@example.test".into()),
+            vec!["rpc", "mailto:hi@renai.im"],
+            Command::Rpc("mailto:hi@renai.im".into()),
         ),
     ] {
         assert_eq!(
@@ -20,6 +20,8 @@ fn explicit_commands_and_registered_service_handles_are_required() {
         vec!["unknown"],
         vec!["rpc"],
         vec!["rpc", "tel:+1555"],
+        vec!["rpc", "mailto:personal@example.test"],
+        vec!["rpc", "mailto:noti@renai.im"],
         vec!["login", "extra"],
     ] {
         assert_eq!(

@@ -6,7 +6,7 @@ use rustpush::{
 use std::io::Write;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream};
 
-const US: &str = "mailto:service@example.test";
+const US: &str = "mailto:hi@renai.im";
 const THEM: &str = "tel:+15550100";
 const GUID: &str = "5D4C3B2A-0000-4000-8000-000000000001";
 
@@ -28,6 +28,7 @@ struct Fake {
     deliveries: Mutex<VecDeque<Result<Delivery, Failure>>>,
     hang_sends: std::sync::atomic::AtomicBool,
     offline: std::sync::atomic::AtomicBool,
+    extra_handles: Mutex<Vec<String>>,
 }
 
 impl Native for Fake {
@@ -35,15 +36,22 @@ impl Native for Fake {
         if self.offline.load(std::sync::atomic::Ordering::Relaxed) {
             Err(Failure::new("apns", "not_ready"))
         } else {
-            Ok(vec![US.to_owned()])
+            Ok([
+                vec![US.to_owned()],
+                self.extra_handles.lock().unwrap().clone(),
+            ]
+            .concat())
         }
     }
 
     async fn decode(&self, raw: APSMessage) -> Result<Option<MessageInst>, Failure> {
         let APSMessage::Notification { payload, .. } = raw else {
-            panic!("spooled a non-notification");
+            return Ok(None);
         };
-        let marker = payload.as_string().unwrap().to_owned();
+        let marker = payload.as_dictionary().unwrap()["marker"]
+            .as_string()
+            .unwrap()
+            .to_owned();
         let mut decodes = self.decodes.lock().unwrap();
         let scripts = decodes.get_mut(&marker).unwrap();
         let script = if scripts.len() > 1 {
@@ -115,11 +123,20 @@ const RESCAN: Timing = Timing {
 };
 
 fn spool(store: &Store, name: &str, marker: &str) {
+    spool_to(store, name, marker, Some(US));
+}
+
+fn spool_to(store: &Store, name: &str, marker: &str, target: Option<&str>) {
+    let mut payload = plist::Dictionary::new();
+    payload.insert("marker".into(), marker.into());
+    if let Some(target) = target {
+        payload.insert("tP".into(), target.into());
+    }
     let raw = APSMessage::Notification {
         id: 1,
         topic: [0; 20],
         token: None,
-        payload: plist::Value::String(marker.into()),
+        payload: plist::Value::Dictionary(payload),
         channel: None,
     };
     store.save(name, &raw).unwrap();
@@ -251,7 +268,7 @@ async fn requests_send_from_the_service_handle_and_reject_invalid_input() {
         h.call(1, "handles", json!({})).await,
         json!({"id": 1, "result": {"handles": [US]}})
     );
-    let send = json!({"guid": GUID, "to": THEM, "text": "hi"});
+    let send = json!({"from": US, "guid": GUID, "to": THEM, "text": "hi"});
     assert_eq!(
         h.call(2, "send", send.clone()).await["result"],
         json!({"status": "failed", "code": "no_imessage"})
@@ -289,17 +306,17 @@ async fn requests_send_from_the_service_handle_and_reject_invalid_input() {
     for (method, params, expected) in [
         (
             "send",
-            json!({"guid": "nope", "to": THEM, "text": "x"}),
+            json!({"from": US, "guid": "nope", "to": THEM, "text": "x"}),
             "invalid_guid",
         ),
         (
             "send",
-            json!({"guid": GUID, "to": US, "text": "x"}),
+            json!({"from": US, "guid": GUID, "to": US, "text": "x"}),
             "invalid_recipient",
         ),
         (
             "send",
-            json!({"guid": GUID, "to": "15550100", "text": "x"}),
+            json!({"from": US, "guid": GUID, "to": "15550100", "text": "x"}),
             "invalid_recipient",
         ),
         ("send", json!({"guid": GUID, "to": THEM}), "invalid_params"),
@@ -416,76 +433,8 @@ async fn notifications_leave_the_spool_only_after_the_gateway_acknowledges_them(
     h.finish().await;
 }
 
-#[tokio::test]
-async fn failed_notifications_stay_spooled_and_are_retried() {
-    let fake = Fake::default();
-    let mut body = NormalMessage::new(String::new(), MessageType::IMessage);
-    body.parts = MessageParts(vec![
-        IndexedMessagePart {
-            part: MessagePart::Text("hi".into(), TextFormat::default()),
-            idx: None,
-            ext: None,
-        },
-        photo("image/heic"),
-    ]);
-    let message = incoming(Message::Message(body));
-    *fake.certify_failures.lock().unwrap() = 1;
-    fake.decodes.lock().unwrap().insert(
-        "late".into(),
-        VecDeque::from([
-            Script::Fail,
-            Script::Message(Box::new(message.clone())),
-            Script::Message(Box::new(message)),
-        ]),
-    );
-    let mut h = Harness::start(fake, RESCAN, |store| {
-        let path = store.attachment(&format!("{GUID}-0.heic")).unwrap();
-        std::fs::write(path, b"saved").unwrap();
-    })
-    .await;
-    spool(&h.store, "inbox-9.plist", "late");
-    h.inbox.send("inbox-9.plist".into()).unwrap();
-    h.inbox.send("inbox-missing.plist".into()).unwrap();
-    for attempt in 1..=2 {
-        let event = h.next().await;
-        assert_eq!(event["spool"], "inbox-9.plist", "attempt {attempt}");
-        assert!(event["message"]["attachments"][0]["path"]
-            .as_str()
-            .unwrap()
-            .ends_with(".heic"));
-        let ack = h
-            .call(attempt, "ack", json!({"spool": "inbox-9.plist"}))
-            .await;
-        assert_eq!(ack["result"]["acknowledged"], true);
-    }
-    h.drained().await;
-    assert_eq!(*h.fake.downloads.lock().unwrap(), 0);
-    assert_eq!(h.fake.certified.lock().unwrap().len(), 1);
-    std::fs::remove_dir_all(h.path.join("attachments")).unwrap();
-    std::fs::write(h.path.join("attachments"), b"").unwrap();
-    spool(&h.store, "inbox-10.plist", "late");
-    h.fake.decodes.lock().unwrap().insert(
-        "late".into(),
-        VecDeque::from([Script::Message(Box::new(incoming(Message::Message(
-            NormalMessage {
-                parts: MessageParts(vec![photo("image/png")]),
-                ..NormalMessage::new(String::new(), MessageType::IMessage)
-            },
-        ))))]),
-    );
-    h.inbox.send("inbox-10.plist".into()).unwrap();
-    tokio::time::sleep(Duration::from_millis(20)).await;
-    assert!(h
-        .store
-        .load::<APSMessage>("inbox-10.plist")
-        .unwrap()
-        .is_some());
-    assert_eq!(
-        h.call(4, "handles", json!({})).await["result"]["handles"][0],
-        US
-    );
-    h.finish().await;
-}
-
 #[path = "rpc_recovery_tests.rs"]
 mod recovery;
+
+#[path = "rpc_sender_tests.rs"]
+mod sender;

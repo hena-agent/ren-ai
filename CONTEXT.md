@@ -46,6 +46,14 @@ _Avoid_: contact, number, address
 The handle every persona texts from.
 _Avoid_: persona handle, sender, bot account
 
+**Notification handle**:
+The handle the service itself texts from. No persona ever uses it.
+_Avoid_: system handle, sender
+
+**Notification**:
+An iMessage the service writes and sends from the notification handle. It belongs to no Conversation, and no persona sees it.
+_Avoid_: Notice, system message, alert
+
 **Discovery**:
 Browsing published personas' public profiles, Liking or Passing each, and joining the waitlist with a phone-number handle and web consent. Discovery never asks for an Apple ID email.
 _Avoid_: discovery page, swipe app

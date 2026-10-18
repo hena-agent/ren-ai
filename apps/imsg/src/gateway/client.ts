@@ -4,6 +4,10 @@ import { messagingApi, tapback as tapbackSchema } from "./protocol.ts";
 import type { IncomingMessage } from "../messages/messages.ts";
 
 const failure = (error: string | Error) => new Error(String(error));
+// Older Macs report unknown RPC tags as defects; expose an ordinary failure, never a send fallback.
+const notificationFailure = Effect.catchDefect((cause) =>
+  Effect.fail(new Error("Notification RPC unavailable", { cause })),
+);
 
 export const remoteMessages = (config: { readonly url: string; readonly token: string }) =>
   Effect.gen(function* () {
@@ -12,6 +16,10 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
     const probe = () => client.probe().pipe(Effect.mapError(failure));
     return {
       probe,
+      notify: (handle: string, text: string) =>
+        client.notify({ handle, text }).pipe(notificationFailure, Effect.mapError(failure)),
+      notificationStatus: (guid: string) =>
+        client.notificationStatus({ guid }).pipe(notificationFailure, Effect.mapError(failure)),
       image: (attachment: NonNullable<IncomingMessage["attachments"]>[number]) =>
         client.image({ reference: attachment.path }).pipe(Effect.mapError(failure)),
       sendText: (handle: string, text: string) =>
