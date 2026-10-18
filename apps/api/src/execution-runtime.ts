@@ -20,6 +20,7 @@ import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { runtimeStatus, runtimeStatusRequest } from "./conversations/runtime-status.ts";
 import { prepareMessaging } from "./application-tools.ts";
 import type { Persona } from "@ren-ai/personas";
+import { usageCollector } from "./usage/collect.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -86,6 +87,7 @@ export async function createExecutionRuntime(
       throw cause;
     }));
   const boot = Effect.gen(function* () {
+    let usage: Effect.Success<ReturnType<typeof usageCollector>>;
     const { personas } = yield* Effect.tryPromise(catalog.load);
     const messages = yield* remoteMessages({
       url: execution.imsgRpcUrl,
@@ -99,8 +101,26 @@ export async function createExecutionRuntime(
           callback = applicationGateway(tools, health, execution.managementToken);
           yield* Effect.addFinalizer(() => Effect.promise(callback!.dispose));
           const remote = yield* remoteHost(remoteConfiguration, personas);
+          usage = yield* usageCollector({
+            messages: (input) =>
+              remote.client.message
+                .list(input)
+                .pipe(
+                  Effect.mapError(
+                    (cause) => new Error("OpenCode usage history unavailable", { cause }),
+                  ),
+                ),
+            get: (id) => remote.sessions.get(id),
+          });
           yield* syncFolders(remote.client, execution.directory, personas, groundRules);
-          return remote;
+          return {
+            ...remote,
+            sessions: {
+              ...remote.sessions,
+              remove: (sessionID: Parameters<typeof remote.sessions.remove>[0]) =>
+                usage.session(sessionID).pipe(Effect.andThen(remote.sessions.remove(sessionID))),
+            },
+          };
         }),
       messages,
       messages.gestures,
@@ -128,6 +148,7 @@ export async function createExecutionRuntime(
         yield* host.heartbeat.followUps;
         yield* host.heartbeat.failedTurns;
         yield* health.tick;
+        yield* usage.tick;
         yield* Effect.all([host.heartbeat.stopped, host.heartbeat.endings], {
           concurrency: "unbounded",
         });

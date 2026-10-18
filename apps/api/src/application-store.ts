@@ -12,6 +12,7 @@ import type { PublicPersona } from "@ren-ai/onboarding";
 import { authorize } from "@ren-ai/transport/server";
 import { conversationStatus } from "./conversations/status.ts";
 import { conversationRecords } from "./conversations/http.ts";
+import { usageQueries } from "./usage/query.ts";
 
 export interface ApplicationStoreConfig {
   readonly catalog: () => Promise<readonly PublicPersona[]>;
@@ -53,7 +54,8 @@ export const createApplicationStore = async (
     );
     const management = contactManagement(contactsStore, config.managementToken);
     const statusStore = await run(conversationStatus(config.catalog));
-    const records = conversationRecords(statusStore, (effect) => Effect.runPromise(effect));
+    const usage = await run(usageQueries);
+    const records = conversationRecords(statusStore, (effect) => Effect.runPromise(effect), usage);
     const privateRecords = config.managementToken
       ? authorize(records, config.managementToken)
       : async () => new Response("Unauthorized", { status: 401 });

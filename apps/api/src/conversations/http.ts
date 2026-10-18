@@ -4,6 +4,7 @@ import { ConversationQuery, ConversationRecovery } from "@ren-ai/onboarding";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import type { conversationStatus } from "./status.ts";
 import type { Effect } from "effect";
+import type { usageQueries } from "../usage/query.ts";
 
 /** Shared diagnostic boundary for DB-only and executor-backed operator actions. */
 export async function conversationRequest(
@@ -48,12 +49,21 @@ export async function conversationRequest(
   }
 }
 
-export const conversationRecords =
-  (
-    store: Effect.Success<ReturnType<typeof conversationStatus>>,
-    run: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
-  ) =>
-  (request: Request) =>
+export const conversationRecords = (
+  store: Effect.Success<ReturnType<typeof conversationStatus>>,
+  run: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
+  usage: Effect.Success<typeof usageQueries>,
+) => {
+  const readUsage = async (url: URL, id: number) => {
+    const before = url.searchParams.has("before")
+      ? Number(url.searchParams.get("before"))
+      : undefined;
+    if (before !== undefined && (!Number.isSafeInteger(before) || before <= 0))
+      return Response.json({ error: "invalid_cursor" }, { status: 400 });
+    const result = await run(usage(id, before));
+    return result ? Response.json(result) : Response.json({ error: "not_found" }, { status: 404 });
+  };
+  return (request: Request) =>
     conversationRequest(request, async () => {
       if (request.method !== "GET") return new Response(null, { status: 405 });
       const url = new URL(request.url);
@@ -72,9 +82,11 @@ export const conversationRecords =
         }
         return Response.json(await run(store.list(input)));
       }
-      const id = Number(url.pathname.split("/").at(-1));
+      const isUsage = url.pathname.endsWith("/usage");
+      const id = Number(url.pathname.split("/").at(isUsage ? -2 : -1));
       if (!Number.isSafeInteger(id) || id <= 0)
         return Response.json({ error: "invalid_id" }, { status: 400 });
+      if (isUsage) return readUsage(url, id);
       let cursor: string | undefined;
       try {
         cursor = Schema.decodeUnknownSync(
@@ -88,3 +100,4 @@ export const conversationRecords =
         ? Response.json(detail)
         : Response.json({ error: "not_found" }, { status: 404 });
     });
+};

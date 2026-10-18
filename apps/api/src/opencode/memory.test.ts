@@ -61,8 +61,8 @@ test("automatic compaction writes persona Memory and keeps his name through two 
               summaries++;
               return TestLLM.text(
                 summaries === 1
-                  ? "À propos de lui: Il s'appelle Jules.\nNous deux: Il m'a montré une photo de son chien.\nProjets et promesses: Se revoir.\nDernièrement: Il est rentré."
-                  : "À propos de lui: Il s'appelle Jules.\nNous deux: Nous avons parlé du chien.\nProjets et promesses: Se revoir.\nDernièrement: Il prépare le dîner.",
+                  ? "## Important Context\nÀ propos de lui: Il s'appelle Jules.\nNous deux: Il m'a montré une photo de son chien.\nProjets et promesses: Se revoir.\nDernièrement: Il est rentré."
+                  : "## Important Context\nÀ propos de lui: Il s'appelle Jules.\nNous deux: Nous avons parlé du chien.\nProjets et promesses: Se revoir.\nDernièrement: Il prépare le dîner.",
                 `memory-${summaries}`,
               );
             }
@@ -101,7 +101,9 @@ test("automatic compaction writes persona Memory and keeps his name through two 
           for (const request of memories) {
             expect(JSON.stringify(request)).toContain("Garde son prénom");
             expect(JSON.stringify(request)).toContain("four parts");
-            expect(JSON.stringify(request)).not.toContain("Work State");
+            expect(JSON.stringify(request.system)).toContain(
+              "ignore the generic coding checkpoint template",
+            );
           }
           expect(JSON.stringify(memories[1])).toContain("Jules");
           const messages = yield* host.sessions.messages({ sessionID: session.id });
