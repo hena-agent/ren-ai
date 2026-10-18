@@ -77,6 +77,13 @@ Changes to the shapes in `packages/onboarding` must keep the Discovery client an
 
 The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/README.md`). Changes to `@ren-ai/imsg/protocol` keep the running application working, and the application keeps handling every answer the deployed Mac can give.
 
+## Durable Object storage
+
+- Treat Durable Objects as authoritative state and coordination, not a polling cache. Schedule persisted work when state changes; keep maintenance bounded. See ADR-0019 for the Mac/Cloudflare boundary.
+- Budget storage rows read/written separately from requests. Use indexed predicates and SQL limits/keyset cursors before loading recovery batches; verify hot queries with `EXPLAIN QUERY PLAN` against the real schema.
+- Persist collection fingerprints and progress checkpoints across actor replacement. Reconcile changed sessions and unfinished records; leave completed history untouched. Keep unchanged Admin checkpoints free of storage transactions and writes.
+- Test repeated idle checks, concurrent checkpoints, actor replacement and growing history at the real storage boundary. Preserve durable deduplication, recovery and uncertain-send behavior while reducing access; passing functional tests alone does not establish bounded storage cost.
+
 ## Persona authoring
 
 - Every image-generation action offers an **optional operator prompt**: initial main portraits, independent secondary images, and individual image regeneration. An empty prompt uses the normal character, style and reference direction. Submit paid generation only after the operator confirms the image-options dialog.
