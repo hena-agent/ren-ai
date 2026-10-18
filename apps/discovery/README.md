@@ -1,6 +1,15 @@
 # Discovery
 
 `renai.im` serves this Vite browser app through Cloudflare static assets.
+`/` is the public introduction home, with service details, the waitlist process,
+FAQs and the same localized privacy notice used during registration. It does not
+request the Catalog. Its calls to action open `/explore`, which contains image
+style selection, profile browsing and waitlist registration. The Discovery logo
+returns home; native links support browser history, reloads and direct entry.
+Display language, image style and Likes retain their existing browser storage.
+Private `/#reselect=…` links sent through iMessage still open Discovery directly
+and retain their fragment for registration.
+
 Both public profiles and waiting registration use `api.renai.im`:
 
 ```text

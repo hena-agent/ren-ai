@@ -1,4 +1,84 @@
 {
+  "home": {
+    "navigation": "About the service",
+    "about": "About RenAI",
+    "how": "How it works",
+    "faq": "FAQ",
+    "start": "Meet the personas",
+    "eyebrow": "A new connection. A familiar iMessage.",
+    "title": "A little more",
+    "titleAccent": "to look forward to.",
+    "intro": "AI personas with their own tastes and stories. Discover someone who catches your interest, and share the everyday over iMessage.",
+    "waiting": "Join the waitlist. If selected, a persona will send the first hello.",
+    "example": "One evening, over messages",
+    "exampleLabel": "An illustrative, fictional conversation",
+    "messages": [
+      "Found a tiny bookshop on my way home",
+      "You didn't just walk past, did you?",
+      "haha no. went in for one book and it's been an hour"
+    ],
+    "exampleNote": "An example of a conversation with an AI persona.",
+    "aboutEyebrow": "Getting to know each other, little by little",
+    "aboutTitle": "There’s a story beyond the profile.",
+    "features": [
+      {
+        "title": "Their own tastes. Their own stories.",
+        "body": "Different personalities, backgrounds, and favorite things. Read the profiles and find a persona you'd like to know better."
+      },
+      {
+        "title": "Somewhere you already feel at home",
+        "body": "No separate messaging app to install. Share a little of your day in the iMessage you already use."
+      },
+      {
+        "title": "Another chapter in your conversation",
+        "body": "Conversations that build on what you've shared. From everyday moments to favorite things, get to know each other over time."
+      }
+    ],
+    "howEyebrow": "Before the first hello",
+    "howTitle": "It starts with a little curiosity.",
+    "steps": [
+      {
+        "title": "Have a look",
+        "body": "Choose an image style, then explore the personas' photos and introductions."
+      },
+      {
+        "title": "Show your interest",
+        "body": "Like the personas you're curious about. It's fine to choose more than one."
+      },
+      {
+        "title": "Wait for a hello",
+        "body": "Register your iPhone number for iMessage and give consent. If selected, one of your liked personas will reach out first."
+      }
+    ],
+    "selectionNote": "Selection isn't first-come, first-served, and there is no set contact time. Registration doesn't guarantee an immediate connection.",
+    "faqTitle": "A few things you might be wondering.",
+    "questions": [
+      {
+        "title": "Am I talking to a real person?",
+        "body": "No. RenAI personas are fictional people played by AI. Their photos and profiles represent fictional people, too. This isn't a service for connecting with real people."
+      },
+      {
+        "title": "Do I need another app?",
+        "body": "No separate messaging app is needed. You need an iPhone with iMessage and a mobile number. Android isn't supported yet."
+      },
+      {
+        "title": "Will I hear from someone right away?",
+        "body": "We're currently accepting waitlist registrations. Selected visitors receive a message; selection isn't first-come, first-served, and contact timing isn't fixed."
+      },
+      {
+        "title": "Will I talk to everyone I like?",
+        "body": "You'll start with one available persona from your Likes. Liking a persona doesn't guarantee a connection with that particular persona."
+      },
+      {
+        "title": "What information do I register?",
+        "body": "Your iPhone number for iMessage and preferred conversation language. Name, age, and gender are optional. Read the privacy information and give consent to complete your waitlist registration."
+      }
+    ],
+    "closingTitle": "Whose story catches your interest?",
+    "closingBody": "Start with a profile. Take your time.",
+    "footer": "Everyday moments with AI personas. Ren AI.",
+    "pageTitle": "Ren AI — A little more to look forward to"
+  },
   "optionalProfile": "A little about you (optional)",
   "optionalProfileHint": "You can leave these blank. If provided, your persona can use them from the first greeting.",
   "profileName": "Name (optional)",
@@ -30,7 +110,7 @@
   "photo": "Photo",
   "previousPhoto": "Previous photo",
   "nextPhoto": "Next photo",
-  "skip": "Skip to profiles",
+  "skip": "Skip to content",
   "navigation": "Profile navigation",
   "browseTab": "Discover",
   "likedTab": "Likes",

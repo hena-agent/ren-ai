@@ -127,6 +127,9 @@ export function App({ client = discoveryClient }: { client?: DiscoveryClient }) 
 
 function DiscoveryApp({ client }: { client: DiscoveryClient }) {
   const copy = useCopy();
+  useEffect(() => {
+    document.title = `${copy.brand} — ${copy.explore}`;
+  }, [copy.brand, copy.explore]);
   const [catalog, setCatalog] = useState<Catalog>({ phase: "loading" });
   const activeRequest = useRef(new AbortController());
   const load = useCallback(
