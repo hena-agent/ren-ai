@@ -52,12 +52,22 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
               event.sessionID,
               () => memory.context(),
             );
-            const { text: summary } = yield* ctx.session.generate({
-              sessionID: event.sessionID,
-              prompt: `${persona.memory}\nWrite her Memory in ${persona.language}, from her point of view. Use four parts: about him, the two of them, plans and promises, and lately. The current Conversation documents and memory-clarity override older summaries and tool results. Preserve known facts and unfinished promises, but omit forgotten details and keep faded memories uncertain; never reconstruct lost details from old transcript or tool results. Describe photos worth remembering. Update any previous Memory with what happened since. This summary is a conversation checkpoint, not a replacement for the persistent short-term or long-term files. Return only the four-part Memory, not a conversation checkpoint wrapper. Do not call tools.\n\n${current}`,
+            // Let OpenCode execute and account for compaction instead of an unmetered session.generate.
+            // Its validator requires a native heading; the content remains first-person Persona Memory.
+            event.system.push({
+              type: "text",
+              text: "This is Persona Memory, not a coding task. Follow the four-part first-person Memory instructions in the conversation. Use only ## Important Context as the enclosing heading; ignore the generic coding checkpoint template appended later.",
             });
-            if (!summary.trim()) yield* Effect.fail(new Error());
-            event.result = { summary };
+            event.messages.push({
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `${persona.memory}\nWrite her Memory in ${persona.language}, from her point of view. Use four parts: about him, the two of them, plans and promises, and lately, under ## Important Context. The current Conversation documents and memory-clarity override older summaries and tool results. Preserve known facts and unfinished promises, but omit forgotten details and keep faded memories uncertain; never reconstruct lost details from old transcript or tool results. Describe photos worth remembering. Update any previous Memory with what happened since. This summary is a conversation checkpoint, not a replacement for the persistent short-term or long-term files. Do not call tools.\n\n${current}`,
+                },
+              ],
+            });
+            event.tools = {};
           }).pipe(Effect.orDie),
         );
       }),

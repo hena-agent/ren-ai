@@ -52,6 +52,9 @@ test("forward migration leaves exactly the PRD app tables", async () => {
         "retained_session",
         "send",
         "test_handle",
+        "usage_entry",
+        "usage_session",
+        "usage_turn",
         "user",
       ]);
       expect(appTables).not.toContain("intake_last");

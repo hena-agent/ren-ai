@@ -239,7 +239,7 @@ test("real OC compaction receives current Memory and loss markers without resett
           expect(prompt).not.toContain("birthday-detail-0317");
           expect(JSON.stringify(request.messages)).toContain("omit forgotten details");
           return TestLLM.text(
-            "상대에 대해: 생일 날짜가 기억나지 않는다.\n둘 사이: 아직 알아가는 중.\n약속: 없음.\n최근: 사진전 작품을 고른다.",
+            "## Important Context\n상대에 대해: 생일 날짜가 기억나지 않는다.\n둘 사이: 아직 알아가는 중.\n약속: 없음.\n최근: 사진전 작품을 고른다.",
             "memory-summary",
           );
         }
