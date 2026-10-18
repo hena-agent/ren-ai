@@ -1,6 +1,11 @@
 import { Effect, Fiber, Layer } from "effect";
 import { afterEach, expect, test, vi } from "vitest";
-import { fakeGestures, fakeMessages, messageGateway } from "@ren-ai/imsg/testing";
+import {
+  fakeGestures,
+  fakeMessages,
+  fakeNotifications,
+  messageGateway,
+} from "@ren-ai/imsg/testing";
 import { runApplicationWatch } from "./watch.ts";
 import { TestClock } from "effect/testing";
 import { FetchHttpClient } from "effect/unstable/http";
@@ -33,7 +38,12 @@ const awaitRequests = (requests: readonly string[], expected: number) =>
 
 test("the Mac resumes from Cloudflare's bookmark and wakes only on new messages", async () => {
   const fake = fakeMessages();
-  const gateway = messageGateway(fake.messages, "imsg-secret", fakeGestures().gestures);
+  const gateway = messageGateway(
+    fake.messages,
+    "imsg-secret",
+    fakeGestures().gestures,
+    fakeNotifications(),
+  );
   const requests: string[] = [];
   vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const request = new Request(input, init);
@@ -78,7 +88,12 @@ test("the Mac resumes from Cloudflare's bookmark and wakes only on new messages"
 test("restored edit observations coalesce, retry failed hints, and expire without idle Worker polling", async () => {
   const fake = fakeMessages();
   const row = await Effect.runPromise(fake.text("private-handle", "private-text", 0));
-  const gateway = messageGateway(fake.messages, "imsg-secret", fakeGestures().gestures);
+  const gateway = messageGateway(
+    fake.messages,
+    "imsg-secret",
+    fakeGestures().gestures,
+    fakeNotifications(),
+  );
   const requests: string[] = [];
   const logs = captureFailures();
   let failed = true;
@@ -132,7 +147,12 @@ test("restored edit observations coalesce, retry failed hints, and expire withou
 
 test("an unavailable or malformed watch snapshot reconnects before resuming message observation", async () => {
   const fake = fakeMessages();
-  const gateway = messageGateway(fake.messages, "imsg-secret", fakeGestures().gestures);
+  const gateway = messageGateway(
+    fake.messages,
+    "imsg-secret",
+    fakeGestures().gestures,
+    fakeNotifications(),
+  );
   const requests: string[] = [];
   const logs = captureFailures();
   vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {

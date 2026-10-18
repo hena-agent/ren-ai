@@ -28,6 +28,17 @@ export interface Messages {
   status(guid: string): Effect.Effect<MessageStatus, Error>;
 }
 
+/** Service-authored texts have no Conversation and no incoming-message feed. */
+export interface Notifications {
+  sendText(
+    handle: string,
+    text: string,
+    requestId: string,
+  ): Effect.Effect<{ readonly guid: string }, Error>;
+  status: Messages["status"];
+  probe(): Effect.Effect<void, Error>;
+}
+
 interface MessageStatus {
   readonly state: "pending" | "sent" | "delivered" | "failed";
   readonly error: number;

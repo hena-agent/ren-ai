@@ -2,3 +2,4 @@
 export { messageGateway } from "./gateway/server.ts";
 export { fakeGestures } from "./gestures/gestures.fake.ts";
 export { fakeMessages } from "./messages/messages.fake.ts";
+export { fakeNotifications } from "./messages/notifications.fake.ts";

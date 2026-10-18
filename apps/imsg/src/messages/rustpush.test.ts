@@ -28,7 +28,12 @@ test("texts are recorded before submission and settled by Apple's answer", async
   await f.run(({ messages }) =>
     Effect.gen(function* () {
       const delivered = (yield* messages.sendText(handle, "hello")).guid!;
-      expect(sent(f.bridge, "send")[0]).toEqual({ guid: delivered, to: them, text: "hello" });
+      expect(sent(f.bridge, "send")[0]).toEqual({
+        from: service,
+        guid: delivered,
+        to: them,
+        text: "hello",
+      });
       expect(f.bridge.spawned[0]).toMatchObject({ args: ["rpc", service] });
       expect(yield* messages.sendStatus(delivered)).toBe("sent");
       expect(yield* messages.textStatus(handle, 0)).toBe("sent");

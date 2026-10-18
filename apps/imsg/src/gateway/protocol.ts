@@ -49,18 +49,32 @@ export const incomingMessage = Schema.Struct({
   ...messageDetail.fields,
 });
 
+const messageStatus = Schema.Struct({
+  state: Schema.Literals(["pending", "sent", "delivered", "failed"]),
+  error: Schema.Number,
+  dateRead: Schema.NullOr(Schema.Number),
+});
+
+export const sendTextRpc = Rpc.make("sendText", {
+  payload: { handle: Schema.String, text: Schema.String },
+  success: Schema.Struct({ guid: Schema.NullOr(Schema.String) }),
+  error: Schema.String,
+});
+
 export const messagingApi = RpcGroup.make(
+  Rpc.make("notify", {
+    payload: { handle: Schema.String, text: Schema.String },
+    success: Schema.Struct({ guid: Schema.String, requestId: Schema.String }),
+    error: Schema.String,
+  }),
+  Rpc.make("notificationStatus", { payload: guid, success: messageStatus, error: Schema.String }),
   Rpc.make("probe", { error: Schema.String }),
   Rpc.make("image", {
     payload: { reference: Schema.String },
     success: Schema.Struct({ uri: Schema.String }),
     error: Schema.String,
   }),
-  Rpc.make("sendText", {
-    payload: { handle: Schema.String, text: Schema.String },
-    success: Schema.Struct({ guid: Schema.NullOr(Schema.String) }),
-    error: Schema.String,
-  }),
+  sendTextRpc,
   Rpc.make("after", {
     payload: {
       ...cursor,
@@ -88,11 +102,7 @@ export const messagingApi = RpcGroup.make(
   }),
   Rpc.make("status", {
     payload: guid,
-    success: Schema.Struct({
-      state: Schema.Literals(["pending", "sent", "delivered", "failed"]),
-      error: Schema.Number,
-      dateRead: Schema.NullOr(Schema.Number),
-    }),
+    success: messageStatus,
     error: Schema.String,
   }),
   Rpc.make("sendStatus", {

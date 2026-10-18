@@ -79,10 +79,21 @@ The gateway owns bridge stdin/stdout. Requests have `{id, requestId, method, par
 `requestId` is a gateway-generated UUID shared by gateway/native diagnostics and
 returned on errors. Replies
 have the same `id` and either `result` or a sanitized `error`. Methods are `handles`,
-`send`, `typing`, `read`, `react` and `ack`. The selected local handle is immutable
-for the process and must already be registered. Incoming events are emitted as
+`send`, `typing`, `read`, `react` and `ack`. The only accepted process Service handle
+is `mailto:hi@renai.im`; it must be registered and is the only sender for gestures. Text `send` requests require
+`{from, guid, to, text}`: `from` must be that Service handle or
+`mailto:noti@renai.im`, and must be registered at request time. Other account
+aliases are rejected. A missing Notification handle does not prevent startup.
+The gateway and bridge ship together, so their internal send shape changes together.
+Incoming events are emitted as
 `{event:"message", spool, message}` and repeated until acknowledged by spool ID.
 Only the gateway acknowledges after its history commit. Do not acknowledge manually.
+Content is admitted only when the actual IDS envelope destination (`tP`) is the
+Service handle, independently of the sender-supplied participants. Notification
+replies, other-alias content and content without a destination are discarded before
+attachment download and gateway emission; raw spool data is removed only after
+delivery certification. Delivery/read receipts still reach the gateway to reconcile
+its ledger, even without a destination.
 
 Definitive recipient acceptance yields `sent`; unanimous device rejection yields
 `failed`. Missing, lagged or timed-out results stay uncertain. Requests are bounded

@@ -10,7 +10,12 @@ import { applicationGateway } from "./application-gateway.ts";
 import { remotePersonaPlugins } from "../../test/persona-plugins.test-helper.ts";
 import { remoteHost } from "./remote.ts";
 import { remoteMessages } from "@ren-ai/imsg/client";
-import { fakeGestures, fakeMessages, messageGateway } from "@ren-ai/imsg/testing";
+import {
+  fakeGestures,
+  fakeMessages,
+  fakeNotifications,
+  messageGateway,
+} from "@ren-ai/imsg/testing";
 import {
   messagingFixture,
   registration,
@@ -32,7 +37,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
   const { root, personaDirectory } = await messagingFixture("distributed-messaging-");
   const local = fakeMessages();
   const gestures = fakeGestures();
-  const mac = messageGateway(local.messages, "secret", gestures.gestures);
+  const mac = messageGateway(local.messages, "secret", gestures.gestures, fakeNotifications());
   try {
     await runMessagingTest(
       Effect.gen(function* () {

@@ -4,6 +4,77 @@ use rustpush::SendResult;
 use tokio::sync::broadcast;
 
 #[tokio::test]
+async fn failed_notifications_stay_spooled_and_are_retried() {
+    let fake = Fake::default();
+    let mut body = NormalMessage::new(String::new(), MessageType::IMessage);
+    body.parts = MessageParts(vec![
+        IndexedMessagePart {
+            part: MessagePart::Text("hi".into(), TextFormat::default()),
+            idx: None,
+            ext: None,
+        },
+        photo("image/heic"),
+    ]);
+    let message = incoming(Message::Message(body));
+    *fake.certify_failures.lock().unwrap() = 1;
+    fake.decodes.lock().unwrap().insert(
+        "late".into(),
+        VecDeque::from([
+            Script::Fail,
+            Script::Message(Box::new(message.clone())),
+            Script::Message(Box::new(message)),
+        ]),
+    );
+    let mut h = Harness::start(fake, RESCAN, |store| {
+        let path = store.attachment(&format!("{GUID}-0.heic")).unwrap();
+        std::fs::write(path, b"saved").unwrap();
+    })
+    .await;
+    spool(&h.store, "inbox-9.plist", "late");
+    h.inbox.send("inbox-9.plist".into()).unwrap();
+    h.inbox.send("inbox-missing.plist".into()).unwrap();
+    for attempt in 1..=2 {
+        let event = h.next().await;
+        assert_eq!(event["spool"], "inbox-9.plist", "attempt {attempt}");
+        assert!(event["message"]["attachments"][0]["path"]
+            .as_str()
+            .unwrap()
+            .ends_with(".heic"));
+        let ack = h
+            .call(attempt, "ack", json!({"spool": "inbox-9.plist"}))
+            .await;
+        assert_eq!(ack["result"]["acknowledged"], true);
+    }
+    h.drained().await;
+    assert_eq!(*h.fake.downloads.lock().unwrap(), 0);
+    assert_eq!(h.fake.certified.lock().unwrap().len(), 1);
+    std::fs::remove_dir_all(h.path.join("attachments")).unwrap();
+    std::fs::write(h.path.join("attachments"), b"").unwrap();
+    spool(&h.store, "inbox-10.plist", "late");
+    h.fake.decodes.lock().unwrap().insert(
+        "late".into(),
+        VecDeque::from([Script::Message(Box::new(incoming(Message::Message(
+            NormalMessage {
+                parts: MessageParts(vec![photo("image/png")]),
+                ..NormalMessage::new(String::new(), MessageType::IMessage)
+            },
+        ))))]),
+    );
+    h.inbox.send("inbox-10.plist".into()).unwrap();
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert!(h
+        .store
+        .load::<APSMessage>("inbox-10.plist")
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        h.call(4, "handles", json!({})).await["result"]["handles"][0],
+        US
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
 async fn readiness_reports_a_disconnected_apple_session_and_recovers() {
     let mut h = Harness::start(Fake::default(), REDELIVER, |_| {}).await;
     h.fake
@@ -12,6 +83,26 @@ async fn readiness_reports_a_disconnected_apple_session_and_recovers() {
     let response = h.call(1, "handles", json!({})).await;
     assert_eq!(response["error"]["stage"], "apns");
     assert_eq!(response["error"]["cause"]["code"], "not_ready");
+    let send = h
+        .call(
+            3,
+            "send",
+            json!({ "from": "mailto:noti@renai.im", "to": THEM, "guid": GUID, "text": "private" }),
+        )
+        .await;
+    assert_eq!(send["error"]["stage"], "input");
+    assert_eq!(send["error"]["cause"]["code"], "sender_unavailable");
+    assert_eq!(send["error"]["cause"]["upstreamStage"], "apns");
+    assert_eq!(send["error"]["cause"]["upstream"]["code"], "not_ready");
+    let missing = h
+        .call(
+            4,
+            "send",
+            json!({ "to": THEM, "guid": GUID, "text": "private" }),
+        )
+        .await;
+    assert_eq!(missing["error"]["cause"]["code"], "invalid_params");
+    assert!(h.fake.sent.lock().unwrap().is_empty());
     assert_eq!(
         response["error"]["requestId"]
             .as_str()
@@ -41,7 +132,7 @@ async fn a_rejected_send_returns_provider_codes_without_resubmitting() {
         .call(
             1,
             "send",
-            json!({"guid": GUID, "to": THEM, "text": "private"}),
+            json!({"from": US, "guid": GUID, "to": THEM, "text": "private"}),
         )
         .await;
     assert_eq!(
@@ -59,7 +150,7 @@ async fn unresponsive_submissions_time_out_without_retrying() {
         .store(true, std::sync::atomic::Ordering::Relaxed);
     let mut h = Harness::start(fake, RESCAN, |_| {}).await;
     h.request(
-        json!({"id": 1, "method": "send", "params": {"guid": GUID, "to": THEM, "text": "private"}}),
+        json!({"id": 1, "method": "send", "params": {"from": US, "guid": GUID, "to": THEM, "text": "private"}}),
     )
     .await;
     while h.fake.sent.lock().unwrap().is_empty() {

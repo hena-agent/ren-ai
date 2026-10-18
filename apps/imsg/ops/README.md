@@ -4,6 +4,8 @@
 supervises one native Rustpush bridge and owns SQLite message history. All Personas
 use **hi@renai.im**, including first contact, replies and gestures. See
 [ADR-0018](../../../docs/adr/0018-rustpush-owns-the-imessage-transport.md).
+Service Notifications use **noti@renai.im** on the same Apple Account, through a
+separate RPC and outgoing ledger. See [the alias runbook](notifications.md).
 
 ## Build and install
 
@@ -27,7 +29,7 @@ and does not start services. Run it as the intended LaunchAgent user. Set
 Only `IMSG_TOKEN`, `IMSG_PORT` and `IMSG_LISTEN_HOST` are accepted in the protected
 `imsg.env`; defaults are loopback port **4702**. The LaunchAgent runs in its installed
 home. For local runs, `IMSG_HOME` selects a home containing `ren-rustpush`,
-`history.sqlite` and the `rustpush/` state directory.
+`history.sqlite`, `notifications.sqlite` and the `rustpush/` state directory.
 
 Sign in locally before starting the gateway:
 
@@ -54,6 +56,10 @@ Authenticated `GET /health` reports `imsg`, the exact artifact revision, and a
 bounded history/session readiness probe. Ready is HTTP 200; degraded is HTTP 503.
 The verifier requires the running revision to match its artifact. Then verify
 through `IMSG_URL=https://imsg.renai.im/rpc`. The probe sends no message.
+Health includes `dependencies.messages` and `dependencies.notifications`. During
+the Mac-only rollout, Notification readiness is reported separately and does not
+fail the updater's overall readiness probe. Discovery must not use it until the
+alias runbook's local, public and live checks pass.
 
 The separate Cloudflare Tunnel still routes `imsg.renai.im` to
 `http://127.0.0.1:4702`. `install-mac-tunnel.sh` takes a reviewed cloudflared binary
@@ -66,6 +72,11 @@ days of logs.
 - `history.sqlite` is the gateway's durable cursor/status authority. Outgoing
   texts are recorded before submission. A timeout or lost process leaves the row
   pending; it is never automatically resent. A later delivery receipt can settle it.
+- `notifications.sqlite` stores only gateway-submitted Notifications and their
+  delivery/read outcomes. It is never part of `after`, `recent` or `follow`, and
+  cannot affect Persona statuses or gestures. Keep it with the rest of the home
+  for backup and restore. Notification replies are discarded before saving their
+  attachments; APNs spool data is removed after certification.
 - `rustpush/` holds Apple registration/keys, the raw APNs notification spool and
   downloaded attachments. Notifications are persisted before APNs acknowledgement.
   They leave the spool after the gateway confirms storage and delivery certification

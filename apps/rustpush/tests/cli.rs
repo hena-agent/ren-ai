@@ -24,8 +24,7 @@ fn failures_are_correlated_at_the_process_boundary_without_echoing_private_input
     let state = std::env::temp_dir()
         .join("opencode")
         .join(format!("ren-rustpush-cli-{}", uuid::Uuid::new_v4()));
-    let (success, stdout, events, stderr) =
-        events(&["rpc", "mailto:private-sender@example.test"], Some(&state));
+    let (success, stdout, events, stderr) = events(&["rpc", "mailto:hi@renai.im"], Some(&state));
     assert!(!success);
     assert!(stdout.is_empty());
     assert!(!stderr.contains("example.test"));
@@ -55,7 +54,7 @@ fn the_bridge_requires_an_explicit_command_service_handle_and_state() {
             }
         );
     }
-    let (success, _, events, _) = events(&["rpc", "mailto:service@example.test"], None);
+    let (success, _, events, _) = events(&["rpc", "mailto:hi@renai.im"], None);
     assert!(!success);
     assert_eq!(events[0]["cause"]["code"], "rustpush_state_dir_required");
 }

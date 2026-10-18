@@ -6,7 +6,12 @@ import { TestLLM } from "@opencode/ai/testing";
 import { Effect, Schema } from "effect";
 import { expect, test } from "vitest";
 import { discoveryNotice, ContactSelection } from "@ren-ai/onboarding";
-import { fakeGestures, fakeMessages, messageGateway } from "@ren-ai/imsg/testing";
+import {
+  fakeGestures,
+  fakeMessages,
+  fakeNotifications,
+  messageGateway,
+} from "@ren-ai/imsg/testing";
 import { servePublic } from "@ren-ai/transport/listener";
 import { createGateway } from "../../api-msg/src/gateway.ts";
 import { messagingFixture } from "../test/messaging.test-helper.ts";
@@ -116,6 +121,7 @@ test.each(["sent", "uncertain"] as const)(
               },
               "imsg-secret",
               fakeGestures().gestures,
+              fakeNotifications(),
             );
             yield* Effect.addFinalizer(() => Effect.promise(messages.dispose));
             const imsg = yield* servePublic(messages.handler, 0);
