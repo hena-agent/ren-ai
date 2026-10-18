@@ -4,8 +4,8 @@ import { Cause, Clock, Effect, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
-import { bindUsageSessions } from "./schema.ts";
 import { saveUsage } from "./save.ts";
+import { safetyInterval } from "../scheduling.ts";
 
 export const usageCollector = (api: {
   readonly messages: (input: MessageListInput) => Effect.Effect<MessageListOutput, Error>;
@@ -18,9 +18,23 @@ export const usageCollector = (api: {
       Effect.gen(function* () {
         const started = yield* Clock.currentTimeMillis;
         const work = Effect.gen(function* () {
-          const [bound] = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
+          const [bound] = yield* sql<{
+            fingerprint: string | null;
+            lastIdle: string | null;
+            unavailable: number;
+          }>`SELECT fingerprint, last_idle AS lastIdle, unavailable FROM usage_session WHERE session_id = ${sessionID}`;
           if (!bound) return;
-          // ponytail: replay paginated metadata for correctness; add incremental snapshots if long histories make polling costly.
+          const session = yield* api.get(Session.ID.make(sessionID));
+          const fingerprint = JSON.stringify([
+            session.time.updated,
+            session.time.idle,
+            session.outcome,
+            session.tokens,
+            session.cost,
+          ]);
+          if (bound.fingerprint === fingerprint && !bound.unavailable) return;
+          // Native history cursors are opaque page cursors, not durable change tokens.
+          // Read history on change, but checkpoint closed turns so SQLite only applies the unfinished tail.
           const messages: MessageListOutput["data"][number][] = [];
           let cursor: string | undefined;
           const visited = new Set<string>();
@@ -35,9 +49,10 @@ export const usageCollector = (api: {
               yield* Effect.fail(new Error("Repeated usage message cursor"));
             if (cursor) visited.add(cursor);
           } while (cursor);
-          const session = yield* api.get(Session.ID.make(sessionID));
           const now = yield* Clock.currentTimeMillis;
-          yield* saveUsage(sql, session, messages, now).pipe(sql.withTransaction);
+          yield* saveUsage(sql, session, messages, now, bound.lastIdle, fingerprint).pipe(
+            sql.withTransaction,
+          );
         });
         yield* work.pipe(
           Effect.timeout("30 seconds"),
@@ -66,13 +81,35 @@ export const usageCollector = (api: {
       session: (id: string) => lock.withPermit(collect(id)),
       tick: lock.withPermit(
         Effect.gen(function* () {
-          yield* bindUsageSessions(sql);
+          const now = yield* Clock.currentTimeMillis;
           const rows = yield* sql<{
             sessionID: string;
-          }>`SELECT session_id AS sessionID FROM usage_session ORDER BY synced_at, session_id`;
+            current: number | null;
+            stoppedAt: number | null;
+            syncedAt: number | null;
+          }>`SELECT s.session_id AS sessionID, c.id AS current, e.stopped_at AS stoppedAt, s.synced_at AS syncedAt FROM usage_session s
+            LEFT JOIN conversation c ON c.session_id = s.session_id AND c.usage_key = s.conversation_key
+            LEFT JOIN conversation_end e ON e.conversation_id = c.id
+            WHERE s.next_check_at <= ${now}
+            ORDER BY s.next_check_at, s.session_id LIMIT 20`;
           yield* Effect.forEach(
             rows,
-            (row) => collect(row.sessionID).pipe(Effect.catch(() => Effect.void)),
+            (row) =>
+              Effect.gen(function* () {
+                if (
+                  row.current === null ||
+                  (row.stoppedAt !== null && row.syncedAt !== null && row.syncedAt >= row.stoppedAt)
+                ) {
+                  yield* sql`UPDATE usage_session SET next_check_at = NULL WHERE session_id = ${row.sessionID}`;
+                  return;
+                }
+                const checked = yield* collect(row.sessionID).pipe(
+                  Effect.as(true),
+                  Effect.catch(() => Effect.succeed(false)),
+                );
+                yield* sql`UPDATE usage_session SET next_check_at = ${checked && row.stoppedAt !== null ? null : now + safetyInterval},
+                  synced_at = CASE WHEN ${Number(checked)} THEN ${now} ELSE synced_at END WHERE session_id = ${row.sessionID}`;
+              }),
             { discard: true },
           );
         }),

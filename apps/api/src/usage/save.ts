@@ -46,10 +46,16 @@ export const saveUsage = (
   session: Session.Info,
   messages: readonly SessionMessage.Info[],
   now: number,
+  lastIdle: string | null,
+  fingerprint: string,
 ) =>
   Effect.gen(function* () {
+    const boundary =
+      lastIdle === null ? -1 : messages.findIndex((message) => message.id === lastIdle);
+    if (lastIdle !== null && boundary < 0)
+      yield* Effect.fail(new Error("Usage history checkpoint is missing"));
     let turnID: string | null = null;
-    for (const message of messages) {
+    for (const message of messages.slice(boundary + 1)) {
       const created = DateTime.toEpochMillis(message.time.created);
       if (message.type === "idle") {
         yield* sql`UPDATE usage_turn SET ended_at = ${created}, outcome = ${message.outcome} WHERE id = ${turnID}`;
@@ -88,5 +94,7 @@ export const saveUsage = (
     FROM usage_entry WHERE session_id = ${session.id} AND source != 'session-overhead'
     ON CONFLICT(id) DO UPDATE SET input=excluded.input, output=excluded.output, reasoning=excluded.reasoning,
       cache_read=excluded.cache_read, cache_write=excluded.cache_write, cost=excluded.cost`;
-    yield* sql`UPDATE usage_session SET message_count = ${messages.length}, synced_at = ${now}, unavailable = 0 WHERE session_id = ${session.id}`;
+    const idle = messages.findLast((message) => message.type === "idle");
+    yield* sql`UPDATE usage_session SET message_count = ${messages.length}, synced_at = ${now}, unavailable = 0,
+      fingerprint = ${fingerprint}, last_idle = ${idle?.id ?? null} WHERE session_id = ${session.id}`;
   });

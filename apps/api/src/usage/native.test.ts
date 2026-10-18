@@ -70,11 +70,11 @@ test("real OpenCode message API meters Persona Memory and replays idle-delimited
               modelID: null,
             });
             const restarted = yield* usageCollector(api);
-            yield* restarted.tick;
+            yield* restarted.session(session.id);
             expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
             yield* remote.sessions.prompt({ sessionID: session.id, text: "다음 이야기" });
             yield* remote.sessions.wait(session.id);
-            yield* restarted.tick;
+            yield* restarted.session(session.id);
             expect((yield* query(conversation.id))!.turns).toHaveLength(3);
           }).pipe(Effect.provideService(SqlClient.SqlClient, sql)),
         ),

@@ -141,9 +141,17 @@ test("running, interrupted and failed steps preserve missing usage and safe diag
       ];
       const collector = yield* usageCollector({
         messages: () => Effect.succeed({ data: history, cursor: {} }),
-        get: () => Effect.succeed(session),
+        get: () =>
+          Effect.succeed(
+            fromPartial<Session.Info>({
+              id: session.id,
+              tokens,
+              cost: session.cost,
+              time: { created: time, updated: DateTime.makeUnsafe(history.length) },
+            }),
+          ),
       });
-      yield* collector.tick;
+      yield* collector.session(session.id);
       expect((yield* query(conversation.id))!.turns[0]!.totals.unmeasuredEntries).toBe(2);
       history = [
         user("msg_first"),
@@ -177,7 +185,7 @@ test("running, interrupted and failed steps preserve missing usage and safe diag
         }),
         idle("msg_old_end"),
       ];
-      yield* collector.tick;
+      yield* collector.session(session.id);
       const detail = (yield* query(conversation.id))!;
       expect(detail.turns).toHaveLength(4);
       expect(detail.turns.flatMap((turn) => turn.entries)).toEqual(
@@ -194,7 +202,7 @@ test("running, interrupted and failed steps preserve missing usage and safe diag
           idle(`msg_idle_${index}`),
         ]).flat(),
       ];
-      yield* collector.tick;
+      yield* collector.session(session.id);
       const page = (yield* query(conversation.id))!;
       expect(page.turns).toHaveLength(50);
       expect((yield* query(conversation.id, page.nextBefore!))!.turns).toHaveLength(5);
@@ -240,13 +248,13 @@ test("pagination and upstream failures preserve the previous snapshot and emit c
           messages: () => Effect.succeed({ data: [], cursor: { next: "same" } }),
           get: () => Effect.succeed(session),
         });
-        yield* cyclic.tick;
+        yield* cyclic.session(session.id).pipe(Effect.result);
         expect(yield* sql`SELECT COUNT(*) AS count FROM usage_entry`).toEqual([{ count: 0 }]);
         const healthy = yield* usageCollector({
           messages: () => Effect.succeed({ data: [], cursor: {} }),
           get: () => Effect.succeed(session),
         });
-        yield* healthy.tick;
+        yield* healthy.session(session.id);
         expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 0 }]);
       } finally {
         stderr.mockRestore();
