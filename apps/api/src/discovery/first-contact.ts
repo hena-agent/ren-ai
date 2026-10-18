@@ -46,7 +46,7 @@ export const firstContacts = (
         (rows) => rows.length > 0,
       );
     const update = (id: string, state: string) =>
-      sql`UPDATE discovery_contact SET state = ${state} WHERE registration_id = ${id}`;
+      sql`UPDATE discovery_contact SET state = ${state} WHERE registration_id = ${id} AND state != ${state}`;
     const start = (row: Contact) =>
       Effect.gen(function* () {
         const persona = host.personas.get(row.personaID);

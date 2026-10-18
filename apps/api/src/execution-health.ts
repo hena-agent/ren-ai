@@ -63,11 +63,13 @@ export const createExecutionHealth = (
           yield* sql`DELETE FROM application_alert WHERE name = ${name} RETURNING name`;
         if (changed.length) yield* notify(`Cleared: ${name}`, webhook, fetcher);
       }).pipe(Effect.orDie);
-    let nextCheck = 0;
     const tick = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
-      if (now < nextCheck) return;
-      nextCheck = now + 60_000;
+      const [last] = yield* sql<{
+        at: number;
+      }>`SELECT at FROM application_clock WHERE name = 'health'`;
+      if (last && now < last.at + 300_000) return;
+      yield* sql`INSERT INTO application_clock (name, at) VALUES ('health', ${now}) ON CONFLICT(name) DO UPDATE SET at = excluded.at`;
       const check = Effect.tryPromise(async () => {
         const response = await fetcher(new URL("/health", configuration.apiMsgUrl), {
           headers: { Authorization: `Bearer ${configuration.managementToken}` },

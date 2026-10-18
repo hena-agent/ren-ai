@@ -271,38 +271,47 @@ test("a successful polling response without queue markup replaces the page rathe
 const promptPage = (active: boolean, token: string, maximum: string) =>
   queuePage(active, "progress", token, "photo").replace(
     "<output data-pending>",
-    `<div data-add-images id="portrait-additions-photo"><button data-image-maximum="${maximum}">Add</button></div><dialog data-portrait-dialog><textarea></textarea><select><option value="1">One</option><option value="2">Two</option></select></dialog><output data-pending>`,
+    `<div data-add-images id="portrait-additions-photo"><button data-image-maximum="${maximum}">Add</button></div><dialog data-portrait-dialog><textarea></textarea><select><option value="1">One</option><option value="2">Two</option></select><button data-portrait-cancel>Cancel</button><button data-portrait-confirm>Confirm</button></dialog><output data-pending>`,
   );
 
-test("polling keeps the operator's open prompt and selection even when the last queued photo finishes", async () => {
-  vi.useFakeTimers();
-  document.body.innerHTML = promptPage(true, "before", "5");
-  const form = document.querySelector("form")!;
-  const dialog = document.querySelector("dialog")!;
-  const prompt = dialog.querySelector("textarea")!;
-  const count = dialog.querySelector("select")!;
-  dialog.showModal();
-  prompt.value = "a private next-photo direction";
-  count.value = "2";
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async () => new Response(promptPage(false, "completed", "4")));
-  vi.stubGlobal("fetch", fetcher);
-  watchImageQueue();
-  await vi.advanceTimersByTimeAsync(1000);
-  expect(document.querySelector("form")).toBe(form);
-  expect(dialog.open).toBe(true);
-  expect(prompt.value).toBe("a private next-photo direction");
-  expect(count.value).toBe("2");
-  expect(form.querySelector<HTMLInputElement>('[name="draft"]')!.value).toBe("completed");
-  expect(form.querySelector("[data-image-maximum]")!.getAttribute("data-image-maximum")).toBe("5");
-  dialog.close();
-  await vi.advanceTimersByTimeAsync(1000);
-  expect(document.querySelector("form")).not.toBe(form);
-  expect(document.querySelector("[data-image-maximum]")!.getAttribute("data-image-maximum")).toBe(
-    "4",
-  );
-});
+test.each([false, true])(
+  "completed polling preserves the open prompt and cannot overwrite a newer submission (%s)",
+  async (resubmit) => {
+    vi.useFakeTimers();
+    document.body.innerHTML = promptPage(true, "before", "5");
+    const form = document.querySelector("form")!;
+    const dialog = document.querySelector("dialog")!;
+    const prompt = dialog.querySelector("textarea")!;
+    const count = dialog.querySelector("select")!;
+    dialog.showModal();
+    prompt.value = "a private next-photo direction";
+    count.value = "2";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => new Response(promptPage(false, "completed", "4")));
+    vi.stubGlobal("fetch", fetcher);
+    watchImageQueue();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(document.querySelector("form")).toBe(form);
+    expect(dialog.open).toBe(true);
+    expect(prompt.value).toBe("a private next-photo direction");
+    expect(count.value).toBe("2");
+    expect(form.querySelector<HTMLInputElement>('[name="draft"]')!.value).toBe("completed");
+    expect(form.querySelector("[data-image-maximum]")!.getAttribute("data-image-maximum")).toBe(
+      "5",
+    );
+    dialog.close();
+    if (resubmit) {
+      fetcher.mockImplementation(async () => new Response(promptPage(true, "new-submission", "3")));
+      submitImageForm(form, null);
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(document.querySelector("form") === form).toBe(resubmit);
+    expect(document.querySelector("[data-image-maximum]")!.getAttribute("data-image-maximum")).toBe(
+      resubmit ? "3" : "4",
+    );
+  },
+);
 
 test("an options dialog on a page without a registered job never starts background polling", async () => {
   vi.useFakeTimers();

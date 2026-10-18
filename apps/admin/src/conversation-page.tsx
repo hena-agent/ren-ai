@@ -109,6 +109,11 @@ function Detail({ view }: { view: ConversationView }) {
       <Connections entries={[detail.entry]} />
       <section aria-labelledby="execution-title">
         <h2 id="execution-title">실제 OpenCode 실행 상태</h2>
+        {runtime.failed && (
+          <p role="alert">
+            마지막 응답 생성 실패 — OpenCode 서버 로그와 애플리케이션 로그를 확인해 주세요.
+          </p>
+        )}
         <p>
           <strong>{execution[runtime.state]}</strong> · 대기 작업{" "}
           {runtime.pending === null ? "미확인" : `${runtime.pending}개`} · 예약 연락{" "}

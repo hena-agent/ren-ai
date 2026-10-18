@@ -1,17 +1,17 @@
-import { Context, Effect, Exit, Layer, Scope } from "effect";
+import { Clock, Context, Effect, Exit, Layer, Scope } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { remoteMessages } from "@ren-ai/imsg/client";
 import { startMessagingApplication } from "./application.ts";
 import { applicationGateway } from "./opencode/application-gateway.ts";
 import { remoteHost } from "./opencode/remote.ts";
-import { catalogRefresher, syncFolders } from "./opencode/catalog-sync.ts";
+import { syncFolders, catalogRefresher } from "./opencode/catalog-sync.ts";
 import { catalogClient } from "./personas/catalog.ts";
 import { firstContacts } from "./discovery/first-contact.ts";
 import { operatorHandler } from "./operator/api.ts";
 import { createExecutionHealth } from "./execution-health.ts";
 import type { ApplicationStore } from "./application-store.ts";
 import type { CloudflareBindings, CloudflareConfiguration } from "./cloudflare-config.ts";
-import type { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/unstable/sql";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
@@ -20,6 +20,8 @@ import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { runtimeStatus, runtimeStatusRequest } from "./conversations/runtime-status.ts";
 import { prepareMessaging } from "./application-tools.ts";
 import type { Persona } from "@ren-ai/personas";
+import { cachedCatalog } from "./personas/cached-catalog.ts";
+import { scheduleWork, safetyInterval } from "./scheduling.ts";
 import { usageCollector } from "./usage/collect.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
@@ -44,6 +46,7 @@ export async function createExecutionRuntime(
   const run = <A, E>(effect: Effect.Effect<A, E, RuntimeServices>) =>
     Effect.runPromise(Effect.provideContext(effect, services));
   const execution = configuration.execution;
+  const health = await run(createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher));
   const catalog = catalogClient(
     { url: bindings.PERSONA_CATALOG_URL, token: bindings.TOKEN_CATALOG },
     fetcher,
@@ -56,6 +59,8 @@ export async function createExecutionRuntime(
     directory: execution.directory,
     model: execution.model,
     groundRules,
+    onPrompt: (sessionID: string) =>
+      scheduleWork(`turn:${sessionID}`, Date.now() + 30_000).pipe(Effect.provideContext(services)),
   };
   let inspector: Promise<ReturnType<typeof runtimeStatusRequest>> | undefined;
   const inspect = () =>
@@ -88,12 +93,13 @@ export async function createExecutionRuntime(
     }));
   const boot = Effect.gen(function* () {
     let usage: Effect.Success<ReturnType<typeof usageCollector>>;
-    const { personas } = yield* Effect.tryPromise(catalog.load);
+    const saved = yield* cachedCatalog(catalog.load, groundRules);
+    const snapshot = yield* saved.current;
+    const { personas } = snapshot;
     const messages = yield* remoteMessages({
       url: execution.imsgRpcUrl,
       token: execution.managementToken,
     });
-    const health = yield* createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher);
     const host = yield* startMessagingApplication(
       personas,
       (tools) =>
@@ -101,6 +107,10 @@ export async function createExecutionRuntime(
           callback = applicationGateway(tools, health, execution.managementToken);
           yield* Effect.addFinalizer(() => Effect.promise(callback!.dispose));
           const remote = yield* remoteHost(remoteConfiguration, personas);
+          yield* saved.synchronize(
+            snapshot,
+            syncFolders(remote.client, execution.directory, personas, groundRules),
+          );
           usage = yield* usageCollector({
             messages: (input) =>
               remote.client.message
@@ -112,7 +122,6 @@ export async function createExecutionRuntime(
                 ),
             get: (id) => remote.sessions.get(id),
           });
-          yield* syncFolders(remote.client, execution.directory, personas, groundRules);
           return {
             ...remote,
             sessions: {
@@ -125,6 +134,7 @@ export async function createExecutionRuntime(
       messages,
       messages.gestures,
       health,
+      false,
     );
     operator = operatorHandler(host.operator);
     yield* Effect.addFinalizer(() => Effect.promise(operator!.dispose));
@@ -143,15 +153,29 @@ export async function createExecutionRuntime(
           ),
       ),
       tick: Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const now = yield* Clock.currentTimeMillis;
         yield* host.heartbeat.intake;
         yield* contacts.tick;
         yield* host.heartbeat.followUps;
-        yield* host.heartbeat.failedTurns;
-        yield* health.tick;
+        const [last] = yield* sql<{
+          at: number;
+        }>`SELECT at FROM application_clock WHERE name = 'recovery'`;
+        if (!last || last.at + safetyInterval <= now) {
+          yield* host.heartbeat.failedTurns;
+          yield* sql`INSERT INTO application_clock (name, at) VALUES ('recovery', ${now}) ON CONFLICT(name) DO UPDATE SET at = excluded.at`;
+        }
+        const due = yield* sql<{
+          sessionID: string;
+        }>`SELECT SUBSTR(name, 6) AS sessionID FROM application_work WHERE name LIKE 'turn:%' AND due <= ${now}
+            UNION SELECT session_id AS sessionID FROM failed_turn WHERE review = 0 AND retry_at <= ${now}`;
+        if (due.length) yield* host.heartbeat.checkTurns(due.map((row) => row.sessionID));
+        yield* host.heartbeat.rebuilds;
         yield* usage.tick;
         yield* Effect.all([host.heartbeat.stopped, host.heartbeat.endings], {
           concurrency: "unbounded",
         });
+        if (!last || last.at + safetyInterval <= now) yield* catalogSync.reconcile(groundRules);
       }),
     };
   });
@@ -185,13 +209,17 @@ export async function createExecutionRuntime(
       return initialized;
     },
     tick: async () => {
+      await run(health.tick);
       const runtime = await open();
       await run(runtime.tick);
     },
     fetch: async (request: Request) => {
       const url = new URL(request.url);
       if (url.pathname.startsWith("/rpc")) {
-        if (callback) return callback.handler(request);
+        if (callback) {
+          const response = await callback.handler(request);
+          return new Response(await response.arrayBuffer(), response);
+        }
         // open observes startup failure once; this catch prevents an unhandled detached rejection.
         void open().catch(() => {});
         return new Response("Execution is starting", { status: 503 });

@@ -18,6 +18,7 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
   messages: Messages,
   gestures: Gestures,
   alerts: FailureAlerts,
+  eager = true,
 ) =>
   Effect.gen(function* () {
     const { tools, directory, pace, sends, endings } = yield* prepareMessaging(
@@ -27,7 +28,7 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
     );
     const host = yield* connect(tools);
     const stopped = yield* stoppedConversations(host);
-    yield* stopped.resume;
+    if (eager) yield* stopped.resume;
     const follow = yield* followUps(
       directory.active,
       (personaID) => host.personas.get(personaID)!.timeZone,
@@ -42,7 +43,7 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
     const retained = yield* retainedSessions(host);
     yield* retained.resume;
     sends.onSent(follow.sent);
-    const failed = yield* failedTurns(host, directory, alerts);
+    const failed = yield* failedTurns(host, directory, alerts, eager);
     const { incoming, recovery } = yield* setupRebuilding(
       directory,
       host,
@@ -52,6 +53,7 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       follow.sent,
       failed.forget,
       pace.onNew,
+      eager,
     );
     const operator = yield* makeOperator(
       directory,
@@ -73,6 +75,8 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
         intake: incoming.poll,
         followUps: follow.tick,
         failedTurns: failed.tick,
+        checkTurns: failed.check,
+        rebuilds: recovery.pending,
         endings: endings.tick,
         stopped: stopped.tick,
       },

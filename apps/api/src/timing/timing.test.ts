@@ -102,8 +102,16 @@ test("an arrival during generation prevents a stale send or wait until the next 
       yield* pace.seen("other", []);
       yield* pace.seen("first", ["previous"]);
       expect(yield* pace.during("first", action)).toBe("new");
-      yield* pace.seen("first", ["message"]);
+      const context = [...Array.from({ length: 204 }, (_, i) => `message-${i}`), "message"];
+      for (const id of context) yield* pace.onNew("first", id);
+      yield* pace.onNew("other", "message");
+      yield* pace.onNew("first", "outside-context");
+      yield* pace.seen("first", context);
+      expect(yield* pace.during("first", action)).toBe("new");
+      yield* pace.seen("first", ["outside-context"]);
       expect(yield* pace.during("first", Effect.succeed(true))).toBe(true);
+      yield* pace.seen("other", []);
+      expect(yield* pace.during("other", action)).toBe("new");
     }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
   );
 });

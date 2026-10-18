@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { Effect, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
@@ -16,6 +15,8 @@ import { watchEdits } from "./edits.ts";
 import { imageMime } from "@ren-ai/imsg";
 import { resetBoundary } from "../conversations/reset-boundary.ts";
 import { intakeQueue } from "./queue.ts";
+import { scheduleWork } from "../scheduling.ts";
+import { promptID } from "./message-id.ts";
 
 export interface PromptImage {
   readonly uri: string;
@@ -25,9 +26,6 @@ interface Bookmark {
   readonly rowID: number;
   readonly date: number;
 }
-
-const promptID = (sessionID: string, guid: string) =>
-  `msg_${createHash("sha256").update(sessionID).update("\0").update(guid).digest("hex")}`;
 
 export const intake = (
   messages: Messages,
@@ -196,6 +194,7 @@ export const intake = (
             latestSend = Math.max(latestSend, row.createdAt);
           } else {
             firstReply ??= row.createdAt;
+            yield* changes.remember(conversation, row);
             if (!seen.length) {
               yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
               const rendered = yield* content(row, previous, timeZone(conversation.personaID));
@@ -258,13 +257,13 @@ export const intake = (
             rendered.files,
           );
           yield* Effect.gen(function* () {
+            yield* changes.remember(conversation, row);
             yield* markSeen(conversation.sessionID, row.guid);
             yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt}, first_received_at = COALESCE(first_received_at, ${row.createdAt}) WHERE id = ${conversation.id}`;
             yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
             yield* received(conversation, row.createdAt);
           }).pipe(sql.withTransaction);
-          yield* changes.remember(conversation, row);
           signal(conversation);
           return;
         }
@@ -291,6 +290,10 @@ export const intake = (
         if (conversation && !(yield* predatesRelationship(conversation, row)))
           yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
       }
+      if (batch.length === 100)
+        yield* scheduleWork("intake", Date.now()).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
     });
     // Live notifications and periodic polls share the admission cursor. Edit
     // observation stays outside this lock because it can itself deliver a reset.

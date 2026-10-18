@@ -180,9 +180,8 @@ test.each(["sent", "uncertain"] as const)(
               });
               // Registration and selection completed while execution was unavailable.
               expect(attempts).toBe(0);
-              await expect(executionState(runtime, "/__fixture/alarm")).rejects.toThrow(
-                "Application is unavailable",
-              );
+              const offline = await executionState(runtime, "/__fixture/alarm");
+              expect(offline.alarm).toBeGreaterThan(Date.now() + 25_000);
               expect((await runtime.dispatchFetch("https://app/discovery/personas")).status).toBe(
                 200,
               );
@@ -209,6 +208,16 @@ test.each(["sent", "uncertain"] as const)(
               const state = await executionState(runtime);
               expect(creates).toEqual([state.conversations[0]!.session_id]);
               expect(state.sends).toEqual([{ state: outcome, tool_call_id: "native-greeting" }]);
+              // The real Cloudflare SQLite limit is 100 bindings, unlike Node SQLite.
+              for (const count of [0, 99, 100, 205]) {
+                const context = await Effect.runPromise(
+                  callback.context({
+                    sessionID: creates[0]!,
+                    messageIDs: Array.from({ length: count }, (_, i) => `msg_context_${i}`),
+                  }),
+                );
+                expect(context.sends).toEqual([]);
+              }
               const session = join(personaDirectory, "sessions", creates[0]!);
               const files = async () => ({
                 state: await readFile(join(session, "STATE.md"), "utf8"),
@@ -243,6 +252,7 @@ test.each(["sent", "uncertain"] as const)(
               );
               await executionState(runtime, "/__fixture/alarm");
               expect((await executionState(runtime)).conversations).toEqual(state.conversations);
+              expect((await executionState(runtime)).catalogReads).toBe(0);
               expect(creates).toHaveLength(1);
               expect(attempts).toBe(1);
               expect(fake.bubbles).toEqual(bubbles);

@@ -40,6 +40,7 @@ export const ConversationList = Schema.Struct({
 });
 export const ConversationRuntime = Schema.Struct({
   state: Schema.Literals(["running", "idle", "missing", "unavailable"]),
+  failed: Schema.optionalKey(Schema.Boolean),
   pending: Schema.NullOr(Schema.Number),
   nextWakeAt: Schema.NullOr(Schema.Number),
 });

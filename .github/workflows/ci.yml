@@ -72,8 +72,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/build/ren-ai-rustpush
             apps/rustpush/target
-          key: rustpush-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/rustpush/Cargo.lock', 'apps/rustpush/native.patch', 'apps/rustpush/rust-toolchain.toml') }}
+          key: rustpush-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/rustpush/Cargo.toml', 'apps/rustpush/Cargo.lock', 'apps/rustpush/.cargo/config.toml', 'apps/rustpush/native.patch', 'apps/rustpush/rust-toolchain.toml') }}
       - run: cargo install cargo-llvm-cov --version 0.8.5 --locked
       - run: cargo install rust-code-analysis-cli --version 0.0.25 --locked
       - run: bash apps/rustpush/check.sh
@@ -159,6 +160,7 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bash apps/api-msg/ops/build-bundle.sh "$RUNNER_TEMP/api-msg-bundle"
+      - run: bash apps/api-msg/ops/check-container.sh "$RUNNER_TEMP/api-msg-bundle"
       - run: tar -czf api-msg-bundle.tar.gz -C "$RUNNER_TEMP/api-msg-bundle" .
       - uses: actions/attest-build-provenance@v4
         with:

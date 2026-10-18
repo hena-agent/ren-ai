@@ -8,18 +8,7 @@ import { edited, unsent } from "../transcript/transcript.ts";
 const editWindow = 15 * 60_000;
 const unsendWindow = 2 * 60_000;
 
-interface WatchedMessage {
-  readonly row: IncomingMessage;
-  text: string;
-  revision: number;
-}
-
-interface WatchedConversation {
-  readonly conversation: Conversation;
-  readonly rows: Map<string, WatchedMessage>;
-}
-
-/** Observed edits keep their original prompt IDs and retry through the durable intake queue. */
+/** Admitted text survives actor eviction for the edit window, then is deleted. */
 export const watchEdits = (
   messages: Messages,
   enqueue: (conversation: Conversation, id: string, text: string) => Effect.Effect<void, Error>,
@@ -29,86 +18,55 @@ export const watchEdits = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const watched = new Map<string, WatchedConversation>();
     const remember = (conversation: Conversation, row: IncomingMessage) =>
-      Effect.gen(function* () {
-        yield* sql`INSERT OR IGNORE INTO intake_edit (session_id, guid, text, revision)
-        SELECT ${conversation.sessionID}, ${row.guid}, ${row.text}, 0 WHERE ${row.text} != ''`;
-        const [saved] = yield* sql<{
-          text: string;
-          revision: number;
-        }>`SELECT text, revision FROM intake_edit
-        WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
-        if (!saved?.text) return;
-        let group = watched.get(conversation.sessionID);
-        if (!group) {
-          group = { conversation, rows: new Map() };
-          watched.set(conversation.sessionID, group);
-        }
-        group.rows.set(row.guid, { row, text: saved.text, revision: saved.revision });
-      });
-    const now = yield* Clock.currentTimeMillis;
-    const active = yield* sql<Conversation>`SELECT conversation.id, user.handle,
-      conversation.persona_id AS personaID, conversation.session_id AS sessionID
-      FROM conversation JOIN user ON user.id = conversation.user_id
-      WHERE conversation.ended_at IS NULL AND conversation.last_received_at >= ${now - editWindow}`;
-    for (const conversation of active) {
-      const seen = yield* sql<{
-        guid: string;
-      }>`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID}`;
-      const known = new Set(seen.map((item) => item.guid));
-      const recent = yield* messages.recent(conversation.handle, now - editWindow);
-      for (const row of recent) {
-        if (known.has(row.guid)) yield* remember(conversation, row);
-      }
-    }
-    const inspect = (
-      group: WatchedConversation,
-      guid: string,
-      entry: WatchedMessage,
-      currentText: string,
-      time: number,
-    ) =>
+      row.text
+        ? sql`INSERT OR IGNORE INTO intake_edit (session_id, guid, created_at, text, revision)
+          VALUES (${conversation.sessionID}, ${row.guid}, ${row.createdAt}, ${row.text}, 0)`.pipe(
+            Effect.asVoid,
+          )
+        : Effect.void;
+    type Watched = Conversation & {
+      guid: string;
+      text: string;
+      createdAt: number;
+      revision: number;
+    };
+    const inspect = (entry: Watched, currentText: string, time: number) =>
       Effect.gen(function* () {
         if (currentText === entry.text) return;
-        if (!currentText && entry.row.createdAt + unsendWindow < time) return;
-        const zone = timeZone(group.conversation.personaID);
+        if (!currentText && entry.createdAt + unsendWindow < time) return;
+        const zone = timeZone(entry.personaID);
         const text = currentText ? edited(entry.text, currentText, time, zone) : unsent(time, zone);
         const revision = entry.revision + 1;
         const promptID = `msg_edit_${createHash("sha256")
           .update(
-            [group.conversation.sessionID, guid, entry.text, currentText, String(revision)].join(
-              "\0",
-            ),
+            [entry.sessionID, entry.guid, entry.text, currentText, String(revision)].join("\0"),
           )
           .digest("hex")}`;
         yield* Effect.gen(function* () {
-          yield* enqueue(group.conversation, promptID, text);
+          yield* enqueue(entry, promptID, text);
           yield* sql`UPDATE intake_edit SET text = ${currentText}, revision = ${revision}
-            WHERE session_id = ${group.conversation.sessionID} AND guid = ${guid}`;
-          yield* arriving(group.conversation.sessionID, promptID);
+            WHERE session_id = ${entry.sessionID} AND guid = ${entry.guid}`;
+          yield* arriving(entry.sessionID, promptID);
         }).pipe(sql.withTransaction);
-        entry.text = currentText;
-        entry.revision = revision;
-        signal(group.conversation);
-        if (!currentText) group.rows.delete(guid);
+        signal(entry);
       });
     const poll = Effect.gen(function* () {
       const time = yield* Clock.currentTimeMillis;
-      for (const [id, group] of watched) {
-        for (const [guid, entry] of group.rows) {
-          if (entry.row.createdAt + editWindow < time) group.rows.delete(guid);
-        }
-        if (!group.rows.size) {
-          watched.delete(id);
-          continue;
-        }
-        const since = Math.min(...[...group.rows.values()].map((entry) => entry.row.createdAt));
-        const recent = yield* messages.recent(group.conversation.handle, since);
+      yield* sql`DELETE FROM intake_edit WHERE created_at < ${time - editWindow}
+        OR NOT EXISTS (SELECT 1 FROM conversation c WHERE c.session_id = intake_edit.session_id AND c.ended_at IS NULL)`;
+      const watched =
+        yield* sql<Watched>`SELECT c.id, e.session_id AS sessionID, u.handle, c.persona_id AS personaID,
+        e.guid, e.text, e.created_at AS createdAt, e.revision FROM intake_edit e JOIN conversation c ON c.session_id = e.session_id
+        JOIN user u ON u.id = c.user_id WHERE e.text != ''`;
+      for (const handle of new Set(watched.map((entry) => entry.handle))) {
+        const group = watched.filter((entry) => entry.handle === handle);
+        const since = Math.min(...group.map((entry) => entry.createdAt));
+        const recent = yield* messages.recent(handle, since);
         const byGuid = new Map(recent.map((row) => [row.guid, row]));
-        for (const [guid, entry] of group.rows) {
-          const current = byGuid.get(guid);
-          if (current) yield* inspect(group, guid, entry, current.text, time);
+        for (const entry of group) {
+          const current = byGuid.get(entry.guid);
+          if (current) yield* inspect(entry, current.text, time);
         }
       }
     });

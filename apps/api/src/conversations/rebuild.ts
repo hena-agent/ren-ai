@@ -17,6 +17,7 @@ export const setupRebuilding = (
   sent: (conversation: Conversation, date: number) => Effect.Effect<void, Error>,
   forget: (sessionID: string) => Effect.Effect<void>,
   arriving: (sessionID: string, messageID: string) => Effect.Effect<void, Error>,
+  eager = true,
 ) =>
   Effect.gen(function* () {
     let restore: (handle: string) => Effect.Effect<void, Error>;
@@ -49,9 +50,11 @@ export const setupRebuilding = (
         Effect.asVoid,
         Effect.mapError((error) => new Error(String(error))),
       );
-    yield* incoming.resetPending;
-    yield* recovery.missing;
+    if (eager) {
+      yield* incoming.resetPending;
+      yield* recovery.missing;
+    }
     yield* reset.resume;
-    yield* incoming.poll;
+    if (eager) yield* incoming.poll;
     return { incoming, recovery };
   });

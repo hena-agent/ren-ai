@@ -203,6 +203,7 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
       directory,
       watch,
       refresh,
+      reconcile: refresher.reconcile(fixture.groundRules),
       profileName,
       transport,
       recovery,

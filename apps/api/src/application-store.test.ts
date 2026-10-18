@@ -5,6 +5,7 @@ import { discoveryNotice } from "@ren-ai/onboarding";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
 import { expect, test } from "vitest";
+import { Schema } from "effect";
 import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
 
 const workerSource = async () => {
@@ -52,6 +53,36 @@ const openRuntime = async (resourcePersistencePath: string) => {
 
 const call = (runtime: Miniflare, path: string, init?: Parameters<Miniflare["dispatchFetch"]>[1]) =>
   runtime.dispatchFetch(`http://application.test${path}`, init);
+
+test("usage collection has a bounded SQL budget and unchanged history incurs no writes after replacement", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "api-usage-budget-"));
+  try {
+    const runtime = await openRuntime(persistence);
+    const response = await call(runtime, "/__fixture/usage-budget");
+    expect(response.status).toBe(200);
+    const result = Schema.decodeUnknownSync(
+      Schema.Struct({
+        initial: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        idle: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        changed: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        unchanged: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        input: Schema.Number,
+      }),
+    )(await response.json());
+    process.stdout.write(`Usage SQL budget: ${JSON.stringify(result)}\n`);
+    expect(result.initial.reads).toBeLessThan(1000);
+    expect(result.idle.reads).toBeLessThan(20);
+    expect(result.idle.writes).toBe(0);
+    expect(result.changed.reads).toBeLessThan(1000);
+    expect(result.changed.writes).toBeLessThan(20);
+    expect(result.unchanged.reads).toBeLessThan(20);
+    expect(result.unchanged.writes).toBe(0);
+    expect(result.input).toBe(11);
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
 const register = (runtime: Miniflare, handle: string) =>
   call(runtime, "/discovery/waitlist", {
     method: "POST",
