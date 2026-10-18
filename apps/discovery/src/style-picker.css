@@ -66,14 +66,29 @@
   color: var(--muted);
 }
 .style-switch > div {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
 }
+.style-switch > div::before {
+  position: absolute;
+  inset: 3px auto 3px 3px;
+  width: calc((100% - 10px) / 2);
+  border-radius: 9px;
+  background: var(--ink);
+  content: "";
+  transition: transform var(--motion-standard) var(--ease-out);
+}
+.style-switch > div:has(button:last-child[aria-pressed="true"])::before {
+  transform: translateX(calc(100% + 4px));
+}
 .style-switch button {
+  position: relative;
   min-height: 38px;
   min-width: 66px;
   padding: 6px 12px;
@@ -83,8 +98,8 @@
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
+  transition: color var(--motion-fast);
 }
 .style-switch button[aria-pressed="true"] {
-  background: var(--ink);
   color: var(--surface);
 }

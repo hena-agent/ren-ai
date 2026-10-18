@@ -184,6 +184,19 @@ function DiscoveryApp({ client }: { client: DiscoveryClient }) {
   );
 }
 
+function useBrowseView() {
+  const [view, setView] = useState<BrowseView | "waiting" | "active">("browse");
+  const [contactOpened, setContactOpened] = useState(false);
+  function navigate(next: BrowseView) {
+    if (next === "contact") setContactOpened(true);
+    setView(next);
+  }
+  function back() {
+    setView("browse");
+  }
+  return { view, setView, contactOpened, navigate, back };
+}
+
 function Experience({
   people,
   client,
@@ -196,7 +209,7 @@ function Experience({
   const [style, setStyle] = useState(readImageStyle);
   const [styleStorageFailure, setStyleStorageFailure] = useState(false);
   const [storageFailure, setStorageFailure] = useState<true>();
-  const [view, setView] = useState<BrowseView | "waiting" | "active">("browse");
+  const { view, setView, contactOpened, navigate, back } = useBrowseView();
   const [busy, setBusy] = useState(false);
   const [details, setDetails] = useState<{ id: string; image: number }>();
   const displayed = style ? people.map((persona) => withImageStyle(persona, style)) : people;
@@ -261,38 +274,36 @@ function Experience({
         <LikedPanel people={liked} onOpen={openDetails} disabled={busy} />
         <section className="swipe-stage" aria-label={copy.explore}>
           <h1 className="sr-only">{copy.explore}</h1>
-          {view === "contact" && (
-            <div className="contact-surface" hidden={Boolean(detail)}>
+          {contactOpened && (
+            <div className="contact-surface" hidden={view !== "contact" || Boolean(detail)}>
               <JoinForm
                 liked={liked}
                 client={client}
-                onBack={() => setView("browse")}
+                onBack={back}
                 onSuccess={setView}
                 onBusyChange={setBusy}
               />
             </div>
           )}
-          {(view !== "contact" || detail) && (
-            <div className="browse-panel">
-              <Deck
-                people={displayed}
-                current={current}
-                next={remaining[1]}
-                likedCount={liked.length}
-                hasPassed={people.some((persona) => choices[persona.id] === false)}
-                choose={choose}
-                restart={restart}
-                onOpen={openDetails}
-                onBusyChange={setBusy}
-                details={detail && { persona: detail, image: details!.image }}
-                onCollapse={closeDetails}
-              />
-              <p id="swipe-help" className="sr-only">
-                {copy.instructions}
-              </p>
-              {storageFailure && <output className="storage-warning">{copy.storageFailure}</output>}
-            </div>
-          )}
+          <div className="browse-panel" hidden={view === "contact" && !detail}>
+            <Deck
+              people={displayed}
+              current={current}
+              next={remaining[1]}
+              likedCount={liked.length}
+              hasPassed={people.some((persona) => choices[persona.id] === false)}
+              choose={choose}
+              restart={restart}
+              onOpen={openDetails}
+              onBusyChange={setBusy}
+              details={detail && { persona: detail, image: details!.image }}
+              onCollapse={closeDetails}
+            />
+            <p id="swipe-help" className="sr-only">
+              {copy.instructions}
+            </p>
+            {storageFailure && <output className="storage-warning">{copy.storageFailure}</output>}
+          </div>
         </section>
         <Navigation
           view={view}
@@ -300,7 +311,7 @@ function Experience({
           disabled={busy}
           onView={(next) => {
             closeDetails();
-            setView(next);
+            navigate(next);
           }}
         />
       </main>

@@ -1,13 +1,19 @@
 {
   "home": {
+    "menu": "Toggle menu",
+    "personaLabel": "AI persona",
+    "profileNote": "Different tastes. A story of their own.",
     "navigation": "About the service",
-    "about": "About RenAI",
+    "about": "About Ren AI",
     "how": "How it works",
     "faq": "FAQ",
     "start": "Meet the personas",
     "eyebrow": "A new connection. A familiar iMessage.",
     "title": "A little more",
     "titleAccent": "to look forward to.",
+    "heroIntro": "Different tastes. Their own stories. Meet an AI persona you want to know.",
+    "conversationTitle": "A little closer.",
+    "conversationAccent": "One message at a time.",
     "intro": "AI personas with their own tastes and stories. Discover someone who catches your interest, and share the everyday over iMessage.",
     "waiting": "Join the waitlist. If selected, a persona will send the first hello.",
     "example": "One evening, over messages",
@@ -55,7 +61,7 @@
     "questions": [
       {
         "title": "Am I talking to a real person?",
-        "body": "No. RenAI personas are fictional people played by AI. Their photos and profiles represent fictional people, too. This isn't a service for connecting with real people."
+        "body": "No. Ren AI personas are fictional people played by AI. Their photos and profiles represent fictional people, too. This isn't a service for connecting with real people."
       },
       {
         "title": "Do I need another app?",

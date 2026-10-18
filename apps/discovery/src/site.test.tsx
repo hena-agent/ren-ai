@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotices } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
@@ -41,6 +41,9 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   selectLanguage("화면 언어", "English");
   expect(screen.getAllByRole("link", { name: "Meet the personas" })).toHaveLength(2);
   expect(screen.getByRole("navigation", { name: "About the service" })).toBeTruthy();
+  expect(document.querySelector(".conversation-artwork > img")?.getAttribute("src")).toBe(
+    "/landing/conversation-en.webp",
+  );
   expect(screen.getByText("Am I talking to a real person?")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.en.title)).toBeTruthy();
   expect(document.title).toBe("Ren AI — A little more to look forward to");
@@ -50,6 +53,46 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(screen.getByText(discoveryNotices.ja.title)).toBeTruthy();
   expect(document.documentElement.lang).toBe("ja");
   expect(document.title).toBe("Ren AI — 日常に、待ち遠しいメッセージを");
+  expect(document.querySelector(".conversation-artwork > img")?.getAttribute("src")).toBe(
+    "/landing/conversation-ja.webp",
+  );
+});
+
+test("portrait selection changes the featured scene without leaving the page or losing it on locale changes", () => {
+  const profiles = vi.fn<DiscoveryClient["profiles"]>();
+  render(<Site client={{ profiles, join: vi.fn<DiscoveryClient["join"]>() }} />);
+  const selected = screen.getByRole("button", { name: "한서우 프로필" });
+  const next = screen.getByRole("button", { name: "강서율 프로필" });
+  expect(selected.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(next);
+  expect(selected.getAttribute("aria-pressed")).toBe("false");
+  expect(next.getAttribute("aria-pressed")).toBe("true");
+  expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
+    "/landing/seoyul.webp",
+  );
+  selectLanguage("화면 언어", "English");
+  expect(
+    screen.getByRole("button", { name: "강서율 profile photo" }).getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(window.location.pathname).toBe("/");
+  expect(profiles).not.toHaveBeenCalled();
+});
+
+test("the menu toggles, closes after following a section and restores keyboard focus on Escape", () => {
+  render(<Site />);
+  const toggle = screen.getByRole("button", { name: "메뉴 열기 및 닫기" });
+  const nav = screen.getByRole("navigation", { name: "서비스 소개 메뉴" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  fireEvent.click(within(nav).getByRole("link", { name: "Ren AI 소개" }));
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle);
+  fireEvent.keyDown(within(nav).getAllByRole("link")[0]!, { key: "Tab" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  fireEvent.keyDown(within(nav).getAllByRole("link")[0]!, { key: "Escape" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(toggle);
 });
 
 test.each(["/explore", "/#reselect=private-token"])(

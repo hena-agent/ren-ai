@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "design:assets": "node design/render.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "deploy": "wrangler deploy",

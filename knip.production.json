@@ -44,7 +44,8 @@
       ]
     },
     "apps/discovery": {
-      "entry": ["index.html"]
+      "entry": ["index.html", "design/render.mjs!"],
+      "ignoreBinaries": ["magick", "rsvg-convert"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],
