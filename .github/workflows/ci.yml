@@ -159,6 +159,7 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bash apps/api-msg/ops/build-bundle.sh "$RUNNER_TEMP/api-msg-bundle"
+      - run: bash apps/api-msg/ops/check-container.sh "$RUNNER_TEMP/api-msg-bundle"
       - run: tar -czf api-msg-bundle.tar.gz -C "$RUNNER_TEMP/api-msg-bundle" .
       - uses: actions/attest-build-provenance@v4
         with:

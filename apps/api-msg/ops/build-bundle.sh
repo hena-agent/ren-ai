@@ -6,7 +6,8 @@ output="${1:?Usage: build-bundle.sh NEW-OUTPUT-DIRECTORY}"
 [[ "$(bun --version)" == 1.4.2 ]] || { echo 'Bundle with Bun 1.4.2' >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo 'Use a new output directory' >&2; exit 1; }
 mkdir -p "$output"
-bun build --target=bun --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/api-msg.js" --metafile="$output/api-msg.graph.json" "$ops/api-msg-entry.mjs"
+# RPC uses JSON; omit optional native MessagePack loading from the portable bundle.
+bun build --target=bun --define 'process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED="true"' --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/api-msg.js" --metafile="$output/api-msg.graph.json" "$ops/api-msg-entry.mjs"
 bun build --target=bun --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/api-msg-verify.js" --metafile="$output/api-msg-verify.graph.json" "$ops/probe-entry.mjs"
 if grep -Eiq '(@effect/sql|sqlite|better-sqlite3)' "$output"/*.graph.json; then
   echo 'The production api-msg artifact must not contain a SQL or SQLite dependency' >&2
