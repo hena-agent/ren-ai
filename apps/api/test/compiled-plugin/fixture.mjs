@@ -70,7 +70,7 @@ async function completion(request) {
     ? {
         role: "assistant",
         content:
-          "About him: isolated.\nThe two of them: isolated.\nPlans and promises: remember.\nLately: a compiled test.",
+          "## Important Context\nAbout him: isolated.\nThe two of them: isolated.\nPlans and promises: remember.\nLately: a compiled test.",
       }
     : waiting
       ? {
