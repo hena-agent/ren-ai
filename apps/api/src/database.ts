@@ -202,6 +202,10 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE INDEX discovery_attempt_ip ON discovery_attempt(ip, at)`;
         yield* sql`CREATE INDEX discovery_attempt_expiry ON discovery_attempt(at)`;
       }),
+      "032_usage_collection": Effect.gen(function* () {
+        yield* sql`CREATE INDEX usage_entry_turn ON usage_entry(turn_id, outcome)`;
+        yield* sql`ALTER TABLE usage_session ADD COLUMN snapshot_hash TEXT`;
+      }),
     }),
   });
 });

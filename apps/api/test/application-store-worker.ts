@@ -5,6 +5,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { createApplicationStore, type ApplicationStore } from "../src/application-store.ts";
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { registrationSchemaProbe } from "./registration-schema.test-helper.ts";
+import { usageBudget } from "./usage-budget.test-helper.ts";
 
 interface RegistryNamespace {
   idFromName: (name: string) => string;
@@ -62,6 +63,8 @@ export class Registry extends DurableObject<Environment> {
       );
     }
     const store = await this.application();
+    if (path === "/__fixture/usage-budget")
+      return Response.json(await usageBudget(this.ctx.storage, store));
     if (path === "/__fixture/test-handle") {
       const { handle } = Schema.decodeUnknownSync(Schema.Struct({ handle: Schema.String }))(
         await request.json(),

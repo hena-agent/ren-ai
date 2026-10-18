@@ -8,6 +8,8 @@ Each execution heartbeat reads every bound session's complete, paginated `messag
 
 Collection upserts by native message ID in one application transaction. A failed page, cyclic cursor, unavailable executor or interrupted collection leaves the previous snapshot intact and marks the session unavailable. Repeating a snapshot or restarting the application cannot add duplicate usage. Running steps are refreshed until their final values arrive. A completed turn whose step has no terminal measurement retains an `unmeasured` entry with nullable counters, not invented zero usage.
 
+Persist a fingerprint of accounting metadata and session totals with each successful snapshot. An unchanged snapshot performs no accounting writes, including after actor replacement; recovery from an unavailable session clears that flag. `syncedAt` records the last persisted snapshot or recovery, not an idle poll. Changed snapshots update only different values, and turn completion uses an indexed lookup. Private message text and summaries do not participate in the fingerprint. Native pagination still reads the complete remote history so late measurements and retained sessions remain correct. A compiled Durable Object regression measures actual SQLite rows read/written for initial, unchanged and changed snapshots.
+
 The execution heartbeat collects usage after its other lifecycle work. Before removing a bound OpenCode session, the application requires a successful final usage snapshot. Collection failure prevents that removal. Session bindings are captured at creation and replacement; recorded usage is not cascade-deleted by a reset or user removal. Retained/replaced sessions continue to be collected. Existing conversations are bound when the schema is installed.
 
 ## Stored detail

@@ -20,7 +20,7 @@ export const usageCollector = (api: {
         const work = Effect.gen(function* () {
           const [bound] = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
           if (!bound) return;
-          // ponytail: replay paginated metadata for correctness; add incremental snapshots if long histories make polling costly.
+          // Native cursors paginate a snapshot, not a change feed. SQL persists only changed accounting metadata.
           const messages: MessageListOutput["data"][number][] = [];
           let cursor: string | undefined;
           const visited = new Set<string>();
@@ -52,7 +52,7 @@ export const usageCollector = (api: {
                 durationMs: (yield* Clock.currentTimeMillis) - started,
                 ...contactCause(Cause.squash(cause)),
               });
-              yield* sql`UPDATE usage_session SET unavailable = 1 WHERE session_id = ${sessionID}`;
+              yield* sql`UPDATE usage_session SET unavailable = 1 WHERE session_id = ${sessionID} AND unavailable = 0`;
               return yield* Effect.fail(
                 new Error("Conversation usage snapshot unavailable", {
                   cause: Cause.squash(cause),
