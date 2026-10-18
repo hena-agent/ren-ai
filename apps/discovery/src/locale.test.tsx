@@ -65,6 +65,24 @@ test("language detection prefers a saved choice, then supported browser language
   expect(detectLocale()).toBe("en");
 });
 
+test("the globe picker exposes its selected language and opens a checked language list by keyboard", () => {
+  render(
+    <LocaleProvider>
+      <LocalePicker />
+    </LocaleProvider>,
+  );
+  const trigger = screen.getByRole("combobox", { name: "화면 언어" });
+  expect(trigger.querySelector(".sr-only")?.textContent).toBe("한국어");
+  expect(trigger.querySelector("svg circle")).not.toBeNull();
+  fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown" });
+  expect(screen.getByRole("option", { name: "한국어" }).textContent).toContain("✓");
+  expect(screen.getAllByRole("option")).toHaveLength(3);
+  fireEvent.click(screen.getByRole("option", { name: "English" }));
+  expect(screen.queryByRole("listbox")).toBeNull();
+  expect(trigger.querySelector(".sr-only")?.textContent).toBe("English");
+  expect(trigger.getAttribute("aria-label")).toBe("Display language");
+});
+
 test("display changes preserve original profiles, photos, Likes and the mounted contact form, keeping conversation and consent languages distinct", async () => {
   localStorage.setItem("ren-ai.discovery.image-style", "photo");
   const join = vi.fn<DiscoveryClient["join"]>(async () => ({ status: "waiting" }));

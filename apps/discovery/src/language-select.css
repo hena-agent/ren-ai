@@ -26,6 +26,37 @@
   background: var(--canvas);
   opacity: 0.7;
 }
+.language-select-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+.language-select-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+.header-language-select {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+  border-color: transparent;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+}
+.header-language-select:hover:not(:disabled),
+.header-language-select[data-state="open"] {
+  border-color: transparent;
+  color: var(--ink);
+  background: var(--canvas);
+}
+.header-language-select .language-select-icon svg {
+  width: 20px;
+  height: 20px;
+}
 .form-language-select {
   width: 100%;
   max-width: none;
@@ -33,7 +64,8 @@
 }
 .language-select-content {
   z-index: 20;
-  min-width: var(--radix-select-trigger-width);
+  min-width: max(144px, var(--radix-select-trigger-width));
+  max-height: var(--radix-select-content-available-height);
   overflow: hidden;
   padding: 4px;
   border: 1px solid var(--line);
@@ -86,10 +118,5 @@
   .site-header .style-switch button {
     min-width: 54px;
     padding-inline: 6px;
-  }
-  .header-language-select {
-    max-width: 6.5rem;
-    gap: 4px;
-    padding-inline: 7px;
   }
 }

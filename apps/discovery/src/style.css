@@ -4,6 +4,7 @@
 @import "./photo-gallery.css";
 @import "./profile-details.css";
 @import "./language-select.css";
+@import "./home.css";
 
 :root {
   --canvas: #f4f5f7;
