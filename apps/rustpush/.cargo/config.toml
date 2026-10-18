@@ -1,0 +1,3 @@
+[build]
+# Share intermediates across worktrees; final executables stay in each local target/.
+build-dir = "{cargo-cache-home}/build/ren-ai-rustpush"

@@ -72,8 +72,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/build/ren-ai-rustpush
             apps/rustpush/target
-          key: rustpush-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/rustpush/Cargo.lock', 'apps/rustpush/native.patch', 'apps/rustpush/rust-toolchain.toml') }}
+          key: rustpush-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/rustpush/Cargo.toml', 'apps/rustpush/Cargo.lock', 'apps/rustpush/.cargo/config.toml', 'apps/rustpush/native.patch', 'apps/rustpush/rust-toolchain.toml') }}
       - run: cargo install cargo-llvm-cov --version 0.8.5 --locked
       - run: cargo install rust-code-analysis-cli --version 0.0.25 --locked
       - run: bash apps/rustpush/check.sh
