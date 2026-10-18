@@ -29,6 +29,7 @@ export interface RemoteConfig {
   readonly directory: string;
   readonly model: string;
   readonly groundRules: string;
+  readonly onPrompt?: (sessionID: string) => Effect.Effect<void, Error>;
 }
 
 export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, Persona>) =>
@@ -48,7 +49,10 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
       get: (sessionID: Session.ID) =>
         client.session.get({ sessionID }).pipe(Effect.mapError(remoteError)),
       prompt: (input: SessionPromptInput) =>
-        client.session.prompt(input).pipe(Effect.mapError(remoteError)),
+        (config.onPrompt?.(input.sessionID) ?? Effect.void).pipe(
+          Effect.andThen(client.session.prompt(input)),
+          Effect.mapError((error) => ("_tag" in error ? remoteError(error) : error)),
+        ),
       wait: (sessionID: Session.ID) =>
         client.session.wait({ sessionID }).pipe(Effect.mapError(remoteError)),
       messages: (input: MessageListInput) =>
@@ -90,6 +94,7 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
       ),
       retry: (sessionID: Session.ID) =>
         Effect.gen(function* () {
+          yield* config.onPrompt?.(sessionID) ?? Effect.void;
           const session = yield* sessions.get(sessionID);
           const pending = yield* sessions.inbox(sessionID);
           if (pending.length) {

@@ -43,7 +43,10 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           step++;
           if (step === 1) return TestLLM.tool("mark", "read", {});
           if (step === 2) return TestLLM.tool("reaction", "react", { tapback: "love" });
-          if (step === 3) return TestLLM.tool("pause", "wait", { seconds: 60 });
+          if (step === 3) {
+            Effect.runSync(Deferred.succeed(waiting, undefined));
+            return TestLLM.tool("pause", "wait", { seconds: 60 });
+          }
           if (step === 4) return TestLLM.tool("reply", "send", { text: "hello from Docker" });
           return TestLLM.text("done", "answer");
         });
@@ -51,13 +54,14 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         yield* Effect.promise(() => native.run(native.plugins.register(intruder)));
         const alerts: string[] = [];
         let alertRequests = 0;
+        let observations = 0;
         let disconnected = false;
         let applicationWeb = unavailable;
         const network: typeof fetch = async (input, init) => {
           const request = new Request(input, init);
           const hostname = new URL(request.url).hostname;
-          const waitingRequest =
-            hostname === "app.test" && (await request.clone().text()).includes('"tag":"wait"');
+          if (hostname === "app.test" && (await request.clone().text()).includes('"tag":"observe"'))
+            observations++;
           if (hostname === "app.test" && disconnected)
             return new Response("offline", { status: 503 });
           if (
@@ -71,7 +75,6 @@ test("an incoming message reaches Docker's persona plugin and replies through th
             : hostname === "imsg.test"
               ? mac.handler(request)
               : applicationWeb(request));
-          if (waitingRequest) Effect.runSync(Deferred.succeed(waiting, undefined));
           return response;
         };
         const application = yield* Effect.gen(function* () {
@@ -116,6 +119,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
             messages,
             messages.gestures,
             silentAlerts,
+            false,
           );
         }).pipe(
           Effect.provide(FetchHttpClient.layer),
@@ -124,6 +128,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         const stopHeartbeat = yield* local.messages.follow(0, () =>
           Effect.all([application.heartbeat.intake, application.heartbeat.followUps]),
         );
+        yield* application.heartbeat.intake;
         yield* Effect.addFinalizer(() => Effect.sync(stopHeartbeat));
         const session = yield* application.createSession("persona1");
         yield* application.conversations.create(registration("+821012345678", session.id));
@@ -140,6 +145,11 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           while (!local.bubbles.length) yield* Effect.sleep("10 millis");
         }).pipe(Effect.timeout("5 seconds"));
         yield* application.sessions.wait(session.id);
+        yield* Effect.promise(async () => {
+          await expect.poll(() => observations).toBeGreaterThan(0);
+        });
+        yield* application.heartbeat.checkTurns([session.id]);
+        yield* application.heartbeat.rebuilds;
         const modelRequests = yield* llm.requests();
         expect(JSON.stringify(modelRequests[0])).toContain("read 21:04");
         const pauseResults = modelRequests

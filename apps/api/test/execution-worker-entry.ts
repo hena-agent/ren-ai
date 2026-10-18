@@ -51,6 +51,7 @@ export class ExecutionApplication extends ApiApplication {
     }
     return Response.json({
       catalogReads,
+      alarm: await this.ctx.storage.getAlarm(),
       contacts: this.ctx.storage.sql
         .exec("SELECT state, session_id FROM discovery_contact")
         .toArray(),

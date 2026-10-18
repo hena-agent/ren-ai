@@ -8,7 +8,7 @@ import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 
 type MessagingOptions = Omit<
   HostOptions,
-  "personas" | "send" | "wait" | "read" | "react" | "onContext" | "handleForSession"
+  "personas" | "send" | "wait" | "read" | "react" | "context" | "handleForSession"
 >;
 
 export const startPersonaHost = (root: string, options: PersonaHostOptions) =>

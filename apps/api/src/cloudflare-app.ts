@@ -11,6 +11,7 @@ import { applicationRequest } from "./application-request.ts";
 import { stateTransfer } from "./state-transfer.ts";
 import { healthResponse, probeHealth } from "@ren-ai/transport/health";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
+import { intakeRequests } from "./intake/http.ts";
 
 export interface CloudflareApplication {
   readonly store: ApplicationStore;
@@ -108,6 +109,9 @@ export const createCloudflareApplication = async (
       httpClient: Context.get(services, HttpClient.HttpClient),
     });
     let runtime: ReturnType<typeof createExecutionRuntime> | undefined;
+    const intake = configuration.execution.managementToken
+      ? intakeRequests(store, configuration.execution.managementToken)
+      : async () => new Response("Unavailable", { status: 503 });
     const execution = () =>
       (runtime ??= createExecutionRuntime(store, configuration, bindings, groundRules, fetcher));
     return {
@@ -126,6 +130,8 @@ export const createCloudflareApplication = async (
               configuration.bootstrapOnly,
             );
           if (configuration.bootstrapOnly && isWriteRequest(request)) return bootstrapResponse();
+          if (path === "/management/intake/watch" || path === "/management/intake/wake")
+            return intake(request);
           if (
             path.startsWith("/rpc") ||
             path.startsWith("/operator/") ||

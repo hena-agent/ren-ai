@@ -17,24 +17,23 @@ interface PluginConfig {
     tapback: Tapback,
     callID: string,
   ) => Effect.Effect<string, Error>;
-  readonly onContext?: (
+  readonly context?: (
     sessionID: string,
     messageIDs: readonly string[],
-  ) => Effect.Effect<void, Error>;
-  readonly lastMessageStatus?: (
-    sessionID: string,
-  ) => Effect.Effect<OutgoingStatus | undefined, Error>;
+  ) => Effect.Effect<
+    {
+      readonly status: OutgoingStatus | undefined;
+      readonly sends: ReadonlyArray<{
+        readonly toolCallID: string | null;
+        readonly state: string;
+        readonly updatedAt: number;
+      }>;
+    },
+    Error
+  >;
   readonly health: {
     readonly raise: (name: string, detail: string) => Effect.Effect<void>;
   };
-  readonly settledSends?: (sessionID: string) => Effect.Effect<
-    ReadonlyArray<{
-      readonly toolCallID: string | null;
-      readonly state: string;
-      readonly updatedAt: number;
-    }>,
-    Error
-  >;
 }
 
 type HostTools =

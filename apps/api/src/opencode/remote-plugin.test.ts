@@ -27,7 +27,7 @@ const installedPlugin = installedPlugins[0]!;
 afterEach(() => vi.unstubAllEnvs());
 
 test.each([false, true])(
-  "the plugins validate wait results without catalog loading (default entries: %s)",
+  "the plugins wait locally without Cloudflare calls or catalog loading (default entries: %s)",
   async (installed) => {
     const { root, personaDirectory } = await messagingFixture("plugin-wait-result-");
     try {
@@ -38,7 +38,7 @@ test.each([false, true])(
           yield* llm.serve((request) => {
             if (request.tools.some((tool) => tool.name === "wait") && !attempted) {
               attempted = true;
-              return TestLLM.tool("heartbeat-only", "wait", { seconds: 60 });
+              return TestLLM.tool("local-wait", "wait", { seconds: 1 });
             }
             return TestLLM.text("observed result", "answer");
           });
@@ -54,10 +54,8 @@ test.each([false, true])(
             if (payload.tag === "catalog" && ++catalogs)
               return new Response("Starting", { status: 503 });
             if (payload.tag !== "wait") return fixture.web.handler(request);
-            const values = ++waitAttempts === 1 ? [""] : ["observed result"];
-            return new Response(
-              `${JSON.stringify({ _tag: "Chunk", requestId: payload.id, values })}\n${JSON.stringify({ _tag: "Exit", requestId: payload.id, exit: { _tag: "Success", value: null } })}\n`,
-            );
+            waitAttempts++;
+            throw new Error("Wait must stay local");
           };
           const config = {
             directory: personaDirectory,
@@ -82,11 +80,11 @@ test.each([false, true])(
             .flatMap((request) => request.messages)
             .flatMap((message) => message.content)
             .filter((part) => part.type === "tool-result")
-            .filter((part) => part.id === "heartbeat-only")
+            .filter((part) => part.id === "local-wait")
             .map((part) => part.result);
           expect(results).toHaveLength(1);
-          expect(results[0]).toEqual({ type: "text", value: "observed result" });
-          expect(waitAttempts).toBe(2);
+          expect(results[0]).toEqual({ type: "text", value: "paused 1s" });
+          expect(waitAttempts).toBe(0);
           expect(catalogs).toBe(0);
           const beforeMismatch = (yield* llm.requests()).length;
           yield* Effect.promise(() =>

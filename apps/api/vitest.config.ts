@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  assetsInclude: ["**/*.md"],
   resolve: {
     alias: {
       "@ren-ai/personas/languages": fileURLToPath(

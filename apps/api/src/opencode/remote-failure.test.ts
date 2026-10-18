@@ -5,9 +5,11 @@ import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
 import { providerUnavailable } from "../../test/messaging-host.test-helper.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";
+import { remoteHost } from "./remote.ts";
+import { FetchHttpClient } from "effect/unstable/http";
 
 test("missing-session errors retain the native diagnostic for the operator", () =>
-  withRemoteHost((remote) =>
+  withRemoteHost((remote, directory, { transport }) =>
     Effect.gen(function* () {
       const session = yield* remote.createSession("persona1");
       yield* remote.sessions.remove(session.id);
@@ -15,6 +17,29 @@ test("missing-session errors retain the native diagnostic for the operator", () 
       const reported = yield* remote.sessions.get(session.id).pipe(Effect.flip);
       expect(reported.message).toBe(native.message);
       expect(reported.message).not.toBe("");
+      const rejected = yield* remote.sessions
+        .prompt({ sessionID: session.id, text: "missing" })
+        .pipe(Effect.flip);
+      expect(rejected).toMatchObject({ _tag: "Session.NotFoundError" });
+      const cause = new Error("Cannot persist turn probe");
+      const guarded = yield* remoteHost(
+        {
+          baseUrl: "https://oc.test",
+          authorization: "Basic test",
+          directory,
+          model: "test/probe",
+          groundRules: "",
+          onPrompt: () => Effect.fail(cause),
+        },
+        remote.personas,
+      ).pipe(Effect.provide(FetchHttpClient.layer));
+      const before = transport.requests.length;
+      expect(
+        yield* guarded.sessions
+          .prompt({ sessionID: session.id, text: "must not be admitted" })
+          .pipe(Effect.flip),
+      ).toBe(cause);
+      expect(transport.requests).toHaveLength(before);
     }),
   ));
 
