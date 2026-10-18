@@ -1,4 +1,4 @@
-import { Clock, Deferred, Effect } from "effect";
+import { Array, Clock, Deferred, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 
 /** Each notification belongs to one session, including across a Conversation's reset. */
@@ -50,8 +50,12 @@ export const timing = Effect.gen(function* () {
       yield* Effect.sleep(Math.max(0, until - (yield* Clock.currentTimeMillis)));
     });
   const seen = (id: string, messageIDs: readonly string[]) =>
-    sql`UPDATE reply_arrival SET seen = 1 WHERE session_id = ${id} AND ${sql.in("message_id", messageIDs)}`.pipe(
-      Effect.asVoid,
+    // Cloudflare SQLite allows 100 bindings; reserve one for the session ID.
+    Effect.forEach(
+      Array.chunksOf(messageIDs, 99),
+      (batch) =>
+        sql`UPDATE reply_arrival SET seen = 1 WHERE session_id = ${id} AND ${sql.in("message_id", batch)}`,
+      { discard: true },
     );
   return { onNew, during, wait, quiet, seen };
 });

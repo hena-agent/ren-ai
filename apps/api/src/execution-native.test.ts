@@ -202,6 +202,16 @@ test.each(["sent", "uncertain"] as const)(
               const state = await executionState(runtime);
               expect(creates).toEqual([state.conversations[0]!.session_id]);
               expect(state.sends).toEqual([{ state: outcome, tool_call_id: "native-greeting" }]);
+              // The real Cloudflare SQLite limit is 100 bindings, unlike Node SQLite.
+              for (const count of [0, 99, 100, 205]) {
+                const context = await Effect.runPromise(
+                  callback.context({
+                    sessionID: creates[0]!,
+                    messageIDs: Array.from({ length: count }, (_, i) => `msg_context_${i}`),
+                  }),
+                );
+                expect(context.sends).toEqual([]);
+              }
               const session = join(personaDirectory, "sessions", creates[0]!);
               const files = async () => ({
                 state: await readFile(join(session, "STATE.md"), "utf8"),

@@ -13,6 +13,34 @@ import { conversationEndings } from "./end.ts";
 import { retainedSessions } from "./retained.ts";
 import type { ContactDiagnostic } from "../discovery/diagnostics.ts";
 
+test.each([false, true])(
+  "runtime status exposes pre-assistant failure only when idle (running: %s)",
+  (running) =>
+    withContactDatabase(
+      Effect.gen(function* () {
+        const f = yield* relationshipFixture;
+        const host = fromPartial<PersonaRuntime>({
+          sessions: {
+            get: () => Effect.succeed(fromPartial<Session.Info>({ outcome: "failed" })),
+            inbox: () => Effect.succeed([]),
+          },
+        });
+        const service = yield* runtimeStatus(host, () => Effect.succeed(running), f.ending);
+        const handler = runtimeStatusRequest(service, Effect.runPromise);
+        const response = yield* Effect.promise(() =>
+          handler(new Request(`https://api.test/operator/conversations?id=${f.conversation.id}`)),
+        );
+        expect(response.status).toBe(200);
+        expect(yield* Effect.promise(() => response.json())).toEqual({
+          state: running ? "running" : "idle",
+          failed: !running,
+          pending: 0,
+          nextWakeAt: null,
+        });
+      }),
+    ),
+);
+
 test("termination stops execution and cancels inbox work once across application restarts", async () => {
   await withContactDatabase(
     Effect.gen(function* () {
@@ -65,6 +93,7 @@ test("termination stops execution and cancels inbox work once across application
       const service = yield* runtimeStatus(host, () => Effect.succeed(false), f.ending);
       expect(yield* service.inspect(f.conversation.id)).toEqual({
         state: "idle",
+        failed: false,
         pending: 0,
         nextWakeAt: null,
       });

@@ -82,6 +82,14 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect(client.detail).toHaveBeenLastCalledWith(1, registrationNextBefore);
   expect((await admin(request("/conversations/1?registrationsBefore=invalid"))).status).toBe(400);
   expect(active).not.toContain('value="stop"');
+  client.runtime = async () => ({ state: "idle", failed: true, pending: 0, nextWakeAt: null });
+  const failed = await (await admin(request("/conversations/1"))).text();
+  expect(failed).toContain("마지막 응답 생성 실패");
+  expect(failed).toContain("OpenCode 서버 로그");
+  client.runtime = async () => ({ state: "idle", failed: false, pending: 0, nextWakeAt: null });
+  expect(await (await admin(request("/conversations/1"))).text()).not.toContain(
+    "마지막 응답 생성 실패",
+  );
   const ended = {
     ...entry,
     endedAt: 300,
@@ -176,6 +184,7 @@ test("conversation client authenticates and validates every response without lea
       const calls: Request[] = [];
       let invalid = false;
       let status = 200;
+      let failed: boolean | undefined;
       const management = managementClient(
         "https://api.test",
         "private-token",
@@ -188,7 +197,7 @@ test("conversation client authenticates and validates every response without lea
           if (url.pathname === "/management/conversations")
             return Response.json({ entries: [entry], nextBefore: null });
           if (url.pathname.startsWith("/management/conversations/")) return Response.json(detail);
-          return Response.json({ state: "idle", pending: 0, nextWakeAt: null });
+          return Response.json({ state: "idle", pending: 0, nextWakeAt: null, failed });
         },
       );
       const client = management.conversations!;
@@ -203,6 +212,8 @@ test("conversation client authenticates and validates every response without lea
       expect((await client.detail(1)).entry.personaName).toBe("강서율");
       await client.detail(1, randomUUID());
       expect((await client.runtime(1)).state).toBe("idle");
+      failed = true;
+      expect((await client.runtime(1)).failed).toBe(true);
       await client.recover({ id: 1, action: "notice", requestId: randomUUID() });
       expect(
         calls.every((call) => call.headers.get("authorization") === "Bearer private-token"),

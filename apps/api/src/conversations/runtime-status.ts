@@ -30,11 +30,12 @@ export const runtimeStatus = (
         const sessionID = Session.ID.make(row.sessionID);
         const result = yield* Effect.result(
           Effect.gen(function* () {
-            yield* host.sessions.get(sessionID);
+            const session = yield* host.sessions.get(sessionID);
             const running = yield* active(sessionID);
             const inbox = yield* host.sessions.inbox(sessionID);
             return {
               state: running ? ("running" as const) : ("idle" as const),
+              failed: !running && session.outcome === "failed",
               pending: inbox.length,
               nextWakeAt: row.nextWakeAt,
             };
