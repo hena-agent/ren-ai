@@ -88,6 +88,28 @@ test("all steps in an idle-delimited turn, including steered input, are durable 
       expect(JSON.stringify(first)).not.toMatch(/PRIVATE|private@example/);
       yield* collector.tick;
       expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
+      const hash = yield* sql`SELECT snapshot_hash FROM usage_session`;
+      const offline = yield* usageCollector({
+        messages: () => Effect.fail(new Error("offline")),
+        get: () => Effect.succeed(session),
+      });
+      yield* offline.session(session.id).pipe(Effect.result);
+      expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 1 }]);
+      yield* collector.session(session.id);
+      expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 0 }]);
+      expect(yield* sql`SELECT snapshot_hash FROM usage_session`).toEqual(hash);
+      expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
+      yield* sql`CREATE TRIGGER reject_usage BEFORE UPDATE ON usage_entry WHEN NEW.input = 999
+        BEGIN SELECT RAISE(ABORT, 'fixture failure'); END`;
+      pages[1] = assistant("msg_first", { tokens: { ...tokens, input: 101 } });
+      pages[3] = assistant("msg_second", { tokens: { ...tokens, input: 999 } });
+      yield* collector.session(session.id).pipe(Effect.result);
+      expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
+      expect(yield* sql`SELECT snapshot_hash FROM usage_session`).toEqual(hash);
+      yield* sql`DROP TRIGGER reject_usage`;
+      pages[1] = assistant("msg_first");
+      pages[3] = assistant("msg_second");
+      yield* collector.session(session.id);
       expect(yield* query(999)).toBeUndefined();
       yield* directory.replaceSession(conversation, "ses_replacement");
       expect((yield* query(conversation.id))!.sessions).toHaveLength(2);
@@ -141,15 +163,7 @@ test("running, interrupted and failed steps preserve missing usage and safe diag
       ];
       const collector = yield* usageCollector({
         messages: () => Effect.succeed({ data: history, cursor: {} }),
-        get: () =>
-          Effect.succeed(
-            fromPartial<Session.Info>({
-              id: session.id,
-              tokens,
-              cost: session.cost,
-              time: { created: time, updated: DateTime.makeUnsafe(history.length) },
-            }),
-          ),
+        get: () => Effect.succeed(session),
       });
       yield* collector.session(session.id);
       expect((yield* query(conversation.id))!.turns[0]!.totals.unmeasuredEntries).toBe(2);

@@ -11,22 +11,21 @@ import { migrate } from "../database.ts";
 import { usageCollector } from "./collect.ts";
 
 const time = DateTime.makeUnsafe(1000);
-const sessionInfo = (id: string, updated = 1000) =>
+const sessionInfo = (id: string) =>
   fromPartial<Session.Info>({
     id,
-    time: { created: time, updated: DateTime.makeUnsafe(updated) },
+    time: { created: time, updated: time },
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     cost: 0,
   });
 
-test("unchanged usage survives collector replacement without history reads or snapshot writes; new turns leave old rows untouched", () =>
+test("unchanged usage survives collector replacement without snapshot writes; new turns leave unchanged rows untouched", () =>
   runMessagingTest(
     Effect.gen(function* () {
       yield* migrate;
       const sql = yield* SqlClient.SqlClient;
       const directory = yield* conversations;
       yield* directory.create(registration("usage@example.test", "ses_storage"));
-      let revision = 1;
       let history = [
         fromPartial<SessionMessage.User>({
           id: "msg_first",
@@ -45,7 +44,7 @@ test("unchanged usage survives collector replacement without history reads or sn
       );
       const api = {
         messages,
-        get: () => Effect.succeed(sessionInfo("ses_storage", revision)),
+        get: () => Effect.succeed(sessionInfo("ses_storage")),
       };
       const collector = yield* usageCollector(api);
       yield* collector.tick;
@@ -53,7 +52,7 @@ test("unchanged usage survives collector replacement without history reads or sn
         WHEN OLD.id = 'msg_first' BEGIN SELECT RAISE(ABORT, 'historical turn rewritten'); END`;
       const restarted = yield* usageCollector(api);
       yield* restarted.session("ses_storage");
-      expect(messages).toHaveBeenCalledTimes(1);
+      expect(messages).toHaveBeenCalledTimes(2);
       history = [
         ...history,
         fromPartial<SessionMessage.User>({
@@ -68,16 +67,15 @@ test("unchanged usage survives collector replacement without history reads or sn
           time: { created: time },
         }),
       ];
-      revision++;
       yield* restarted.session("ses_storage");
-      expect(messages).toHaveBeenCalledTimes(2);
+      expect(messages).toHaveBeenCalledTimes(3);
       expect(yield* sql`SELECT id FROM usage_turn ORDER BY rowid`).toEqual([
         { id: "msg_first" },
         { id: "msg_second" },
       ]);
       yield* sql`UPDATE usage_session SET unavailable = 1`;
       yield* restarted.session("ses_storage");
-      expect(messages).toHaveBeenCalledTimes(3);
+      expect(messages).toHaveBeenCalledTimes(4);
       expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 0 }]);
     }),
   ));
@@ -125,25 +123,36 @@ test("maintenance bounds usage checks, spaces unchanged checks and excludes repl
     }),
   ));
 
-test("missing native checkpoints preserve saved usage and report a failure instead of replaying closed history", () =>
+test("failed maintenance keeps the saved fingerprint and backs off before retrying after collector replacement", () =>
   runMessagingTest(
     Effect.gen(function* () {
       yield* migrate;
       const sql = yield* SqlClient.SqlClient;
       const directory = yield* conversations;
       yield* directory.create(registration("checkpoint@example.test", "ses_missing"));
-      yield* sql`UPDATE usage_session SET last_idle = 'missing'`;
       const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
       try {
-        const collector = yield* usageCollector({
+        const api = {
           messages: () => Effect.succeed({ data: [], cursor: {} }),
           get: () => Effect.succeed(sessionInfo("ses_missing")),
+        };
+        const collector = yield* usageCollector(api);
+        yield* collector.session("ses_missing");
+        const saved = yield* sql`SELECT snapshot_hash FROM usage_session`;
+        const unavailable = yield* usageCollector({
+          ...api,
+          messages: () => Effect.fail(new Error("offline")),
         });
-        yield* collector.tick;
-        expect(yield* sql`SELECT unavailable, last_idle, fingerprint FROM usage_session`).toEqual([
-          { unavailable: 1, last_idle: "missing", fingerprint: null },
-        ]);
+        yield* unavailable.tick;
+        expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 1 }]);
+        expect(yield* sql`SELECT snapshot_hash FROM usage_session`).toEqual(saved);
         expect(stderr).toHaveBeenCalled();
+        const restarted = yield* usageCollector(api);
+        yield* restarted.tick;
+        expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 1 }]);
+        yield* sql`UPDATE usage_session SET next_check_at = 0`;
+        yield* restarted.tick;
+        expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 0 }]);
       } finally {
         stderr.mockRestore();
       }

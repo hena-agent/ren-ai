@@ -81,7 +81,7 @@ The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/
 
 - Treat Durable Objects as authoritative state and coordination, not a polling cache. Schedule persisted work when state changes; keep maintenance bounded. See ADR-0019 for the Mac/Cloudflare boundary.
 - Budget storage rows read/written separately from requests. Use indexed predicates and SQL limits/keyset cursors before loading recovery batches; verify hot queries with `EXPLAIN QUERY PLAN` against the real schema.
-- Persist collection fingerprints and progress checkpoints across actor replacement. Reconcile changed sessions and unfinished records; leave completed history untouched. Keep unchanged Admin checkpoints free of storage transactions and writes.
+- Persist collection fingerprints and schedules across actor replacement. Reconcile changed accounting metadata, including late measurements, while leaving unchanged history untouched. Keep unchanged Admin checkpoints free of storage transactions and writes.
 - Test repeated idle checks, concurrent checkpoints, actor replacement and growing history at the real storage boundary. Preserve durable deduplication, recovery and uncertain-send behavior while reducing access; passing functional tests alone does not establish bounded storage cost.
 
 ## Persona authoring

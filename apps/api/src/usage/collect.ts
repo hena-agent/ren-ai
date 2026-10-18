@@ -18,23 +18,9 @@ export const usageCollector = (api: {
       Effect.gen(function* () {
         const started = yield* Clock.currentTimeMillis;
         const work = Effect.gen(function* () {
-          const [bound] = yield* sql<{
-            fingerprint: string | null;
-            lastIdle: string | null;
-            unavailable: number;
-          }>`SELECT fingerprint, last_idle AS lastIdle, unavailable FROM usage_session WHERE session_id = ${sessionID}`;
+          const [bound] = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
           if (!bound) return;
-          const session = yield* api.get(Session.ID.make(sessionID));
-          const fingerprint = JSON.stringify([
-            session.time.updated,
-            session.time.idle,
-            session.outcome,
-            session.tokens,
-            session.cost,
-          ]);
-          if (bound.fingerprint === fingerprint && !bound.unavailable) return;
-          // Native history cursors are opaque page cursors, not durable change tokens.
-          // Read history on change, but checkpoint closed turns so SQLite only applies the unfinished tail.
+          // Native cursors paginate a snapshot, not a change feed. SQL persists only changed accounting metadata.
           const messages: MessageListOutput["data"][number][] = [];
           let cursor: string | undefined;
           const visited = new Set<string>();
@@ -49,10 +35,9 @@ export const usageCollector = (api: {
               yield* Effect.fail(new Error("Repeated usage message cursor"));
             if (cursor) visited.add(cursor);
           } while (cursor);
+          const session = yield* api.get(Session.ID.make(sessionID));
           const now = yield* Clock.currentTimeMillis;
-          yield* saveUsage(sql, session, messages, now, bound.lastIdle, fingerprint).pipe(
-            sql.withTransaction,
-          );
+          yield* saveUsage(sql, session, messages, now).pipe(sql.withTransaction);
         });
         yield* work.pipe(
           Effect.timeout("30 seconds"),
@@ -67,7 +52,7 @@ export const usageCollector = (api: {
                 durationMs: (yield* Clock.currentTimeMillis) - started,
                 ...contactCause(Cause.squash(cause)),
               });
-              yield* sql`UPDATE usage_session SET unavailable = 1 WHERE session_id = ${sessionID}`;
+              yield* sql`UPDATE usage_session SET unavailable = 1 WHERE session_id = ${sessionID} AND unavailable = 0`;
               return yield* Effect.fail(
                 new Error("Conversation usage snapshot unavailable", {
                   cause: Cause.squash(cause),
