@@ -209,6 +209,11 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE INDEX usage_session_due ON usage_session(next_check_at, session_id)`;
         yield* sql`CREATE INDEX usage_entry_turn ON usage_entry(turn_id, outcome)`;
       }),
+      "033_recovery_indexes": Effect.gen(function* () {
+        yield* sql`CREATE INDEX failed_turn_inspection ON failed_turn(retry_at, session_id)`;
+        yield* sql`CREATE INDEX failed_turn_pending ON failed_turn(review, retry_at, last_retry_at, failed_at, session_id)`;
+        yield* sql`CREATE INDEX failed_turn_flags ON failed_turn(review, quota, provider_alerted, failed_at)`;
+      }),
     }),
   });
 });
