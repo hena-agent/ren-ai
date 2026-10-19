@@ -38,6 +38,13 @@ const reasons = {
   reserved: "배정됨",
   no_persona: "공개된 미배정 Like 후보 없음",
 };
+const notificationLabels = {
+  queued: "안내 대기 중",
+  sent: "안내 보냄",
+  failed: "안내 실패",
+  uncertain: "안내 결과 불확실",
+  skipped: "안내 생략 (시간당 한도)",
+};
 const time = (at: number) =>
   new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "short",
@@ -86,6 +93,7 @@ function Rows({
                 <span className="contact-handle">{entry.handle}</span>
                 {entry.testHandle && <small>테스트 연락처</small>}
                 <small>{time(entry.createdAt)}</small>
+                {entry.notification && <small>{notificationLabels[entry.notification]}</small>}
                 {entry.state === "active" && !entry.relationshipEnd && (
                   <a href={`/first-contacts?languages=${entry.id}`}>현재 언어 실력</a>
                 )}

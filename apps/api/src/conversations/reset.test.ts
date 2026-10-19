@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
 import { registration } from "../../test/messaging.test-helper.ts";
@@ -16,6 +17,8 @@ test("a test handle resets Memory into a new session and keeps the old session f
         yield* host.sessions.wait(old.id);
         const command = yield* fake.text(handle, " /Reset \n", at + 1);
         yield* startTestHandle(host, fake.messages, handle);
+        const sql = yield* SqlClient.SqlClient;
+        expect(yield* sql`SELECT state FROM discovery_notification`).toEqual([{ state: "queued" }]);
         const fresh = (yield* host.conversations.byHandle(handle))!;
         expect(fresh.sessionID).not.toBe(old.id);
         const id = Session.ID.make(fresh.sessionID);

@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { Migrator, SqlClient } from "effect/unstable/sql";
 import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
 import { usageSchema } from "./usage/schema.ts";
+import { notificationSchema } from "./discovery/notifications.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -206,6 +207,7 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE INDEX usage_entry_turn ON usage_entry(turn_id, outcome)`;
         yield* sql`ALTER TABLE usage_session ADD COLUMN snapshot_hash TEXT`;
       }),
+      "033_waitlist_notifications": notificationSchema,
     }),
   });
 });

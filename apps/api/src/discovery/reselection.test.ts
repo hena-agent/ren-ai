@@ -125,6 +125,9 @@ test("a delivered private reselection link admits another persona for the same U
           expect(yield* Effect.promise(() => response.json())).toEqual({ status: "waiting" });
         }
         expect((yield* f.sql`SELECT id FROM discovery_registration`).length).toBe(2);
+        expect(yield* f.sql`SELECT state FROM discovery_notification`).toEqual([
+          { state: "queued" },
+        ]);
         expect(
           (yield* f.sql`SELECT registration_id FROM discovery_contact WHERE registration_id = ${oldRegistrationID}`)
             .length,
@@ -178,6 +181,9 @@ test("a delivered private reselection link admits another persona for the same U
         expect((yield* f.sql`SELECT id FROM user`).length).toBe(1);
         const active = yield* submit({ reselectionToken: token });
         expect(yield* Effect.promise(() => active.json())).toEqual({ status: "active" });
+        expect(yield* f.sql`SELECT state FROM discovery_notification`).toEqual([
+          { state: "queued" },
+        ]);
         yield* app.tools.endConversation(next.sessionID, "다음 인사", "end-new");
         yield* app.endings.tick;
         expect(
@@ -194,6 +200,7 @@ test("a delivered private reselection link admits another persona for the same U
           (yield* submit({ reselectionToken: latestToken, likedPersonaIDs: ["jiwoo"] })).status,
         ).toBe(200);
         yield* f.sql`DELETE FROM discovery_registration WHERE handle = ${previous.handle}`;
+        expect(yield* f.sql`SELECT state FROM discovery_notification`).toEqual([]);
         expect(
           (yield* submit({ reselectionToken: latestToken, likedPersonaIDs: ["jiwoo"] })).status,
         ).toBe(400);
