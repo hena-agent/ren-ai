@@ -165,7 +165,7 @@
   "privacy": "개인정보 처리 내용 읽기",
   "waitingTitle": "대기 등록이 완료됐어요.",
   "waitingMessage": "준비되는 대로, 좋아한 페르소나 중 한 명이 연락할 거예요.",
-  "waitingHint": "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 첫 인사를 기다려 주세요.",
+  "waitingHint": "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
   "activeTitle": "이미 대화가 시작된 연락처예요.",
   "activeMessage": "iMessage에서 기존 페르소나와 대화를 이어가 주세요.",
   "selected": "관심을 전할 페르소나"

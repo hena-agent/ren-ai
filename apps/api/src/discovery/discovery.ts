@@ -19,6 +19,7 @@ import { submissionLimit } from "./rate-limit.ts";
 import { verifyTurnstile } from "./turnstile.ts";
 import { reselect, withoutEndedPersonas } from "./reselection.ts";
 import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
+import { queueWaitlistNotification } from "./notifications.ts";
 
 const failure = Schema.Literals([
   "consent",
@@ -132,6 +133,9 @@ export const makeDiscoveryWeb = ({
               VALUES (${id}, ${input.conversationLanguage ?? input.locale})`;
             for (const personaID of input.likedPersonaIDs)
               yield* sql`INSERT INTO discovery_like (registration_id, persona_id) VALUES (${id}, ${personaID})`;
+            yield* queueWaitlistNotification(id, created).pipe(
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
           }
           return { status: "waiting" as const };
         }).pipe(

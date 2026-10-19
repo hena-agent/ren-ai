@@ -165,7 +165,7 @@
   "privacy": "Read about privacy and data use",
   "waitingTitle": "You're on the waitlist.",
   "waitingMessage": "When things are ready, one of the personas you liked may get in touch.",
-  "waitingHint": "There is no guaranteed order or contact date. Look out for a first greeting on iMessage.",
+  "waitingHint": "There is no guaranteed order or contact date. On iMessage, Ren AI's notifications come from noti@renai.im and the persona's first greeting comes from hi@renai.im.",
   "activeTitle": "This contact already has a conversation.",
   "activeMessage": "Continue with your existing persona on iMessage.",
   "selected": "Personas you're interested in"

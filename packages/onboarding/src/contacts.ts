@@ -32,6 +32,9 @@ export const ContactEntry = Schema.Struct({
   scheduledAt: Schema.NullOr(Schema.Number),
   requestId: Schema.NullOr(Schema.String),
   testHandle: Schema.optionalKey(Schema.Boolean),
+  notification: Schema.optionalKey(
+    Schema.Literals(["queued", "sent", "failed", "uncertain", "skipped"]),
+  ),
   relationshipEnd: Schema.optionalKey(
     Schema.Struct({ at: Schema.Number, noticeDelivered: Schema.Boolean }),
   ),

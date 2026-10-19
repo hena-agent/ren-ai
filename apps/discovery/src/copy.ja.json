@@ -165,7 +165,7 @@
   "privacy": "個人情報の取り扱いを読む",
   "waitingTitle": "ウェイトリストに登録しました。",
   "waitingMessage": "準備ができたら、いいねしたペルソナの1人から連絡が届くことがあります。",
-  "waitingHint": "登録順や連絡時期は決まっていません。iMessageで最初の挨拶をお待ちください。",
+  "waitingHint": "登録順や連絡時期は決まっていません。iMessageでは、Ren AIの通知はnoti@renai.imから、ペルソナの最初の挨拶はhi@renai.imから届きます。",
   "activeTitle": "この連絡先ではすでに会話が始まっています。",
   "activeMessage": "iMessageで今のペルソナとの会話を続けてください。",
   "selected": "気になるペルソナ"
