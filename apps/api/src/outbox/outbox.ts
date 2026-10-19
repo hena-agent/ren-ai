@@ -207,10 +207,11 @@ export const outbox = (
             if (observed.state !== "recorded" && observed.state !== "uncertain")
               return "settled" as const;
             if (row.attemptID) return "uncertain" as const;
-            yield* sql`UPDATE send SET state = 'failed', late = 1, notification_pending = 1,
+            const released =
+              yield* sql`UPDATE send SET state = 'failed', late = 1, notification_pending = 1,
             updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${row.id}
-            AND state IN ('recorded', 'uncertain')`;
-            return "released" as const;
+            AND state IN ('recorded', 'uncertain') RETURNING id`;
+            return released.length ? ("released" as const) : ("settled" as const);
           }),
         ),
       exclusive: <A, E>(conversation: Conversation, action: Effect.Effect<A, E>) =>

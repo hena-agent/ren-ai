@@ -14,6 +14,7 @@ import { serveTestOperator } from "../../test/operator-http.test-helper.ts";
 import { operatorHandler } from "./api.ts";
 import { runOperatorCli } from "./cli.ts";
 import { outbox } from "../outbox/outbox.ts";
+import { applicationRequest } from "../application-request.ts";
 
 test("the authenticated CLI releases only the reviewed legacy call, preserves the Conversation, and is idempotent", async () => {
   const { root, personaDirectory } = await messagingFixture("release-send-");
@@ -94,8 +95,46 @@ test("the authenticated CLI releases only the reviewed legacy call, preserves th
           VALUES (${conversation.handle}, ${conversation.id}, 'text', 'pending', 'identified', 'uncertain', 0, 0, ${attemptID}, ${attemptID})`;
         yield* fake.outgoing(conversation.handle, "pending", 1, "unknown", attemptID);
         expect(yield* command(conversation.handle, "identified")).toBe("Send recovery: uncertain");
+        const captured = captureDiagnostics();
+        const resolve = fake.messages.resolveSend.bind(fake.messages);
+        try {
+          fake.messages.resolveSend = () =>
+            Effect.fail(
+              Object.assign(new Error("private transport input"), { code: "ECONNRESET" }),
+            );
+          const response = yield* Effect.promise(() =>
+            applicationRequest(
+              new Request("https://app.test/release-send", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ handle: conversation.handle, callID: "identified" }),
+              }),
+              handler.handler,
+            ),
+          );
+          expect(response.status).toBe(503);
+          const correlation = response.headers.get("x-request-id")!;
+          expect(yield* Effect.promise(() => response.text())).toContain(correlation);
+          expect(captured.logs.every((line) => line.includes(correlation))).toBe(true);
+          expect(captured.logs.filter((line) => line.includes("causeName"))).toHaveLength(1);
+          expect(captured.logs.join("\n")).toContain("ECONNRESET");
+          expect(captured.logs.join("\n")).not.toContain("private transport input");
+        } finally {
+          fake.messages.resolveSend = resolve;
+          captured.restore();
+        }
         yield* fake.settle(attemptID, "delivered");
         expect(yield* command(conversation.handle, "identified")).toBe("Send recovery: settled");
+        yield* insert("racing-call", "racing message");
+        // A receipt wins between the last status read and the conditional release write.
+        yield* sql`CREATE TRIGGER settled_during_release BEFORE UPDATE OF state ON send
+          WHEN OLD.tool_call_id = 'racing-call' AND NEW.state = 'failed' BEGIN
+          UPDATE send SET state = 'delivered' WHERE id = OLD.id;
+          SELECT RAISE(IGNORE); END`;
+        expect(yield* command(conversation.handle, "racing-call")).toBe("Send recovery: settled");
+        expect(yield* sql`SELECT state FROM send WHERE tool_call_id = 'racing-call'`).toEqual([
+          { state: "delivered" },
+        ]);
       }),
     );
   } finally {

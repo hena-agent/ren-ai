@@ -1,8 +1,5 @@
-import type {
-  DurableObjectStorage,
-  SqlStorageCursor,
-  SqlStorageValue,
-} from "@cloudflare/workers-types";
+import type { DurableObjectStorage } from "@cloudflare/workers-types";
+import { storageMeter } from "./storage-meter.test-helper.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
@@ -47,18 +44,9 @@ export async function usageBudget(storage: DurableObjectStorage, store: Applicat
       VALUES (${session.id}, 1, 'budget', 'fixture')`;
     }),
   );
-  const exec = storage.sql.exec.bind(storage.sql);
-  let cursors: SqlStorageCursor<Record<string, SqlStorageValue>>[] = [];
-  storage.sql.exec = <T extends Record<string, SqlStorageValue>>(
-    query: string,
-    ...bindings: SqlStorageValue[]
-  ) => {
-    const cursor = exec<T>(query, ...bindings);
-    cursors.push(cursor);
-    return cursor;
-  };
+  const meter = storageMeter(storage);
   const collect = async () => {
-    cursors = [];
+    meter.reset();
     // Recreate the collector to include the actor-replacement path.
     await store.run(
       Effect.gen(function* () {
@@ -69,10 +57,7 @@ export async function usageBudget(storage: DurableObjectStorage, store: Applicat
         yield* collector.session(session.id);
       }),
     );
-    return {
-      reads: cursors.reduce((sum, cursor) => sum + cursor.rowsRead, 0),
-      writes: cursors.reduce((sum, cursor) => sum + cursor.rowsWritten, 0),
-    };
+    return meter.totals();
   };
   try {
     const initial = await collect();
@@ -91,6 +76,6 @@ export async function usageBudget(storage: DurableObjectStorage, store: Applicat
       .toArray();
     return { initial, idle, changed, unchanged, input: entry!.input };
   } finally {
-    storage.sql.exec = exec;
+    meter.restore();
   }
 }

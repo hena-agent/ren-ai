@@ -6,6 +6,7 @@ import { createApplicationStore, type ApplicationStore } from "../src/applicatio
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { registrationSchemaProbe } from "./registration-schema.test-helper.ts";
 import { usageBudget } from "./usage-budget.test-helper.ts";
+import { outboxBudget } from "./outbox-budget.test-helper.ts";
 
 interface RegistryNamespace {
   idFromName: (name: string) => string;
@@ -63,6 +64,8 @@ export class Registry extends DurableObject<Environment> {
       );
     }
     const store = await this.application();
+    if (path === "/__fixture/outbox-budget")
+      return Response.json(await outboxBudget(this.ctx.storage, store));
     if (path === "/__fixture/usage-budget")
       return Response.json(await usageBudget(this.ctx.storage, store));
     if (path === "/__fixture/test-handle") {

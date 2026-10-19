@@ -2,6 +2,9 @@ import { Effect, Exit, Option } from "effect";
 import { HttpServerRequest } from "effect/unstable/http";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 
+/** The transport failure already has a correlated diagnostic. */
+export class ObservedSendFailure extends Error {}
+
 export const observeSend = <A, R>(
   stage: string,
   operationId: string,
@@ -30,7 +33,10 @@ export const observeSend = <A, R>(
         }),
       ),
       Effect.mapError(
-        (cause) => new Error(`Messaging operation unavailable; request ${requestId}`, { cause }),
+        (cause) =>
+          new ObservedSendFailure(`Messaging operation unavailable; request ${requestId}`, {
+            cause,
+          }),
       ),
     );
   });

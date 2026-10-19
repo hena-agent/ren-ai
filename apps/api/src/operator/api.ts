@@ -1,7 +1,8 @@
 import { normalizeHandle } from "@ren-ai/onboarding";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { Effect, Layer, Schema } from "effect";
-import { HttpRouter, HttpServer } from "effect/unstable/http";
+import { HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
+import { ObservedSendFailure } from "../outbox/observe.ts";
 import {
   HttpApi,
   HttpApiBuilder,
@@ -78,11 +79,12 @@ export const operatorHandler = (operations: Operations) => {
   const handlers = HttpApiBuilder.group(operatorApi, "operator", (group) =>
     group
       .handle("releaseSend", ({ payload }) =>
-        Effect.suspend(() => {
-          const requestId = crypto.randomUUID();
+        Effect.gen(function* () {
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          const requestId = request.headers["x-operation-id"] ?? crypto.randomUUID();
           const started = performance.now();
           const fields = { requestId, operation: "send.release", stage: "outbox.reconcile" };
-          return normalized(payload.handle).pipe(
+          return yield* normalized(payload.handle).pipe(
             Effect.flatMap((handle) => operations.releaseSend(handle, payload.callID)),
             Effect.tap((result) =>
               Effect.sync(() =>
@@ -99,7 +101,7 @@ export const operatorHandler = (operations: Operations) => {
               Effect.sync(() =>
                 contactLog({
                   ...fields,
-                  ...contactCause(cause),
+                  ...(cause instanceof ObservedSendFailure ? {} : contactCause(cause)),
                   outcome: "failed",
                   level: "error",
                   durationMs: performance.now() - started,
