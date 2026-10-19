@@ -243,7 +243,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
                 statusFails
                   ? Effect.fail(new Error("status unavailable"))
                   : imessage.messages.lastOutgoingStatus(handle),
-              sendText: (handle, text) =>
+              sendText: (handle, text, attemptID) =>
                 Effect.gen(function* () {
                   const pending = yield* sql<{
                     handle: string;
@@ -251,7 +251,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
                     state: string;
                   }>`SELECT handle, content, state FROM send ORDER BY id DESC LIMIT 1`;
                   expect(pending).toEqual([{ handle, content: text, state: "recorded" }]);
-                  return yield* imessage.messages.sendText(handle, text);
+                  return yield* imessage.messages.sendText(handle, text, attemptID);
                 }),
             },
             ui.gestures,
@@ -365,13 +365,17 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               handle: first.handle,
               content: "bubble 1",
               state: "sent",
-              guid: "fake-1",
+              guid: (yield* imessage.messages.recent(first.handle, 0)).filter(
+                (row) => row.fromMe,
+              )[0]!.guid,
             },
             {
               handle: first.handle,
               content: "bubble 2",
               state: "sent",
-              guid: "fake-2",
+              guid: (yield* imessage.messages.recent(first.handle, 0)).filter(
+                (row) => row.fromMe,
+              )[1]!.guid,
             },
           ]);
           expect(

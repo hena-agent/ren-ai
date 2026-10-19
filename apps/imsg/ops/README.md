@@ -72,6 +72,12 @@ days of logs.
 - `history.sqlite` is the gateway's durable cursor/status authority. Outgoing
   texts are recorded before submission. A timeout or lost process leaves the row
   pending; it is never automatically resent. A later delivery receipt can settle it.
+- `submitText` accepts an application-owned attempt UUID and deduplicates it across
+  restarts. `resolveSend` fences an absent UUID before reporting failure; late
+  submissions cannot escape that fence. Preserve `send_fence` with `history.sqlite`
+  during backups/restores. Fences never appear in message history. An admitted
+  pending UUID remains uncertain. Deploy this gateway before the API that uses
+  these RPCs; older clients can still use `sendText` during the rollout.
 - `notifications.sqlite` stores only gateway-submitted Notifications and their
   delivery/read outcomes. It is never part of `after`, `recent` or `follow`, and
   cannot affect Persona statuses or gestures. Keep it with the rest of the home

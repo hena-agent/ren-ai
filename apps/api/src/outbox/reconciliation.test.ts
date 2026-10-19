@@ -201,20 +201,29 @@ test("accepted RPC without a row remains in doubt; a failed status lookup cannot
           registration("ambiguous@example.com", "ambiguous"),
         );
         const fake = fakeMessages();
+        let guid = "";
         const messages = {
           ...fake.messages,
-          sendText: () => Effect.succeed({ guid: "uncertain-guid" }),
+          sendText: (_handle: string, _text: string, attemptID?: string) => {
+            guid = attemptID!;
+            return Effect.succeed({ guid });
+          },
           sendStatus: () => Effect.fail(new Error("status unavailable")),
+          resolveSend: () => Effect.fail(new Error("status unavailable")),
         };
         const sends = yield* outbox(messages, fakeGestures().gestures, personas);
         const attempted = yield* Effect.forkScoped(sends.send(conversation, "maybe", "one"));
         yield* TestClock.adjust("3 seconds");
         expect(yield* Fiber.join(attempted)).toBe("not sent: send in doubt");
-        const row = yield* fake.outgoing(conversation.handle, "maybe", 0, "sent", "uncertain-guid");
+        const row = yield* fake.outgoing(conversation.handle, "maybe", 0, "sent", guid);
         expect(yield* sends.reconcile(conversation, row)).toBe(true);
-        const waiting = yield* Effect.forkScoped(sends.send(conversation, "next", "two"));
+        const waiting = yield* Effect.forkScoped(
+          sends.send(conversation, "next", "two").pipe(Effect.flip),
+        );
         yield* TestClock.adjust("3 seconds");
-        expect(yield* Fiber.join(waiting)).toBe("not sent: an earlier send is still in doubt");
+        expect((yield* Fiber.join(waiting)).message).toContain(
+          "Messaging operation unavailable; request",
+        );
         const recovered = yield* outbox(fake.messages, fakeGestures().gestures, personas);
         expect(yield* recovered.send(conversation, "next", "two")).toContain(
           'earlier message "maybe" did go out',
@@ -242,9 +251,9 @@ test("an accepted send waits for a 2.3-second Messages row delay before allowing
         const secondAccepted = yield* Deferred.make<void>();
         const messages = {
           ...fake.messages,
-          sendText: (handle: string, text: string) =>
+          sendText: (handle: string, text: string, attemptID?: string) =>
             Effect.gen(function* () {
-              const guid = `delayed-${text}`;
+              const guid = attemptID!;
               yield* Effect.forkIn(
                 Effect.sleep("2300 millis").pipe(
                   Effect.andThen(

@@ -7,6 +7,7 @@ import type { Gestures } from "../gestures/gestures.ts";
 import { messagingApi } from "./protocol.ts";
 import { readAttachment, transportRow } from "./attachments.ts";
 import { notificationHandlers } from "./notifications.ts";
+import { messageRequest } from "./operation.ts";
 
 export const messageGateway = (
   messages: Messages,
@@ -20,6 +21,14 @@ export const messageGateway = (
       messages.after(0, 1).pipe(Effect.andThen(gestures.probe()), Effect.mapError(String)),
     image: ({ reference }) => readAttachment(messages, reference).pipe(Effect.mapError(String)),
     sendText: ({ handle, text }) => messages.sendText(handle, text).pipe(Effect.mapError(String)),
+    submitText: ({ handle, text, attemptID }) =>
+      messageRequest("send.submit", (requestId) =>
+        messages.sendText(handle, text, attemptID, requestId),
+      ),
+    resolveSend: ({ attemptID }) =>
+      messageRequest("send.resolve", () =>
+        messages.resolveSend(attemptID).pipe(Effect.map((state) => ({ state }))),
+      ),
     after: ({ rowID, limit }) =>
       messages.after(rowID, limit).pipe(
         Effect.map((rows) => rows.map(transportRow)),

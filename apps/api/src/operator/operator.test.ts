@@ -193,6 +193,7 @@ test("the operator HTTP API documents its typed request, result and error contra
 
 test("the rebuild route handles an unavailable operation", async () => {
   const api = operatorHandler({
+    releaseSend: () => Effect.succeed("not_found"),
     testHandle: () => Effect.void,
     block: () => Effect.void,
     remove: () => Effect.succeed("not_found"),
@@ -234,7 +235,10 @@ test("HTTP API and typed CLI run over authenticated port-zero HTTP", async () =>
           (handle) =>
             Effect.succeed(handle === input.handle ? ("rebuilt" as const) : ("not_found" as const)),
         );
-        const { handler, dispose } = operatorHandler(operations);
+        const { handler, dispose } = operatorHandler({
+          ...operations,
+          releaseSend: () => Effect.succeed("not_found"),
+        });
         yield* Effect.addFinalizer(() => Effect.promise(dispose));
         const path = yield* serveTestOperator(async (request) => {
           expect(request.headers.get("content-type")).toContain("application/json");
@@ -282,7 +286,9 @@ test("HTTP API and typed CLI run over authenticated port-zero HTTP", async () =>
           ["remove", input.handle, "extra"],
         ]) {
           expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
-            new Error("Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE"),
+            new Error(
+              "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID",
+            ),
           );
         }
         expect(yield* runOperatorCli(["block", "other@example.com"], path)).toBe(
@@ -312,6 +318,7 @@ test("HTTP API and typed CLI run over authenticated port-zero HTTP", async () =>
         );
         let failedCalls = 0;
         const failed = operatorHandler({
+          releaseSend: () => Effect.fail(new Error("database offline")),
           testHandle: () => Effect.fail(new Error("database offline")),
           block: () => Effect.fail(new Error("database offline")),
           remove: () =>

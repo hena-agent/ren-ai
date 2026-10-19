@@ -162,7 +162,7 @@ test("bounded catch-up preserves cursor order across a large unrelated backlog",
     } finally {
       fixture.close();
     }
-    const target = history.outgoing("target", handle, "latest inserted", 1);
+    const target = history.outgoing("target", handle, "latest inserted", 1)!;
     history.settle(target.guid, "sent");
     const first = history.after(9_999, 1);
     expect(first).toHaveLength(1);

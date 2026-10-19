@@ -206,6 +206,7 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE INDEX usage_entry_turn ON usage_entry(turn_id, outcome)`;
         yield* sql`ALTER TABLE usage_session ADD COLUMN snapshot_hash TEXT`;
       }),
+      "033_send_identity": sql`ALTER TABLE send ADD COLUMN attempt_id TEXT`,
     }),
   });
 });

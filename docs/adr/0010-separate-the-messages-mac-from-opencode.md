@@ -33,6 +33,14 @@ Failed-turn recovery will use supported OpenCode APIs rather than the current pr
 
 An absent Messages row does not prove an uncertain send failed, even after a grace period. Later sends remain fenced until Messages supplies a definitive outcome; a disconnected request may still finish on the Mac.
 
+Refined on 2026-10-20: the application now persists a text attempt's UUID before
+submission and the gateway uses it as the outgoing GUID. Resolving a missing UUID
+atomically stores a durable rejection fence. A delayed submission of that UUID
+cannot reach Apple, so this affirmative rejection releases the Conversation's
+send fence. An admitted attempt with no definitive Apple outcome stays uncertain;
+neither a timeout nor a restart authorizes replay. See ADR-0018 for transport
+ownership and recovery of attempts predating this protocol.
+
 Reuse Cloudflare Tunnel for public HTTPS ingress. The messaging and application APIs enforce authorization using dedicated service credentials; they do not rely on a paid Cloudflare Access subscription. Endpoint URLs and credentials are deployment configuration so the services can move independently. The Mac receives only messaging-service credentials, never OpenCode credentials.
 
 ## Deployment and relocation

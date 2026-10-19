@@ -19,6 +19,7 @@ test("an interrupted send is shown to her with its real outcome after Messages s
         const entered = yield* Deferred.make<void>();
         const never = yield* Deferred.make<void>();
         const fake = fakeMessages();
+        let guid = "";
         const llm = yield* scriptedPersona();
         yield* llm.serve((request) =>
           request.messages.some((message) => JSON.stringify(message).includes("check outcome"))
@@ -27,11 +28,16 @@ test("an interrupted send is shown to her with its real outcome after Messages s
         );
         const host = yield* startTestHost(root, personaDirectory, llm, {
           ...fake.messages,
-          sendText: () =>
-            Deferred.succeed(entered, undefined).pipe(
-              Effect.andThen(Deferred.await(never)),
-              Effect.as({ guid: "never" }),
-            ),
+          sendText: (handle, text, attemptID) => {
+            guid = attemptID!;
+            return fake
+              .outgoing(handle, text, Date.now(), "unknown", guid)
+              .pipe(
+                Effect.andThen(Deferred.succeed(entered, undefined)),
+                Effect.andThen(Deferred.await(never)),
+                Effect.as({ guid }),
+              );
+          },
         });
         const session = yield* host.createSession("persona1");
         const handle = "interrupted@example.com";
@@ -47,7 +53,8 @@ test("an interrupted send is shown to her with its real outcome after Messages s
         expect(JSON.stringify(yield* host.sessions.messages({ sessionID: session.id }))).toContain(
           "Tool execution interrupted",
         );
-        yield* fake.outgoing(handle, "hello", Date.now() + 1, "delivered");
+        yield* fake.settle(guid, "delivered");
+        yield* fake.redeliver((yield* fake.messages.recent(handle, 0))[0]!);
         yield* host.sessions.prompt({ sessionID: session.id, text: "check outcome" });
         yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
         const request = JSON.stringify((yield* llm.requests()).at(-1)?.messages);

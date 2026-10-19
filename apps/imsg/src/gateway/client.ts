@@ -5,9 +5,10 @@ import type { IncomingMessage } from "../messages/messages.ts";
 
 const failure = (error: string | Error) => new Error(String(error));
 // Older Macs report unknown RPC tags as defects; expose an ordinary failure, never a send fallback.
-const notificationFailure = Effect.catchDefect((cause) =>
-  Effect.fail(new Error("Notification RPC unavailable", { cause })),
-);
+const unavailable = (operation: string) =>
+  Effect.catchDefect((cause) => Effect.fail(new Error(`${operation} RPC unavailable`, { cause })));
+const notificationFailure = unavailable("Notification");
+const sendFailure = unavailable("Identified send");
 
 export const remoteMessages = (config: { readonly url: string; readonly token: string }) =>
   Effect.gen(function* () {
@@ -22,8 +23,17 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
         client.notificationStatus({ guid }).pipe(notificationFailure, Effect.mapError(failure)),
       image: (attachment: NonNullable<IncomingMessage["attachments"]>[number]) =>
         client.image({ reference: attachment.path }).pipe(Effect.mapError(failure)),
-      sendText: (handle: string, text: string) =>
-        client.sendText({ handle, text }).pipe(Effect.mapError(failure)),
+      sendText: (handle: string, text: string, attemptID?: string) =>
+        (attemptID === undefined
+          ? client.sendText({ handle, text })
+          : client.submitText({ handle, text, attemptID }).pipe(sendFailure)
+        ).pipe(Effect.mapError(failure)),
+      resolveSend: (attemptID: string) =>
+        client.resolveSend({ attemptID }).pipe(
+          sendFailure,
+          Effect.map((result) => result.state),
+          Effect.mapError(failure),
+        ),
       after: (rowID: number, limit?: number) =>
         client
           .after({ rowID, ...(limit === undefined ? {} : { limit }) })

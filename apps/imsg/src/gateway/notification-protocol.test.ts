@@ -49,6 +49,16 @@ test("an older Mac rejects notify rather than sending from the Persona handle", 
           "Notification RPC unavailable",
         );
         expect(f.local.bubbles).toEqual([]);
+        const attemptID = crypto.randomUUID();
+        for (const effect of [
+          remote.sendText("user@example.test", "private", attemptID).pipe(Effect.asVoid),
+          remote.resolveSend(attemptID).pipe(Effect.asVoid),
+        ]) {
+          expect((yield* effect.pipe(Effect.flip)).message).toContain(
+            "Identified send RPC unavailable",
+          );
+        }
+        expect(f.local.bubbles).toEqual([]);
         yield* remote.sendText("+821012345678", "persona");
         expect(f.local.bubbles).toEqual([{ handle: "+821012345678", text: "persona" }]);
       }),
@@ -70,9 +80,13 @@ test("Notification RPC failures return safe correlated errors and diagnose persi
         expect(f.local.bubbles).toEqual([]);
         f.notifications.sendText = persistenceFailure;
         f.notifications.status = persistenceFailure;
+        f.local.messages.sendText = persistenceFailure;
+        f.local.messages.resolveSend = persistenceFailure;
         for (const call of [
           remote.notify("+821012345678", "private-text").pipe(Effect.asVoid),
           remote.notificationStatus(guid).pipe(Effect.asVoid),
+          remote.sendText("+821012345678", "private-text", crypto.randomUUID()).pipe(Effect.asVoid),
+          remote.resolveSend(crypto.randomUUID()).pipe(Effect.asVoid),
         ]) {
           const error = yield* call.pipe(Effect.flip);
           const requestId = error.message.match(/request ([0-9a-f-]{36})/)?.[1];

@@ -7,6 +7,7 @@ import type { Persona } from "@ren-ai/personas";
 import { notReacted, notSent, sent } from "../transcript/transcript.ts";
 import type { timing } from "../timing/timing.ts";
 import { introduceRelationship } from "../conversations/introduction.ts";
+import { observeSend } from "./observe.ts";
 
 export type { Tapback } from "@ren-ai/imsg/protocol";
 
@@ -16,6 +17,7 @@ interface SendRow {
   readonly state: "recorded" | "uncertain" | "sent" | "delivered" | "failed" | "not_sent";
   readonly content: string;
   readonly guid: string | null;
+  readonly attemptID: string | null;
   readonly recordedAt: number;
   readonly updatedAt: number;
   readonly toolCallID: string | null;
@@ -49,24 +51,37 @@ export const outbox = (
     ) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
+        const attemptID = kind === "text" ? crypto.randomUUID().toUpperCase() : null;
         // Fence the send in the same statement that records it: reset may race typing.
-        const rows = yield* sql<{ id: number; recordedAt: number }>`INSERT INTO send
-        (handle, conversation_id, kind, content, tool_call_id, state, target_guid, recorded_at, updated_at)
-        SELECT ${conversation.handle}, id, ${kind}, ${content}, ${callID}, 'recorded', ${targetGUID}, ${now}, ${now}
+        const rows = yield* sql<{
+          id: number;
+          recordedAt: number;
+          attemptID: string | null;
+        }>`INSERT INTO send
+        (handle, conversation_id, kind, content, tool_call_id, state, target_guid, recorded_at, updated_at, attempt_id, guid)
+        SELECT ${conversation.handle}, id, ${kind}, ${content}, ${callID}, 'recorded', ${targetGUID}, ${now}, ${now}, ${attemptID}, ${attemptID}
         FROM conversation WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID}
           AND rebuilding = 0 AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = ${conversation.handle})
           AND (ended_at IS NULL OR EXISTS (SELECT 1 FROM conversation_end e
             WHERE e.conversation_id = conversation.id AND e.consumed_at IS NULL
             AND ((${callID} = e.call_id || ':farewell:' || e.farewell_attempt AND e.farewell_pending = 1 AND ${content} = e.farewell)
               OR (${callID} = e.call_id || ':notice:' || e.notice_attempt AND e.notice_pending = 1 AND ${content} = e.notice))))
-        RETURNING id, recorded_at AS recordedAt`;
+        RETURNING id, recorded_at AS recordedAt, attempt_id AS attemptID`;
         return rows[0];
       });
-    const settle = (conversation: Conversation, match: SendRow, guid: string, at: number) =>
+    const settle = (
+      conversation: Conversation,
+      match: SendRow,
+      guid: string,
+      at: number,
+      observed?: "sent" | "delivered" | "failed" | "unknown",
+    ) =>
       Effect.gen(function* () {
-        const status = yield* messages
-          .sendStatus(guid)
-          .pipe(Effect.catch(() => Effect.succeed("unknown" as const)));
+        const status =
+          observed ??
+          (yield* messages
+            .sendStatus(guid)
+            .pipe(Effect.catch(() => Effect.succeed("unknown" as const))));
         if (status !== "unknown") {
           const late = inFlight.has(match.id) ? match.late : 1;
           const updated =
@@ -79,7 +94,8 @@ export const outbox = (
     const reconcile = (conversation: Conversation, row: IncomingMessage) =>
       Effect.gen(function* () {
         if (!row.fromMe || row.handle !== conversation.handle) return false;
-        const matches = yield* sql<SendRow>`SELECT id, state, content, guid, late,
+        const matches =
+          yield* sql<SendRow>`SELECT id, state, content, guid, attempt_id AS attemptID, late,
           notification_pending AS notificationPending, recorded_at AS recordedAt, updated_at AS updatedAt, tool_call_id AS toolCallID
            FROM send WHERE conversation_id = ${conversation.id} AND kind IN ('text', 'tapback')
           AND (guid = ${row.guid} OR (guid IS NULL AND content = ${row.text}
@@ -92,7 +108,7 @@ export const outbox = (
       });
     const pending = (conversation: Conversation) =>
       Effect.map(
-        sql<SendRow>`SELECT id, kind, state, content, guid, late, notification_pending AS notificationPending,
+        sql<SendRow>`SELECT id, kind, state, content, guid, attempt_id AS attemptID, late, notification_pending AS notificationPending,
           recorded_at AS recordedAt, updated_at AS updatedAt, tool_call_id AS toolCallID FROM send
           WHERE conversation_id = ${conversation.id} AND (state IN ('recorded', 'uncertain') OR notification_pending = 1)
           ORDER BY id LIMIT 1`,
@@ -100,13 +116,27 @@ export const outbox = (
       );
     const check = (conversation: Conversation, earlier: SendRow) =>
       Effect.gen(function* () {
-        if (earlier.guid && inFlight.has(earlier.id))
+        if (earlier.attemptID && !inFlight.has(earlier.id)) {
+          const status = yield* observeSend(
+            "transport.resolve",
+            earlier.attemptID,
+            messages.resolveSend(earlier.attemptID),
+          );
+          yield* settle(
+            conversation,
+            earlier,
+            earlier.attemptID,
+            yield* Clock.currentTimeMillis,
+            status,
+          );
+        } else if (earlier.guid && inFlight.has(earlier.id))
           yield* settle(conversation, earlier, earlier.guid, earlier.recordedAt);
         else {
           const rows = yield* messages.recent(conversation.handle, earlier.recordedAt);
           for (const row of rows) yield* reconcile(conversation, row);
         }
-        const state = yield* sql<SendRow>`SELECT id, kind, state, content, guid, late,
+        const state =
+          yield* sql<SendRow>`SELECT id, kind, state, content, guid, attempt_id AS attemptID, late,
               notification_pending AS notificationPending,
               recorded_at AS recordedAt, updated_at AS updatedAt, tool_call_id AS toolCallID
               FROM send WHERE id = ${earlier.id}`;
@@ -125,36 +155,69 @@ export const outbox = (
           yield* sql`SELECT id FROM send WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
         if (existing.length) return prefix("this call was already recorded");
         if (!reportLate) return undefined;
-        const earlier = yield* pending(conversation);
-        if (!earlier) return undefined;
-        // A missing row is not a rejection; only an observed outcome releases this fence.
-        const settled = yield* check(conversation, earlier);
-        if (settled.state === "recorded" || settled.state === "uncertain")
-          return prefix("an earlier send is still in doubt");
-        yield* sql`UPDATE send SET notification_pending = 0 WHERE id = ${settled.id}`;
-        if (settled.state !== "sent" && settled.state !== "delivered") return undefined;
-        const at = new Intl.DateTimeFormat("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: personas.get(conversation.personaID)!.timeZone,
-        }).format(settled.updatedAt);
-        const now = yield* Clock.currentTimeMillis;
-        yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
+        for (;;) {
+          const earlier = yield* pending(conversation);
+          if (!earlier) return undefined;
+          // A missing row is not a rejection; only an observed outcome releases this fence.
+          const settled = yield* check(conversation, earlier);
+          if (settled.state === "recorded" || settled.state === "uncertain")
+            return prefix("an earlier send is still in doubt");
+          yield* sql`UPDATE send SET notification_pending = 0 WHERE id = ${settled.id}`;
+          if (settled.state !== "sent" && settled.state !== "delivered") continue;
+          const at = new Intl.DateTimeFormat("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: personas.get(conversation.personaID)!.timeZone,
+          }).format(settled.updatedAt);
+          const now = yield* Clock.currentTimeMillis;
+          yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
           VALUES (${conversation.handle}, ${conversation.id}, ${kind}, ${content}, ${callID}, 'not_sent', ${now}, ${now})`;
-        return prefix(
-          `your earlier ${settled.kind === "tapback" ? "tapback" : "message"} "${settled.content}" did go out at ${at}`,
-        );
+          return prefix(
+            `your earlier ${settled.kind === "tapback" ? "tapback" : "message"} "${settled.content}" did go out at ${at}`,
+          );
+        }
       });
+    const recordedCall = (conversation: Conversation, callID: string) =>
+      Effect.map(
+        sql<SendRow>`SELECT id, kind, state, content, guid, attempt_id AS attemptID, late,
+        notification_pending AS notificationPending, recorded_at AS recordedAt,
+        updated_at AS updatedAt, tool_call_id AS toolCallID FROM send
+        WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`,
+        (rows) => rows[0],
+      );
     return {
       reconcile,
+      observe: (conversation: Conversation) =>
+        Effect.gen(function* () {
+          const row = yield* pending(conversation);
+          if (row?.state === "recorded" || row?.state === "uncertain")
+            yield* check(conversation, row);
+        }),
+      /** An explicit operator attestation for legacy attempts; identified sends require transport proof. */
+      release: (conversation: Conversation, callID: string) =>
+        PartitionedSemaphore.withPermit(
+          locks,
+          conversation.id,
+        )(
+          Effect.gen(function* () {
+            const row = yield* recordedCall(conversation, callID);
+            if (!row) return "not_found" as const;
+            if (row.state !== "recorded" && row.state !== "uncertain") return "settled" as const;
+            const observed = yield* check(conversation, row);
+            if (observed.state !== "recorded" && observed.state !== "uncertain")
+              return "settled" as const;
+            if (row.attemptID) return "uncertain" as const;
+            yield* sql`UPDATE send SET state = 'failed', late = 1, notification_pending = 1,
+            updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${row.id}
+            AND state IN ('recorded', 'uncertain')`;
+            return "released" as const;
+          }),
+        ),
       exclusive: <A, E>(conversation: Conversation, action: Effect.Effect<A, E>) =>
         PartitionedSemaphore.withPermit(locks, conversation.id)(action),
       delivery: (conversation: Conversation, callID: string) =>
         Effect.gen(function* () {
-          const [row] = yield* sql<SendRow>`SELECT id, kind, state, content, guid, late,
-          notification_pending AS notificationPending, recorded_at AS recordedAt,
-          updated_at AS updatedAt, tool_call_id AS toolCallID FROM send
-          WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`;
+          const row = yield* recordedCall(conversation, callID);
           if (!row) return undefined;
           if (row.state === "recorded" || row.state === "uncertain")
             return (yield* check(conversation, row)).state;
@@ -236,15 +299,22 @@ export const outbox = (
             const { id } = recorded;
             inFlight.add(id);
             return yield* Effect.gen(function* () {
-              const outcome = yield* Effect.result(messages.sendText(conversation.handle, text));
+              const outcome = yield* Effect.result(
+                observeSend(
+                  "transport.submit",
+                  recorded.attemptID!,
+                  messages.sendText(conversation.handle, text, recorded.attemptID!),
+                ),
+              );
               if (Result.isFailure(outcome)) {
                 yield* sql`UPDATE send SET state = 'uncertain', late = 1, notification_pending = 1,
                 updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`;
                 return notSent("send in doubt");
               }
-              yield* sql`UPDATE send SET state = 'uncertain', guid = ${outcome.success.guid}, updated_at = ${yield* Clock.currentTimeMillis}
+              yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${yield* Clock.currentTimeMillis}
               WHERE id = ${id} AND state = 'recorded'`;
-              let row = (yield* sql<SendRow>`SELECT id, state, content, guid, late,
+              let row =
+                (yield* sql<SendRow>`SELECT id, state, content, guid, attempt_id AS attemptID, late,
                notification_pending AS notificationPending, recorded_at AS recordedAt,
                 updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
               row = yield* check(conversation, row);
