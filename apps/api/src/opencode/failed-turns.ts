@@ -4,15 +4,9 @@ import { Clock, DateTime, Effect, Option, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { PersonaRuntime } from "./runtime.ts";
 import type { Conversation, conversations } from "../conversations/conversations.ts";
+import { recoveryBatch } from "./recovery-batch.ts";
 
 type Directory = Effect.Success<typeof conversations>;
-const selectedSessions = (
-  conversations: readonly Conversation[],
-  sessionIDs: readonly string[],
-) => ({
-  selected: conversations.filter((row) => sessionIDs.includes(row.sessionID)),
-  priority: new Set(sessionIDs),
-});
 type Failure = {
   session_id: string;
   fingerprint: string;
@@ -61,11 +55,11 @@ export const failedTurns = (
         const removed =
           yield* sql<Failure>`DELETE FROM failed_turn WHERE session_id = ${sessionID} RETURNING *`;
         yield* alerts.clear(turnAlert(sessionID));
-        const active = yield* pending();
-        if (removed.some((row) => row.quota) && !active.some((row) => row.quota))
-          yield* alerts.clear(cap);
-        if (removed.some((row) => !row.quota) && !active.some((row) => !row.quota))
-          yield* alerts.clear(provider);
+        const [active] = yield* sql<{ quota: number; provider: number }>`SELECT
+          EXISTS(SELECT 1 FROM failed_turn WHERE review = 0 AND quota = 1) AS quota,
+          EXISTS(SELECT 1 FROM failed_turn WHERE review = 0 AND quota = 0) AS provider`;
+        if (removed.some((row) => row.quota) && !active!.quota) yield* alerts.clear(cap);
+        if (removed.some((row) => !row.quota) && !active!.provider) yield* alerts.clear(provider);
       }).pipe(Effect.catchCause(Effect.logWarning));
 
     const succeeded = (prior: Failure) =>
@@ -93,7 +87,8 @@ export const failedTurns = (
         const outgoing = yield* sql`SELECT 1 FROM send WHERE conversation_id = ${conversation.id}
         AND kind IN ('text', 'tapback') LIMIT 1`;
         if (prior?.fingerprint === fingerprint && (!outgoing.length || prior.review)) return;
-        const [held] = (yield* pending()).filter((row) => row.quota);
+        const [held] = yield* sql<Failure>`SELECT * FROM failed_turn WHERE review = 0 AND quota = 1
+          ORDER BY retry_at, last_retry_at, failed_at, session_id LIMIT 1`;
         const quota = Boolean(held) || quotaError(assistant);
         const failures = (prior?.failures ?? 0) + 1;
         const retryAt = held ? held.retry_at : now + (quota ? probeDelay : retryDelay(failures));
@@ -174,42 +169,19 @@ export const failedTurns = (
         }),
       );
 
-    const inspections = (conversations: readonly Conversation[], failures: readonly Failure[]) =>
-      Effect.gen(function* () {
-        // Reserve half the budget for known failures; the durable circular scan ensures
-        // idle/new Conversations cannot starve even across frequent actor replacements.
-        const priority = new Set(failures.slice(0, 10).map((row) => row.session_id));
-        const [scan] = yield* sql<{
-          conversationID: number;
-        }>`SELECT conversation_id AS conversationID FROM recovery_scan WHERE id = 1`;
-        const cursor = scan?.conversationID ?? 0;
-        const background = conversations
-          .filter((row) => !priority.has(row.sessionID))
-          .toSorted((a, b) => a.id - b.id);
-        const rotated = [
-          ...background.filter((row) => row.id > cursor),
-          ...background.filter((row) => row.id <= cursor),
-        ].slice(0, 20 - priority.size);
-        const selected = [
-          ...conversations.filter((row) => priority.has(row.sessionID)),
-          ...rotated,
-        ];
-        return { selected, priority };
-      });
     const inspect = (sessionIDs?: readonly string[]) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        const conversations = yield* directory.all();
-        const active = new Set(conversations.map((conversation) => conversation.sessionID));
-        const failures =
-          yield* sql<Failure>`SELECT * FROM failed_turn ORDER BY retry_at, session_id`;
-        for (const row of failures) if (!active.has(row.session_id)) yield* forget(row.session_id);
-        const batch = sessionIDs
-          ? selectedSessions(conversations, sessionIDs)
-          : yield* inspections(
-              conversations,
-              failures.filter((row) => active.has(row.session_id)),
-            );
+        const orphaned = yield* sql<{
+          sessionID: string;
+        }>`SELECT f.session_id AS sessionID FROM failed_turn f
+          WHERE NOT EXISTS (SELECT 1 FROM conversation c JOIN user u ON u.id = c.user_id
+            WHERE c.session_id = f.session_id AND c.ended_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = u.handle)) LIMIT 20`;
+        for (const row of orphaned) yield* forget(row.sessionID);
+        const batch = yield* recoveryBatch(sessionIDs).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
         for (const conversation of batch.selected) {
           let released: string[] = [];
           yield* directory.admit(
@@ -227,17 +199,17 @@ export const failedTurns = (
             yield* sql`INSERT INTO recovery_scan (id, conversation_id) VALUES (1, ${conversation.id})
             ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id`;
         }
-        const rows = yield* pending();
-        const providers = rows.filter((row) => !row.quota);
-        if (
-          !providers.some((row) => row.provider_alerted) &&
-          providers.some((row) => now - row.failed_at >= 10 * 60_000)
-        ) {
+        const [status] = yield* sql<{ alerted: number; failing: number; quota: number }>`SELECT
+          EXISTS(SELECT 1 FROM failed_turn WHERE review = 0 AND quota = 0 AND provider_alerted = 1) AS alerted,
+          EXISTS(SELECT 1 FROM failed_turn WHERE review = 0 AND quota = 0 AND failed_at <= ${now - 600_000}) AS failing,
+          EXISTS(SELECT 1 FROM failed_turn WHERE review = 0 AND quota = 1) AS quota`;
+        if (!status!.alerted && status!.failing) {
           yield* alerts.raise(provider, "Provider failing for 10 minutes");
           yield* sql`UPDATE failed_turn SET provider_alerted = 1 WHERE quota = 0 AND review = 0`;
         }
-        const due = rows.filter((row) => row.retry_at <= now);
-        const selected = due.slice(0, rows.some((row) => row.quota) ? 1 : 20);
+        const selected =
+          yield* sql<Failure>`SELECT * FROM failed_turn WHERE review = 0 AND retry_at <= ${now}
+          ORDER BY retry_at, last_retry_at, failed_at, session_id LIMIT ${status!.quota ? 1 : 20}`;
         for (const row of selected) yield* dispatch(row, now);
       });
     const tick = inspect();
