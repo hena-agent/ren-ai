@@ -20,7 +20,7 @@ export const startMessagingGateway = Effect.gen(function* () {
     clear: () => Effect.void,
   };
   const home = resolve(config.home);
-  const { messages, gestures } = yield* makeRustpushMessages(
+  const { messages, gestures, notifications } = yield* makeRustpushMessages(
     {
       command: join(home, "ren-rustpush"),
       state: join(home, "rustpush"),
@@ -29,7 +29,7 @@ export const startMessagingGateway = Effect.gen(function* () {
     },
     health,
   );
-  const gateway = messageGateway(messages, config.token, gestures);
+  const gateway = messageGateway(messages, config.token, gestures, notifications);
   yield* Effect.addFinalizer(() => Effect.promise(gateway.dispose));
   const listener = yield* servePublic(gateway.handler, config.port, config.hostname);
   return { listener };

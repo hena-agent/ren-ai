@@ -64,6 +64,7 @@ test("the independently configured Mac service starts with only messaging creden
           });
           const { guid } = yield* remote.sendText("+821012345678", "isolated");
           expect(bridge.requests.find((request) => request.method === "send")?.params).toEqual({
+            from: service,
             guid,
             to: "tel:+821012345678",
             text: "isolated",

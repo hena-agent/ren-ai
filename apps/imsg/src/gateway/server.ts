@@ -2,13 +2,20 @@ import { Effect, Layer, Queue, Stream, Result } from "effect";
 import { RpcServer } from "effect/unstable/rpc";
 import { authorize, rpcRouter } from "@ren-ai/transport/server";
 import { healthResponse } from "@ren-ai/transport/health";
-import type { IncomingMessage, Messages } from "../messages/messages.ts";
+import type { IncomingMessage, Messages, Notifications } from "../messages/messages.ts";
 import type { Gestures } from "../gestures/gestures.ts";
 import { messagingApi } from "./protocol.ts";
 import { readAttachment, transportRow } from "./attachments.ts";
+import { notificationHandlers } from "./notifications.ts";
 
-export const messageGateway = (messages: Messages, token: string, gestures: Gestures) => {
+export const messageGateway = (
+  messages: Messages,
+  token: string,
+  gestures: Gestures,
+  notifications: Notifications,
+) => {
   const handlers = messagingApi.toLayer({
+    ...notificationHandlers(notifications),
     probe: () =>
       messages.after(0, 1).pipe(Effect.andThen(gestures.probe()), Effect.mapError(String)),
     image: ({ reference }) => readAttachment(messages, reference).pipe(Effect.mapError(String)),
@@ -87,28 +94,51 @@ export const messageGateway = (messages: Messages, token: string, gestures: Gest
     }
     const requestId = crypto.randomUUID();
     const start = performance.now();
-    const result = await Effect.runPromise(
-      messages
-        .after(0, 1)
-        .pipe(Effect.andThen(gestures.probe()), Effect.timeout("3 seconds"), Effect.result),
+    const [result, notificationResult] = await Effect.runPromise(
+      Effect.all(
+        [
+          messages
+            .after(0, 1)
+            .pipe(Effect.andThen(gestures.probe()), Effect.timeout("3 seconds"), Effect.result),
+          notifications.probe().pipe(Effect.timeout("3 seconds"), Effect.result),
+        ],
+        { concurrency: "unbounded" },
+      ),
     );
-    if (Result.isFailure(result))
-      process.stderr.write(
-        `${JSON.stringify({
-          service: "imsg",
-          requestId,
-          operation: "health",
-          stage: "messages.probe",
-          outcome: "failed",
-          level: "error",
-          durationMs: performance.now() - start,
-          causeName: result.failure.name === "TimeoutError" ? "TimeoutError" : "Error",
-          ...("code" in result.failure &&
-            typeof result.failure.code === "string" &&
-            /^[A-Z0-9_]{1,64}$/.test(result.failure.code) && { causeCode: result.failure.code }),
-        })}\n`,
-      );
-    const response = healthResponse("imsg", Result.isSuccess(result) ? "ready" : "degraded");
+    for (const [stage, checked] of [
+      ["messages.probe", result],
+      ["notifications.probe", notificationResult],
+    ] as const) {
+      if (Result.isFailure(checked))
+        process.stderr.write(
+          `${JSON.stringify({
+            service: "imsg",
+            requestId,
+            operation: "health",
+            stage,
+            outcome: "failed",
+            level:
+              "code" in checked.failure && checked.failure.code === "HANDLE_NOT_REGISTERED"
+                ? "warn"
+                : "error",
+            durationMs: performance.now() - start,
+            causeName: checked.failure.name === "TimeoutError" ? "TimeoutError" : "Error",
+            ...("code" in checked.failure &&
+              typeof checked.failure.code === "string" &&
+              /^[A-Z0-9_]{1,64}$/.test(checked.failure.code) && {
+                causeCode: checked.failure.code,
+              }),
+          })}\n`,
+        );
+    }
+    const status = Result.isSuccess(result) ? "ready" : "degraded";
+    // Notifications are optional until Discovery's separately deployed join flow uses them.
+    const response = healthResponse("imsg", status, {
+      dependencies: {
+        messages: status,
+        notifications: Result.isSuccess(notificationResult) ? "ready" : "degraded",
+      },
+    });
     response.headers.set("X-Request-ID", requestId);
     return response;
   }, token);

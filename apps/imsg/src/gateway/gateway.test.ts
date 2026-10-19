@@ -4,13 +4,19 @@ import { expect, test } from "vitest";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import type { IncomingMessage } from "../messages/messages.ts";
 import { fakeGestures } from "../gestures/gestures.fake.ts";
+import { fakeNotifications } from "../messages/notifications.fake.ts";
 import { messageGateway } from "./server.ts";
 import { remoteMessages } from "./client.ts";
 
 test("the public messaging API authorizes a send before touching Messages", async () => {
   const local = fakeMessages();
   const gestures = fakeGestures();
-  const server = messageGateway(local.messages, "gateway-secret", gestures.gestures);
+  const server = messageGateway(
+    local.messages,
+    "gateway-secret",
+    gestures.gestures,
+    fakeNotifications(),
+  );
   try {
     const denied = await server.handler(new Request("https://imsg.test/rpc", { method: "POST" }));
     expect(denied.status).toBe(401);

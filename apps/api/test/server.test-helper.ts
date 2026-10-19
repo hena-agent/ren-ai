@@ -8,7 +8,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { startPersonaHost } from "./application.test-helper.ts";
 import { composeServer } from "./composition.test-helper.ts";
 import { servePublic } from "@ren-ai/transport/listener";
-import { messageGateway } from "@ren-ai/imsg/testing";
+import { fakeNotifications, messageGateway } from "@ren-ai/imsg/testing";
 import { installedPlugins, remotePersonaPlugins } from "./persona-plugins.test-helper.ts";
 import { silentAlerts } from "./messaging.test-helper.ts";
 import { scriptedOverrides } from "./host.test-helper.ts";
@@ -104,7 +104,7 @@ export const composedTestServer = (
       overrides: scriptedOverrides(llm),
     });
     const openCode = yield* servePublic(native.web, 0);
-    const gateway = messageGateway(messages, "messaging-secret", gestures);
+    const gateway = messageGateway(messages, "messaging-secret", gestures, fakeNotifications());
     yield* Effect.addFinalizer(() => Effect.promise(gateway.dispose));
     const mac = yield* servePublic(gateway.handler, 0);
     const catalog = yield* testCatalog(personaDirectory);

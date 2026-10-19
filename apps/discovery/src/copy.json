@@ -1,21 +1,41 @@
 {
   "home": {
+    "menu": "메뉴 열기 및 닫기",
+    "personaLabel": "AI 페르소나",
+    "personaNames": { "seoyeon": "한서연", "dohee": "백도희", "seoyul": "강서율" },
+    "profileNote": "저마다의 취향. 서로 다른 이야기.",
     "navigation": "서비스 소개 메뉴",
-    "about": "RenAI 소개",
+    "about": "Ren AI 소개",
     "how": "이용 방법",
     "faq": "자주 묻는 질문",
     "start": "페르소나 만나보기",
-    "eyebrow": "새로운 만남, 익숙한 iMessage에서",
+    "eyebrow": "앱 설치 없이, 늘 쓰던 iMessage에서",
     "title": "일상에,",
     "titleAccent": "기다려지는 메시지 하나.",
+    "heroIntro": "새 앱 설치 없이, 익숙한 iMessage에서. 당신과만 연결되는 AI 페르소나를 만나보세요.",
+    "conversationTitle": "대화는,",
+    "conversationAccent": "iMessage에서.",
     "intro": "저마다의 취향과 이야기를 가진 AI 페르소나. 마음이 가는 누군가를 발견하고, iMessage로 일상을 나눠보세요.",
     "waiting": "현재 대기 등록을 받고 있어요. 선정되면 첫 인사를 보내드려요.",
     "example": "어느 저녁의 대화",
     "exampleLabel": "서비스 이해를 위한 가상의 대화 예시",
-    "messages": [
-      "집 가는 길에 작은 서점을 발견했어",
-      "그냥 지나치진 않았겠네?",
-      "응 ㅋㅋ 한 권만 보려다가 벌써 한 시간이야"
+    "dailyPhoto": "환하게 웃는 도희의 일상 사진",
+    "cafePhoto": "내가 보낸 카페의 라떼 사진",
+    "heartReaction": "도희가 내 사진에 하트로 반응했어요",
+    "openMusic": "Spotify에서 듣기 (새 탭)",
+    "exchanges": [
+      {
+        "message": "잠깐 쉬러 나왔어. 오늘 햇살 진짜 좋다 ☀️",
+        "reply": "표정부터 벌써 주말인데? ㅋㅋ"
+      },
+      {
+        "message": "라떼 예쁘다 ㅋㅋ 거기 네가 말한 카페야?",
+        "reply": "응! 드디어 와봤어. 커피도 꽤 괜찮네"
+      },
+      {
+        "message": "지금 이 노래 듣는데, 너도 좋아할 것 같아서",
+        "reply": "좋다. 집 가는 길에 계속 들을 듯 🎧"
+      }
     ],
     "exampleNote": "AI 페르소나와 나눌 수 있는 대화의 예시예요.",
     "aboutEyebrow": "조금씩, 서로를 알아가는 일",
@@ -34,20 +54,37 @@
         "body": "나눈 이야기를 기억하며 이어가는 대화. 작은 일상부터 서로의 취향까지, 천천히 알아가요."
       }
     ],
-    "howEyebrow": "첫 인사까지",
-    "howTitle": "시작은 작은 관심 하나면 돼요.",
+    "howTitle": "첫 인사까지, 세 걸음.",
+    "installEyebrow": "새로운 건, 만남 하나면 충분하니까",
+    "installTitle": "새 앱 말고,",
+    "installAccent": "늘 쓰던 메시지에서.",
+    "installBody": "다운로드도, 새로운 대화 앱에 익숙해지는 시간도 필요 없어요. 매일 열어보던 iMessage에 새로운 사람이 찾아와요.",
+    "channelNote": "이미 iPhone에 있는 메시지 앱",
+    "notificationLabel": "iMessage로 도착하는 페르소나의 첫 인사 예시",
+    "notificationNow": "지금",
+    "greeting": "안녕, 도희야. 오늘은 어떤 하루였어?",
+    "exclusiveEyebrow": "한 사람에게만 이어지는 이야기",
+    "exclusiveTitle": "오직 ",
+    "exclusiveAccent": "당신",
+    "exclusiveSuffix": "과만.",
+    "exclusiveBody": "당신과 연결된 페르소나는 다른 누구와도 대화하지 않아요.",
+    "exclusiveNote": "당신이 궁금해진 페르소나가,\n먼저 말을 걸어올 거예요.",
+    "exclusiveExample": "페르소나 전용 연결 예시",
+    "exclusiveRecipient": "유일한 대화 상대",
+    "exclusiveYou": "당신",
+    "exclusivePhoto": "창가에서 휴대폰 메시지를 읽으며 미소 짓는 도희",
     "steps": [
       {
         "title": "둘러보고",
-        "body": "원하는 이미지 스타일을 고르고, 페르소나의 사진과 소개를 만나보세요."
+        "body": "사진과 소개를 보며 궁금한 페르소나를 찾아요."
       },
       {
         "title": "마음을 전하고",
-        "body": "궁금한 페르소나에게 좋아요를 눌러주세요. 여러 명을 선택해도 괜찮아요."
+        "body": "좋아요를 보내고 iPhone 번호와 동의를 등록해요."
       },
       {
-        "title": "연락을 기다려요",
-        "body": "iMessage를 쓰는 iPhone 번호와 동의를 등록하면, 선정 후 좋아요한 페르소나 중 한 명이 먼저 인사해요."
+        "title": "페르소나가 연락할 거예요",
+        "body": "당신을 더 알고 싶은 페르소나가 iMessage로 먼저 인사해요."
       }
     ],
     "selectionNote": "대기 등록 순서와 선정·연락 시점은 정해져 있지 않아요. 등록이 즉시 연결을 보장하지는 않아요.",
@@ -55,7 +92,7 @@
     "questions": [
       {
         "title": "실제 사람과 대화하나요?",
-        "body": "아니요. RenAI의 페르소나는 AI가 연기하는 가상의 인물이에요. 사진과 프로필도 가상 인물을 표현한 것이며, 실제 사람과 연결하는 서비스가 아니에요."
+        "body": "아니요. Ren AI의 페르소나는 AI가 연기하는 가상의 인물이에요. 사진과 프로필도 가상 인물을 표현한 것이며, 실제 사람과 연결하는 서비스가 아니에요."
       },
       {
         "title": "별도의 앱이 필요한가요?",
@@ -74,8 +111,9 @@
         "body": "iMessage를 쓰는 iPhone 번호와 대화하고 싶은 언어를 등록해요. 이름·나이·성별은 선택 사항이에요. 개인정보 처리 내용을 읽고 동의한 뒤 대기 등록을 완료할 수 있어요."
       }
     ],
-    "closingTitle": "누구의 이야기가 궁금한가요?",
-    "closingBody": "마음이 가는 프로필부터, 천천히 만나보세요.",
+    "closingTitle": "다음 메시지가",
+    "closingAccent": "기다려지는 사람.",
+    "closingBody": "새 앱 설치 없이, 익숙한 iMessage에서. 마음이 가는 한 사람부터 만나보세요.",
     "footer": "AI 페르소나와 나누는 일상, Ren AI.",
     "pageTitle": "Ren AI — 일상에, 기다려지는 메시지 하나"
   },
@@ -114,15 +152,12 @@
   "closeDetails": "프로필 접기",
   "introductionTitle": "자기소개",
   "intro": "마음이 가는 사람을 만나보세요.",
-  "styleTitle": "어떤 느낌으로 만나볼까요?",
-  "styleIntro": "같은 페르소나를 두 가지 모습으로 만날 수 있어요. 원하는 스타일을 골라 주세요.",
   "styleSetting": "이미지 스타일",
   "animeStyle": "애니메",
   "photoStyle": "실사",
-  "animeStyleHint": "부드러운 애니메 감성",
-  "photoStyleHint": "사진처럼 자연스러운 모습",
-  "styleChangeHint": "탐색 중에도 바꿀 수 있어요. 좋아요한 사람은 그대로 유지돼요.",
   "styleStorageFailure": "이 브라우저에 이미지 스타일을 보관하지 못했어요. 지금 선택은 계속 사용할 수 있어요.",
+  "styleUpdating": "이미지 스타일을 바꾸고 있어요.",
+  "styleLoadFailure": "이미지 스타일을 바꾸지 못했어요. 현재 모습은 그대로예요. 다시 시도해 주세요.",
   "explore": "누가 궁금한가요?",
   "instructions": "왼쪽은 Pass, 오른쪽은 Like. 방향키로도 선택할 수 있어요. 사진·이름·소개를 눌러도 선택이나 펼치기가 되지 않아요. 위쪽 화살표 버튼으로 소개 전체를 펼치고 아래쪽 화살표 버튼으로 접으세요.",
   "loading": "만날 사람들을 불러오고 있어요.",
@@ -165,7 +200,7 @@
   "privacy": "개인정보 처리 내용 읽기",
   "waitingTitle": "대기 등록이 완료됐어요.",
   "waitingMessage": "준비되는 대로, 좋아한 페르소나 중 한 명이 연락할 거예요.",
-  "waitingHint": "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 첫 인사를 기다려 주세요.",
+  "waitingHint": "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
   "activeTitle": "이미 대화가 시작된 연락처예요.",
   "activeMessage": "iMessage에서 기존 페르소나와 대화를 이어가 주세요.",
   "selected": "관심을 전할 페르소나"

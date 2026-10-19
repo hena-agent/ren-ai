@@ -23,6 +23,7 @@ import type { Persona } from "@ren-ai/personas";
 import { cachedCatalog } from "./personas/cached-catalog.ts";
 import { scheduleWork, safetyInterval } from "./scheduling.ts";
 import { usageCollector } from "./usage/collect.ts";
+import { waitlistNotifications } from "./discovery/notifications.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -46,6 +47,10 @@ export async function createExecutionRuntime(
   const run = <A, E>(effect: Effect.Effect<A, E, RuntimeServices>) =>
     Effect.runPromise(Effect.provideContext(effect, services));
   const execution = configuration.execution;
+  const messages = await run(
+    remoteMessages({ url: execution.imsgRpcUrl, token: execution.managementToken }),
+  );
+  const notifications = await run(waitlistNotifications(messages));
   const health = await run(createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher));
   const catalog = catalogClient(
     { url: bindings.PERSONA_CATALOG_URL, token: bindings.TOKEN_CATALOG },
@@ -69,10 +74,6 @@ export async function createExecutionRuntime(
         // Inspect metadata without starting intake, synchronizing folders or resuming model work.
         const personas = new Map<string, Persona>();
         const remote = yield* remoteHost(remoteConfiguration, personas);
-        const messages = yield* remoteMessages({
-          url: execution.imsgRpcUrl,
-          token: execution.managementToken,
-        });
         const { endings } = yield* prepareMessaging(personas, messages, messages.gestures);
         const status = yield* runtimeStatus(
           remote,
@@ -96,10 +97,6 @@ export async function createExecutionRuntime(
     const saved = yield* cachedCatalog(catalog.load, groundRules);
     const snapshot = yield* saved.current;
     const { personas } = snapshot;
-    const messages = yield* remoteMessages({
-      url: execution.imsgRpcUrl,
-      token: execution.managementToken,
-    });
     const host = yield* startMessagingApplication(
       personas,
       (tools) =>
@@ -209,9 +206,15 @@ export async function createExecutionRuntime(
       return initialized;
     },
     tick: async () => {
-      await run(health.tick);
-      const runtime = await open();
-      await run(runtime.tick);
+      const results = await Promise.allSettled([
+        run(notifications.tick),
+        (async () => {
+          await run(health.tick);
+          const runtime = await open();
+          await run(runtime.tick);
+        })(),
+      ]);
+      for (const result of results) if (result.status === "rejected") throw result.reason;
     },
     fetch: async (request: Request) => {
       const url = new URL(request.url);

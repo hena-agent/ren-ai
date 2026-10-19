@@ -70,7 +70,12 @@ export const startBridge = (
       | undefined;
     let sequence = 0;
     // Synchronous, so a closing bridge either sees this request as pending or refuses it.
-    const write = (method: string, params: object, requireReady = true, requestId = randomUUID()) =>
+    const write = (
+      method: string,
+      params: object,
+      requireReady = true,
+      requestId: string = randomUUID(),
+    ) =>
       Effect.suspend((): Effect.Effect<BridgeResult, BridgeError> => {
         if (!connection || (requireReady && !connection.ready))
           return Effect.fail(new BridgeUnavailable({ message: "Messaging bridge is not running" }));
@@ -98,10 +103,10 @@ export const startBridge = (
           Effect.ensuring(Effect.sync(() => pending.delete(id))),
         );
       });
-    const call = (method: string, params: object) =>
+    const call = (method: string, params: object, correlation?: string) =>
       // Restored notifications can arrive before the handles handshake completes.
       Effect.suspend(() => {
-        const requestId = randomUUID();
+        const requestId = correlation ?? randomUUID();
         return observe(
           `rustpush.rpc.${method}`,
           write(method, params, method !== "ack", requestId),

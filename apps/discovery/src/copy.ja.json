@@ -1,21 +1,41 @@
 {
   "home": {
+    "menu": "メニューの開閉",
+    "personaLabel": "AIペルソナ",
+    "personaNames": { "seoyeon": "ソヨン", "dohee": "ドヒ", "seoyul": "ソユル" },
+    "profileNote": "それぞれの好み。それぞれの物語。",
     "navigation": "サービス紹介メニュー",
-    "about": "RenAIとは",
+    "about": "Ren AIとは",
     "how": "はじめ方",
     "faq": "よくある質問",
     "start": "ペルソナに出会う",
-    "eyebrow": "新しい出会いを、いつものiMessageで",
+    "eyebrow": "アプリの追加なし。いつものiMessageで。",
     "title": "日常に、",
     "titleAccent": "待ち遠しいメッセージを。",
+    "heroIntro": "新しいアプリなしで、いつものiMessageから。あなただけとつながるAIペルソナに出会おう。",
+    "conversationTitle": "会話は、",
+    "conversationAccent": "いつものiMessageで。",
     "intro": "それぞれの好みや物語を持つAIペルソナ。気になる相手を見つけて、iMessageで日常を分かち合ってみませんか。",
     "waiting": "現在、ウェイトリスト登録を受け付けています。選ばれると、最初の挨拶が届きます。",
     "example": "ある夜のやりとり",
     "exampleLabel": "サービスを紹介する架空の会話例",
-    "messages": [
-      "帰り道に小さな本屋さんを見つけた",
-      "そのまま通り過ぎたりしないよね？",
-      "うん笑 一冊だけのつもりが、もう一時間たってる"
+    "dailyPhoto": "明るく笑うドヒの日常写真",
+    "cafePhoto": "自分が送ったカフェのラテの写真",
+    "heartReaction": "ドヒが写真にハートでリアクションしました",
+    "openMusic": "Spotifyで聴く（新しいタブ）",
+    "exchanges": [
+      {
+        "message": "ちょっと休憩に来た。今日の日差し、気持ちいい ☀️",
+        "reply": "もう週末みたいな顔してるね笑"
+      },
+      {
+        "message": "ラテかわいい笑 前に言ってたカフェ？",
+        "reply": "そう！やっと来れた。コーヒーもおいしいよ"
+      },
+      {
+        "message": "今これ聴いてて、好きそうだなって思った",
+        "reply": "いいね。帰り道はずっとこれ聴こうかな 🎧"
+      }
     ],
     "exampleNote": "AIペルソナとの会話の一例です。",
     "aboutEyebrow": "少しずつ、お互いを知っていく",
@@ -34,20 +54,37 @@
         "body": "話したことを覚えながら続いていく会話。小さな日常からお互いの好みまで、ゆっくり知っていけます。"
       }
     ],
-    "howEyebrow": "最初の挨拶まで",
-    "howTitle": "小さな興味から、はじまります。",
+    "howTitle": "最初の挨拶まで、3ステップ。",
+    "installEyebrow": "新しいのは、出会いだけでいい",
+    "installTitle": "新しいアプリより、",
+    "installAccent": "いつものメッセージで。",
+    "installBody": "ダウンロードも、新しいアプリに慣れる時間もいりません。毎日開くiMessageに、新しい相手がやってきます。",
+    "channelNote": "iPhoneにすでにあるメッセージアプリ",
+    "notificationLabel": "iMessageに届くペルソナの最初の挨拶の例",
+    "notificationNow": "今",
+    "greeting": "こんにちは、ドヒだよ。今日はどんな一日だった？",
+    "exclusiveEyebrow": "ひとりだけと紡ぐ物語",
+    "exclusiveTitle": "",
+    "exclusiveAccent": "あなた",
+    "exclusiveSuffix": "とだけ。",
+    "exclusiveBody": "あなたとつながったペルソナは、ほかの誰とも会話しません。",
+    "exclusiveNote": "あなたのことが気になったペルソナが、\n先に声をかけてくれます。",
+    "exclusiveExample": "ペルソナの専属のつながりの例",
+    "exclusiveRecipient": "唯一の会話相手",
+    "exclusiveYou": "あなた",
+    "exclusivePhoto": "窓辺でメッセージを読みながら微笑むドヒ",
     "steps": [
       {
         "title": "見てみる",
-        "body": "画像のスタイルを選んで、ペルソナの写真や自己紹介を見てみましょう。"
+        "body": "写真と自己紹介を見て、気になる相手を探します。"
       },
       {
         "title": "興味を伝える",
-        "body": "気になるペルソナに「いいね」を。複数選んでも大丈夫です。"
+        "body": "いいねを送り、iPhoneの番号と同意を登録します。"
       },
       {
-        "title": "挨拶を待つ",
-        "body": "iMessageを使うiPhoneの番号と同意を登録。選ばれると、いいねしたペルソナの一人から挨拶が届きます。"
+        "title": "ペルソナから連絡します",
+        "body": "あなたをもっと知りたいペルソナが、iMessageで先に挨拶してくれます。"
       }
     ],
     "selectionNote": "登録順でのご案内ではありません。選定・連絡の時期は未定です。登録しても、すぐに会話が始まるとは限りません。",
@@ -55,7 +92,7 @@
     "questions": [
       {
         "title": "実在する人と話すのですか？",
-        "body": "いいえ。RenAIのペルソナはAIが演じる架空の人物です。写真やプロフィールも架空の人物を表現したもので、実在する人とつながるサービスではありません。"
+        "body": "いいえ。Ren AIのペルソナはAIが演じる架空の人物です。写真やプロフィールも架空の人物を表現したもので、実在する人とつながるサービスではありません。"
       },
       {
         "title": "別のアプリが必要ですか？",
@@ -74,8 +111,9 @@
         "body": "iMessageを使うiPhoneの番号と、会話したい言語を登録します。名前・年齢・性別は任意です。個人情報の取り扱いを読み、同意したうえでウェイトリストへの登録を完了できます。"
       }
     ],
-    "closingTitle": "誰の物語が気になりますか？",
-    "closingBody": "心惹かれるプロフィールから、ゆっくりと。",
+    "closingTitle": "次のメッセージが、",
+    "closingAccent": "待ち遠しくなる相手。",
+    "closingBody": "新しいアプリなしで、いつものiMessageから。気になるひとりに出会ってみませんか。",
     "footer": "AIペルソナと分かち合う日常、Ren AI。",
     "pageTitle": "Ren AI — 日常に、待ち遠しいメッセージを"
   },
@@ -123,15 +161,12 @@
   "closeDetails": "プロフィールを閉じる",
   "introductionTitle": "自己紹介",
   "intro": "心に留まる人と出会いましょう。",
-  "styleTitle": "どんな雰囲気で出会いたい？",
-  "styleIntro": "同じペルソナを2つのスタイルで楽しめます。好きなスタイルを選んでください。",
-  "styleSetting": "写真スタイル",
+  "styleSetting": "画像スタイル",
   "animeStyle": "アニメ",
   "photoStyle": "実写",
-  "animeStyleHint": "やわらかなアニメの雰囲気",
-  "photoStyleHint": "写真のように自然な姿",
-  "styleChangeHint": "閲覧中も変更できます。いいねはそのまま残ります。",
   "styleStorageFailure": "写真スタイルを保存できませんでした。現在の選択はそのまま使えます。",
+  "styleUpdating": "画像スタイルを切り替えています。",
+  "styleLoadFailure": "画像スタイルを切り替えられませんでした。今の表示はそのままです。もう一度お試しください。",
   "explore": "誰が気になりますか？",
   "instructions": "左でPass、右でLike。方向キーでも選べます。写真・名前・紹介文を押しても選択や展開はされません。上向き矢印ボタンで紹介全体を開き、下向き矢印ボタンで閉じてください。",
   "loading": "出会える人たちを読み込んでいます。",
@@ -165,7 +200,7 @@
   "privacy": "個人情報の取り扱いを読む",
   "waitingTitle": "ウェイトリストに登録しました。",
   "waitingMessage": "準備ができたら、いいねしたペルソナの1人から連絡が届くことがあります。",
-  "waitingHint": "登録順や連絡時期は決まっていません。iMessageで最初の挨拶をお待ちください。",
+  "waitingHint": "登録順や連絡時期は決まっていません。iMessageでは、Ren AIの通知はnoti@renai.imから、ペルソナの最初の挨拶はhi@renai.imから届きます。",
   "activeTitle": "この連絡先ではすでに会話が始まっています。",
   "activeMessage": "iMessageで今のペルソナとの会話を続けてください。",
   "selected": "気になるペルソナ"

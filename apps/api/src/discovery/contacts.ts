@@ -31,6 +31,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           testHandle: number;
           endedAt: number | null;
           endingComplete: number | null;
+          notification: typeof ContactEntry.Type.notification | null;
         }>`SELECT r.id, r.handle, r.created_at AS createdAt, c.state, c.persona_id AS personaID,
       c.scheduled_at AS scheduledAt, c.request_id AS requestId, v.ended_at AS endedAt,
       EXISTS(SELECT 1 FROM send s WHERE s.conversation_id = v.id AND s.tool_call_id = e.call_id || ':notice:' || e.notice_attempt AND s.state IN ('sent','delivered')) AS endingComplete,
@@ -42,8 +43,10 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       EXISTS(SELECT 1 FROM user u WHERE u.handle = r.handle AND (u.persona_id IS NOT NULL
         OR NOT EXISTS(SELECT 1 FROM conversation c WHERE c.user_id = u.id AND c.ended_at IS NOT NULL)))
         OR EXISTS(SELECT 1 FROM persona_assignment WHERE handle = r.handle) AS occupied,
-      EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle
+      EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle,
+      n.state AS notification
       FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id
+      LEFT JOIN discovery_notification n ON n.registration_id = r.id
       LEFT JOIN conversation v ON v.session_id = c.session_id LEFT JOIN conversation_end e ON e.conversation_id = v.id
       WHERE r.archived_at IS NULL ORDER BY r.created_at, r.id`;
         const likes = yield* sql<{
@@ -94,6 +97,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
             scheduledAt: row.scheduledAt,
             requestId: row.requestId,
             testHandle: row.testHandle === 1,
+            ...(row.notification && { notification: row.notification }),
             ...(row.endedAt !== null && {
               relationshipEnd: { at: row.endedAt, noticeDelivered: row.endingComplete === 1 },
             }),

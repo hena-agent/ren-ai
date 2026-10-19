@@ -105,6 +105,12 @@ test("pending registration disables navigation until a recoverable failure compl
   fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
     target: { value: "01012345678" },
   });
+  const phone = screen.getByRole("textbox", { name: "휴대전화 번호" });
+  fireEvent.click(within(navigation).getByRole("button", { name: "탐색" }));
+  expect(screen.queryByRole("textbox", { name: "휴대전화 번호" })).toBeNull();
+  fireEvent.click(within(navigation).getByRole("button", { name: /연락받기/ }));
+  expect(screen.getByRole("textbox", { name: "휴대전화 번호" })).toBe(phone);
+  expect(phone.getAttribute("value")).toBe("010-1234-5678");
   expect(currentTabs()).toEqual([null, null, "page"]);
   fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
   act(() => verify("human"));

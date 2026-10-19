@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { App } from "./app.tsx";
 import { withImageStyle } from "./image-style.ts";
+import { selectImageStyle } from "../test/choose.ts";
 
 afterEach(() => {
   cleanup();
@@ -32,7 +33,7 @@ test("style-specific independent photos display only that style's remaining main
   expect(screen.getByRole("button", { name: "사진 3 / 3" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "다음 사진" }));
   expect(screen.getByRole("img").getAttribute("src")).toBe(person.secondaryPortraits[0]!.imageUrl);
-  fireEvent.click(screen.getByRole("button", { name: "애니메" }));
+  await selectImageStyle("애니메");
   expect(screen.queryByRole("button", { name: "사진 3 / 3" })).toBeNull();
   expect(screen.getByRole("img").getAttribute("src")).toBe(person.secondaryPortraits[1]!.imageUrl);
 });

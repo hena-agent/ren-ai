@@ -6,6 +6,10 @@ A service where people text fictional personas over iMessage. The repo also carr
 
 ### Product
 
+**Ren AI**:
+The official product name, written with this capitalization and space in logos, UI, metadata, documentation and communication.
+_Avoid_: Ren, RenAI
+
 **Persona**:
 A fictional character the service plays in iMessage. A conversation's persona is chosen at onboarding and never changes.
 _Avoid_: bot, character, agent (an agent is the OpenCode mechanism that implements a persona)
@@ -45,6 +49,14 @@ _Avoid_: contact, number, address
 **Service handle**:
 The handle every persona texts from.
 _Avoid_: persona handle, sender, bot account
+
+**Notification handle**:
+The handle the service itself texts from. No persona ever uses it.
+_Avoid_: system handle, sender
+
+**Notification**:
+An iMessage the service writes and sends from the notification handle. It belongs to no Conversation, and no persona sees it.
+_Avoid_: Notice, system message, alert
 
 **Discovery**:
 Browsing published personas' public profiles, Liking or Passing each, and joining the waitlist with a phone-number handle and web consent. Discovery never asks for an Apple ID email.

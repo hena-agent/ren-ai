@@ -1,15 +1,30 @@
 import { Effect, Scope } from "effect";
+import { vi } from "vitest";
 import { FetchHttpClient } from "effect/unstable/http";
 import { fakeMessages } from "../src/messages/messages.fake.ts";
 import { fakeGestures } from "../src/gestures/gestures.fake.ts";
+import { fakeNotifications } from "../src/messages/notifications.fake.ts";
 import { messageGateway } from "../src/gateway/server.ts";
 import { remoteMessages } from "../src/gateway/client.ts";
 import type { Messages } from "../src/messages/messages.ts";
 
-export const gatewayFixture = (messages?: Messages) => {
+export const captureGatewayLogs = () => {
+  const logs: string[] = [];
+  const logging = vi.spyOn(console, "log").mockImplementation((...values) => {
+    logs.push(JSON.stringify(values));
+  });
+  return { logs, restore: () => logging.mockRestore() };
+};
+
+export const gatewayFixture = (messages?: Messages, notifications = fakeNotifications()) => {
   const local = fakeMessages();
   const gestures = fakeGestures();
-  const server = messageGateway(messages ?? local.messages, "secret", gestures.gestures);
+  const server = messageGateway(
+    messages ?? local.messages,
+    "secret",
+    gestures.gestures,
+    notifications,
+  );
   const transport = { fetch: server.handler };
   const request = (tag: string, payload: object) =>
     server.handler(
@@ -34,5 +49,5 @@ export const gatewayFixture = (messages?: Messages) => {
         ),
       ),
     );
-  return { local, gestures, server, transport, request, run };
+  return { local, gestures, notifications, server, transport, request, run };
 };

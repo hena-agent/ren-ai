@@ -1,12 +1,12 @@
 {
-  "version": "discovery-2026-10-17",
+  "version": "discovery-2026-10-19",
   "title": "Before you wait to hear from someone",
   "aiNotice": "The personas you meet here are AI. One of the personas you like may contact you first on iMessage later.",
   "sections": [
     {
       "title": "What do we store?",
       "paragraphs": [
-        "We store the mobile number you enter, the personas you Like, your language settings and the registration time. We save the number in international format with its country code and use it to select people to contact on iMessage later and to handle duplicate registrations.",
+        "We store the mobile number you enter, the personas you Like, your language settings and the registration time. We save the number in international format with its country code and use it for a registration notification, to select people to contact on iMessage later and to handle duplicate registrations.",
         "Name, age in years and gender are individually optional; you can register without them. If provided, we store them with your registration and pass them through OpenCode and model providers for use in conversation and memories from the first greeting. They are deleted with your registration.",
         "We also record the version, language and time of your consent. The operator can review waitlist registrations. Contact details and registration data are not included in the public profile API."
       ]
@@ -14,21 +14,21 @@
     {
       "title": "Where is it processed?",
       "paragraphs": [
-        "Waitlist registrations are stored in SQLite on service-managed servers. Registering alone does not send an iMessage or start an AI conversation.",
+        "Waitlist registrations are stored in SQLite on service-managed servers. A new registration attempts one immediate iMessage notification from noti@renai.im, without starting an AI conversation. Delivery is not guaranteed. This address only sends notifications and does not read replies.",
         "Cloudflare is involved in the website and public API; Apple iMessage delivers messages. Human verification uses Cloudflare Turnstile and its Privacy Addendum (https://www.cloudflare.com/turnstile-privacy-policy/). Per-IP rate-limit information is temporarily held in server memory and is not saved with registration data."
       ]
     },
     {
       "title": "Contact and retention",
       "paragraphs": [
-        "We do not guarantee registration order or when you will be contacted. When the service is ready, you may start a conversation with one of the personas you Like.",
+        "We do not guarantee registration order or when you will be contacted. If selected, one of the personas you Like will send a first greeting from hi@renai.im.",
         "Waitlist registrations do not expire automatically. On a deletion request, we delete the service-managed registration and Likes. Once a conversation starts, its content may be processed through OpenCode and model providers to generate replies and memories. External providers' processing countries and regions have not yet been confirmed."
       ]
     },
     {
       "title": "Stopping contact and requesting deletion",
       "paragraphs": [
-        "To leave the waitlist or request deletion, contact hi@renai.im. We may verify that you own the number. After a conversation starts, blocking it in iMessage can stop messages. Deleting service records does not delete messages remaining in Apple Messages or on your devices."
+        "To leave the waitlist or request deletion, email hi@renai.im. Blocking the notification address does not remove your registration. We may verify that you own the number. After a conversation starts, blocking it in iMessage can stop messages. Deleting service records does not delete messages remaining in Apple Messages or on your devices."
       ]
     }
   ],

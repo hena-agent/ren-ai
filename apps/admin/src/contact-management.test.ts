@@ -98,6 +98,24 @@ test("authenticated Admin lists, confirms and displays exclusive selection and r
   expect(progress).toContain("결과 확인 필요·실패 건은 자동 재발송하지 않습니다");
 });
 
+test("Waitlist shows Notification outcomes without offering resend or changing selection eligibility", async () => {
+  const notifications = ["queued", "sent", "failed", "uncertain", "skipped"] as const;
+  const { admin } = await readOnlyContacts(
+    notifications.map((notification) => ({ ...entry(), notification })),
+  );
+  const page = await (await admin(request("/waitlist"))).text();
+  for (const label of [
+    "안내 대기 중",
+    "안내 보냄",
+    "안내 실패",
+    "안내 결과 불확실",
+    "안내 생략 (시간당 한도)",
+  ])
+    expect(page).toContain(label);
+  expect(page).not.toContain("resend");
+  expect(page.match(/form="contact-direct-selection"/g)).toHaveLength(5);
+});
+
 test("a waiting test handle starts now with a chosen liked persona", async () => {
   const tester = {
     ...entry(),

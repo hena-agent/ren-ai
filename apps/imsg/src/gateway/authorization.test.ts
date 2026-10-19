@@ -12,9 +12,9 @@ const healthRequest = (method = "GET", token = "secret") =>
 test("messaging authorization fails closed for absent configuration and invalid credentials", async () => {
   const fixture = gatewayFixture();
   try {
-    expect(() => messageGateway(fixture.local.messages, "", fixture.gestures.gestures)).toThrow(
-      "Service authorization token is required",
-    );
+    expect(() =>
+      messageGateway(fixture.local.messages, "", fixture.gestures.gestures, fixture.notifications),
+    ).toThrow("Service authorization token is required");
     for (const authorization of ["Bearer wrong", "Basic secret", "Bearer secreu"]) {
       const denied = await fixture.server.handler(
         new Request("https://imsg.test/rpc", { method: "POST", headers: { authorization } }),
@@ -78,6 +78,7 @@ test("HTTP health preserves authorization and reports identity and no-send readi
       service: "imsg",
       revision: "development",
       status: "ready",
+      dependencies: { messages: "ready", notifications: "ready" },
     });
     f.gestures.gestures.probe = () =>
       Effect.fail(
@@ -89,6 +90,7 @@ test("HTTP health preserves authorization and reports identity and no-send readi
       service: "imsg",
       revision: "development",
       status: "degraded",
+      dependencies: { messages: "degraded", notifications: "ready" },
     });
     expect(JSON.stringify(stderr.mock.calls)).toContain(failed.headers.get("x-request-id"));
     expect(JSON.stringify(stderr.mock.calls)).not.toContain("private permission detail");
