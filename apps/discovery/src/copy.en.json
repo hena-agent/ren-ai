@@ -2,6 +2,7 @@
   "home": {
     "menu": "Toggle menu",
     "personaLabel": "AI persona",
+    "personaNames": { "seoyeon": "Seoyeon", "dohee": "Dohee", "seoyul": "Seoyul" },
     "profileNote": "Different tastes. A story of their own.",
     "navigation": "About the service",
     "about": "About Ren AI",

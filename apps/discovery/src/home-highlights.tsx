@@ -32,7 +32,7 @@ export function HomeHighlights({ style }: { style: ImageStyle }) {
             <img src="/icons/imessage.svg" width="48" height="48" alt="" />
             <div>
               <div className="home-notification-sender">
-                <strong lang="ko">백도희</strong>
+                <strong>{home.personaNames.dohee}</strong>
                 <span>{home.notificationNow}</span>
               </div>
               <p>{home.greeting}</p>
@@ -68,7 +68,7 @@ export function HomeHighlights({ style }: { style: ImageStyle }) {
                 loading="lazy"
               />
             </div>
-            <strong lang="ko">백도희</strong>
+            <strong>{home.personaNames.dohee}</strong>
             <span>{home.personaLabel}</span>
           </div>
           <div className="home-connection-link" aria-hidden="true">

@@ -27,11 +27,11 @@ export function HeroGallery({ style }: { style: ImageStyle }) {
           <button
             type="button"
             key={portrait.image}
-            aria-label={`${portrait.name} ${copy.profilePhoto}`}
+            aria-label={`${copy.home.personaNames[portrait.image]} ${copy.profilePhoto}`}
             aria-pressed={selected === index}
             onClick={() => setSelected(index)}
           >
-            <span lang="ko">{portrait.name}</span>
+            <span>{copy.home.personaNames[portrait.image]}</span>
             <span className="hero-selector-dot" aria-hidden="true" />
           </button>
         ))}

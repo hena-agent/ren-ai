@@ -78,9 +78,18 @@ readable at 320px without horizontal overflow.
 Treat featured profiles as editorial
 selections; keep public persona writing in
 its original language. The landing remains independent of a live Catalog request.
+Featured landing names follow the screen language: Korean full names, English
+given names (Seoyeon, Dohee, Seoyul), and Japanese given names (ソヨン, ドヒ, ソユル).
+Apply these names to portrait selectors and accessible labels, conversation
+headers, notification examples, the relationship diagram and closing greeting.
+Keep photo/persona selection stable across locale changes. Actual Catalog names
+in Discovery's explorer remain in their original language.
 Desktop navigation uses one horizontal row; smaller screens use a single-row
 header with language selection and a menu toggle. The menu closes on a section
 selection or Escape, restoring toggle focus on Escape.
+Language-menu keyboard focus uses an inset ring inside the rounded option so
+the popover cannot clip it. Retain a distinct selected-language background and
+check, and the circular globe trigger's visible keyboard focus.
 
 ## Interaction
 

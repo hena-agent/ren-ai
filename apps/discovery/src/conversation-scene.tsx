@@ -42,7 +42,7 @@ export function ConversationScene({ style }: { style: ImageStyle }) {
                 loading="lazy"
               />
               <div>
-                <strong lang="ko">백도희</strong>
+                <strong>{copy.home.personaNames.dohee}</strong>
                 <span>{copy.home.personaLabel}</span>
               </div>
               <span className="conversation-platform">iMessage</span>

@@ -2,6 +2,7 @@
   "home": {
     "menu": "메뉴 열기 및 닫기",
     "personaLabel": "AI 페르소나",
+    "personaNames": { "seoyeon": "한서연", "dohee": "백도희", "seoyul": "강서율" },
     "profileNote": "저마다의 취향. 서로 다른 이야기.",
     "navigation": "서비스 소개 메뉴",
     "about": "Ren AI 소개",
@@ -19,7 +20,7 @@
     "example": "어느 저녁의 대화",
     "exampleLabel": "서비스 이해를 위한 가상의 대화 예시",
     "dailyPhoto": "환하게 웃는 도희의 일상 사진",
-    "cafePhoto": "내가 보낸 카페의 라테 사진",
+    "cafePhoto": "내가 보낸 카페의 라떼 사진",
     "heartReaction": "도희가 내 사진에 하트로 반응했어요",
     "openMusic": "Spotify에서 듣기 (새 탭)",
     "exchanges": [
@@ -28,7 +29,7 @@
         "reply": "표정부터 벌써 주말인데? ㅋㅋ"
       },
       {
-        "message": "라테 예쁘다 ㅋㅋ 거기 네가 말한 카페야?",
+        "message": "라떼 예쁘다 ㅋㅋ 거기 네가 말한 카페야?",
         "reply": "응! 드디어 와봤어. 커피도 꽤 괜찮네"
       },
       {

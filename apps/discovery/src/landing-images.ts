@@ -1,10 +1,10 @@
 import type { ImageStyle } from "./image-style.ts";
 
 export const landingPersonas = [
-  { image: "seoyeon", name: "한서연" },
-  { image: "dohee", name: "백도희" },
-  { image: "seoyul", name: "강서율" },
-];
+  { image: "seoyeon" },
+  { image: "dohee" },
+  { image: "seoyul" },
+] as const;
 
 export function landingImage(name: string, style: ImageStyle): string {
   return `/landing/${name}${style === "anime" ? "-anime" : ""}.webp`;

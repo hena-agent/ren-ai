@@ -80,8 +80,11 @@
   gap: 8px;
   padding: 8px 10px;
   border-radius: 7px;
-  outline: none;
   cursor: pointer;
+}
+.language-select-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ink);
 }
 .language-select-item[data-highlighted] {
   background: var(--canvas);

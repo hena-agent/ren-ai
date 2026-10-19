@@ -2,6 +2,7 @@
   "home": {
     "menu": "メニューの開閉",
     "personaLabel": "AIペルソナ",
+    "personaNames": { "seoyeon": "ソヨン", "dohee": "ドヒ", "seoyul": "ソユル" },
     "profileNote": "それぞれの好み。それぞれの物語。",
     "navigation": "サービス紹介メニュー",
     "about": "Ren AIとは",

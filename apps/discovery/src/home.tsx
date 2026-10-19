@@ -122,7 +122,7 @@ export function Home() {
             <figcaption>
               <span className="home-greeting-name">
                 <span className="icon icon-message" aria-hidden="true" />
-                <span lang="ko">백도희</span>
+                <span>{home.personaNames.dohee}</span>
                 <span>iMessage</span>
               </span>
               <p>{home.greeting}</p>
