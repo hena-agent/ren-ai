@@ -49,7 +49,7 @@ html {
 }
 .discovery-shell .primary-button:hover:not(:disabled),
 .app-navigation .contact-button:hover:not(:disabled) {
-  background: #b93327;
+  background: var(--accent-hover);
 }
 .discovery-shell .primary-button:disabled,
 .app-navigation .contact-button:disabled {

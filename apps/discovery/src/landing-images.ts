@@ -11,7 +11,7 @@ export function landingImage(name: string, style: ImageStyle): string {
 }
 
 export function landingImages(style: ImageStyle): readonly string[] {
-  return [...landingPersonas.map((persona) => persona.image), "dohee-daily"].map((name) =>
-    landingImage(name, style),
+  return [...landingPersonas.map((persona) => persona.image), "dohee-daily", "dohee-exclusive"].map(
+    (name) => landingImage(name, style),
   );
 }

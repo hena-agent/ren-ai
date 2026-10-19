@@ -6,6 +6,7 @@
 @import "./home.css";
 @import "./home-artwork.css";
 @import "./home-mobile.css";
+@import "./home-highlights.css";
 @import "./home-navigation.css";
 @import "./conversation-scene.css";
 @import "./style-switch.css";
@@ -18,7 +19,8 @@
   --ink: #20242b;
   --muted: #626975;
   --line: #e3e6eb;
-  --accent: #d64032;
+  --accent: #c72c52;
+  --accent-hover: #a82042;
   --danger: #b52e38;
   --motion-fast: 160ms;
   --motion-standard: 220ms;
@@ -304,6 +306,9 @@ button:disabled {
 }
 .icon-music {
   mask: url("/icons/music.svg") center / contain no-repeat;
+}
+.icon-message {
+  mask: url("/icons/message.svg") center / contain no-repeat;
 }
 .icon-check {
   mask: url("/icons/check.svg") center / contain no-repeat;

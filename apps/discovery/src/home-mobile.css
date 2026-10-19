@@ -74,19 +74,8 @@
   .home-section-intro {
     font-size: 16px;
   }
-  .home-how {
-    padding-block: 48px 32px;
-  }
   .home-eyebrow {
     margin-bottom: 20px;
-  }
-  .home-steps {
-    grid-template-columns: 1fr;
-    gap: 24px;
-    margin-top: 40px;
-  }
-  .home-steps h3 {
-    margin-top: 14px;
   }
   .home-faq {
     grid-template-columns: 1fr;
@@ -95,18 +84,6 @@
   }
   .home-faq h2 {
     font-size: 34px;
-  }
-  .home-closing {
-    padding: 56px 24px;
-  }
-  .home-closing h2 {
-    font-size: 48px;
-  }
-  .home-closing > div {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 28px;
-    margin-top: 28px;
   }
   .home-footer > div {
     align-items: start;

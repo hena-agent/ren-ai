@@ -8,10 +8,10 @@
     "how": "이용 방법",
     "faq": "자주 묻는 질문",
     "start": "페르소나 만나보기",
-    "eyebrow": "새로운 만남, 익숙한 iMessage에서",
+    "eyebrow": "앱 설치 없이, 늘 쓰던 iMessage에서",
     "title": "일상에,",
     "titleAccent": "기다려지는 메시지 하나.",
-    "heroIntro": "취향도, 이야기도 저마다 다른 AI 페르소나. 마음이 가는 누군가를 만나보세요.",
+    "heroIntro": "새 앱 설치 없이, 익숙한 iMessage에서. 당신과만 연결되는 AI 페르소나를 만나보세요.",
     "conversationTitle": "대화는,",
     "conversationAccent": "iMessage에서.",
     "intro": "저마다의 취향과 이야기를 가진 AI 페르소나. 마음이 가는 누군가를 발견하고, iMessage로 일상을 나눠보세요.",
@@ -53,20 +53,37 @@
         "body": "나눈 이야기를 기억하며 이어가는 대화. 작은 일상부터 서로의 취향까지, 천천히 알아가요."
       }
     ],
-    "howEyebrow": "첫 인사까지",
-    "howTitle": "시작은 작은 관심 하나면 돼요.",
+    "howTitle": "첫 인사까지, 세 걸음.",
+    "installEyebrow": "새로운 건, 만남 하나면 충분하니까",
+    "installTitle": "새 앱 말고,",
+    "installAccent": "늘 쓰던 메시지에서.",
+    "installBody": "다운로드도, 새로운 대화 앱에 익숙해지는 시간도 필요 없어요. 매일 열어보던 iMessage에 새로운 사람이 찾아와요.",
+    "channelNote": "이미 iPhone에 있는 메시지 앱",
+    "notificationLabel": "iMessage로 도착하는 페르소나의 첫 인사 예시",
+    "notificationNow": "지금",
+    "greeting": "안녕, 도희야. 오늘은 어떤 하루였어?",
+    "exclusiveEyebrow": "한 사람에게만 이어지는 이야기",
+    "exclusiveTitle": "오직 ",
+    "exclusiveAccent": "당신",
+    "exclusiveSuffix": "과만.",
+    "exclusiveBody": "당신과 연결된 페르소나는 다른 누구와도 대화하지 않아요.",
+    "exclusiveNote": "당신이 궁금해진 페르소나가,\n먼저 말을 걸어올 거예요.",
+    "exclusiveExample": "페르소나 전용 연결 예시",
+    "exclusiveRecipient": "유일한 대화 상대",
+    "exclusiveYou": "당신",
+    "exclusivePhoto": "창가에서 휴대폰 메시지를 읽으며 미소 짓는 도희",
     "steps": [
       {
         "title": "둘러보고",
-        "body": "원하는 이미지 스타일을 고르고, 페르소나의 사진과 소개를 만나보세요."
+        "body": "사진과 소개를 보며 궁금한 페르소나를 찾아요."
       },
       {
         "title": "마음을 전하고",
-        "body": "궁금한 페르소나에게 좋아요를 눌러주세요. 여러 명을 선택해도 괜찮아요."
+        "body": "좋아요를 보내고 iPhone 번호와 동의를 등록해요."
       },
       {
         "title": "페르소나가 연락할 거예요",
-        "body": "iMessage를 쓰는 iPhone 번호와 동의를 등록하면, 선정 후 좋아요한 페르소나 중 한 명이 먼저 인사해요."
+        "body": "당신을 더 알고 싶은 페르소나가 iMessage로 먼저 인사해요."
       }
     ],
     "selectionNote": "대기 등록 순서와 선정·연락 시점은 정해져 있지 않아요. 등록이 즉시 연결을 보장하지는 않아요.",
@@ -93,8 +110,9 @@
         "body": "iMessage를 쓰는 iPhone 번호와 대화하고 싶은 언어를 등록해요. 이름·나이·성별은 선택 사항이에요. 개인정보 처리 내용을 읽고 동의한 뒤 대기 등록을 완료할 수 있어요."
       }
     ],
-    "closingTitle": "누구의 이야기가 궁금한가요?",
-    "closingBody": "마음이 가는 프로필부터, 천천히 만나보세요.",
+    "closingTitle": "다음 메시지가",
+    "closingAccent": "기다려지는 사람.",
+    "closingBody": "새 앱 설치 없이, 익숙한 iMessage에서. 마음이 가는 한 사람부터 만나보세요.",
     "footer": "AI 페르소나와 나누는 일상, Ren AI.",
     "pageTitle": "Ren AI — 일상에, 기다려지는 메시지 하나"
   },

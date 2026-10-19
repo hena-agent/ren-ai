@@ -8,10 +8,10 @@
     "how": "How it works",
     "faq": "FAQ",
     "start": "Meet the personas",
-    "eyebrow": "A new connection. A familiar iMessage.",
+    "eyebrow": "No new app. Just iMessage.",
     "title": "A little more",
     "titleAccent": "to look forward to.",
-    "heroIntro": "Different tastes. Their own stories. Meet an AI persona you want to know.",
+    "heroIntro": "No new app. Just iMessage, and an AI persona connected exclusively to you.",
     "conversationTitle": "A little closer.",
     "conversationAccent": "One message at a time.",
     "intro": "AI personas with their own tastes and stories. Discover someone who catches your interest, and share the everyday over iMessage.",
@@ -53,20 +53,37 @@
         "body": "Conversations that build on what you've shared. From everyday moments to favorite things, get to know each other over time."
       }
     ],
-    "howEyebrow": "Before the first hello",
-    "howTitle": "It starts with a little curiosity.",
+    "howTitle": "Three steps to the first hello.",
+    "installEyebrow": "A new connection is enough of a change",
+    "installTitle": "A new person.",
+    "installAccent": "Not another app.",
+    "installBody": "Nothing to download. No new messaging app to learn. A new person arrives in the iMessage you open every day.",
+    "channelNote": "The messaging app already on your iPhone",
+    "notificationLabel": "An example of a persona's first hello arriving in iMessage",
+    "notificationNow": "now",
+    "greeting": "Hey, it's Dohee. How was your day?",
+    "exclusiveEyebrow": "A connection that isn't shared",
+    "exclusiveTitle": "Only ",
+    "exclusiveAccent": "you",
+    "exclusiveSuffix": ".",
+    "exclusiveBody": "Your persona doesn't have conversations with anyone else.",
+    "exclusiveNote": "A persona who's curious about you\nwill be the one to say hello.",
+    "exclusiveExample": "Illustrative exclusive persona connection",
+    "exclusiveRecipient": "Their only conversation partner",
+    "exclusiveYou": "You",
+    "exclusivePhoto": "Dohee smiling as she reads a message beside a window",
     "steps": [
       {
         "title": "Have a look",
-        "body": "Choose an image style, then explore the personas' photos and introductions."
+        "body": "Explore photos and introductions. Find someone you're curious about."
       },
       {
         "title": "Show your interest",
-        "body": "Like the personas you're curious about. It's fine to choose more than one."
+        "body": "Send your Likes, then register your iPhone number and give consent."
       },
       {
         "title": "A persona will reach out",
-        "body": "Register your iPhone number for iMessage and give consent. If selected, one of your liked personas will reach out first."
+        "body": "A persona who wants to know you better sends the first hello on iMessage."
       }
     ],
     "selectionNote": "Selection isn't first-come, first-served, and there is no set contact time. Registration doesn't guarantee an immediate connection.",
@@ -93,8 +110,9 @@
         "body": "Your iPhone number for iMessage and preferred conversation language. Name, age, and gender are optional. Read the privacy information and give consent to complete your waitlist registration."
       }
     ],
-    "closingTitle": "Whose story catches your interest?",
-    "closingBody": "Start with a profile. Take your time.",
+    "closingTitle": "Someone you'll",
+    "closingAccent": "hope to hear from.",
+    "closingBody": "No new app. Just a new connection in iMessage. Start with someone who catches your interest.",
     "footer": "Everyday moments with AI personas. Ren AI.",
     "pageTitle": "Ren AI — A little more to look forward to"
   },

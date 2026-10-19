@@ -8,6 +8,8 @@ import { ConversationScene } from "./conversation-scene.tsx";
 import { useImageStyle } from "./use-image-style.ts";
 import { landingImages } from "./landing-images.ts";
 import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
+import { HomeHighlights } from "./home-highlights.tsx";
+import { landingImage } from "./landing-images.ts";
 
 function ExploreLink() {
   const copy = useCopy();
@@ -79,22 +81,7 @@ export function Home() {
           <ConversationScene style={style} />
         </section>
 
-        <section className="home-how" id="how-it-works" aria-labelledby="how-title">
-          <div className="home-section-heading">
-            <p className="home-eyebrow">{home.howEyebrow}</p>
-            <h2 id="how-title">{home.howTitle}</h2>
-          </div>
-          <ol className="home-steps">
-            {home.steps.map((step, index) => (
-              <li key={step.title}>
-                <span aria-hidden="true">0{index + 1}</span>
-                <h3>{step.title}</h3>
-                <p>{step.body}</p>
-              </li>
-            ))}
-          </ol>
-          <p className="home-selection-note">{home.selectionNote}</p>
-        </section>
+        <HomeHighlights style={style} />
 
         <section className="home-faq" id="faq" aria-labelledby="faq-title">
           <div>
@@ -115,12 +102,33 @@ export function Home() {
         </section>
 
         <section className="home-closing" aria-labelledby="closing-title">
-          <p className="home-eyebrow">Ren AI</p>
-          <h2 id="closing-title">{home.closingTitle}</h2>
-          <div>
+          <div className="home-closing-copy">
+            <p className="home-eyebrow">Ren AI</p>
+            <h2 id="closing-title">
+              {home.closingTitle}
+              <span>{home.closingAccent}</span>
+            </h2>
             <p>{home.closingBody}</p>
             <ExploreLink />
           </div>
+          <figure className="home-closing-photo">
+            <img
+              src={landingImage("dohee-daily", style)}
+              width="928"
+              height="1152"
+              alt={home.dailyPhoto}
+              loading="lazy"
+            />
+            <figcaption>
+              <span className="home-greeting-name">
+                <span className="icon icon-message" aria-hidden="true" />
+                <span lang="ko">백도희</span>
+                <span>iMessage</span>
+              </span>
+              <p>{home.greeting}</p>
+              <small>{home.exampleNote}</small>
+            </figcaption>
+          </figure>
         </section>
       </main>
       <footer className="home-footer">

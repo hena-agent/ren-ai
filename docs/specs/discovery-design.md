@@ -3,7 +3,7 @@
 ## Direction
 
 Ren AI is refined, photo-led and personal. Preserve the existing white, cool gray
-(`#f4f5f7`), ink (`#20242b`) and red (`#d64032`) palette. Improve proportions,
+(`#f4f5f7`), ink (`#20242b`) and cherry rose (`#c72c52`, hover `#a82042`) palette. Improve proportions,
 spacing, typography and feedback within that palette. Use the official product
 name from `CONTEXT.md` throughout.
 
@@ -43,7 +43,39 @@ gentle photographic parallax. Reduced motion and browsers without view timelines
 show all messages immediately in normal document flow, with no empty pinning space.
 
 Avoid repeated profile grids, miniature UI screenshots and tilted photo decorations.
-Finish with a confident red CTA section. Treat featured profiles as editorial
+Use cherry rose for decisive actions, selection, hearts and connection details;
+do not fill the closing section with the accent color. Keep the brand symbol,
+favicon and touch icon consistent with the accent.
+
+Make two benefits prominent in the hero copy and after the conversation:
+**no additional app to install**, and **each persona connects exclusively with
+one user—you, rather than being shared with other users**. This is a promise
+about the persona's exclusive connection, not merely a limit on how many personas
+a visitor can talk to. State this directly in the headline, description and
+simple one-to-one diagram. Use a short heading with only the visitor word accented
+and a single-sentence explanation. Show the new section-specific persona image
+as a small circle opposite an equally sized circle labeled with the visitor word.
+Connect them with thin line segments and a real SVG heart; both segments must end
+with a clear gap before the heart. Do not run a line through a masked icon or
+use a table, recipient rows or a large profile card. Keep the image style-aware.
+The follow-up invitation says a persona curious about the visitor will reach out
+first. Keep operational selection/availability language in registration notes
+and FAQs rather than this relationship-focused section.
+iMessage on
+iPhone is the sole supported channel; do not show LINE, WhatsApp or future-channel
+logos. Show a localized illustrative first-message notification alongside the
+iMessage identity, using the messaging-app icon rather than repeating a persona
+avatar in every notification. Prioritize spacing, alignment and readable
+relationship information rather than an oversized portrait.
+Do not imply immediate matching or a guaranteed connection to the featured persona.
+Keep the three registration steps compact, followed by the existing selection note.
+
+End with an ink-colored editorial closing: an invitation and cherry-rose CTA
+beside a large everyday persona photograph with an illustrative first greeting.
+Adapt these photos and avatars to the selected image style. On phones, stack
+copy and imagery with the CTA before the photo; keep headings and notifications
+readable at 320px without horizontal overflow.
+Treat featured profiles as editorial
 selections; keep public persona writing in
 its original language. The landing remains independent of a live Catalog request.
 Desktop navigation uses one horizontal row; smaller screens use a single-row
