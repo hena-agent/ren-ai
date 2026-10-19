@@ -14,8 +14,9 @@ export const fakeMessages = (events: string[] = []) => {
   const statuses = new Map<string, "sent" | "no_imessage" | "unknown">();
   const messages: Messages = {
     image: imageData,
-    sendText: (handle, text) =>
+    sendText: (handle, text, attemptID) =>
       Effect.gen(function* () {
+        if (attemptID && sendStatuses.has(attemptID)) return { guid: attemptID };
         events.push("send");
         bubbles.push({ handle, text });
         lastStatuses.set(handle, { delivered: false, readAt: null });
@@ -24,9 +25,14 @@ export const fakeMessages = (events: string[] = []) => {
           text,
           yield* Clock.currentTimeMillis,
           "sent",
-          `fake-${bubbles.length}`,
+          attemptID ?? `fake-${bubbles.length}`,
         );
         return { guid: row.guid };
+      }),
+    resolveSend: (attemptID) =>
+      Effect.sync(() => {
+        if (!sendStatuses.has(attemptID)) sendStatuses.set(attemptID, "failed");
+        return sendStatuses.get(attemptID)!;
       }),
     textStatus: (handle) =>
       Effect.sync(

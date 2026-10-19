@@ -83,7 +83,8 @@ export const openHistory = (path: string, serviceHandle: string) => {
       read_at INTEGER,
       detail TEXT NOT NULL DEFAULT '{}'
     );
-    CREATE INDEX IF NOT EXISTS message_handle ON message (handle, id);`);
+    CREATE INDEX IF NOT EXISTS message_handle ON message (handle, id);
+    CREATE TABLE IF NOT EXISTS send_fence (guid TEXT PRIMARY KEY);`);
   const insert =
     db.prepare(`INSERT INTO message (guid, handle, created_at, text, from_me, state, detail)
     VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (guid) DO NOTHING RETURNING *`);
@@ -158,8 +159,32 @@ export const openHistory = (path: string, serviceHandle: string) => {
       return undefined;
     },
     /** Records an outgoing text before it is submitted, so a crash leaves it in doubt, not lost. */
-    outgoing: (guid: string, handle: string, text: string, createdAt: number) =>
-      message(decodeRow(insert.get(guid, handle, createdAt, text, 1, "pending", "{}"))),
+    outgoing: (guid: string, handle: string, text: string, createdAt: number) => {
+      const admitted = db
+        .prepare(`INSERT INTO message
+        (guid, handle, created_at, text, from_me, state)
+        SELECT ?, ?, ?, ?, 1, 'pending' WHERE NOT EXISTS
+        (SELECT 1 FROM send_fence WHERE guid = ?)
+        ON CONFLICT (guid) DO NOTHING RETURNING *`)
+        .get(guid, handle, createdAt, text, guid);
+      if (admitted) return message(decodeRow(admitted));
+      const existing = one(`SELECT * FROM message WHERE guid = ?`, guid);
+      if (
+        existing &&
+        (existing.handle !== handle || existing.text !== text || existing.from_me !== 1)
+      )
+        throw new Error("Send identity conflict");
+      return undefined;
+    },
+    /** Fence missing attempts atomically with admission, including across restarts. */
+    fence: (guid: string) => {
+      run(
+        `INSERT OR IGNORE INTO send_fence SELECT ? WHERE NOT EXISTS
+        (SELECT 1 FROM message WHERE guid = ?)`,
+        guid,
+        guid,
+      );
+    },
     settle: (guid: string, state: "sent" | "failed", error = 0) => {
       run(
         `UPDATE message SET state = ?, error = ? WHERE guid = ? AND state = 'pending'`,
@@ -175,7 +200,11 @@ export const openHistory = (path: string, serviceHandle: string) => {
     status: (guid: string) => {
       const row = one(`SELECT * FROM message WHERE guid = ? AND from_me = 1`, guid);
       return {
-        state: row?.state ?? "pending",
+        state:
+          row?.state ??
+          (db.prepare(`SELECT 1 FROM send_fence WHERE guid = ?`).get(guid)
+            ? ("failed" as const)
+            : ("pending" as const)),
         error: row?.error ?? 0,
         dateRead: row?.read_at ?? null,
       };

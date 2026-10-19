@@ -103,6 +103,33 @@ API_APP_URL=https://api.renai.im bun run operator remove HANDLE
 The commands are `remove`, `block`, `rebuild`, `test-handle` and `untest-handle`,
 each taking one handle.
 
+### Recover a blocked send
+
+Deploy the matching imsg gateway first and verify its exact revision and readiness
+locally and through the public tunnel. Then deploy api-app. New text attempts
+persist an identity before submission; on the next delivery check/send, the Mac
+either reports its outcome or durably rejects the missing attempt. An admitted
+but unconfirmed attempt stays uncertain. Neither path automatically resends it.
+
+For a legacy attempt, inspect its exact OpenCode tool call and the old transport's
+history. Establish that the original executor/request can no longer send and
+verify non-delivery with the operator/recipient; absence from history alone is
+not proof. The following command is an explicit non-delivery attestation for
+that **one legacy call**, not a reset or a resend:
+
+```sh
+API_APP_URL=https://api.renai.im bun run operator release-send HANDLE CALL_ID
+```
+
+It rechecks transport evidence before changing anything. `released` records a
+legacy failure, `settled` means transport evidence or a prior recovery already
+settled it, `uncertain` means an identified native attempt still cannot be released,
+and `not_found` means the Handle/current Conversation does not own that call.
+Repeating the same command cannot release a different attempt. Completed sends,
+Conversation identity, State and Memory are preserved. The next model context
+reports the failed send honestly, and a fresh send can proceed after all earlier
+uncertainty is resolved. Recovery failures include a request ID for the logs.
+
 The Dockerfile now builds only plugin-installation and explicit offline-export
 artifacts. `compose.yml` retains the plugin installer and original volume names,
 not an application listener or tunnel. The obsolete Docker serving/deploy path

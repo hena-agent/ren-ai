@@ -70,6 +70,7 @@ export const prepareMessaging = (
           yield* sql`INSERT INTO context_seen (session_id, guid) VALUES (${sessionID}, ${observed})
             ON CONFLICT(session_id) DO UPDATE SET guid = excluded.guid WHERE guid IS NOT excluded.guid`;
           const conversation = yield* directory.bySession(sessionID);
+          if (conversation) yield* sends.observe(conversation);
           return {
             status: conversation
               ? yield* messages.lastOutgoingStatus(conversation.handle)

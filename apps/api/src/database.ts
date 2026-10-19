@@ -217,6 +217,11 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE INDEX failed_turn_pending ON failed_turn(review, retry_at, last_retry_at, failed_at, session_id)`;
         yield* sql`CREATE INDEX failed_turn_flags ON failed_turn(review, quota, provider_alerted, failed_at)`;
       }),
+      "036_send_identity": Effect.gen(function* () {
+        yield* sql`ALTER TABLE send ADD COLUMN attempt_id TEXT`;
+        yield* sql`CREATE INDEX send_pending ON send(conversation_id, id)
+          WHERE state IN ('recorded', 'uncertain') OR notification_pending = 1`;
+      }),
     }),
   });
 });

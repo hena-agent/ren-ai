@@ -112,11 +112,17 @@ test.each(["sent", "uncertain"] as const)(
             const messages = messageGateway(
               {
                 ...fake.messages,
-                sendText: (handle, text) => {
+                sendText: (handle, text, attemptID) => {
                   attempts++;
                   return outcome === "uncertain"
-                    ? Effect.fail(new Error("Connection lost; send outcome unknown"))
-                    : fake.messages.sendText(handle, text);
+                    ? fake
+                        .outgoing(handle, text, Date.now(), "unknown", attemptID)
+                        .pipe(
+                          Effect.andThen(
+                            Effect.fail(new Error("Connection lost; send outcome unknown")),
+                          ),
+                        )
+                    : fake.messages.sendText(handle, text, attemptID);
                 },
               },
               "imsg-secret",

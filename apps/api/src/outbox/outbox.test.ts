@@ -90,7 +90,13 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
       expect(yield* ui.gestures.read(conversation.handle)).toBeUndefined();
       expect(yield* ui.gestures.react(conversation.handle, "like")).toBeUndefined();
       const failed = yield* outbox(
-        { ...fake.messages, sendText: () => Effect.fail(new Error("imsg timed out")) },
+        {
+          ...fake.messages,
+          sendText: (handle, text, guid) =>
+            fake
+              .outgoing(handle, text, 0, "unknown", guid)
+              .pipe(Effect.andThen(Effect.fail(new Error("imsg timed out")))),
+        },
         {
           ...ui.gestures,
           typing: () => Effect.fail(new Error("UI unavailable")),
@@ -116,12 +122,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
       yield* TestClock.adjust("3 seconds");
       expect(yield* Fiber.join(waiting)).toBe("not sent: an earlier send is still in doubt");
       expect(fake.bubbles).toEqual([]);
-      yield* fake.outgoing(
-        conversation.handle,
-        "in doubt",
-        yield* Clock.currentTimeMillis,
-        "failed",
-      );
+      yield* fake.settle((yield* fake.messages.recent(conversation.handle, 0))[0]!.guid, "failed");
       expect(yield* recovered.send(conversation, "must wait", "call-3")).toBe("sent");
       expect(fake.bubbles).toEqual([{ handle: conversation.handle, text: "must wait" }]);
       const rows = yield* sql<{ state: string; content: string }>`SELECT state, content FROM send`;
@@ -164,13 +165,14 @@ test("typing time scales with text and is capped before each recorded send", asy
       const delivered = yield* outbox(
         {
           ...fake.messages,
-          sendText: (handle, text) =>
+          sendText: (handle, text, guid) =>
             Effect.gen(function* () {
               const row = yield* fake.outgoing(
                 handle,
                 text,
                 yield* Clock.currentTimeMillis,
                 "delivered",
+                guid,
               );
               return { guid: row.guid };
             }),

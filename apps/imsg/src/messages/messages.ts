@@ -6,7 +6,14 @@ export interface Messages {
   image(
     attachment: NonNullable<IncomingMessage["attachments"]>[number],
   ): Effect.Effect<{ readonly uri: string }, Error>;
-  sendText(handle: string, text: string): Effect.Effect<{ readonly guid: string | null }, Error>;
+  sendText(
+    handle: string,
+    text: string,
+    attemptID?: string,
+    requestId?: string,
+  ): Effect.Effect<{ readonly guid: string | null }, Error>;
+  /** Atomically reject a missing application-owned attempt; never retry an admitted send. */
+  resolveSend(attemptID: string): Effect.Effect<"sent" | "delivered" | "failed" | "unknown", Error>;
   /** Status of her most recent outgoing row, using its date_read and delivery fields. */
   lastOutgoingStatus(handle: string): Effect.Effect<OutgoingStatus | undefined, Error>;
   /** Ordered by ROWID. Older deployed gateways may return more than the optional limit. */

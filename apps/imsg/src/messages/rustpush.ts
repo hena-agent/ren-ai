@@ -59,6 +59,37 @@ const probe = (bridge: Effect.Success<ReturnType<typeof startBridge>>, handle: s
     ),
   );
 
+const historyQueries = (history: ReturnType<typeof openHistory>) => ({
+  resolveSend: (attemptID: string) =>
+    query(() => {
+      const guid = attemptID.toUpperCase();
+      history.fence(guid);
+      const { state } = history.status(guid);
+      return state === "pending" ? ("unknown" as const) : state;
+    }),
+  lastOutgoingStatus: (handle: string) =>
+    query(() => {
+      const last = history.lastOutgoing(handle);
+      return last && { delivered: last.state === "delivered", readAt: last.readAt };
+    }),
+  after: (rowID: number, limit?: number) => query(() => history.after(rowID, limit)),
+  recent: (handle: string, since: number) => query(() => history.recent(handle, since)),
+  status: (guid: string) => query(() => history.status(guid)),
+  sendStatus: (guid: string) =>
+    query(() => {
+      const { state } = history.status(guid);
+      return state === "pending" ? ("unknown" as const) : state;
+    }),
+  textStatus: (handle: string, since: number) =>
+    query(() => {
+      const last = history.lastOutgoing(handle, since);
+      if (last?.state === "failed" && last.error === noIMessage) return "no_imessage" as const;
+      return last?.state === "sent" || last?.state === "delivered"
+        ? ("sent" as const)
+        : ("unknown" as const);
+    }),
+});
+
 /** Scoped adapter: keep its scope alive for as long as Messages is in use. */
 export const makeRustpushMessages = (options: RustpushOptions, alerts: Alerts) =>
   Effect.gen(function* () {
@@ -125,48 +156,36 @@ export const makeRustpushMessages = (options: RustpushOptions, alerts: Alerts) =
       handle: string,
       text: string,
       requestId: string = randomUUID(),
+      guid: string = randomUUID().toUpperCase(),
     ) =>
-      Effect.gen(function* () {
-        const guid = randomUUID().toUpperCase();
-        const now = yield* Clock.currentTimeMillis;
-        yield* query(() => record.outgoing(guid, handle, text, now));
-        yield* changed;
-        const submit = observe(
-          "rustpush.send",
-          bridge.call("send", { from, guid, to: uriOf(handle), text }, requestId).pipe(
-            Effect.match({ onSuccess: (result) => result, onFailure: (error) => error }),
-            Effect.flatMap((outcome) => settle(record, guid, outcome)),
-          ),
-          () => ({}),
-          requestId,
-        );
-        const fiber = yield* Effect.forkIn(submit, lifetime);
-        // The row is the authority: a slow answer leaves it pending and settles it later.
-        yield* Fiber.join(fiber).pipe(Effect.timeoutOption(options.settleMillis ?? 20_000));
-        return { guid };
-      });
+      Effect.uninterruptibleMask((restore) =>
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis;
+          const admitted = yield* query(() => record.outgoing(guid, handle, text, now));
+          if (!admitted) return { guid };
+          yield* changed;
+          const submit = observe(
+            "rustpush.send",
+            bridge.call("send", { from, guid, to: uriOf(handle), text }, requestId).pipe(
+              Effect.match({ onSuccess: (result) => result, onFailure: (error) => error }),
+              Effect.flatMap((outcome) => settle(record, guid, outcome)),
+            ),
+            () => ({}),
+            requestId,
+          );
+          const fiber = yield* Effect.forkIn(submit, lifetime);
+          // The row is the authority: a slow answer leaves it pending and settles it later.
+          yield* restore(
+            Fiber.join(fiber).pipe(Effect.timeoutOption(options.settleMillis ?? 20_000)),
+          );
+          return { guid };
+        }),
+      );
     const messages: Messages = {
+      ...historyQueries(history),
       image: imageData,
-      sendText: (handle, text) => send(history, service, handle, text),
-      lastOutgoingStatus: (handle) =>
-        query(() => {
-          const last = history.lastOutgoing(handle);
-          return last && { delivered: last.state === "delivered", readAt: last.readAt };
-        }),
-      after: (rowID, limit) => query(() => history.after(rowID, limit)),
-      recent: (handle, since) => query(() => history.recent(handle, since)),
-      status: (guid) => query(() => history.status(guid)),
-      sendStatus: (guid) =>
-        query(() => {
-          const { state } = history.status(guid);
-          return state === "pending" ? "unknown" : state;
-        }),
-      textStatus: (handle, since) =>
-        query(() => {
-          const last = history.lastOutgoing(handle, since);
-          if (last?.state === "failed" && last.error === noIMessage) return "no_imessage";
-          return last?.state === "sent" || last?.state === "delivered" ? "sent" : "unknown";
-        }),
+      sendText: (handle, text, attemptID, requestId) =>
+        send(history, service, handle, text, requestId, attemptID?.toUpperCase()),
       follow: (rowID, receive) =>
         Effect.gen(function* () {
           const signal = yield* Queue.sliding<void>(1);

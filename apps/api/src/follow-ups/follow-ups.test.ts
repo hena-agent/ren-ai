@@ -274,7 +274,7 @@ test("incoming tapbacks, manual sends, tool texts and her tapbacks reset the qui
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(toolAt);
         yield* TestClock.adjust("1 hour");
         const [alreadySent] = (yield* fake.messages.after(0)).filter(
-          (row) => row.guid === "fake-1",
+          (row) => row.fromMe && row.text === "hello",
         );
         yield* sends.reconcile(conversation, alreadySent!);
         expect((yield* state(sql, conversation.id))?.lastSentAt).toBe(toolAt);

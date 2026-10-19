@@ -1,6 +1,8 @@
 import { normalizeHandle } from "@ren-ai/onboarding";
+import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { Effect, Layer, Schema } from "effect";
-import { HttpRouter, HttpServer } from "effect/unstable/http";
+import { HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
+import { ObservedSendFailure } from "../outbox/observe.ts";
 import {
   HttpApi,
   HttpApiBuilder,
@@ -20,6 +22,18 @@ const normalized = (handle: string) =>
 
 export const operatorApi = HttpApi.make("operator").add(
   HttpApiGroup.make("operator")
+    .add(
+      HttpApiEndpoint.post("releaseSend", "/release-send", {
+        payload: Schema.Struct({
+          handle: Schema.String,
+          callID: Schema.String.check(Schema.isMinLength(1)),
+        }),
+        success: Schema.Struct({
+          result: Schema.Literals(["released", "settled", "uncertain", "not_found"]),
+        }),
+        error,
+      }),
+    )
     .add(
       HttpApiEndpoint.post("testHandle", "/test-handle", {
         payload: Schema.Struct({ handle: Schema.String, enabled: Schema.Boolean }),
@@ -51,6 +65,10 @@ export const operatorApi = HttpApi.make("operator").add(
 );
 
 type Operations = {
+  readonly releaseSend: (
+    handle: string,
+    callID: string,
+  ) => Effect.Effect<"released" | "settled" | "uncertain" | "not_found", Error>;
   readonly testHandle: (handle: string, enabled: boolean) => Effect.Effect<void, Error>;
   readonly block: (handle: string) => Effect.Effect<void, Error>;
   readonly remove: (handle: string) => Effect.Effect<"removed" | "not_found", Error>;
@@ -60,6 +78,41 @@ type Operations = {
 export const operatorHandler = (operations: Operations) => {
   const handlers = HttpApiBuilder.group(operatorApi, "operator", (group) =>
     group
+      .handle("releaseSend", ({ payload }) =>
+        Effect.gen(function* () {
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          const requestId = request.headers["x-operation-id"] ?? crypto.randomUUID();
+          const started = performance.now();
+          const fields = { requestId, operation: "send.release", stage: "outbox.reconcile" };
+          return yield* normalized(payload.handle).pipe(
+            Effect.flatMap((handle) => operations.releaseSend(handle, payload.callID)),
+            Effect.tap((result) =>
+              Effect.sync(() =>
+                contactLog({
+                  ...fields,
+                  outcome: "completed",
+                  code: result,
+                  level: result === "uncertain" ? "warn" : "info",
+                  durationMs: performance.now() - started,
+                }),
+              ),
+            ),
+            Effect.tapError((cause) =>
+              Effect.sync(() =>
+                contactLog({
+                  ...fields,
+                  ...(cause instanceof ObservedSendFailure ? {} : contactCause(cause)),
+                  outcome: "failed",
+                  level: "error",
+                  durationMs: performance.now() - started,
+                }),
+              ),
+            ),
+            Effect.map((result) => ({ result })),
+            Effect.mapError(() => ({ reason: `Send recovery failed (request ${requestId})` })),
+          );
+        }),
+      )
       .handle("testHandle", ({ payload }) =>
         normalized(payload.handle).pipe(
           Effect.flatMap((handle) => operations.testHandle(handle, payload.enabled)),

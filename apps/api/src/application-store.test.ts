@@ -78,6 +78,27 @@ test("usage collection has a bounded SQL budget and unchanged history incurs no 
     expect(result.unchanged.reads).toBeLessThan(20);
     expect(result.unchanged.writes).toBe(0);
     expect(result.input).toBe(11);
+    const outbox = await call(runtime, "/__fixture/outbox-budget");
+    expect(outbox.status).toBe(200);
+    const budgets = Schema.decodeUnknownSync(
+      Schema.Array(
+        Schema.Struct({
+          size: Schema.Number,
+          reads: Schema.Number,
+          writes: Schema.Number,
+          plan: Schema.Array(Schema.Struct({ detail: Schema.String })),
+        }),
+      ),
+    )(await outbox.json());
+    expect(budgets.map(({ size }) => size)).toEqual([100, 10000]);
+    for (const budget of budgets) {
+      expect(budget.reads).toBeLessThanOrEqual(2);
+      expect(budget.writes).toBe(0);
+      expect(budget.plan.some(({ detail }) => detail.includes("USING INDEX send_pending"))).toBe(
+        true,
+      );
+      expect(budget.plan.some(({ detail }) => detail.includes("TEMP B-TREE"))).toBe(false);
+    }
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });
