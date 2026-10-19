@@ -2,7 +2,7 @@
 
 Agreed on 2026-10-19. [ADR-0020](../adr/0020-notifications-come-from-noti-renai-im.md)
 records the identity and transport decision. This document distinguishes the Mac
-capability from the later Discovery rollout; joining currently still sends nothing.
+capability from the separate Discovery rollout.
 
 ## Step 1: Mac capability
 
@@ -32,6 +32,11 @@ capability from the later Discovery rollout; joining currently still sends nothi
 
 ## Step 2: Discovery, API and Admin (separate release)
 
+Step 1 live acceptance passed on `e00db759e20c0cbfb095eec27b270a796b5a869f`;
+[the rollout record](https://github.com/hena-agent/ren-ai/pull/115#issuecomment-6259688946)
+includes sender separation, dropped replies/photos, Persona replies and restart
+persistence. Step 2 uses consent version `discovery-2026-10-19` in all locales.
+
 - Save a Notification atomically with each new Waitlist entry. New joins,
   Reselection and test-handle joins after Reset qualify. Repeat submissions and
   already-active handles do not send another message. Existing registrations are
@@ -41,6 +46,9 @@ capability from the later Discovery rollout; joining currently still sends nothi
   verification and no delivery result exposed on the public site.
 - Cap Notifications at 30 per hour across the service. Excess joins still succeed;
   their Notifications are skipped, not deferred into a later backlog.
+  Admission to a send attempt uses a rolling hour of anonymous timestamps in
+  SQLite, committed with the uncertain state before calling the Mac. Removing a
+  registration or resetting a test handle cannot reset that budget.
 - One attempt only: no automatic retry or Admin resend button. Admin shows queued,
   sent, failed, uncertain or skipped results on Waitlist entries. Delivery receipts
   may update the transport record. Failure never changes eligibility, Selection or

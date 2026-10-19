@@ -93,9 +93,9 @@ test("all steps in an idle-delimited turn, including steered input, are durable 
         messages: () => Effect.fail(new Error("offline")),
         get: () => Effect.succeed(session),
       });
-      yield* offline.tick;
+      yield* offline.session(session.id).pipe(Effect.result);
       expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 1 }]);
-      yield* collector.tick;
+      yield* collector.session(session.id);
       expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 0 }]);
       expect(yield* sql`SELECT snapshot_hash FROM usage_session`).toEqual(hash);
       expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
@@ -103,13 +103,13 @@ test("all steps in an idle-delimited turn, including steered input, are durable 
         BEGIN SELECT RAISE(ABORT, 'fixture failure'); END`;
       pages[1] = assistant("msg_first", { tokens: { ...tokens, input: 101 } });
       pages[3] = assistant("msg_second", { tokens: { ...tokens, input: 999 } });
-      yield* collector.tick;
+      yield* collector.session(session.id).pipe(Effect.result);
       expect((yield* query(conversation.id))!.totals).toEqual(first.totals);
       expect(yield* sql`SELECT snapshot_hash FROM usage_session`).toEqual(hash);
       yield* sql`DROP TRIGGER reject_usage`;
       pages[1] = assistant("msg_first");
       pages[3] = assistant("msg_second");
-      yield* collector.tick;
+      yield* collector.session(session.id);
       expect(yield* query(999)).toBeUndefined();
       yield* directory.replaceSession(conversation, "ses_replacement");
       expect((yield* query(conversation.id))!.sessions).toHaveLength(2);
@@ -165,7 +165,7 @@ test("running, interrupted and failed steps preserve missing usage and safe diag
         messages: () => Effect.succeed({ data: history, cursor: {} }),
         get: () => Effect.succeed(session),
       });
-      yield* collector.tick;
+      yield* collector.session(session.id);
       expect((yield* query(conversation.id))!.turns[0]!.totals.unmeasuredEntries).toBe(2);
       history = [
         user("msg_first"),
@@ -199,7 +199,7 @@ test("running, interrupted and failed steps preserve missing usage and safe diag
         }),
         idle("msg_old_end"),
       ];
-      yield* collector.tick;
+      yield* collector.session(session.id);
       const detail = (yield* query(conversation.id))!;
       expect(detail.turns).toHaveLength(4);
       expect(detail.turns.flatMap((turn) => turn.entries)).toEqual(
@@ -216,7 +216,7 @@ test("running, interrupted and failed steps preserve missing usage and safe diag
           idle(`msg_idle_${index}`),
         ]).flat(),
       ];
-      yield* collector.tick;
+      yield* collector.session(session.id);
       const page = (yield* query(conversation.id))!;
       expect(page.turns).toHaveLength(50);
       expect((yield* query(conversation.id, page.nextBefore!))!.turns).toHaveLength(5);
@@ -262,13 +262,13 @@ test("pagination and upstream failures preserve the previous snapshot and emit c
           messages: () => Effect.succeed({ data: [], cursor: { next: "same" } }),
           get: () => Effect.succeed(session),
         });
-        yield* cyclic.tick;
+        yield* cyclic.session(session.id).pipe(Effect.result);
         expect(yield* sql`SELECT COUNT(*) AS count FROM usage_entry`).toEqual([{ count: 0 }]);
         const healthy = yield* usageCollector({
           messages: () => Effect.succeed({ data: [], cursor: {} }),
           get: () => Effect.succeed(session),
         });
-        yield* healthy.tick;
+        yield* healthy.session(session.id);
         expect(yield* sql`SELECT unavailable FROM usage_session`).toEqual([{ unavailable: 0 }]);
       } finally {
         stderr.mockRestore();

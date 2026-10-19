@@ -66,7 +66,7 @@ export async function usageBudget(storage: DurableObjectStorage, store: Applicat
           get: () => Effect.succeed(session),
           messages: () => Effect.succeed({ data: history, cursor: {} }),
         });
-        yield* collector.tick;
+        yield* collector.session(session.id);
       }),
     );
     return {

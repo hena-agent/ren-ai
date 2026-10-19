@@ -1,5 +1,6 @@
 # AGENTS.md
 
+- Use the official product name defined in `CONTEXT.md` in UI, assets, documentation and responses. For Discovery design changes, read `docs/specs/discovery-design.md`.
 - Ask for and receive explicit user approval before creating a Git worktree.
   Use the current working directory unless the user approves another worktree.
 - Do not preserve backward compatibility. Remove obsolete paths instead of
@@ -76,6 +77,13 @@ Libraries are Just-in-Time: `exports` points at `./src/index.ts`, there is no bu
 Changes to the shapes in `packages/onboarding` must keep the Discovery client and Admin working with the API still running: new fields stay optional until the API deploys, and clients continue handling every answer the old API can give.
 
 The Messages Mac deploys itself from `main` on its own schedule (`apps/imsg/ops/README.md`). Changes to `@ren-ai/imsg/protocol` keep the running application working, and the application keeps handling every answer the deployed Mac can give.
+
+## Durable Object storage
+
+- Treat Durable Objects as authoritative state and coordination, not a polling cache. Schedule persisted work when state changes; keep maintenance bounded. See ADR-0019 for the Mac/Cloudflare boundary.
+- Budget storage rows read/written separately from requests. Use indexed predicates and SQL limits/keyset cursors before loading recovery batches; verify hot queries with `EXPLAIN QUERY PLAN` against the real schema.
+- Persist collection fingerprints and schedules across actor replacement. Reconcile changed accounting metadata, including late measurements, while leaving unchanged history untouched. Keep unchanged Admin checkpoints free of storage transactions and writes.
+- Test repeated idle checks, concurrent checkpoints, actor replacement and growing history at the real storage boundary. Preserve durable deduplication, recovery and uncertain-send behavior while reducing access; passing functional tests alone does not establish bounded storage cost.
 
 ## Persona authoring
 

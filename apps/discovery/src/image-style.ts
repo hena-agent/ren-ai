@@ -4,14 +4,14 @@ export type ImageStyle = "anime" | "photo";
 export type StyledPersona = PublicPersona & { readonly imageUrls?: readonly string[] };
 const key = "ren-ai.discovery.image-style";
 
-export function readImageStyle(): ImageStyle | undefined {
+export function readImageStyle(): ImageStyle {
   try {
     const value = localStorage.getItem(key);
     if (value === "anime" || value === "photo") return value;
   } catch {
-    // Browser storage may be unavailable; leave the style unset.
+    // The first visit and browsers without storage start with anime.
   }
-  return undefined;
+  return "anime";
 }
 
 export function saveImageStyle(style: ImageStyle): boolean {
