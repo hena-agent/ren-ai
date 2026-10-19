@@ -12,6 +12,7 @@ export function Header({ children }: { children?: ReactNode }) {
         {copy.skip}
       </a>
       <a className="wordmark" href="/">
+        <img src="/brand.svg" width="30" height="30" alt="" />
         {copy.brand}
       </a>
       {children}
@@ -80,7 +81,7 @@ export function Navigation({
 }) {
   const copy = useCopy();
   return (
-    <nav className="app-navigation" aria-label={copy.navigation}>
+    <nav className="app-navigation" aria-label={copy.navigation} data-view={view}>
       <button
         className="nav-explore"
         type="button"

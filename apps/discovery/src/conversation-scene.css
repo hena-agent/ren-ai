@@ -1,0 +1,375 @@
+.conversation-demo {
+  margin: 0;
+}
+.conversation-story {
+  --scene-header: 80px;
+  view-timeline-name: --conversation;
+  view-timeline-axis: block;
+  view-timeline-inset: var(--scene-header) 0;
+}
+.conversation-viewport {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 760px;
+  overflow: hidden;
+  background: var(--canvas);
+}
+.conversation-photo {
+  position: absolute;
+  inset: 0 34% 0 0;
+  margin: 0;
+  overflow: hidden;
+}
+.conversation-photo > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 32%;
+}
+.conversation-photo::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 62%, var(--canvas));
+  content: "";
+}
+.conversation-thread {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  align-self: center;
+  min-width: 0;
+  margin: 0;
+  padding: 56px clamp(28px, 4vw, 72px) 64px 16px;
+}
+.conversation-contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: var(--canvas);
+}
+.conversation-contact > img {
+  border: 2px solid white;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.conversation-contact > div {
+  display: flex;
+  flex-direction: column;
+}
+.conversation-contact strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+.conversation-contact > div > span,
+.conversation-platform {
+  color: var(--muted);
+  font-size: 14px;
+}
+.conversation-platform {
+  margin-left: auto;
+}
+.conversation-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.conversation-message {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.conversation-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  min-height: 0;
+}
+.conversation-bubble {
+  max-width: 88%;
+  margin-block: 10px;
+  padding: 16px 20px;
+  border-radius: 24px 24px 24px 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 24px #20242b08;
+}
+.conversation-message p {
+  margin: 0;
+  font-size: clamp(18px, 1.5vw, 23px);
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.conversation-message[data-direction="outgoing"] .conversation-bubble {
+  align-self: end;
+  border-radius: 24px 24px 6px 24px;
+  background: #0069df;
+  color: white;
+}
+.conversation-note {
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.conversation-media {
+  position: relative;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.conversation-media > img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: 270px;
+  object-fit: cover;
+  border-radius: 20px;
+}
+.conversation-message .conversation-bubble.conversation-media {
+  background: none;
+  padding: 0;
+  box-shadow: none;
+}
+.conversation-reaction {
+  position: absolute;
+  top: -14px;
+  left: -12px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 34px;
+  border: 3px solid var(--canvas);
+  border-radius: 20px;
+  background: #e7e9ee;
+  color: var(--accent);
+}
+.conversation-reaction .icon {
+  width: 20px;
+  height: 20px;
+}
+.conversation-music {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: 0 8px 24px #20242b08;
+}
+.conversation-music:hover {
+  background: #e7e9ee;
+}
+.conversation-music-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 80px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: white;
+}
+.conversation-music-icon .icon {
+  width: 40px;
+  height: 40px;
+}
+.conversation-music > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 16px;
+}
+.conversation-music small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.conversation-music small .icon {
+  width: 16px;
+  height: 16px;
+}
+@keyframes scene-photo-drift {
+  from {
+    transform: translateY(4%) scale(1.12);
+  }
+  to {
+    transform: translateY(-4%) scale(1.12);
+  }
+}
+@keyframes scene-message-arrive {
+  from {
+    visibility: hidden;
+    opacity: 0;
+    grid-template-rows: 0fr;
+    transform: translateY(36px);
+  }
+  to {
+    visibility: visible;
+    opacity: 1;
+    grid-template-rows: 1fr;
+    transform: translateY(0);
+  }
+}
+@keyframes conversation-react {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (max-width: 800px) {
+  .conversation-story {
+    --scene-header: 72px;
+  }
+}
+@media (max-width: 700px) {
+  .conversation-viewport {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .conversation-photo {
+    position: relative;
+    inset: auto;
+    height: 380px;
+    flex-shrink: 0;
+  }
+  .conversation-photo::after {
+    background: linear-gradient(180deg, transparent 65%, var(--canvas));
+  }
+  .conversation-thread {
+    width: 100%;
+    padding: 16px 20px 48px;
+  }
+  .conversation-contact {
+    margin-bottom: 20px;
+  }
+  .conversation-bubble {
+    max-width: 92%;
+    margin-block: 6px;
+    padding: 12px 16px;
+  }
+  .conversation-message p {
+    font-size: clamp(16px, 4.5vw, 19px);
+  }
+  .conversation-media > img {
+    height: 180px;
+  }
+  .conversation-music {
+    gap: 12px;
+    padding: 16px;
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .conversation-photo > img {
+      animation: scene-photo-drift 1ms linear both;
+      animation-timeline: --conversation;
+      animation-range: contain 0% contain 100%;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) and (min-height: 700px) {
+    .conversation-story {
+      height: 360svh;
+      --thread-height: min(560px, calc(100svh - 240px));
+    }
+    .conversation-viewport {
+      position: sticky;
+      top: var(--scene-header);
+      height: calc(100svh - var(--scene-header));
+      min-height: 0;
+    }
+    .conversation-window {
+      position: relative;
+      height: var(--thread-height);
+      overflow: clip;
+      mask-image: linear-gradient(transparent, black 16px, black calc(100% - 16px), transparent);
+    }
+    .conversation-messages {
+      position: absolute;
+      right: 0;
+      bottom: 16px;
+      left: 0;
+    }
+    .conversation-reveal {
+      overflow: hidden;
+    }
+    .conversation-message {
+      animation: scene-message-arrive 1ms var(--ease-out) both;
+      animation-timeline: --conversation;
+    }
+    .conversation-message:first-child {
+      animation-range: contain 0% contain 4%;
+    }
+    .conversation-message:nth-child(2) {
+      animation-range: contain 8% contain 12%;
+    }
+    .conversation-message:nth-child(3) {
+      animation-range: contain 18% contain 22%;
+    }
+    .conversation-message:nth-child(4) {
+      animation-range: contain 30% contain 34%;
+    }
+    .conversation-message:nth-child(5) {
+      animation-range: contain 40% contain 44%;
+    }
+    .conversation-message:nth-child(6) {
+      animation-range: contain 50% contain 54%;
+    }
+    .conversation-message:nth-child(7) {
+      animation-range: contain 62% contain 66%;
+    }
+    .conversation-message:nth-child(8) {
+      animation-range: contain 72% contain 76%;
+    }
+    .conversation-message:nth-child(9) {
+      animation-range: contain 82% contain 86%;
+    }
+    .conversation-reaction {
+      animation: conversation-react 1ms var(--ease-out) both;
+      animation-timeline: --conversation;
+      animation-range: contain 36% contain 38%;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) and (min-height: 700px) and (max-width: 700px) {
+    .conversation-story {
+      --thread-height: min(430px, calc(100svh - 360px));
+    }
+    .conversation-viewport {
+      display: block;
+    }
+    .conversation-photo {
+      position: absolute;
+      inset: 0 0 auto;
+      height: 42%;
+    }
+    .conversation-photo > img {
+      object-position: center 25%;
+    }
+    .conversation-thread {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+  }
+}

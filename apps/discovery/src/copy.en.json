@@ -1,21 +1,41 @@
 {
   "home": {
+    "menu": "Toggle menu",
+    "personaLabel": "AI persona",
+    "personaNames": { "seoyeon": "Seoyeon", "dohee": "Dohee", "seoyul": "Seoyul" },
+    "profileNote": "Different tastes. A story of their own.",
     "navigation": "About the service",
-    "about": "About RenAI",
+    "about": "About Ren AI",
     "how": "How it works",
     "faq": "FAQ",
     "start": "Meet the personas",
-    "eyebrow": "A new connection. A familiar iMessage.",
+    "eyebrow": "No new app. Just iMessage.",
     "title": "A little more",
     "titleAccent": "to look forward to.",
+    "heroIntro": "No new app. Just iMessage, and an AI persona connected exclusively to you.",
+    "conversationTitle": "A little closer.",
+    "conversationAccent": "One message at a time.",
     "intro": "AI personas with their own tastes and stories. Discover someone who catches your interest, and share the everyday over iMessage.",
     "waiting": "Join the waitlist. If selected, a persona will send the first hello.",
     "example": "One evening, over messages",
     "exampleLabel": "An illustrative, fictional conversation",
-    "messages": [
-      "Found a tiny bookshop on my way home",
-      "You didn't just walk past, did you?",
-      "haha no. went in for one book and it's been an hour"
+    "dailyPhoto": "Dohee smiling during a break",
+    "cafePhoto": "The café latte photo I sent",
+    "heartReaction": "Dohee loved my photo",
+    "openMusic": "Listen on Spotify (new tab)",
+    "exchanges": [
+      {
+        "message": "Snuck out for a break. The sunshine today ☀️",
+        "reply": "You already look like it's the weekend haha"
+      },
+      {
+        "message": "That latte! Is that the café you told me about?",
+        "reply": "Yes! Finally made it. Pretty good coffee too"
+      },
+      {
+        "message": "Listening to this and thought you might like it",
+        "reply": "Love it. That's my walk home sorted 🎧"
+      }
     ],
     "exampleNote": "An example of a conversation with an AI persona.",
     "aboutEyebrow": "Getting to know each other, little by little",
@@ -34,20 +54,37 @@
         "body": "Conversations that build on what you've shared. From everyday moments to favorite things, get to know each other over time."
       }
     ],
-    "howEyebrow": "Before the first hello",
-    "howTitle": "It starts with a little curiosity.",
+    "howTitle": "Three steps to the first hello.",
+    "installEyebrow": "A new connection is enough of a change",
+    "installTitle": "A new person.",
+    "installAccent": "Not another app.",
+    "installBody": "Nothing to download. No new messaging app to learn. A new person arrives in the iMessage you open every day.",
+    "channelNote": "The messaging app already on your iPhone",
+    "notificationLabel": "An example of a persona's first hello arriving in iMessage",
+    "notificationNow": "now",
+    "greeting": "Hey, it's Dohee. How was your day?",
+    "exclusiveEyebrow": "A connection that isn't shared",
+    "exclusiveTitle": "Only ",
+    "exclusiveAccent": "you",
+    "exclusiveSuffix": ".",
+    "exclusiveBody": "Your persona doesn't have conversations with anyone else.",
+    "exclusiveNote": "A persona who's curious about you\nwill be the one to say hello.",
+    "exclusiveExample": "Illustrative exclusive persona connection",
+    "exclusiveRecipient": "Their only conversation partner",
+    "exclusiveYou": "You",
+    "exclusivePhoto": "Dohee smiling as she reads a message beside a window",
     "steps": [
       {
         "title": "Have a look",
-        "body": "Choose an image style, then explore the personas' photos and introductions."
+        "body": "Explore photos and introductions. Find someone you're curious about."
       },
       {
         "title": "Show your interest",
-        "body": "Like the personas you're curious about. It's fine to choose more than one."
+        "body": "Send your Likes, then register your iPhone number and give consent."
       },
       {
-        "title": "Wait for a hello",
-        "body": "Register your iPhone number for iMessage and give consent. If selected, one of your liked personas will reach out first."
+        "title": "A persona will reach out",
+        "body": "A persona who wants to know you better sends the first hello on iMessage."
       }
     ],
     "selectionNote": "Selection isn't first-come, first-served, and there is no set contact time. Registration doesn't guarantee an immediate connection.",
@@ -55,7 +92,7 @@
     "questions": [
       {
         "title": "Am I talking to a real person?",
-        "body": "No. RenAI personas are fictional people played by AI. Their photos and profiles represent fictional people, too. This isn't a service for connecting with real people."
+        "body": "No. Ren AI personas are fictional people played by AI. Their photos and profiles represent fictional people, too. This isn't a service for connecting with real people."
       },
       {
         "title": "Do I need another app?",
@@ -74,8 +111,9 @@
         "body": "Your iPhone number for iMessage and preferred conversation language. Name, age, and gender are optional. Read the privacy information and give consent to complete your waitlist registration."
       }
     ],
-    "closingTitle": "Whose story catches your interest?",
-    "closingBody": "Start with a profile. Take your time.",
+    "closingTitle": "Someone you'll",
+    "closingAccent": "hope to hear from.",
+    "closingBody": "No new app. Just a new connection in iMessage. Start with someone who catches your interest.",
     "footer": "Everyday moments with AI personas. Ren AI.",
     "pageTitle": "Ren AI — A little more to look forward to"
   },
@@ -123,15 +161,12 @@
   "closeDetails": "Collapse profile",
   "introductionTitle": "About me",
   "intro": "Meet someone who catches your eye.",
-  "styleTitle": "How would you like to meet?",
-  "styleIntro": "Meet the same personas in two visual styles. Choose the one you prefer.",
-  "styleSetting": "Photo style",
+  "styleSetting": "Image style",
   "animeStyle": "Anime",
   "photoStyle": "Photo",
-  "animeStyleHint": "A soft anime look",
-  "photoStyleHint": "A natural photographic look",
-  "styleChangeHint": "You can change this while browsing. Your likes stay with you.",
   "styleStorageFailure": "Your photo style could not be saved. You can keep using your current choice.",
+  "styleUpdating": "Changing image style.",
+  "styleLoadFailure": "The image style could not be changed. Your current view is preserved. Please try again.",
   "explore": "Who catches your eye?",
   "instructions": "Left to Pass, right to Like. You can also use the arrow keys. Tapping a photo, name or introduction does not make a choice or expand the profile. Use the up arrow button to expand and the down arrow button to collapse.",
   "loading": "Loading people to meet.",

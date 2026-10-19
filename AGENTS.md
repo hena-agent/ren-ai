@@ -1,5 +1,6 @@
 # AGENTS.md
 
+- Use the official product name defined in `CONTEXT.md` in UI, assets, documentation and responses. For Discovery design changes, read `docs/specs/discovery-design.md`.
 - Ask for and receive explicit user approval before creating a Git worktree.
   Use the current working directory unless the user approves another worktree.
 - Do not preserve backward compatibility. Remove obsolete paths instead of

@@ -4,4 +4,6 @@ import { beforeEach, vi } from "vitest";
 beforeEach(() => {
   vi.spyOn(navigator, "languages", "get").mockReturnValue(["ko-KR"]);
   vi.stubEnv("TZ", "Asia/Seoul");
+  if (typeof HTMLImageElement !== "undefined")
+    vi.spyOn(HTMLImageElement.prototype, "decode").mockReset().mockResolvedValue(undefined);
 });

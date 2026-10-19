@@ -1,0 +1,26 @@
+html.style-reveal::view-transition-old(root),
+html.style-reveal::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.style-reveal::view-transition-old(root) {
+  z-index: 1;
+}
+html.style-reveal::view-transition-new(root) {
+  z-index: 2;
+  animation: image-style-reveal 550ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes image-style-reveal {
+  from {
+    clip-path: circle(0px at 0px 0px);
+  }
+  to {
+    clip-path: circle(var(--style-reveal-radius) at 0px 0px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.style-reveal::view-transition-new(root) {
+    animation: none;
+    clip-path: none;
+  }
+}
