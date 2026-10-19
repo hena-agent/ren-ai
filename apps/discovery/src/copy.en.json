@@ -18,10 +18,23 @@
     "waiting": "Join the waitlist. If selected, a persona will send the first hello.",
     "example": "One evening, over messages",
     "exampleLabel": "An illustrative, fictional conversation",
-    "messages": [
-      "Found a tiny bookshop on my way home",
-      "You didn't just walk past, did you?",
-      "haha no. went in for one book and it's been an hour"
+    "dailyPhoto": "Dohee smiling during a break",
+    "cafePhoto": "The café latte photo I sent",
+    "heartReaction": "Dohee loved my photo",
+    "openMusic": "Listen on Spotify (new tab)",
+    "exchanges": [
+      {
+        "message": "Snuck out for a break. The sunshine today ☀️",
+        "reply": "You already look like it's the weekend haha"
+      },
+      {
+        "message": "That latte! Is that the café you told me about?",
+        "reply": "Yes! Finally made it. Pretty good coffee too"
+      },
+      {
+        "message": "Listening to this and thought you might like it",
+        "reply": "Love it. That's my walk home sorted 🎧"
+      }
     ],
     "exampleNote": "An example of a conversation with an AI persona.",
     "aboutEyebrow": "Getting to know each other, little by little",
@@ -52,7 +65,7 @@
         "body": "Like the personas you're curious about. It's fine to choose more than one."
       },
       {
-        "title": "Wait for a hello",
+        "title": "A persona will reach out",
         "body": "Register your iPhone number for iMessage and give consent. If selected, one of your liked personas will reach out first."
       }
     ],
@@ -129,15 +142,12 @@
   "closeDetails": "Collapse profile",
   "introductionTitle": "About me",
   "intro": "Meet someone who catches your eye.",
-  "styleTitle": "How would you like to meet?",
-  "styleIntro": "Meet the same personas in two visual styles. Choose the one you prefer.",
-  "styleSetting": "Photo style",
+  "styleSetting": "Image style",
   "animeStyle": "Anime",
   "photoStyle": "Photo",
-  "animeStyleHint": "A soft anime look",
-  "photoStyleHint": "A natural photographic look",
-  "styleChangeHint": "You can change this while browsing. Your likes stay with you.",
   "styleStorageFailure": "Your photo style could not be saved. You can keep using your current choice.",
+  "styleUpdating": "Changing image style.",
+  "styleLoadFailure": "The image style could not be changed. Your current view is preserved. Please try again.",
   "explore": "Who catches your eye?",
   "instructions": "Left to Pass, right to Like. You can also use the arrow keys. Tapping a photo, name or introduction does not make a choice or expand the profile. Use the up arrow button to expand and the down arrow button to collapse.",
   "loading": "Loading people to meet.",

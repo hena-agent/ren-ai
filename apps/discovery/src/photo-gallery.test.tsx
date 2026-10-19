@@ -4,7 +4,7 @@ import { App } from "./app.tsx";
 import { Card } from "./card.tsx";
 import { ProfileDetails } from "./profile-details.tsx";
 import { withImageStyle } from "./image-style.ts";
-import { choose } from "../test/choose.ts";
+import { choose, selectImageStyle } from "../test/choose.ts";
 
 afterEach(() => {
   cleanup();
@@ -39,7 +39,7 @@ test("persona-sized photo navigation preserves the image index on style changes 
     screen.getByRole("button", { name: "사진 1 / 2" }).getAttribute("aria-current"),
   ).toBeNull();
   expect(document.querySelector(".gallery-position")?.textContent).toBe("2 / 2");
-  fireEvent.click(screen.getByRole("button", { name: "실사" }));
+  await selectImageStyle("실사");
   expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
     people[0]!.portraitGallery[1]!.photo,
   );

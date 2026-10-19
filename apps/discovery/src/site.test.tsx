@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotices } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
 import type { DiscoveryClient } from "./client.ts";
-import { selectLanguage } from "../test/choose.ts";
+import { selectImageStyle, selectLanguage } from "../test/choose.ts";
 
 afterEach(() => {
   cleanup();
@@ -34,6 +34,7 @@ test("the home explains the service without loading profiles and offers real nav
   expect(document.querySelectorAll(".home-questions details")).toHaveLength(5);
   expect(screen.getByText(discoveryNotices.ko.title)).toBeTruthy();
   expect(document.title).toBe("Ren AI — 일상에, 기다려지는 메시지 하나");
+  expect(screen.getByRole("heading", { name: "페르소나가 연락할 거예요" })).toBeTruthy();
 });
 
 test("home navigation, FAQs, title and the shared privacy notice follow the display language", () => {
@@ -45,36 +46,79 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
     name: "An illustrative, fictional conversation",
   });
   expect(
-    within(englishConversation).getByText("Found a tiny bookshop on my way home"),
+    within(englishConversation).getByText("Snuck out for a break. The sunshine today ☀️"),
   ).toBeTruthy();
-  expect(within(englishConversation).getAllByRole("listitem")).toHaveLength(3);
+  expect(within(englishConversation).getAllByRole("listitem")).toHaveLength(9);
+  expect(within(englishConversation).getAllByRole("list")).toHaveLength(1);
+  expect(within(englishConversation).getAllByText("백도희")).toHaveLength(1);
+  expect(within(englishConversation).getByText("Dohee loved my photo")).toBeTruthy();
+  const music = within(englishConversation).getByRole("link", { name: /Best Part/ });
+  expect(music.getAttribute("href")).toBe("https://open.spotify.com/track/1RMJOxR6GRPsBHL8qeC2ux");
+  expect(music.getAttribute("target")).toBe("_blank");
   expect(screen.getByText("Am I talking to a real person?")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.en.title)).toBeTruthy();
   expect(document.title).toBe("Ren AI — A little more to look forward to");
+  expect(screen.getByRole("heading", { name: "A persona will reach out" })).toBeTruthy();
   selectLanguage("Display language", "日本語");
   expect(screen.getAllByRole("link", { name: "ペルソナに出会う" })).toHaveLength(2);
   expect(screen.getByText("実在する人と話すのですか？")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.ja.title)).toBeTruthy();
   expect(document.documentElement.lang).toBe("ja");
   expect(document.title).toBe("Ren AI — 日常に、待ち遠しいメッセージを");
+  expect(screen.getByRole("heading", { name: "ペルソナから連絡します" })).toBeTruthy();
   expect(
     within(screen.getByRole("figure", { name: "サービスを紹介する架空の会話例" })).getByText(
-      "帰り道に小さな本屋さんを見つけた",
+      "ちょっと休憩に来た。今日の日差し、気持ちいい ☀️",
     ),
   ).toBeTruthy();
+});
+
+test("landing starts in anime and changes every image together while retaining the selected persona", async () => {
+  const profiles = vi.fn<DiscoveryClient["profiles"]>();
+  const client = { profiles, join: vi.fn<DiscoveryClient["join"]>() };
+  const first = render(<Site client={client} />);
+  expect(document.querySelector(".conversation-photo img")?.getAttribute("src")).toBe(
+    "/landing/dohee-daily-anime.webp",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "강서율 프로필" }));
+  await selectImageStyle("실사");
+  expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
+    "/landing/seoyul.webp",
+  );
+  expect(document.querySelector(".conversation-photo img")?.getAttribute("src")).toBe(
+    "/landing/dohee-daily.webp",
+  );
+  expect(document.querySelector(".conversation-contact img")?.getAttribute("src")).toBe(
+    "/landing/dohee.webp",
+  );
+  await selectImageStyle("애니메");
+  expect(screen.getByRole("button", { name: "강서율 프로필" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  expect(document.querySelector(".conversation-contact img")?.getAttribute("src")).toBe(
+    "/landing/dohee-anime.webp",
+  );
+  await selectImageStyle("실사");
+  first.unmount();
+  render(<Site client={client} />);
+  expect(screen.getByRole("button", { name: "실사" }).getAttribute("aria-pressed")).toBe("true");
+  expect(document.querySelector(".conversation-photo img")?.getAttribute("src")).toBe(
+    "/landing/dohee-daily.webp",
+  );
+  expect(profiles).not.toHaveBeenCalled();
 });
 
 test("portrait selection changes the featured scene without leaving the page or losing it on locale changes", () => {
   const profiles = vi.fn<DiscoveryClient["profiles"]>();
   render(<Site client={{ profiles, join: vi.fn<DiscoveryClient["join"]>() }} />);
-  const selected = screen.getByRole("button", { name: "한서우 프로필" });
+  const selected = screen.getByRole("button", { name: "백도희 프로필" });
   const next = screen.getByRole("button", { name: "강서율 프로필" });
   expect(selected.getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(next);
   expect(selected.getAttribute("aria-pressed")).toBe("false");
   expect(next.getAttribute("aria-pressed")).toBe("true");
   expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
-    "/landing/seoyul.webp",
+    "/landing/seoyul-anime.webp",
   );
   selectLanguage("화면 언어", "English");
   expect(

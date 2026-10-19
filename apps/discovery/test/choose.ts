@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
 export function resetCardTest() {
@@ -30,6 +30,12 @@ export function selectLanguage(label: string, next: string) {
   const option = screen.getByRole("option", { name: next });
   fireEvent.click(option);
   return trigger;
+}
+
+export async function selectImageStyle(label: string) {
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: label }));
+  });
 }
 
 export const swipeSurface = () => document.querySelector<HTMLElement>(".swipe-surface")!;

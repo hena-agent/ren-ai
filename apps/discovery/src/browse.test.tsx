@@ -35,9 +35,6 @@ const client: DiscoveryClient = { profiles: async () => profiles, join };
 
 async function passAllProfiles() {
   render(<App client={client} />);
-  await screen.findByRole("heading", { name: /어떤 느낌|미카/ });
-  const picker = screen.queryByRole("heading", { name: "어떤 느낌으로 만나볼까요?" });
-  if (picker) fireEvent.click(screen.getByRole("button", { name: /실사/ }));
   await screen.findByRole("heading", { name: "미카" });
   for (const _ of profiles) choose(false);
   await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });

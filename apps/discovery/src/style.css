@@ -1,5 +1,4 @@
 @import "./registration.css";
-@import "./style-picker.css";
 @import "./swipe.css";
 @import "./photo-gallery.css";
 @import "./profile-details.css";
@@ -9,6 +8,8 @@
 @import "./home-mobile.css";
 @import "./home-navigation.css";
 @import "./conversation-scene.css";
+@import "./style-switch.css";
+@import "./style-transition.css";
 @import "./interactions.css";
 
 :root {
@@ -94,9 +95,6 @@ button:disabled {
 }
 .site-header .style-switch {
   margin: 0;
-}
-.site-header .style-switch > span {
-  display: none;
 }
 .site-header .style-switch button {
   min-height: 44px;
@@ -294,6 +292,18 @@ button:disabled {
 }
 .icon-arrow {
   mask: url("/icons/arrow.svg") center / contain no-repeat;
+}
+.icon-external {
+  mask: url("/icons/external.svg") center / contain no-repeat;
+}
+.icon-down {
+  mask: url("/icons/down.svg") center / contain no-repeat;
+}
+.icon-plus {
+  mask: url("/icons/plus.svg") center / contain no-repeat;
+}
+.icon-music {
+  mask: url("/icons/music.svg") center / contain no-repeat;
 }
 .icon-check {
   mask: url("/icons/check.svg") center / contain no-repeat;

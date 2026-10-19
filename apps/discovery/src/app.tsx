@@ -6,10 +6,11 @@ import { readChoices, saveChoices } from "./choices.ts";
 import { Card } from "./card.tsx";
 import { JoinForm } from "./join-form.tsx";
 import { useCopy, LocaleProvider } from "./locale.tsx";
-import { readImageStyle, saveImageStyle, withImageStyle } from "./image-style.ts";
+import { withImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
 import type { StyledPersona } from "./image-style.ts";
-import { StylePicker, StyleSwitch } from "./style-picker.tsx";
+import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
+import { useImageStyle } from "./use-image-style.ts";
 import { Header, LikedPanel, Navigation } from "./chrome.tsx";
 import type { BrowseView } from "./chrome.tsx";
 
@@ -206,13 +207,12 @@ function Experience({
 }) {
   const copy = useCopy();
   const [choices, setChoices] = useState(readChoices);
-  const [style, setStyle] = useState(readImageStyle);
-  const [styleStorageFailure, setStyleStorageFailure] = useState(false);
+  const { style, changing, issue, choose: changeStyle } = useImageStyle();
   const [storageFailure, setStorageFailure] = useState<true>();
   const { view, setView, contactOpened, navigate, back } = useBrowseView();
   const [busy, setBusy] = useState(false);
   const [details, setDetails] = useState<{ id: string; image: number }>();
-  const displayed = style ? people.map((persona) => withImageStyle(persona, style)) : people;
+  const displayed = people.map((persona) => withImageStyle(persona, style));
   const remaining = displayed.filter((persona) => !Object.hasOwn(choices, persona.id));
   const current = remaining[0];
   const liked = displayed.filter((persona) => choices[persona.id] === true);
@@ -220,8 +220,18 @@ function Experience({
   const openDetails = (persona: PublicPersona, image = 0) => setDetails({ id: persona.id, image });
   const closeDetails = () => setDetails(undefined);
   function chooseStyle(next: ImageStyle) {
-    setStyle(next);
-    setStyleStorageFailure(!saveImageStyle(next));
+    const reading = [...remaining.slice(0, 1), ...(detail ? [detail] : [])];
+    const images = reading.flatMap((persona) => {
+      const portrait = withImageStyle(persona, next);
+      return portrait.imageUrls ?? [portrait.imageUrl];
+    });
+    images.push(
+      ...remaining
+        .slice(1, 2)
+        .concat(liked)
+        .map((persona) => withImageStyle(persona, next).imageUrl),
+    );
+    void changeStyle(next, images);
   }
   function choose(persona: PublicPersona, like: boolean) {
     const next = { ...choices, [persona.id]: like };
@@ -233,24 +243,12 @@ function Experience({
     setChoices(next);
     setStorageFailure(saveChoices(next) ? undefined : true);
   }
-  const sample = people.find((persona) => persona.portraits) ?? people[0];
-  if (!style && sample)
-    return (
-      <>
-        <Header />
-        <main className="onboarding-view" id="discovery-content">
-          <StylePicker sample={sample} onChoose={chooseStyle} />
-        </main>
-      </>
-    );
   const header = (
     <>
       <Header>
-        {import.meta.env.DEV && style && <StyleSwitch style={style} onChoose={chooseStyle} />}
+        <StyleSwitch style={style} onChoose={chooseStyle} changing={changing} disabled={busy} />
       </Header>
-      {styleStorageFailure && (
-        <output className="storage-warning">{copy.styleStorageFailure}</output>
-      )}
+      <StyleFeedback issue={issue} />
     </>
   );
   if (view === "waiting" || view === "active")
@@ -270,6 +268,7 @@ function Experience({
         id="discovery-content"
         data-view={view}
         data-detail={Boolean(detail)}
+        inert={changing}
       >
         <LikedPanel people={liked} onOpen={openDetails} disabled={busy} />
         <section className="swipe-stage" aria-label={copy.explore}>
@@ -308,7 +307,7 @@ function Experience({
         <Navigation
           view={view}
           likedCount={liked.length}
-          disabled={busy}
+          disabled={busy || changing}
           onView={(next) => {
             closeDetails();
             navigate(next);

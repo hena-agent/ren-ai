@@ -5,13 +5,16 @@ import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
 import { HomeNavigation } from "./home-navigation.tsx";
 import { HeroGallery } from "./home-artwork.tsx";
 import { ConversationScene } from "./conversation-scene.tsx";
+import { useImageStyle } from "./use-image-style.ts";
+import { landingImages } from "./landing-images.ts";
+import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
 
 function ExploreLink() {
   const copy = useCopy();
   return (
     <a className="home-cta" href="/explore">
       {copy.home.start}
-      <span aria-hidden="true">↗</span>
+      <span className="icon icon-external" aria-hidden="true" />
     </a>
   );
 }
@@ -19,17 +22,26 @@ function ExploreLink() {
 export function Home() {
   const copy = useCopy();
   const home = copy.home;
+  const { style, changing, issue, choose } = useImageStyle();
   useEffect(() => {
     document.title = home.pageTitle;
   }, [home.pageTitle]);
   return (
     <div className="home">
       <Header>
+        <StyleSwitch
+          style={style}
+          changing={changing}
+          onChoose={(next) => {
+            void choose(next, landingImages(next));
+          }}
+        />
         <HomeNavigation />
       </Header>
+      <StyleFeedback issue={issue} />
       <main id="discovery-content">
         <section className="home-hero" aria-labelledby="home-title">
-          <HeroGallery />
+          <HeroGallery style={style} />
           <div className="home-hero-copy">
             <p className="home-eyebrow">{home.eyebrow}</p>
             <h1 id="home-title">
@@ -42,7 +54,7 @@ export function Home() {
             </div>
           </div>
           <a className="home-scroll" href="#about" aria-label={home.about}>
-            <span aria-hidden="true">↓</span>
+            <span className="icon icon-down" aria-hidden="true" />
           </a>
         </section>
         <p className="home-notice">
@@ -64,7 +76,7 @@ export function Home() {
               <p className="home-conversation-note">{home.features[2]!.body}</p>
             </div>
           </div>
-          <ConversationScene />
+          <ConversationScene style={style} />
         </section>
 
         <section className="home-how" id="how-it-works" aria-labelledby="how-title">
@@ -94,7 +106,7 @@ export function Home() {
               <details key={question.title}>
                 <summary>
                   {question.title}
-                  <span aria-hidden="true">+</span>
+                  <span className="icon icon-plus" aria-hidden="true" />
                 </summary>
                 <p>{question.body}</p>
               </details>
