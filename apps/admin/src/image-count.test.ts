@@ -15,9 +15,9 @@ import { basePreview, preview, subGenerator } from "../test/sub-portraits.ts";
 
 useBrowser();
 
-test("count defaults to one and the modal displays the actual initial two-style total before confirmation", async () => {
-  const { admin } = await fixture();
-  document.body.innerHTML = await (await admin(request("/new"))).text();
+test("photo count defaults to one and only counts the chosen style before confirmation", async () => {
+  const { page } = await basePreview();
+  document.body.innerHTML = page;
   const form = fillCharacterForm(character);
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const count = form.querySelector<HTMLSelectElement>('[name="imageCount"]')!;
@@ -32,14 +32,10 @@ test("count defaults to one and the modal displays the actual initial two-style 
   });
   form.requestSubmit(button);
   expect(count.value).toBe("1");
-  expect(dialog.querySelector("[data-image-total]")?.textContent).toBe(
-    "애니메·실사 각각 1장 · 총 2장 생성",
-  );
+  expect(dialog.querySelector("[data-image-total]")?.textContent).toBe("선택한 스타일 1장 생성");
   count.value = "4";
   count.dispatchEvent(new Event("change"));
-  expect(dialog.querySelector("[data-image-total]")?.textContent).toBe(
-    "애니메·실사 각각 4장 · 총 8장 생성",
-  );
+  expect(dialog.querySelector("[data-image-total]")?.textContent).toBe("선택한 스타일 4장 생성");
   expect(sent).toEqual([]);
   dialog.querySelector<HTMLButtonElement>("[data-portrait-confirm]")!.click();
   expect(sent).toEqual(["4"]);
@@ -52,7 +48,7 @@ test("remaining capacity caps addition, regeneration is one, and repeated openin
   const button = document.querySelector("button")!;
   const count = dialog.querySelector("select")!;
   count.value = "6";
-  configureImageCount(dialog, button, "subportrait");
+  configureImageCount(dialog, button, "generate");
   expect(count.value).toBe("1");
   expect(count.options[2]?.disabled).toBe(true);
   configureImageCount(dialog, button, "regenerate");
@@ -60,7 +56,7 @@ test("remaining capacity caps addition, regeneration is one, and repeated openin
   configureImageCount(dialog, button, "generate");
   count.value = "2";
   count.dispatchEvent(new Event("change"));
-  expect(dialog.querySelector("p")?.textContent).toBe("애니메·실사 각각 2장 · 총 4장 생성");
+  expect(dialog.querySelector("p")?.textContent).toBe("선택한 스타일 2장 생성");
 });
 
 test("only explicit larger counts create multiple photos; malformed counts never reach the provider", async () => {
@@ -81,18 +77,18 @@ test("only explicit larger counts create multiple photos; malformed counts never
   );
   expect(batch.status).toBe(200);
   const page = await batch.text();
-  expect(portrait).toHaveBeenCalledTimes(6);
-  expect(preview(page).secondaryPortraits).toHaveLength(4);
+  expect(portrait).toHaveBeenCalledTimes(3);
+  expect(preview(page).secondaryPortraits).toHaveLength(2);
   const after = await admin(
     request("/personas?style=photo", {
       ...character,
       draft: tokenOf(page),
-      intent: "subportrait",
+      intent: "generate",
       imageCount: "2",
     }),
   );
   expect(after.status).toBe(200);
-  expect(portrait).toHaveBeenCalledTimes(8);
+  expect(portrait).toHaveBeenCalledTimes(5);
   expect(await store.list()).toEqual([]);
   expect(
     (
@@ -120,7 +116,7 @@ test("a partially failed explicit batch keeps every successful photo without pub
     request("/personas?style=anime", {
       ...character,
       draft: tokenOf(page),
-      intent: "subportrait",
+      intent: "generate",
       imageCount: "3",
     }),
   );
@@ -131,13 +127,11 @@ test("a partially failed explicit batch keeps every successful photo without pub
   expect(await store.publicList()).toEqual([]);
 });
 
-test("an explicitly selected initial batch preserves the successful style when its opposite main fails", async () => {
+test("an explicit first batch preserves a successful photo when its sibling fails", async () => {
   const portrait = vi
     .fn<typeof generator.portrait>()
-    .mockImplementation(async (_character, style) => {
-      if (style === "photo") throw new Error("photo model unavailable");
-      return portraitImage;
-    });
+    .mockResolvedValueOnce(portraitImage)
+    .mockRejectedValueOnce(new Error("photo unavailable"));
   const { admin, store } = await fixture({ ...subGenerator, portrait });
   const result = await admin(
     request("/personas", {
@@ -149,8 +143,8 @@ test("an explicitly selected initial batch preserves the successful style when i
   );
   expect(result.status).toBe(503);
   const partial = preview(await result.text());
-  expect(partial.portraits?.anime).toBeTruthy();
-  expect(partial.portraits?.photo).toBeUndefined();
-  expect(partial.secondaryPortraits).toHaveLength(1);
+  expect(partial.portraits?.anime).toBeUndefined();
+  expect(partial.portraits?.photo).toBeTruthy();
+  expect(partial.secondaryPortraits).toHaveLength(0);
   expect(await store.list()).toEqual([]);
 });

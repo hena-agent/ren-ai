@@ -6,6 +6,7 @@ import { GenerationError, operation, protect, safeText, validationFailure } from
 import { generateCharacter, convertCharacter } from "./character-generation.ts";
 import { generateInitialDocument } from "./initial-generation.ts";
 import { profileWriting } from "./profile-writing.ts";
+import sheetPolicy from "./identity-sheet-policy.json";
 
 type Character = {
   readonly name: string;
@@ -16,6 +17,12 @@ const characterText = (character: Character) =>
   `${character.name}\n${character.description}${character.gender ? `\n\nSELECTED GENDER: ${character.gender}` : ""}`;
 type PortraitStyle = keyof typeof policy.portraits;
 export interface ProfileGenerator {
+  sheet: (
+    character: Character,
+    style: PortraitStyle,
+    instructions?: string,
+    reference?: Portrait,
+  ) => Promise<Portrait>;
   character: (
     seed: string,
     gender?: NonNullable<PersonaRecord["gender"]>,
@@ -152,6 +159,10 @@ export function createProfileGenerator({
 }): ProfileGenerator {
   const thinkingConfig = { thinkingLevel: "LOW" };
   const configurations = {
+    sheet: {
+      responseModalities: ["TEXT", "IMAGE"],
+      imageConfig: { aspectRatio: "3:2", imageSize: "1K" },
+    },
     image: {
       responseModalities: ["TEXT", "IMAGE"],
       imageConfig: { aspectRatio: "4:5", imageSize: "1K" },
@@ -163,7 +174,7 @@ export function createProfileGenerator({
     model: string,
     prompt: string,
     input: string,
-    format: "image" | "text" | "json",
+    format: keyof typeof configurations,
     style?: PortraitStyle,
     references: readonly Portrait[] = [],
     responseJsonSchema?: JsonSchema.JsonSchema,
@@ -223,7 +234,33 @@ export function createProfileGenerator({
     );
     return { text: visibleText(parts), fields };
   };
+  const imageResult = async (
+    prompt: string,
+    input: string,
+    style: PortraitStyle,
+    references: readonly Portrait[],
+    format: "image" | "sheet",
+  ) => {
+    const { parts, fields } = await request(imageModel, prompt, input, format, style, references);
+    const image = parts.find((part) => part.inlineData)?.inlineData;
+    if (!image) throw new GenerationError("No generated portrait", { ...fields, code: "no_image" });
+    const bytes = Buffer.from(image.data, "base64");
+    if (bytes.toString("base64") !== image.data)
+      throw new GenerationError("Invalid portrait encoding", {
+        ...fields,
+        code: "invalid_encoding",
+      });
+    return { bytes, mimeType: image.mimeType };
+  };
   return {
+    sheet: (character, style, instructions = "", reference) =>
+      imageResult(
+        `${sheetPolicy.direction}\n\n${sheetPolicy[style]}\n\n${policy.genderDirection}`,
+        `${characterText(character)}${instructions ? `\n\nOPERATOR IDENTITY DIRECTION:\n${instructions}` : ""}`,
+        style,
+        reference ? [reference] : [],
+        "sheet",
+      ),
     character: (seed, gender) => generateCharacter(characterRequest, seed, gender),
     convert: (character, instructions) =>
       convertCharacter(characterRequest, character, instructions),
@@ -255,31 +292,20 @@ export function createProfileGenerator({
       return visibleText(parts);
     },
     portrait: async (character, style, instructions = "", reference, composition) => {
-      const { parts, fields } = await request(
-        imageModel,
+      return imageResult(
         (composition
           ? `${policy.portraits[style]}\n\n${policy.regeneratePortraitDirection}`
           : reference
-            ? `${policy.portraits[style]}\n\n${policy.subPortraitDirection}`
+            ? `${policy.portraits[style]}\n\n${policy.identityPortraitDirection}`
             : style === "photo"
               ? `${policy.portraits.photo}\n\n${policy.photoSceneDirection}`
               : policy.portraits.anime) +
           `\n\n${policy.profilePhotoDirection}\n\n${policy.genderDirection}`,
         `${characterText(character)}${instructions ? `\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\n${instructions}` : ""}`,
-        "image",
         style,
         [reference, composition].filter((image): image is Portrait => image !== undefined),
+        "image",
       );
-      const image = parts.find((part) => part.inlineData)?.inlineData;
-      if (!image)
-        throw new GenerationError("No generated portrait", { ...fields, code: "no_image" });
-      const bytes = Buffer.from(image.data, "base64");
-      if (bytes.toString("base64") !== image.data)
-        throw new GenerationError("Invalid portrait encoding", {
-          ...fields,
-          code: "invalid_encoding",
-        });
-      return { bytes, mimeType: image.mimeType };
     },
   };
 }

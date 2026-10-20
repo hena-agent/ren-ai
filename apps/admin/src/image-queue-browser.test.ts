@@ -329,7 +329,7 @@ test("a registration acknowledgement keeps the active editor reusable and ignore
   document.body.innerHTML = queuePage(true, "first", "original", "old image");
   const form = document.querySelector("form")!;
   form.innerHTML +=
-    '<button name="intent" value="subportrait">Add another</button><div data-add-images id="portrait-additions-photo">old capacity</div>';
+    '<button name="intent" value="generate">Add another</button><div data-add-images id="portrait-additions-photo">old capacity</div>';
   bindPending(form, submitImageForm);
   const { deferred } = await import("../test/queue.ts");
   const oldPoll = deferred<Response>();
@@ -400,7 +400,7 @@ test("a partial legacy poll without an additions panel preserves the existing ad
 
 test("a lost acknowledgement keeps its request identity across preview polling but changed targets or prompts create new confirmations", async () => {
   document.body.innerHTML =
-    '<form action="/personas"><input name="draft" value="original"><input name="portraitInstructions" value="first"><button name="intent" value="subportrait" formaction="/personas?style=photo">Add</button><output data-pending></output></form>';
+    '<form action="/personas"><input name="draft" value="original"><input name="portraitInstructions" value="first"><button name="intent" value="generate" formaction="/personas?style=photo">Add</button><output data-pending></output></form>';
   const form = document.querySelector("form")!;
   const button = form.querySelector("button")!;
   const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("offline"));

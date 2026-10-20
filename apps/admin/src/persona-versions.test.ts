@@ -428,6 +428,8 @@ test("rollback failure preserves current content and reports safe causes for inv
 
 test("version navigation is locked during work and unsaved completed image previews remain recoverable", async () => {
   const { store, first, path } = await versionFixture();
+  const { seedSheets } = await import("../test/fixtures.ts");
+  await seedSheets(store, first.id);
   const portrait = deferred<typeof portraitImage>();
   const model = { ...generator, portrait: () => portrait.promise };
   const admin = createAdmin(store, "test-password", "", { generator: model, log: () => {} });
@@ -438,7 +440,7 @@ test("version navigation is locked during work and unsaved completed image previ
       description: first.description,
       published: "on",
       draft: tokenOf(editor),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   expect((await admin(request(`${path}/versions`))).status).toBe(409);

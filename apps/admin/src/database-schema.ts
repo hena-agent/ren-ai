@@ -49,3 +49,15 @@ export const personaImages = sqliteTable(
     uniqueIndex("persona_image_position").on(table.personaId, table.style, table.position),
   ],
 );
+
+// Drafts have IDs before their first Persona save, so this table has no Persona FK.
+export const identitySheets = sqliteTable(
+  "persona_identity_sheets",
+  {
+    personaId: text().notNull(),
+    style: text({ enum: ["anime", "photo"] }).notNull(),
+    objectKey: text().notNull(),
+    operationId: text().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.personaId, table.style] })],
+);

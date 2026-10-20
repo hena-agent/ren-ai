@@ -6,7 +6,7 @@ import { deferred, finishedJob, jobUrl, queuedRequest } from "../test/queue.ts";
 async function editor() {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const setup = await savedPreview({ ...subGenerator, portrait });
-  const fields = { ...character, draft: tokenOf(setup.editing), intent: "subportrait" };
+  const fields = { ...character, draft: tokenOf(setup.editing), intent: "generate" };
   const enqueue = (imageCount = "1", style = "photo", portraitInstructions = "") =>
     setup.admin(
       queuedRequest(`${setup.route}?style=${style}`, {
@@ -69,7 +69,7 @@ test("saving rows still reserve capacity until their photo enters the preview", 
   expect(preview(await finishedJob(admin, jobUrl(first))).secondaryPortraits).toHaveLength(5);
 });
 
-test("regeneration reserves no extra photo and the next addition uses its completed same-style main", async () => {
+test("regeneration reserves no extra photo and the next addition keeps using the same-style sheet", async () => {
   const { admin, route, editing, original, portrait, enqueue } = await editor();
   await finishedJob(admin, jobUrl(await enqueue("4")));
   const wait = deferred<typeof portraitImage>();
@@ -89,7 +89,7 @@ test("regeneration reserves no extra photo and the next addition uses its comple
   const completed = preview(await finishedJob(admin, jobUrl(addition)));
   expect(completed.secondaryPortraits).toHaveLength(5);
   expect(completed.portraits!.photo).not.toBe(original.portraits!.photo);
-  expect(portrait.mock.calls.at(-1)![3]!.mimeType).toBe("image/png");
+  expect(portrait.mock.calls.at(-1)![3]!.mimeType).toBe("image/jpeg");
 });
 
 test("a failed row can wait behind another same-persona batch and keeps its newly completed sibling", async () => {

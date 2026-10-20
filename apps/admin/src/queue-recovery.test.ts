@@ -14,7 +14,7 @@ import { queuedRequest, jobUrl, finishedJob, deferred } from "../test/queue.ts";
 test("same saved-source submissions racing validation return one job and cannot consume twice", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, route, editing } = await savedPreview({ ...subGenerator, portrait });
-  const fields = { ...character, draft: tokenOf(editing), intent: "subportrait", imageCount: "1" };
+  const fields = { ...character, draft: tokenOf(editing), intent: "generate", imageCount: "1" };
   const [first, duplicate] = await Promise.all([
     admin(queuedRequest(`${route}?style=photo`, fields)),
     admin(queuedRequest(`${route}?style=photo`, fields)),
@@ -38,7 +38,7 @@ test("one failed slot cannot be retried while its sibling is running; private re
       ...character,
       draft: await newToken(admin),
       intent: "generate",
-      imageCount: "1",
+      imageCount: "2",
     }),
   );
   const path = jobUrl(accepted);
@@ -103,7 +103,7 @@ test("a saved source changed while waiting is rejected at worker start and the n
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   await store.update({ ...record, name: "Externally updated" });
@@ -115,7 +115,7 @@ test("a saved source changed while waiting is rejected at worker start and the n
   const rejected = await finishedJob(admin, jobUrl(stale));
   expect(rejected).toContain("다른 화면에서 캐릭터가 변경");
   await finishedJob(admin, jobUrl(third));
-  expect(portrait).toHaveBeenCalledTimes(6);
+  expect(portrait).toHaveBeenCalledTimes(4);
   expect(
     logs.find(
       (entry) =>
@@ -129,12 +129,14 @@ test("non-Error preparation and image failures are diagnosed before becoming rec
     .fn<typeof generator.convert>()
     .mockRejectedValueOnce("private unexpected text failure")
     .mockImplementation(generator.convert);
-  const { admin, logs } = await fixture({ ...subGenerator, convert: introduction });
+  const { admin, store, logs } = await fixture({ ...subGenerator, convert: introduction });
+  const token = await newToken(admin);
+  vi.spyOn(store, "sheets").mockRejectedValueOnce("private unexpected text failure");
   const accepted = await admin(
     queuedRequest("/personas", {
       ...character,
       description: "내부 인물 설명",
-      draft: await newToken(admin),
+      draft: token,
       intent: "generate",
     }),
   );
@@ -158,7 +160,7 @@ test("non-Error preparation and image failures are diagnosed before becoming rec
     ).status,
   ).toBe(303);
   await finishedJob(admin, path);
-  expect(introduction).toHaveBeenCalledTimes(2);
+  expect(introduction).not.toHaveBeenCalled();
   const broken = await fixture({
     ...subGenerator,
     portrait: async () => {
@@ -173,7 +175,7 @@ test("non-Error preparation and image failures are diagnosed before becoming rec
     }),
   );
   expect(await finishedJob(broken.admin, jobUrl(images))).toContain('data-state="failed"');
-  expect(broken.logs.filter((entry) => entry.event === "operation.failed")).toHaveLength(2);
+  expect(broken.logs.filter((entry) => entry.event === "operation.failed")).toHaveLength(1);
 });
 
 test("external secondary references fail before enqueue while owned bytes are validated at their read boundary", async () => {

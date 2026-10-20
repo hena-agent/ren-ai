@@ -5,9 +5,6 @@ import { operation, GenerationError } from "./logging.ts";
 import copy from "./copy.json";
 import { ownedImageKey } from "@ren-ai/personas/image-url";
 
-export const mainImage = (persona: PersonaRecord, style: "anime" | "photo") =>
-  personaImages(persona).find((image) => image.main && image.style === style)?.imageUrl;
-
 export function imageStyle(params: URLSearchParams): "anime" | "photo" {
   const style = params.get("style");
   if (style !== "anime" && style !== "photo")

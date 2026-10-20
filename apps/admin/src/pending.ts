@@ -1,7 +1,8 @@
 import { bindPortraitDialog } from "./portrait-dialog.ts";
 import { syncGender } from "./editor-controls.ts";
+import { bindSheetReadiness } from "./sheet-readiness.ts";
 const messages: Readonly<Record<string, string>> = {
-  subportrait: "adding",
+  generate: "adding",
   regenerate: "regenerating",
   "retry-image": "regenerating",
   save: "saving",
@@ -12,6 +13,7 @@ export function bindPending(
   submitImage?: (form: HTMLFormElement, submitter: HTMLElement | null) => void,
 ) {
   bindPortraitDialog(form);
+  bindSheetReadiness(form);
   let pending = false;
   const status = form.querySelector<HTMLOutputElement>("[data-pending]");
   const improvement = form.querySelector<HTMLOutputElement>("[data-improvement-pending]");
@@ -33,7 +35,7 @@ export function bindPending(
     if (improvement && intent === "improve") improvement.textContent = "초안을 개선하고 있습니다…";
     if (
       submitImage &&
-      ["generate", "portrait", "subportrait", "regenerate", "retry-image"].includes(String(intent))
+      ["generate", "regenerate", "retry-image", "sheet", "sheets"].includes(String(intent))
     ) {
       event.preventDefault();
       submitImage(form, event.submitter);

@@ -4,6 +4,7 @@ import type { Draft } from "./draft.ts";
 import type { ImageBatch } from "./image-batch.ts";
 import type { ImageBatchSnapshot } from "./image-batch.ts";
 import type { ImageSlot } from "./image-slots.ts";
+import { isSheetIntent } from "./image-slots.ts";
 import {
   captureLogging,
   operation,
@@ -49,8 +50,6 @@ function restoreJob(
       task.state = "failed";
       task.recoveryPending = true;
     }
-  if (interrupted && !saved.batch.prepared && !saved.batch.source.bio)
-    for (const task of tasks) if (task.state === "waiting") task.state = "blocked";
   const { failure: detail, ...previous } = saved;
   let failure: Error | undefined;
   if (interrupted)
@@ -139,16 +138,18 @@ export function createImageQueue(
   const reservations = (personaId: string) => {
     const counts = { anime: 0, photo: 0 };
     for (const job of active(personaId))
-      if (job.batch.intent !== "regenerate")
+      if (job.batch.intent !== "regenerate" && !isSheetIntent(job.batch.intent))
         for (const task of job.tasks)
           if (["waiting", "generating", "saving"].includes(task.state)) counts[task.style]++;
     return counts;
   };
-  const reserve = (batch: ImageBatch, ordinals: readonly number[], replacing: boolean) => {
-    if (replacing) {
+  const reserve = (batch: ImageBatch, ordinals: readonly number[]) => {
+    if (isSheetIntent(batch.intent)) {
       if (active(batch.personaId).length) throw new PersonaError("conflict", copy.busy);
       return;
     }
+    if (active(batch.personaId).some((job) => isSheetIntent(job.batch.intent)))
+      throw new PersonaError("conflict", copy.busy);
     if (batch.intent === "regenerate") return;
     const counts = reservations(batch.personaId);
     for (const image of personaImages(batch.record())) counts[image.style]++;
@@ -213,7 +214,7 @@ export function createImageQueue(
               if (imageUrl) {
                 task.imageUrl = imageUrl;
                 task.state = "completed";
-              } else if (task.state !== "failed") task.state = "blocked";
+              }
               publish(job, job.batch.draft());
               await durable?.checkpoint();
             }
@@ -310,12 +311,7 @@ export function createImageQueue(
           await durable?.checkpoint();
           return;
         }
-        schedule(
-          job,
-          [ordinal],
-          job.batch.intent === "subportrait" || job.batch.intent === "regenerate",
-          true,
-        );
+        schedule(job, [ordinal], !isSheetIntent(job.batch.intent), true);
         await job.completion;
       } catch (cause) {
         const waiting = [...pending];
@@ -329,8 +325,8 @@ export function createImageQueue(
       const known = keys.get(key);
       if (known) return get(known);
       const ordinals = batch.slots.map((_, ordinal) => ordinal);
-      if (batch.intent === "subportrait" || batch.intent === "regenerate") adopt(batch, ordinals);
-      reserve(batch, ordinals, batch.intent === "generate" || batch.intent === "portrait");
+      if (!isSheetIntent(batch.intent)) adopt(batch, ordinals);
+      reserve(batch, ordinals);
       const reserved = reservations(batch.personaId);
       const job: QueuedJob = {
         id: randomUUID(),
@@ -341,14 +337,14 @@ export function createImageQueue(
         completion: Promise.resolve(),
         tasks: batch.slots.map((slot, ordinal) => ({
           ...slot,
-          index: slot.index + (batch.intent === "subportrait" ? reserved[slot.style] : 0),
+          index: slot.index + (batch.intent === "generate" ? reserved[slot.style] : 0),
           ordinal,
           state: "waiting",
         })),
       };
       jobs.set(job.id, job);
       keys.set(key, job.id);
-      schedule(job, ordinals, batch.intent === "subportrait" || batch.intent === "regenerate");
+      schedule(job, ordinals, !isSheetIntent(batch.intent));
       return job;
     },
     get,
@@ -390,7 +386,7 @@ export function createImageQueue(
         .filter((task) => task.state === "failed" || task.state === "blocked")
         .map((task) => task.ordinal);
       job.batch.resume(editing, ordinals);
-      reserve(job.batch, ordinals, false);
+      reserve(job.batch, ordinals);
       for (const ordinal of ordinals) job.batch.setPrompt(ordinal, job.batch.prompts[ordinal]!);
       restart(job, ordinals);
       return job;
@@ -402,7 +398,7 @@ export function createImageQueue(
         throw new PersonaError("invalid", copy.imageTargetRequired);
       if (pending.has(job.id)) throw new PersonaError("conflict", copy.busy);
       job.batch.resume(editing, [ordinal]);
-      reserve(job.batch, [ordinal], false);
+      reserve(job.batch, [ordinal]);
       job.batch.setPrompt(ordinal, prompt);
       restart(job, [ordinal]);
       return job;

@@ -22,12 +22,12 @@ test("all user-selected capture directions reach the image boundary in order, wi
   );
   expect(response.status).toBe(200);
   const result = preview(await response.text());
-  expect(result.secondaryPortraits).toHaveLength(10);
-  expect(portrait).toHaveBeenCalledTimes(12);
-  const photos = portrait.mock.calls.filter((call) => call[1] === "photo").slice(1);
+  expect(result.secondaryPortraits).toHaveLength(5);
+  expect(portrait).toHaveBeenCalledTimes(6);
+  const photos = portrait.mock.calls.filter((call) => call[1] === "photo");
   expect(photos.map((call) => call[2])).toEqual(
     Array.from(
-      { length: 5 },
+      { length: 6 },
       (_, position) => `operator constraint\n\nPHOTO DIRECTION:\n${photoVariation(position)}`,
     ),
   );
@@ -46,7 +46,7 @@ test("all user-selected capture directions reach the image boundary in order, wi
       entry.event === "operation.completed" &&
       entry.poseIndex === 0,
   );
-  expect(baseEvents).toHaveLength(2);
+  expect(baseEvents).toHaveLength(1);
   for (const event of baseEvents) expect(event.jobId).toMatch(/^[0-9a-f-]{36}$/);
 });
 
@@ -66,7 +66,7 @@ test("empty operator prompts do not prepend phantom scene separators, and batche
     request(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
       imageCount: "2",
     }),
   );
@@ -79,24 +79,23 @@ test("empty operator prompts do not prepend phantom scene separators, and batche
     photoVariation(0),
     photoVariation(1),
   ]);
-  expect(portrait.mock.calls[count]?.[3]).toBeUndefined();
+  expect(portrait.mock.calls[count]?.[3]).toEqual(portrait.mock.calls[count + 1]?.[3]);
   expect(portrait.mock.calls[count + 1]?.[3]).toBeTruthy();
 });
 
-test("a reference-read failure after saving initial mains preserves those photos without issuing unanchored extras", async () => {
+test("an unreadable identity sheet prevents every photo in that style from generating unanchored", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, store, logs } = await fixture({ ...subGenerator, portrait });
   vi.spyOn(store, "image").mockResolvedValue(new Response(null, { status: 404 }));
   const failed = await initialProfile(admin, "2");
   expect(failed.status).toBe(503);
   const record = preview(await failed.text());
-  expect(record.portraits?.anime).toBeTruthy();
-  expect(record.portraits?.photo).toBeTruthy();
+  expect(record.portraits).toBeUndefined();
   expect(record.secondaryPortraits).toBeUndefined();
-  expect(portrait).toHaveBeenCalledTimes(2);
+  expect(portrait).not.toHaveBeenCalled();
   expect(
     logs.filter((entry) => entry.event === "operation.failed").map((entry) => entry.style),
-  ).toEqual(["anime", "photo"]);
+  ).toEqual(["photo", "photo"]);
 });
 
 test("whole initial failure returns a correlated recovery page while an explicit extra-image failure retains successful outputs", async () => {
@@ -127,7 +126,7 @@ test("a failed optional whole-photo batch still permits saving the edited source
   const failed = await admin(request("/personas", changed));
   expect(failed.status).toBe(503);
   const html = await failed.text();
-  expect(preview(html)).toEqual(preview(page));
+  expect(preview(html)).toEqual({ ...preview(page), name: "Changed source" });
   expect(html).toContain('value="Changed source"');
   expect(
     (await admin(request("/personas", { ...changed, draft: tokenOf(html), intent: "save" })))
@@ -143,16 +142,16 @@ test("modal count caps, totals and updates respect initial, additional and one-i
   const dialog = document.querySelector("dialog")!;
   const select = dialog.querySelector("select")!;
   const button = document.querySelector("button")!;
-  configureImageCount(dialog, button, "portrait");
-  expect(dialog.querySelector("p")?.textContent).toBe("애니메·실사 각각 1장 · 총 2장 생성");
+  configureImageCount(dialog, button, "generate");
+  expect(dialog.querySelector("p")?.textContent).toBe("선택한 스타일 1장 생성");
   select.value = "6";
   select.dispatchEvent(new Event("change"));
-  expect(dialog.querySelector("p")?.textContent).toBe("애니메·실사 각각 6장 · 총 12장 생성");
+  expect(dialog.querySelector("p")?.textContent).toBe("선택한 스타일 6장 생성");
   expect(select.options[2]?.disabled).toBe(false);
   configureImageCount(dialog, button, "generate");
   expect(select.value).toBe("6");
   button.dataset["imageMaximum"] = "2";
-  configureImageCount(dialog, button, "subportrait");
+  configureImageCount(dialog, button, "generate");
   expect(select.value).toBe("1");
   select.value = "2";
   select.dispatchEvent(new Event("change"));
@@ -178,7 +177,9 @@ test("uploaded counts are rejected before paid work, and failed secondary output
   for (const [key, value] of Object.entries({ ...character, draft: token, intent: "generate" }))
     form.set(key, value);
   form.set("imageCount", new File(["2"], "count.txt"));
-  const rejected = await admin(new Request(request("/personas"), { method: "POST", body: form }));
+  const rejected = await admin(
+    new Request(request("/personas?style=photo"), { method: "POST", body: form }),
+  );
   expect(rejected.status).toBe(400);
   expect(await rejected.text()).toContain(copy.formError);
   expect(portrait).not.toHaveBeenCalled();
@@ -187,13 +188,13 @@ test("uploaded counts are rejected before paid work, and failed secondary output
     .mockImplementationOnce(subGenerator.portrait)
     .mockRejectedValueOnce(new Error("secondary outage"));
   const partial = await admin(
-    request("/personas", { ...character, draft: token, intent: "generate", imageCount: "2" }),
+    request("/personas", { ...character, draft: token, intent: "generate", imageCount: "3" }),
   );
   expect(partial.status).toBe(503);
   const record = preview(await partial.text());
-  expect(record.portraits?.anime).toBeTruthy();
+  expect(record.portraits?.anime).toBeUndefined();
   expect(record.portraits?.photo).toBeTruthy();
   expect(record.secondaryPortraits).toHaveLength(1);
-  expect(portrait.mock.calls[2]?.[2]).toBe(photoVariation(0));
-  expect(portrait.mock.calls[3]?.[2]).toBe(photoVariation(0));
+  expect(portrait.mock.calls[0]?.[2]).toBe(photoVariation(0));
+  expect(portrait.mock.calls[2]?.[2]).toBe(photoVariation(2));
 });

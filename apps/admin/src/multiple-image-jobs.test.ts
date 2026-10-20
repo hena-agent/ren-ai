@@ -27,7 +27,7 @@ test("one persona accepts multiple FIFO batches, reserves capacity, and merges e
       queuedRequest(`${route}?style=photo`, {
         ...character,
         draft: tokenOf(editing),
-        intent: "subportrait",
+        intent: "generate",
         imageCount: count,
         portraitInstructions: prompt,
       }),
@@ -55,7 +55,7 @@ test("one persona accepts multiple FIFO batches, reserves capacity, and merges e
         }),
       )
     ).status,
-  ).toBe(409);
+  ).toBe(400);
   const rejected = await enqueue("over capacity", "1");
   expect(rejected.status).toBe(400);
   const recovery = await rejected.text();
@@ -86,12 +86,12 @@ test("one persona accepts multiple FIFO batches, reserves capacity, and merges e
     ]);
     expect(
       window.document
-        .querySelector('[data-portrait-operation="subportrait:photo"]')!
+        .querySelector('[data-portrait-operation="generate:photo"]')!
         .hasAttribute("disabled"),
     ).toBe(true);
     expect(
       window.document
-        .querySelector('[data-portrait-operation="subportrait:anime"]')!
+        .querySelector('[data-portrait-operation="generate:anime"]')!
         .hasAttribute("disabled"),
     ).toBe(false);
     expect(window.document.querySelector('[value="regenerate"]')!.hasAttribute("disabled")).toBe(
@@ -153,7 +153,7 @@ test.each(["anime", "photo"] as const)(
   "%s reservations reject overflow before payment while keeping the full accepted batch",
   async (style) => {
     const { admin, route, editing, portrait, wait } = await waitingEditor();
-    const fields = { ...character, draft: tokenOf(editing), intent: "subportrait" };
+    const fields = { ...character, draft: tokenOf(editing), intent: "generate" };
     const first = await admin(
       queuedRequest(`${route}?style=${style}`, { ...fields, imageCount: "5" }),
     );
@@ -182,7 +182,7 @@ test("a valid signed editor from before an Admin restart can register and displa
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   const pending = await (await admin(request(jobUrl(accepted)))).text();
@@ -199,7 +199,7 @@ test("separate confirmations can queue identical photo options while an acknowle
     const submission = queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     });
     submission.headers.set("X-Image-Request", id);
     return admin(submission);

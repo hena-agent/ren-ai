@@ -11,7 +11,7 @@ test("a new draft, changed count or private direction is a distinct selected add
   const fields = {
     ...character,
     draft: tokenOf(page),
-    intent: "subportrait",
+    intent: "generate",
     imageCount: "1",
     imageDirection: "first direction",
     portraitInstructions: "tweak",
@@ -86,7 +86,7 @@ test("raw private direction diagnostics are redacted, and the boundary accepts e
         request("/personas?style=photo", {
           ...character,
           draft: tokenOf(page),
-          intent: "subportrait",
+          intent: "generate",
           imageDirection: "private image direction alone",
           portraitInstructions: "separate tweak",
         }),
@@ -98,7 +98,7 @@ test("raw private direction diagnostics are redacted, and the boundary accepts e
     request("/personas?style=photo", {
       ...character,
       draft: tokenOf(page),
-      intent: "subportrait",
+      intent: "generate",
       imageDirection: "x".repeat(4000),
     }),
   );
@@ -110,14 +110,14 @@ test("a signed older form adds against the latest wholly regenerated main images
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, page } = await basePreview({ ...subGenerator, portrait });
   const newer = await (
-    await admin(request("/personas", { ...character, draft: tokenOf(page), intent: "portrait" }))
+    await admin(request("/personas", { ...character, draft: tokenOf(page), intent: "generate" }))
   ).text();
   const added = await (
     await admin(
       request("/personas?style=photo", {
         ...character,
         draft: tokenOf(page),
-        intent: "subportrait",
+        intent: "generate",
       }),
     )
   ).text();

@@ -27,16 +27,17 @@ async function enqueueBoundary(
       preview: serializePersona(original),
       imageCount: 1,
       imageInstructions: "",
+      sheets: await store.sheets(original.id),
     },
-    "subportrait",
+    "generate",
     new URLSearchParams({ style: "photo" }),
-    "subportrait:photo",
+    "generate:photo",
     subGenerator,
     store,
   );
   let id = "";
   await loggedRequest(
-    request("/personas", { intent: "subportrait" }),
+    request("/personas", { intent: "generate" }),
     async () => {
       requestFields({ personaId: original.id });
       id = queue.enqueue(key, batch).id;
@@ -125,6 +126,7 @@ async function fullDraft(setup: Awaited<ReturnType<typeof savedPreview>>) {
     id: setup.original.id,
     base: serializePersona(setup.original),
     preview: serializePersona({ ...setup.original, secondaryPortraits }),
+    sheets: await setup.store.sheets(setup.original.id),
   };
 }
 
@@ -170,6 +172,7 @@ test.each(["mismatched", "missing"])(
       id: setup.original.id,
       base: "old snapshot",
       preview: serializePersona({ ...setup.original, name: "old unrelated preview" }),
+      sheets: await setup.store.sheets(setup.original.id),
     };
     const update = vi.fn<Parameters<typeof createImageQueue>[0]>();
     const queue = createImageQueue(update, () => (state === "missing" ? undefined : cached));
@@ -220,6 +223,7 @@ test("registration rejects a regeneration target replaced in the latest preview 
     preview: serializePersona(original),
     imageCount: 1,
     imageInstructions: "",
+    sheets: await store.sheets(original.id),
   };
   const latest = {
     ...draft,

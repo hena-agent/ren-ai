@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { publicationIssues, personaImages } from "@ren-ai/personas";
-import type { PersonaRecord, InitialDocuments } from "@ren-ai/personas";
+import { publicationIssues } from "@ren-ai/personas";
+import type { PersonaRecord, InitialDocuments, IdentitySheets } from "@ren-ai/personas";
 import copy from "./copy.json";
 import { ImageOptions } from "./image-options.tsx";
 import { ImageJobPanel } from "./image-job-panel.tsx";
@@ -9,16 +9,17 @@ import { DocumentEditor } from "./document-editor.tsx";
 import { InspectionResults } from "./inspection-page.tsx";
 import type { InspectionRow } from "./inspection-page.tsx";
 import type { Draft } from "./draft.ts";
-import { Preview, Comparison } from "./profile-preview.tsx";
-import { PublicPersonaPreview } from "./public-persona-preview.tsx";
+import { Preview } from "./profile-preview.tsx";
 import { ContactPage } from "./contact-page.tsx";
 import type { ContactView } from "./contact-page.tsx";
 import { UploadDialog } from "./upload-controls.tsx";
 import { VersionPage } from "./version-page.tsx";
 import type { VersionView } from "./version-page.tsx";
 import { ConversationPage, type ConversationView } from "./conversation-page.tsx";
+import { PortraitManager } from "./portrait-manager.tsx";
 
 interface EditorFields {
+  sheets?: IdentitySheets | undefined;
   documents?: InitialDocuments | undefined;
   tab?: Draft["tab"];
   showIdea?: boolean | undefined;
@@ -44,6 +45,7 @@ function needsCreation(persona: PersonaRecord, editing: boolean, retry: boolean)
 }
 
 function Editor({
+  sheets,
   persona,
   editing,
   draft,
@@ -200,41 +202,14 @@ function Editor({
               tab={tab}
             />
           </div>
-          <aside className="portrait-manager" aria-labelledby="preview-title">
-            <div
-              data-public-preview
-              data-images={JSON.stringify(
-                personaImages(persona).map(({ style, imageUrl }) => ({ style, imageUrl })),
-              )}
-            >
-              <PublicPersonaPreview
-                name={persona.name}
-                source={persona.description ?? persona.prompt}
-                images={personaImages(persona)}
-              />
-            </div>
-            <div className="portrait-manager-heading">
-              <h2 id="preview-title">프로필 사진</h2>
-              <button
-                className="secondary"
-                form="persona-editor"
-                type="submit"
-                name="intent"
-                value="generate"
-                disabled={locked}
-                data-portrait-label={copy.baseImageCost}
-              >
-                {persona.imageUrl && persona.bio ? copy.regenerate : copy.generate}
-              </button>
-            </div>
-            <p className="hint">스타일별 최대 6장 · 변경한 사진은 저장 후 공개됩니다.</p>
-            <Comparison
-              persona={persona}
-              action={action}
-              locked={locked}
-              reservations={imageReservations}
-            />
-          </aside>
+          <PortraitManager
+            persona={persona}
+            action={action}
+            locked={locked}
+            sheets={sheets}
+            reservations={imageReservations}
+            jobs={imageJobs ?? [{ job: imageJob }]}
+          />
         </div>
         <output className="pending-status" data-pending aria-live="polite" />
         <UploadDialog />
@@ -358,6 +333,7 @@ function Navigation({
 }
 
 export function renderPage({
+  sheets,
   personas,
   record,
   editing,
@@ -452,6 +428,7 @@ export function renderPage({
               <InspectionResults rows={inspections} />
             ) : record ? (
               <Editor
+                sheets={sheets}
                 persona={record}
                 editing={editing}
                 draft={draft}

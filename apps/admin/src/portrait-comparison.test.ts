@@ -8,7 +8,6 @@ import {
   femaleCharacter,
   generator,
   request,
-  newToken,
   tokenOf,
   idOf,
   png,
@@ -18,6 +17,7 @@ import copy from "./copy.json";
 import { renderPage } from "./page.tsx";
 import { ageOn } from "@ren-ai/personas/birth-date";
 import { sheet } from "../test/character.ts";
+import { basePreview } from "../test/sub-portraits.ts";
 
 test("incomplete list cards retain readable placeholders without image-management actions", async () => {
   const window = new Window();
@@ -40,12 +40,7 @@ test("both styles are saved together, survive restart and become public without 
   const portraits = vi
     .fn<typeof generator.portrait>()
     .mockResolvedValue({ bytes: png, mimeType: "image/png" });
-  const { admin, store, root } = await fixture({ ...generator, portrait: portraits });
-  const page = await (
-    await admin(
-      request("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),
-    )
-  ).text();
+  const { admin, store, root, page } = await basePreview({ ...generator, portrait: portraits });
   const window = new Window();
   let images: string[];
   try {
@@ -69,21 +64,31 @@ test("both styles are saved together, survive restart and become public without 
         image.getAttribute("alt"),
       ),
     ).toEqual([
-      `${character.name} ${copy.styles.photo} · 메인`,
-      `${character.name} ${copy.styles.anime} · 메인`,
+      `${character.name} ${copy.styles.photo} · 사진 1`,
+      `${character.name} ${copy.styles.anime} · 사진 1`,
     ]);
     expect(
       [...window.document.querySelectorAll(".image-option figcaption")].map(
         (caption) => caption.textContent,
       ),
-    ).toEqual(["대표 · 외모 기준", "대표 · 외모 기준"]);
+    ).toEqual(["사진 1", "사진 1"]);
     expect(window.document.querySelector('[name="imageChoice"]')).toBeNull();
     expect(window.document.querySelector('input[type="radio"]')).toBeNull();
   } finally {
     await window.happyDOM.close();
   }
-  expect(portraits).toHaveBeenCalledWith(femaleCharacter, "anime");
-  expect(portraits).toHaveBeenCalledWith(femaleCharacter, "photo");
+  expect(portraits).toHaveBeenCalledWith(
+    femaleCharacter,
+    "anime",
+    "extra",
+    expect.objectContaining({ mimeType: "image/png" }),
+  );
+  expect(portraits).toHaveBeenCalledWith(
+    femaleCharacter,
+    "photo",
+    "extra",
+    expect.objectContaining({ mimeType: "image/jpeg" }),
+  );
   expect(page).toContain(copy.styles.anime);
   expect(page).toContain(copy.styles.photo);
   for (const image of images!)
@@ -105,6 +110,7 @@ test("both styles are saved together, survive restart and become public without 
       bio: record.bio,
       imageUrl: record.imageUrl,
       portraits: record.portraits,
+      secondaryPortraits: [],
       profile: { introduction: record.bio, sections: [] },
     },
   ]);
@@ -169,12 +175,7 @@ test("saved previews keep external portrait URLs intact and use authenticated ro
 });
 
 test("client-supplied image choices cannot replace either saved style", async () => {
-  const { admin, store } = await fixture();
-  const page = await (
-    await admin(
-      request("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),
-    )
-  ).text();
+  const { admin, store, page } = await basePreview();
   const response = await admin(
     request("/personas", {
       ...character,

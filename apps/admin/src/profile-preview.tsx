@@ -1,8 +1,8 @@
 import { Fragment } from "react";
 import { personaImages } from "@ren-ai/personas";
-import type { PersonaRecord } from "@ren-ai/personas";
+import type { PersonaRecord, IdentitySheets } from "@ren-ai/personas";
 import copy from "./copy.json";
-import { SubPortraitPanel } from "./sub-portrait-panel.tsx";
+import { PhotoAddPanel } from "./photo-add-panel.tsx";
 import { UploadControls } from "./upload-controls.tsx";
 
 function ProfileContent({ persona }: { persona: PersonaRecord }) {
@@ -59,6 +59,8 @@ export function Preview({ persona }: { persona: PersonaRecord }) {
 }
 
 export function Comparison({
+  sheets = {},
+  sheetBusy = false,
   persona,
   action,
   locked,
@@ -68,6 +70,8 @@ export function Comparison({
   action: string;
   locked: boolean;
   reservations?: { anime: number; photo: number } | undefined;
+  sheets?: IdentitySheets | undefined;
+  sheetBusy?: boolean;
 }) {
   const images = personaImages(persona);
   return (
@@ -78,11 +82,12 @@ export function Comparison({
             <h3 id={`portrait-${style}-title`} tabIndex={-1}>
               {style === "photo" ? "실사" : "애니풍"}
             </h3>
-            <SubPortraitPanel
+            <PhotoAddPanel
               persona={persona}
               action={action}
               style={style}
               reserved={reservations[style]}
+              ready={Boolean(sheets[style]) && !sheetBusy}
             />
           </div>
           <UploadControls
@@ -93,38 +98,37 @@ export function Comparison({
           <div className="image-options-grid" data-image-preview id={`portrait-gallery-${style}`}>
             {images
               .filter((image) => image.style === style)
-              .map(({ imageUrl, main }, index) => (
+              .map(({ imageUrl }, index) => (
                 <figure className="image-option" key={imageUrl}>
                   <a
                     href={imageUrl}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 사진 크게 보기`}
+                    aria-label={`${copy.portraitLabels[style]} 사진 ${index + 1} 크게 보기`}
                   >
                     <img
                       src={imageUrl}
-                      alt={`${persona.name} ${copy.styles[style]} · ${main ? "메인" : `추가 ${index}`}`}
+                      alt={`${persona.name} ${copy.styles[style]} · 사진 ${index + 1}`}
                       width={800}
                       height={1000}
                       loading="lazy"
                     />
                   </a>
-                  <figcaption>{main ? "대표 · 외모 기준" : `추가 ${index}`}</figcaption>
+                  <figcaption>사진 {index + 1}</figcaption>
                   <div className="portrait-image-actions">
-                    {!main && (
-                      <button
-                        className="secondary"
-                        form="persona-editor"
-                        type="submit"
-                        name="intent"
-                        value="set-main"
-                        disabled={locked}
-                        formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
-                        aria-label={`${copy.portraitLabels[style]} 추가 ${index} 대표로 지정`}
-                      >
-                        대표로 지정
-                      </button>
-                    )}
+                    <button
+                      type="submit"
+                      name="intent"
+                      value="sheet"
+                      className="secondary"
+                      disabled={locked}
+                      formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
+                      data-portrait-style={style}
+                      data-portrait-operation={`sheet:${style}:${imageUrl}`}
+                      data-portrait-label={`${copy.portraitLabels[style]} 이 사진에서 인물 시트 1장 생성`}
+                    >
+                      이 사진으로 시트 만들기
+                    </button>
                     <button
                       type="button"
                       className="secondary"
@@ -141,12 +145,13 @@ export function Comparison({
                       type="submit"
                       name="intent"
                       value="regenerate"
+                      disabled={!sheets[style] || sheetBusy}
                       data-portrait-style={style}
                       data-image-index={index}
                       formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
                       data-portrait-operation={`regenerate:${style}:${imageUrl}`}
-                      data-portrait-label={`${main ? copy.mainImage : copy.secondaryImage} · ${copy.styles[style]} · ${copy.singleImageCost}`}
-                      aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 다시 생성`}
+                      data-portrait-label={`사진 ${index + 1} · ${copy.styles[style]} · ${copy.singleImageCost}`}
+                      aria-label={`${copy.portraitLabels[style]} 사진 ${index + 1} 다시 생성`}
                     >
                       다시 생성
                     </button>
@@ -159,8 +164,8 @@ export function Comparison({
                       value="delete-image"
                       disabled={locked}
                       formAction={`${action}?image=${encodeURIComponent(imageUrl)}&style=${style}`}
-                      data-confirm-delete={`${copy.portraitLabels[style]} ${main ? "대표" : `추가 ${index}`} 사진을 삭제할까요?${main ? ` ${images.find((image) => image.style === style && !image.main) ? "추가 1 사진이 새 대표 · 외모 기준이 되고 Discovery에서 먼저 표시됩니다." : "남은 사진이 없어 이 스타일은 빈 상태로 표시됩니다."}` : ""} 저장하기 전까지 공개된 사진은 유지됩니다.`}
-                      aria-label={`${copy.portraitLabels[style]} ${main ? "메인" : `추가 ${index}`} 삭제`}
+                      data-confirm-delete={`${copy.portraitLabels[style]} 사진 ${index + 1}을 삭제할까요? 인물 시트와 다른 사진은 유지됩니다. 저장하기 전까지 공개된 사진은 유지됩니다.`}
+                      aria-label={`${copy.portraitLabels[style]} 사진 ${index + 1} 삭제`}
                     >
                       삭제
                     </button>

@@ -15,17 +15,16 @@ export function readImagePrompts(form: FormData, total: number) {
   });
 }
 
-export function imagePrompt(draft: Draft, slot: ImageSlot, ordinal: number, initial: boolean) {
-  const variation = initial ? Math.max(0, slot.index - 1) : slot.index;
+export function imagePrompt(draft: Draft, slot: ImageSlot, ordinal: number, sheet: boolean) {
   if (draft.imagePrompts?.length) {
     const prompt = draft.imagePrompts[ordinal]!;
-    return prompt || (slot.index > 0 && draft.imageCount! > 1 ? photoVariation(variation) : "");
+    return prompt || (!sheet && draft.imageCount! > 1 ? photoVariation(slot.index) : "");
   }
-  const direction = initial
+  const direction = sheet
     ? draft.portraitInstructions!
     : [draft.imageDirection, draft.imageInstructions]
         .filter(Boolean)
         .join("\n\nOPERATOR DIRECTION:\n");
-  if ((initial && slot.index === 0) || (!initial && draft.imageCount === 1)) return direction;
-  return [direction, photoVariation(variation)].filter(Boolean).join("\n\nPHOTO DIRECTION:\n");
+  if (sheet || draft.imageCount === 1) return direction;
+  return [direction, photoVariation(slot.index)].filter(Boolean).join("\n\nPHOTO DIRECTION:\n");
 }

@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { character, fixture, request, tokenOf } from "../test/fixtures.ts";
+import { character, fixture, request, newToken } from "../test/fixtures.ts";
 import { bindPending } from "./pending.ts";
 import { bindPortraitDialog } from "./portrait-dialog.ts";
 import copy from "./copy.json";
@@ -10,9 +10,20 @@ useBrowser();
 async function editor(preview = false) {
   const { admin } = await fixture();
   let page = await (await admin(request("/new"))).text();
+  const token = await newToken(admin);
+  const { draftTokens } = await import("./draft.ts");
+  const { renderPage } = await import("./page.tsx");
+  const { emptyPersona } = await import("./authoring.ts");
+  const draft = draftTokens("test-password").decode(token);
+  page = renderPage({
+    record: { ...emptyPersona, id: draft.id },
+    editing: false,
+    draft: token,
+    sheets: draft.sheets,
+  });
   if (preview)
     page = await (
-      await admin(request("/personas", { ...character, draft: tokenOf(page), intent: "generate" }))
+      await admin(request("/personas", { ...character, draft: token, intent: "generate" }))
     ).text();
   document.body.innerHTML = page;
   const form = fillCharacterForm(character);
@@ -65,7 +76,7 @@ test("first generation opens a focused modal and only submits the optional promp
   expect(submissions).toEqual([
     { intent: "generate", prompt: "햇살 아래 웃는 모습", busy: "true" },
   ]);
-  expect(form.querySelector("[data-pending]")?.textContent).toBe(copy.generating);
+  expect(form.querySelector("[data-pending]")?.textContent).toBe(copy.addingScene);
   form.requestSubmit(generate);
   expect(dialog.open).toBe(false);
   expect(submissions).toHaveLength(1);
@@ -93,20 +104,20 @@ test("cancelling the modal makes no request and a blank prompt can be confirmed 
 test("one generating action changes its label after a preview and saving bypasses the modal", async () => {
   const { form, dialog, button, submissions } = await editor(true);
   const generate = button('[value="generate"]');
-  expect(generate.textContent).toBe(copy.regenerate);
-  expect(document.querySelectorAll('[value="generate"]')).toHaveLength(1);
+  expect(generate.textContent).toBe("+ 추가");
+  expect(document.querySelectorAll('[value="generate"]')).toHaveLength(2);
   expect(generate.form).toBe(form);
   form.requestSubmit(generate);
   expect(dialog.open).toBe(true);
   button("[data-portrait-confirm]").click();
   expect(submissions).toEqual([{ intent: "generate", prompt: "", busy: "true" }]);
   document.defaultView!.dispatchEvent(new Event("pageshow"));
-  generate.value = "portrait";
+  generate.value = "generate";
   form.requestSubmit(generate);
   expect(dialog.open).toBe(true);
   expect(submissions).toHaveLength(1);
   button("[data-portrait-confirm]").click();
-  expect(submissions.at(-1)?.intent).toBe("portrait");
+  expect(submissions.at(-1)?.intent).toBe("generate");
   document.defaultView!.dispatchEvent(new Event("pageshow"));
   form.requestSubmit(button('[value="save"]'));
   expect(dialog.open).toBe(false);
@@ -164,6 +175,7 @@ test("image-options context remains empty for a legacy button without a target l
   const { form, dialog, button } = await editor();
   const generate = button('[value="generate"]');
   generate.removeAttribute("data-portrait-label");
+  generate.removeAttribute("data-portrait-operation");
   form.requestSubmit(generate);
   expect(dialog.open).toBe(true);
   expect(dialog.querySelector("[data-portrait-target]")?.textContent).toBe("");

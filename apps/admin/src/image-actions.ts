@@ -9,6 +9,16 @@ import { readImageCount } from "./image-count.ts";
 import { readImagePrompts } from "./image-prompts.ts";
 import { protect } from "./logging.ts";
 import { createHash } from "node:crypto";
+import { isSheetIntent } from "./image-slots.ts";
+import { imageStyle } from "./portrait-images.ts";
+
+function adoptPhotos(original: Draft, latest: Draft | undefined) {
+  if (!latest || latest.base !== original.base) return original;
+  const next = { ...latest };
+  delete next.sheets;
+  if (original.sheets) next.sheets = original.sheets;
+  return next;
+}
 
 export function imageRequestKey(
   request: Request,
@@ -67,15 +77,20 @@ export function imageSubmission(
       key: regenerationKey(previewOf(draft, emptyPersona), params),
       draft: latest?.base === draft.base ? latest : draft,
     };
-  if (intent === "regenerate" || intent === "set-main")
+  if (intent === "regenerate")
     return {
       key: regenerationKey(previewOf(draft, emptyPersona), params),
       draft: latestImageDraft(draft, latest, params),
     };
-  if (intent === "subportrait")
+  if (intent === "generate" || isSheetIntent(intent))
     return {
-      key: `subportrait:${params.get("style")}`,
-      draft: latest?.base === draft.base ? latest : draft,
+      key:
+        intent === "sheets"
+          ? "sheets"
+          : intent === "sheet"
+            ? `sheet:${imageStyle(params)}:${params.get("image") ?? draft.sheets?.[imageStyle(params)] ?? "new"}`
+            : `generate:${imageStyle(params)}`,
+      draft: adoptPhotos(draft, latest),
     };
   return { key: intent, draft };
 }
@@ -86,13 +101,10 @@ export function capturePortraitInput(
   intent: ReturnType<typeof readIntent>,
   key: string,
 ) {
-  const count = readImageCount(form, intent === "regenerate" ? 1 : 6);
-  const prompts = readImagePrompts(
-    form,
-    count * (intent === "generate" || intent === "portrait" ? 2 : 1),
-  );
+  const count = readImageCount(form, intent === "regenerate" || isSheetIntent(intent) ? 1 : 6);
+  const prompts = readImagePrompts(form, count * (intent === "sheets" ? 2 : 1));
   const current = { ...draft, imagePrompts: prompts };
-  if (intent === "regenerate" || intent === "subportrait")
+  if (intent === "regenerate" || intent === "generate")
     return {
       ...current,
       imageInstructions: readPortraitInstructions(form),

@@ -3,7 +3,7 @@ import { editingStorage } from "./editing-storage.ts";
 import { memoryStorage } from "../test/memory-storage.ts";
 import { createAdmin } from "./admin.ts";
 import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
-import { character, generator, newToken, request } from "../test/fixtures.ts";
+import { character, generator, newToken, request, fixtureStores } from "../test/fixtures.ts";
 
 test("private draft and batch rows are restored independently and changed task snapshots are persisted", async () => {
   const { store } = await cloudflareFixture();
@@ -16,6 +16,7 @@ test("private draft and batch rows are restored independently and changed task s
     log: () => {},
     persistence: { saved: empty, checkpoint: persistence.save, wake: async () => {} },
   });
+  fixtureStores.set(admin, store);
   const response = await admin(
     request("/personas", {
       ...character,

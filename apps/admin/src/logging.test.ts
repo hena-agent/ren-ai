@@ -1,5 +1,12 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { character, fixture, generator, newToken, request } from "../test/fixtures.ts";
+import {
+  character,
+  fixture,
+  generator,
+  newToken,
+  request,
+  fixtureStores,
+} from "../test/fixtures.ts";
 import copy from "./copy.json";
 import { createAdmin } from "./admin.ts";
 import { rm } from "node:fs/promises";
@@ -30,6 +37,7 @@ test("a failed portrait request preserves the editor and writes a correlated dia
       },
     },
   });
+  fixtureStores.set(admin, store);
   const draft = await newToken(admin);
   stderr.mockClear();
   const response = await admin(request("/personas", { ...character, draft, intent: "generate" }));
@@ -69,9 +77,8 @@ test("successful generation, saving and reads emit timed lifecycle events with s
   });
   const completed = logs.filter((entry) => entry.event === "operation.completed");
   expect(completed.map(({ stage, style }) => [stage, style])).toEqual([
-    ["portrait.generate", "anime"],
-    ["image.save", "anime"],
-    ["image.queue.task", "anime"],
+    ["identity.sheets.read", undefined],
+    ["portrait.reference.read", "photo"],
     ["portrait.generate", "photo"],
     ["image.save", "photo"],
     ["image.queue.task", "photo"],
@@ -108,8 +115,8 @@ test("parallel portrait outcomes stay correlated until both finish and concurren
   });
   const portrait = vi
     .fn<typeof generator.portrait>()
-    .mockImplementation(async (_character, style) => {
-      if (style === "anime") throw new Error("anime offline");
+    .mockRejectedValueOnce(new Error("first photo offline"))
+    .mockImplementation(async () => {
       await photo;
       return portraitImage;
     });
@@ -118,7 +125,9 @@ test("parallel portrait outcomes stay correlated until both finish and concurren
     portrait,
   });
   const draft = await newToken(admin);
-  const pending = admin(request("/personas", { ...character, draft, intent: "generate" }));
+  const pending = admin(
+    request("/personas", { ...character, draft, intent: "generate", imageCount: "2" }),
+  );
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(2));
   const other = await admin(request("/"));
   rejectPhoto(new Error("photo offline"));
@@ -128,7 +137,7 @@ test("parallel portrait outcomes stay correlated until both finish and concurren
   await Promise.resolve();
   const failures = logs.filter((entry) => entry.event === "operation.failed");
   expect(failures).toHaveLength(2);
-  expect(failures.map(({ style }) => style)).toEqual(["anime", "photo"]);
+  expect(failures.map(({ style }) => style)).toEqual(["photo", "photo"]);
   for (const entry of failures)
     expect(entry).toMatchObject({
       requestId: failed.headers.get("x-request-id"),
@@ -160,7 +169,9 @@ test("Gemini HTTP failures identify the model and style while removing echoed se
   });
   const { admin, logs } = await fixture({ ...generator, portrait: provider.portrait });
   const draft = await newToken(admin);
-  const response = await admin(request("/personas", { ...character, draft, intent: "generate" }));
+  const response = await admin(
+    request("/personas", { ...character, draft, intent: "generate", imageCount: "2" }),
+  );
   const failures = logs.filter((entry) => entry.event === "operation.failed");
   expect(failures).toHaveLength(1);
   for (const entry of failures)
@@ -216,15 +227,16 @@ test("storage failures expose the underlying filesystem code and missing generat
 
 test("image persistence failures are distinct from successful model generation", async () => {
   const { admin, store, logs } = await fixture();
+  const token = await newToken(admin);
   vi.spyOn(store, "saveImage").mockRejectedValue(
     Object.assign(new Error("disk full"), { code: "ENOSPC" }),
   );
   const response = await admin(
-    request("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),
+    request("/personas", { ...character, draft: token, intent: "generate" }),
   );
   expect(response.status).toBe(503);
   const failures = logs.filter((entry) => entry.event === "operation.failed");
-  expect(failures).toHaveLength(2);
+  expect(failures).toHaveLength(1);
   for (const entry of failures)
     expect(entry).toMatchObject({ stage: "image.save", code: "ENOSPC" });
 });

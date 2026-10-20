@@ -6,7 +6,7 @@ import { femaleCharacter, legacy } from "../test/fixtures.ts";
 
 useBrowser();
 
-test("photo deletion confirms its style and main-image promotion, cancellation leaves the editor reusable", () => {
+test("photo deletion confirms only the selected photo and preserves its sheet and siblings", () => {
   document.body.innerHTML = renderPage({
     record: {
       ...legacy,
@@ -28,15 +28,13 @@ test("photo deletion confirms its style and main-image promotion, cancellation l
     event.preventDefault();
   });
   form.requestSubmit(main);
-  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 대표"));
-  expect(confirm).toHaveBeenLastCalledWith(
-    expect.stringContaining("추가 1 사진이 새 대표 · 외모 기준"),
-  );
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 사진 1"));
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("인물 시트와 다른 사진은 유지"));
   expect(sent).toEqual([]);
   expect(form.hasAttribute("aria-busy")).toBe(false);
   confirm.mockReturnValue(true);
   form.requestSubmit(secondary);
-  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 추가 1"));
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("실사 사진 2"));
   expect(confirm).toHaveBeenLastCalledWith(expect.not.stringContaining("새 대표 · 외모 기준"));
   expect(sent).toEqual([secondary.getAttribute("formaction")]);
   expect(document.querySelectorAll(".image-option")).toHaveLength(2);
@@ -49,7 +47,7 @@ test("every image intent prevents native navigation and invokes the queued submi
   const button = form.querySelector("button")!;
   const submit = vi.fn<NonNullable<Parameters<typeof bindPending>[1]>>();
   bindPending(form, submit);
-  for (const intent of ["generate", "portrait", "subportrait", "regenerate", "retry-image"]) {
+  for (const intent of ["generate", "sheet", "sheets", "regenerate", "retry-image"]) {
     button.value = intent;
     const event = new SubmitEvent("submit", { cancelable: true, submitter: button });
     form.dispatchEvent(event);
@@ -71,7 +69,7 @@ test("every image intent prevents native navigation and invokes the queued submi
 
 test("generation announces progress, prevents repeated native submissions and recovers on browser navigation", () => {
   document.body.innerHTML =
-    '<form data-generating="생성 중" data-saving="저장 중"><button value="generate">생성</button><button value="save">저장</button><output data-pending></output></form>';
+    '<form data-adding="생성 중" data-saving="저장 중"><button value="generate">생성</button><button value="save">저장</button><output data-pending></output></form>';
   const form = document.querySelector("form")!;
   bindPending(form);
   const submit = new SubmitEvent("submit", {
@@ -120,12 +118,12 @@ test("pending binding also handles submit without a button, absent copy and form
 
 test("addition and single-image regeneration announce their progress and missing labels remain safe", () => {
   document.body.innerHTML =
-    '<form data-regenerating="1장 다시 생성 중" data-adding="선택한 사진 생성 중"><button value="regenerate"></button><button value="subportrait"></button><output data-pending></output></form>';
+    '<form data-regenerating="1장 다시 생성 중" data-adding="선택한 사진 생성 중"><button value="regenerate"></button><button value="generate"></button><output data-pending></output></form>';
   const form = document.querySelector("form")!;
   bindPending(form);
   for (const [intent, message] of [
     ["regenerate", "1장 다시 생성 중"],
-    ["subportrait", "선택한 사진 생성 중"],
+    ["generate", "선택한 사진 생성 중"],
   ]) {
     form.dispatchEvent(
       new SubmitEvent("submit", {

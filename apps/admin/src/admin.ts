@@ -1,5 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { decodePersona, PersonaError, serializePersona } from "@ren-ai/personas";
+import { PersonaError } from "@ren-ai/personas";
 import type { PersonaStore, PersonaRecord } from "@ren-ai/personas";
 import {
   authorPersona,
@@ -9,18 +9,23 @@ import {
   selectedGender,
   characterOf,
 } from "./authoring.ts";
-import { restoreDraft, draftTokens, previewOf, documentsOf, captureDocuments } from "./draft.ts";
+import {
+  restoreDraft,
+  draftTokens,
+  previewOf,
+  documentsOf,
+  captureDocuments,
+  draftFields as documentFields,
+} from "./draft.ts";
 import type { Draft } from "./draft.ts";
 import { renderPage as renderAdminPage } from "./page.tsx";
 import type { PageContent } from "./page.tsx";
 import copy from "./copy.json";
 import { generateTextDraft } from "./generation-workflows.ts";
-import { deletePortrait, setMainPortrait } from "./regenerate-portrait.ts";
-import { createImageQueue } from "./image-queue.ts";
-import type { ImageJob, DurableQueue } from "./image-queue.ts";
+import { deletePortrait } from "./regenerate-portrait.ts";
+import { createImageQueue, type ImageJob, type DurableQueue } from "./image-queue.ts";
 import { createImageBatch, restoreImageBatch } from "./image-batch.ts";
-import { isImageIntent } from "./image-slots.ts";
-import type { ImageIntent } from "./image-slots.ts";
+import { isImageIntent, type ImageIntent } from "./image-slots.ts";
 import {
   capturePortraitInput,
   imagePromptOf,
@@ -37,7 +42,6 @@ import {
   requestId,
   GenerationError,
 } from "./logging.ts";
-import { versionedPersona } from "@ren-ai/personas";
 import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
 import type { AdminOptions } from "./admin-options.ts";
@@ -48,12 +52,7 @@ import { generationFailureMessage } from "./generation-failure.ts";
 import { imageJobRoute } from "./image-job-routes.ts";
 import { uploadRoute } from "./upload-route.ts";
 import { versionRoutes } from "./version-routes.ts";
-const documentFields = (draft: Draft) => ({
-  documents: documentsOf(draft),
-  tab: draft.tab,
-  showIdea: Boolean(draft.characterPending),
-  improvementInput: draft.improvementInput,
-});
+import { savePersonaDraft } from "./save-persona.ts";
 export function createAdmin(
   store: PersonaStore,
   password: string,
@@ -175,35 +174,16 @@ export function createAdmin(
     try {
       await assertSnapshot(store, draft);
       if (intent === "save") {
-        const valid = decodePersona(versionedPersona(persona));
-        if (valid.published && !valid.imageUrl)
-          throw new PersonaError("invalid", "공개하려면 소개와 프로필 이미지가 필요합니다.");
-        const documents = documentsOf(draft);
-        const saved = await operation("persona.save", {}, () =>
-          store.save(valid, documents, {
-            persona: draft.base,
-            ...(draft.initial?.base && { initial: draft.initial.base }),
-            ...(draft.legacySource && { legacySource: draft.legacySource }),
-          }),
-        );
-        subDrafts.set(draft.id, {
-          id: draft.id,
-          base: serializePersona(saved),
-          preview: serializePersona(saved),
-          initial: { base: documents, preview: documents },
-        });
+        subDrafts.set(draft.id, await savePersonaDraft(persona, draft, store));
         return new Response(null, {
           status: 303,
           headers: {
-            Location: `/personas/${valid.id}?saved=1${draft.tab && draft.tab !== "persona" ? `&tab=${draft.tab}` : ""}`,
+            Location: `/personas/${draft.id}?saved=1${draft.tab && draft.tab !== "persona" ? `&tab=${draft.tab}` : ""}`,
           },
         });
       }
-      if (intent === "delete-image" || intent === "set-main") {
-        const next =
-          intent === "set-main"
-            ? setMainPortrait(persona, draft, submittedKey)
-            : deletePortrait(persona, draft, submittedKey);
+      if (intent === "delete-image") {
+        const next = deletePortrait(persona, draft, submittedKey);
         subDrafts.set(draft.id, next);
         return html(
           renderPage({
@@ -227,8 +207,12 @@ export function createAdmin(
           }),
         );
       if (!generator) return unconfigured(persona, draft);
-      const next = await generateTextDraft(persona, draft, intent, generator);
+      const next = { ...(await generateTextDraft(persona, draft, intent, generator)) };
       await assertSnapshot(store, draft);
+      if (intent === "character") {
+        await operation("identity.sheets.clear", {}, () => store.clearSheets(draft.id));
+        delete next.sheets;
+      }
       subDrafts.set(draft.id, next);
       return html(
         renderPage({
@@ -386,6 +370,11 @@ export function createAdmin(
       if (active) return jobPage(queue.get(active), true);
     }
     let draft = record ? restoreDraft(record, editing, subDrafts.get(record.id)) : undefined;
+    if (draft)
+      draft = {
+        ...draft,
+        sheets: await operation("identity.sheets.read", {}, () => store.sheets(draft!.id)),
+      };
     if (draft && editing && !draft.initial) {
       const initial = await store.initial(draft.id);
       draft = { ...draft, initial: initial ? { base: initial, preview: initial } : {} };

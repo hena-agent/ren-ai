@@ -95,7 +95,7 @@ test("an anime-only upload becomes the main photo without requiring an AI call",
   const { admin } = await fixture();
   const response = await admin(uploadRequest(await newToken(admin), "style=anime"));
   expect(response.status).toBe(200);
-  expect(photos(await response.text())).toMatchObject([{ style: "anime", main: true }]);
+  expect(photos(await response.text())).toMatchObject([{ style: "anime" }]);
 });
 
 test("uploads reject stale previews, full styles, cross-origin, unauthenticated and non-POST requests", async () => {

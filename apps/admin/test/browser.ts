@@ -12,6 +12,8 @@ export function useBrowser(cleanup?: () => void) {
   let browser: Window;
   beforeEach(() => {
     browser = new Window();
+    // Fixture image URLs have no HTTP image loader; unreadable-image tests override per image.
+    vi.spyOn(browser.HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(640);
     vi.stubGlobal("document", browser.document);
     vi.stubGlobal("window", browser);
     vi.stubGlobal("MutationObserver", browser.MutationObserver);

@@ -24,6 +24,7 @@ import { ageOn, birthDateOf } from "./birth-date.ts";
 import { nextPersonaVersion, requireVersion } from "./versions.ts";
 import type { SaveSnapshot } from "./versions.ts";
 import { historyFor, readVersions, writeVersionFiles } from "./version-files.ts";
+import { identitySheetFiles } from "./identity-sheets.ts";
 
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
@@ -124,6 +125,7 @@ export async function createPersonaStore(directory: string) {
     );
   };
   return {
+    ...identitySheetFiles(directory),
     list,
     inspect: () => inspectPersonaFiles(directory),
     source,

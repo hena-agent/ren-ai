@@ -141,7 +141,7 @@ test("invalid publication keeps the description, while malformed forms and tampe
     (await admin(request("/personas", { ...character, draft, intent: "unsupported" }))).status,
   ).toBe(400);
   expect(
-    (await admin(request("/personas", { ...character, draft, intent: "portrait" }))).status,
+    (await admin(request("/personas", { ...character, draft, intent: "generate" }))).status,
   ).toBe(200);
   expect(await store.list()).toEqual([]);
 });
@@ -247,7 +247,7 @@ test("simultaneous generation and stale editors cannot duplicate or overwrite a 
   expect(rejected.status).toBe(409);
   expect(await rejected.text()).toContain(copy.stale);
   expect((await store.get("legacy")).name).toBe("변경된 이름");
-  expect(delayedIntroduction).toHaveBeenCalledTimes(2);
+  expect(delayedIntroduction).toHaveBeenCalledTimes(1);
 });
 
 test("storage outages and missing generation credentials preserve the author's work without exposing private details", async () => {

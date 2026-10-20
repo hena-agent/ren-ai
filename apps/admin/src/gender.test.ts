@@ -11,6 +11,7 @@ import {
   portraitImage,
   request,
   tokenOf,
+  seedSheets,
 } from "../test/fixtures.ts";
 import { preview, modelReply, photoPortrait } from "../test/sub-portraits.ts";
 import policy from "./policy.json";
@@ -47,18 +48,28 @@ test("new personas default to female and the native disabled male option cannot 
   }
   expect(drafting).not.toHaveBeenCalled();
   expect(portrait).not.toHaveBeenCalled();
-  const generated = await (
+  const established = await (
     await admin(
       request("/personas", {
         ...character,
         draft: tokenOf(page),
+        intent: "sheets",
+        gender: "female",
+      }),
+    )
+  ).text();
+  const generated = await (
+    await admin(
+      request("/personas", {
+        ...character,
+        draft: tokenOf(established),
         intent: "generate",
         gender: "female",
       }),
     )
   ).text();
   expect(preview(generated).gender).toBe("female");
-  expect(portrait).toHaveBeenCalledWith(femaleCharacter, "anime");
+  expect(portrait).toHaveBeenCalledWith(femaleCharacter, "photo", "", portraitImage);
   const saved = await admin(
     request("/personas", { ...character, draft: tokenOf(generated), published: "on" }),
   );
@@ -160,6 +171,7 @@ test("existing male records retain their selected gender and explicit gender edi
     .mockImplementation(generator.introduction);
   const { admin, store } = await fixture({ ...generator, character: drafting, introduction });
   await store.create({ ...legacy, gender: "male" });
+  await seedSheets(store, legacy.id);
   const route = `/personas/${legacy.id}`;
   const page = await (await admin(request(route))).text();
   const fields = {
@@ -212,9 +224,20 @@ test("existing male records retain their selected gender and explicit gender edi
     ).status,
   ).toBe(400);
   expect(drafting).toHaveBeenCalledTimes(1);
+  const withoutSheets = await (await admin(request(route))).text();
+  const rebuilt = await (
+    await admin(
+      request(route, {
+        ...fields,
+        draft: tokenOf(withoutSheets),
+        gender: "female",
+        intent: "sheets",
+      }),
+    )
+  ).text();
   const switched = await (
     await admin(
-      request(route, { ...fields, draft: tokenOf(current), gender: "female", intent: "generate" }),
+      request(route, { ...fields, draft: tokenOf(rebuilt), gender: "female", intent: "generate" }),
     )
   ).text();
   expect(preview(switched).gender).toBe("female");

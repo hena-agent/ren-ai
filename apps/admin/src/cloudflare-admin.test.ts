@@ -130,7 +130,7 @@ test("alarms execute one photo, re-arm remaining work and restore safe failed di
   let admin = await cloudflareAdmin(env, storage);
   const token = tokenOf(await (await admin.fetch(request("/new"))).text());
   const registered = await admin.fetch(
-    request("/personas", { ...character, draft: token, intent: "generate" }),
+    request("/personas", { ...character, draft: token, intent: "sheets" }),
   );
   const url = registered.headers.get("location")!;
   const alarm = await storage.getAlarm();

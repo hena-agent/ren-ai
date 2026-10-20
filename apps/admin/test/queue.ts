@@ -1,6 +1,13 @@
 import { expect, vi } from "vitest";
 import type { createAdmin } from "../src/admin.ts";
 import { request } from "./fixtures.ts";
+import { loggedJob, type Log } from "../src/logging.ts";
+
+export async function runNextTask(admin: ReturnType<typeof createAdmin>, log: Log) {
+  const job = admin.nextJob()!;
+  await loggedJob(job.requestId, { jobId: job.id }, admin.runNext, log);
+  return job;
+}
 
 export function deferred<Value>() {
   let resolve!: (value: Value) => void;

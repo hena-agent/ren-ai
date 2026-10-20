@@ -8,12 +8,10 @@ import {
   portraitImage,
   request,
   tokenOf,
+  photoPortrait,
 } from "./fixtures.ts";
 
-export const photoPortrait = {
-  bytes: Buffer.from("ffd8ffe0", "hex"),
-  mimeType: "image/jpeg" as const,
-};
+export { photoPortrait } from "./fixtures.ts";
 export const subPlan = (count: number) => ({
   reason: "private recommendation reason",
   scenes: Array.from({ length: count }, (_, index) => ({
@@ -31,13 +29,13 @@ export const addPortrait = (admin: Admin, page: string, style = "photo", imageCo
     request(`/personas?style=${style}`, {
       ...character,
       draft: tokenOf(page),
-      intent: "subportrait",
+      intent: "generate",
       imageCount,
     }),
   );
 export const initialProfile = async (admin: Admin, imageCount = "1") =>
   admin(
-    request("/personas", {
+    request("/personas?style=photo", {
       ...character,
       draft: await newToken(admin),
       intent: "generate",
@@ -52,11 +50,21 @@ export function preview(page: string) {
 }
 export async function basePreview(model = subGenerator) {
   const result = await fixture(model);
-  const page = await (
+  let page = await (
     await result.admin(
-      request("/personas", {
+      request("/personas?style=anime", {
         ...character,
         draft: await newToken(result.admin),
+        intent: "generate",
+        portraitInstructions: "extra",
+      }),
+    )
+  ).text();
+  page = await (
+    await result.admin(
+      request("/personas?style=photo", {
+        ...character,
+        draft: tokenOf(page),
         intent: "generate",
         portraitInstructions: "extra",
       }),

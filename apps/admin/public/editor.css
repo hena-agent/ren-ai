@@ -336,6 +336,30 @@
   max-width: none;
   margin: 0;
 }
+.identity-sheets {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.identity-sheets .hint {
+  margin: 0;
+}
+[data-identity-sheet] {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.identity-sheet-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+[data-identity-sheet] > button {
+  justify-self: start;
+}
 .persona-workbench .portrait-manager-heading {
   min-height: 60px;
   gap: 12px;
@@ -373,10 +397,10 @@
 .persona-workbench .portrait-style h3 {
   font-size: 14px;
 }
-.persona-workbench .sub-portraits {
+.persona-workbench .photo-additions {
   gap: 8px;
 }
-.persona-workbench .sub-portraits button {
+.persona-workbench .photo-additions button {
   background: transparent;
   padding: 8px 12px;
   font-weight: 400;

@@ -18,6 +18,7 @@ import { validationFailure } from "./logging.ts";
 import { personaValues, photoValues } from "./catalog-values.ts";
 import { readPublicCatalog } from "@ren-ai/personas/catalog";
 import { personaImageBase } from "@ren-ai/personas/image-url";
+import { databaseSheets } from "./database-sheets.ts";
 
 async function databaseOperation<T>(run: () => Promise<T>) {
   try {
@@ -77,6 +78,7 @@ export function databaseStore(
   };
   const source = async (id: string) => serializePersona(await get(id));
   return {
+    ...databaseSheets(binding, imageBase),
     catalog: async () => {
       const [rows, photos] = await readCatalog();
       return {

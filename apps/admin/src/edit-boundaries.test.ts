@@ -20,7 +20,7 @@ function openPhotoAddition(page: string) {
   const form = document.querySelector<HTMLFormElement>("#persona-editor")!;
   bindPending(form);
   form.requestSubmit(
-    document.querySelector<HTMLButtonElement>('[value="subportrait"][formaction$="photo"]'),
+    document.querySelector<HTMLButtonElement>('[value="generate"][formaction$="photo"]'),
   );
   return form;
 }
@@ -45,7 +45,7 @@ test("stale forms preserve newer deletions and additions, and deleted image targ
   expect(portrait).toHaveBeenCalledTimes(3);
 });
 
-test("stale secondary regeneration is rejected when its identity main was changed", async () => {
+test("stale secondary regeneration is rejected when its identity sheet was changed", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, page } = await basePreview({ ...subGenerator, portrait });
   const added = await (
@@ -53,7 +53,7 @@ test("stale secondary regeneration is rejected when its identity main was change
       request("/personas?style=photo", {
         ...character,
         draft: tokenOf(page),
-        intent: "subportrait",
+        intent: "generate",
       }),
     )
   ).text();
@@ -62,7 +62,7 @@ test("stale secondary regeneration is rejected when its identity main was change
     request(`/personas?style=photo&image=${encodeURIComponent(original.portraits!.photo!)}`, {
       ...character,
       draft: tokenOf(added),
-      intent: "regenerate",
+      intent: "sheet",
     }),
   );
   const stale = await admin(
@@ -72,7 +72,7 @@ test("stale secondary regeneration is rejected when its identity main was change
     ),
   );
   expect(stale.status).toBe(409);
-  expect(portrait).toHaveBeenCalledTimes(4);
+  expect(portrait).toHaveBeenCalledTimes(3);
 });
 
 test("secondary regeneration passes both same-style identity and current composition while deleting extras retains all others", async () => {
@@ -85,7 +85,7 @@ test("secondary regeneration passes both same-style identity and current composi
         request(`/personas?style=${style}`, {
           ...character,
           draft: tokenOf(current),
-          intent: "subportrait",
+          intent: "generate",
           imageCount: "2",
         }),
       )
@@ -171,7 +171,7 @@ test("count and prompt are scoped to a failed target, with the next target retur
     request("/personas?style=photo", {
       ...character,
       draft: tokenOf(page),
-      intent: "subportrait",
+      intent: "generate",
       imageCount: "2",
       portraitInstructions: "retry this",
     }),
@@ -202,7 +202,7 @@ test("a fresh action after a successful batch defaults to one and an empty promp
     request(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
       imageCount: "2",
       portraitInstructions: "for this batch only",
     }),
@@ -276,7 +276,7 @@ test("reload retains partial profile creation and failed same-style addition inp
         request(`${route}?style=photo`, {
           ...character,
           draft: tokenOf(current),
-          intent: "subportrait",
+          intent: "generate",
           imageCount: "2",
           portraitInstructions: "keep this retry",
         }),
@@ -301,7 +301,7 @@ test("whole-image regeneration follows its signed original biography instead of 
   );
   expect(preview(await rewritten.text()).bio).not.toBe(preview(page).bio);
   const portraitOnly = await admin(
-    request("/personas", { ...character, draft: tokenOf(page), intent: "portrait" }),
+    request("/personas", { ...character, draft: tokenOf(page), intent: "generate" }),
   );
   expect(portraitOnly.status).toBe(200);
   expect(preview(await portraitOnly.text()).bio).toBe(preview(page).bio);

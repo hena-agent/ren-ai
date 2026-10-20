@@ -1,4 +1,10 @@
-import { decodePersona, PersonaError, personaImages, serializePersona } from "@ren-ai/personas";
+import {
+  decodePersona,
+  PersonaError,
+  personaImages,
+  serializePersona,
+  withPersonaImages,
+} from "@ren-ai/personas";
 import type { PersonaStore, PersonaRecord, Portrait } from "@ren-ai/personas";
 import { ownedImageKey } from "@ren-ai/personas/image-url";
 import { characterOf, emptyPersona } from "./authoring.ts";
@@ -7,18 +13,25 @@ import { completedImageDraft, previewOf } from "./draft.ts";
 import type { ProfileGenerator } from "./generation.ts";
 import { generateImage } from "./image-generation.ts";
 import type { ImageStage } from "./image-generation.ts";
-import { imageSlots } from "./image-slots.ts";
+import { imageSlots, isSheetIntent } from "./image-slots.ts";
 import type { ImageSlot, ImageIntent } from "./image-slots.ts";
-import { imageStyle, imageTarget, mainImage, readPortraitReference } from "./portrait-images.ts";
+import { imageStyle, imageTarget, readPortraitReference } from "./portrait-images.ts";
 import { imagePrompt } from "./image-prompts.ts";
 import { regeneratePortrait } from "./regenerate-portrait.ts";
 import copy from "./copy.json";
 import { assertSnapshot } from "./snapshot.ts";
-import { requirePublicProfile } from "@ren-ai/personas/profile";
 import { operation } from "./logging.ts";
+import { randomUUID } from "node:crypto";
+import {
+  assertSheets,
+  generateSheet,
+  sheetSource,
+  requireSheetReferences,
+} from "./identity-sheets.ts";
 
 type Store = PersonaStore;
 export interface ImageBatchSnapshot {
+  operationId: string;
   source: PersonaRecord;
   original: Draft;
   intent: ImageIntent;
@@ -28,7 +41,6 @@ export interface ImageBatchSnapshot {
   latest: Draft;
   prompts: readonly string[];
   expectedBase: string;
-  prepared: boolean;
 }
 export interface ImageBatch {
   readonly intent: ImageIntent;
@@ -42,24 +54,11 @@ export interface ImageBatch {
   readonly run: (
     ordinal: number,
     stage: (stage: ImageStage) => void | Promise<void>,
-  ) => Promise<string | undefined>;
+  ) => Promise<string>;
   readonly setPrompt: (ordinal: number, prompt: string) => void;
   readonly finish: (failed: boolean) => Draft;
   readonly resume: (latest: Draft, ordinals: readonly number[]) => void;
   readonly snapshot: () => ImageBatchSnapshot;
-}
-
-function appendImage(record: PersonaRecord, slot: ImageSlot, imageUrl: string) {
-  if (mainImage(record, slot.style))
-    return decodePersona({
-      ...record,
-      secondaryPortraits: [...(record.secondaryPortraits ?? []), { style: slot.style, imageUrl }],
-    });
-  const portraits = {
-    ...(record.portraits ?? (record.imageUrl ? { photo: record.imageUrl } : {})),
-    [slot.style]: imageUrl,
-  };
-  return decodePersona({ ...record, portraits, imageUrl: portraits.photo ?? portraits.anime! });
 }
 
 function slotsOf(
@@ -69,21 +68,20 @@ function slotsOf(
   params: URLSearchParams,
   key: string,
 ) {
-  if (intent === "generate" || intent === "portrait") return imageSlots(intent, draft.imageCount!);
+  if (isSheetIntent(intent)) {
+    const style = intent === "sheet" ? imageStyle(params) : "anime";
+    if (intent === "sheet") sheetSource(persona, style, params);
+    return imageSlots(intent, 1, style);
+  }
   const style = imageStyle(params);
   const images = personaImages(persona).filter((image) => image.style === style);
   if (intent === "regenerate") {
     const active = images.findIndex((image) => `${style}:${image.imageUrl}` === key);
-    if (
-      active > 0 &&
-      [mainImage(persona, style)!, images[active]!.imageUrl].some((url) => !ownedImageKey(url))
-    )
+    if (active >= 0 && !ownedImageKey(images[active]!.imageUrl))
       throw new PersonaError("invalid", copy.baseOwnedRequired);
     return active < 0 ? [] : imageSlots(intent, 1, style, active);
   }
   if (draft.imageCount! > 6 - images.length) throw new PersonaError("invalid", copy.galleryFull);
-  const main = mainImage(persona, style);
-  if (main && !ownedImageKey(main)) throw new PersonaError("invalid", copy.baseOwnedRequired);
   return imageSlots(intent, draft.imageCount!, style, images.length);
 }
 
@@ -98,16 +96,16 @@ export function createImageBatch(
   restored?: ImageBatchSnapshot,
 ): ImageBatch {
   persona = decodePersona(persona);
-  const initial = intent === "generate" || intent === "portrait";
-  if (!initial && !persona.bio) throw new PersonaError("invalid", copy.regenerateRequired);
+  const sheets = isSheetIntent(intent);
+  const operationId = restored ? restored.operationId : randomUUID();
   const slots = slotsOf(persona, draft, intent, params, key);
+  if (!sheets) requireSheetReferences(draft, slots);
   const prompts = restored
     ? [...restored.prompts]
-    : slots.map((slot, ordinal) => imagePrompt(draft, slot, ordinal, initial));
+    : slots.map((slot, ordinal) => imagePrompt(draft, slot, ordinal, sheets));
   let current = restored?.current ?? persona;
   let latest = restored?.latest ?? draft;
   let expectedBase = restored?.expectedBase ?? draft.base;
-  let prepared = restored?.prepared ?? false;
   const references = new Map<string, Portrait>();
   const reference = async (style: ImageSlot["style"], url: string) => {
     const cached = references.get(url);
@@ -118,32 +116,37 @@ export function createImageBatch(
   };
   const prepare = async () => {
     await assertSnapshot(store, { ...latest, base: expectedBase });
-    if (prepared || !initial) return;
-    let authored = persona;
-    if (!decodePersona(persona).bio) {
-      const converted = await operation("character.complete", {}, () =>
-        generator.convert(characterOf(persona)),
-      );
-      if (converted.name !== persona.name)
-        throw new PersonaError("invalid", "생성된 문서의 이름이 원본과 다릅니다.");
-      requirePublicProfile(converted.description);
-      authored = { ...persona, description: converted.description, prompt: converted.description };
-      persona = authored;
-    }
-    const document = decodePersona(authored);
-    requirePublicProfile(document.description!);
-    const fresh = {
-      ...document,
-      imageUrl: "",
-    };
-    delete fresh.portraits;
-    delete fresh.secondaryPortraits;
-    delete fresh.portraitGallery;
-    current = fresh;
-    prepared = true;
+    if (sheets)
+      for (const slot of slots) {
+        const recovered = await operation("identity.sheet.receipt", { style: slot.style }, () =>
+          store.sheetResult(persona.id, slot.style, `${operationId}:${slot.style}`),
+        );
+        if (recovered)
+          latest = {
+            ...latest,
+            sheets: { ...latest.sheets, [slot.style]: recovered },
+            imageEditing: true,
+          };
+      }
+    await assertSheets(store, latest, slots);
+    if (slots.length) latest = { ...latest, preview: serializePersona(current) };
   };
   const run = async (ordinal: number, stage: (stage: ImageStage) => void | Promise<void>) => {
     const slot = slots[ordinal]!;
+    if (sheets) {
+      latest = await generateSheet(
+        current,
+        latest,
+        slot.style,
+        prompts[ordinal]!,
+        intent === "sheet" ? sheetSource(current, slot.style, params) : undefined,
+        generator,
+        store,
+        stage,
+        `${operationId}:${slot.style}`,
+      );
+      return latest.sheets![slot.style]!;
+    }
     if (intent === "regenerate") {
       const target = imageTarget(current, params);
       const next = await regeneratePortrait(
@@ -160,9 +163,7 @@ export function createImageBatch(
       return personaImages(current).filter((image) => image.style === slot.style)[target.index]!
         .imageUrl;
     }
-    const main = mainImage(current, slot.style);
-    if (initial && slot.index > 0 && !main) return undefined;
-    const identity = main ? await reference(slot.style, main) : undefined;
+    const identity = await reference(slot.style, latest.sheets![slot.style]!);
     const imageUrl = await generateImage(
       current,
       slot.style,
@@ -170,12 +171,12 @@ export function createImageBatch(
       store,
       prompts[ordinal],
       identity,
-      intent === "subportrait"
-        ? personaImages(current).filter((image) => image.style === slot.style).length
-        : slot.index,
+      personaImages(current).filter((image) => image.style === slot.style).length,
       stage,
     );
-    current = appendImage(current, slot, imageUrl);
+    current = decodePersona(
+      withPersonaImages(current, [...personaImages(current), { style: slot.style, imageUrl }]),
+    );
     latest = { ...latest, preview: serializePersona(current), imageEditing: true };
     return imageUrl;
   };
@@ -200,6 +201,7 @@ export function createImageBatch(
       return latest;
     },
     snapshot: () => ({
+      operationId,
       source: persona,
       original: draft,
       intent,
@@ -209,7 +211,6 @@ export function createImageBatch(
       latest,
       prompts,
       expectedBase,
-      prepared,
     }),
     resume: (editing, ordinals) => {
       if (editing.preview !== latest.preview) {
@@ -219,13 +220,15 @@ export function createImageBatch(
         current = next;
       }
       const selected = ordinals.map((ordinal) => slots[ordinal]!);
+      if (selected.some(({ style }) => latest.sheets?.[style] !== editing.sheets?.[style]))
+        throw new PersonaError("conflict", "인물 시트가 변경되었습니다. 다시 열어 주세요.");
       const images = personaImages(current);
       if (
         intent === "regenerate" &&
         !images.some((image) => `${image.style}:${image.imageUrl}` === key)
       )
         throw new PersonaError("conflict", copy.stale);
-      if (intent !== "regenerate")
+      if (intent !== "regenerate" && !sheets)
         for (const style of ["anime", "photo"] as const)
           if (
             images.filter((image) => image.style === style).length +
@@ -239,6 +242,7 @@ export function createImageBatch(
         base: editing.base,
         preview: editing.preview,
         ...(editing.initial && { initial: editing.initial }),
+        ...(editing.sheets && { sheets: editing.sheets }),
       };
     },
   };
@@ -249,6 +253,10 @@ export function restoreImageBatch(
   generator: ProfileGenerator,
   store: Store,
 ) {
+  if (typeof snapshot.operationId !== "string")
+    throw new PersonaError("invalid", "이미지 작업의 생성 식별자가 없습니다.");
+  if (!["generate", "regenerate", "sheet", "sheets"].includes(snapshot.intent))
+    throw new PersonaError("invalid", "지원하지 않는 이미지 작업입니다.");
   return createImageBatch(
     snapshot.source,
     snapshot.original,

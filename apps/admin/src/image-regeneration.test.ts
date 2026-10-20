@@ -11,6 +11,7 @@ import {
   request,
   tokenOf,
   portraitImage,
+  seedSheets,
 } from "../test/fixtures.ts";
 import {
   basePreview,
@@ -30,7 +31,7 @@ test("an independent image is replaced once by stable URL without changing other
         request(`/personas?style=${style}`, {
           ...character,
           draft: tokenOf(current),
-          intent: "subportrait",
+          intent: "generate",
           portraitInstructions: "travel photo",
         }),
       )
@@ -53,7 +54,7 @@ test("an independent image is replaced once by stable URL without changing other
     expect(portrait).toHaveBeenCalledTimes(count + 1);
     expect(after.bio).toBe(before.bio);
     expect(after.imageUrl).toBe(
-      original.main && original.style === "photo" ? after.portraits?.photo : before.imageUrl,
+      original.imageUrl === before.imageUrl ? after.portraits?.[original.style] : before.imageUrl,
     );
     expect(personaImages(after)).toHaveLength(4);
     expect(
@@ -164,7 +165,7 @@ test("failed regeneration retains image, optional prompt, cause metadata and a s
   expect(preview(await recovered.text()).portraits?.anime).toBe(before.portraits?.anime);
 });
 
-test("invalid styles, image targets and missing public introductions are rejected before paid work", async () => {
+test("invalid targets are rejected but editing a private description does not require rewriting a public introduction", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, page } = await basePreview({ ...subGenerator, portrait });
   const fields = { ...character, draft: tokenOf(page), intent: "regenerate" };
@@ -185,14 +186,15 @@ test("invalid styles, image targets and missing public introductions are rejecte
         request("/personas?image=0&style=photo", { ...fields, description: "new source" }),
       )
     ).status,
-  ).toBe(400);
-  expect(portrait).toHaveBeenCalledTimes(2);
+  ).toBe(200);
+  expect(portrait).toHaveBeenCalledTimes(3);
 });
 
 test("legacy single image replacement preserves its format and works with a signed draft after restart", async () => {
   const { admin, store } = await fixture();
   const imageUrl = await store.saveImage(portraitImage);
   await store.create({ ...legacy, imageUrl });
+  await seedSheets(store, legacy.id);
   const path = `/personas/${legacy.id}`;
   const page = await (await admin(request(path))).text();
   const fields = {
