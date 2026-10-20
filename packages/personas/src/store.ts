@@ -25,6 +25,8 @@ import { nextPersonaVersion, requireVersion } from "./versions.ts";
 import type { SaveSnapshot } from "./versions.ts";
 import { historyFor, readVersions, writeVersionFiles } from "./version-files.ts";
 import { identitySheetFiles } from "./identity-sheets.ts";
+import { fileListing } from "./file-listing.ts";
+import type { PersonaQuery } from "./listing.ts";
 
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
@@ -127,6 +129,7 @@ export async function createPersonaStore(directory: string) {
   return {
     ...identitySheetFiles(directory),
     list,
+    browse: async (query: PersonaQuery) => fileListing(directory, await list(), query),
     inspect: () => inspectPersonaFiles(directory),
     source,
     importDraft: async (id: string) => {
