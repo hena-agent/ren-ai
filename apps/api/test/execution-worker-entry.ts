@@ -40,7 +40,12 @@ export class ExecutionApplication extends ApiApplication {
     const path = new URL(request.url).pathname;
     if (!path.startsWith("/__fixture/")) return super.fetch(request);
     await super.fetch(new Request("https://app/health"));
-    if (path === "/__fixture/due") {
+    if (path === "/__fixture/verify-imessage") {
+      this.ctx.storage.sql.exec(
+        "UPDATE discovery_registration SET imessage_status = 'available', imessage_checked_at = ?",
+        Date.now(),
+      );
+    } else if (path === "/__fixture/due") {
       this.ctx.storage.sql.exec(
         "UPDATE discovery_contact SET scheduled_at = 0 WHERE state = 'scheduled'",
       );

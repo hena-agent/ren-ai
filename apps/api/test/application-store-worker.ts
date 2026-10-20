@@ -64,6 +64,13 @@ export class Registry extends DurableObject<Environment> {
       );
     }
     const store = await this.application();
+    if (path === "/__fixture/verify-imessage") {
+      this.ctx.storage.sql.exec(
+        "UPDATE discovery_registration SET imessage_status = 'available', imessage_checked_at = ?",
+        Date.now(),
+      );
+      return Response.json({ ok: true });
+    }
     if (path === "/__fixture/outbox-budget")
       return Response.json(await outboxBudget(this.ctx.storage, store));
     if (path === "/__fixture/usage-budget")

@@ -182,6 +182,8 @@ test("registry persists state on the Durable Object across recreation", async ()
         }),
       });
     expect((await start("missing")).status).toBe(409);
+    expect((await start("sora")).status).toBe(409);
+    expect((await call(runtime, "/__fixture/verify-imessage")).status).toBe(200);
     expect((await start("sora")).status).toBe(200);
     expect((await start("sora")).status).toBe(200);
 

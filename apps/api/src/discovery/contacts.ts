@@ -79,6 +79,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           )
             ? "ready"
             : "no_persona";
+          if (row.imessageStatus !== "available") reason = "imessage_unverified";
           if (row.imessageStatus === "unavailable") reason = "no_imessage";
           if (row.state || row.occupied) reason = "reserved";
           if (row.admitted) reason = "active";

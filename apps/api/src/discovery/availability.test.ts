@@ -5,6 +5,63 @@ import { withContactDatabase } from "./contact.test-helper.ts";
 import { notificationFixture } from "./notifications.test-helper.ts";
 import { checkAvailability } from "./availability.ts";
 
+const assertSelectionHeld = (
+  f: Effect.Success<typeof notificationFixture>,
+  row: { id: string; handle: string },
+) =>
+  Effect.gen(function* () {
+    yield* f.sql`INSERT INTO test_handle VALUES (${row.handle})`;
+    expect(
+      yield* f.store.start(
+        { requestId: randomUUID(), registrationID: row.id, personaID: "luna" },
+        "start",
+      ),
+    ).toBeNull();
+    for (const registrationIDs of [undefined, [row.id]]) {
+      const result = yield* f.store.select(
+        { requestId: randomUUID(), count: 1, ...(registrationIDs && { registrationIDs }) },
+        "selection",
+      );
+      expect(result.entries).toEqual([]);
+    }
+    expect(yield* f.sql`SELECT * FROM persona_assignment`).toEqual([]);
+    expect(yield* f.sql`SELECT * FROM discovery_contact`).toEqual([]);
+    expect(yield* f.sql`SELECT * FROM discovery_like`).toHaveLength(1);
+  });
+
+test.each(["unchecked", "failed"])(
+  "%s iMessage lookup holds all Selection paths until confirmed",
+  (status) =>
+    withContactDatabase(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const f = yield* notificationFixture;
+          yield* f.join();
+          if (status === "failed") {
+            f.availability.mockReturnValue(Effect.fail(new Error("Lookup unavailable")));
+            yield* f.tick;
+          }
+          const row = (yield* f.store.list).entries[0]!;
+          expect(row.eligible).toBe(false);
+          expect(row.reason).toBe("imessage_unverified");
+          expect((yield* f.store.list).eligibleCount).toBe(0);
+          yield* assertSelectionHeld(f, row);
+          yield* f.sql`UPDATE discovery_registration SET imessage_status = 'available', imessage_checked_at = 123 WHERE id = ${row.id}`;
+          expect((yield* f.store.list).entries[0]).toMatchObject({
+            eligible: true,
+            reason: "ready",
+          });
+          expect(
+            (yield* f.store.select(
+              { requestId: randomUUID(), count: 1, registrationIDs: [row.id] },
+              "confirmed",
+            )).entries,
+          ).toHaveLength(1);
+        }),
+      ),
+    ),
+);
+
 test.each([true, false])(
   "lookup available=%s is durable and controls every Selection path without a send",
   (available) =>
@@ -35,22 +92,7 @@ test.each([true, false])(
           });
           expect(row.imessage?.checkedAt).toEqual(expect.any(Number));
           if (!available) {
-            yield* f.sql`INSERT INTO test_handle VALUES (${row.handle})`;
-            expect(
-              yield* f.store.start(
-                { requestId: randomUUID(), registrationID: row.id, personaID: "luna" },
-                "start",
-              ),
-            ).toBeNull();
-            for (const registrationIDs of [undefined, [row.id]]) {
-              const result = yield* f.store.select(
-                { requestId: randomUUID(), count: 1, ...(registrationIDs && { registrationIDs }) },
-                "selection",
-              );
-              expect(result.entries).toEqual([]);
-            }
-            expect(yield* f.sql`SELECT * FROM persona_assignment`).toEqual([]);
-            expect(yield* f.sql`SELECT * FROM discovery_like`).toHaveLength(1);
+            yield* assertSelectionHeld(f, row);
             expect(yield* f.sql`SELECT * FROM notification_attempt`).toEqual([]);
           }
           expect(f.logs).toContainEqual(
@@ -83,7 +125,8 @@ test.each([undefined, "upstream-request"])(
           yield* f.join();
           yield* f.tick;
           expect((yield* f.store.list).entries[0]).toMatchObject({
-            eligible: true,
+            eligible: false,
+            reason: "imessage_unverified",
             imessage: { status: "failed" },
           });
           expect(f.logs).toContainEqual(

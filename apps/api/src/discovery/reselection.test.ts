@@ -10,6 +10,7 @@ import { prepareMessaging } from "../application-tools.ts";
 import { contactFixture, withContactDatabase } from "./contact.test-helper.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
 import { firstContacts } from "./first-contact.ts";
+import { checkAvailability } from "./availability.ts";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { Session } from "@opencode/schema/session";
 import { SessionInbox } from "@opencode/schema/session-inbox";
@@ -132,6 +133,16 @@ test("a delivered private reselection link admits another persona for the same U
           (yield* f.sql`SELECT registration_id FROM discovery_contact WHERE registration_id = ${oldRegistrationID}`)
             .length,
         ).toBe(1);
+        const waiting = yield* f.store.list;
+        expect(waiting.eligibleCount).toBe(0);
+        expect(waiting.entries[0]?.reason).toBe("imessage_unverified");
+        yield* checkAvailability(
+          waiting.entries[0]!.id,
+          {
+            availability: () => Effect.succeed({ available: true, requestId: randomUUID() }),
+          },
+          () => {},
+        );
         expect((yield* f.store.list).eligibleCount).toBe(1);
         const selection = yield* f.store.select(
           { requestId: randomUUID(), count: 1 },

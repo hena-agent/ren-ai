@@ -116,13 +116,18 @@ test("Waitlist shows Notification outcomes without offering resend or changing s
   expect(page.match(/form="contact-direct-selection"/g)).toHaveLength(5);
 });
 
-test("Waitlist shows iMessage lookup status and time, and disables unsupported entries", async () => {
-  const rows = [
-    entry(),
+test("Waitlist holds unverified iMessage entries and enables only confirmed available entries", async () => {
+  const rows: readonly (typeof ContactEntry.Type)[] = [
+    { ...entry(), eligible: false, reason: "imessage_unverified" },
     ...(["available", "unavailable", "failed"] as const).map((status) => ({
       ...entry(),
-      eligible: status !== "unavailable",
-      reason: status === "unavailable" ? ("no_imessage" as const) : ("ready" as const),
+      eligible: status === "available",
+      reason:
+        status === "unavailable"
+          ? ("no_imessage" as const)
+          : status === "available"
+            ? ("ready" as const)
+            : ("imessage_unverified" as const),
       imessage: { status, checkedAt: 1_000 },
     })),
   ];
@@ -133,6 +138,12 @@ test("Waitlist shows iMessage lookup status and time, and disables unsupported e
   const unsupported = page.split("<tr>").find((row) => row.includes(rows[2]!.id))!;
   expect(unsupported).toContain("disabled");
   expect(unsupported).toContain("iMessage 미지원");
+  for (const index of [0, 3]) {
+    const held = page.split("<tr>").find((row) => row.includes(rows[index]!.id))!;
+    expect(held).toContain("disabled");
+    expect(held).toContain("iMessage 확인 전 선정 보류");
+  }
+  expect(page.split("<tr>").find((row) => row.includes(rows[1]!.id))).not.toContain("disabled");
 });
 
 test("a waiting test handle starts now with a chosen liked persona", async () => {
