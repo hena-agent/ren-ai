@@ -7,7 +7,9 @@
         "worker/entry.mjs",
         "src/pending-entry.mjs",
         "scripts/build.mjs",
-        "scripts/import-local.mjs"
+        "scripts/import-local.mjs",
+        "scripts/seed.mjs",
+        "worker/test-seeding.ts"
       ]
     },
     "apps/api": {

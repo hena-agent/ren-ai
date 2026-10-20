@@ -378,6 +378,7 @@ export function renderPage({
               conversationView={conversationView}
               {...(recoveryAvailable !== undefined && { recoveryAvailable })}
             />
+            <a href="/seeding">Seeding runs</a>
           </header>
           <main id="main" className={record || versionView ? "persona-workbench" : undefined}>
             <div

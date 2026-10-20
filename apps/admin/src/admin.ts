@@ -23,7 +23,7 @@ import type { PageContent } from "./page.tsx";
 import copy from "./copy.json";
 import { generateTextDraft } from "./generation-workflows.ts";
 import { deletePortrait } from "./regenerate-portrait.ts";
-import { createImageQueue, type ImageJob, type DurableQueue } from "./image-queue.ts";
+import { createImageQueue, type DurableQueue } from "./image-queue.ts";
 import { createImageBatch, restoreImageBatch } from "./image-batch.ts";
 import { isImageIntent, type ImageIntent } from "./image-slots.ts";
 import {
@@ -41,6 +41,7 @@ import {
   requestFields,
   requestId,
   GenerationError,
+  writeLog,
 } from "./logging.ts";
 import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
@@ -53,6 +54,9 @@ import { imageJobRoute } from "./image-job-routes.ts";
 import { uploadRoute } from "./upload-route.ts";
 import { versionRoutes } from "./version-routes.ts";
 import { savePersonaDraft } from "./save-persona.ts";
+import { seedingRoutes } from "./seeding-routes.ts";
+import { seedingEngine } from "./seeding-engine.ts";
+import { imageJobPages } from "./image-job-page.ts";
 import { personaQuery } from "./persona-query.ts";
 export function createAdmin(
   store: PersonaStore,
@@ -61,10 +65,11 @@ export function createAdmin(
   {
     generator,
     script,
-    log,
+    log = writeLog,
     persistence,
     management,
     catalogPending,
+    seeding,
     localImages = true,
   }: AdminOptions = {},
 ) {
@@ -99,16 +104,28 @@ export function createAdmin(
     (id) => subDrafts.get(id),
     durable,
   );
-  const queueFields = (job: ImageJob) => ({
-    imageJob: job,
-    imageJobs: queue.list(job.batch.personaId, job.id).map((entry) => ({
-      job: entry,
-      position: queue.position(entry.id),
-    })),
-    imageReservations: queue.reservations(job.batch.personaId),
-    queuePosition: queue.position(job.id),
-    queueObservedAt: Date.now(),
-  });
+  const seeds =
+    seeding && generator && durable
+      ? seedingEngine({
+          ...seeding,
+          store,
+          generator,
+          drafts: subDrafts,
+          queue,
+          checkpoint: durable.checkpoint,
+          log,
+          busy,
+        })
+      : undefined;
+  const seedRoute = (request: Request) =>
+    seeding && seeds ? seedingRoutes(request, seeding.repository, seeds) : undefined;
+  const assertSeedEditable = seeds?.assertEditable;
+  const { fields: queueFields, page: jobPage } = imageJobPages(
+    subDrafts,
+    queue,
+    tokens,
+    renderPage,
+  );
   // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow request, generation and storage failures before responding
   const failure = (error: unknown, record?: PersonaRecord, draft?: Draft) => {
     reportFailure(error, { stage: "request" }, error instanceof PersonaError ? "warn" : "error");
@@ -230,43 +247,6 @@ export function createAdmin(
     }
   };
 
-  const jobPage = (job: ImageJob, progress: boolean) => {
-    const latest = subDrafts.get(job.batch.personaId)!;
-    const failed = job.state === "failed";
-    const record =
-      job.state !== "completed" && latest.preview === job.batch.draft().preview
-        ? job.batch.record()
-        : previewOf(latest, emptyPersona);
-    const cause = job.failure;
-    const invalid = cause instanceof PersonaError;
-    const detail = invalid
-      ? cause.message
-      : cause instanceof GenerationError
-        ? generationFailureMessage(cause)
-        : undefined;
-    return html(
-      renderPage({
-        record,
-        ...documentFields(latest),
-        editing: Boolean(latest.base),
-        draft: tokens.encode(latest),
-        seed: latest.seed,
-        ...retryImageInput(latest, failed),
-        imagePrompts: latest.imagePrompts,
-        conversion: latest.conversion,
-        ...((progress || queue.pending(job.batch.personaId)) && queueFields(job)),
-        ...(failed && {
-          error: `${detail ?? copy.failure} ${copy.partialGenerationFailure} (요청 ID: ${job.requestId})`,
-        }),
-      }),
-      progress || !failed
-        ? 200
-        : invalid
-          ? { invalid: 400, not_found: 404, conflict: 409 }[cause.kind]
-          : 503,
-    );
-  };
-
   const enqueueImages = async (
     request: Request,
     persona: ReturnType<typeof authorPersona>,
@@ -319,6 +299,7 @@ export function createAdmin(
         throw new PersonaError("invalid", copy.formError);
       });
       draft = tokens.decode(form.get("draft"));
+      await seeds?.assertEditable(draft.id);
       protectEditingForm(form);
       requestFields({ personaId: draft.id });
       if ((id && (id !== draft.id || !draft.base)) || (!id && draft.base))
@@ -429,8 +410,10 @@ export function createAdmin(
             "Cache-Control": "no-store",
           },
         });
-      if (request.method !== "GET" && request.method !== "POST")
+      if (!["GET", "POST"].includes(request.method))
         return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
+      const seeded = await seedRoute(request);
+      if (seeded) return seeded;
       if (["/waitlist", "/first-contacts"].includes(url.pathname))
         return contactRoutes(request, management);
       if (url.pathname.startsWith("/conversations"))
@@ -443,13 +426,24 @@ export function createAdmin(
         drafts: subDrafts,
         busy,
         pending: queue.pending,
+        assertEditable: assertSeedEditable,
       });
       if (versionResponse) return versionResponse;
       const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
       if (resource) return resource;
       const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/(?:retry|delete|clear))?$/.exec(url.pathname);
       if (jobMatch)
-        return await imageJobRoute(request, url, jobMatch, queue, tokens, subDrafts, jobPage);
+        return await imageJobRoute(
+          request,
+          url,
+          jobMatch,
+          queue,
+          tokens,
+          subDrafts,
+          jobPage,
+          busy,
+          assertSeedEditable,
+        );
       const match = /^\/personas\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
       if (request.method === "POST") return submit(request, url, match?.[1]);
       let record: PersonaRecord | undefined;
@@ -478,7 +472,7 @@ export function createAdmin(
         const response = await handle(request);
         try {
           if (durable) await operation("editing.checkpoint", {}, durable.checkpoint);
-          if (persistence && queue.next())
+          if (persistence && (queue.next() || (await seeds?.next())))
             await operation("image.queue.wake", {}, persistence.wake);
           return response;
         } catch (error) {
@@ -487,5 +481,5 @@ export function createAdmin(
       },
       log,
     );
-  return Object.assign(fetch, { runNext: queue.runNext, nextJob: queue.next });
+  return Object.assign(fetch, { runNext: queue.runNext, nextJob: queue.next, seeds });
 }

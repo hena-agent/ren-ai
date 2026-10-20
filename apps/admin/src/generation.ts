@@ -7,6 +7,8 @@ import { generateCharacter, convertCharacter } from "./character-generation.ts";
 import { generateInitialDocument } from "./initial-generation.ts";
 import { profileWriting } from "./profile-writing.ts";
 import sheetPolicy from "./identity-sheet-policy.json";
+import { reserveGeneration, seedingBudgetActive } from "./seeding-budget.ts";
+import { setTimeout } from "node:timers/promises";
 
 type Character = {
   readonly name: string;
@@ -191,32 +193,50 @@ export function createProfileGenerator({
       const fields = { model };
       if (!key.trim())
         throw new GenerationError("GEMINI_API_KEY is required", { ...fields, code: "missing_key" });
-      let response: Response;
-      try {
-        response = await fetcher(
-          `${endpoint}/models/${encodeURIComponent(model)}:generateContent`,
-          {
-            method: "POST",
-            headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-            signal: AbortSignal.timeout(120_000),
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ text: `${prompt}\n\n${input}` }, ...imageParts],
+      const dispatch = async () => {
+        let response: Response;
+        await reserveGeneration(model, `${prompt}\n\n${input}`, references.length);
+        try {
+          response = await fetcher(
+            `${endpoint}/models/${encodeURIComponent(model)}:generateContent`,
+            {
+              method: "POST",
+              headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+              signal: AbortSignal.timeout(120_000),
+              body: JSON.stringify({
+                contents: [
+                  {
+                    role: "user",
+                    parts: [{ text: `${prompt}\n\n${input}` }, ...imageParts],
+                  },
+                ],
+                generationConfig: {
+                  ...configurations[format],
+                  ...(seedingBudgetActive() && { maxOutputTokens: 8192 }),
+                  ...(responseJsonSchema && { responseJsonSchema }),
                 },
-              ],
-              generationConfig: {
-                ...configurations[format],
-                ...(responseJsonSchema && { responseJsonSchema }),
-              },
-            }),
-          },
-        );
-      } catch (cause) {
-        throw networkError(cause, model, secrets);
+              }),
+            },
+          );
+        } catch (cause) {
+          throw networkError(cause, model, secrets);
+        }
+        return readReply(response, model, secrets);
+      };
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await dispatch();
+        } catch (cause) {
+          const rejected =
+            cause instanceof GenerationError &&
+            cause.fields.status === 429 &&
+            cause.fields.providerStatus === "RESOURCE_EXHAUSTED";
+          if (!seedingBudgetActive() || !rejected || attempt >= 2) throw cause;
+          await operation("generation.rejected.wait", { model, status: cause.fields.status! }, () =>
+            setTimeout(5000 * 2 ** attempt),
+          );
+        }
       }
-      return readReply(response, model, secrets);
     });
   const characterRequest = async (
     prompt: string,

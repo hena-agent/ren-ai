@@ -1,5 +1,5 @@
 import type { D1Database } from "@cloudflare/workers-types";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import {
   decodePersona,
@@ -10,7 +10,7 @@ import {
   requireVersion,
 } from "@ren-ai/personas";
 import type { PersonaStore } from "@ren-ai/personas";
-import { personas, personaImages, personaVersions } from "./database-schema.ts";
+import { personas, personaImages, personaVersions, seedingSeeds } from "./database-schema.ts";
 import { r2Images } from "./r2-images.ts";
 import type { ImageBucket } from "./r2-images.ts";
 import { recordOf, currentPersonaRows } from "./database-record.ts";
@@ -203,12 +203,24 @@ export function databaseStore(
             .where(and(eq(personas.id, record.id), eq(personas.commitId, commitId))),
         ),
       );
+      const seedStage = record.portraits?.anime && record.portraits.photo ? "done" : "partial";
       const [result] = await databaseOperation(() =>
         db.batch([
           write,
           ...history,
           db.delete(personaImages).where(and(eq(personaImages.personaId, record.id), ownsCommit)),
           ...inserts,
+          db
+            .update(seedingSeeds)
+            .set({ stage: seedStage })
+            .where(
+              and(
+                eq(seedingSeeds.personaId, record.id),
+                inArray(seedingSeeds.stage, ["done", "partial"]),
+                ne(seedingSeeds.stage, seedStage),
+                ownsCommit,
+              ),
+            ),
         ]),
       );
       if (!result.meta.changes)

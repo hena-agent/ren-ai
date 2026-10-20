@@ -26,6 +26,7 @@ interface ImageTask extends ImageSlot {
   recoveryPending?: boolean;
 }
 export interface ImageJob {
+  readonly seedingRunId?: string;
   readonly id: string;
   readonly batch: ImageBatch;
   readonly tasks: readonly ImageTask[];
@@ -321,7 +322,7 @@ export function createImageQueue(
         throw cause;
       }
     },
-    enqueue: (key: string, batch: ImageBatch) => {
+    enqueue: (key: string, batch: ImageBatch, seedingRunId?: string) => {
       const known = keys.get(key);
       if (known) return get(known);
       const ordinals = batch.slots.map((_, ordinal) => ordinal);
@@ -329,6 +330,7 @@ export function createImageQueue(
       reserve(batch, ordinals);
       const reserved = reservations(batch.personaId);
       const job: QueuedJob = {
+        ...(seedingRunId && { seedingRunId }),
         id: randomUUID(),
         batch,
         requestId: requestId(),
