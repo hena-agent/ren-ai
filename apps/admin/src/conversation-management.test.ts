@@ -74,6 +74,10 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   ])
     expect(page).toContain(text);
   const active = await (await admin(request("/conversations/1"))).text();
+  const sessionLink =
+    '<a href="https://oc.renai.im/server/aHR0cHM6Ly9vYy5yZW5haS5pbQ/session/ses_seoyul" target="_blank" rel="noreferrer" title="OpenCode에서 세션 열기 (새 탭)"><code class="conversation-session">ses_seoyul</code></a>';
+  expect(page).toContain(sessionLink);
+  expect(active.split(sessionLink)).toHaveLength(3);
   expect(active).toContain("실행 중");
   expect(active).toContain("대기 작업 2개");
   expect(active).toContain("현재 언어 실력 보기");

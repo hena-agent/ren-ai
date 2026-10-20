@@ -31,6 +31,7 @@ const execution = {
   missing: "세션 없음",
   unavailable: "조회 실패 — 정지 여부 미확인",
 };
+const openCodeServer = "https://oc.renai.im";
 
 function Connections({ entries }: { entries: readonly (typeof ConversationEntry.Type)[] }) {
   return (
@@ -58,8 +59,15 @@ function Connections({ entries }: { entries: readonly (typeof ConversationEntry.
                 <a href={`/personas/${entry.personaID}`}>{entry.personaName}</a>
                 <small>{entry.personaID}</small>
               </td>
-              <td>
-                <code className="conversation-session">{entry.sessionID}</code>
+              <td aria-label={entry.sessionID}>
+                <a
+                  href={`${openCodeServer}/server/${Buffer.from(openCodeServer).toString("base64url")}/session/${encodeURIComponent(entry.sessionID)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="OpenCode에서 세션 열기 (새 탭)"
+                >
+                  <code className="conversation-session">{entry.sessionID}</code>
+                </a>
               </td>
               <td>
                 <strong>{entry.endedAt === null ? "활성" : "종료"}</strong>
