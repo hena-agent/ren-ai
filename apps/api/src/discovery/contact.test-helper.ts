@@ -23,7 +23,9 @@ export const contactFixture = Effect.gen(function* () {
   const register = (handle: string, likes = ["luna"]) =>
     Effect.gen(function* () {
       const id = randomUUID();
-      yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at) VALUES (${id}, ${handle}, 'ko', 'web-consent', 123)`;
+      // Selection fixtures represent registrations whose iMessage lookup succeeded.
+      yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at, imessage_status, imessage_checked_at)
+        VALUES (${id}, ${handle}, 'ko', 'web-consent', 123, 'available', 123)`;
       for (const persona of likes)
         yield* sql`INSERT INTO discovery_like VALUES (${id}, ${persona})`;
       return id;

@@ -17,6 +17,7 @@ import { composedTestServer, unrelatedSession } from "../test/server.test-helper
 import { listenerUrl } from "../test/listener.test-helper.ts";
 import { servePublic } from "@ren-ai/transport/listener";
 import { runMessagingTest } from "../test/messaging.test-helper.ts";
+import { checkAvailability } from "./discovery/availability.ts";
 
 const platform = Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer);
 
@@ -80,6 +81,17 @@ test("composed HTTP, remote OpenCode, messaging API and authenticated operator c
         );
         expect(registration.status).toBe(200);
         expect(registration.headers.get("access-control-allow-origin")).toBe("https://renai.im");
+        const [waiting] = yield* sql<{ id: string }>`SELECT id FROM discovery_registration`;
+        yield* checkAvailability(
+          waiting!.id,
+          {
+            availability: (handle) =>
+              fake.messages
+                .availability(handle)
+                .pipe(Effect.map((result) => ({ ...result, requestId: randomUUID() }))),
+          },
+          () => {},
+        );
         const key = randomUUID();
         const selected = yield* Effect.promise(() =>
           server.publicWeb(

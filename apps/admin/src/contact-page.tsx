@@ -38,6 +38,7 @@ const reasons = {
   reserved: "배정됨",
   no_persona: "공개된 미배정 Like 후보 없음",
   no_imessage: "iMessage 미지원",
+  imessage_unverified: "iMessage 확인 전 선정 보류",
 };
 const notificationLabels = {
   queued: "안내 대기 중",

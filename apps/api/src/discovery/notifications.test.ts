@@ -23,7 +23,7 @@ test("joining queues one Notification in the consent language without starting a
         }
         expect(f.notify).not.toHaveBeenCalled();
         expect(yield* f.snapshot).toMatchObject({
-          entries: [{ notification: "queued", eligible: true }],
+          entries: [{ notification: "queued", eligible: false, reason: "imessage_unverified" }],
         });
         yield* f.tick;
         yield* f.tick;

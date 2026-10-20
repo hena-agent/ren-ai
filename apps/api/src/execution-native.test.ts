@@ -176,6 +176,8 @@ test.each(["sent", "uncertain"] as const)(
               });
               expect(await registered.json()).toEqual({ status: "waiting" });
               expect(registered.status).toBe(200);
+              // Seed the completed lookup before testing Selection while the executor is offline.
+              await executionState(runtime, "/__fixture/verify-imessage");
               const select = { requestId: "00000000-0000-4000-8000-000000000028", count: 1 };
               const selected = await send("/management/discovery/select", select);
               expect(selected.status).toBe(200);

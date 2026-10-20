@@ -11,6 +11,7 @@ import { expect } from "vitest";
 import { contacts } from "../src/discovery/contacts.ts";
 import { makeDiscoveryWeb } from "../src/discovery/discovery.ts";
 import { firstContacts } from "../src/discovery/first-contact.ts";
+import { checkAvailability } from "../src/discovery/availability.ts";
 import { messagingFixture, registration, runMessagingTest } from "./messaging.test-helper.ts";
 import { quietTestHost, startTestHost } from "./messaging-host.test-helper.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
@@ -49,7 +50,7 @@ const verified = HttpClient.make((request) =>
 /** How a test handle starts over after `/reset`: register through Discovery, then start it directly. */
 export const startTestHandle = (
   host: Host,
-  messages: Pick<Messages, "textStatus">,
+  messages: Pick<Messages, "textStatus" | "availability">,
   handle: string,
   personaID = "persona1",
 ) =>
@@ -85,6 +86,16 @@ export const startTestHandle = (
       id: string;
     }>`SELECT id FROM discovery_registration WHERE handle = ${handle}`;
     if (!registered) return "unavailable" as const;
+    yield* checkAvailability(
+      registered.id,
+      {
+        availability: (target) =>
+          messages
+            .availability(target)
+            .pipe(Effect.map((result) => ({ ...result, requestId: randomUUID() }))),
+      },
+      () => {},
+    );
     const store = yield* contacts(catalog);
     const started = yield* store.start(
       { requestId: randomUUID(), registrationID: registered.id, personaID },
