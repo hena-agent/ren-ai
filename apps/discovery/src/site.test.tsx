@@ -59,12 +59,12 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   ).toBeTruthy();
   expect(within(englishConversation).getAllByRole("listitem")).toHaveLength(9);
   expect(within(englishConversation).getAllByRole("list")).toHaveLength(1);
-  expect(within(englishConversation).getAllByText("Dohee")).toHaveLength(1);
-  expect(screen.getAllByText("Dohee")).toHaveLength(5);
-  for (const name of ["Seoyeon", "Dohee", "Seoyul"]) {
+  expect(within(englishConversation).getAllByText("Jia")).toHaveLength(1);
+  expect(screen.getAllByText("Jia")).toHaveLength(5);
+  for (const name of ["Subin", "Jia", "Harin"]) {
     expect(screen.getByRole("button", { name: `${name} profile photo` })).toBeTruthy();
   }
-  expect(within(englishConversation).getByText("Dohee loved my photo")).toBeTruthy();
+  expect(within(englishConversation).getByText("Jia loved my photo")).toBeTruthy();
   const music = within(englishConversation).getByRole("link", { name: /Best Part/ });
   expect(music.getAttribute("href")).toBe("https://open.spotify.com/track/1RMJOxR6GRPsBHL8qeC2ux");
   expect(music.getAttribute("target")).toBe("_blank");
@@ -83,8 +83,8 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(screen.getByText("実在する人と話すのですか？")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.ja.title)).toBeTruthy();
   expect(document.documentElement.lang).toBe("ja");
-  expect(screen.getAllByText("ドヒ")).toHaveLength(5);
-  for (const name of ["ソヨン", "ドヒ", "ソユル"]) {
+  expect(screen.getAllByText("ジア")).toHaveLength(5);
+  for (const name of ["スビン", "ジア", "ハリン"]) {
     expect(screen.getByRole("button", { name: `${name} プロフィール写真` })).toBeTruthy();
   }
   expect(document.title).toBe("Ren AI — 日常に、待ち遠しいメッセージを");
@@ -108,7 +108,7 @@ test("landing starts in anime and changes every image together while retaining t
   expect(document.querySelector(".conversation-photo img")?.getAttribute("src")).toBe(
     "/landing/dohee-daily-anime.webp",
   );
-  fireEvent.click(screen.getByRole("button", { name: "강서율 프로필" }));
+  fireEvent.click(screen.getByRole("button", { name: "강하린 프로필" }));
   await selectImageStyle("실사");
   expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
     "/landing/seoyul.webp",
@@ -129,7 +129,7 @@ test("landing starts in anime and changes every image together while retaining t
     "/landing/dohee-daily.webp",
   );
   await selectImageStyle("애니메");
-  expect(screen.getByRole("button", { name: "강서율 프로필" }).getAttribute("aria-pressed")).toBe(
+  expect(screen.getByRole("button", { name: "강하린 프로필" }).getAttribute("aria-pressed")).toBe(
     "true",
   );
   expect(document.querySelector(".conversation-contact img")?.getAttribute("src")).toBe(
@@ -151,8 +151,8 @@ test("landing starts in anime and changes every image together while retaining t
 test("portrait selection changes the featured scene without leaving the page or losing it on locale changes", () => {
   const profiles = vi.fn<DiscoveryClient["profiles"]>();
   render(<Site client={{ profiles, join: vi.fn<DiscoveryClient["join"]>() }} />);
-  const selected = screen.getByRole("button", { name: "백도희 프로필" });
-  const next = screen.getByRole("button", { name: "강서율 프로필" });
+  const selected = screen.getByRole("button", { name: "백지아 프로필" });
+  const next = screen.getByRole("button", { name: "강하린 프로필" });
   expect(selected.getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(next);
   expect(selected.getAttribute("aria-pressed")).toBe("false");
@@ -162,11 +162,11 @@ test("portrait selection changes the featured scene without leaving the page or 
   );
   selectLanguage("화면 언어", "English");
   expect(
-    screen.getByRole("button", { name: "Seoyul profile photo" }).getAttribute("aria-pressed"),
+    screen.getByRole("button", { name: "Harin profile photo" }).getAttribute("aria-pressed"),
   ).toBe("true");
   selectLanguage("Display language", "日本語");
   expect(
-    screen.getByRole("button", { name: "ソユル プロフィール写真" }).getAttribute("aria-pressed"),
+    screen.getByRole("button", { name: "ハリン プロフィール写真" }).getAttribute("aria-pressed"),
   ).toBe("true");
   expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
     "/landing/seoyul-anime.webp",

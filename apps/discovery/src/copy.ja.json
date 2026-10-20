@@ -2,7 +2,7 @@
   "home": {
     "menu": "メニューの開閉",
     "personaLabel": "AIペルソナ",
-    "personaNames": { "seoyeon": "ソヨン", "dohee": "ドヒ", "seoyul": "ソユル" },
+    "personaNames": { "seoyeon": "スビン", "dohee": "ジア", "seoyul": "ハリン" },
     "profileNote": "それぞれの好み。それぞれの物語。",
     "navigation": "サービス紹介メニュー",
     "about": "Ren AIとは",
@@ -19,9 +19,9 @@
     "waiting": "現在、ウェイトリスト登録を受け付けています。選ばれると、最初の挨拶が届きます。",
     "example": "ある夜のやりとり",
     "exampleLabel": "サービスを紹介する架空の会話例",
-    "dailyPhoto": "明るく笑うドヒの日常写真",
+    "dailyPhoto": "明るく笑うジアの日常写真",
     "cafePhoto": "自分が送ったカフェのラテの写真",
-    "heartReaction": "ドヒが写真にハートでリアクションしました",
+    "heartReaction": "ジアが写真にハートでリアクションしました",
     "openMusic": "Spotifyで聴く（新しいタブ）",
     "exchanges": [
       {
@@ -62,7 +62,7 @@
     "channelNote": "iPhoneにすでにあるメッセージアプリ",
     "notificationLabel": "iMessageに届くペルソナの最初の挨拶の例",
     "notificationNow": "今",
-    "greeting": "こんにちは、ドヒだよ。今日はどんな一日だった？",
+    "greeting": "こんにちは、ジアだよ。今日はどんな一日だった？",
     "exclusiveEyebrow": "ひとりだけと紡ぐ物語",
     "exclusiveTitle": "",
     "exclusiveAccent": "あなた",
@@ -72,7 +72,7 @@
     "exclusiveExample": "ペルソナの専属のつながりの例",
     "exclusiveRecipient": "唯一の会話相手",
     "exclusiveYou": "あなた",
-    "exclusivePhoto": "窓辺でメッセージを読みながら微笑むドヒ",
+    "exclusivePhoto": "窓辺でメッセージを読みながら微笑むジア",
     "steps": [
       {
         "title": "見てみる",

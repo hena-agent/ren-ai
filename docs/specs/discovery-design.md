@@ -24,7 +24,7 @@ messages inside the demo, not the brand palette. Keep the example caption at 14p
 and preserve the original accessible message order without live announcements.
 Asset provenance lives in `apps/discovery/design/README.md`.
 
-Feature 백도희 in the center hero panel and conversation. Keep one continuous
+Feature 백지아 in the center hero panel and conversation. Keep one continuous
 conversation with a single contact header and photograph: her everyday photo and
 message, the visitor's café photo with her heart Tapback and reply, then a real
 Spotify song link. Each photo, message and reply appears individually at its own
@@ -32,7 +32,7 @@ scroll threshold, expanding into the bottom of the thread and pushing earlier
 messages upward. Future messages occupy no space before their arrival. The heart
 reaction arrives after the visitor's photo. Scroll reverses these arrivals;
 do not split these exchanges into separate sections, numbered cases or resets. Keep the
-café photo independent of image style; Dohee's photos and avatars follow it.
+café photo independent of image style; Jia's photos and avatars follow it.
 Use readable native music-card text, an explicit external link and no autoplay.
 Use SVG icons for UI arrows, music, reactions and disclosure controls rather than
 text glyphs standing in for icons.
@@ -79,7 +79,9 @@ Treat featured profiles as editorial
 selections; keep public persona writing in
 its original language. The landing remains independent of a live Catalog request.
 Featured landing names follow the screen language: Korean full names, English
-given names (Seoyeon, Dohee, Seoyul), and Japanese given names (ソヨン, ドヒ, ソユル).
+given names (Subin, Jia, Harin), and Japanese given names (スビン, ジア, ハリン).
+Use 한수빈, 백지아 and 강하린 as the Korean full names. These editorial names are
+independent of live Catalog names; asset keys retain their source identifiers.
 Apply these names to portrait selectors and accessible labels, conversation
 headers, notification examples, the relationship diagram and closing greeting.
 Keep photo/persona selection stable across locale changes. Actual Catalog names
