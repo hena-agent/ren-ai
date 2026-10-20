@@ -20,8 +20,11 @@ export function ProfileLanguages({
       <ul>
         {(compact ? entries.slice(0, 2) : entries).map(([code, level]) => (
           <li key={code}>
-            {names.of(code)} · {languages.native?.includes(code) ? copy.native : copy[level]}
-            {!compact && languages.primary === code && ` · ${copy.primary}`}
+            <strong>{names.of(code)}</strong>
+            <span className="profile-language-level">
+              {languages.native?.includes(code) ? copy.native : copy[level]}
+              {!compact && languages.primary === code && ` · ${copy.primary}`}
+            </span>
           </li>
         ))}
       </ul>

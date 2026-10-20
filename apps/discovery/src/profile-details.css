@@ -103,6 +103,21 @@
   background: var(--canvas);
   border-radius: 16px;
 }
+.profile-languages li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.profile-languages strong {
+  font-weight: 600;
+}
+.profile-language-level {
+  color: var(--muted);
+}
+.profile-caption .profile-language-level {
+  color: rgb(255 255 255 / 85%);
+}
 .profile-facts {
   margin: 0;
   display: grid;
