@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { useCopy, LocalePicker } from "./locale.tsx";
-import { Attribution } from "./attribution.tsx";
 
 export type BrowseView = "browse" | "liked" | "contact";
 
@@ -65,7 +64,6 @@ export function LikedPanel({
         </div>
       )}
       <p className="sidebar-note">{copy.joinIntro}</p>
-      <Attribution />
     </aside>
   );
 }

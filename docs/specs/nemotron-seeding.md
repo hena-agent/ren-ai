@@ -103,9 +103,8 @@ and model overrides change totals. A run must be bounded, with no unbounded retr
 
 ## Attribution
 
-Discovery credits NVIDIA and links the source and CC BY 4.0, marking adaptation.
-Show localized credit in the landing footer and explorer Likes panel, including
-mobile. Public persona writing remains self-presentation without source metadata.
+Keep source attribution in a GitHub comment only; Discovery does not display it.
+Public persona writing remains self-presentation without source metadata.
 
 ## Approved test boundaries
 
@@ -113,7 +112,6 @@ mobile. Public persona writing remains self-presentation without source metadata
 - Authenticated Admin upload/confirm/progress/review/publish requests.
 - Real durable queue/storage recovery with scripted Gemini responses, including
   repeated submissions, actor replacement, partial failure and bounded idle work.
-- Discovery attribution rendering.
 
 ## Sources
 
