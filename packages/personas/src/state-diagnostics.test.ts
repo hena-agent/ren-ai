@@ -100,7 +100,9 @@ test("missing and mismatched trait values point to the actual trait or the inser
   expect(issue.start).toBeGreaterThan(missing.indexOf("traits:"));
   const missingTrait = source.replace(/traits:[\s\S]*?---/, "traits: {}\n---");
   expect(stateStatus(missingTrait, persona).issues[0]?.message).toContain("강도 80");
-  expect(stateStatus(source, "불완전한 Persona").issues[0]?.message).toContain("Persona 형식");
+  expect(stateStatus(source, "불완전한 Persona").issues[0]?.message).toContain(
+    "Persona 문서의 형식",
+  );
   const emptyKey = source.replace("도움 요청 회피:", '" ":');
   expect(stateStatus(emptyKey, persona).state).toBe("invalid");
   const alias = source

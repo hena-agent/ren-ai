@@ -1,10 +1,36 @@
-import { Schema } from "effect";
+import { Schema, SchemaGetter } from "effect";
 import { splitPersonaMarkdown } from "./profile.ts";
 
-export const LanguageCode = Schema.String.check(Schema.isPattern(/^[a-z]{2,3}(?:-[A-Z]{2})?$/));
+const LanguageTag = Schema.String.check(Schema.isPattern(/^[a-z]{2,3}(?:-[A-Z]{2})?$/));
+const BaseLanguage = Schema.String.check(Schema.isPattern(/^[a-z]{2,3}$/));
+const baseLanguage = (code: string) => code.split("-")[0]!;
+export const LanguageCode = LanguageTag.pipe(
+  Schema.decodeTo(BaseLanguage, {
+    decode: SchemaGetter.transform(baseLanguage),
+    encode: SchemaGetter.passthrough(),
+  }),
+);
 export const Proficiency = Schema.Literals(["beginner", "conversational", "proficient", "fluent"]);
-export const LanguageProficiency = Schema.Record(Schema.String, Proficiency).check(
-  Schema.makeFilter((value) => Object.keys(value).every(Schema.is(LanguageCode))),
+const Levels = Schema.Record(Schema.String, Proficiency);
+function consistentLevels(levels: typeof Levels.Type) {
+  const seen = new Map<string, typeof Proficiency.Type>();
+  for (const [tag, value] of Object.entries(levels)) {
+    const code = baseLanguage(tag);
+    if (seen.has(code) && seen.get(code) !== value) return false;
+    seen.set(code, value);
+  }
+  return true;
+}
+export const LanguageProficiency = Levels.check(
+  Schema.makeFilter((value) => Object.keys(value).every(Schema.is(LanguageTag))),
+  Schema.makeFilter(consistentLevels),
+).pipe(
+  Schema.decodeTo(Schema.Record(BaseLanguage, Proficiency), {
+    decode: SchemaGetter.transform((value) =>
+      Object.fromEntries(Object.entries(value).map(([code, level]) => [baseLanguage(code), level])),
+    ),
+    encode: SchemaGetter.passthrough(),
+  }),
 );
 export const LanguageBackground = Schema.Struct({
   primary: LanguageCode,

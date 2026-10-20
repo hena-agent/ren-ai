@@ -45,7 +45,7 @@ function fieldMessage(path: readonly PropertyKey[]) {
   if (field === "persistence") return "persistence: lasting이어야 합니다.";
   if (field === "traits") return "traits: 특성 이름을 key로 가진 객체가 필요합니다.";
   if (path.includes("languageProficiency"))
-    return "languageProficiency: 언어 코드별 beginner · conversational · proficient · fluent 중 하나를 작성해 주세요.";
+    return "languageProficiency: 언어 코드별 beginner · conversational · proficient · fluent 중 하나를 작성해 주세요. 지역 태그는 같은 언어로 처리하며 같은 언어의 실력이 충돌하면 안 됩니다.";
   if (path.length === 0)
     return "State는 컨디션 5개·초기 호감도 affection·traits를 포함한 YAML 객체여야 합니다.";
   return `${path.map(String).join(".")}: 필수 항목 또는 허용된 필드인지 확인해 주세요.`;
@@ -54,12 +54,19 @@ function fieldMessage(path: readonly PropertyKey[]) {
 function languageIssue(state: typeof InitialState.Type, source: string) {
   const background = languageBackground(source);
   const levels = state.languageProficiency;
-  if (
-    levels &&
-    background &&
-    (!levels[background.primary] || background.native.some((code) => levels[code] !== "fluent"))
-  )
-    return "주 사용 언어의 실력이 필요하며, 모국어 실력은 fluent여야 합니다.";
+  if (levels && background) {
+    if (!levels[background.primary])
+      return {
+        code: background.primary,
+        message: `주 사용 언어 ${background.primary}의 실력이 없습니다. languageProficiency에 추가해 주세요.`,
+      };
+    const native = background.native.find((code) => levels[code] !== "fluent");
+    if (native)
+      return {
+        code: native,
+        message: `모국어 ${native}의 실력이 ${levels[native] ?? "미설정"}입니다. 모국어는 fluent여야 합니다. Persona의 모국어 설정도 확인해 주세요.`,
+      };
+  }
   return undefined;
 }
 
@@ -113,14 +120,22 @@ function stateIssues(source: string, personaSource?: string) {
         document.contents,
         ["traits"],
         offset,
-        "특성을 비교하려면 Persona 형식을 먼저 정리해 주세요.",
+        "State를 비교하려면 Persona 문서의 형식·언어 배경을 먼저 정리해 주세요.",
       ),
     ];
   }
   const issues: ReturnType<typeof issueAt>[] = [];
   const language = languageIssue(state, personaSource);
   if (language)
-    issues.push(location(source, document.contents, ["languageProficiency"], offset, language));
+    issues.push(
+      location(
+        source,
+        document.contents,
+        ["languageProficiency", language.code],
+        offset,
+        language.message,
+      ),
+    );
   for (const trait of hidden) {
     if (state.traits[trait.name]?.strength !== trait.strength)
       issues.push(

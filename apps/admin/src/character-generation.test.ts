@@ -107,7 +107,15 @@ test("structured character fields are rendered by code instead of asking the mod
         JSON.stringify({
           persona: { ...sheet, languageBackground: { primary: "en", native: ["en"] } },
           publicProfile,
-          state: { mood: 55, energy: 60, stress: 35, connection: 55, solitude: 60, affection: 18 },
+          state: {
+            mood: 55,
+            energy: 60,
+            stress: 35,
+            connection: 55,
+            solitude: 60,
+            affection: 18,
+            languageProficiency: { en: "fluent" },
+          },
           memory: "# 현재 생활\n\n- 사진전을 준비 중이다.\n",
         }),
       ),
