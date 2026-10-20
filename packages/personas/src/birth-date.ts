@@ -25,7 +25,8 @@ export function birthDateOf(source: string) {
   const next = headings.find((heading) => heading.depth <= 2 && heading.start > identity.start);
   const match = privateMarkdown
     .slice(identity.end, next?.start)
-    .match(/^\n+이름: [^\n]+\n성별: (?:여성|남성)\n생년월일: ([^\n]+)(?:\n|$)/);
+    .replace(/[ \t]+\n/g, "\n")
+    .match(/^\s*이름: *[^\n]+\n\s*성별: *(?:여성|남성)\n\s*생년월일: *([^\n]+?)[ \t]*(?:\n|$)/);
   return match && Schema.is(BirthDate)(match[1]) ? match[1] : undefined;
 }
 

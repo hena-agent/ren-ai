@@ -52,10 +52,13 @@ const labels = {
 };
 
 export function renderCharacterSheet(sheet: typeof CharacterSheet.Type) {
+  const background =
+    sheet.languageBackground &&
+    Schema.decodeUnknownSync(LanguageBackground)(sheet.languageBackground);
   const sections = [
     [
       "정체성·외형",
-      `이름: ${sheet.name}\n성별: ${sheet.gender === "female" ? "여성" : "남성"}\n생년월일: ${sheet.birthDate}${sheet.languageBackground ? `\n주 사용 언어: ${sheet.languageBackground.primary}\n모국어: ${sheet.languageBackground.native.join(", ")}` : ""}\n\n${sheet.appearance}`,
+      `이름: ${sheet.name}\n성별: ${sheet.gender === "female" ? "여성" : "남성"}\n생년월일: ${sheet.birthDate}${background ? `\n주 사용 언어: ${background.primary}\n모국어: ${background.native.join(", ")}` : ""}\n\n${sheet.appearance}`,
     ],
     ["성장 배경", sheet.background],
     ["생활·목표", sheet.dailyLife],

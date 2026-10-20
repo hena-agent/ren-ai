@@ -106,7 +106,7 @@ test("a draft generation failure preserves the brief idea and the existing chara
   ).toBe(400);
 });
 
-test("the AI draft adapter requests the whole Markdown document and validates it before returning it", async () => {
+test("the AI draft adapter requests structured character fields and validates them before rendering Markdown", async () => {
   const fetcher = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(characterResponse())
@@ -138,16 +138,13 @@ test("the AI draft adapter requests the whole Markdown document and validates it
 });
 
 test("new drafts carry fixed native background separately from operator-reviewable initial proficiency", async () => {
-  const description = character.description.replace(
-    `생년월일: ${sheet.birthDate}`,
-    `생년월일: ${sheet.birthDate}\n주 사용 언어: ko\n모국어: ko`,
-  );
   const fetcher = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(
       modelReply(
         JSON.stringify({
-          persona: description,
+          persona: { ...sheet, languageBackground: { primary: "ko", native: ["ko"] } },
+          publicProfile: "천천히 알아가요.",
           state: { ...scores, languageProficiency: { ko: "fluent", en: "beginner" } },
           memory: "# 현재 생활\n\n영어를 배우고 있다.",
         }),

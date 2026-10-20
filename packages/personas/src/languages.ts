@@ -1,10 +1,36 @@
-import { Schema } from "effect";
+import { Schema, SchemaGetter } from "effect";
 import { splitPersonaMarkdown } from "./profile.ts";
 
-export const LanguageCode = Schema.String.check(Schema.isPattern(/^[a-z]{2,3}(?:-[A-Z]{2})?$/));
+const LanguageTag = Schema.String.check(Schema.isPattern(/^[a-z]{2,3}(?:-[A-Z]{2})?$/));
+const BaseLanguage = Schema.String.check(Schema.isPattern(/^[a-z]{2,3}$/));
+const baseLanguage = (code: string) => code.split("-")[0]!;
+export const LanguageCode = LanguageTag.pipe(
+  Schema.decodeTo(BaseLanguage, {
+    decode: SchemaGetter.transform(baseLanguage),
+    encode: SchemaGetter.passthrough(),
+  }),
+);
 export const Proficiency = Schema.Literals(["beginner", "conversational", "proficient", "fluent"]);
-export const LanguageProficiency = Schema.Record(Schema.String, Proficiency).check(
-  Schema.makeFilter((value) => Object.keys(value).every(Schema.is(LanguageCode))),
+const Levels = Schema.Record(Schema.String, Proficiency);
+function consistentLevels(levels: typeof Levels.Type) {
+  const seen = new Map<string, typeof Proficiency.Type>();
+  for (const [tag, value] of Object.entries(levels)) {
+    const code = baseLanguage(tag);
+    if (seen.has(code) && seen.get(code) !== value) return false;
+    seen.set(code, value);
+  }
+  return true;
+}
+export const LanguageProficiency = Levels.check(
+  Schema.makeFilter((value) => Object.keys(value).every(Schema.is(LanguageTag))),
+  Schema.makeFilter(consistentLevels),
+).pipe(
+  Schema.decodeTo(Schema.Record(BaseLanguage, Proficiency), {
+    decode: SchemaGetter.transform((value) =>
+      Object.fromEntries(Object.entries(value).map(([code, level]) => [baseLanguage(code), level])),
+    ),
+    encode: SchemaGetter.passthrough(),
+  }),
 );
 export const LanguageBackground = Schema.Struct({
   primary: LanguageCode,
@@ -19,8 +45,11 @@ export const PublicLanguages = Schema.Struct({
 /** Fixed language background is part of the private Persona, not mutable State. */
 export function languageBackground(source: string): typeof LanguageBackground.Type | undefined {
   const match =
-    /^## 정체성·외형\n+이름: [^\n]+\n성별: (?:여성|남성)(?:\n생년월일: [^\n]+)?\n주 사용 언어: ([^\n]+)\n모국어: ([^\n]+)\n/m.exec(
-      splitPersonaMarkdown(source).privateMarkdown + "\n",
+    /^## 정체성·외형\n+이름: *[^\n]+\n+성별: *(?:여성|남성)(?:\n+생년월일: *[^\n]+)?\n+주 사용 언어: *([^\n]+)\n+모국어: *([^\n]+)\n/m.exec(
+      splitPersonaMarkdown(source)
+        .privateMarkdown.split("\n")
+        .map((line) => line.trim())
+        .join("\n") + "\n",
     );
   if (!match) return undefined;
   return Schema.decodeUnknownSync(LanguageBackground)({

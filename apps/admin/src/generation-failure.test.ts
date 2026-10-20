@@ -1,5 +1,9 @@
 import { expect, test, vi } from "vitest";
-import { CharacterFormatError, renderCharacterSheet } from "@ren-ai/personas";
+import {
+  CharacterFormatError,
+  parseCharacterDescription,
+  renderCharacterSheet,
+} from "@ren-ai/personas";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import {
   fixture,
@@ -40,12 +44,12 @@ test("image failure responses explain Google's location rejection and preserve c
   ).toBeUndefined();
 });
 
-test("conversion reports the rejected section and rule without leaking generated content", async () => {
+test("conversion rejects invalid structured fields without leaking generated content", async () => {
   const secret = "private generated invalid sample";
-  const output = withPublicProfile(
-    renderCharacterSheet({ ...sheet, samples: [secret] }),
-    "안녕하세요.",
-  );
+  const output = JSON.stringify({
+    persona: { ...sheet, samples: [secret] },
+    publicProfile: "안녕하세요.",
+  });
   const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(modelReply(output));
   const { admin, store, logs } = await fixture(
     createProfileGenerator({ key: "private-key", fetcher }),
@@ -74,7 +78,7 @@ test("conversion reports the rejected section and rule without leaking generated
   );
   expect(response.status).toBe(503);
   const page = await response.text();
-  expect(page).toContain("‘문자 예시’ 영역의 형식이 올바르지 않아");
+  expect(page).toContain("AI가 생성한 캐릭터 문서의 형식이 올바르지 않아");
   expect(page).not.toContain("생성 API 설정이나 저장소 상태를 확인");
   expect(page).toContain(response.headers.get("X-Request-ID"));
   expect(preview(page).prompt).toBe(before.prompt);
@@ -86,9 +90,7 @@ test("conversion reports the rejected section and rule without leaking generated
     requestId: response.headers.get("X-Request-ID"),
     stage: "character.draft",
     code: "invalid_character",
-    causeCode: "invalid_description",
-    validationSection: "문자 예시",
-    validationRule: "sample_count",
+    causeName: "SchemaError",
   });
   for (const value of [secret, output, token, "private-key", confirmedSource])
     expect(JSON.stringify(logs)).not.toContain(value);
@@ -104,6 +106,27 @@ test("validation diagnostics allowlist locations and rules and retain the origin
   });
   expect(JSON.stringify(error.fields)).not.toContain("private");
   expect(characterValidationFields(new Error("private"))).toEqual({});
+});
+
+test.each([
+  ["성별: 여성", "성별: 잘못된 값", "identity_format"],
+  [sheet.birthDate, "1998-02-30", "birth_date"],
+  [
+    "생년월일: " + sheet.birthDate,
+    "생년월일: " + sheet.birthDate + "\n주 사용 언어: English\n모국어: en",
+    "language_background",
+  ],
+])("identity diagnostics retain a safe rule for %s", (before, after, rule) => {
+  let cause = new Error("Expected character validation to fail");
+  try {
+    parseCharacterDescription(renderCharacterSheet(sheet).replace(before, after));
+  } catch (error) {
+    if (error instanceof Error) cause = error;
+  }
+  expect(characterValidationFields(cause)).toEqual({
+    validationSection: "정체성·외형",
+    validationRule: rule,
+  });
 });
 
 test.each([

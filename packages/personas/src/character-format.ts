@@ -56,14 +56,19 @@ function checked<T>(section: string, detail: string, read: () => T, excerpt = ""
 }
 
 function readIdentity(section: string, source: string) {
+  const joined = section
+    .split("\n")
+    .find((line) => /^(?:주 사용 언어:.*모국어:|모국어:.*주 사용 언어:)/.test(line));
+  if (joined)
+    throw invalid("정체성·외형", "주 사용 언어와 모국어를 별도 줄에 작성해 주세요.", joined);
   const identity =
-    /^이름: ([^\n]+)\n성별: (여성|남성)\n생년월일: ([^\n]+)(?:\n주 사용 언어: [^\n]+\n모국어: [^\n]+)?\n\n([\s\S]+)$/.exec(
+    /^이름: *([^\n]+)\n+성별: *(여성|남성)\n+생년월일: *([^\n]+)(?:\n+주 사용 언어: *[^\n]+\n+모국어: *[^\n]+)?\n+([\s\S]+)$/.exec(
       section,
     );
-  if (!identity)
+  if (!identity || /^(?:이름|성별|생년월일|주 사용 언어|모국어):/.test(identity[4]!.trim()))
     throw invalid(
       "정체성·외형",
-      "이름: … / 성별: 여성 또는 남성 / 생년월일: YYYY-MM-DD 뒤에 빈 줄과 외형 설명이 필요합니다.",
+      "이름: … / 성별: 여성 또는 남성 / 생년월일: YYYY-MM-DD와 외형 설명이 필요합니다.",
     );
   const birthDate = checked(
     "정체성·외형",
@@ -77,16 +82,19 @@ function readIdentity(section: string, source: string) {
     () => languageBackground(source),
   );
   return {
-    name: identity[1],
+    name: identity[1]!.trim(),
     gender: identity[2] === "여성" ? "female" : "male",
     birthDate,
-    appearance: identity[4],
+    appearance: identity[4]!.trim(),
     ...(background && { languageBackground: background }),
   };
 }
 
 export function parseCharacterDescription(source: string) {
-  source = splitPersonaMarkdown(source).privateMarkdown;
+  source = splitPersonaMarkdown(source)
+    .privateMarkdown.split("\n")
+    .map((line) => line.trim())
+    .join("\n");
   const parts = source
     .replace(/\r\n/g, "\n")
     .trim()
@@ -109,7 +117,7 @@ export function parseCharacterDescription(source: string) {
       .split(/^- /m)
       .filter(Boolean)
       .map((row) => {
-        const match = /^([^:]+): (\d+) — ([\s\S]+)$/.exec(row.trim());
+        const match = /^([^:]+): *(\d+) *— *([\s\S]+)$/.exec(row.trim());
         if (!match)
           throw invalid(
             "기본 성향 (0–100, 고정)",
@@ -147,7 +155,7 @@ export function parseCharacterDescription(source: string) {
           .filter(Boolean)
           .map((row) => {
             const match =
-              /^([^\n]+)\n강도: (\d+)\n\n나타나는 상황: ([\s\S]+?)\n\n이유: ([\s\S]+)$/.exec(
+              /^([^\n]+)\n+강도: *(\d+)\n+나타나는 상황: *([\s\S]+?)\n+이유: *([\s\S]+)$/.exec(
                 row.trim(),
               );
             if (!match)
@@ -162,7 +170,7 @@ export function parseCharacterDescription(source: string) {
               reason: match[4],
             };
           });
-  const samples = section("문자 예시").split("\n");
+  const samples = section("문자 예시").split("\n").filter(Boolean);
   if (!samples.every((line) => line.startsWith("- ")))
     throw invalid("문자 예시", "문자 예시를 “- 짧은 문자” 목록으로 작성해 주세요.");
   checked("문자 예시", "문자 예시는 2–3개의 짧은 한 줄이어야 합니다.", () =>

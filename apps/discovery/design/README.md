@@ -25,13 +25,16 @@ an equally sized visitor circle through two thin line segments and an SVG heart.
 The lines stop before the heart, with no masked-background workaround. The
 section has no profile card or table rows; its invitation says a persona curious
 about the visitor will say hello first. Notification examples use the iMessage
-symbol rather than another copy of Dohee's portrait.
+symbol rather than another copy of Jia's portrait.
 `preview-exclusive-desktop.webp` and `preview-exclusive-mobile.webp` show the
 new, section-specific artwork in the simple persona–heart–visitor diagram and
 the warmer first-contact invitation. These are review snapshots, not runtime assets.
 
 The portraits are static editorial selections from Ren AI's Catalog,
 exported on 2026-10-18–19. They do not depend on the local authoring service at runtime.
+Landing display names are independent editorial names: 한수빈 (Subin / スビン),
+백지아 (Jia / ジア) and 강하린 (Harin / ハリン). The source asset keys below
+remain unchanged to preserve provenance.
 Refresh or remove these selections when the represented persona is withdrawn:
 
 | Asset                      | Persona ID                           | Published source image ID            |
@@ -49,7 +52,7 @@ Refresh or remove these selections when the represented persona is withdrawn:
 
 Anime is the first-visit default. `landing-images.ts` selects the matching
 editorial assets; decode the target set before capturing the top-left style
-reveal. Dohee's photo-style daily image was generated once through Admin's confirmed
+reveal. Jia's photo-style daily image was generated once through Admin's confirmed
 one-photo workflow on 2026-10-19, using her existing main portrait as reference and
 the operator-approved bright everyday selfie direction. Other portraits reuse
 existing Catalog images except the two `dohee-exclusive` assets, generated once
@@ -59,7 +62,7 @@ message-reading scene. Existing photos and published persona data are preserved.
 The exclusivity exports are 336px square face crops for the 88–112px circular
 nodes, downsampled before export rather than enlarged with CSS transforms.
 
-One continuous scroll-driven conversation shows Dohee sharing a daily photo,
+One continuous scroll-driven conversation shows Jia sharing a daily photo,
 reacting with a heart to the visitor's café photo, and sharing a Spotify link.
 Each message expands into view separately, pushing the preceding messages upward
 beneath one contact header; future messages have zero height. The heart arrives

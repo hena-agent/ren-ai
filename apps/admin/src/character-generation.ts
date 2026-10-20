@@ -1,8 +1,13 @@
 import { Schema } from "effect";
 import type { JsonSchema } from "effect";
-import { parseCharacterDescription } from "@ren-ai/personas";
+import {
+  CharacterSheet,
+  parseCharacterDescription,
+  renderCharacterSheet,
+  stateStatus,
+} from "@ren-ai/personas";
 import { birthDateOf } from "@ren-ai/personas/birth-date";
-import { requirePublicProfile } from "@ren-ai/personas/profile";
+import { requirePublicProfile, withPublicProfile } from "@ren-ai/personas/profile";
 import policy from "./character-policy.json";
 import profilePolicy from "./policy.json";
 import { GenerationError, operation, protect, validationFailure } from "./logging.ts";
@@ -16,6 +21,10 @@ const Review = Schema.Struct({
   additions: Schema.Array(Schema.String.check(Schema.isPattern(/\S/))).check(
     Schema.isMaxLength(20),
   ),
+});
+const ConvertedPersona = Schema.Struct({
+  persona: CharacterSheet,
+  publicProfile: GeneratedPersona.fields.publicProfile,
 });
 type Request = (
   prompt: string,
@@ -33,29 +42,36 @@ async function author(
   protect(seed, instructions);
   const original = `${seed}${gender ? `\nSELECTED GENDER: ${gender}` : ""}${name ? `\nSAVED NAME: ${name}\nIMPROVEMENT REQUEST:\n${instructions}` : ""}`;
   const originalBirthDate = name ? birthDateOf(seed) : undefined;
-  const reference = policy.reference.replace(
-    "{{CURRENT_DATE_UTC}}",
-    new Date().toISOString().slice(0, 10),
-  );
+  const reference =
+    policy.reference.replace("{{CURRENT_DATE_UTC}}", new Date().toISOString().slice(0, 10)) +
+    `\n\n${languageDirection}`;
   let diagnostic: LogFields = {};
   const create = (repair?: { document: string; issues: readonly string[] }) =>
     operation(repair ? "character.repair" : "character.draft", {}, async () => {
       const response = await request(
-        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n\n${initialPolicy.generate}\n\n${initialPolicy.affection}\n\n${languageDirection}\n\npersona는 완성된 Persona Markdown, state는 컨디션 5개와 초기 호감도 affection 및 languageProficiency, memory는 초기 생활 기억인 JSON 객체를 한 요청에서 작성해. Persona 본문에는 상태·기억을 넣지 마. 보정도 이 JSON 객체 전체를 반환해.`}`,
+        `${repair ? policy.repair : name ? policy.convert : policy.generate}\n\n${reference}\n\n${profileWriting}\n\n${profilePolicy.genderDirection}${name ? "" : `\n\n${initialPolicy.generate}\n\n${initialPolicy.affection}\n\npersona는 스키마의 인물 설정 객체, publicProfile은 공개 자기소개 Markdown, state는 컨디션 5개와 초기 호감도 affection 및 languageProficiency, memory는 초기 생활 기억이다. persona에는 상태·기억을 넣지 마. 보정도 이 JSON 객체 전체를 반환해.`}`,
         repair
           ? `${original}\n\nDOCUMENT:\n${repair.document}\n\nISSUES:\n${JSON.stringify(repair.issues)}`
           : original,
-        name ? undefined : Schema.toJsonSchemaDocument(GeneratedPersona).schema,
+        Schema.toJsonSchemaDocument(name ? ConvertedPersona : GeneratedPersona).schema,
       );
       diagnostic = response.fields;
       protect(response.text);
       try {
-        const packet = name
+        const initialPacket = name
           ? undefined
           : Schema.decodeUnknownSync(GeneratedPersona)(JSON.parse(response.text), {
               onExcessProperty: "error",
             });
-        const description = packet?.persona ?? response.text;
+        const packet =
+          initialPacket ??
+          Schema.decodeUnknownSync(ConvertedPersona)(JSON.parse(response.text), {
+            onExcessProperty: "error",
+          });
+        const description = withPublicProfile(
+          renderCharacterSheet(packet.persona),
+          packet.publicProfile,
+        );
         const parts = requirePublicProfile(description);
         const sheet = parseCharacterDescription(parts.privateMarkdown);
         const { base, hidden, samples, languageBackground: background, ...text } = sheet;
@@ -84,9 +100,9 @@ async function author(
         return {
           name: sheet.name,
           description: description.trim(),
-          ...(packet && {
-            initial: generatedInitial(description, packet.state, packet.memory),
-            reviewDocument: JSON.stringify(packet),
+          ...(initialPacket && {
+            initial: generatedInitial(description, initialPacket.state, initialPacket.memory),
+            reviewDocument: JSON.stringify(initialPacket),
           }),
         };
       } catch (cause) {
@@ -121,14 +137,22 @@ async function author(
         );
       }
     });
+  const inspect = async (result: Awaited<ReturnType<typeof create>>) => {
+    const inspected = await review(result.reviewDocument ?? result.description);
+    const issues = result.initial
+      ? stateStatus(result.initial.state, result.description).issues.map((issue) => issue.message)
+      : [];
+    protect(...issues);
+    return { ...inspected, issues: [...inspected.issues, ...issues] };
+  };
   let result = await create();
-  let inspected = await review(result.reviewDocument ?? result.description);
+  let inspected = await inspect(result);
   if (inspected.issues.length) {
     result = await create({
       document: result.reviewDocument ?? result.description,
       issues: inspected.issues,
     });
-    inspected = await review(result.reviewDocument ?? result.description);
+    inspected = await inspect(result);
     if (inspected.issues.length)
       throw new GenerationError("Character review failed after repair", {
         ...diagnostic,
