@@ -3,7 +3,13 @@ import { rpcClient } from "@ren-ai/transport/client";
 import { messagingApi, tapback as tapbackSchema } from "./protocol.ts";
 import type { IncomingMessage } from "../messages/messages.ts";
 
-const failure = (error: string | Error) => new Error(String(error));
+const failure = (error: string | Error): Error & { requestId?: string } => {
+  const result = new Error(String(error));
+  const requestId = /request ([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/.exec(
+    result.message,
+  )?.[1];
+  return Object.assign(result, requestId ? { requestId } : {});
+};
 // Older Macs report unknown RPC tags as defects; expose an ordinary failure, never a send fallback.
 const unavailable = (operation: string) =>
   Effect.catchDefect((cause) => Effect.fail(new Error(`${operation} RPC unavailable`, { cause })));
@@ -17,6 +23,8 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
     const probe = () => client.probe().pipe(Effect.mapError(failure));
     return {
       probe,
+      availability: (handle: string) =>
+        client.availability({ handle }).pipe(unavailable("Availability"), Effect.mapError(failure)),
       notify: (handle: string, text: string) =>
         client.notify({ handle, text }).pipe(notificationFailure, Effect.mapError(failure)),
       notificationStatus: (guid: string) =>

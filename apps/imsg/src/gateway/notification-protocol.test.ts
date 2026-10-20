@@ -49,6 +49,9 @@ test("an older Mac rejects notify rather than sending from the Persona handle", 
           "Notification RPC unavailable",
         );
         expect(f.local.bubbles).toEqual([]);
+        expect((yield* remote.availability("+821012345678").pipe(Effect.flip)).message).toContain(
+          "Availability RPC unavailable",
+        );
         const attemptID = crypto.randomUUID();
         for (const effect of [
           remote.sendText("user@example.test", "private", attemptID).pipe(Effect.asVoid),

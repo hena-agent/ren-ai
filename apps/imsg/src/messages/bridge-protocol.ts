@@ -44,6 +44,7 @@ const bridgeMessage = Schema.Union([
 export type BridgeMessage = typeof bridgeMessage.Type;
 
 const result = Schema.Union([
+  Schema.Struct({ available: Schema.Boolean }),
   Schema.Struct({ handles: Schema.Array(Schema.String) }),
   Schema.Struct({ status: Schema.Literal("sent") }),
   Schema.Struct({ status: Schema.Literal("failed"), code: Schema.String }),

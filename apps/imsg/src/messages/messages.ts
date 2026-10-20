@@ -3,6 +3,10 @@ import type { OutgoingStatus } from "../gateway/protocol.ts";
 
 /** The adapter must force iMessage and must never fall back to SMS. */
 export interface Messages {
+  availability(
+    handle: string,
+    requestId?: string,
+  ): Effect.Effect<{ readonly available: boolean }, Error>;
   image(
     attachment: NonNullable<IncomingMessage["attachments"]>[number],
   ): Effect.Effect<{ readonly uri: string }, Error>;

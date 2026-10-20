@@ -16,6 +16,10 @@ export const messageGateway = (
   notifications: Notifications,
 ) => {
   const handlers = messagingApi.toLayer({
+    availability: ({ handle }) =>
+      messageRequest("recipient.availability", (requestId) =>
+        messages.availability(handle, requestId),
+      ),
     ...notificationHandlers(notifications),
     probe: () =>
       messages.after(0, 1).pipe(Effect.andThen(gestures.probe()), Effect.mapError(String)),

@@ -15,8 +15,16 @@ use tokio::{
     task::JoinSet,
 };
 
+#[path = "rpc_availability.rs"]
+mod availability;
+
 /// The Apple session behind the bridge. An `Err` from `send` means the outcome is uncertain.
 pub trait Native: Send + Sync + 'static {
+    fn availability(
+        &self,
+        from: &str,
+        to: &str,
+    ) -> impl Future<Output = Result<bool, Failure>> + Send;
     fn handles(&self) -> impl Future<Output = Result<Vec<String>, Failure>> + Send;
     fn decode(
         &self,
@@ -157,6 +165,7 @@ async fn call<N: Native>(
 ) -> Result<Value, Failure> {
     let message = match method {
         "handles" => return Ok(json!({"handles": native.handles().await?})),
+        "availability" => return availability::call(native, from, input).await,
         "send" => {
             let p: Text = params(input)?;
             guid(&p.guid)?;
@@ -426,7 +435,7 @@ pub async fn serve<N: Native>(
             let request_id = request.request_id.to_string();
             let started = Instant::now();
             let operation = match request.method.as_str() {
-                "handles" | "send" | "typing" | "read" | "react" => request.method.as_str(),
+                "handles" | "availability" | "send" | "typing" | "read" | "react" => request.method.as_str(),
                 _ => "unknown",
             };
             let result = tokio::time::timeout(
