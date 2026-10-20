@@ -27,11 +27,17 @@ export const ContactEntry = Schema.Struct({
   likedPersonas: Schema.Array(candidate),
   state: ContactState,
   eligible: Schema.Boolean,
-  reason: Schema.Literals(["ready", "blocked", "active", "reserved", "no_persona"]),
+  reason: Schema.Literals(["ready", "blocked", "active", "reserved", "no_persona", "no_imessage"]),
   persona: Schema.NullOr(candidate),
   scheduledAt: Schema.NullOr(Schema.Number),
   requestId: Schema.NullOr(Schema.String),
   testHandle: Schema.optionalKey(Schema.Boolean),
+  imessage: Schema.optionalKey(
+    Schema.Struct({
+      status: Schema.Literals(["available", "unavailable", "failed"]),
+      checkedAt: Schema.Number,
+    }),
+  ),
   notification: Schema.optionalKey(
     Schema.Literals(["queued", "sent", "failed", "uncertain", "skipped"]),
   ),
