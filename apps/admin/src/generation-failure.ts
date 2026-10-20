@@ -11,6 +11,7 @@ const rules = new Map([
   ],
   ["생년월일은 YYYY-MM-DD 형식의 실제 날짜이며 미래일 수 없습니다.", "birth_date"],
   ["주 사용 언어와 모국어에 유효한 언어 코드를 작성해 주세요.", "language_background"],
+  ["주 사용 언어와 모국어를 별도 줄에 작성해 주세요.", "language_background"],
   ["각 Stat을 “- 자율성: 85 — 근거”처럼 정수 0–100과 이유로 작성해 주세요.", "stat_format"],
   ["정의된 기본 성향 6개만 작성해 주세요.", "stat_name"],
   ["Stat은 정수 0–100이며 근거가 필요합니다.", "stat_value"],

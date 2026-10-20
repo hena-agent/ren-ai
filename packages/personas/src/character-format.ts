@@ -56,6 +56,11 @@ function checked<T>(section: string, detail: string, read: () => T, excerpt = ""
 }
 
 function readIdentity(section: string, source: string) {
+  const joined = section
+    .split("\n")
+    .find((line) => /^(?:주 사용 언어:.*모국어:|모국어:.*주 사용 언어:)/.test(line));
+  if (joined)
+    throw invalid("정체성·외형", "주 사용 언어와 모국어를 별도 줄에 작성해 주세요.", joined);
   const identity =
     /^이름: *([^\n]+)\n+성별: *(여성|남성)\n+생년월일: *([^\n]+)(?:\n+주 사용 언어: *[^\n]+\n+모국어: *[^\n]+)?\n+([\s\S]+)$/.exec(
       section,

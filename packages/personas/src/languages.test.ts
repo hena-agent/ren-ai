@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { expect, test } from "vitest";
 import {
   LanguageBackground,
+  LanguageCode,
   LanguageProficiency,
   languageBackground,
   languageSummary,
@@ -12,6 +13,71 @@ import { renderCharacterSheet } from "./character-sheet.ts";
 import { stateStatus } from "./state-diagnostics.ts";
 import { sheet } from "../../../apps/admin/test/sheet.ts";
 import { initialTraits } from "./publication.ts";
+import { documentStatus } from "./document-diagnostics.ts";
+import { withPublicProfile } from "./profile.ts";
+
+test("regional language tags identify one language without inventing or promoting proficiency", () => {
+  expect(Schema.decodeUnknownSync(LanguageCode)("en-US")).toBe("en");
+  expect(Schema.encodeSync(LanguageCode)("en")).toBe("en");
+  expect(Schema.encodeSync(LanguageProficiency)({ en: "fluent" })).toEqual({ en: "fluent" });
+  const regional = { primary: "en-US", native: ["en-US"] };
+  const persona = renderCharacterSheet({ ...sheet, languageBackground: regional });
+  expect(persona).toContain("주 사용 언어: en\n모국어: en\n\n");
+  expect(languageBackground(persona.replace("모국어: en", "모국어: en-US"))).toEqual({
+    primary: "en",
+    native: ["en"],
+  });
+  expect(parseCharacterDescription(persona).languageBackground).toEqual({
+    primary: "en",
+    native: ["en"],
+  });
+  const documents = serializeInitialState({
+    ...state,
+    languageProficiency: { en: "fluent", ko: "fluent", ja: "proficient" },
+  });
+  expect(stateStatus(documents, persona.replace("모국어: en", "모국어: en-US")).state).toBe(
+    "valid",
+  );
+  expect(
+    parseInitialState(documents.replace("  en: fluent", "  en-US: fluent")).languageProficiency,
+  ).toEqual({ en: "fluent", ko: "fluent", ja: "proficient" });
+  expect(
+    Schema.decodeUnknownSync(LanguageProficiency)({ "en-US": "fluent", en: "fluent" }),
+  ).toEqual({ en: "fluent" });
+  expect(() =>
+    Schema.decodeUnknownSync(LanguageProficiency)({ "en-US": "beginner", en: "fluent" }),
+  ).toThrow(/Expected/);
+});
+
+test("joined language fields are a Persona error with the actual bad row selected", () => {
+  const malformed = source.replace(
+    "주 사용 언어: en\n모국어: ko, en",
+    "주 사용 언어: ko모국어: en-US",
+  );
+  const result = documentStatus(withPublicProfile(malformed, "Hello."), sheet.name);
+  expect(result.state).toBe("invalid");
+  expect(result.issues[0]?.message).toContain("별도 줄");
+  expect(result.issues[0]?.line).toBe(6);
+});
+
+test("language diagnostics name the missing or nonfluent native language", () => {
+  const persona = renderCharacterSheet({
+    ...sheet,
+    languageBackground: { primary: "en", native: ["en"] },
+  });
+  const missing = stateStatus(
+    serializeInitialState({ ...state, languageProficiency: { ko: "fluent" } }),
+    persona,
+  );
+  expect(missing.issues[0]?.message).toContain("en");
+  const lowerSource = serializeInitialState({ ...state, languageProficiency: { en: "beginner" } });
+  const lower = stateStatus(lowerSource, persona);
+  expect(lower.issues[0]?.message).toContain("beginner");
+  expect(lower.issues[0]?.message).toContain("모국어 en");
+  expect(lowerSource.slice(lower.issues[0]!.start, lower.issues[0]!.end).trim()).toBe(
+    "en: beginner",
+  );
+});
 
 const background = { primary: "en", native: ["ko", "en"] };
 const source = renderCharacterSheet({ ...sheet, languageBackground: background });
