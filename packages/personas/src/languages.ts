@@ -19,8 +19,11 @@ export const PublicLanguages = Schema.Struct({
 /** Fixed language background is part of the private Persona, not mutable State. */
 export function languageBackground(source: string): typeof LanguageBackground.Type | undefined {
   const match =
-    /^## 정체성·외형\n+이름: [^\n]+\n성별: (?:여성|남성)(?:\n생년월일: [^\n]+)?\n주 사용 언어: ([^\n]+)\n모국어: ([^\n]+)\n/m.exec(
-      splitPersonaMarkdown(source).privateMarkdown + "\n",
+    /^## 정체성·외형\n+이름: *[^\n]+\n+성별: *(?:여성|남성)(?:\n+생년월일: *[^\n]+)?\n+주 사용 언어: *([^\n]+)\n+모국어: *([^\n]+)\n/m.exec(
+      splitPersonaMarkdown(source)
+        .privateMarkdown.split("\n")
+        .map((line) => line.trim())
+        .join("\n") + "\n",
     );
   if (!match) return undefined;
   return Schema.decodeUnknownSync(LanguageBackground)({
