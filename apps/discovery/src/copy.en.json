@@ -2,7 +2,7 @@
   "home": {
     "menu": "Toggle menu",
     "personaLabel": "AI persona",
-    "personaNames": { "seoyeon": "Seoyeon", "dohee": "Dohee", "seoyul": "Seoyul" },
+    "personaNames": { "seoyeon": "Subin", "dohee": "Jia", "seoyul": "Harin" },
     "profileNote": "Different tastes. A story of their own.",
     "navigation": "About the service",
     "about": "About Ren AI",
@@ -19,9 +19,9 @@
     "waiting": "Join the waitlist. If selected, a persona will send the first hello.",
     "example": "One evening, over messages",
     "exampleLabel": "An illustrative, fictional conversation",
-    "dailyPhoto": "Dohee smiling during a break",
+    "dailyPhoto": "Jia smiling during a break",
     "cafePhoto": "The café latte photo I sent",
-    "heartReaction": "Dohee loved my photo",
+    "heartReaction": "Jia loved my photo",
     "openMusic": "Listen on Spotify (new tab)",
     "exchanges": [
       {
@@ -62,7 +62,7 @@
     "channelNote": "The messaging app already on your iPhone",
     "notificationLabel": "An example of a persona's first hello arriving in iMessage",
     "notificationNow": "now",
-    "greeting": "Hey, it's Dohee. How was your day?",
+    "greeting": "Hey, it's Jia. How was your day?",
     "exclusiveEyebrow": "A connection that isn't shared",
     "exclusiveTitle": "Only ",
     "exclusiveAccent": "you",
@@ -72,7 +72,7 @@
     "exclusiveExample": "Illustrative exclusive persona connection",
     "exclusiveRecipient": "Their only conversation partner",
     "exclusiveYou": "You",
-    "exclusivePhoto": "Dohee smiling as she reads a message beside a window",
+    "exclusivePhoto": "Jia smiling as she reads a message beside a window",
     "steps": [
       {
         "title": "Have a look",
