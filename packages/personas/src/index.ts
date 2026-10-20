@@ -5,6 +5,8 @@ export type { Portrait } from "./images.ts";
 export { validatePortrait } from "./images.ts";
 export type { Persona, PersonaRecord } from "./model.ts";
 export type { PersonaStore } from "./store-contract.ts";
+export { personaPage, personaPageSize } from "./listing.ts";
+export type { PersonaQuery, PersonaPage } from "./listing.ts";
 export { IdentitySheets } from "./identity-sheets.ts";
 export { personaImages, withPersonaImages } from "./portraits.ts";
 export type { PersonaImage } from "./portraits.ts";

@@ -50,6 +50,7 @@ test("the rolling service-wide cap skips excess joins permanently and survives d
             (yield* f.join({ handle: `+82101234${String(index).padStart(4, "0")}` })).status,
           ).toBe(200);
         yield* f.tick;
+        yield* (yield* f.reopen()).tick;
         expect(f.notify).toHaveBeenCalledTimes(30);
         expect(
           yield* f.sql`SELECT state, COUNT(*) AS count FROM discovery_notification GROUP BY state ORDER BY state`,

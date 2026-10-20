@@ -292,7 +292,18 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "persona_created_order": {
+          "name": "persona_created_order",
+          "columns": ["createdAt", "id"],
+          "isUnique": false
+        },
+        "persona_updated_order": {
+          "name": "persona_updated_order",
+          "columns": ["updatedAt", "id"],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

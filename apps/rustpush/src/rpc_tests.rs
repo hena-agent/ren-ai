@@ -32,6 +32,11 @@ struct Fake {
 }
 
 impl Native for Fake {
+    async fn availability(&self, _from: &str, to: &str) -> Result<bool, Failure> {
+        self.handles().await?;
+        Ok(to == THEM)
+    }
+
     async fn handles(&self) -> Result<Vec<String>, Failure> {
         if self.offline.load(std::sync::atomic::Ordering::Relaxed) {
             Err(Failure::new("apns", "not_ready"))
@@ -257,6 +262,34 @@ impl Harness {
 }
 
 #[tokio::test]
+async fn availability_looks_up_without_sending_and_preserves_errors() {
+    let mut h = Harness::start(Fake::default(), REDELIVER, |_| {}).await;
+    for (to, available) in [(THEM, true), ("mailto:other@example.com", false)] {
+        assert_eq!(
+            h.call(1, "availability", json!({ "to": to })).await["result"],
+            json!({ "available": available })
+        );
+    }
+    assert_eq!(
+        h.call(2, "availability", json!({"to": "invalid"})).await["error"]["stage"],
+        "input"
+    );
+    assert_eq!(
+        h.call(2, "availability", json!({})).await["error"]["stage"],
+        "input"
+    );
+    h.fake
+        .offline
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(
+        h.call(3, "availability", json!({ "to": THEM })).await["error"]["stage"],
+        "apns"
+    );
+    assert!(h.fake.sent.lock().unwrap().is_empty());
+    h.finish().await;
+}
+
+#[tokio::test]
 async fn requests_send_from_the_service_handle_and_reject_invalid_input() {
     let fake = Fake::default();
     fake.deliveries.lock().unwrap().extend([
@@ -345,7 +378,7 @@ async fn requests_send_from_the_service_handle_and_reject_invalid_input() {
             "unknown_tapback",
         ),
         ("delete", json!({}), "unknown_method"),
-        ("ack", json!({"guid": GUID}), "invalid_params"),
+        ("ack", json!({ "guid": GUID }), "invalid_params"),
     ] {
         assert_eq!(
             code(h.call(8, method, params).await),

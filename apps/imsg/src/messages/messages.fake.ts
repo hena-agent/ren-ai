@@ -13,6 +13,7 @@ export const fakeMessages = (events: string[] = []) => {
   const watchers = new Set<(row: IncomingMessage) => Effect.Effect<void, Error>>();
   const statuses = new Map<string, "sent" | "no_imessage" | "unknown">();
   const messages: Messages = {
+    availability: () => Effect.succeed({ available: true }),
     image: imageData,
     sendText: (handle, text, attemptID) =>
       Effect.gen(function* () {

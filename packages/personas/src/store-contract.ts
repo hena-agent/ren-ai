@@ -4,6 +4,7 @@ import type { createPersonaStore } from "./store.ts";
 export type PersonaStore = Pick<
   Awaited<ReturnType<typeof createPersonaStore>>,
   | "list"
+  | "browse"
   | "get"
   | "source"
   | "initial"

@@ -182,6 +182,15 @@ export const makeRustpushMessages = (options: RustpushOptions, alerts: Alerts) =
         }),
       );
     const messages: Messages = {
+      availability: (handle, requestId) =>
+        bridge.call("availability", { to: uriOf(handle) }, requestId).pipe(
+          Effect.mapError((error) => new Error(error.message, { cause: error })),
+          Effect.flatMap((result) =>
+            "available" in result
+              ? Effect.succeed({ available: result.available })
+              : Effect.fail(new Error("Invalid availability response")),
+          ),
+        ),
       ...historyQueries(history),
       image: imageData,
       sendText: (handle, text, attemptID, requestId) =>

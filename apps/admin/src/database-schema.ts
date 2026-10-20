@@ -7,24 +7,31 @@ import {
   index,
 } from "drizzle-orm/sqlite-core";
 
-export const personas = sqliteTable("personas", {
-  id: text().primaryKey(),
-  name: text().notNull(),
-  gender: text({ enum: ["female", "male"] }),
-  descriptionVersion: integer(),
-  currentVersion: integer().notNull().default(1),
-  timeZone: text().notNull(),
-  language: text().notNull(),
-  openingLine: text().notNull(),
-  memoryInstruction: text().notNull(),
-  published: integer({ mode: "boolean" }).notNull(),
-  state: text().notNull(),
-  memory: text().notNull(),
-  revision: integer().notNull(),
-  commitId: text().notNull(),
-  createdAt: integer().notNull(),
-  updatedAt: integer().notNull(),
-});
+export const personas = sqliteTable(
+  "personas",
+  {
+    id: text().primaryKey(),
+    name: text().notNull(),
+    gender: text({ enum: ["female", "male"] }),
+    descriptionVersion: integer(),
+    currentVersion: integer().notNull().default(1),
+    timeZone: text().notNull(),
+    language: text().notNull(),
+    openingLine: text().notNull(),
+    memoryInstruction: text().notNull(),
+    published: integer({ mode: "boolean" }).notNull(),
+    state: text().notNull(),
+    memory: text().notNull(),
+    revision: integer().notNull(),
+    commitId: text().notNull(),
+    createdAt: integer().notNull(),
+    updatedAt: integer().notNull(),
+  },
+  (table) => [
+    index("persona_created_order").on(table.createdAt, table.id),
+    index("persona_updated_order").on(table.updatedAt, table.id),
+  ],
+);
 
 export const personaVersions = sqliteTable(
   "persona_versions",

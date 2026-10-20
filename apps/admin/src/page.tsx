@@ -9,7 +9,7 @@ import { DocumentEditor } from "./document-editor.tsx";
 import { InspectionResults } from "./inspection-page.tsx";
 import type { InspectionRow } from "./inspection-page.tsx";
 import type { Draft } from "./draft.ts";
-import { Preview } from "./profile-preview.tsx";
+import { PersonaList, type PersonaListing } from "./persona-list.tsx";
 import { ContactPage } from "./contact-page.tsx";
 import type { ContactView } from "./contact-page.tsx";
 import { UploadDialog } from "./upload-controls.tsx";
@@ -220,35 +220,13 @@ function Editor({
 
 export type PageContent =
   | (EditorFields & { record: PersonaRecord; personas?: never })
-  | ({ personas: readonly PersonaRecord[]; record?: never } & {
+  | ({ personas: readonly PersonaRecord[]; record?: never; listing?: PersonaListing } & {
       [Field in keyof EditorFields]?: never;
     });
 
 function heading(view: ContactView | undefined, inspections: readonly InspectionRow[] | undefined) {
   if (view) return view.tab === "waitlist" ? "대기자 관리" : "첫 연락 현황";
   return inspections ? "Persona 형식 검사" : copy.list;
-}
-
-function PersonaList({ personas }: { personas: readonly PersonaRecord[] }) {
-  if (!personas.length)
-    return (
-      <div className="empty">
-        <p>{copy.empty}</p>
-        <a href="/new">{copy.start} →</a>
-      </div>
-    );
-  return (
-    <div className="persona-grid">
-      {personas.map((persona) => (
-        <div key={persona.id}>
-          <a className="card-link" href={`/personas/${persona.id}`}>
-            <Preview persona={persona} />
-            <span className="edit-label">{copy.edit}</span>
-          </a>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function PageNotices({
@@ -362,6 +340,7 @@ export function renderPage({
   versionView,
   conversationView,
   recoveryAvailable,
+  listing,
 }: PageContent & {
   error?: string;
   saved?: boolean;
@@ -371,6 +350,7 @@ export function renderPage({
   versionView?: VersionView;
   conversationView?: ConversationView;
   recoveryAvailable?: boolean;
+  listing?: PersonaListing;
 }) {
   return (
     "<!doctype html>" +
@@ -380,6 +360,7 @@ export function renderPage({
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>{copy.title}</title>
+          <link rel="icon" type="image/svg+xml" href="/brand.svg" />
           <link rel="stylesheet" href="/style.css" />
           <script src="/pending.js" type="module" />
         </head>
@@ -449,7 +430,7 @@ export function renderPage({
                 showIdea={showIdea}
               />
             ) : (
-              <PersonaList personas={personas} />
+              <PersonaList personas={personas} listing={listing} />
             )}
           </main>
         </body>

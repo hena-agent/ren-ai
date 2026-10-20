@@ -79,7 +79,11 @@ The gateway owns bridge stdin/stdout. Requests have `{id, requestId, method, par
 `requestId` is a gateway-generated UUID shared by gateway/native diagnostics and
 returned on errors. Replies
 have the same `id` and either `result` or a sanitized `error`. Methods are `handles`,
-`send`, `typing`, `read`, `react` and `ack`. The only accepted process Service handle
+`availability`, `send`, `typing`, `read`, `react` and `ack`. An `availability` request
+takes `{to}` (`tel:+…` or `mailto:…`) and returns `{available}` by querying iMessage
+IDS keys without sending a message. This is registration reachability, not proof
+of delivery; upstream caches negative results for one hour. Lookup errors remain
+errors, never an unavailable result. The only accepted process Service handle
 is `mailto:hi@renai.im`; it must be registered and is the only sender for gestures. Text `send` requests require
 `{from, guid, to, text}`: `from` must be that Service handle or
 `mailto:noti@renai.im`, and must be registered at request time. Other account

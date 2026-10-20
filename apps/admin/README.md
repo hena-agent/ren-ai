@@ -10,6 +10,20 @@ initial documents and conversation state/memory unchanged.
 New Catalog schemas start empty. Existing saved Markdown and images can be
 explicitly imported into local D1/R2 with the one-off command below.
 
+## Catalog browsing
+
+The authenticated Admin list shows 20 personas per page, newest creation first
+(`createdAt DESC, id DESC`). Operators can also sort oldest first or by latest
+update, search by name or ID (literal partial matches), and combine publication,
+gallery style and configured-language filters. Identity sheets do not count as
+gallery photos. Private descriptions are excluded from search.
+
+Search runs on Enter or the search button. The GET form resets pagination when
+applying conditions; page links preserve those conditions in the URL for reloads,
+back navigation and sharing. Results include a filtered count and previous/next
+navigation. Out-of-range pages show the last available page. D1 applies filtering,
+ordering and pagination before loading documents and the selected personas' photos.
+
 ## Local development
 
 `GET /health` reports service `admin`, the full source revision embedded in the

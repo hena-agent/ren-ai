@@ -222,6 +222,11 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE INDEX send_pending ON send(conversation_id, id)
           WHERE state IN ('recorded', 'uncertain') OR notification_pending = 1`;
       }),
+      "037_imessage_availability": Effect.gen(function* () {
+        yield* sql`ALTER TABLE discovery_registration ADD COLUMN imessage_status TEXT
+          CHECK(imessage_status IN ('available', 'unavailable', 'failed'))`;
+        yield* sql`ALTER TABLE discovery_registration ADD COLUMN imessage_checked_at INTEGER`;
+      }),
     }),
   });
 });

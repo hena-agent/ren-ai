@@ -29,6 +29,13 @@
       "when": 1792485664478,
       "tag": "0003_sparkling_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792488214884,
+      "tag": "0003_blue_galactus",
+      "breakpoints": true
     }
   ]
 }

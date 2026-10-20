@@ -10,12 +10,13 @@ export async function workerFixture() {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
   });
-  const [worker, script, css, editorCss] = await Promise.all([
+  const [worker, script, css, editorCss, icon] = await Promise.all([
     readFile(new URL("../dist/worker/entry.js", import.meta.url), "utf8"),
     readFile(new URL("../public/pending.js", import.meta.url), "utf8"),
     readFile(new URL("../public/style.css", import.meta.url), "utf8"),
     readFile(new URL("../public/editor.css", import.meta.url), "utf8"),
+    readFile(new URL("../public/brand.svg", import.meta.url), "utf8"),
   ]);
-  const assets = `const assets=${JSON.stringify({ "/style.css": css, "/editor.css": editorCss, "/pending.js": script })};export default {fetch(request){return new Response(assets[new URL(request.url).pathname] ?? '',{status:assets[new URL(request.url).pathname] ? 200 : 404})}}`;
+  const assets = `const assets=${JSON.stringify({ "/style.css": css, "/editor.css": editorCss, "/pending.js": script, "/brand.svg": icon })};export default {fetch(request){return new Response(assets[new URL(request.url).pathname] ?? '',{status:assets[new URL(request.url).pathname] ? 200 : 404})}}`;
   return cloudflareFixture(worker, assets);
 }

@@ -20,6 +20,9 @@ export const notificationFixture = Effect.gen(function* () {
     Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ success: true }))),
   );
   type Transport = Effect.Success<ReturnType<typeof remoteMessages>>;
+  const availability = vi.fn<Transport["availability"]>(() =>
+    Effect.succeed({ available: true, requestId: "lookup-request" }),
+  );
   const notify = vi.fn<Transport["notify"]>((_handle, _text) =>
     Effect.succeed({ guid: "notification-guid", requestId: "mac-request" }),
   );
@@ -28,7 +31,9 @@ export const notificationFixture = Effect.gen(function* () {
   );
   const logs: ContactDiagnostic[] = [];
   const reopen = () =>
-    waitlistNotifications({ notify, notificationStatus }, (event) => logs.push(event));
+    waitlistNotifications({ notify, notificationStatus, availability }, (event) =>
+      logs.push(event),
+    );
   const worker = yield* reopen();
   const management = contactManagement(f.store, "management", () => {});
   const join = (overrides: Partial<DiscoveryRequest> = {}) =>
@@ -59,5 +64,15 @@ export const notificationFixture = Effect.gen(function* () {
       )
     ).json(),
   );
-  return { ...f, ...worker, join, snapshot, notify, notificationStatus, reopen, logs };
+  return {
+    ...f,
+    ...worker,
+    join,
+    snapshot,
+    notify,
+    notificationStatus,
+    availability,
+    reopen,
+    logs,
+  };
 });
