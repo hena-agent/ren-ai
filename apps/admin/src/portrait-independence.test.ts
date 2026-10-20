@@ -6,6 +6,7 @@ import {
   generator,
   newToken,
   portraitImage,
+  photoPortrait,
   portraitReply,
   request,
   tokenOf,
@@ -14,6 +15,7 @@ import { createProfileGenerator } from "./generation.ts";
 import { draftTokens } from "./draft.ts";
 import policy from "./policy.json";
 import { parsePersona } from "@ren-ai/personas";
+import { photoVariation } from "./image-generation.ts";
 
 test("both portrait styles receive only their own art direction and the same private character description", async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(portraitReply);
@@ -39,7 +41,7 @@ test("both portrait styles receive only their own art direction and the same pri
   }
 });
 
-test("the two independent main styles run one at a time and both results become a private preview", async () => {
+test("independent photos run one at a time and both results become a private preview", async () => {
   let release: (image: typeof portraitImage) => void =
     vi.fn<(image: typeof portraitImage) => void>();
   const ready = new Promise<typeof portraitImage>((resolve) => {
@@ -50,12 +52,15 @@ test("the two independent main styles run one at a time and both results become 
     .mockImplementationOnce(() => ready)
     .mockResolvedValue(portraitImage);
   const { admin, store, logs } = await fixture({ ...generator, portrait });
+  const token = await newToken(admin);
   const saved = vi.spyOn(store, "saveImage");
   const pending = admin(
-    request("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),
+    request("/personas", { ...character, draft: token, intent: "generate", imageCount: "2" }),
   );
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(1));
-  expect(portrait.mock.calls).toEqual([[femaleCharacter, "anime"]]);
+  expect(portrait.mock.calls).toEqual([
+    [femaleCharacter, "photo", photoVariation(0), photoPortrait],
+  ]);
   expect(saved).not.toHaveBeenCalled();
   expect(
     logs
@@ -69,12 +74,12 @@ test("the two independent main styles run one at a time and both results become 
   expect(response.status).toBe(200);
   expect(saved).toHaveBeenCalledTimes(2);
   expect(portrait.mock.calls).toEqual([
-    [femaleCharacter, "anime"],
-    [femaleCharacter, "photo"],
+    [femaleCharacter, "photo", photoVariation(0), photoPortrait],
+    [femaleCharacter, "photo", photoVariation(1), photoPortrait],
   ]);
   const draft = draftTokens("test-password").decode(tokenOf(await response.text()));
   const pair = parsePersona(draft.id, draft.preview).portraits;
-  expect(pair?.anime).toMatch(/^\/images\//);
+  expect(pair?.anime).toBeUndefined();
   expect(pair?.photo).toMatch(/^\/images\//);
   expect(await store.list()).toEqual([]);
 });
@@ -95,24 +100,23 @@ test("either style failing keeps the completed sibling as a partial preview and 
       return portraitImage;
     });
     const failed = await admin(
-      request("/personas", {
+      request(`/personas?style=${style}`, {
         ...character,
         draft: token,
-        intent: "portrait",
+        intent: "generate",
         portraitInstructions: style,
       }),
     );
     expect(failed.status).toBe(503);
     const partial = draftTokens("test-password").decode(tokenOf(await failed.text()));
     const record = parsePersona(partial.id, partial.preview);
-    expect(record.portraits?.[style]).toBeUndefined();
-    expect(record.portraits?.[style === "anime" ? "photo" : "anime"]).toMatch(/^\/images\//);
+    expect(record.portraits).toEqual(parsePersona(partial.id, previous).portraits);
     expect(record.bio).toBe(parsePersona(partial.id, previous).bio);
     expect(await store.list()).toEqual([]);
   }
   portrait.mockResolvedValue(portraitImage);
   const retried = await admin(
-    request("/personas", { ...character, draft: token, intent: "portrait" }),
+    request("/personas", { ...character, draft: token, intent: "generate" }),
   );
   expect(retried.status).toBe(200);
   expect(draftTokens("test-password").decode(tokenOf(await retried.text())).preview).not.toBe(

@@ -50,11 +50,11 @@ const PortraitPair = Schema.Struct({
   anime: Schema.String.check(Schema.isNonEmpty()),
   photo: Schema.String.check(Schema.isNonEmpty()),
 });
-const MainPortraits = Schema.Struct({
+const FirstPhotos = Schema.Struct({
   anime: Schema.optionalKey(PortraitPair.fields.anime),
   photo: Schema.optionalKey(PortraitPair.fields.photo),
 }).check(Schema.makeFilter((value) => Boolean(value.anime || value.photo)));
-const SecondaryPortraits = Schema.Array(
+const RemainingPhotos = Schema.Array(
   Schema.Struct({
     style: Schema.Literals(["anime", "photo"]),
     imageUrl: Schema.String.check(Schema.isNonEmpty()),
@@ -75,8 +75,8 @@ const Frontmatter = Schema.Struct({
   "description-version": Schema.optionalKey(
     Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
   ),
-  portraits: Schema.optionalKey(MainPortraits),
-  "secondary-portraits": Schema.optionalKey(SecondaryPortraits),
+  portraits: Schema.optionalKey(FirstPhotos),
+  "secondary-portraits": Schema.optionalKey(RemainingPhotos),
   "portrait-gallery": Schema.optionalKey(
     Schema.Array(PortraitPair).check(Schema.isMinLength(1), Schema.isMaxLength(6)),
   ),

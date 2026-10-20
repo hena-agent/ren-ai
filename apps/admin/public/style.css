@@ -710,7 +710,7 @@ aside h2 {
   border-radius: 10px;
   background: var(--panel);
 }
-.sub-portraits {
+.photo-additions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;

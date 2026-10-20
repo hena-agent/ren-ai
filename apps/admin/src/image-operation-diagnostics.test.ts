@@ -14,7 +14,12 @@ test("image generation and storage carry their own style and optional picture in
   await loggedRequest(
     request("/personas", { intent: "generate" }),
     async () => {
-      await generateImage(original, "anime", subGenerator, store, "", undefined, 3);
+      const reference = await readPortraitReference(
+        (await store.sheets(original.id)).anime!,
+        "anime",
+        store,
+      );
+      await generateImage(original, "anime", subGenerator, store, "", reference, 3);
       return new Response();
     },
     (entry) => logs.push(entry),
@@ -24,6 +29,7 @@ test("image generation and storage carry their own style and optional picture in
       .filter((entry) => entry.event === "operation.started")
       .map((entry) => [entry.stage, entry.style, entry.poseIndex]),
   ).toEqual([
+    ["portrait.reference.read", "anime", undefined],
     ["portrait.generate", "anime", 3],
     ["image.save", "anime", 3],
   ]);
@@ -38,6 +44,7 @@ test("independent regeneration emits generating and saving stages and maintains 
     base: serializePersona(original),
     preview: serializePersona(original),
     imageInstructions: "",
+    sheets: await store.sheets(original.id),
   };
   await loggedRequest(
     request("/personas", { intent: "regenerate" }),

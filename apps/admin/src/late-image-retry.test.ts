@@ -12,7 +12,7 @@ test("retry after another successful batch keeps all newer photos and can contin
   const accepted = await admin(
     queuedRequest(
       `${route}?style=photo`,
-      { ...character, draft: tokenOf(editing), intent: "subportrait", imageCount: "2" },
+      { ...character, draft: tokenOf(editing), intent: "generate", imageCount: "2" },
       ["first", "second"],
     ),
   );
@@ -21,7 +21,7 @@ test("retry after another successful batch keeps all newer photos and can contin
   const newer = await admin(
     queuedRequest(
       `${route}?style=photo`,
-      { ...character, draft: tokenOf(partial), intent: "subportrait", imageCount: "1" },
+      { ...character, draft: tokenOf(partial), intent: "generate", imageCount: "1" },
       ["another completed picture"],
     ),
   );
@@ -58,7 +58,7 @@ test("a late retry cannot exceed a style's capacity or resurrect an already rege
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   const path = jobUrl(accepted);
@@ -67,7 +67,7 @@ test("a late retry cannot exceed a style's capacity or resurrect an already rege
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(partial),
-      intent: "subportrait",
+      intent: "generate",
       imageCount: "5",
     }),
   );
@@ -129,7 +129,7 @@ test("a forged old-source retry cannot overwrite a newer fully regenerated chara
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   const path = jobUrl(failed);
@@ -155,7 +155,7 @@ test("a forged old-source retry cannot overwrite a newer fully regenerated chara
       )
     ).status,
   ).toBe(409);
-  expect(portrait).toHaveBeenCalledTimes(5);
+  expect(portrait).toHaveBeenCalledTimes(4);
 });
 
 test("a failed regeneration row retries one owned target and preserves the opposite style", async () => {
@@ -205,7 +205,7 @@ test("retrying a failed regeneration at full photo capacity replaces exactly one
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
       imageCount: "5",
     }),
   );

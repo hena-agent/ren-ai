@@ -15,4 +15,8 @@ export type PersonaStore = Pick<
   | "importDraft"
   | "versions"
   | "version"
+  | "sheets"
+  | "saveSheet"
+  | "sheetResult"
+  | "clearSheets"
 >;

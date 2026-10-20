@@ -1,6 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Schema } from "effect";
-import { InitialDocuments, parsePersona, PersonaError, serializePersona } from "@ren-ai/personas";
+import {
+  IdentitySheets,
+  InitialDocuments,
+  parsePersona,
+  PersonaError,
+  serializePersona,
+} from "@ren-ai/personas";
 import type { PersonaRecord } from "@ren-ai/personas";
 import copy from "./copy.json";
 import { captureImprovement } from "./persona-improvement.ts";
@@ -10,6 +16,7 @@ const Draft = Schema.Struct({
   base: Schema.String,
   legacySource: Schema.optionalKey(Schema.String),
   preview: Schema.String,
+  sheets: Schema.optionalKey(IdentitySheets),
   initial: Schema.optionalKey(
     Schema.Struct({
       base: Schema.optionalKey(InitialDocuments),
@@ -44,6 +51,14 @@ const Draft = Schema.Struct({
 export type Draft = typeof Draft.Type;
 export const documentsOf = (draft: Draft) =>
   draft.initial?.preview ?? draft.initial?.base ?? { state: "", memory: "" };
+
+export const draftFields = (draft: Draft) => ({
+  sheets: draft.sheets,
+  documents: documentsOf(draft),
+  tab: draft.tab,
+  showIdea: Boolean(draft.characterPending),
+  improvementInput: draft.improvementInput,
+});
 
 export function captureDocuments(form: FormData, draft: Draft): Draft {
   const previous = documentsOf(draft);

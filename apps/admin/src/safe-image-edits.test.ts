@@ -7,7 +7,7 @@ import { basePreview, preview, subGenerator, publishPreview } from "../test/sub-
 test("save and reload restore only actual edits, and a replayed successful addition returns a successful latest preview", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, page, store } = await basePreview({ ...subGenerator, portrait });
-  const addedFields = { ...character, draft: tokenOf(page), intent: "subportrait" };
+  const addedFields = { ...character, draft: tokenOf(page), intent: "generate" };
   const added = await admin(request("/personas?style=photo", addedFields));
   expect(added.status).toBe(200);
   const content = await added.text();
@@ -40,7 +40,7 @@ test("save and reload restore only actual edits, and a replayed successful addit
 });
 
 test("edited source supports independently selected image and text actions without changing saved state", async () => {
-  for (const intent of ["delete-image", "subportrait", "introduction"] as const) {
+  for (const intent of ["delete-image", "generate", "introduction"] as const) {
     const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
     const introduction = vi
       .fn<typeof generator.introduction>()
@@ -57,7 +57,7 @@ test("edited source supports independently selected image and text actions witho
     );
     expect(result.status).toBe(200);
     expect(preview(await result.text()).description).toBe(description);
-    expect(portrait).toHaveBeenCalledTimes(intent === "subportrait" ? 3 : 2);
+    expect(portrait).toHaveBeenCalledTimes(intent === "generate" ? 3 : 2);
     expect(introduction).toHaveBeenCalledTimes(intent === "introduction" ? 1 : 0);
     expect(await store.list()).toEqual([]);
   }
@@ -70,7 +70,7 @@ test("a failed multi-image addition displays recovery information, preserves suc
   };
   const { admin, page } = await basePreview(model);
   model.portrait.mockRejectedValueOnce(new Error("outage"));
-  const fields = { ...character, draft: tokenOf(page), intent: "subportrait", imageCount: "2" };
+  const fields = { ...character, draft: tokenOf(page), intent: "generate", imageCount: "2" };
   const failed = await admin(request("/personas?style=photo", fields));
   expect(failed.status).toBe(503);
   const result = await failed.text();
@@ -91,7 +91,7 @@ test("private image directions are bounded and narrowed before requests, and whi
         request("/personas?style=photo", {
           ...character,
           draft: tokenOf(page),
-          intent: "subportrait",
+          intent: "generate",
           imageDirection: "x".repeat(4001),
         }),
       )
@@ -101,7 +101,7 @@ test("private image directions are bounded and narrowed before requests, and whi
   for (const [key, value] of Object.entries({
     ...character,
     draft: tokenOf(page),
-    intent: "subportrait",
+    intent: "generate",
   }))
     body.set(key, value);
   body.set("imageDirection", new File(["bad"], "direction.txt"));
@@ -116,7 +116,7 @@ test("private image directions are bounded and narrowed before requests, and whi
         request("/personas?style=photo", {
           ...character,
           draft: tokenOf(page),
-          intent: "subportrait",
+          intent: "generate",
           imageDirection: "  a casual selfie  ",
         }),
       )

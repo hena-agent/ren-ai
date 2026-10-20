@@ -2,6 +2,7 @@ import { bindPending } from "./pending.ts";
 import { bindDocumentEditor, destroyDocumentEditors } from "./document-editor-browser.ts";
 import copy from "./copy.json";
 import { bindUploads } from "./upload-browser.ts";
+import { checkSheetImages } from "./sheet-readiness.ts";
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 let revision = Symbol();
@@ -86,7 +87,9 @@ function updatePage(next: Document) {
   const progress = document.querySelector("[data-image-progress]")!;
   const updated = next.querySelector("[data-image-progress]")!;
   if (progress.innerHTML !== updated.innerHTML) progress.innerHTML = updated.innerHTML;
-  for (const region of document.querySelectorAll("[data-image-preview], [data-add-images]")) {
+  for (const region of document.querySelectorAll(
+    "[data-image-preview], [data-add-images], [data-identity-sheet]",
+  )) {
     if (editingPrompt && region.hasAttribute("data-add-images")) continue;
     const available = next.getElementById(region.id);
     if (available && region.innerHTML !== available.innerHTML)
@@ -102,6 +105,7 @@ function updatePage(next: Document) {
     preview.dataset["images"] = newPreview.dataset["images"]!;
     preview.closest("form")!.dispatchEvent(new document.defaultView!.Event("photos-updated"));
   }
+  for (const form of document.querySelectorAll("form")) checkSheetImages(form);
   watchImageQueue();
 }
 

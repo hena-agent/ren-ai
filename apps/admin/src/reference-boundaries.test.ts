@@ -23,7 +23,7 @@ test("single-style addition accepts exactly 20MB and WebP identity reference byt
           request("/personas?style=photo", {
             ...character,
             draft: tokenOf(page),
-            intent: "subportrait",
+            intent: "generate",
             portraitInstructions: mimeType,
           }),
         )
@@ -61,7 +61,7 @@ test("reference failures diagnose cause, style and request without echoed payloa
       request("/personas?style=photo", {
         ...character,
         draft: tokenOf(page),
-        intent: "subportrait",
+        intent: "generate",
       }),
     );
     expect(failed.status).toBe(503);
@@ -105,7 +105,7 @@ test("style-specific capacity blocks an extra image before any generation and le
         request(`${route}?style=photo`, {
           ...character,
           draft: tokenOf(editing),
-          intent: "subportrait",
+          intent: "generate",
         }),
       )
     ).status,
@@ -115,7 +115,7 @@ test("style-specific capacity blocks an extra image before any generation and le
     request(`${route}?style=anime`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   expect(after.status).toBe(200);

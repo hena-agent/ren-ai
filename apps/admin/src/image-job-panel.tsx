@@ -1,5 +1,6 @@
 import type { ImageJob } from "./image-queue.ts";
 import copy from "./copy.json";
+import { isSheetIntent } from "./image-slots.ts";
 
 export function ImageJobPanel({
   job,
@@ -14,6 +15,8 @@ export function ImageJobPanel({
 }) {
   const active = job.state === "queued" || job.state === "running";
   const completed = job.tasks.filter((task) => task.state === "completed").length;
+  const target = (index: number) =>
+    isSheetIntent(job.batch.intent) ? "인물 시트" : `사진 ${index + 1}`;
   return (
     <section
       className="image-queue"
@@ -72,7 +75,7 @@ export function ImageJobPanel({
                 {task.imageUrl ? (
                   <img
                     src={task.imageUrl}
-                    alt={`${copy.portraitLabels[task.style]} 사진 ${task.index + 1}`}
+                    alt={`${copy.portraitLabels[task.style]} ${target(task.index)}`}
                     width={48}
                     height={60}
                     loading="lazy"
@@ -83,7 +86,7 @@ export function ImageJobPanel({
               </div>
               <div className="queue-item-content">
                 <strong>
-                  {copy.portraitLabels[task.style]} 사진 {task.index + 1}
+                  {copy.portraitLabels[task.style]} {target(task.index)}
                 </strong>
                 <span>
                   {copy.queueStates[task.state]}
@@ -103,7 +106,7 @@ export function ImageJobPanel({
                   value="retry-image"
                   formAction={`/image-jobs/${job.id}/retry?image=${task.ordinal}`}
                   data-portrait-operation={`retry:${job.id}:${task.ordinal}`}
-                  data-portrait-label={`${copy.portraitLabels[task.style]} 사진 ${task.index + 1} · ${copy.singleImageCost}`}
+                  data-portrait-label={`${copy.portraitLabels[task.style]} ${target(task.index)} · ${copy.singleImageCost}`}
                   data-portrait-style={task.style}
                   data-image-index={task.index}
                   data-portrait-prompt={job.batch.prompts[task.ordinal]}

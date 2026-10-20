@@ -39,20 +39,18 @@ test("durable FIFO resumes between alarms, preserves completed siblings and dedu
     await loggedJob(job.requestId, { jobId: job.id }, admin.runNext, () => {});
   };
   await step();
-  expect(calls).toEqual(["anime"]);
+  expect(calls).toEqual(["photo"]);
   const firstPage = await (await admin(request(jobUrl))).text();
-  const firstImage = preview(firstPage).portraits!.anime;
+  const firstImage = preview(firstPage).portraits!.photo;
   admin = open();
   expect((await admin(submission.clone())).headers.get("location")).toBe(jobUrl);
   await step();
-  await step();
-  await step();
-  expect(calls).toEqual(["anime", "photo", "anime", "photo"]);
+  expect(calls).toEqual(["photo", "photo"]);
   expect(admin.nextJob()).toBeUndefined();
   await loggedJob("idle", {}, admin.runNext, () => {});
   const complete = await (await admin(request(jobUrl))).text();
-  expect(preview(complete).portraits!.anime).toBe(firstImage);
-  expect(preview(complete).secondaryPortraits).toHaveLength(2);
+  expect(preview(complete).portraits!.photo).toBe(firstImage);
+  expect(preview(complete).secondaryPortraits).toHaveLength(1);
   const save = await admin(
     request("/personas", {
       ...character,
@@ -67,7 +65,7 @@ test("durable FIFO resumes between alarms, preserves completed siblings and dedu
   expect(await store.publicList()).toHaveLength(1);
 });
 
-test("an interrupted shared character preparation blocks dependent photos until an operator retries", async () => {
+test("an interrupted photo never rewrites a character description during recovery", async () => {
   const convert = vi.fn<typeof generator.convert>().mockImplementation(generator.convert);
   const { open, state, logs } = await durableFixture({ ...generator, convert });
   let admin = open();
@@ -90,7 +88,7 @@ test("an interrupted shared character preparation blocks dependent photos until 
       requestId: job.requestId,
       jobId: job.id,
       stage: "image.queue.recovery",
-      style: "anime",
+      style: "photo",
       imageOrdinal: 0,
     },
   ]);
@@ -100,6 +98,8 @@ test("a queued stale snapshot fails before paid calls and retains its conflict a
   const portrait = vi.fn<typeof generator.portrait>().mockResolvedValue(portraitImage);
   const { store, open } = await durableFixture({ ...generator, portrait });
   await store.save(databasePersona, initialDocuments, { persona: "" });
+  const { seedSheets } = await import("../test/fixtures.ts");
+  await seedSheets(store, databasePersona.id);
   let admin = open();
   const token = tokenOf(await (await admin(request(`/personas/${databasePersona.id}`))).text());
   const registered = await admin(
@@ -151,7 +151,12 @@ test("an interrupted paid task is not automatically called again; later safe pho
   const { open, state } = await durableFixture({ ...generator, portrait });
   let admin = open();
   const registered = await admin(
-    request("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),
+    request("/personas", {
+      ...character,
+      draft: await newToken(admin),
+      intent: "generate",
+      imageCount: "2",
+    }),
   );
   const jobUrl = registered.headers.get("location")!;
   state.saved!.queue.jobs[0]!.tasks[0]!.state = "generating";

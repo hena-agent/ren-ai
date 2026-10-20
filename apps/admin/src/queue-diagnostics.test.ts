@@ -66,6 +66,7 @@ test("failure diagnostics redact a repeated second-photo prompt echoed by the im
         ...character,
         draft: await newToken(admin),
         intent: "generate",
+        imageCount: "2",
       },
       ["first-private-direction", "repeated-second-private-direction"],
     ),
@@ -115,7 +116,7 @@ test("text-only edits keep the latest unsaved images on reload and configuration
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   const latest = await finishedJob(admin, jobUrl(images));
@@ -139,7 +140,7 @@ test("text-only edits keep the latest unsaved images on reload and configuration
   const failed = await unavailable(
     queuedRequest(
       "/personas",
-      { ...character, draft: await newToken(unavailable), intent: "generate", imageCount: "1" },
+      { ...character, draft: await newToken(unavailable), intent: "generate", imageCount: "2" },
       ["anime input", "photo input"],
     ),
   );
@@ -161,7 +162,7 @@ test("a retry request redacts its signed draft and every private source field be
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   expect(accepted.status).toBe(303);

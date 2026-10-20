@@ -28,8 +28,8 @@ test("initial creation makes two mains only, and the obsolete recommendation act
     portrait,
   });
   expect(portrait.mock.calls).toEqual([
-    [femaleCharacter, "anime", "extra"],
-    [femaleCharacter, "photo", "extra"],
+    [femaleCharacter, "anime", "extra", portraitImage],
+    [femaleCharacter, "photo", "extra", photoPortrait],
   ]);
   expect(
     (
@@ -58,7 +58,7 @@ test("a selected style adds one independent image and never regenerates its oppo
   const fields = {
     ...character,
     draft: tokenOf(page),
-    intent: "subportrait",
+    intent: "generate",
     imageDirection: "private selfie idea",
     portraitInstructions: "private optional tweak",
   };
@@ -104,7 +104,7 @@ test("image generation preserves style-specific identity inputs without insistin
         {
           parts: [
             {
-              text: `${policy.portraits[style]}\n\n${policy.subPortraitDirection}\n\n${policy.profilePhotoDirection}\n\n${policy.genderDirection}\n\n${character.name}\n${character.description}\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\nfull-body travel photo`,
+              text: `${policy.portraits[style]}\n\n${policy.identityPortraitDirection}\n\n${policy.profilePhotoDirection}\n\n${policy.genderDirection}\n\n${character.name}\n${character.description}\n\nADDITIONAL PORTRAIT INSTRUCTIONS:\nfull-body travel photo`,
             },
             {
               inlineData: {

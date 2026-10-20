@@ -265,11 +265,11 @@ test("runtime projections can be rendered from the Markdown prompt while incompl
   expect(page).toContain("파리에서 그림을 그려요.");
 });
 
-test("incomplete image sources must receive a same-identity complete document before any portrait calls", async () => {
+test("photo generation uses its identity sheet without requiring a profile rewrite", async () => {
   const convert = vi
     .fn<typeof generator.convert>()
     .mockResolvedValue({ name: "wrong", description: character.description, additions: [] });
-  const portrait = vi.fn<typeof generator.portrait>();
+  const portrait = vi.fn<typeof generator.portrait>().mockImplementation(generator.portrait);
   const { admin } = await fixture({ ...generator, convert, portrait });
   const result = await admin(
     request("/personas", {
@@ -279,6 +279,7 @@ test("incomplete image sources must receive a same-identity complete document be
       intent: "generate",
     }),
   );
-  expect(result.status).toBe(400);
-  expect(portrait).not.toHaveBeenCalled();
+  expect(result.status).toBe(200);
+  expect(portrait).toHaveBeenCalledTimes(1);
+  expect(convert).not.toHaveBeenCalled();
 });

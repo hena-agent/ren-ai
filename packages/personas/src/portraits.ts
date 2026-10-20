@@ -22,15 +22,39 @@ export function normalizePortraits(persona: PersonaRecord): PersonaRecord {
   return next;
 }
 
-export function personaImages(
-  input: PersonaRecord,
-): readonly (PersonaImage & { readonly main: boolean })[] {
+export function personaImages(input: PersonaRecord): readonly PersonaImage[] {
   const persona = normalizePortraits(input);
   const portraits = persona.portraits ?? (persona.imageUrl ? { photo: persona.imageUrl } : {});
   return [
     ...(["anime", "photo"] as const).flatMap((style) =>
-      portraits[style] ? [{ style, imageUrl: portraits[style], main: true }] : [],
+      portraits[style] ? [{ style, imageUrl: portraits[style] }] : [],
     ),
-    ...(persona.secondaryPortraits ?? []).map((image) => ({ ...image, main: false })),
+    ...(persona.secondaryPortraits ?? []),
   ];
+}
+
+/** Project gallery order onto the persisted/public photo fields. No photo has an identity role. */
+export function withPersonaImages(
+  persona: PersonaRecord,
+  images: readonly PersonaImage[],
+): PersonaRecord {
+  const first = (style: PersonaImage["style"]) => images.find((image) => image.style === style);
+  const anime = first("anime");
+  const photo = first("photo");
+  const next = {
+    ...persona,
+    imageUrl: photo?.imageUrl ?? anime?.imageUrl ?? "",
+    secondaryPortraits: images
+      .filter((image) => image !== anime && image !== photo)
+      .map(({ style, imageUrl }) => ({ style, imageUrl })),
+    published: persona.published && images.length > 0,
+  };
+  delete next.portraits;
+  delete next.portraitGallery;
+  if (images.length)
+    next.portraits = {
+      ...(anime && { anime: anime.imageUrl }),
+      ...(photo && { photo: photo.imageUrl }),
+    };
+  return next;
 }

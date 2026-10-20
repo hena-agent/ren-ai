@@ -9,10 +9,7 @@ export function bindPortraitDialog(form: HTMLFormElement) {
   form.addEventListener("submit", (event) => {
     if (event.defaultPrevented || confirmed || form.hasAttribute("aria-busy")) return;
     const intent = event.submitter?.getAttribute("value");
-    if (
-      !intent ||
-      !["generate", "portrait", "subportrait", "regenerate", "retry-image"].includes(intent)
-    )
+    if (!intent || !["generate", "regenerate", "retry-image", "sheet", "sheets"].includes(intent))
       return;
     event.preventDefault();
     submitter = event.submitter;

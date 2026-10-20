@@ -13,6 +13,8 @@ import type { ProfileGenerator } from "../src/generation.ts";
 import type { LogEntry } from "../src/logging.ts";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import { sheet } from "./sheet.ts";
+import type { PersonaStore } from "@ren-ai/personas";
+import { draftTokens } from "../src/draft.ts";
 
 export const authorization = `Basic ${Buffer.from("admin:test-password").toString("base64")}`;
 export const character = {
@@ -57,6 +59,7 @@ export const portraitReply = async () =>
     ],
   });
 export const generator: ProfileGenerator = {
+  sheet: async () => ({ bytes: png, mimeType: "image/png" }),
   character: async () => authoredCharacter,
   introduction: async () => introduction,
   profile: async () => introduction,
@@ -70,6 +73,18 @@ export const generator: ProfileGenerator = {
   portrait: async () => ({ bytes: png, mimeType: "image/png" }),
 };
 export const portraitImage = { bytes: png, mimeType: "image/png" as const };
+export const photoPortrait = {
+  bytes: Buffer.from("ffd8ffe0", "hex"),
+  mimeType: "image/jpeg" as const,
+};
+export async function seedSheets(store: PersonaStore, id: string) {
+  const sheets = {
+    anime: await store.saveImage(portraitImage),
+    photo: await store.saveImage(photoPortrait),
+  };
+  for (const style of ["anime", "photo"] as const) await store.saveSheet(id, style, sheets[style]);
+  return sheets;
+}
 export const legacy = {
   version: 1,
   id: "legacy",
@@ -86,6 +101,7 @@ export const legacy = {
   publicProfile: "파리에서 그림을 그려요.",
 };
 const roots: string[] = [];
+export const fixtureStores = new WeakMap<ReturnType<typeof createAdmin>, PersonaStore>();
 afterEach(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
   roots.length = 0;
@@ -101,10 +117,15 @@ export async function fixture(model = generator) {
     script: "test script",
     log: (entry) => logs.push(entry),
   });
+  fixtureStores.set(admin, store);
   return { root, store, admin, logs };
 }
-export const request = (path: string, fields?: Record<string, string>) =>
-  new Request(`http://localhost:3729${path}`, {
+export const request = (path: string, fields?: Record<string, string>) => {
+  const url = new URL(path, "http://localhost:3729");
+  // Photo-operation fixtures target photo unless a test explicitly selects another style.
+  if (fields?.["intent"] === "generate" && !url.searchParams.has("style"))
+    url.searchParams.set("style", "photo");
+  return new Request(url, {
     method: fields ? "POST" : "GET",
     headers: { authorization, origin: "http://localhost:3729" },
     ...(fields
@@ -119,13 +140,21 @@ export const request = (path: string, fields?: Record<string, string>) =>
         }
       : {}),
   });
+};
 export function tokenOf(page: string) {
   const token = /name="draft" value="([^"]+)"/.exec(page)?.[1];
   if (!token) throw new Error("Expected an authoring draft");
   return token;
 }
 export async function newToken(admin: ReturnType<typeof createAdmin>) {
-  return tokenOf(await (await admin(request("/new"))).text());
+  const token = tokenOf(await (await admin(request("/new"))).text());
+  const store = fixtureStores.get(admin);
+  if (!store) return token;
+  // Photo workflow tests start with established identities; sheet creation has its own tests.
+  const tokens = draftTokens("test-password");
+  const draft = tokens.decode(token);
+  const sheets = await seedSheets(store, draft.id);
+  return tokens.encode({ ...draft, sheets });
 }
 export function idOf(response: Response) {
   const id = /\/personas\/([^?]+)/.exec(response.headers.get("location") ?? "")?.[1];

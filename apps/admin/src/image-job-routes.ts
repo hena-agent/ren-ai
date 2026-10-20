@@ -44,6 +44,7 @@ export async function imageJobRoute(
         editing: Boolean(latest.base),
         draft: tokens.encode(latest),
         documents: documentsOf(latest),
+        sheets: latest.sheets,
         tab: latest.tab,
         imageJobs: queue
           .list(token.id, "")
@@ -54,7 +55,7 @@ export async function imageJobRoute(
   }
   const submitted = authorPersona(form, previewOf(token, emptyPersona));
   if (JSON.stringify(characterOf(submitted)) !== JSON.stringify(characterOf(job.batch.source)))
-    throw new PersonaError("invalid", copy.regenerateRequired);
+    throw new PersonaError("invalid", copy.stale);
   const ordinal = url.searchParams.get("image");
   if (!ordinal || !/^\d{1,2}$/.test(ordinal))
     throw new PersonaError("invalid", copy.imageTargetRequired);

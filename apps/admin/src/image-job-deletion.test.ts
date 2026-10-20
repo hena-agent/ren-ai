@@ -28,7 +28,7 @@ test("dismissed records stay gone after restart and replay never creates another
   admin = open();
   expect((await admin(request(url))).status).toBe(404);
   expect((await admin(submission.clone())).status).toBe(404);
-  expect(portrait).toHaveBeenCalledTimes(2);
+  expect(portrait).toHaveBeenCalledTimes(1);
 });
 
 test("clear removes only this persona's ended records, preserves waiting work, and pending work rejects uploads or deletion", async () => {
@@ -45,18 +45,17 @@ test("clear removes only this persona's ended records, preserves waiting work, a
   expect((await admin(uploadRequest(tokenOf(page)))).status).toBe(409);
   while (admin.nextJob()) await loggedJob("test", {}, admin.runNext, () => {});
   page = await (await admin(request(url))).text();
-  const addition = await admin(
-    request("/personas", {
-      ...character,
-      draft: tokenOf(page),
-      intent: "subportrait",
-      imageCount: "1",
-    }),
-  );
+  const withoutStyle = request("/personas", {
+    ...character,
+    draft: tokenOf(page),
+    intent: "generate",
+    imageCount: "1",
+  });
+  const addition = await admin(new Request("http://localhost:3729/personas", withoutStyle));
   // The style is part of the target URL, not an editable form field.
   expect(addition.status).toBe(400);
   const waiting = await admin(
-    request("/personas?style=photo", { ...character, draft: tokenOf(page), intent: "subportrait" }),
+    request("/personas?style=photo", { ...character, draft: tokenOf(page), intent: "generate" }),
   );
   const other = await admin(
     request("/personas", { ...character, draft: await newToken(admin), intent: "generate" }),

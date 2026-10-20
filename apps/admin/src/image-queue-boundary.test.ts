@@ -30,16 +30,26 @@ test("all personas and styles share one FIFO worker, with early acknowledgement,
   });
   const { admin, store, logs } = await fixture({ ...generator, portrait });
   const firstDraft = await newToken(admin);
-  const firstFields = { ...character, draft: firstDraft, intent: "generate", imageCount: "1" };
+  const firstFields = { ...character, draft: firstDraft, intent: "generate", imageCount: "2" };
   const first = await admin(
-    queuedRequest("/personas", firstFields, ["private anime selfie", "private realistic travel"]),
+    queuedRequest("/personas?style=anime", firstFields, [
+      "private anime selfie",
+      "private realistic travel",
+    ]),
   );
   expect(first.status).toBe(303);
   const path = jobUrl(first);
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(1));
-  expect(portrait.mock.calls[0]?.slice(1)).toEqual(["anime", "private anime selfie"]);
+  expect(portrait.mock.calls[0]?.slice(1)).toEqual([
+    "anime",
+    "private anime selfie",
+    portraitImage,
+  ]);
   const duplicate = await admin(
-    queuedRequest("/personas", firstFields, ["private anime selfie", "private realistic travel"]),
+    queuedRequest("/personas?style=anime", firstFields, [
+      "private anime selfie",
+      "private realistic travel",
+    ]),
   );
   expect(jobUrl(duplicate)).toBe(path);
   const second = await admin(
@@ -50,7 +60,7 @@ test("all personas and styles share one FIFO worker, with early acknowledgement,
         name: "Second",
         draft: await newToken(admin),
         intent: "generate",
-        imageCount: "1",
+        imageCount: "2",
       },
       ["second anime", "second photo"],
     ),
@@ -82,7 +92,11 @@ test("all personas and styles share one FIFO worker, with early acknowledgement,
   const partial = await (await admin(request(path))).text();
   expect(personaImages(preview(partial))).toHaveLength(1);
   expect(partial).toContain('data-state="completed"');
-  expect(portrait.mock.calls[1]?.slice(1)).toEqual(["photo", "private realistic travel"]);
+  expect(portrait.mock.calls[1]?.slice(1)).toEqual([
+    "anime",
+    "private realistic travel",
+    portraitImage,
+  ]);
   release[1]!(portraitImage);
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(3));
   release[2]!(portraitImage);
@@ -116,7 +130,7 @@ test("adding two photos sends each independent instruction once, keeps the appro
   const { admin, store, page, logs } = await basePreview({ ...subGenerator, portrait });
   const original = preview(page);
   portrait.mockRejectedValueOnce(new Error("first private idea provider failure"));
-  const fields = { ...character, draft: tokenOf(page), intent: "subportrait", imageCount: "2" };
+  const fields = { ...character, draft: tokenOf(page), intent: "generate", imageCount: "2" };
   const accepted = await admin(
     queuedRequest("/personas?style=photo", fields, ["first private idea", "second private idea"]),
   );
@@ -179,7 +193,7 @@ test("a second failure keeps the edited prompt on only its failed photo for the 
   const accepted = await admin(
     queuedRequest(
       "/personas?style=photo",
-      { ...character, draft: tokenOf(page), intent: "subportrait", imageCount: "2" },
+      { ...character, draft: tokenOf(page), intent: "generate", imageCount: "2" },
       ["first prompt", "completed sibling"],
     ),
   );
@@ -242,28 +256,30 @@ test("invalid per-image counts, uploaded prompts and unauthorized queue routes c
   expect(portrait).not.toHaveBeenCalled();
 });
 
-test("first-style failures block dependent photos while the other style proceeds, and a row retry creates only that failed main", async () => {
+test("failed photos do not block independent sheet-anchored siblings and a row retry replaces only the failed photo", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   portrait.mockRejectedValueOnce(new Error("anime main failed"));
   const { admin } = await fixture({ ...subGenerator, portrait });
   const accepted = await admin(
     queuedRequest(
-      "/personas",
-      { ...character, draft: await newToken(admin), intent: "generate", imageCount: "2" },
+      "/personas?style=anime",
+      { ...character, draft: await newToken(admin), intent: "generate", imageCount: "4" },
       ["anime main", "photo main", "anime extra", "photo extra"],
     ),
   );
   const path = jobUrl(accepted);
   const partial = await finishedJob(admin, path);
-  expect(partial).toContain('data-state="blocked"');
+  expect(partial).toContain('data-state="failed"');
+  expect(partial).not.toContain('data-state="blocked"');
   expect(portrait.mock.calls.map((call) => call[2])).toEqual([
     "anime main",
     "photo main",
+    "anime extra",
     "photo extra",
   ]);
   const before = preview(partial);
-  expect(before.portraits?.anime).toBeUndefined();
-  expect(before.secondaryPortraits).toHaveLength(1);
+  expect(before.portraits?.anime).toBeTruthy();
+  expect(before.secondaryPortraits).toHaveLength(2);
   expect(
     (
       await admin(
@@ -276,9 +292,10 @@ test("first-style failures block dependent photos while the other style proceeds
     ).status,
   ).toBe(303);
   const main = await finishedJob(admin, path);
-  expect(portrait).toHaveBeenCalledTimes(4);
+  expect(portrait).toHaveBeenCalledTimes(5);
   expect(preview(main).portraits?.photo).toBe(before.portraits?.photo);
-  expect(preview(main).secondaryPortraits).toEqual(before.secondaryPortraits);
+  expect(preview(main).portraits?.anime).toBe(before.portraits?.anime);
+  expect(preview(main).secondaryPortraits).toHaveLength(3);
   expect(
     (
       await admin(
@@ -289,9 +306,9 @@ test("first-style failures block dependent photos while the other style proceeds
         }),
       )
     ).status,
-  ).toBe(303);
+  ).toBe(400);
   const done = await finishedJob(admin, path);
   expect(portrait).toHaveBeenCalledTimes(5);
-  expect(preview(done).secondaryPortraits).toHaveLength(2);
+  expect(preview(done).secondaryPortraits).toHaveLength(3);
   expect(done).not.toContain('data-state="blocked"');
 });

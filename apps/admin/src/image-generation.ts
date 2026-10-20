@@ -10,8 +10,8 @@ export async function generateImage(
   style: "anime" | "photo",
   generator: ProfileGenerator,
   store: PersonaStore,
-  instructions?: string,
-  reference?: Portrait,
+  instructions: string | undefined,
+  reference: Portrait,
   position?: number,
   stage?: (stage: ImageStage) => void | Promise<void>,
 ) {
@@ -19,9 +19,7 @@ export async function generateImage(
   await stage?.("generating");
   const image = await operation("portrait.generate", fields, () => {
     const character = characterOf(persona);
-    if (reference) return generator.portrait(character, style, instructions, reference);
-    if (instructions) return generator.portrait(character, style, instructions);
-    return generator.portrait(character, style);
+    return generator.portrait(character, style, instructions, reference);
   });
   await stage?.("saving");
   return operation("image.save", fields, () => store.saveImage(image));

@@ -34,7 +34,7 @@ test("additional-image generation requires confirmation and switching to an imag
   const { page } = await basePreview();
   const ui = bind(page);
   const suggested = document.querySelector<HTMLButtonElement>(
-    '.sub-portraits [value="subportrait"]',
+    '.photo-additions [value="generate"]',
   )!;
   const image = document.querySelector<HTMLButtonElement>(".image-regenerate")!;
   ui.form.requestSubmit(suggested);
@@ -82,9 +82,7 @@ test("edited character definitions keep regeneration an explicit independent cho
   expect(full.hidden).toBe(false);
   expect(
     [
-      ...document.querySelectorAll<HTMLButtonElement>(
-        '[value="regenerate"], [value="subportrait"]',
-      ),
+      ...document.querySelectorAll<HTMLButtonElement>('[value="regenerate"], [value="generate"]'),
     ].every((button) => !button.disabled),
   ).toBe(true);
   name.value = character.name;

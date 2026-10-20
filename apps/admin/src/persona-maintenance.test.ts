@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, vi } from "vitest";
+import { seedSheets } from "../test/fixtures.ts";
 import { fixture, generator, legacy, request, tokenOf } from "../test/fixtures.ts";
 import { preview } from "../test/sub-portraits.ts";
 import { sheet, characterResponse, acceptedReview } from "../test/character.ts";
@@ -142,6 +143,7 @@ test("conversion can be saved immediately with existing photos and public state,
   expect((await store.get("legacy")).imageUrl).toBe(original.imageUrl);
   expect((await store.get("legacy")).published).toBe(true);
   expect(portrait).not.toHaveBeenCalled();
+  await seedSheets(store, original.id);
   const savedPage = await (await admin(request("/personas/legacy"))).text();
   const generated = await admin(
     request("/personas/legacy", {
@@ -159,7 +161,7 @@ test("conversion can be saved immediately with existing photos and public state,
   expect(saved.status).toBe(303);
   expect((await store.get("legacy")).descriptionVersion).toBe(2);
   expect((await store.get("legacy")).publicProfile).toBeTruthy();
-  expect(portrait).toHaveBeenCalledTimes(2);
+  expect(portrait).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(await store.publicList())).not.toContain("additions");
 });
 

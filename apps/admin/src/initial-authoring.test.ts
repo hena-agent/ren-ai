@@ -304,6 +304,8 @@ test("queued image work locks all three document operations until it completes",
       return generator.portrait(...args);
     },
   });
+  const { seedSheets } = await import("../test/fixtures.ts");
+  await seedSheets(setup.store, "harin");
   const submitted = await fields(setup);
   const queued = await setup.admin(queuedRequest(path, { ...submitted, intent: "generate" }));
   expect(queued.status).toBe(303);
@@ -313,7 +315,7 @@ test("queued image work locks all three document operations until it completes",
   expect(
     (
       await setup.admin(
-        request(path, { ...submitted, memorySource: "changed during work", intent: "subportrait" }),
+        request(path, { ...submitted, memorySource: "changed during work", intent: "generate" }),
       )
     ).status,
   ).toBe(409);

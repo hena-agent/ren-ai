@@ -19,7 +19,7 @@ test("an obsolete persisted batch cannot prevent Admin startup, lose its private
   const form = {
     ...character,
     draft: await newToken(admin.fetch),
-    intent: "generate",
+    intent: "sheets",
     portraitInstructions: "private recovery prompt",
   };
   await admin.fetch(request("/personas", form));
@@ -74,6 +74,10 @@ test("invalid drafts isolate only their persona and repeated recovery never over
       base: serializePersona(record),
       preview: serializePersona(record),
       imageCount: 1,
+      sheets: {
+        anime: "/images/11111111-1111-4111-8111-111111111111.png",
+        photo: "/images/22222222-2222-4222-8222-222222222222.png",
+      },
     };
     return {
       id,
@@ -85,7 +89,7 @@ test("invalid drafts isolate only their persona and repeated recovery never over
         record,
         draft,
         "generate",
-        new URLSearchParams(),
+        new URLSearchParams({ style: "photo" }),
         "",
         generator,
         store,

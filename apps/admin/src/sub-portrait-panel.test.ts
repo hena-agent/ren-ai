@@ -15,6 +15,7 @@ test("independent images have individual actions and the additional-image panel 
       editing: true,
       draft: "signed",
       imageReservations: { photo: 2, anime: 1 },
+      sheets: portraits,
     });
     expect(window.document.querySelectorAll(".image-option")).toHaveLength(3);
     expect(
@@ -26,11 +27,9 @@ test("independent images have individual actions and the additional-image panel 
       window.document.querySelector(".portrait-scene-title, .sub-recommendation, .sub-scenes"),
     ).toBeNull();
     expect(window.document.querySelectorAll('[value="delete-image"]')).toHaveLength(3);
-    expect(window.document.querySelectorAll('.sub-portraits [value="subportrait"]')).toHaveLength(
-      2,
-    );
+    expect(window.document.querySelectorAll('.photo-additions [value="generate"]')).toHaveLength(2);
     expect(
-      [...window.document.querySelectorAll('.sub-portraits [value="subportrait"]')].map((button) =>
+      [...window.document.querySelectorAll('.photo-additions [value="generate"]')].map((button) =>
         button.getAttribute("data-image-maximum"),
       ),
     ).toEqual(["2", "4"]);
@@ -47,7 +46,7 @@ test("independent images have individual actions and the additional-image panel 
     ]);
     for (const section of sections) {
       const style = section
-        .querySelector('[value="subportrait"]')!
+        .querySelector('[value="generate"]')!
         .getAttribute("data-portrait-style");
       for (const button of section.querySelectorAll(".image-regenerate"))
         expect(button.getAttribute("data-portrait-style")).toBe(style);
@@ -70,8 +69,9 @@ test("independent images have individual actions and the additional-image panel 
       record: { ...legacy, portraits: { photo: legacy.imageUrl }, secondaryPortraits: full },
       editing: false,
       draft: "signed",
+      sheets: portraits,
     });
-    const buttons = [...window.document.querySelectorAll('.sub-portraits [value="subportrait"]')];
+    const buttons = [...window.document.querySelectorAll('.photo-additions [value="generate"]')];
     expect(buttons.map((button) => button.hasAttribute("disabled"))).toEqual([true, false]);
     expect(
       window.document.querySelector("#portrait-gallery-anime .portrait-empty")?.textContent,

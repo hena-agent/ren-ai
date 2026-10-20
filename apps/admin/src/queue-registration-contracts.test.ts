@@ -4,7 +4,7 @@ import { savedPreview, subGenerator, preview } from "../test/sub-portraits.ts";
 import { queuedRequest, jobUrl, finishedJob } from "../test/queue.ts";
 import { personaImages } from "@ren-ai/personas";
 
-test("queued registration rejects stale snapshots and external mains before returning a job URL", async () => {
+test("queued registration rejects stale snapshots and external sheet sources before returning a job URL", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, original, store, route, editing } = await savedPreview({
     ...subGenerator,
@@ -25,11 +25,14 @@ test("queued registration rejects stale snapshots and external mains before retu
   });
   const current = await (await admin(request(route))).text();
   const rejected = await admin(
-    queuedRequest(`${route}?style=photo`, {
-      ...character,
-      draft: tokenOf(current),
-      intent: "subportrait",
-    }),
+    queuedRequest(
+      `${route}?style=photo&image=${encodeURIComponent("https://example.net/external.jpg")}`,
+      {
+        ...character,
+        draft: tokenOf(current),
+        intent: "sheet",
+      },
+    ),
   );
   expect(rejected.status).toBe(400);
   expect(rejected.headers.get("location")).toBeNull();
@@ -39,7 +42,7 @@ test("queued registration rejects stale snapshots and external mains before retu
 test("changing only a second-photo input or the per-photo protocol is a distinct confirmed action", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, route, editing } = await savedPreview({ ...subGenerator, portrait });
-  const fields = { ...character, draft: tokenOf(editing), intent: "portrait", imageCount: "1" };
+  const fields = { ...character, draft: tokenOf(editing), intent: "generate", imageCount: "2" };
   const separate = queuedRequest(route, fields, ["first instruction", "second instruction"]);
   const legacy = new Request(separate, {
     method: "POST",
@@ -57,15 +60,25 @@ test("changing only a second-photo input or the per-photo protocol is a distinct
   );
   const secondPath = jobUrl(second);
   expect(secondPath).not.toBe(firstPath);
-  await finishedJob(admin, secondPath);
+  const secondPage = await finishedJob(admin, secondPath);
+  await admin(
+    request(
+      `${route}?style=photo&image=${encodeURIComponent(preview(secondPage).portraits!.photo!)}`,
+      {
+        ...character,
+        draft: tokenOf(secondPage),
+        intent: "delete-image",
+      },
+    ),
+  );
   const changed = await admin(
     queuedRequest(route, fields, ["first instruction", "different second instruction"]),
   );
   expect(jobUrl(changed)).not.toBe(secondPath);
   await finishedJob(admin, jobUrl(changed));
   expect(portrait.mock.calls.slice(2).map((call) => call[2])).toEqual([
-    "first instruction",
-    "first instruction",
+    expect.stringContaining("first instruction"),
+    expect.stringContaining("first instruction"),
     "first instruction",
     "second instruction",
     "first instruction",
@@ -81,7 +94,7 @@ test("an older failed job view displays the newest approved editing photos and j
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   const path = jobUrl(first);
@@ -90,7 +103,7 @@ test("an older failed job view displays the newest approved editing photos and j
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(failed),
-      intent: "subportrait",
+      intent: "generate",
       portraitInstructions: "newer photo",
     }),
   );
@@ -113,7 +126,7 @@ test("an updated retry carries request-boundary job identity and correlated priv
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   const path = jobUrl(accepted);

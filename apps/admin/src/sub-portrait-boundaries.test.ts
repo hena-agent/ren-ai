@@ -28,7 +28,7 @@ test("a single secondary failure preserves images and emits correlated diagnosti
     request("/personas?style=photo", {
       ...character,
       draft: tokenOf(page),
-      intent: "subportrait",
+      intent: "generate",
       imageDirection: "private photo idea",
       portraitInstructions: "private tweak",
     }),
@@ -56,7 +56,7 @@ test("a single secondary failure preserves images and emits correlated diagnosti
     request("/personas?style=photo", {
       ...character,
       draft: tokenOf(retained),
-      intent: "subportrait",
+      intent: "generate",
       imageDirection: "private photo idea",
       portraitInstructions: "",
     }),
@@ -71,7 +71,7 @@ test("manual addition requires no planner or saved configuration", async () => {
     request("/personas?style=anime", {
       ...character,
       draft: tokenOf(page),
-      intent: "subportrait",
+      intent: "generate",
       portraitInstructions: "a selfie",
     }),
   );
@@ -82,6 +82,8 @@ test("manual addition requires no planner or saved configuration", async () => {
 test("a missing style can create a main image while external references and invalid styles remain rejected", async () => {
   const { admin, store } = await fixture(subGenerator);
   await store.create({ ...legacy, ...character });
+  const { portraitImage } = await import("../test/fixtures.ts");
+  await store.saveSheet(legacy.id, "anime", await store.saveImage(portraitImage));
   const path = `/personas/${legacy.id}`;
   const page = await (await admin(request(path))).text();
   expect(
@@ -90,7 +92,7 @@ test("a missing style can create a main image while external references and inva
         request(`${path}?style=anime`, {
           ...character,
           draft: tokenOf(page),
-          intent: "subportrait",
+          intent: "generate",
         }),
       )
     ).status,
@@ -101,7 +103,7 @@ test("a missing style can create a main image while external references and inva
         request(`${path}?style=photo`, {
           ...character,
           draft: tokenOf(page),
-          intent: "subportrait",
+          intent: "generate",
         }),
       )
     ).status,
@@ -115,7 +117,7 @@ test("a missing style can create a main image while external references and inva
           request(`/personas?style=${style}`, {
             ...character,
             draft: tokenOf(base.page),
-            intent: "subportrait",
+            intent: "generate",
           }),
         )
       ).status,
@@ -131,7 +133,7 @@ test("parallel independent additions are serialized before a second paid request
     resolve = vi.fn<(value: Awaited<ReturnType<typeof generator.portrait>>) => void>(done);
   });
   portrait.mockReturnValue(image);
-  const fields = { ...character, draft: tokenOf(page), intent: "subportrait" };
+  const fields = { ...character, draft: tokenOf(page), intent: "generate" };
   const first = admin(request("/personas?style=photo", fields));
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(3));
   const second = admin(request("/personas?style=anime", fields));

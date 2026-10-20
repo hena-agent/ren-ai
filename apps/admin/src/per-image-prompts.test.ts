@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { useBrowser, fillCharacterForm } from "../test/browser.ts";
-import { character, fixture, request } from "../test/fixtures.ts";
+import { character } from "../test/fixtures.ts";
 import { basePreview } from "../test/sub-portraits.ts";
 import { bindPending } from "./pending.ts";
 
@@ -55,33 +55,26 @@ test("two added photos have two independent prompts; count changes preserve each
   expect(errors).toEqual([]);
 });
 
-test("initial count is per style, but prompts are per actual photo and ordered to match the single worker", async () => {
-  const { admin } = await fixture();
-  document.body.innerHTML = await (await admin(request("/new"))).text();
+test("each selected-style photo has its own prompt in FIFO order, including the first photo", async () => {
+  const { page } = await basePreview();
+  document.body.innerHTML = page;
   const form = fillCharacterForm(character);
   bindPending(form);
   form.requestSubmit(document.querySelector<HTMLButtonElement>('[value="generate"]'));
   const dialog = form.querySelector<HTMLDialogElement>("dialog")!;
   const count = dialog.querySelector<HTMLSelectElement>("select")!;
-  expect(dialog.querySelectorAll("textarea")).toHaveLength(2);
+  expect(dialog.querySelectorAll("textarea")).toHaveLength(1);
   count.value = "2";
   count.dispatchEvent(new Event("change"));
-  expect(dialog.querySelectorAll("textarea:not(:disabled)")).toHaveLength(4);
+  expect(dialog.querySelectorAll("textarea:not(:disabled)")).toHaveLength(2);
   expect(
     [...dialog.querySelectorAll("[data-image-prompt-field] label")].map(
       (label) => label.textContent,
     ),
-  ).toEqual([
-    "애니메 사진 1 · 추가 프롬프트 (선택)",
-    "실사 사진 1 · 추가 프롬프트 (선택)",
-    "애니메 사진 2 · 추가 프롬프트 (선택)",
-    "실사 사진 2 · 추가 프롬프트 (선택)",
-  ]);
-  expect(dialog.querySelector("[data-image-total]")?.textContent).toBe(
-    "애니메·실사 각각 2장 · 총 4장 생성",
-  );
+  ).toEqual(["실사 사진 1 · 추가 프롬프트 (선택)", "실사 사진 2 · 추가 프롬프트 (선택)"]);
+  expect(dialog.querySelector("[data-image-total]")?.textContent).toBe("선택한 스타일 2장 생성");
   expect(new FormData(form).get("separateImagePrompts")).toBe("1");
-  expect(new FormData(form).getAll("imagePrompts")).toEqual(["", "", ""]);
+  expect(new FormData(form).getAll("imagePrompts")).toEqual([""]);
 });
 
 test("single-image regeneration always has one prompt labeled for the selected existing image", async () => {

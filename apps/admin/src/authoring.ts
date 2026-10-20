@@ -36,13 +36,12 @@ export function readIntent(form: FormData) {
   const intent = form.get("intent") ?? "save";
   if (
     intent === "save" ||
+    intent === "sheet" ||
+    intent === "sheets" ||
     intent === "generate" ||
-    intent === "portrait" ||
     intent === "character" ||
-    intent === "subportrait" ||
     intent === "regenerate" ||
     intent === "delete-image" ||
-    intent === "set-main" ||
     intent === "introduction" ||
     intent === "profile" ||
     intent === "inspect" ||

@@ -5,6 +5,7 @@ import {
   personaImages,
   serializePersona,
   validatePortrait,
+  withPersonaImages,
 } from "@ren-ai/personas";
 import type { PersonaRecord, PersonaStore, Portrait } from "@ren-ai/personas";
 import { completedImageDraft } from "./draft.ts";
@@ -52,18 +53,7 @@ export async function uploadImage(
     ? images.map((image) =>
         image.style === style && image.imageUrl === target ? { ...image, imageUrl } : image,
       )
-    : [...images, { style, imageUrl, main: !images.some((image) => image.style === style) }];
-  const main = (key: "anime" | "photo") =>
-    nextImages.find((image) => image.style === key && image.main)?.imageUrl;
-  const photo = main("photo");
-  const anime = main("anime");
-  const next = decodePersona({
-    ...persona,
-    portraits: { ...(photo && { photo }), ...(anime && { anime }) },
-    imageUrl: photo ?? anime!,
-    secondaryPortraits: nextImages
-      .filter((image) => !image.main)
-      .map(({ style: kind, imageUrl: url }) => ({ style: kind, imageUrl: url })),
-  });
+    : [...images, { style, imageUrl }];
+  const next = decodePersona(withPersonaImages(persona, nextImages));
   return completedImageDraft({ ...draft, preview: serializePersona(next) });
 }

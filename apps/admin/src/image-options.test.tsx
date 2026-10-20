@@ -10,11 +10,7 @@ test("failed per-photo drafts restore separate editable fields with correct nati
   document.body.innerHTML =
     '<form id="editor">' +
     renderToStaticMarkup(
-      <ImageOptions
-        count={3}
-        operation="subportrait:photo"
-        prompts={["first", "second", "third"]}
-      />,
+      <ImageOptions count={3} operation="generate:photo" prompts={["first", "second", "third"]} />,
     ) +
     "</form>";
   const form = document.querySelector("form")!;
@@ -22,7 +18,7 @@ test("failed per-photo drafts restore separate editable fields with correct nati
   expect([...inputs].map((input) => input.value)).toEqual(["first", "second", "third"]);
   expect(new FormData(form).get("portraitInstructions")).toBe("first");
   expect(new FormData(form).getAll("imagePrompts")).toEqual(["second", "third"]);
-  expect(inputs[0]?.dataset["portraitOperation"]).toBe("subportrait:photo");
+  expect(inputs[0]?.dataset["portraitOperation"]).toBe("generate:photo");
   expect(inputs[1]?.id).toBe("image-prompt-1");
   expect(inputs[2]?.id).toBe("image-prompt-2");
   expect(form.querySelector('label[for="image-prompt-1"]')?.textContent).toBe(

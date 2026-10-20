@@ -1,4 +1,4 @@
-import { imageSlots } from "./image-slots.ts";
+import { imageSlots, isSheetIntent } from "./image-slots.ts";
 import copy from "./copy.json";
 
 export function updatePromptFields(dialog: HTMLDialogElement) {
@@ -30,7 +30,7 @@ export function updatePromptFields(dialog: HTMLDialogElement) {
     field.toggleAttribute("hidden", !slot);
     if (slot)
       field.querySelector("label")!.textContent =
-        `${copy.portraitLabels[slot.style]} 사진 ${slot.index + 1} · ${copy.portraitInstructionsLabel}`;
+        `${copy.portraitLabels[slot.style]} ${isSheetIntent(intent) ? "인물 시트" : `사진 ${slot.index + 1}`} · ${copy.portraitInstructionsLabel}`;
   }
   dialog.querySelector<HTMLInputElement>("[data-separate-image-prompts]")!.value = "1";
 }

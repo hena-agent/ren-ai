@@ -54,7 +54,7 @@ test("replaying a failed legacy batch waits behind another live batch and retain
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin, store, editing, route } = await savedPreview({ ...subGenerator, portrait });
   portrait.mockRejectedValueOnce(new Error("first failed batch"));
-  const failedFields = { ...character, draft: tokenOf(editing), intent: "subportrait" };
+  const failedFields = { ...character, draft: tokenOf(editing), intent: "generate" };
   const failed = await admin(request(`${route}?style=photo`, failedFields));
   expect(failed.status).toBe(503);
   const partial = await failed.text();
@@ -64,7 +64,7 @@ test("replaying a failed legacy batch waits behind another live batch and retain
     queuedRequest(`${route}?style=anime`, {
       ...character,
       draft: tokenOf(partial),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(4));
@@ -77,7 +77,7 @@ test("replaying a failed legacy batch waits behind another live batch and retain
   expect((await replay).status).toBe(200);
   const done = await finishedJob(admin, jobUrl(second));
   expect(preview(done).secondaryPortraits).toHaveLength(2);
-  expect((await store.get(preview(done).id)).secondaryPortraits).toBeUndefined();
+  expect((await store.get(preview(done).id)).secondaryPortraits).toEqual([]);
 });
 
 test("blank photo-specific inputs use the default direction separately at one and multiple counts", async () => {
@@ -86,7 +86,7 @@ test("blank photo-specific inputs use the default direction separately at one an
   const single = await admin(
     queuedRequest(
       `${route}?style=photo`,
-      { ...character, draft: tokenOf(editing), intent: "subportrait", imageCount: "1" },
+      { ...character, draft: tokenOf(editing), intent: "generate", imageCount: "1" },
       [""],
     ),
   );
@@ -95,7 +95,7 @@ test("blank photo-specific inputs use the default direction separately at one an
   const additional = await admin(
     queuedRequest(
       `${route}?style=photo`,
-      { ...character, draft: tokenOf(first), intent: "subportrait", imageCount: "2" },
+      { ...character, draft: tokenOf(first), intent: "generate", imageCount: "2" },
       ["", ""],
     ),
   );
@@ -105,7 +105,7 @@ test("blank photo-specific inputs use the default direction separately at one an
     queuedRequest(
       "/personas",
       { ...character, draft: await newToken(admin), intent: "generate", imageCount: "2" },
-      ["", "", "", ""],
+      ["", ""],
     ),
   );
   await finishedJob(admin, jobUrl(initial));
@@ -138,7 +138,7 @@ test("saved editors expose the active job on reload and legacy requests still re
     queuedRequest(`${route}?style=photo`, {
       ...character,
       draft: tokenOf(editing),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(3));
@@ -147,13 +147,15 @@ test("saved editors expose the active job on reload and legacy requests still re
   );
   const other = { ...original, id: "other-source" };
   await store.create(other);
+  const { seedSheets } = await import("../test/fixtures.ts");
+  await seedSheets(store, other.id);
   const otherRoute = `/personas/${other.id}`;
   const otherEditor = await (await admin(request(otherRoute))).text();
   const stale = admin(
     request(`${otherRoute}?style=photo`, {
       ...character,
       draft: tokenOf(otherEditor),
-      intent: "subportrait",
+      intent: "generate",
     }),
   );
   await vi.waitFor(async () =>

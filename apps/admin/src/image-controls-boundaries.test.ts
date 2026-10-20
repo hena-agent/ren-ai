@@ -48,9 +48,7 @@ test("editing source leaves independent image actions available and partial gend
   expect(document.querySelector<HTMLButtonElement>('[value="generate"]')?.hidden).toBe(false);
   expect(
     [
-      ...document.querySelectorAll<HTMLButtonElement>(
-        '[value="regenerate"], [value="subportrait"]',
-      ),
+      ...document.querySelectorAll<HTMLButtonElement>('[value="regenerate"], [value="generate"]'),
     ].every((button) => !button.disabled),
   ).toBe(true);
   document.body.innerHTML =
@@ -104,7 +102,7 @@ test("server source state and style labels reflect independent main images accur
     ).toEqual(
       ["photo", "anime"].map(
         (style) =>
-          `${copy.mainImage} · ${copy.styles[style === "anime" ? "anime" : "photo"]} · ${copy.singleImageCost}`,
+          `사진 1 · ${copy.styles[style === "anime" ? "anime" : "photo"]} · ${copy.singleImageCost}`,
       ),
     );
   }
@@ -118,10 +116,10 @@ test("a saved partial style exposes only its remaining main image, and addition 
   expect(document.querySelector(".portrait-anime")).toBeNull();
   const { page } = await basePreview();
   document.body.innerHTML = page;
-  const buttons = document.querySelectorAll<HTMLButtonElement>('[value="subportrait"]');
+  const buttons = document.querySelectorAll<HTMLButtonElement>('[value="generate"]');
   for (const [index, style] of ["photo", "anime"].entries()) {
     expect(buttons[index]?.getAttribute("formaction")).toBe(`/personas?style=${style}`);
-    expect(buttons[index]?.dataset["portraitOperation"]).toBe(`subportrait:${style}`);
+    expect(buttons[index]?.dataset["portraitOperation"]).toBe(`generate:${style}`);
   }
   expect(document.querySelector('[value="introduction"]')).toBeNull();
   const image = document.querySelector<HTMLImageElement>("#portrait-gallery-anime img")!;
@@ -139,6 +137,6 @@ test("a saved partial style exposes only its remaining main image, and addition 
     editing: true,
     draft: "signed",
   });
-  expect(document.querySelector('[value="subportrait"]')).toBeTruthy();
+  expect(document.querySelector('[value="generate"]')).toBeTruthy();
   expect(document.querySelector('[value="introduction"]')).toBeNull();
 });

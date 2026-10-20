@@ -23,11 +23,11 @@ async function blockOtherPersona(
       intent: "generate",
     }),
   );
-  await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(3));
+  await vi.waitFor(() => expect(portrait).toHaveBeenCalledTimes(2));
   return { wait, other };
 }
 
-test("legacy retry processes blocked dependents after their failed main and restores per-photo directions on a repeated failure", async () => {
+test("legacy retry replaces only a failed photo while independent sheet-anchored siblings remain completed", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
   const { admin } = await fixture({ ...subGenerator, portrait });
   portrait.mockRejectedValueOnce(new Error("main failure"));
@@ -40,11 +40,11 @@ test("legacy retry processes blocked dependents after their failed main and rest
   };
   const first = await admin(request("/personas", fields));
   expect(first.status).toBe(503);
-  expect(portrait).toHaveBeenCalledTimes(3);
+  expect(portrait).toHaveBeenCalledTimes(2);
   const completed = await admin(request("/personas", fields));
   expect(completed.status).toBe(200);
-  expect(preview(await completed.text()).secondaryPortraits).toHaveLength(2);
-  expect(portrait).toHaveBeenCalledTimes(5);
+  expect(preview(await completed.text()).secondaryPortraits).toHaveLength(1);
+  expect(portrait).toHaveBeenCalledTimes(3);
   const nextFields = { ...fields, draft: await newToken(admin) };
   portrait.mockRejectedValueOnce(new Error("first repeated"));
   expect((await admin(request("/personas", nextFields))).status).toBe(503);
@@ -53,9 +53,9 @@ test("legacy retry processes blocked dependents after their failed main and rest
   expect(failed.status).toBe(503);
   const { draftTokens } = await import("./draft.ts");
   const draft = draftTokens("test-password").decode(tokenOf(await failed.text()));
-  expect(draft.imagePrompts).toHaveLength(4);
-  expect(draft.imagePrompts?.[0]).toBe("operator direction");
-  expect(draft.imagePrompts?.[2]).toContain("PHOTO DIRECTION");
+  expect(draft.imagePrompts).toHaveLength(2);
+  expect(draft.imagePrompts?.[0]).toContain("operator direction");
+  expect(draft.imagePrompts?.[1]).toContain("PHOTO DIRECTION");
 });
 
 test("a confirmed retry waiting behind another persona resets its previous attempt timing and uses the new FIFO position", async () => {
@@ -86,7 +86,7 @@ test("a confirmed retry waiting behind another persona resets its previous attem
   wait.resolve({ bytes: Buffer.from("89504e470d0a1a0a", "hex"), mimeType: "image/png" });
   await finishedJob(admin, jobUrl(other));
   await finishedJob(admin, path);
-  expect(portrait).toHaveBeenCalledTimes(5);
+  expect(portrait).toHaveBeenCalledTimes(3);
 });
 
 test("blank default prompts remain valid strings for initial main slots and receive variety only for extra photos", async () => {
@@ -96,21 +96,22 @@ test("blank default prompts remain valid strings for initial main slots and rece
     base: serializePersona(original),
     preview: serializePersona(original),
     imageCount: 2,
-    imagePrompts: ["", "", "", ""],
+    imagePrompts: ["", ""],
+    sheets: await store.sheets(original.id),
   };
   const batch = createImageBatch(
     original,
     draft,
     "generate",
-    new URLSearchParams(),
+    new URLSearchParams({ style: "photo" }),
     "generate",
     subGenerator,
     store,
   );
-  expect(batch.prompts.slice(0, 2)).toEqual(["", ""]);
-  expect(
-    batch.prompts.slice(2).every((prompt) => typeof prompt === "string" && prompt.length > 30),
-  ).toBe(true);
+  expect(batch.prompts).toHaveLength(2);
+  expect(batch.prompts.every((prompt) => typeof prompt === "string" && prompt.length > 30)).toBe(
+    true,
+  );
 });
 
 test("a legacy failed-batch replay shows queued status while another persona is running", async () => {
@@ -131,7 +132,7 @@ test("a legacy failed-batch replay shows queued status while another persona is 
   wait.resolve({ bytes: Buffer.from("89504e470d0a1a0a", "hex"), mimeType: "image/png" });
   await finishedJob(admin, jobUrl(other));
   expect((await replay).status).toBe(200);
-  expect(portrait).toHaveBeenCalledTimes(5);
+  expect(portrait).toHaveBeenCalledTimes(3);
 });
 
 test("legacy multi-photo initial requests leave both main directions unmodified and default additions to photo", async () => {
@@ -148,10 +149,10 @@ test("legacy multi-photo initial requests leave both main directions unmodified 
   );
   expect(response.status).toBe(200);
   expect(portrait.mock.calls.slice(0, 2).map((call) => call[2])).toEqual([
-    "operator main direction",
-    "operator main direction",
+    expect.stringContaining("operator main direction"),
+    expect.stringContaining("operator main direction"),
   ]);
-  expect(imageSlots("subportrait", 2).every((slot) => slot.style === "photo")).toBe(true);
+  expect(imageSlots("generate", 2).every((slot) => slot.style === "photo")).toBe(true);
 });
 
 test("initial photo diagnostics keep their selected slot after an earlier extra photo fails", async () => {
@@ -174,5 +175,5 @@ test("initial photo diagnostics keep their selected slot after an earlier extra 
     logs
       .filter((entry) => entry.stage === "portrait.generate" && entry.event === "operation.started")
       .map((entry) => entry.poseIndex),
-  ).toEqual([0, 0, 1, 2, 1, 2]);
+  ).toEqual([0, 1, 2]);
 });

@@ -150,10 +150,9 @@ test("generation is a private preview until saving; publishing exposes only the 
   const page = await generated.text();
   expect(page).not.toContain('class="notice success"');
   expect(page).toContain(introduction);
-  expect(page).toContain(copy.regenerate);
-  expect(page).toContain(`alt="${character.name} ${copy.styles.anime} · 메인"`);
-  expect(page).toContain(`alt="${character.name} ${copy.styles.photo} · 메인"`);
-  const image = /src="(\/images\/[^"]+)"/.exec(page)![1]!;
+  expect(page).not.toContain("전체 사진 다시 생성");
+  expect(page).toContain(`alt="${character.name} ${copy.styles.photo} · 사진 1"`);
+  const image = preview(page).portraits!.photo!;
   expect(await store.list()).toEqual([]);
   expect(await (await admin(new Request("http://localhost:3729/api/personas"))).json()).toEqual([]);
   expect((await store.image(image.slice("/images/".length))).status).toBe(200);
@@ -186,6 +185,7 @@ test("generation is a private preview until saving; publishing exposes only the 
       bio: introduction,
       imageUrl: persisted.imageUrl,
       portraits: persisted.portraits,
+      secondaryPortraits: [],
       profile: { introduction, sections: [] },
     },
   ]);
@@ -196,7 +196,7 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(listPage).toContain(copy.edit);
   expect(listPage).not.toContain(`${id} / EDIT`);
   const editPage = await (await admin(request(`/personas/${id}`))).text();
-  expect(editPage).toContain(`alt="${character.name} ${copy.styles.anime} · 메인"`);
+  expect(editPage).toContain(`alt="${character.name} ${copy.styles.photo} · 사진 1"`);
   expect(editPage).toContain(`src="${image}"`);
   const editedWindow = new Window();
   try {
@@ -216,11 +216,10 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect((await store.image(image.slice("/images/".length))).status).toBe(200);
 });
 
-test("a failed full image refresh preserves completed photos and can be retried without regenerating the introduction", async () => {
+test("a failed photo addition preserves completed photos and retry does not regenerate the introduction", async () => {
   const portrait = vi
     .fn<ProfileGeneratorPortrait>()
     .mockResolvedValue({ bytes: png, mimeType: "image/png" })
-    .mockResolvedValueOnce({ bytes: png, mimeType: "image/png" })
     .mockResolvedValueOnce({ bytes: png, mimeType: "image/png" })
     .mockRejectedValueOnce(new Error("private upstream detail"));
   const intro = vi.fn<typeof generator.introduction>().mockResolvedValue(introduction);
@@ -231,28 +230,32 @@ test("a failed full image refresh preserves completed photos and can be retried 
     )
   ).text();
   const token = tokenOf(initial);
-  const originalImage = /src="(\/images\/[^"]+)"/.exec(initial)![1]!;
+  const originalImage = preview(initial).portraits!.photo!;
   const failed = await admin(
-    request("/personas", { ...character, draft: token, intent: "portrait" }),
+    request("/personas", { ...character, draft: token, intent: "generate" }),
   );
   expect(failed.status).toBe(503);
   const page = await failed.text();
   expect(page).toContain(copy.failure);
   expect(page).not.toContain("private upstream detail");
-  expect(page).not.toContain(originalImage);
+  expect(page).toContain(originalImage);
   expect(preview(page).portraits?.anime).toBeUndefined();
   expect(preview(page).portraits?.photo).toBeTruthy();
   expect(page).toContain(introduction);
   expect(page).toContain("독립적인 성격의 도예가");
   const retried = await (
-    await admin(request("/personas", { ...character, draft: tokenOf(page), intent: "portrait" }))
+    await admin(request("/personas", { ...character, draft: tokenOf(page), intent: "generate" }))
   ).text();
   expect(retried).toContain(introduction);
-  expect(retried).not.toContain(originalImage);
+  expect(retried).toContain(originalImage);
   expect(intro).not.toHaveBeenCalled();
-  expect(portrait).toHaveBeenCalledTimes(6);
-  expect(portrait).toHaveBeenCalledWith(femaleCharacter, "anime");
-  expect(portrait).toHaveBeenCalledWith(femaleCharacter, "photo");
+  expect(portrait).toHaveBeenCalledTimes(3);
+  expect(portrait).toHaveBeenCalledWith(
+    femaleCharacter,
+    "photo",
+    "",
+    expect.objectContaining({ mimeType: "image/jpeg" }),
+  );
   expect((await admin(request(originalImage))).status).toBe(200);
   expect(await store.list()).toEqual([]);
 });
