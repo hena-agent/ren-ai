@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { seedingCommand } from "./seeding-command.ts";
 import { seedManifest } from "../test/seeding.ts";
+import { readSeedManifest } from "./seed-selection.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -19,45 +20,51 @@ async function scriptedDuckDB(root: string) {
   vi.stubEnv("PATH", `${root}:${process.env["PATH"]}`);
 }
 
-test("the local command writes a pinned balanced manifest and uploads it without confirming payment", async () => {
-  const root = await mkdtemp(join(tmpdir(), "seeding-command-"));
-  const output = join(root, "manifest.json");
-  const http = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(Response.json({ names: [], records: [], next: "seeds:" }))
-    .mockResolvedValueOnce(Response.json({ names: [], records: [] }))
-    .mockResolvedValueOnce(
-      new Response(null, { status: 303, headers: { location: "/seeding/test-run" } }),
-    );
-  vi.stubGlobal("fetch", http);
-  try {
-    await scriptedDuckDB(root);
-    const result = await seedingCommand(
-      [
-        "--count",
-        "4",
-        "--revision",
-        "a".repeat(40),
-        "--output",
-        output,
-        "--admin",
-        "http://localhost:3729",
-      ],
-      { ADMIN_PASSWORD: "secret" },
-    );
-    expect(JSON.parse(await readFile(output, "utf8"))).toMatchObject({
-      dataset: "nvidia/Nemotron-Personas-Korea",
-      revision: "a".repeat(40),
-    });
-    expect(result).toContain("http://localhost:3729/seeding/test-run");
-    expect(http).toHaveBeenCalledTimes(3);
-    expect(new Request(...http.mock.calls[1]!).url).toContain("cursor=seeds%3A");
-    expect(await new Request(...http.mock.calls[2]!).text()).not.toContain('"confirm"');
-  } finally {
-    vi.unstubAllGlobals();
-    await rm(root, { recursive: true, force: true });
-  }
-});
+test.each([1, 4])(
+  "the local command writes and uploads exactly %i seeds without confirming payment",
+  async (count) => {
+    const root = await mkdtemp(join(tmpdir(), "seeding-command-"));
+    const output = join(root, "manifest.json");
+    const http = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ names: [], records: [], next: "seeds:" }))
+      .mockResolvedValueOnce(Response.json({ names: [], records: [] }))
+      .mockResolvedValueOnce(
+        new Response(null, { status: 303, headers: { location: "/seeding/test-run" } }),
+      );
+    vi.stubGlobal("fetch", http);
+    try {
+      await scriptedDuckDB(root);
+      const result = await seedingCommand(
+        [
+          "--count",
+          String(count),
+          "--revision",
+          "a".repeat(40),
+          "--output",
+          output,
+          "--admin",
+          "http://localhost:3729",
+        ],
+        { ADMIN_PASSWORD: "secret" },
+      );
+      expect(JSON.parse(await readFile(output, "utf8"))).toMatchObject({
+        dataset: "nvidia/Nemotron-Personas-Korea",
+        revision: "a".repeat(40),
+      });
+      expect(result).toContain("http://localhost:3729/seeding/test-run");
+      expect(readSeedManifest(JSON.parse(await readFile(output, "utf8"))).seeds).toHaveLength(
+        count,
+      );
+      expect(http).toHaveBeenCalledTimes(3);
+      expect(new Request(...http.mock.calls[1]!).url).toContain("cursor=seeds%3A");
+      expect(await new Request(...http.mock.calls[2]!).text()).not.toContain('"confirm"');
+    } finally {
+      vi.unstubAllGlobals();
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test("the command runs the pinned DuckDB scan and preserves its manifest when the upload fails", async () => {
   const root = await mkdtemp(join(tmpdir(), "seeding-scan-"));

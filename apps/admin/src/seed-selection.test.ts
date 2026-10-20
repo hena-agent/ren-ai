@@ -2,6 +2,22 @@ import { expect, test } from "vitest";
 import { selectSeeds } from "./seed-selection.ts";
 import { seedManifest } from "../test/seeding.ts";
 
+test.each([0, 1, 2, 3])(
+  "a single-person preview can select age band %i without adding siblings",
+  (band) => {
+    const manifest = seedManifest();
+    const rows = manifest.seeds.map((seed) => seed.source);
+    const selected = selectSeeds(rows, {
+      count: 1,
+      revision: manifest.revision,
+      date: manifest.date,
+      names: [],
+      records: manifest.seeds.slice(0, band).map((seed) => seed.uuid),
+    });
+    expect(selected.seeds).toEqual([manifest.seeds[band]]);
+  },
+);
+
 test("the seed command selects four age bands, preserving source facts and skipping names already used", () => {
   const rows = [20, 25, 30, 35, 39].map((age, i) => ({
     uuid: String(i).padStart(32, "0"),

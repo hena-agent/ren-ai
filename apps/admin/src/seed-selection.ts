@@ -16,7 +16,7 @@ const Manifest = Schema.Struct({
   dataset: Schema.Literal("nvidia/Nemotron-Personas-Korea"),
   revision: Schema.String.check(Schema.isPattern(/^[a-f0-9]{40}$/)),
   date: Schema.String,
-  seeds: Schema.Array(Seed).check(Schema.isMinLength(4), Schema.isMaxLength(200)),
+  seeds: Schema.Array(Seed).check(Schema.isMinLength(1), Schema.isMaxLength(200)),
 });
 export type SeedManifest = typeof Manifest.Type;
 export type PersonaSeed = typeof Seed.Type;
@@ -32,6 +32,8 @@ export const seedNameKey = (name: string) =>
   name.normalize("NFKC").replace(/\s/g, "").toLowerCase();
 export const seedError = () =>
   new PersonaError("invalid", "Invalid or conflicting seeding manifest");
+export const validSeedCount = (count: number) =>
+  Number.isInteger(count) && count >= 1 && count <= 200 && (count === 1 || count % 4 === 0);
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: validate an uploaded dataset manifest before persistence or paid generation
 export function readSeedManifest(input: unknown): SeedManifest {
@@ -41,7 +43,8 @@ export function readSeedManifest(input: unknown): SeedManifest {
   } catch {
     throw seedError();
   }
-  if (!validBirthDate(manifest.date) || manifest.seeds.length % 4) throw seedError();
+  if (!validBirthDate(manifest.date) || (manifest.seeds.length !== 1 && manifest.seeds.length % 4))
+    throw seedError();
   const names = new Set<string>();
   const ids = new Set<string>();
   const bands = [0, 0, 0, 0];
@@ -65,7 +68,8 @@ export function readSeedManifest(input: unknown): SeedManifest {
     ids.add(seed.uuid);
     bands[Math.floor((seed.age - 20) / 5)]!++;
   }
-  if (bands.some((count) => count !== manifest.seeds.length / 4)) throw seedError();
+  if (manifest.seeds.length !== 1 && bands.some((count) => count !== manifest.seeds.length / 4))
+    throw seedError();
   return manifest;
 }
 
@@ -86,13 +90,7 @@ export function selectSeeds(
     records: readonly string[];
   },
 ): SeedManifest {
-  if (
-    !Number.isInteger(options.count) ||
-    options.count < 4 ||
-    options.count > 200 ||
-    options.count % 4
-  )
-    throw seedError();
+  if (!validSeedCount(options.count)) throw seedError();
   const rows = Schema.decodeUnknownSync(Schema.Array(sourceSchema))(input);
   const names = new Set(options.names.map(seedNameKey));
   const records = new Set(options.records);
@@ -122,6 +120,7 @@ export function selectSeeds(
     band.push({ uuid, name, age, birthDate, source });
     names.add(seedNameKey(name));
     records.add(uuid);
+    if (options.count === 1) break;
   }
   const seeds = bands.flat();
   if (seeds.length !== options.count)

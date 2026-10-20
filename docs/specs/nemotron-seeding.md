@@ -30,6 +30,9 @@ fictional birth date consistent with age on the selection date, then age normall
 Revalidate eligibility before paid generation if a run has waited.
 
 Select equally across 20–24, 25–29, 30–34 and 35–39, randomly within each band.
+A single-person preview (`--count 1`) may use any eligible age band; larger runs
+remain balanced in multiples of four. Preview runs use the same source receipts,
+paid confirmation, budget and unpublished-save workflow.
 Retain names in their original script; skip duplicate full names already reserved
 or in the Catalog. Preserve the complete source record privately. Never infer a
 Persona's primary/native language merely from the dataset's prose language.

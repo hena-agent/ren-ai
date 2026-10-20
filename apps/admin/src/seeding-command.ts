@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { parseArgs, promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { Schema } from "effect";
-import { selectSeeds } from "./seed-selection.ts";
+import { selectSeeds, validSeedCount } from "./seed-selection.ts";
 
 const exclusions = Schema.Struct({
   names: Schema.Array(Schema.String),
@@ -47,14 +47,11 @@ export async function seedingCommand(args: readonly string[], env: { ADMIN_PASSW
     !/^[a-f0-9]{40}$/.test(revision) ||
     !values.output ||
     !values.admin ||
-    !Number.isInteger(count) ||
-    count < 4 ||
-    count > 200 ||
-    count % 4 ||
+    !validSeedCount(count) ||
     !env.ADMIN_PASSWORD
   )
     throw new Error(
-      "Use --revision <40-char hash> --count <4..200, multiple of 4> --output <new file> --admin <origin>, with ADMIN_PASSWORD",
+      "Use --revision <40-char hash> --count <1 or 4..200 in multiples of 4> --output <new file> --admin <origin>, with ADMIN_PASSWORD",
     );
   const origin = adminOrigin(values.admin);
   const headers = {

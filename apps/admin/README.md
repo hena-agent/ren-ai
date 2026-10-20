@@ -94,6 +94,8 @@ production HTTPS origin only when deliberately selecting a production run. The
 command retrieves consumed IDs/names, scans the pinned source, writes a new
 mode-0600 manifest, and uploads it. Keep manifests private; they contain source
 records. The command never confirms payment.
+Use `--count 1` for a single-person preview with the same confirmation and recovery
+flow. Larger runs remain balanced across the four age bands in multiples of four.
 
 Open the returned `/seeding/<id>` page, review the seed names, image count and
 budget, then **Confirm paid run**. Each seed gets Persona, initial State/Memory,
