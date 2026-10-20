@@ -19,6 +19,7 @@ import { personaValues, photoValues } from "./catalog-values.ts";
 import { readPublicCatalog } from "@ren-ai/personas/catalog";
 import { personaImageBase } from "@ren-ai/personas/image-url";
 import { databaseSheets } from "./database-sheets.ts";
+import { databaseListing } from "./database-listing.ts";
 
 async function databaseOperation<T>(run: () => Promise<T>) {
   try {
@@ -98,6 +99,7 @@ export function databaseStore(
       };
     },
     list,
+    browse: (query) => databaseOperation(() => databaseListing(db, imageBase, query)),
     get,
     versions: async (id) => {
       await rowOf(id);

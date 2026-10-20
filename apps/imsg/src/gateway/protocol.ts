@@ -62,6 +62,11 @@ export const sendTextRpc = Rpc.make("sendText", {
 });
 
 export const messagingApi = RpcGroup.make(
+  Rpc.make("availability", {
+    payload: handle,
+    success: Schema.Struct({ available: Schema.Boolean, requestId: Schema.String }),
+    error: Schema.String,
+  }),
   Rpc.make("submitText", {
     payload: { ...handle, text: Schema.String, attemptID: Schema.String.check(Schema.isUUID()) },
     success: Schema.Struct({ guid: Schema.NullOr(Schema.String), requestId: Schema.String }),

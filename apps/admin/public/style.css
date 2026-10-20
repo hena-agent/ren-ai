@@ -14,6 +14,60 @@
   color: var(--ink);
   line-height: 1.6;
 }
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.catalog-filters label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  flex: 1 1 140px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.catalog-filters .catalog-search {
+  flex: 2 1 220px;
+}
+.catalog-filters input,
+.catalog-filters select {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+}
+.catalog-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+}
+.catalog-result-count {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 20px 0;
+}
+.catalog-result-count strong {
+  color: var(--signal);
+}
+.catalog-pagination {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 32px;
+  font-variant-numeric: tabular-nums;
+}
+.catalog-pagination a {
+  padding: 12px;
+}
+.catalog-pagination [aria-disabled] {
+  color: var(--muted);
+}
 .conversation-session {
   display: inline-block;
   max-width: 32ch;

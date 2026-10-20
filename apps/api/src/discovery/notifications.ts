@@ -9,6 +9,7 @@ import {
   type ContactDiagnostic,
 } from "./diagnostics.ts";
 import { waitlistNotificationText } from "./notification-copy.ts";
+import { checkAvailability } from "./availability.ts";
 
 export const notificationSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -34,7 +35,7 @@ export const queueWaitlistNotification = (registrationID: string, createdAt: num
 
 type Transport = Pick<
   Effect.Success<ReturnType<typeof remoteMessages>>,
-  "notify" | "notificationStatus"
+  "notify" | "notificationStatus" | "availability"
 >;
 
 export const waitlistNotifications = (transport: Transport, log: ContactLog = contactLog) =>
@@ -61,7 +62,7 @@ export const waitlistNotifications = (transport: Transport, log: ContactLog = co
         locale: keyof typeof waitlistNotificationText;
       }>`SELECT n.registration_id AS id, r.handle, r.locale FROM discovery_notification n
         JOIN discovery_registration r ON r.id = n.registration_id
-        WHERE n.state = 'queued' ORDER BY n.created_at, n.registration_id`;
+         WHERE n.state = 'queued' ORDER BY n.created_at, n.registration_id LIMIT 30`;
       for (const row of queued) {
         const started = performance.now();
         const fields: Pick<ContactDiagnostic, "requestId" | "operation" | "operationId"> = {
@@ -71,6 +72,14 @@ export const waitlistNotifications = (transport: Transport, log: ContactLog = co
         let stage = "notification.claim";
         let failed = false;
         yield* Effect.gen(function* () {
+          stage = "recipient.availability";
+          const availability = yield* checkAvailability(row.id, transport, log);
+          if (availability === "unavailable") {
+            yield* sql`UPDATE discovery_notification SET state = 'failed'
+              WHERE registration_id = ${row.id} AND state = 'queued'`;
+            return;
+          }
+          stage = "notification.claim";
           if (!(yield* claim(row.id))) return;
           stage = "transport.send";
           const result = yield* transport
@@ -124,6 +133,10 @@ export const waitlistNotifications = (transport: Transport, log: ContactLog = co
           durationMs: performance.now() - started,
         });
       }
+      const remaining =
+        yield* sql`SELECT registration_id FROM discovery_notification WHERE state = 'queued' LIMIT 1`;
+      if (remaining.length)
+        yield* scheduleWork("notifications", (yield* Clock.currentTimeMillis) + 1_000);
     });
     return { tick };
   });

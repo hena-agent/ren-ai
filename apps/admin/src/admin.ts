@@ -53,6 +53,7 @@ import { imageJobRoute } from "./image-job-routes.ts";
 import { uploadRoute } from "./upload-route.ts";
 import { versionRoutes } from "./version-routes.ts";
 import { savePersonaDraft } from "./save-persona.ts";
+import { personaQuery } from "./persona-query.ts";
 export function createAdmin(
   store: PersonaStore,
   password: string,
@@ -364,6 +365,7 @@ export function createAdmin(
     editing: boolean,
     saved: boolean,
     tab: string | null,
+    params: URLSearchParams,
   ) => {
     if (record) {
       const active = queue.pending(record.id);
@@ -400,7 +402,11 @@ export function createAdmin(
             draft!.preview !== draft!.base ||
             JSON.stringify(draft!.initial?.preview) !== JSON.stringify(draft!.initial?.base),
         }
-      : { personas: await operation("persona.list", {}, store.list) };
+      : await operation("persona.list", {}, async () => {
+          const query = personaQuery(params);
+          const listing = await store.browse(query);
+          return { personas: listing.personas, listing: { ...listing, query } };
+        });
     return html(renderPage({ ...content, saved, catalogPending: await catalogPending?.() }));
   };
 
@@ -459,6 +465,7 @@ export function createAdmin(
         Boolean(match),
         url.searchParams.get("saved") === "1",
         url.searchParams.get("tab"),
+        url.searchParams,
       );
     } catch (error) {
       return failure(error);

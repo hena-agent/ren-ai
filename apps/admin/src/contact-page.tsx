@@ -37,6 +37,7 @@ const reasons = {
   active: "이미 대화 중",
   reserved: "배정됨",
   no_persona: "공개된 미배정 Like 후보 없음",
+  no_imessage: "iMessage 미지원",
 };
 const notificationLabels = {
   queued: "안내 대기 중",
@@ -44,6 +45,11 @@ const notificationLabels = {
   failed: "안내 실패",
   uncertain: "안내 결과 불확실",
   skipped: "안내 생략 (시간당 한도)",
+};
+const imessageLabels = {
+  available: "사용 가능",
+  unavailable: "미지원",
+  failed: "확인 실패",
 };
 const time = (at: number) =>
   new Intl.DateTimeFormat("ko-KR", {
@@ -66,6 +72,7 @@ function Rows({
           <tr>
             {selection && <th scope="col">선정</th>}
             <th scope="col">연락처 / 등록</th>
+            <th scope="col">iMessage</th>
             <th scope="col">Like한 페르소나</th>
             <th scope="col">배정 / 예정 시각</th>
             <th scope="col">상태</th>
@@ -98,6 +105,16 @@ function Rows({
                   <a href={`/first-contacts?languages=${entry.id}`}>현재 언어 실력</a>
                 )}
               </th>
+              <td>
+                {entry.imessage ? (
+                  <>
+                    {imessageLabels[entry.imessage.status]}
+                    <small>{time(entry.imessage.checkedAt)}</small>
+                  </>
+                ) : (
+                  "미확인"
+                )}
+              </td>
               <td>{entry.likedPersonas.map((p) => p.name).join(", ") || "없음"}</td>
               <td>
                 {entry.persona ? (

@@ -13,6 +13,15 @@ pub struct Apple {
 }
 
 impl Native for Apple {
+    async fn availability(&self, from: &str, to: &str) -> Result<bool, Failure> {
+        self.client
+            .identity
+            .validate_targets(&[to.to_owned()], "com.apple.madrid", from)
+            .await
+            .map(|targets| targets.iter().any(|target| target == to))
+            .map_err(|e| Failure::push("ids_lookup", e))
+    }
+
     async fn handles(&self) -> Result<Vec<String>, Failure> {
         let apns = self.connection.resource_state.subscribe();
         let registration = self.client.identity.resource_state.subscribe();

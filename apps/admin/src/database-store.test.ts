@@ -107,6 +107,10 @@ test("the relational schema enforces photo ownership and supports records whose 
   const { db, store } = await cloudflareFixture();
   const config = getTableConfig(personaImages);
   const versionShape = getTableConfig(personaVersions);
+  expect(getTableConfig(personas).indexes.map((entry) => entry.config)).toMatchObject([
+    { name: "persona_created_order", columns: [{ name: "createdAt" }, { name: "id" }] },
+    { name: "persona_updated_order", columns: [{ name: "updatedAt" }, { name: "id" }] },
+  ]);
   expect(versionShape.primaryKeys.map((key) => key.columns.map((column) => column.name))).toEqual([
     ["personaId", "version"],
   ]);

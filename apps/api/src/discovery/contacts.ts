@@ -32,6 +32,8 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           endedAt: number | null;
           endingComplete: number | null;
           notification: typeof ContactEntry.Type.notification | null;
+          imessageStatus: NonNullable<typeof ContactEntry.Type.imessage>["status"] | null;
+          imessageCheckedAt: number | null;
         }>`SELECT r.id, r.handle, r.created_at AS createdAt, c.state, c.persona_id AS personaID,
       c.scheduled_at AS scheduledAt, c.request_id AS requestId, v.ended_at AS endedAt,
       EXISTS(SELECT 1 FROM send s WHERE s.conversation_id = v.id AND s.tool_call_id = e.call_id || ':notice:' || e.notice_attempt AND s.state IN ('sent','delivered')) AS endingComplete,
@@ -44,7 +46,8 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
         OR NOT EXISTS(SELECT 1 FROM conversation c WHERE c.user_id = u.id AND c.ended_at IS NOT NULL)))
         OR EXISTS(SELECT 1 FROM persona_assignment WHERE handle = r.handle) AS occupied,
       EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle,
-      n.state AS notification
+       n.state AS notification, r.imessage_status AS imessageStatus,
+       r.imessage_checked_at AS imessageCheckedAt
       FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id
       LEFT JOIN discovery_notification n ON n.registration_id = r.id
       LEFT JOIN conversation v ON v.session_id = c.session_id LEFT JOIN conversation_end e ON e.conversation_id = v.id
@@ -71,15 +74,15 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
             id: like.personaID,
             name: byID.get(like.personaID)?.name ?? like.personaID,
           }));
-          const reason = row.unavailable
-            ? "blocked"
-            : row.admitted
-              ? "active"
-              : row.state || row.occupied
-                ? "reserved"
-                : likedPersonas.some((p) => available.has(p.id))
-                  ? "ready"
-                  : "no_persona";
+          let reason: typeof ContactEntry.Type.reason = likedPersonas.some((p) =>
+            available.has(p.id),
+          )
+            ? "ready"
+            : "no_persona";
+          if (row.imessageStatus === "unavailable") reason = "no_imessage";
+          if (row.state || row.occupied) reason = "reserved";
+          if (row.admitted) reason = "active";
+          if (row.unavailable) reason = "blocked";
           return {
             id: row.id,
             handle: row.handle,
@@ -98,6 +101,9 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
             requestId: row.requestId,
             testHandle: row.testHandle === 1,
             ...(row.notification && { notification: row.notification }),
+            ...(row.imessageStatus && {
+              imessage: { status: row.imessageStatus, checkedAt: row.imessageCheckedAt! },
+            }),
             ...(row.endedAt !== null && {
               relationshipEnd: { at: row.endedAt, noticeDelivered: row.endingComplete === 1 },
             }),

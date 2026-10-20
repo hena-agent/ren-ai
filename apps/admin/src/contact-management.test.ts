@@ -116,6 +116,25 @@ test("Waitlist shows Notification outcomes without offering resend or changing s
   expect(page.match(/form="contact-direct-selection"/g)).toHaveLength(5);
 });
 
+test("Waitlist shows iMessage lookup status and time, and disables unsupported entries", async () => {
+  const rows = [
+    entry(),
+    ...(["available", "unavailable", "failed"] as const).map((status) => ({
+      ...entry(),
+      eligible: status !== "unavailable",
+      reason: status === "unavailable" ? ("no_imessage" as const) : ("ready" as const),
+      imessage: { status, checkedAt: 1_000 },
+    })),
+  ];
+  const { admin } = await readOnlyContacts(rows);
+  const page = await (await admin(request("/waitlist"))).text();
+  for (const label of ["iMessage", "미확인", "사용 가능", "미지원", "확인 실패", "70. 1. 1."])
+    expect(page).toContain(label);
+  const unsupported = page.split("<tr>").find((row) => row.includes(rows[2]!.id))!;
+  expect(unsupported).toContain("disabled");
+  expect(unsupported).toContain("iMessage 미지원");
+});
+
 test("a waiting test handle starts now with a chosen liked persona", async () => {
   const tester = {
     ...entry(),
