@@ -9,6 +9,8 @@ import { managementClient } from "./contact-client.ts";
 import { catalogDelivery, wakeAlarm } from "./catalog-delivery.ts";
 import { recoverEditing, downloadEditingRecovery } from "./editing-recovery.ts";
 import { restoreImageBatch } from "./image-batch.ts";
+import { seedingStore } from "./seeding-store.ts";
+import { pricedSeedingModels } from "./seeding-budget.ts";
 
 export interface AdminEnv {
   ADMIN_JURISDICTION?: "us" | "local";
@@ -76,6 +78,13 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
       },
       management,
       catalogPending: delivery.pending,
+      seeding: {
+        repository: seedingStore(env.DB),
+        models: {
+          text: env.ADMIN_TEXT_MODEL ?? pricedSeedingModels.text,
+          image: env.ADMIN_IMAGE_MODEL ?? pricedSeedingModels.image,
+        },
+      },
     },
   );
   return {
@@ -83,14 +92,15 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
     alarm: async () => {
       await delivery.flush();
       const job = handle.nextJob();
-      if (!job) return;
-      await loggedJob(
-        job.requestId,
-        { personaId: job.batch.personaId, jobId: job.id },
-        handle.runNext,
-        workerLog,
-      );
-      if (handle.nextJob()) await wake();
+      if (job)
+        await loggedJob(
+          job.requestId,
+          { personaId: job.batch.personaId, jobId: job.id },
+          () => handle.seeds!.runImage(job, handle.runNext),
+          workerLog,
+        );
+      else await handle.seeds!.tick();
+      if (handle.nextJob() || (await handle.seeds!.next())) await wake();
     },
   };
 }

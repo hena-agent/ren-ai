@@ -75,6 +75,59 @@ value for private Catalog access. The application refreshes revisions once a sec
 session events. Its selection response uses absolute Worker image URLs, which
 also work in the existing Discovery client.
 
+## Korean Nemotron pilot
+
+Apply the seeding ledger migrations (`db:local`, or `db:remote` before deploying).
+Use the default Gemini models and configure `GEMINI_API_KEY`. Install DuckDB with
+its `httpfs` extension (`duckdb -c 'INSTALL httpfs;'`). Then select and upload:
+
+```sh
+bun run --cwd apps/admin seed:korea \
+  --revision ada0f5b53a38bb5a30cce09358adde883c1ab63a \
+  --count 20 \
+  --output "$HOME/korean-pilot.json" \
+  --admin http://127.0.0.1:3729
+```
+
+`ADMIN_PASSWORD` comes from the environment or Admin's local `.env`. Use the
+production HTTPS origin only when deliberately selecting a production run. The
+command retrieves consumed IDs/names, scans the pinned source, writes a new
+mode-0600 manifest, and uploads it. Keep manifests private; they contain source
+records. The command never confirms payment.
+
+Open the returned `/seeding/<id>` page, review the seed names, image count and
+budget, then **Confirm paid run**. Each seed gets Persona, initial State/Memory,
+two independent identity sheets and one photo per style through the shared FIFO.
+Refresh for progress. Completed personas are saved unpublished; open each editor
+to inspect the documents and images before selecting **Publish reviewed selections**.
+A changed saved snapshot requires a refreshed review page. Partial image results
+remain available in the editor and cannot be bulk published without both styles.
+
+The approximately $0.35/persona estimate is not a bill or a budget reservation.
+The default maximum is $3/persona because each dispatch conservatively reserves
+maximum input/output tokens. Failed, rejected and interrupted calls retain their
+reservation. Only explicit 429/RESOURCE_EXHAUSTED rejections
+receive two automatic retries (5s and 10s). Other failures stop that operation;
+uncertain drafts and images require individual operator-confirmed retries.
+The run's confirmed budget cannot be silently increased by resubmission.
+For a save conflict with an existing Persona, open her editor from the Catalog to
+review the latest saved documents, then confirm the seed's save retry. This adopts
+the operator's saved version without regenerating it.
+
+If upload fails, retain the manifest and upload that exact file again:
+
+```sh
+curl --user "admin:$ADMIN_PASSWORD" \
+  --header 'Origin: http://127.0.0.1:3729' \
+  --header 'Content-Type: application/json' \
+  --data-binary "@$HOME/korean-pilot.json" \
+  http://127.0.0.1:3729/seeding
+```
+
+The same manifest returns the same run. Source receipts survive deletion and
+nonpublication. Follow the [pilot sequence](../../docs/specs/nemotron-seeding.md):
+review 20 Korean personas before Japanese/US pilots or larger runs.
+
 ## Deploy
 
 The production domain is `admin.renai.im`, using the `persona-admin` Worker

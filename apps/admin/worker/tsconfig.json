@@ -6,5 +6,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["entry.mjs", "form-data.d.ts"]
+  "include": ["entry.mjs", "form-data.d.ts", "test-seeding.ts"]
 }

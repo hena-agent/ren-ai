@@ -151,6 +151,7 @@ interface VersionContext {
   drafts: Map<string, Draft>;
   busy: Set<string>;
   pending: (id: string) => string | undefined;
+  assertEditable: ((id: string) => Promise<void>) | undefined;
 }
 
 export async function versionRoutes(request: Request, url: URL, context: VersionContext) {
@@ -172,6 +173,7 @@ export async function versionRoutes(request: Request, url: URL, context: Version
   }
   busy.add(id);
   try {
+    await context.assertEditable?.(id);
     record = await store.get(id);
     const currentVersion = record.version ?? 1;
     const initial = await store.initial(id);

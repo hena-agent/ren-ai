@@ -1,4 +1,11 @@
-import { integer, sqliteTable, text, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
+import {
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+  primaryKey,
+  index,
+} from "drizzle-orm/sqlite-core";
 
 export const personas = sqliteTable("personas", {
   id: text().primaryKey(),
@@ -60,4 +67,43 @@ export const identitySheets = sqliteTable(
     operationId: text().notNull(),
   },
   (table) => [primaryKey({ columns: [table.personaId, table.style] })],
+);
+
+export const seedingRuns = sqliteTable("seeding_runs", {
+  id: text().primaryKey(),
+  digest: text().notNull().unique(),
+  dataset: text().notNull(),
+  revision: text().notNull(),
+  selectedOn: text().notNull(),
+  createdAt: integer().notNull(),
+  confirmed: integer({ mode: "boolean" }).notNull().default(false),
+  budgetMicros: integer().notNull().default(0),
+  reservedMicros: integer().notNull().default(0),
+  requestId: text().notNull(),
+});
+
+// No Persona FK: provenance and consumed-seed receipts survive Persona deletion.
+export const seedingSeeds = sqliteTable(
+  "seeding_seeds",
+  {
+    personaId: text().primaryKey(),
+    runId: text()
+      .notNull()
+      .references(() => seedingRuns.id),
+    dataset: text().notNull(),
+    uuid: text().notNull(),
+    nameKey: text().notNull().unique(),
+    source: text().notNull(),
+    ordinal: integer().notNull(),
+    stage: text({
+      enum: ["draft", "drafting", "sheets", "anime", "photo", "save", "done", "partial", "failed"],
+    }).notNull(),
+    pending: integer({ mode: "boolean" }).notNull().default(false),
+    retryStage: text({ enum: ["draft", "drafting", "sheets", "anime", "photo", "save"] }),
+  },
+  (table) => [
+    uniqueIndex("seeding_source").on(table.dataset, table.uuid),
+    index("seeding_pending").on(table.pending, table.runId, table.ordinal),
+    index("seeding_run").on(table.runId, table.ordinal),
+  ],
 );

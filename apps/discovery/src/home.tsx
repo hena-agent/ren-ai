@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Header } from "./chrome.tsx";
 import { useCopy } from "./locale.tsx";
 import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
+import { Attribution } from "./attribution.tsx";
 import { HomeNavigation } from "./home-navigation.tsx";
 import { HeroGallery } from "./home-artwork.tsx";
 import { ConversationScene } from "./conversation-scene.tsx";
@@ -138,6 +139,7 @@ export function Home() {
             {copy.brand}
           </a>
           <p>{home.footer}</p>
+          <Attribution />
         </div>
         <PrivacyDisclosure />
       </footer>

@@ -18,9 +18,25 @@ _Avoid_: bot, character, agent (an agent is the OpenCode mechanism that implemen
 The operator's detailed, private description of a persona's appearance, background, personality and speech. It is the source for her public profile and conversation instructions.
 _Avoid_: bio, introduction, system prompt
 
+**Persona seed**:
+What a persona is drafted from: an operator's short idea or one record of a third-party synthetic persona dataset. It is source material; users never see it and no persona plays it.
+_Avoid_: Nemotron persona, source persona, template
+
+**Seeding run**:
+One operator-confirmed run that drafts many personas from a set of Persona seeds, creates their identity sheets and photos, and saves them unpublished.
+_Avoid_: import, batch, bulk generation
+
 **Public profile**:
 The name, image and introduction shown to people choosing personas. It is distinct from the private persona description.
 _Avoid_: persona definition, prompt
+
+**Image style**:
+One of the two renderings of every persona image: anime or photo. Each style has its own identity sheet and photos, and a Discovery visitor browses in one style at a time.
+_Avoid_: live-action, photorealistic, realistic, portrait type
+
+**Identity sheet**:
+A neutral multi-view reference image of one persona in one image style. Every photo of her in that style is generated from it; it never appears in her public profile.
+_Avoid_: main photo, representative photo, reference portrait
 
 **Persona version**:
 An immutable saved edition of one persona's identity document, including its private description and public profile. It excludes photos, initial State and Memory, and the evolving state and memories of Conversations.
@@ -81,6 +97,10 @@ _Avoid_: chat, thread, session (a session is OpenCode's)
 **Relationship ending**:
 A persona's permanent decision to end her Conversation with one user. It is distinct from declining a suggestion, taking a break, or blocking the user from the service.
 _Avoid_: ban, reset, pause
+
+**Retired persona**:
+A persona whose Conversation has ended. She never appears in Discovery again; the operator keeps her relationship history.
+_Avoid_: archived, deleted, unpublished
 
 **Reselection**:
 A user choosing other personas through Discovery after a Relationship ending, followed by Selection and a new Conversation. The previous Conversation's private memories and judgments belong only to that previous relationship.

@@ -17,10 +17,14 @@ export async function imageJobRoute(
   tokens: ReturnType<typeof draftTokens>,
   drafts: Map<string, Draft>,
   page: (job: ImageJob, progress: boolean) => Response,
+  busy: ReadonlySet<string>,
+  assertEditable?: (id: string) => Promise<void>,
 ) {
   const job = queue.get(match[1]!);
   requestFields({ personaId: job.batch.personaId, jobId: job.id });
   if (request.method === "GET" && !match[2]) return page(job, true);
+  await assertEditable?.(job.batch.personaId);
+  if (busy.has(job.batch.personaId)) throw new PersonaError("conflict", copy.busy);
   if (request.method !== "POST" || !match[2]) throw new PersonaError("not_found", copy.notFound);
   if (request.headers.get("origin") !== url.origin)
     throw new PersonaError("invalid", copy.originError);
