@@ -8,10 +8,13 @@ export const characterResponse = (value: object = sheet, conversion = false) =>
       "issues" in value
         ? { additions: [], ...value }
         : {
-            persona: value,
+            persona: {
+              ...(!conversion && { languageBackground: { primary: "ko", native: ["ko"] } }),
+              ...value,
+            },
             publicProfile: "천천히 알아가는 쪽이 편해요.",
             ...(!conversion && {
-              state: scores,
+              state: { ...scores, languageProficiency: { ko: "fluent" } },
               memory: "# 현재 생활\n\n- 사진전을 준비 중이다.\n",
             }),
           },
