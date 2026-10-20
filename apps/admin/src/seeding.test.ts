@@ -119,4 +119,6 @@ test.each([1, 4])(
       logs.stderr.mockRestore();
     }
   },
+  // Real image processing and 60 actor restorations exceed Vitest's 5s default on CI.
+  30_000,
 );
