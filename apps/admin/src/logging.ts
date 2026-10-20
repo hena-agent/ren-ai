@@ -195,15 +195,7 @@ export function loggedRequest(request: Request, run: () => Promise<Response>, lo
     ? "/personas/:id"
     : /^\/conversations\/\d+$/.test(path)
       ? "/conversations/:id"
-      : [
-            "/",
-            "/new",
-            "/personas",
-            "/api/personas",
-            "/inspection",
-            "/health",
-            "/conversations",
-          ].includes(path)
+      : ["/", "/new", "/personas", "/api/personas", "/health", "/conversations"].includes(path)
         ? path
         : "/other";
   return scope.run(

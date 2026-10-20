@@ -2,7 +2,6 @@ import { PersonaError, serializePersona } from "@ren-ai/personas";
 import type { PersonaStore } from "@ren-ai/personas";
 import type { Draft } from "./draft.ts";
 import { draftTokens } from "./draft.ts";
-import { inspectFiles } from "./inspection-page.tsx";
 import { operation, requestFields } from "./logging.ts";
 import type { renderPage } from "./page.tsx";
 
@@ -63,11 +62,6 @@ export function createResources(
     if (pathname === "/pending.js")
       return new Response(script, {
         headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" },
-      });
-    if (pathname === "/inspection")
-      return render({
-        personas: [],
-        inspections: inspectFiles(await operation("persona.inspect", {}, store.inspect)),
       });
     if (localImages && pathname.startsWith("/images/"))
       return operation("image.read", {}, () => store.image(pathname.slice("/images/".length)));

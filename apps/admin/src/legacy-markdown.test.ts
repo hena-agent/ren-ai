@@ -13,8 +13,6 @@ test("explicit legacy conversion keeps original publication choices, guards stal
   const source = `---\n${JSON.stringify({ name: legacy.name, bio: "천천히 알아가요.", description: "Private identity", published: true, "image-url": legacy.imageUrl, "time-zone": legacy.timeZone, language: legacy.language, "opening-line": legacy.openingLine, memory: legacy.memory, gender: "female", "profile-details": { basics: { age: 28 }, lifestyle: { rhythm: "밤형" }, relationship: { contact: "천천히" }, interests: [], answers: [{ question: "하고 싶은 일?", answer: "책방 구경" }] }, portraits: { photo: legacy.imageUrl }, "secondary-portraits": [] })}\n---\nOld prompt duplicate`;
   await writeFile(join(root, "legacy.md"), source);
   await expect(store.get("legacy")).rejects.toThrow("invalid frontmatter");
-  const inspection = await (await admin(request("/inspection"))).text();
-  expect(inspection).toContain('href="/import/legacy"');
   const response = await admin(request("/import/legacy"));
   expect(response.status).toBe(200);
   const page = await response.text();
