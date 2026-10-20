@@ -360,6 +360,7 @@ export function renderPage({
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>{copy.title}</title>
+          <link rel="icon" type="image/svg+xml" href="/brand.svg" />
           <link rel="stylesheet" href="/style.css" />
           <script src="/pending.js" type="module" />
         </head>

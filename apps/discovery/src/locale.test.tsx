@@ -151,12 +151,17 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
 test("localized proficiency includes all languages in details and keeps unset profiles unlabelled", () => {
   const view = render(<ProfileLanguages persona={persona} />);
   expect(screen.getAllByRole("listitem")).toHaveLength(5);
-  expect(screen.getByText("한국어 · 모국어 · 주 사용 언어")).toBeTruthy();
-  expect(screen.getByText("프랑스어 · 능숙")).toBeTruthy();
+  expect(within(screen.getAllByRole("listitem")[0]!).getByText("한국어")).toBeTruthy();
+  expect(
+    within(screen.getAllByRole("listitem")[0]!).getByText("모국어 · 주 사용 언어"),
+  ).toBeTruthy();
+  expect(screen.getByText("프랑스어")).toBeTruthy();
+  expect(screen.getByText("능숙")).toBeTruthy();
   view.rerender(
     <ProfileLanguages persona={{ ...persona, languages: { proficiency: { en: "fluent" } } }} />,
   );
-  expect(screen.getByText("영어 · 유창")).toBeTruthy();
+  expect(screen.getByText("영어")).toBeTruthy();
+  expect(screen.getByText("유창")).toBeTruthy();
   view.rerender(<ProfileLanguages persona={{ ...persona, languages: { proficiency: {} } }} />);
   expect(screen.queryByRole("region")).toBeNull();
   view.rerender(

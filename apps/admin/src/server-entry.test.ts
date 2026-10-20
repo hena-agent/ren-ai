@@ -21,6 +21,16 @@ test("the real Worker and Durable Object serve bundled assets and correlate gene
   expect(page.status).toBe(200);
   const markup = await page.text();
   expect(markup).toContain('type="module"');
+  expect(markup).toContain('<link rel="icon" type="image/svg+xml" href="/brand.svg"/>');
+  const icon = await runtime.dispatchFetch("http://localhost:3729/brand.svg", { headers });
+  expect(icon.status).toBe(200);
+  expect(icon.headers.get("content-type")).toBe("image/svg+xml");
+  const discoveryIcon = await readFile(
+    new URL("../../discovery/public/brand.svg", import.meta.url),
+    "utf8",
+  );
+  expect(await icon.text()).toBe(discoveryIcon.replace("#c72c52", "#515151"));
+  expect((await runtime.dispatchFetch("http://localhost:3729/brand.svg")).status).toBe(200);
   const script = await runtime.dispatchFetch("http://localhost:3729/pending.js", { headers });
   expect((await script.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
   const styles = await runtime.dispatchFetch("http://localhost:3729/style.css", { headers });
