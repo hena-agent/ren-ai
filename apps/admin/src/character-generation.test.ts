@@ -98,6 +98,44 @@ test("the real authoring boundary saves only a reviewed, editable persona descri
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
+test("structured character fields are rendered by code instead of asking the model for Markdown formatting", async () => {
+  const publicProfile = "천천히 알아가요.\n\n### 좋아하는 것\n\n- 사진 산책";
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      modelReply(
+        JSON.stringify({
+          persona: { ...sheet, languageBackground: { primary: "en", native: ["en"] } },
+          publicProfile,
+          state: { mood: 55, energy: 60, stress: 35, connection: 55, solitude: 60, affection: 18 },
+          memory: "# 현재 생활\n\n- 사진전을 준비 중이다.\n",
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(acceptedReview());
+  const result = await createProfileGenerator({ key: "key", fetcher }).character(
+    "미국인 사진가",
+    "female",
+  );
+  expect(result.description).toBe(
+    withPublicProfile(
+      renderCharacterSheet({
+        ...sheet,
+        languageBackground: { primary: "en", native: ["en"] },
+      }),
+      publicProfile,
+    ),
+  );
+  expect(JSON.parse(await new Request(...fetcher.mock.calls[0]!).text())).toMatchObject({
+    generationConfig: {
+      responseJsonSchema: {
+        properties: { persona: { type: "object" } },
+        required: ["persona", "publicProfile", "state", "memory"],
+      },
+    },
+  });
+});
+
 test("one targeted repair is reviewed again and only the corrected sheet becomes the draft", async () => {
   const issue = "말투가 원본과 달리 상담원처럼 장황하다.";
   const fetcher = vi
@@ -132,14 +170,10 @@ test("one targeted repair is reviewed again and only the corrected sheet becomes
   ).toBe(true);
 });
 
-test.each<{ invalid: object; label: string; output?: string }>([
+test.each<{ invalid: object; label: string }>([
   { invalid: { ...sheet, base: {} }, label: "missing axes" },
   {
-    invalid: {},
-    output: withPublicProfile(
-      `${renderCharacterSheet(sheet)}\n\n## MEMORY\nInvented shared memory`,
-      "안녕하세요.",
-    ),
+    invalid: { ...sheet, dailyLife: `${sheet.dailyLife}\n\n## MEMORY\nInvented shared memory` },
     label: "runtime memory",
   },
   { invalid: { ...sheet, name: " " }, label: "empty name" },
@@ -153,10 +187,8 @@ test.each<{ invalid: object; label: string; output?: string }>([
     invalid: { ...sheet, base: { ...sheet.base, autonomy: { ...sheet.base.autonomy, value } } },
     label: `invalid score ${value}`,
   })),
-])("invalid persona output is rejected before review: $label", async ({ invalid, output }) => {
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(output ? modelReply(output) : characterResponse(invalid));
+])("invalid persona output is rejected before review: $label", async ({ invalid }) => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(characterResponse(invalid));
   const { admin, store, logs } = await fixture(createProfileGenerator({ key: "key", fetcher }));
   const response = await admin(
     request("/personas", {

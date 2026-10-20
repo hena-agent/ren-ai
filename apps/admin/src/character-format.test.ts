@@ -4,8 +4,21 @@ import { legacy } from "../test/fixtures.ts";
 import { renderCharacterSheet } from "@ren-ai/personas";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import { inspectPersona, parseCharacterDescription, versionedPersona } from "@ren-ai/personas";
+import { birthDateOf } from "@ren-ai/personas/birth-date";
 
 const description = renderCharacterSheet(sheet);
+test("human-edited spacing and blank lines do not change the character or its language background", () => {
+  const value = { ...sheet, languageBackground: { primary: "en", native: ["en", "ko"] } };
+  const source = renderCharacterSheet(value)
+    .replaceAll("\n\n", "\n")
+    .replaceAll("\n", "\n\n\n")
+    .split("\n")
+    .map((line) => `  ${line}  `)
+    .join("\r\n")
+    .replaceAll(": ", ":   ");
+  expect(parseCharacterDescription(source)).toEqual(value);
+  expect(birthDateOf(source)).toBe(sheet.birthDate);
+});
 test("the current description format round-trips all fixed fields, multiline reasons, traits and both genders", () => {
   expect(parseCharacterDescription(description)).toEqual(sheet);
   const male = {
@@ -51,6 +64,7 @@ test.each([
   description.replace("- 안녕하세요.", "안녕하세요."),
   description.replace("강도: 80", "강도: 101"),
   renderCharacterSheet({ ...sheet, samples: ["한 개뿐"] }),
+  renderCharacterSheet({ ...sheet, background: "x".repeat(2001) }),
   description.replace(`이름: ${sheet.name}`, "이름:  "),
   renderCharacterSheet({ ...sheet, hidden: [...sheet.hidden, ...sheet.hidden] }),
 ])("invalid persisted descriptions produce a payload-free format error", (source) => {

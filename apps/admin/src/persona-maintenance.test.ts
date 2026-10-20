@@ -290,7 +290,9 @@ test("converted sheet identity is validated even when an adapter returns the exp
 test("conversion uses the real structured-generation and review boundary with exact identity and a private supplement report", async () => {
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockResolvedValueOnce(modelReply(conversion.description))
+    .mockResolvedValueOnce(
+      modelReply(JSON.stringify({ persona: sheet, publicProfile: legacy.bio })),
+    )
     .mockResolvedValueOnce(characterResponse({ issues: [], additions: conversion.additions }));
   const model = createProfileGenerator({ key: "key", fetcher });
   expect(
