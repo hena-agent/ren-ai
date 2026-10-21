@@ -124,6 +124,13 @@ Use native CSS before introducing animation dependencies.
 
 ## Public profiles and sharing
 
+The contact form asks for a Starting relationship using one native radio group:
+Dating (selected by default, newly dating), Flirting, Friends and Strangers. Show
+a short description per choice, use the existing cherry-rose selected treatment
+and visible keyboard focus, and preserve the choice across locale changes and
+failed submissions. Friends is platonic and independent of gender. This selection
+does not invent user facts or shared history. See [Starting relationship](starting-relationship.md).
+
 Keep the existing Discovery cards, swipe interactions, inline reading view and
 contact form. Show sharing only at the end of the expanded profile at
 `/personas/{id}`, after all profile content. Use a full-width, white, rounded
