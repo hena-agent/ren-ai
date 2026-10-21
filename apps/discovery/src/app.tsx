@@ -32,6 +32,7 @@ function Deck({
   hasPassed,
   choose,
   restart,
+  onNavigate,
   onOpen,
   onBusyChange,
   details,
@@ -44,6 +45,7 @@ function Deck({
   hasPassed: boolean;
   choose: (persona: PublicPersona, like: boolean) => void;
   restart: () => void;
+  onNavigate: (view: BrowseView) => void;
   onOpen: (persona: PublicPersona, image?: number) => void;
   onBusyChange: (busy: boolean) => void;
   details: { persona: StyledPersona; image: number } | undefined;
@@ -100,6 +102,11 @@ function Deck({
       <span className="empty-icon icon icon-cards" aria-hidden="true" />
       <h2>{copy.end}</h2>
       <p>{likedCount ? copy.endHint : copy.noLikes}</p>
+      {likedCount > 0 && (
+        <button className="primary-button" type="button" onClick={() => onNavigate("contact")}>
+          {copy.contact}
+        </button>
+      )}
       {hasPassed && (
         <button className="text-button" type="button" onClick={restart}>
           {copy.restart}
@@ -318,6 +325,7 @@ function Experience({
               hasPassed={people.some((persona) => choices[persona.id] === false)}
               choose={choose}
               restart={restart}
+              onNavigate={navigate}
               onOpen={openDetails}
               onBusyChange={setBusy}
               details={detail && { persona: detail, image: details!.image }}

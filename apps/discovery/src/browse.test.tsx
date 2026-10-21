@@ -54,6 +54,9 @@ test("Pass and Like survive a reload, and revisiting passed cards preserves Like
   first.unmount();
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
+  fireEvent.click(screen.getByRole("button", { name: "연락받기" }));
+  expect(screen.getByRole("list", { name: "관심을 전할 페르소나" }).textContent).toBe("보라");
+  fireEvent.click(screen.getByRole("button", { name: /탐색으로 돌아가기/ }));
   fireEvent.click(screen.getByRole("button", { name: "다시 둘러보기" }));
   await screen.findByRole("heading", { name: "미카" });
   expect(
@@ -103,7 +106,7 @@ test("the real client is used by default and inherited property names are valid 
   choose(true);
   await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
   expect(screen.queryByRole("button", { name: "다시 둘러보기" })).toBeNull();
-  expect(screen.getByRole("button", { name: /연락받기/ }).hasAttribute("disabled")).toBe(false);
+  expect(screen.getByRole("button", { name: "연락받기" }).hasAttribute("disabled")).toBe(false);
   expect(fetcher.mock.calls[0]?.[0]).toBe("/discovery/personas");
   expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
 });
