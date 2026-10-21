@@ -6,8 +6,6 @@ import { ImageOptions } from "./image-options.tsx";
 import { ImageJobPanel } from "./image-job-panel.tsx";
 import type { ImageJob } from "./image-queue.ts";
 import { DocumentEditor } from "./document-editor.tsx";
-import { InspectionResults } from "./inspection-page.tsx";
-import type { InspectionRow } from "./inspection-page.tsx";
 import type { Draft } from "./draft.ts";
 import { PersonaList, type PersonaListing } from "./persona-list.tsx";
 import { ContactPage } from "./contact-page.tsx";
@@ -224,9 +222,9 @@ export type PageContent =
       [Field in keyof EditorFields]?: never;
     });
 
-function heading(view: ContactView | undefined, inspections: readonly InspectionRow[] | undefined) {
+function heading(view: ContactView | undefined) {
   if (view) return view.tab === "waitlist" ? "대기자 관리" : "첫 연락 현황";
-  return inspections ? "Persona 형식 검사" : copy.list;
+  return copy.list;
 }
 
 function PageNotices({
@@ -292,7 +290,6 @@ function Navigation({
       <a className="new-link" href="/new">
         + {copy.new}
       </a>
-      <a href="/inspection">전체 검사</a>
       {recoveryAvailable && <a href="/editing-recovery">편집 기록 복구 파일</a>}
       <a href="/waitlist" aria-current={contactView?.tab === "waitlist" ? "page" : undefined}>
         대기자
@@ -331,7 +328,6 @@ export function renderPage({
   queueObservedAt,
   conversion,
   improvementInput,
-  inspections,
   changed,
   documents,
   tab,
@@ -345,7 +341,6 @@ export function renderPage({
   error?: string;
   saved?: boolean;
   catalogPending?: boolean | undefined;
-  inspections?: readonly InspectionRow[];
   contactView?: ContactView;
   versionView?: VersionView;
   conversationView?: ConversationView;
@@ -386,7 +381,7 @@ export function renderPage({
               hidden={Boolean(record || versionView || conversationView)}
             >
               <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
-              <h1>{heading(contactView, inspections)}</h1>
+              <h1>{heading(contactView)}</h1>
               <p className="description">
                 {contactView ? "대기자 선정과 첫 연락 진행 상태를 관리합니다." : copy.description}
               </p>
@@ -406,8 +401,6 @@ export function renderPage({
               <VersionPage {...versionView} />
             ) : contactView ? (
               <ContactPage view={contactView} />
-            ) : inspections ? (
-              <InspectionResults rows={inspections} />
             ) : record ? (
               <Editor
                 sheets={sheets}

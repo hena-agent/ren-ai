@@ -76,7 +76,7 @@ test("previously passed shared personas can be Liked without losing siblings, th
     subin: true,
   });
   expect(window.location.pathname).toBe("/explore");
-  fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
+  fireEvent.click(screen.getByRole("button", { name: "연락받기" }));
   expect(
     within(screen.getByRole("list", { name: "관심을 전할 페르소나" })).getAllByRole("listitem"),
   ).toHaveLength(2);

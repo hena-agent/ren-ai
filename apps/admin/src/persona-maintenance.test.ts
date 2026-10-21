@@ -1,5 +1,3 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 import { seedSheets } from "../test/fixtures.ts";
 import { fixture, generator, legacy, request, tokenOf } from "../test/fixtures.ts";
@@ -51,61 +49,12 @@ const convertPage = async (
   );
 };
 
-test("catalog inspection isolates malformed files, remains private and performs no AI calls", async () => {
-  const convert = vi.fn<typeof generator.convert>();
-  const { admin, store, root, logs } = await fixture({ ...generator, convert });
-  expect(await (await admin(request("/inspection"))).text()).toContain(
-    "검사할 Persona가 없습니다.",
-  );
-  await store.create(original);
-  await store.create({
-    ...original,
-    id: "private-draft",
-    published: false,
-    description: "작성 중인 비공개 설정",
-    prompt: "작성 중인 비공개 설정",
-    bio: "",
-    publicProfile: "",
-  });
-  await store.create({
-    ...original,
-    id: "current",
-    description,
-    descriptionVersion: 2,
-    publicProfile: "",
-  });
-  await store.create({ ...original, id: "repair", descriptionVersion: 1 });
-  await writeFile(join(root, "broken.md"), "private payload that cannot be parsed");
-  const response = await admin(request("/inspection"));
-  expect(response.status).toBe(200);
-  const page = await response.text();
-  for (const status of ["최신 형식", "변환 필요", "수정 필요", "파일 오류", "공개 정보 생성 필요"])
-    expect(page).toContain(status);
-  expect(page).not.toContain("private payload");
-  expect(convert).not.toHaveBeenCalled();
-  const failed = logs.filter((entry) => entry.event === "operation.failed");
-  expect(failed).toHaveLength(1);
-  expect(failed[0]).toMatchObject({
-    stage: "persona.inspect.file",
-    personaId: "broken",
-    code: "invalid_persona_file",
-    requestId: response.headers.get("X-Request-ID"),
-  });
-  expect(JSON.stringify(logs)).not.toContain("private payload");
-  expect((await admin(new Request("http://localhost:3729/inspection"))).status).toBe(401);
-});
-
-test("a filesystem failure keeps its underlying code and bounded stack in the request diagnostic", async () => {
-  const { admin, root, logs } = await fixture();
-  await mkdir(join(root, "blocked.md"));
-  const response = await admin(request("/inspection"));
-  expect(response.status).toBe(200);
-  expect(logs.find((entry) => entry.event === "operation.failed")).toMatchObject({
-    code: "invalid_persona_file",
-    causeCode: "EISDIR",
-    causeName: "Error",
-    requestId: response.headers.get("X-Request-ID"),
-  });
+test("the retired inspection page is absent from navigation and returns not found", async () => {
+  const { admin } = await fixture();
+  const page = await (await admin(request("/"))).text();
+  expect(page).not.toContain('href="/inspection"');
+  expect(page).not.toContain("전체 검사");
+  expect((await admin(request("/inspection"))).status).toBe(404);
 });
 
 test("conversion can be saved immediately with existing photos and public state, with regeneration independently selected", async () => {

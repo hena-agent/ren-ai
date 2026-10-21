@@ -101,7 +101,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   const initialLanguages = screen.getByRole("region", { name: "사용하는 언어" });
   expect(within(initialLanguages).getAllByRole("listitem")).toHaveLength(2);
   choose(true);
-  fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
+  fireEvent.click(screen.getByRole("button", { name: "연락받기" }));
   fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
     target: { value: "01012345678" },
   });
