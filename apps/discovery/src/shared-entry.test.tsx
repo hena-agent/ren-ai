@@ -56,7 +56,7 @@ test("a shared URL opens the target in the original Discovery reading view and c
   expect(screen.queryByRole("link", { name: "페르소나 둘러보기" })).toBeNull();
   expect(document.title).toBe("백지아 — Ren AI의 AI 페르소나");
   await selectImageStyle("애니메");
-  expect(window.location.search).toBe("?style=anime&preview=v1");
+  expect(window.location.search).toBe("?style=anime&preview=v2");
   fireEvent.click(within(details).getByRole("button", { name: "다음 사진" }));
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
   expect(window.location.pathname).toBe("/explore");
@@ -113,7 +113,7 @@ test("explore cards have no sharing action; opening details exposes footer shari
   expect(button.closest(".details-footer")).toBeTruthy();
   fireEvent.click(button);
   await screen.findByText("링크를 복사했어요.");
-  expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo&preview=v1");
+  expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo&preview=v2");
   expect(screen.getByRole("region", { name: /백지아/ })).toBeTruthy();
   expect(localStorage.getItem("ren-ai.discovery.choices")).toBeNull();
   expect(window.location.hash).toBe("#reselect=private-token");

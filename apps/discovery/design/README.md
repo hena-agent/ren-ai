@@ -5,10 +5,11 @@ existing brand symbol, palette and product copy, rendered with Chromium at devic
 scale 1. It contains no persona photograph. Home/explorer sharing and absent
 same-style profile photos use this brand preview. Valid profile previews use the
 first published photo in the shared style. `og-watermark.html` produces the
-transparent 220×72 `public/og-watermark-v1.png` from that same brand symbol and
-the official Ren AI wordmark. The Images binding overlays it 28px from the
-lower-right of a 1200×630 JPEG, with the complete photo centered over a blurred,
-dimmed copy of itself. Renderer failures do not use the brand-only image.
+transparent 220×72 `public/og-watermark-v2.png` from that same brand symbol and
+the official Ren AI wordmark, without a surrounding background box. The Images
+binding overlays it 28px from the lower-right of a 1200×630 JPEG, with the complete
+photo centered over a blurred, dimmed copy of itself. Renderer failures do not use
+the brand-only image.
 No image-generation call is involved. `test/preview-rendition.jpg` is an actual
 native Images rendition of the published photo `7630f603-3715-4393-82c7-093f464128ba.jpg`,
 captured through an isolated Cloudflare remote preview for deployment-probe tests.

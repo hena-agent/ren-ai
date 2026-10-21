@@ -33,7 +33,7 @@ export interface PreviewEnv {
 export type PreviewCache = Pick<Cache, "match" | "put">;
 
 async function watermark(env: PreviewEnv, url: URL) {
-  const asset = await env.ASSETS.fetch(new Request(new URL("/og-watermark-v1.png", url)));
+  const asset = await env.ASSETS.fetch(new Request(new URL("/og-watermark-v2.png", url)));
   if (!asset.ok || !asset.body)
     throw Object.assign(new Error("Preview watermark unavailable"), {
       code: "PREVIEW_WATERMARK_UNAVAILABLE",

@@ -3,7 +3,7 @@ import { PublicPersona } from "@ren-ai/onboarding";
 import type { ImageStyle } from "./image-style.ts";
 
 export const publicOrigin = "https://renai.im";
-export const previewVersion = "v1";
+export const previewVersion = "v2";
 export const personaPath = (id: string) => `/personas/${encodeURIComponent(id)}`;
 export const personaTitle = (persona: PublicPersona) => `${persona.name} — Ren AI의 AI 페르소나`;
 

@@ -8,7 +8,7 @@ import { publicPersonas } from "../test/public-personas.ts";
 
 async function fixture() {
   const photo = await readFile(new URL("../public/landing/dohee-anime.webp", import.meta.url));
-  const mark = await readFile(new URL("../public/og-watermark-v1.png", import.meta.url));
+  const mark = await readFile(new URL("../public/og-watermark-v2.png", import.meta.url));
   const f = previewFixture(photo);
   const assets = vi
     .fn<(request: Request) => Promise<Response>>()
@@ -40,7 +40,7 @@ test("renditions read the published R2 object and compose a blurred backdrop, un
   expect(f.draw.mock.calls[1]![1]).toEqual({ right: 28, bottom: 28 });
   expect(f.output).toHaveBeenCalledWith({ format: "image/jpeg", quality: 88, anim: false });
   expect(f.assets).toHaveBeenCalledWith(
-    expect.objectContaining({ url: "https://renai.im/og-watermark-v1.png" }),
+    expect.objectContaining({ url: "https://renai.im/og-watermark-v2.png" }),
   );
   expect(f.cache.put).toHaveBeenCalledOnce();
 });

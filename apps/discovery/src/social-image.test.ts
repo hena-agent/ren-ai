@@ -9,14 +9,14 @@ import { publicPersonas } from "../test/public-personas.ts";
 test("published personas always advertise their own style-specific, versioned JPEG rendition", () => {
   const image = socialImage(publicPersonas[0], "photo");
   expect(image).toEqual({
-    url: "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v1.jpg",
+    url: "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v2.jpg",
     type: "image/jpeg",
     width: 1200,
     height: 630,
     alt: "백지아 — 실사 스타일의 AI 페르소나 프로필 사진과 Ren AI 로고",
   });
   expect(socialImage(publicPersonas[0], "anime").url).toBe(
-    "https://renai.im/personas/jia/og/anime/00000000-0000-0000-0000-000000000001.v1.jpg",
+    "https://renai.im/personas/jia/og/anime/00000000-0000-0000-0000-000000000001.v2.jpg",
   );
   expect(personaPreview(publicPersonas[0]!, "photo")?.key).toBe(
     "00000000-0000-0000-0000-000000000002.jpg",
@@ -69,6 +69,6 @@ test("preview URLs reuse validated persona IDs and accept only explicit supporte
   });
   expect(previewRoute(new URL("https://renai.im/personas/jia"))).toBeUndefined();
   expect(
-    previewRoute(new URL("https://renai.im/personas/%3Cscript%3E/og/anime/image.v1.jpg")),
+    previewRoute(new URL("https://renai.im/personas/%3Cscript%3E/og/anime/image.v2.jpg")),
   ).toBeUndefined();
 });
