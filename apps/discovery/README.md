@@ -36,14 +36,23 @@ HTML, sitemap and health responses use `Cache-Control: no-store`.
 Home, explorer and profile requests all return the actual application UI in their
 first HTML. Each profile has a distinct title, description and canonical URL,
 Open Graph and Twitter metadata, and WebPage/CreativeWork JSON-LD that explicitly
-identifies a fictional AI persona. Sharing carries `?style=anime` or `?style=photo`;
-the preview uses that style's first gallery photo. The Worker verifies image bytes,
-supported MIME type, dimensions and the 5 MB limit. Open Graph includes image URL,
-secure URL, MIME type, width, height and descriptive alt text; Twitter includes
-its own title, description, image and alt text. Portraits use a summary thumbnail
-instead of a forced landscape crop. Missing, invalid or unreadable images use
-the real 1200×630 `social.png` brand preview, with one correlated diagnostic for
-read/decode failures. Its editable source is `design/social.html`.
+identifies a fictional AI persona. Sharing carries the selected `style` and a
+`preview=v1` rendition version, so new shares have a fresh identity after the OG
+format changes. Open Graph and Twitter advertise a same-origin 1200×630 JPEG at
+`/personas/{id}/og/{style}/{photo-id}.v1.jpg`. Its source is the first published
+same-style gallery photo: the Worker reads its owned object key directly from
+R2, then uses the Images binding to draw a blurred/dimmed backdrop, the uncropped
+portrait and a small Ren AI watermark in the lower-right corner. Watermark source
+is `design/og-watermark.html`; the transparent PNG is `public/og-watermark-v1.png`.
+Bump the rendition version when changing its composition or watermark.
+
+HTML metadata generation does not fetch image bytes. This removes the original
+Workers-only failure: `redirect: "error"` was accepted in Node tests but throws
+before an outbound Workers request. A renderer failure returns a correlated,
+retryable 503; it never silently replaces a published persona preview with brand
+artwork. Home/explorer and genuinely absent same-style photos use `social.png`.
+Open Graph includes image MIME type, width, height, secure URL and alt text;
+Twitter uses the large-image card and explicit image/title/description/alt fields.
 Style variants share one canonical
 URL for search indexing. Without an explicit style query, the server starts in
 anime and the browser restores a saved preference. Public writing stays in its
@@ -55,7 +64,12 @@ image locations. It never lists a separate directory or withdrawn personas.
 returns an actual 404 with `noindex`. Catalog or rendering failures return 503
 with `Retry-After`, a request ID and payload-safe structured diagnostics.
 `/health` identifies service `discovery`, embeds the artifact's source commit
-(`development` locally), and reports Catalog readiness separately.
+(`development` locally), and reports Catalog and preview-executor readiness
+separately. The preview probe checks R2 access and free Images metadata parsing.
+Each image request revalidates publication and current gallery order before
+consulting the rendition cache. Stale/unpublished image URLs return 404 even if
+the old rendition was cached. Only derived renditions are cached; image responses
+remain `no-store` so public CDN caching cannot bypass that validation.
 
 Both public profiles and waiting registration use `api.renai.im`:
 
@@ -83,6 +97,9 @@ frontend port. Vite development and preview use `strictPort: true`.
 Vite renders profile routes in the browser. To check the production HTML path,
 build and run `bunx wrangler dev --port 3867 --var DISCOVERY_API_URL:http://127.0.0.1:4879`
 from this directory with the Vite listener stopped.
+Packaged preview images additionally need the `PORTRAITS` R2 and
+`IMAGE_TRANSFORMS` bindings. High-fidelity overlay checks use an isolated remote
+Wrangler preview, not a production deployment.
 
 ## Deployment
 
@@ -91,6 +108,11 @@ with `VITE_DISCOVERY_API_URL=https://api.renai.im` and the public
 `TURNSTILE_SITE_KEY` repository variable, then deploys the static assets and checks
 `https://renai.im/`, `/explore`, `/social.png`, `/sitemap.xml` and the exact artifact identity at
 `/health`. api-app's deployment checks `/discovery/personas` separately.
+`check:preview` then reads a published profile in each available style and fetches
+the exact advertised image, requiring a public JPEG, 1200×630 dimensions and less
+than 5 MB. It rejects the former brand-image substitution; empty public Catalogs
+are reported explicitly. The Worker accepts source photos up to the Images
+binding's 20 MB input limit and returns bounded, fixed-size JPEG renditions.
 Do not deploy manually or also connect Workers Builds.
 
 `bun run build` builds browser assets. Wrangler bundles `worker/entry.ts` and

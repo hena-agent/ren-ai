@@ -2,10 +2,16 @@
 
 `social.html` is the reproducible 1200×630 source for `public/social.png`: Ren AI's
 existing brand symbol, palette and product copy, rendered with Chromium at device
-scale 1. It contains no persona photograph. Home/explorer sharing and unavailable
+scale 1. It contains no persona photograph. Home/explorer sharing and absent
 same-style profile photos use this brand preview. Valid profile previews use the
-first published photo in the shared style, with dimensions and MIME type measured
-from its actual bytes. No image-generation call is involved.
+first published photo in the shared style. `og-watermark.html` produces the
+transparent 220×72 `public/og-watermark-v1.png` from that same brand symbol and
+the official Ren AI wordmark. The Images binding overlays it 28px from the
+lower-right of a 1200×630 JPEG, with the complete photo centered over a blurred,
+dimmed copy of itself. Renderer failures do not use the brand-only image.
+No image-generation call is involved. `test/preview-rendition.jpg` is an actual
+native Images rendition of the published photo `7630f603-3715-4393-82c7-093f464128ba.jpg`,
+captured through an isolated Cloudflare remote preview for deployment-probe tests.
 
 Conversation text is native HTML from the display-language copy. The photograph,
 thread and message layers use CSS scroll-driven animations; no device screenshot

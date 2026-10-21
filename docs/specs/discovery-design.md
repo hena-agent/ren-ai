@@ -141,13 +141,23 @@ losing the current card, photo, Likes or reselection fragment. Public writing
 remains in its original language.
 
 Use the native share sheet or clipboard copying with accessible success/failure
-feedback. Shared URLs include the selected anime/photo style; the initial HTML's
-Open Graph preview uses its first same-style gallery photo. Verify actual image
-bytes, MIME type, dimensions and the 5 MB size limit before advertising it. Include
-secure URL, width, height and alt text alongside Open Graph and explicit Twitter
-metadata. Use a square summary presentation for portrait photos rather than
-forcing a wide crop. Home/explorer previews and absent/unreadable style photos
-use the actual 1200×630 branded PNG from `design/social.html`. Keep search canonical
+feedback. Shared URLs include the selected anime/photo style and a public preview
+version. Advertise a versioned, same-origin 1200×630 JPEG made from the first
+same-style gallery photo, read directly from R2 after checking the live public
+Catalog. Place the uncropped portrait over a blurred, dimmed copy of the same
+photo; draw a small Ren AI watermark at the lower-right without covering the face.
+Use the native Images binding for composition. Do not expose arbitrary R2 keys,
+private identity sheets or user-supplied source URLs. Check publication and
+current gallery selection before serving cached renditions too.
+
+Include JPEG MIME type, dimensions, secure URL and alt text in Open Graph and
+explicit large-image Twitter metadata. Home/explorer and genuinely absent
+same-style photos use the branded PNG from `design/social.html`; rendering or
+storage failures return retryable image errors rather than substituting it for
+a published persona. Keep HTML independent of image fetching. Bump the rendition
+version when changing its layout/watermark. Deployment checks fetch the advertised
+images and validate real JPEG bytes, dimensions and the 5 MB output limit. Verify
+the photo and watermark pixels in a real Cloudflare preview. Keep search canonical
 URLs independent of style. Return profile content and unique metadata in the
 first HTML for all visitors, including non-JavaScript crawlers. Render home and
 explorer in the same way, keeping home independent of the live Catalog. Sitemap
