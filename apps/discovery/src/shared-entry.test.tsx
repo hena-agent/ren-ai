@@ -94,7 +94,7 @@ test("previously passed shared personas can be Liked without losing siblings, th
   expect(screen.getByRole("heading", { name: "대기 등록이 완료됐어요." })).toBeTruthy();
 });
 
-test("sharing a compact card does not select or expand it, and shared public URLs never contain private fragments", async () => {
+test("explore cards have no sharing action; opening details exposes footer sharing without private fragments", async () => {
   const writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { languages: ["ko-KR"], clipboard: { writeText } });
   mount();
@@ -104,10 +104,17 @@ test("sharing a compact card does not select or expand it, and shared public URL
     `${window.location.pathname}${window.location.search}#reselect=private-token`,
   );
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
-  fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+  expect(window.location.pathname).toBe("/explore");
+  expect(screen.queryByRole("button", { name: "프로필 공유하기" })).toBeNull();
+  expect(screen.queryByRole("region", { name: /백지아/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "백지아 소개 전체 보기" }));
+  expect(window.location.pathname).toBe("/personas/jia");
+  const button = screen.getByRole("button", { name: "프로필 공유하기" });
+  expect(button.closest(".details-footer")).toBeTruthy();
+  fireEvent.click(button);
   await screen.findByText("링크를 복사했어요.");
   expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo");
-  expect(screen.queryByRole("region", { name: /백지아/ })).toBeNull();
+  expect(screen.getByRole("region", { name: /백지아/ })).toBeTruthy();
   expect(localStorage.getItem("ren-ai.discovery.choices")).toBeNull();
   expect(window.location.hash).toBe("#reselect=private-token");
 });

@@ -32,13 +32,8 @@ export function ProfileShare({
     }
   }
   return (
-    <span className="profile-share">
-      <button
-        type="button"
-        className="text-button"
-        disabled={disabled || state === "pending"}
-        onClick={() => void share()}
-      >
+    <div className="profile-share">
+      <button type="button" disabled={disabled || state === "pending"} onClick={() => void share()}>
         <svg
           viewBox="0 0 24 24"
           width="20"
@@ -55,6 +50,6 @@ export function ProfileShare({
       <output>
         {state === "copied" ? copy.copied : state === "failed" ? copy.shareFailure : ""}
       </output>
-    </span>
+    </div>
   );
 }

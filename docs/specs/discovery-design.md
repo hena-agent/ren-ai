@@ -125,7 +125,12 @@ Use native CSS before introducing animation dependencies.
 ## Public profiles and sharing
 
 Keep the existing Discovery cards, swipe interactions, inline reading view and
-contact form. Add sharing to the compact card and reading toolbar. Do not add a
+contact form. Show sharing only at the end of the expanded profile at
+`/personas/{id}`, after all profile content. Use a full-width, white, rounded
+action row with centered icon and visible text; it scrolls with the profile
+rather than staying fixed. Keep the share row and its inline success/failure
+feedback clear of the floating Like/Pass controls and phone safe area. Compact
+cards at `/explore` and the reading toolbar have no sharing control. Do not add a
 separate persona menu, directory or profile layout. `/personas/{id}` is a direct
 entry into that same Discovery, with the target opened in the inline reading
 view and prioritized in the deck. Preserve existing Like/Pass choices and allow

@@ -5,7 +5,6 @@ import { ProfileLanguages } from "./profile-languages.tsx";
 import type { StyledPersona } from "./image-style.ts";
 import { GalleryControls } from "./photo-gallery.tsx";
 import { ProfileDetails } from "./profile-details.tsx";
-import { ProfileShare } from "./profile-share.tsx";
 
 function PortraitImage({ persona }: { persona: PublicPersona }) {
   const copy = useCopy();
@@ -228,13 +227,6 @@ export function Card({
                 </span>
               )}
               <ProfileCaption persona={persona} />
-              <div className="card-share">
-                <ProfileShare
-                  persona={persona}
-                  imageStyle={persona.imageStyle}
-                  disabled={exit !== undefined}
-                />
-              </div>
               <button
                 className="profile-info"
                 ref={openButton}

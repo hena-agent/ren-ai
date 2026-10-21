@@ -25,7 +25,7 @@ test("sharing uses the native share sheet with the chosen style and handles canc
       <ProfileShare persona={publicPersonas[0]!} imageStyle="photo" />
     </LocaleProvider>,
   );
-  const button = screen.getByRole("button", { name: "공유하기" });
+  const button = screen.getByRole("button", { name: "프로필 공유하기" });
   fireEvent.click(button);
   expect(button.hasAttribute("disabled")).toBe(true);
   await vi.waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
@@ -54,9 +54,9 @@ test("without native sharing, copying restores the saved style and retains a ret
       <ProfileShare persona={publicPersonas[0]!} />
     </LocaleProvider>,
   );
-  fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+  fireEvent.click(screen.getByRole("button", { name: "프로필 공유하기" }));
   await screen.findByText("공유하지 못했어요. 다시 시도해 주세요.");
-  fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+  fireEvent.click(screen.getByRole("button", { name: "프로필 공유하기" }));
   await screen.findByText("링크를 복사했어요.");
   expect(writeText).toHaveBeenLastCalledWith("https://renai.im/personas/jia?style=photo");
   view.rerender(
@@ -64,13 +64,13 @@ test("without native sharing, copying restores the saved style and retains a ret
       <ProfileShare persona={publicPersonas[0]!} imageStyle="anime" />
     </LocaleProvider>,
   );
-  fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+  fireEvent.click(screen.getByRole("button", { name: "프로필 공유하기" }));
   await vi.waitFor(() =>
     expect(writeText).toHaveBeenLastCalledWith("https://renai.im/personas/jia?style=anime"),
   );
 });
 
-test("expanded Discovery profiles share their displayed style even when it differs from saved storage", async () => {
+test("expanded profiles share their displayed style only from the final footer after all profile content", async () => {
   const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
   render(
@@ -85,7 +85,13 @@ test("expanded Discovery profiles share their displayed style even when it diffe
     </LocaleProvider>,
   );
   expect(screen.queryByRole("link")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+  const button = screen.getByRole("button", { name: "프로필 공유하기" });
+  const footer = button.closest(".details-footer")!;
+  expect(document.querySelector(".details-scroll")!.lastElementChild).toBe(footer);
+  expect(footer.previousElementSibling).toBe(document.querySelector(".details-content"));
+  expect(document.querySelector(".details-toolbar .profile-share")).toBeNull();
+  fireEvent.click(button);
   await screen.findByText("링크를 복사했어요.");
+  expect(footer.querySelector("output")!.textContent).toBe("링크를 복사했어요.");
   expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo");
 });

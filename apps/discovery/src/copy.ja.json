@@ -127,7 +127,7 @@
   "genderMale": "男性",
   "genderOther": "その他",
   "publicProfile": {
-    "share": "共有する",
+    "share": "プロフィールを共有",
     "copied": "リンクをコピーしました。",
     "shareFailure": "共有できませんでした。もう一度お試しください。",
     "notFound": "このプロフィールは公開されていません。",

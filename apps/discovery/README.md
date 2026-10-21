@@ -18,7 +18,10 @@ is no separate directory, menu or profile layout. The target is prioritized in
 the normal deck; existing Likes and Passes are preserved, including a previous
 choice for the shared persona. Collapse, Like/Pass, gallery browsing and contact
 registration continue through the original UI. Registration includes the visitor's
-current Likes. Cards and their reading toolbar offer native sharing or URL copying.
+current Likes. Only expanded profiles offer native sharing or URL copying through
+a full-width action at the end of their content, above the floating Like/Pass
+controls. Compact `/explore` cards and the reading toolbar have no sharing control.
+Copy success/failure feedback appears inline below the share button.
 Opening a profile updates the address; collapsing it returns to `/explore` while
 preserving the deck, selected photo and private reselection fragment. Shared URLs
 never contain that fragment, handles or browser choices.
