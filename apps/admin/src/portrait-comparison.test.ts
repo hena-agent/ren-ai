@@ -209,10 +209,10 @@ test("portrait requests use distinct art direction while preserving the characte
   await model.portrait(character, "photo");
   const anime = await new Request(...fetcher.mock.calls[0]!).text();
   const photo = await new Request(...fetcher.mock.calls[1]!).text();
-  expect(anime).toContain("LovePlus");
+  expect(anime).toContain("muted, softly shaded finish");
   expect(anime).toContain("2D Japanese");
   expect(anime).toContain("hand-drawn 2D");
-  expect(anime).toContain("cel shading");
+  expect(anime).toContain("soft feathered gradients");
   expect(photo).toContain("photorealistic personal dating-profile photo");
   expect(photo).toMatch(/natural skin texture/i);
   expect(anime).toContain(character.name);
