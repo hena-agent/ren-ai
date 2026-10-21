@@ -154,7 +154,7 @@ export function Card({
   return (
     <div className="card-interaction" data-expanded={Boolean(onCollapse)}>
       <div className="card-media">
-        {next && (
+        {next?.imageUrl && (
           <div className="card-back" aria-hidden="true">
             <img src={next.imageUrl} alt="" draggable={false} />
           </div>

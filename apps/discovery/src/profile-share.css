@@ -1,0 +1,39 @@
+.details-footer {
+  margin: 12px;
+}
+.profile-share {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.profile-share button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 72px;
+  padding: 20px 24px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 650;
+}
+.profile-share button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface) 96%, var(--ink));
+}
+.profile-share button:disabled {
+  color: var(--muted);
+}
+.profile-share output:empty {
+  display: none;
+}
+.profile-share output {
+  padding-inline: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

@@ -13,5 +13,7 @@ test("Discovery development serves only the frontend, with no separate catalog l
   expect(manifest.scripts["dev:worker"]).toBeUndefined();
   expect(manifest.scripts["build"]).toBe("vite build");
   expect(deployment).not.toContain("d1_databases");
-  expect(deployment).not.toContain("run_worker_first");
+  expect(deployment).toMatch(/"run_worker_first":\s*\[/);
+  expect(deployment).toContain('"/explore"');
+  expect(deployment).toContain('"/personas/*"');
 });

@@ -126,6 +126,13 @@
   "genderFemale": "女性",
   "genderMale": "男性",
   "genderOther": "その他",
+  "publicProfile": {
+    "share": "プロフィールを共有",
+    "copied": "リンクをコピーしました。",
+    "shareFailure": "共有できませんでした。もう一度お試しください。",
+    "notFound": "このプロフィールは公開されていません。",
+    "notFoundHint": "ほかのペルソナに出会いましょう。"
+  },
   "languageSetting": "表示言語",
   "reselectionTitle": "別のペルソナと新しく始めましょう",
   "reselectionIntro": "案内を受け取ったiMessageアドレスで登録してください。最初の連絡までお待ちいただく場合があります。",

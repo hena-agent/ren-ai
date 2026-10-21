@@ -5,5 +5,5 @@
     "lib": ["es2023", "dom"],
     "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "worker/**/*.ts"]
 }

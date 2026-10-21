@@ -1,5 +1,12 @@
 # Landing artwork
 
+`social.html` is the reproducible 1200×630 source for `public/social.png`: Ren AI's
+existing brand symbol, palette and product copy, rendered with Chromium at device
+scale 1. It contains no persona photograph. Home/explorer sharing and unavailable
+same-style profile photos use this brand preview. Valid profile previews use the
+first published photo in the shared style, with dimensions and MIME type measured
+from its actual bytes. No image-generation call is involved.
+
 Conversation text is native HTML from the display-language copy. The photograph,
 thread and message layers use CSS scroll-driven animations; no device screenshot
 or artwork export is involved. Verify the conversation at the start, middle and

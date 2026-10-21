@@ -3,11 +3,23 @@ import type { DiscoveryClient } from "./client.ts";
 import { discoveryClient } from "./client.ts";
 import { Home } from "./home.tsx";
 import { LocaleProvider } from "./locale.tsx";
+import { publicRoute, readPublicPeople } from "./public-routing.ts";
 
 export function Site({ client = discoveryClient }: { client?: DiscoveryClient }) {
-  // Reselection links sent through iMessage open Discovery with their private fragment intact.
+  const route = publicRoute(new URL(window.location.href));
   const reselecting = new URLSearchParams(window.location.hash.slice(1)).has("reselect");
-  if (window.location.pathname === "/explore" || reselecting) return <App client={client} />;
+  if (route.id || window.location.pathname === "/explore" || reselecting) {
+    return (
+      <App
+        client={client}
+        personaId={route.id}
+        initialStyle={route.style}
+        initialPeople={readPublicPeople(
+          document.getElementById("public-personas")?.textContent ?? null,
+        )}
+      />
+    );
+  }
   return (
     <LocaleProvider>
       <Home />
