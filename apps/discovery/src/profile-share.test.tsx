@@ -31,7 +31,7 @@ test("sharing uses the native share sheet with the chosen style and handles canc
   await vi.waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
   expect(share).toHaveBeenCalledWith({
     title: "백지아 — Ren AI",
-    url: "https://renai.im/personas/jia?style=photo",
+    url: "https://renai.im/personas/jia?style=photo&preview=v1",
   });
   fireEvent.click(button);
   await vi.waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
@@ -58,7 +58,9 @@ test("without native sharing, copying restores the saved style and retains a ret
   await screen.findByText("공유하지 못했어요. 다시 시도해 주세요.");
   fireEvent.click(screen.getByRole("button", { name: "프로필 공유하기" }));
   await screen.findByText("링크를 복사했어요.");
-  expect(writeText).toHaveBeenLastCalledWith("https://renai.im/personas/jia?style=photo");
+  expect(writeText).toHaveBeenLastCalledWith(
+    "https://renai.im/personas/jia?style=photo&preview=v1",
+  );
   view.rerender(
     <LocaleProvider initialLocale="ko">
       <ProfileShare persona={publicPersonas[0]!} imageStyle="anime" />
@@ -66,7 +68,9 @@ test("without native sharing, copying restores the saved style and retains a ret
   );
   fireEvent.click(screen.getByRole("button", { name: "프로필 공유하기" }));
   await vi.waitFor(() =>
-    expect(writeText).toHaveBeenLastCalledWith("https://renai.im/personas/jia?style=anime"),
+    expect(writeText).toHaveBeenLastCalledWith(
+      "https://renai.im/personas/jia?style=anime&preview=v1",
+    ),
   );
 });
 
@@ -93,5 +97,5 @@ test("expanded profiles share their displayed style only from the final footer a
   fireEvent.click(button);
   await screen.findByText("링크를 복사했어요.");
   expect(footer.querySelector("output")!.textContent).toBe("링크를 복사했어요.");
-  expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo");
+  expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo&preview=v1");
 });
