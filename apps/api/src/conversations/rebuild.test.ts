@@ -46,6 +46,11 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
           ...conversationInput,
           sessionID: original.id,
         });
+        yield* profileSql`UPDATE conversation SET registration_id = 'profile-registration', starting_relationship = 'friends' WHERE id = ${conversation.id}`;
+        yield* profileSql`UPDATE discovery_registration SET archived_at = 124 WHERE id = 'profile-registration'`;
+        yield* profileSql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship)
+          VALUES ('newer-registration', ${handle}, 'en', 'v1', 125, 'dating')`;
+        yield* profileSql`INSERT INTO discovery_profile VALUES ('newer-registration', 'wrong-profile', 99, 'female')`;
         const [started] = yield* (yield* SqlClient.SqlClient)<{
           startedAt: number;
         }>`SELECT started_at AS startedAt FROM conversation WHERE id = ${conversation.id}`;
@@ -69,6 +74,8 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
           'user-name=\\"민수\\" user-age=\\"28\\" user-gender=\\"male\\"',
         );
         expect(transcript).toContain('preferred-language=\\"ja\\"');
+        expect(transcript).toContain('starting-relationship=\\"friends\\"');
+        expect(transcript).not.toContain("wrong-profile");
         expect(transcript).toContain("first");
         expect(transcript).toContain("her manual send");
         expect(transcript).toContain("later");

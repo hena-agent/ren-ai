@@ -93,8 +93,14 @@ test("a discovery registration requires contact, consent, verification and uniqu
     { gender: "female" },
     { gender: "male" },
     { gender: "other" },
+    { startingRelationship: "dating" },
+    { startingRelationship: "flirting" },
+    { startingRelationship: "friends" },
+    { startingRelationship: "strangers" },
   ])
     expect(decode({ ...request, ...fields })).toEqual({ ...request, ...fields });
+  for (const startingRelationship of ["girlfriend", "", null, 1])
+    expect(() => decode({ ...request, startingRelationship })).toThrow(/startingRelationship/);
   for (const input of [
     {},
     { ...request, handle: "invalid" },

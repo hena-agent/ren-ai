@@ -3,7 +3,11 @@ import { SqlClient } from "effect/unstable/sql";
 import type { ConversationEntry, ConversationQuery, PublicPersona } from "@ren-ai/onboarding";
 
 type Entry = typeof ConversationEntry.Type;
-type Row = Omit<Entry, "personaName" | "farewell" | "notice" | "canNotify"> & {
+type Row = Omit<
+  Entry,
+  "personaName" | "farewell" | "notice" | "canNotify" | "startingRelationship"
+> & {
+  startingRelationship: Entry["startingRelationship"] | null;
   canNotify: number;
   farewellPending: number | null;
   noticePending: number | null;
@@ -26,6 +30,7 @@ export const conversationStatus = (catalog: () => Promise<readonly PublicPersona
         const rows =
           yield* sql<Row>`SELECT c.id, u.handle, c.persona_id AS personaID, c.session_id AS sessionID,
       c.started_at AS startedAt, c.ended_at AS endedAt, e.stopped_at AS stoppedAt,
+      c.starting_relationship AS startingRelationship,
       (c.ended_at IS NOT NULL AND e.consumed_at IS NULL
         AND NOT EXISTS(SELECT 1 FROM blocked WHERE handle = u.handle)
         AND NOT EXISTS(SELECT 1 FROM conversation newer WHERE newer.user_id = u.id AND newer.id > c.id)) AS canNotify,
@@ -47,8 +52,17 @@ export const conversationStatus = (catalog: () => Promise<readonly PublicPersona
         });
         const names = new Map(profiles.map((persona) => [persona.id, persona.name]));
         return rows.map(
-          ({ farewellPending, noticePending, farewellState, noticeState, canNotify, ...row }) => ({
+          ({
+            farewellPending,
+            noticePending,
+            farewellState,
+            noticeState,
+            canNotify,
+            startingRelationship,
+            ...row
+          }) => ({
             ...row,
+            ...(startingRelationship && { startingRelationship }),
             personaName: names.get(row.personaID) ?? row.personaID,
             farewell: deliveryState(farewellPending, farewellState),
             notice: deliveryState(noticePending, noticeState),

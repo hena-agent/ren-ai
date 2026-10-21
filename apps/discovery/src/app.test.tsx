@@ -55,6 +55,7 @@ test("a visitor likes a profile, enters a handle and consent, and really joins t
     handle: "+821012345678",
     locale: "ko",
     conversationLanguage: "ko",
+    startingRelationship: "dating",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["harin"],
     turnstileToken: "human",

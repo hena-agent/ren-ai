@@ -11,6 +11,7 @@ import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
 import { conversationEndings } from "./conversations/end.ts";
 import { scheduleWork } from "./scheduling.ts";
 import { promptID } from "./intake/message-id.ts";
+import type { StartingRelationship } from "@ren-ai/onboarding";
 
 export type MessagingTools = {
   readonly [
@@ -71,7 +72,12 @@ export const prepareMessaging = (
             ON CONFLICT(session_id) DO UPDATE SET guid = excluded.guid WHERE guid IS NOT excluded.guid`;
           const conversation = yield* directory.bySession(sessionID);
           if (conversation) yield* sends.observe(conversation);
+          const [relationship] = yield* sql<{ startingRelationship: StartingRelationship | null }>`
+            SELECT starting_relationship AS startingRelationship FROM conversation WHERE session_id = ${sessionID}`;
           return {
+            ...(relationship?.startingRelationship && {
+              startingRelationship: relationship.startingRelationship,
+            }),
             status: conversation
               ? yield* messages.lastOutgoingStatus(conversation.handle)
               : undefined,

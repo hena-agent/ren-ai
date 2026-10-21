@@ -62,6 +62,11 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
               event.system.push({ type: "text", text: memory });
             }
             if (snapshot) {
+              if (snapshot.startingRelationship)
+                event.system.push({
+                  type: "text",
+                  text: `<starting-relationship>${snapshot.startingRelationship}</starting-relationship>\nThis is the chosen starting relationship, not knowledge of the user's life or shared history. Follow the current relationship established in this Conversation's Memory.`,
+                });
               const sends = snapshot.sends;
               for (const [index, entry] of event.messages.entries()) {
                 const content = entry.content.map((part) => {

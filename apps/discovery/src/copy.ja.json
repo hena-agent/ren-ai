@@ -146,6 +146,26 @@
   "proficient": "上級",
   "fluent": "流暢",
   "conversationLanguage": "会話したい言語",
+  "startingRelationship": {
+    "title": "どんな関係から始めますか？",
+    "hint": "選んだ関係で最初の挨拶を交わします。日常や好みは、会話しながら知っていきます。",
+    "dating": {
+      "title": "恋人",
+      "description": "付き合い始めたばかり。最初から愛情を伝えられる関係です。"
+    },
+    "flirting": {
+      "title": "恋人未満",
+      "description": "お互い気になっているけれど、まだ恋人ではない関係です。"
+    },
+    "friends": {
+      "title": "友達",
+      "description": "恋愛を前提にせず、気軽に日常を分かち合う関係です。"
+    },
+    "strangers": {
+      "title": "初対面",
+      "description": "最初の挨拶から、ゆっくり知り合っていきます。"
+    }
+  },
   "conversationLanguageHint": "最初の挨拶は、この言語の習熟度に合わせて送ります。話せない場合は、普段使う言語で挨拶します。",
   "profilePhoto": "プロフィール写真",
   "fullProfile": "プロフィール全体を見る",

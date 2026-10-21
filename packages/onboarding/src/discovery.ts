@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { PublicProfile } from "@ren-ai/personas/public-profile";
 import { MobileNumber } from "./shapes.ts";
+import { StartingRelationship } from "./relationship.ts";
 import disclosure from "./discovery-notice.json";
 import englishDisclosure from "./discovery-notice.en.json";
 import japaneseDisclosure from "./discovery-notice.ja.json";
@@ -57,6 +58,7 @@ export const DiscoveryRequest = Schema.Struct({
   handle: MobileNumber,
   locale: DiscoveryLocale,
   conversationLanguage: Schema.optionalKey(DiscoveryLocale),
+  startingRelationship: Schema.optionalKey(StartingRelationship),
   name: Schema.optionalKey(text.check(Schema.isTrimmed(), Schema.isMaxLength(100))),
   age: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0))),
   gender: Schema.optionalKey(Schema.Literals(["female", "male", "other"])),

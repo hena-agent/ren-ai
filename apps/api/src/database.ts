@@ -227,6 +227,13 @@ export const migrate = Effect.gen(function* () {
           CHECK(imessage_status IN ('available', 'unavailable', 'failed'))`;
         yield* sql`ALTER TABLE discovery_registration ADD COLUMN imessage_checked_at INTEGER`;
       }),
+      "038_starting_relationship": Effect.gen(function* () {
+        yield* sql`ALTER TABLE discovery_registration ADD COLUMN starting_relationship TEXT
+          CHECK(starting_relationship IN ('dating', 'flirting', 'friends', 'strangers'))`;
+        yield* sql`ALTER TABLE conversation ADD COLUMN starting_relationship TEXT
+          CHECK(starting_relationship IN ('dating', 'flirting', 'friends', 'strangers'))`;
+        yield* sql`ALTER TABLE conversation ADD COLUMN registration_id TEXT REFERENCES discovery_registration(id) ON DELETE SET NULL`;
+      }),
     }),
   });
 });

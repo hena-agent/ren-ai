@@ -46,6 +46,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
     list: vi.fn<ConversationClient["list"]>(async () => ({ entries: [entry], nextBefore: 1 })),
     detail: vi.fn<ConversationClient["detail"]>(async () => ({
       ...detail,
+      entry: { ...entry, startingRelationship: "friends" },
       registrationNextBefore,
     })),
     runtime: vi.fn<ConversationClient["runtime"]>(async () => ({
@@ -79,6 +80,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect(page).toContain(sessionLink);
   expect(active.split(sessionLink)).toHaveLength(3);
   expect(active).toContain("실행 중");
+  expect(active).toContain("시작 관계: 친구");
   expect(active).toContain("대기 작업 2개");
   expect(active).toContain("현재 언어 실력 보기");
   expect(active).toContain("이전 등록 25개");
