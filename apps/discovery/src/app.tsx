@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { discoveryClient } from "./client.ts";
 import type { DiscoveryClient } from "./client.ts";
@@ -6,6 +6,7 @@ import { readChoices, saveChoices } from "./choices.ts";
 import { Card } from "./card.tsx";
 import { JoinForm } from "./join-form.tsx";
 import { useCopy, LocaleProvider } from "./locale.tsx";
+import type { Locale } from "./locale.tsx";
 import { withImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
 import type { StyledPersona } from "./image-style.ts";
@@ -13,6 +14,15 @@ import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
 import { useImageStyle } from "./use-image-style.ts";
 import { Header, LikedPanel, Navigation } from "./chrome.tsx";
 import type { BrowseView } from "./chrome.tsx";
+import { Receipt } from "./receipt.tsx";
+import { useCatalog } from "./use-catalog.ts";
+import { personaPath, personaTitle } from "./public-routing.ts";
+
+type Entry = {
+  personaId?: string | undefined;
+  initialStyle?: ImageStyle | undefined;
+  initialPeople?: readonly PublicPersona[] | undefined;
+};
 
 function Deck({
   people,
@@ -99,70 +109,54 @@ function Deck({
   );
 }
 
-function Receipt({ waiting }: { waiting: boolean }) {
-  const copy = useCopy();
+export function App({
+  client = discoveryClient,
+  initialLocale,
+  ...entry
+}: Entry & { client?: DiscoveryClient; initialLocale?: Locale }) {
   return (
-    <section className="receipt" aria-labelledby="receipt-title">
-      <span className="receipt-mark" aria-hidden="true">
-        <span className="icon icon-check" />
-      </span>
-      <h1 id="receipt-title">{waiting ? copy.waitingTitle : copy.activeTitle}</h1>
-      <p>{waiting ? copy.waitingMessage : copy.activeMessage}</p>
-      {waiting && <p className="receipt-hint">{copy.waitingHint}</p>}
-    </section>
-  );
-}
-
-type Catalog =
-  | { phase: "loading" }
-  | { phase: "failed" }
-  | { phase: "ready"; people: readonly PublicPersona[] };
-
-export function App({ client = discoveryClient }: { client?: DiscoveryClient }) {
-  return (
-    <LocaleProvider>
-      <DiscoveryApp client={client} />
+    <LocaleProvider initialLocale={initialLocale}>
+      <DiscoveryApp client={client} {...entry} />
     </LocaleProvider>
   );
 }
 
-function DiscoveryApp({ client }: { client: DiscoveryClient }) {
+function DiscoveryApp({
+  client,
+  initialPeople,
+  personaId,
+  initialStyle,
+}: Entry & { client: DiscoveryClient }) {
   const copy = useCopy();
+  const { catalog, retry } = useCatalog(client, initialPeople);
+  const requested =
+    catalog.phase === "ready" && catalog.people.find((person) => person.id === personaId);
+  const missing = catalog.phase === "ready" && Boolean(personaId) && !requested;
   useEffect(() => {
-    document.title = `${copy.brand} — ${copy.explore}`;
-  }, [copy.brand, copy.explore]);
-  const [catalog, setCatalog] = useState<Catalog>({ phase: "loading" });
-  const activeRequest = useRef(new AbortController());
-  const load = useCallback(
-    (controller: AbortController) => {
-      void client
-        .profiles(controller.signal)
-        .then((people) => {
-          if (!controller.signal.aborted) setCatalog({ phase: "ready", people });
-          return undefined;
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) setCatalog({ phase: "failed" });
-        });
-    },
-    [client],
-  );
-  useEffect(() => {
-    const controller = new AbortController();
-    activeRequest.current = controller;
-    load(controller);
-    return () => activeRequest.current.abort();
-  }, [load]);
-  function retry() {
-    const controller = new AbortController();
-    activeRequest.current = controller;
-    setCatalog({ phase: "loading" });
-    load(controller);
-  }
+    if (missing) document.title = `${copy.publicProfile.notFound} — Ren AI`;
+  }, [missing, copy.publicProfile.notFound]);
   return (
     <div className="discovery-shell">
       {catalog.phase === "ready" ? (
-        <Experience people={catalog.people} client={client} />
+        personaId && !requested ? (
+          <>
+            <Header />
+            <main className="onboarding-view" id="discovery-content">
+              <div className="empty-card">
+                <h1>{copy.publicProfile.notFound}</h1>
+                <p>{copy.publicProfile.notFoundHint}</p>
+                <a href="/explore">{copy.back}</a>
+              </div>
+            </main>
+          </>
+        ) : (
+          <Experience
+            people={catalog.people}
+            client={client}
+            personaId={personaId}
+            initialStyle={initialStyle}
+          />
+        )
       ) : (
         <>
           <Header />
@@ -198,27 +192,56 @@ function useBrowseView() {
   return { view, setView, contactOpened, navigate, back };
 }
 
+function prioritizePersona(people: readonly PublicPersona[], personaId: string | undefined) {
+  return [
+    ...people.filter((person) => person.id === personaId),
+    ...people.filter((person) => person.id !== personaId),
+  ];
+}
+
 function Experience({
   people,
   client,
+  personaId,
+  initialStyle,
 }: {
   people: readonly PublicPersona[];
   client: DiscoveryClient;
+  personaId: string | undefined;
+  initialStyle: ImageStyle | undefined;
 }) {
   const copy = useCopy();
   const [choices, setChoices] = useState(readChoices);
-  const { style, changing, issue, choose: changeStyle } = useImageStyle();
+  const { style, changing, issue, choose: changeStyle } = useImageStyle(initialStyle);
   const [storageFailure, setStorageFailure] = useState<true>();
   const { view, setView, contactOpened, navigate, back } = useBrowseView();
   const [busy, setBusy] = useState(false);
-  const [details, setDetails] = useState<{ id: string; image: number }>();
-  const displayed = people.map((persona) => withImageStyle(persona, style));
+  const [details, setDetails] = useState<{ id: string; image: number } | undefined>(() =>
+    personaId ? { id: personaId, image: 0 } : undefined,
+  );
+  const ordered = prioritizePersona(people, personaId);
+  const displayed = ordered.map((persona) => withImageStyle(persona, style));
   const remaining = displayed.filter((persona) => !Object.hasOwn(choices, persona.id));
   const current = remaining[0];
   const liked = displayed.filter((persona) => choices[persona.id] === true);
   const detail = displayed.find((persona) => persona.id === details?.id);
+  const detailId = detail?.id;
+  const title = detail ? personaTitle(detail) : `${copy.brand} — ${copy.explore}`;
   const openDetails = (persona: PublicPersona, image = 0) => setDetails({ id: persona.id, image });
-  const closeDetails = () => setDetails(undefined);
+  const closeDetails = () => {
+    setDetails(undefined);
+    if (window.location.pathname.startsWith("/personas/"))
+      window.history.replaceState(window.history.state, "", `/explore${window.location.hash}`);
+  };
+  useEffect(() => {
+    document.title = title;
+    if (detailId)
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${personaPath(detailId)}?style=${style}${window.location.hash}`,
+      );
+  }, [detailId, style, title]);
   function chooseStyle(next: ImageStyle) {
     const reading = [...remaining.slice(0, 1), ...(detail ? [detail] : [])];
     const images = reading.flatMap((persona) => {
@@ -272,7 +295,7 @@ function Experience({
       >
         <LikedPanel people={liked} onOpen={openDetails} disabled={busy} />
         <section className="swipe-stage" aria-label={copy.explore}>
-          <h1 className="sr-only">{copy.explore}</h1>
+          <h1 className="sr-only">{detail ? `${detail.name} — Ren AI` : copy.explore}</h1>
           {contactOpened && (
             <div className="contact-surface" hidden={view !== "contact" || Boolean(detail)}>
               <JoinForm

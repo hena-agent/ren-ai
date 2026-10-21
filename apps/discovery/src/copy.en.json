@@ -126,6 +126,13 @@
   "genderFemale": "Female",
   "genderMale": "Male",
   "genderOther": "Other",
+  "publicProfile": {
+    "share": "Share profile",
+    "copied": "Link copied.",
+    "shareFailure": "Couldn't share. Please try again.",
+    "notFound": "This profile isn't public.",
+    "notFoundHint": "Meet another persona."
+  },
   "languageSetting": "Display language",
   "reselectionTitle": "Start fresh with another persona",
   "reselectionIntro": "Use the same iMessage address that received your link. There may be a wait before the first message.",

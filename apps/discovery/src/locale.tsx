@@ -29,8 +29,14 @@ const LocaleContext = createContext<{
 export const useLocale = () => useContext(LocaleContext);
 export const useCopy = () => messages[useLocale().locale];
 
-export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState(readLocale);
+export function LocaleProvider({
+  children,
+  initialLocale,
+}: {
+  children: ReactNode;
+  initialLocale?: Locale | undefined;
+}) {
+  const [locale, setLocale] = useState(initialLocale ?? readLocale);
   const [storageFailure, setStorageFailure] = useState(false);
   useEffect(() => {
     document.documentElement.lang = locale;

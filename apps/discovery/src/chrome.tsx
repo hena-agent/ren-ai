@@ -50,7 +50,7 @@ export function LikedPanel({
                 onClick={() => onOpen(persona)}
                 aria-label={`${persona.name} ${copy.details}`}
               >
-                <img src={persona.imageUrl} alt="" />
+                {persona.imageUrl && <img src={persona.imageUrl} alt="" />}
                 <span>{persona.name}</span>
               </button>
             </li>

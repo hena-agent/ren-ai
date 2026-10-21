@@ -4,6 +4,7 @@ import { GalleryControls } from "./photo-gallery.tsx";
 import { useCopy } from "./locale.tsx";
 import { ProfileLanguages } from "./profile-languages.tsx";
 import { PublicProfileView } from "@ren-ai/personas/public-profile-view";
+import { ProfileShare } from "./profile-share.tsx";
 
 function profileWithoutLegacyAge(profile: NonNullable<StyledPersona["profile"]>) {
   return {
@@ -16,6 +17,19 @@ function profileWithoutLegacyAge(profile: NonNullable<StyledPersona["profile"]>)
       )
       .filter((section) => section.type !== "basics" || section.items.length > 0),
   };
+}
+
+function ProfileContent({ persona }: { persona: StyledPersona }) {
+  return (
+    <>
+      {persona.profile ? (
+        <PublicProfileView profile={profileWithoutLegacyAge(persona.profile)} />
+      ) : (
+        <p>{persona.bio}</p>
+      )}
+      <ProfileLanguages persona={persona} />
+    </>
+  );
 }
 
 function DetailsGallery({
@@ -94,16 +108,19 @@ export function ProfileDetails({
           {persona.name}
           {persona.age !== undefined && `, ${persona.age}`}
         </span>
-        <button
-          className="details-close"
-          ref={close}
-          type="button"
-          aria-label={copy.closeDetails}
-          disabled={disabled}
-          onClick={onClose}
-        >
-          <span className="icon icon-arrow" aria-hidden="true" />
-        </button>
+        <div className="details-toolbar-actions">
+          <ProfileShare persona={persona} imageStyle={persona.imageStyle} disabled={disabled} />
+          <button
+            className="details-close"
+            ref={close}
+            type="button"
+            aria-label={copy.closeDetails}
+            disabled={disabled}
+            onClick={onClose}
+          >
+            <span className="icon icon-arrow" aria-hidden="true" />
+          </button>
+        </div>
       </div>
       <div className="details-scroll">
         <DetailsGallery
@@ -117,12 +134,7 @@ export function ProfileDetails({
             {persona.name}
             {persona.age !== undefined && `, ${persona.age}`}
           </h2>
-          {persona.profile ? (
-            <PublicProfileView profile={profileWithoutLegacyAge(persona.profile)} />
-          ) : (
-            <p>{persona.bio}</p>
-          )}
-          <ProfileLanguages persona={persona} />
+          <ProfileContent persona={persona} />
         </div>
       </div>
     </section>

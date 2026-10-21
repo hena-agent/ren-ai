@@ -1,0 +1,44 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PublicPersona } from "@ren-ai/onboarding";
+import type { DiscoveryClient } from "./client.ts";
+
+type Catalog =
+  | { phase: "loading" }
+  | { phase: "failed" }
+  | { phase: "ready"; people: readonly PublicPersona[] };
+
+export function useCatalog(client: DiscoveryClient, initialPeople?: readonly PublicPersona[]) {
+  const [catalog, setCatalog] = useState<Catalog>(
+    initialPeople ? { phase: "ready", people: initialPeople } : { phase: "loading" },
+  );
+  const activeRequest = useRef(new AbortController());
+  const load = useCallback(
+    (controller: AbortController) => {
+      void client
+        .profiles(controller.signal)
+        .then((people) => {
+          if (!controller.signal.aborted) setCatalog({ phase: "ready", people });
+          return undefined;
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setCatalog({ phase: "failed" });
+        });
+    },
+    [client],
+  );
+  useEffect(() => {
+    if (initialPeople) return undefined;
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    load(controller);
+    return () => activeRequest.current.abort();
+  }, [load, initialPeople]);
+  function retry() {
+    activeRequest.current.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    setCatalog({ phase: "loading" });
+    load(controller);
+  }
+  return { catalog, retry };
+}

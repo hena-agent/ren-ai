@@ -1,7 +1,10 @@
 import type { PublicPersona } from "@ren-ai/onboarding";
 
 export type ImageStyle = "anime" | "photo";
-export type StyledPersona = PublicPersona & { readonly imageUrls?: readonly string[] };
+export type StyledPersona = PublicPersona & {
+  readonly imageUrls?: readonly string[];
+  readonly imageStyle?: ImageStyle;
+};
 const key = "ren-ai.discovery.image-style";
 
 export function readImageStyle(): ImageStyle {
@@ -36,6 +39,7 @@ export function withImageStyle(persona: PublicPersona, style: ImageStyle): Style
       : legacyUrls;
   return {
     ...persona,
+    imageStyle: style,
     imageUrl:
       imageUrls === undefined
         ? (persona.portraits?.[style] ?? persona.imageUrl)

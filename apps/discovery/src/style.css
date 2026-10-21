@@ -12,6 +12,7 @@
 @import "./style-switch.css";
 @import "./style-transition.css";
 @import "./interactions.css";
+@import "./profile-share.css";
 
 :root {
   --canvas: #f4f5f7;

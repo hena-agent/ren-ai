@@ -110,7 +110,9 @@ test("preparation keeps the old image, prevents repeat requests and retains keyb
   target.focus();
   fireEvent.click(target);
   expect(document.querySelector(".app-workspace")?.hasAttribute("inert")).toBe(true);
-  expect(screen.getByRole("status").textContent).toBe("이미지 스타일을 바꾸고 있어요.");
+  expect(
+    within(screen.getByRole("group", { name: "이미지 스타일" })).getByRole("status").textContent,
+  ).toBe("이미지 스타일을 바꾸고 있어요.");
   expect(document.querySelector(".profile-photo")?.getAttribute("src")).toBe(
     people[0]!.portraits.anime,
   );

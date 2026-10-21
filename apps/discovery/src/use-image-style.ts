@@ -6,8 +6,8 @@ import { decodeStyleImages, revealImageStyle } from "./style-transition.ts";
 
 export type StyleIssue = "storage" | "load" | undefined;
 
-export function useImageStyle() {
-  const [style, setStyle] = useState(readImageStyle);
+export function useImageStyle(initialStyle?: ImageStyle) {
+  const [style, setStyle] = useState(initialStyle ?? readImageStyle);
   const [changing, setChanging] = useState(false);
   const [issue, setIssue] = useState<StyleIssue>();
   async function choose(next: ImageStyle, images: readonly string[]) {
