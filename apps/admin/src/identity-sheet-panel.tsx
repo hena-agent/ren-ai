@@ -30,7 +30,8 @@ export function IdentitySheetPanel({
       </div>
       <p className="hint">
         정면·반측면·측면으로 외모를 고정합니다. 완성 즉시 이후 사진의 기준이 되며 공개 갤러리에는
-        포함되지 않습니다.
+        포함되지 않습니다. 설명에서 다시 만들면 기존 시트를 참조하지 않고 현재 설명으로 외모를 새로
+        구성합니다.
       </p>
       {(["anime", "photo"] as const).map((style) => (
         <div key={style} data-identity-sheet={style} id={`identity-sheet-${style}`}>
@@ -65,7 +66,7 @@ export function IdentitySheetPanel({
             data-portrait-operation={`sheet:${style}:${sheets[style] ?? "new"}`}
             data-portrait-label={`${copy.portraitLabels[style]} 인물 시트 1장 생성`}
           >
-            {sheets[style] ? "시트 다시 만들기" : "설명에서 시트 만들기"}
+            {sheets[style] ? "설명에서 시트 다시 만들기" : "설명에서 시트 만들기"}
           </button>
         </div>
       ))}

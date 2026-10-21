@@ -198,7 +198,7 @@ test("existing photos can establish only their own style's sheet without changin
     }),
   );
   expect(replaced.status).toBe(200);
-  expect(sheet.mock.calls.at(-1)?.[3]).toEqual(photoPortrait);
+  expect(sheet.mock.calls.at(-1)?.[3]).toBeUndefined();
   expect(personaImages(preview(await replaced.text()))).toHaveLength(2);
 });
 

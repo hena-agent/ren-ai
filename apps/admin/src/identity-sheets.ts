@@ -57,8 +57,7 @@ export async function generateSheet(
   );
   if (completed)
     return { ...draft, sheets: { ...draft.sheets, [style]: completed }, imageEditing: true };
-  const url = source ?? draft.sheets?.[style];
-  const reference = url ? await readPortraitReference(url, style, store) : undefined;
+  const reference = source ? await readPortraitReference(source, style, store) : undefined;
   await stage("generating");
   const image = await operation("identity.sheet.generate", { style }, () =>
     generator.sheet(characterOf(persona), style, prompt, reference),

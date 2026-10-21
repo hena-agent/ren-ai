@@ -2,16 +2,77 @@ import { expect, test, vi } from "vitest";
 import { basePreview, preview } from "../test/sub-portraits.ts";
 import {
   character,
+  femaleCharacter,
   generator,
+  initialDocuments,
+  legacy,
   newToken,
   portraitImage,
+  portraitReply,
   request,
+  seedSheets,
   tokenOf,
 } from "../test/fixtures.ts";
 import { deferred, finishedJob, jobUrl, queuedRequest, runNextTask } from "../test/queue.ts";
 import { durableFixture } from "../test/durable-admin.ts";
 import { draftTokens } from "./draft.ts";
 import { createImageBatch, restoreImageBatch } from "./image-batch.ts";
+import { createProfileGenerator } from "./generation.ts";
+
+test.each(["anime", "photo"] as const)(
+  "description-based %s sheet replacement uses edited text without the old image, including after actor replacement",
+  async (style) => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(portraitReply);
+    const { open, store } = await durableFixture({
+      ...generator,
+      sheet: createProfileGenerator({ key: "test-key", fetcher }).sheet,
+    });
+    const imageUrl = await store.saveImage(portraitImage);
+    const original = await store.save(
+      {
+        ...legacy,
+        ...femaleCharacter,
+        id: "edited-identity",
+        prompt: character.description,
+        imageUrl,
+        portraits: { anime: imageUrl, photo: imageUrl },
+      },
+      initialDocuments,
+      { persona: "" },
+    );
+    const sheets = await seedSheets(store, original.id);
+    const route = `/personas/${original.id}`;
+    let admin = open();
+    const editing = await (await admin(request(route))).text();
+    const description = character.description.replace("짧은 검은 머리", "긴 붉은 머리");
+    const accepted = await admin(
+      queuedRequest(`${route}?style=${style}`, {
+        ...character,
+        description,
+        draft: tokenOf(editing),
+        intent: "sheet",
+        portraitInstructions: "private new identity direction",
+      }),
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+    admin = open();
+    await runNextTask(admin, () => {});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const payload = await new Request(...fetcher.mock.calls[0]!).text();
+    expect(payload).toContain(JSON.stringify(description).slice(1, -1));
+    expect(payload).not.toContain('"inlineData"');
+    expect(payload).toContain("private new identity direction");
+    const completed = await (await admin(request(jobUrl(accepted)))).text();
+    const next = await store.sheets(original.id);
+    expect(next[style]).not.toBe(sheets[style]);
+    expect(next[style === "anime" ? "photo" : "anime"]).toBe(
+      sheets[style === "anime" ? "photo" : "anime"],
+    );
+    expect(preview(completed).description).toBe(description);
+    expect(preview(completed).portraits).toEqual(original.portraits);
+    expect(await store.get(original.id)).toEqual(original);
+  },
+);
 
 test("a committed sheet receipt repairs a lost draft checkpoint and confirmed retry does not regenerate its paid result", async () => {
   const sheet = vi.fn<typeof generator.sheet>().mockResolvedValue(portraitImage);
