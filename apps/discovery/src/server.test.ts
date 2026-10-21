@@ -1,0 +1,326 @@
+// @vitest-environment node
+import { readFile } from "node:fs/promises";
+import { afterEach, expect, test, vi } from "vitest";
+import { discoveryServer } from "./server.ts";
+import type { ServerEvent } from "./server-log.ts";
+import { serverCause, writeServerLog } from "./server-log.ts";
+import { publicPersonas } from "../test/public-personas.ts";
+import { readPublicPeople } from "./public-routing.ts";
+
+afterEach(() => vi.restoreAllMocks());
+
+test("server diagnostics preserve safe causes and write structured JSON to the matching sink", () => {
+  const info = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+  const error = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  const event = {
+    requestId: "request",
+    operation: "discovery.public" as const,
+    stage: "request",
+    outcome: "completed" as const,
+    durationMs: 1,
+  };
+  writeServerLog({ ...event, level: "info" });
+  writeServerLog({ ...event, level: "warn" });
+  expect(info).toHaveBeenCalledWith(expect.stringContaining('"service":"discovery"'));
+  expect(error).toHaveBeenCalledWith(expect.stringContaining('"level":"warn"'));
+  const cause = Object.assign(new TypeError("private"), {
+    code: "ETIMEDOUT",
+    stack: "TypeError: private\n at call (server.ts:1:1)",
+  });
+  expect(serverCause(new Error("wrapper", { cause }))).toEqual({
+    causeName: "TypeError",
+    causeCode: "ETIMEDOUT",
+    stack: " at call (server.ts:1:1)",
+  });
+  expect(serverCause({ private: "payload" })).toMatchObject({ causeName: "Error" });
+  expect(
+    serverCause(
+      Object.assign(new Error("private"), { code: "private input with spaces", stack: undefined }),
+    ),
+  ).toEqual({ causeName: "Error", stack: "" });
+  expect(serverCause(Object.assign(new Error("private"), { code: 42 }))).not.toHaveProperty(
+    "causeCode",
+  );
+});
+
+async function fixture() {
+  const template = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const photo = await readFile(new URL("../public/landing/dohee-anime.webp", import.meta.url));
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (input) =>
+      new URL(input instanceof Request ? input.url : input).pathname === "/discovery/personas"
+        ? Response.json(publicPersonas)
+        : new Response(photo, { headers: { "Content-Type": "image/webp" } }),
+    );
+  const assets = vi
+    .fn<(request: Request) => Promise<Response>>()
+    .mockImplementation(async () => new Response(template));
+  const log = vi.fn<(event: ServerEvent) => void>();
+  const handler = discoveryServer(fetcher, log);
+  const env = { ASSETS: { fetch: assets }, DISCOVERY_API_URL: "https://api.example" };
+  return {
+    fetcher,
+    assets,
+    log,
+    send: (path: string, method = "GET") =>
+      handler(new Request(`https://renai.im${path}`, { method }), env),
+  };
+}
+
+test("a direct profile request includes readable public HTML, canonical SEO, style-specific previews and safe bootstrap", async () => {
+  const f = await fixture();
+  const name = '지아 <script>alert("private")</script> $&';
+  f.fetcher.mockResolvedValueOnce(
+    Response.json([
+      {
+        ...publicPersonas[0],
+        name,
+        description: "PRIVATE DESCRIPTION",
+        state: "PRIVATE STATE",
+        prompt: "PRIVATE PROMPT",
+        memory: "PRIVATE MEMORY",
+      },
+      publicPersonas[1],
+    ]),
+  );
+  const response = await f.send("/personas/jia?style=photo&tracking=ignored");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("content-type")).toContain("text/html");
+  const html = await response.text();
+  expect(html).toContain("햇살 좋은 날엔 같이 걸어요.");
+  expect(html).toContain("좋아하는 것");
+  expect(html).toContain("https://images.example/jia-photo.webp");
+  expect(html).toContain('<link rel="canonical" href="https://renai.im/personas/jia"');
+  expect(html).toContain(
+    '<meta property="og:url" content="https://renai.im/personas/jia?style=photo"',
+  );
+  expect(html).toContain(
+    '<meta property="og:image" content="https://images.example/jia-photo.webp"',
+  );
+  expect(html).toContain('name="twitter:card" content="summary"');
+  expect(html).toContain('property="og:image:type" content="image/webp"');
+  expect(html).toContain('property="og:image:width" content="928"');
+  expect(html).toContain('property="og:image:height" content="1152"');
+  expect(html).toContain(
+    'property="og:image:secure_url" content="https://images.example/jia-photo.webp"',
+  );
+  expect(html).toContain('name="twitter:image" content="https://images.example/jia-photo.webp"');
+  expect(html).toContain('type="application/ld+json"');
+  expect(html).toContain('"@type":"CreativeWork"');
+  expect(html).toContain('class="discovery-shell"');
+  expect(html).toContain('class="profile-details"');
+  expect(html.match(/<title>/g)).toHaveLength(1);
+  expect(html.match(/name="description"/g)).toHaveLength(1);
+  expect(html).toContain("&lt;script&gt;");
+  expect(html).toContain("$&");
+  expect(html).not.toMatch(/PRIVATE (DESCRIPTION|STATE|PROMPT|MEMORY)/);
+  const bootstrap = /<script id="public-personas" type="application\/json">(.*?)<\/script>/.exec(
+    html,
+  )![1]!;
+  expect(bootstrap).not.toContain("<");
+  expect(readPublicPeople(bootstrap)).toEqual([{ ...publicPersonas[0], name }, publicPersonas[1]]);
+  expect(f.fetcher).toHaveBeenCalledWith(
+    new URL("https://api.example/discovery/personas"),
+    expect.objectContaining({
+      cache: "no-store",
+      headers: { "X-Request-ID": response.headers.get("x-request-id") },
+    }),
+  );
+  expect(f.log).toHaveBeenCalledWith(
+    expect.objectContaining({
+      requestId: response.headers.get("x-request-id"),
+      stage: "request",
+      outcome: "completed",
+      personaId: "jia",
+      style: "photo",
+    }),
+  );
+  expect(f.log.mock.calls[0]![0].durationMs).toBeGreaterThanOrEqual(0);
+});
+
+test("the sitemap exposes current profile links without a separate directory or frontend rebuild", async () => {
+  const f = await fixture();
+  expect((await f.send("/personas")).status).toBe(404);
+  const xml = await f.send("/sitemap.xml");
+  expect(xml.headers.get("content-type")).toContain("application/xml");
+  const body = await xml.text();
+  expect(body).toContain("<loc>https://renai.im/personas/jia</loc>");
+  expect(body).toContain("<loc>https://renai.im/explore</loc>");
+  expect(body).not.toContain("<loc>https://renai.im/personas</loc>");
+  expect(body).toContain("<image:loc>https://images.example/jia-anime.webp</image:loc>");
+  f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
+  expect(await (await f.send("/sitemap.xml")).text()).not.toContain("/personas/jia");
+  f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
+  const removed = await f.send("/personas/jia");
+  expect(removed.status).toBe(404);
+  expect(removed.headers.get("x-robots-tag")).toBe("noindex");
+  expect(await removed.text()).toContain('name="robots" content="noindex,follow"');
+  expect(f.log).toHaveBeenLastCalledWith(expect.objectContaining({ status: 404, level: "warn" }));
+});
+
+test("profiles without photos, structured profiles or a style query still have public content and metadata", async () => {
+  const f = await fixture();
+  const html = await (await f.send("/personas/subin?style=invalid")).text();
+  expect(html).toContain("반가워요.");
+  expect(html).toContain("이 스타일의 사진이 아직 없어요.");
+  expect(html).toContain(
+    'name="description" content="반가워요. — Ren AI의 가상 AI 페르소나. iMessage로 일상을 나눠요."',
+  );
+  expect(html).toContain('property="og:image" content="https://renai.im/social.png"');
+  expect(html).toContain('property="og:image:width" content="1200"');
+  expect(html).toContain('property="og:image:height" content="630"');
+  expect(html).toContain('name="twitter:card" content="summary_large_image"');
+  const normal = await (await f.send("/personas/jia?style=anime")).text();
+  expect(normal).toContain(
+    '<meta property="og:image" content="https://images.example/jia-anime.webp"',
+  );
+});
+
+test("routing handles HEAD, invalid paths, trailing slashes, methods, robots and static assets without unnecessary Catalog requests", async () => {
+  const f = await fixture();
+  const robots = await f.send("/robots.txt");
+  expect(await robots.text()).toContain("Sitemap: https://renai.im/sitemap.xml");
+  for (const path of ["/personas/", "/personas/invalid/id", "/personas/%3Cscript%3E"])
+    expect((await f.send(path)).status).toBe(404);
+  for (const path of ["/personas/jia/?style=photo"]) {
+    const response = await f.send(path);
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe(
+      `https://renai.im${path.replace(/\/(?=\?|$)/, "")}`,
+    );
+  }
+  const method = await f.send("/personas", "POST");
+  expect(method.status).toBe(405);
+  expect(method.headers.get("allow")).toBe("GET, HEAD");
+  expect(f.fetcher).not.toHaveBeenCalled();
+  const head = await f.send("/personas/jia", "HEAD");
+  expect(head.status).toBe(200);
+  expect(await head.text()).toBe("");
+  await f.send("/assets/browser.js");
+  expect(f.assets).toHaveBeenLastCalledWith(
+    expect.objectContaining({ url: "https://renai.im/assets/browser.js" }),
+  );
+});
+
+test.each(["http", "decode", "network", "assets"])(
+  "%s failures return retryable 503s with correlated payload-safe diagnostics",
+  async (failure) => {
+    const f = await fixture();
+    if (failure === "http")
+      f.fetcher.mockResolvedValueOnce(new Response("PRIVATE UPSTREAM", { status: 502 }));
+    if (failure === "decode")
+      f.fetcher.mockResolvedValueOnce(Response.json([{ secret: "PRIVATE DECODE PAYLOAD" }]));
+    if (failure === "network")
+      f.fetcher.mockRejectedValueOnce(
+        Object.assign(new Error("PRIVATE URL AND PROMPT"), { code: "ECONNRESET" }),
+      );
+    if (failure === "assets")
+      f.assets.mockResolvedValueOnce(new Response("PRIVATE ASSET", { status: 500 }));
+    const response = await f.send("/personas/jia?style=photo&secret=PRIVATE QUERY");
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("30");
+    const requestId = response.headers.get("x-request-id");
+    expect(await response.text()).toContain(requestId);
+    const events = f.log.mock.calls.map(([event]) => event);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      requestId,
+      operation: "discovery.public",
+      level: "error",
+      outcome: "failed",
+      personaId: "jia",
+      style: "photo",
+      stage:
+        failure === "assets"
+          ? "assets.template"
+          : failure === "decode"
+            ? "catalog.decode"
+            : "catalog.read",
+    });
+    expect(events[1]).toMatchObject({ requestId, stage: "request", status: 503 });
+    expect(events[0]).toMatchObject(
+      failure === "http"
+        ? { upstreamStatus: 502, code: "CATALOG_UNAVAILABLE" }
+        : failure === "network"
+          ? { causeCode: "ECONNRESET" }
+          : {},
+    );
+    expect(JSON.stringify(events)).not.toContain("PRIVATE");
+  },
+);
+
+test("health reports artifact identity and Catalog readiness independently of static assets", async () => {
+  const f = await fixture();
+  const response = await f.send("/health");
+  expect(await response.json()).toEqual({
+    service: "discovery",
+    revision: "development",
+    status: "ready",
+    dependencies: { catalog: { status: "ready" } },
+  });
+  f.fetcher.mockRejectedValueOnce(new TypeError("secret"));
+  const degraded = await f.send("/health");
+  expect(degraded.status).toBe(503);
+  expect(await degraded.json()).toMatchObject({
+    status: "degraded",
+    dependencies: { catalog: { status: "degraded" } },
+  });
+  expect(f.assets).not.toHaveBeenCalled();
+});
+
+test("home and explorer return searchable application HTML and branded previews without adding navigation", async () => {
+  const f = await fixture();
+  const home = await f.send("/");
+  const html = await home.text();
+  expect(html).toContain("일상에,");
+  expect(html).toContain('class="home-hero"');
+  expect(html).toContain('<link rel="canonical" href="https://renai.im/"');
+  expect(html).toContain('property="og:image" content="https://renai.im/social.png"');
+  expect(html).not.toContain('id="public-personas"');
+  expect(f.fetcher).not.toHaveBeenCalled();
+  const explore = await (await f.send("/explore")).text();
+  expect(explore).toContain('class="discovery-shell"');
+  expect(explore).toContain('class="profile-card"');
+  expect(explore).not.toContain('href="/personas"');
+  expect(explore).toContain('name="robots" content="index,follow,max-image-preview:large"');
+  expect(explore).toContain('<link rel="canonical" href="https://renai.im/explore"');
+});
+
+test("an unreadable preview image logs one correlated diagnostic and serves an indexable profile with a valid brand image", async () => {
+  const f = await fixture();
+  f.fetcher
+    .mockResolvedValueOnce(Response.json(publicPersonas))
+    .mockResolvedValueOnce(new Response("PRIVATE IMAGE PAYLOAD", { status: 403 }));
+  const response = await f.send("/personas/jia?style=photo&private=PRIVATE QUERY");
+  expect(response.status).toBe(200);
+  const html = await response.text();
+  expect(html).toContain('property="og:image" content="https://renai.im/social.png"');
+  expect(html).toContain("햇살 좋은 날엔 같이 걸어요.");
+  expect(f.log).toHaveBeenCalledTimes(2);
+  expect(f.log.mock.calls[0]![0]).toMatchObject({
+    requestId: response.headers.get("x-request-id"),
+    personaId: "jia",
+    style: "photo",
+    stage: "image.read",
+    code: "SOCIAL_IMAGE_UNAVAILABLE",
+    upstreamStatus: 403,
+    level: "warn",
+  });
+  expect(f.log.mock.calls[1]![0]).toMatchObject({ stage: "request", status: 200, level: "info" });
+  expect(JSON.stringify(f.log.mock.calls)).not.toContain("PRIVATE");
+});
+
+test("local HTTP images do not claim secure URLs and image sitemaps escape query strings", async () => {
+  const f = await fixture();
+  const persona = {
+    ...publicPersonas[0]!,
+    portraits: { anime: "http://127.0.0.1:3729/images/photo.png?x=1&y=2" },
+  };
+  f.fetcher.mockResolvedValueOnce(Response.json([persona]));
+  const html = await (await f.send("/personas/jia")).text();
+  expect(html).not.toContain('property="og:image:secure_url"');
+  f.fetcher.mockResolvedValueOnce(Response.json([persona]));
+  expect(await (await f.send("/sitemap.xml")).text()).toContain("?x=1&amp;y=2");
+});

@@ -122,6 +122,36 @@ naturally when scrolling back; there is no autoplay or simulated live typing.
 Reduced motion shows immediate control states.
 Use native CSS before introducing animation dependencies.
 
+## Public profiles and sharing
+
+Keep the existing Discovery cards, swipe interactions, inline reading view and
+contact form. Add sharing to the compact card and reading toolbar. Do not add a
+separate persona menu, directory or profile layout. `/personas/{id}` is a direct
+entry into that same Discovery, with the target opened in the inline reading
+view and prioritized in the deck. Preserve existing Like/Pass choices and allow
+the shared persona to be chosen again. All registration continues through the
+normal form with the current Likes. Keep IDs stable across name edits.
+Opening details updates the address; collapse returns to `/explore` without
+losing the current card, photo, Likes or reselection fragment. Public writing
+remains in its original language.
+
+Use the native share sheet or clipboard copying with accessible success/failure
+feedback. Shared URLs include the selected anime/photo style; the initial HTML's
+Open Graph preview uses its first same-style gallery photo. Verify actual image
+bytes, MIME type, dimensions and the 5 MB size limit before advertising it. Include
+secure URL, width, height and alt text alongside Open Graph and explicit Twitter
+metadata. Use a square summary presentation for portrait photos rather than
+forcing a wide crop. Home/explorer previews and absent/unreadable style photos
+use the actual 1200×630 branded PNG from `design/social.html`. Keep search canonical
+URLs independent of style. Return profile content and unique metadata in the
+first HTML for all visitors, including non-JavaScript crawlers. Render home and
+explorer in the same way, keeping home independent of the live Catalog. Sitemap
+and image locations reflect publication changes without rebuilding. JSON-LD
+describes fictional creative works rather than claiming personas are real people.
+Shared URLs contain no private fragments, handles or browser choices. Missing,
+unpublished and retired personas return 404/noindex; upstream failures return
+retryable 503s rather than masquerading as missing profiles.
+
 ## Review
 
 Check 360px and 390px phones, tablet and desktop; Korean, English and Japanese;
