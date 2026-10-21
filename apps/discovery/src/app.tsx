@@ -16,7 +16,7 @@ import { Header, LikedPanel, Navigation } from "./chrome.tsx";
 import type { BrowseView } from "./chrome.tsx";
 import { Receipt } from "./receipt.tsx";
 import { useCatalog } from "./use-catalog.ts";
-import { personaPath, personaTitle } from "./public-routing.ts";
+import { shareUrl, personaTitle } from "./public-routing.ts";
 
 type Entry = {
   personaId?: string | undefined;
@@ -235,12 +235,14 @@ function Experience({
   };
   useEffect(() => {
     document.title = title;
-    if (detailId)
+    if (detailId) {
+      const target = new URL(shareUrl(detailId, style));
       window.history.replaceState(
         window.history.state,
         "",
-        `${personaPath(detailId)}?style=${style}${window.location.hash}`,
+        `${target.pathname}${target.search}${window.location.hash}`,
       );
+    }
   }, [detailId, style, title]);
   function chooseStyle(next: ImageStyle) {
     const reading = [...remaining.slice(0, 1), ...(detail ? [detail] : [])];

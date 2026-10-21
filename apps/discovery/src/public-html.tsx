@@ -77,17 +77,12 @@ export function publicResponse(
       <meta property="og:description" content={description} />
       <meta property="og:url" content={persona ? shareUrl(persona.id, style) : canonical} />
       <meta property="og:image" content={image.url} />
-      {image.url.startsWith("https:") && (
-        <meta property="og:image:secure_url" content={image.url} />
-      )}
+      <meta property="og:image:secure_url" content={image.url} />
       <meta property="og:image:type" content={image.type} />
       <meta property="og:image:width" content={String(image.width)} />
       <meta property="og:image:height" content={String(image.height)} />
       <meta property="og:image:alt" content={image.alt} />
-      <meta
-        name="twitter:card"
-        content={image.width >= image.height ? "summary_large_image" : "summary"}
-      />
+      <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image.url} />

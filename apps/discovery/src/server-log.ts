@@ -26,14 +26,21 @@ export function serverCause(cause: unknown) {
   const error = cause instanceof Error ? cause : new Error("Non-Error failure");
   const root = error.cause instanceof Error ? error.cause : error;
   return {
-    causeName: ["TypeError", "SyntaxError", "TimeoutError", "AbortError", "SchemaError"].includes(
-      root.name,
-    )
+    causeName: [
+      "TypeError",
+      "SyntaxError",
+      "TimeoutError",
+      "AbortError",
+      "SchemaError",
+      "ImagesError",
+    ].includes(root.name)
       ? root.name
       : "Error",
     ...("code" in root &&
-      typeof root.code === "string" &&
-      /^[\w.-]{1,80}$/.test(root.code) && { causeCode: root.code }),
+      ((typeof root.code === "string" && /^[\w.-]{1,80}$/.test(root.code)) ||
+        (typeof root.code === "number" && Number.isSafeInteger(root.code))) && {
+        causeCode: String(root.code),
+      }),
     stack: (root.stack ?? "")
       .replace(root.message, "<redacted>")
       .split("\n")
