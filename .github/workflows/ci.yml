@@ -228,6 +228,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/
       - run: bun run --cwd apps/api check:health https://renai.im discovery "$GITHUB_SHA"
+      - run: bun run --cwd apps/discovery check:preview https://renai.im "$GITHUB_SHA"
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/explore
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/social.png
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/sitemap.xml

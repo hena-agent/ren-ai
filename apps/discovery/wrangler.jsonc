@@ -7,6 +7,8 @@
   "main": "worker/entry.ts",
   "compatibility_flags": ["nodejs_compat"],
   "vars": { "DISCOVERY_API_URL": "https://api.renai.im" },
+  "images": { "binding": "IMAGE_TRANSFORMS" },
+  "r2_buckets": [{ "binding": "PORTRAITS", "bucket_name": "persona-images" }],
   "route": { "pattern": "renai.im", "custom_domain": true },
   "assets": {
     "directory": "./dist/client",

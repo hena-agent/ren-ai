@@ -48,20 +48,20 @@ test("a shared URL opens the target in the original Discovery reading view and c
   expect(api.profiles).not.toHaveBeenCalled();
   const details = screen.getByRole("region", { name: /백지아/ });
   expect(within(details).getByText("햇살 좋은 날엔 같이 걸어요.")).toBeTruthy();
-  expect(within(details).getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toContain(
-    "jia-photo",
+  expect(within(details).getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
+    publicPersonas[0]!.portraits!.photo,
   );
   expect(document.querySelector(".discovery-shell")).toBeTruthy();
   expect(document.querySelector(".public-site")).toBeNull();
   expect(screen.queryByRole("link", { name: "페르소나 둘러보기" })).toBeNull();
   expect(document.title).toBe("백지아 — Ren AI의 AI 페르소나");
   await selectImageStyle("애니메");
-  expect(window.location.search).toBe("?style=anime");
+  expect(window.location.search).toBe("?style=anime&preview=v1");
   fireEvent.click(within(details).getByRole("button", { name: "다음 사진" }));
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
   expect(window.location.pathname).toBe("/explore");
-  expect(screen.getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toContain(
-    "jia-walk",
+  expect(screen.getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
+    publicPersonas[0]!.secondaryPortraits![0]!.imageUrl,
   );
   choose(false);
   expect(screen.getByRole("heading", { name: "한수빈" })).toBeTruthy();
@@ -113,7 +113,7 @@ test("explore cards have no sharing action; opening details exposes footer shari
   expect(button.closest(".details-footer")).toBeTruthy();
   fireEvent.click(button);
   await screen.findByText("링크를 복사했어요.");
-  expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo");
+  expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo&preview=v1");
   expect(screen.getByRole("region", { name: /백지아/ })).toBeTruthy();
   expect(localStorage.getItem("ren-ai.discovery.choices")).toBeNull();
   expect(window.location.hash).toBe("#reselect=private-token");

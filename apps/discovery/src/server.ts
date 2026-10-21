@@ -2,19 +2,22 @@ import { Schema } from "effect";
 import { PublicPersona } from "@ren-ai/onboarding";
 import { healthResponse } from "@ren-ai/transport/health";
 import { publicResponse, sitemap } from "./public-html.tsx";
-import { publicOrigin, publicRoute } from "./public-routing.ts";
+import { publicOrigin, publicRoute, previewRoute } from "./public-routing.ts";
 import { serverCause, writeServerLog } from "./server-log.ts";
 import type { ServerEvent } from "./server-log.ts";
-import { socialImage, brandSocialImage } from "./social-image.ts";
+import { socialImage } from "./social-image.ts";
+import { previewReady, previewResponse } from "./preview-image.ts";
+import type { PreviewCache, PreviewEnv } from "./preview-image.ts";
 
-interface DiscoveryEnv {
-  ASSETS: { fetch: (request: Request) => Promise<Response> };
+export interface DiscoveryEnv extends PreviewEnv {
   DISCOVERY_API_URL: string;
 }
 
 const failureCodes: Readonly<Record<string, string>> = {
   "catalog.read": "CATALOG_UNAVAILABLE",
   "catalog.decode": "CATALOG_INVALID",
+  "image.render": "PREVIEW_UNAVAILABLE",
+  "health.preview": "PREVIEW_UNAVAILABLE",
 };
 
 function routeResponse(request: Request, url: URL) {
@@ -29,7 +32,7 @@ function routeResponse(request: Request, url: URL) {
     return new Response(`User-agent: *\nAllow: /\nSitemap: ${publicOrigin}/sitemap.xml\n`, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
-  if (url.pathname.startsWith("/personas") && !publicRoute(url).id)
+  if (url.pathname.startsWith("/personas") && !publicRoute(url).id && !previewRoute(url))
     return new Response("Profile not found", {
       status: 404,
       headers: { "X-Robots-Tag": "noindex" },
@@ -37,11 +40,32 @@ function routeResponse(request: Request, url: URL) {
   return undefined;
 }
 
+function unavailableResponse(path: string, requestId: string, catalogReady: boolean) {
+  if (path === "/health")
+    return healthResponse("discovery", "degraded", {
+      dependencies: {
+        catalog: { status: catalogReady ? "ready" : "degraded" },
+        preview: { status: "degraded" },
+      },
+    });
+  return new Response(
+    `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Ren AI</title></head><body><h1>프로필을 불러오지 못했어요.</h1><p>잠시 후 다시 시도해 주세요.</p><p>Request ID: ${requestId}</p><a href="/explore">다시 불러오기</a></body></html>`,
+    {
+      status: 503,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "X-Robots-Tag": "noindex",
+        "Retry-After": "30",
+      },
+    },
+  );
+}
+
 export function discoveryServer(
   fetcher: typeof fetch = fetch,
   log: (event: ServerEvent) => void = writeServerLog,
 ) {
-  return async (request: Request, env: DiscoveryEnv) => {
+  return async (request: Request, env: DiscoveryEnv, cache?: PreviewCache) => {
     const url = new URL(request.url);
     const dynamic =
       url.pathname.startsWith("/personas") ||
@@ -49,9 +73,11 @@ export function discoveryServer(
     if (!dynamic) return env.ASSETS.fetch(request);
     const requestId = crypto.randomUUID();
     const start = performance.now();
-    const route = publicRoute(url);
+    const imageRoute = previewRoute(url);
+    const route = imageRoute ?? publicRoute(url);
     let stage = "route";
     let upstreamStatus: number | undefined;
+    let catalogReady = false;
     const fields = {
       requestId,
       operation: "discovery.public" as const,
@@ -87,39 +113,32 @@ export function discoveryServer(
         stage = "catalog.decode";
         // Decoding strips private or future fields before HTML, bootstrap or metadata can see them.
         people = Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await upstream.json());
+        catalogReady = true;
       }
-      if (url.pathname === "/health")
+      if (url.pathname === "/health") {
+        stage = "health.preview";
+        await previewReady(env, url);
         return finish(
-          healthResponse("discovery", "ready", { dependencies: { catalog: { status: "ready" } } }),
+          healthResponse("discovery", "ready", {
+            dependencies: { catalog: { status: "ready" }, preview: { status: "ready" } },
+          }),
         );
+      }
       if (url.pathname === "/sitemap.xml")
         return finish(
           new Response(sitemap(people), {
             headers: { "Content-Type": "application/xml; charset=utf-8" },
           }),
         );
+      const persona = people.find((person) => person.id === route.id);
+      if (imageRoute) {
+        stage = "image.render";
+        return finish(await previewResponse(url, persona, imageRoute.style, env, cache));
+      }
       stage = "assets.template";
       const template = await env.ASSETS.fetch(new Request(new URL("/index.html", url)));
       if (!template.ok) throw new Error("Browser template unavailable");
-      const image =
-        request.method === "HEAD"
-          ? brandSocialImage
-          : await socialImage(
-              people.find((person) => person.id === route.id),
-              route.style ?? "anime",
-              fetcher,
-              (error, imageStage, status) =>
-                log({
-                  ...fields,
-                  stage: imageStage,
-                  outcome: "failed",
-                  level: "warn",
-                  code: "SOCIAL_IMAGE_UNAVAILABLE",
-                  ...serverCause(error),
-                  ...(status !== undefined && { upstreamStatus: status }),
-                  durationMs: performance.now() - start,
-                }),
-            );
+      const image = socialImage(persona, route.style ?? "anime");
       stage = "html.render";
       return finish(publicResponse(await template.text(), people, url, image));
     } catch (cause) {
@@ -133,25 +152,7 @@ export function discoveryServer(
         ...(upstreamStatus !== undefined && { upstreamStatus }),
         durationMs: performance.now() - start,
       });
-      if (url.pathname === "/health")
-        return finish(
-          healthResponse("discovery", "degraded", {
-            dependencies: { catalog: { status: "degraded" } },
-          }),
-        );
-      return finish(
-        new Response(
-          `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Ren AI</title></head><body><h1>프로필을 불러오지 못했어요.</h1><p>잠시 후 다시 시도해 주세요.</p><p>Request ID: ${requestId}</p><a href="/explore">다시 불러오기</a></body></html>`,
-          {
-            status: 503,
-            headers: {
-              "Content-Type": "text/html; charset=utf-8",
-              "X-Robots-Tag": "noindex",
-              "Retry-After": "30",
-            },
-          },
-        ),
-      );
+      return finish(unavailableResponse(url.pathname, requestId, catalogReady));
     }
   };
 }

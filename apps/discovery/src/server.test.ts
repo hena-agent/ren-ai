@@ -6,6 +6,12 @@ import type { ServerEvent } from "./server-log.ts";
 import { serverCause, writeServerLog } from "./server-log.ts";
 import { publicPersonas } from "../test/public-personas.ts";
 import { readPublicPeople } from "./public-routing.ts";
+import { previewFixture } from "../test/preview.ts";
+
+const animePreview =
+  "https://renai.im/personas/jia/og/anime/00000000-0000-0000-0000-000000000001.v1.jpg";
+const photoPreview =
+  "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v1.jpg";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -38,7 +44,11 @@ test("server diagnostics preserve safe causes and write structured JSON to the m
       Object.assign(new Error("private"), { code: "private input with spaces", stack: undefined }),
     ),
   ).toEqual({ causeName: "Error", stack: "" });
-  expect(serverCause(Object.assign(new Error("private"), { code: 42 }))).not.toHaveProperty(
+  expect(serverCause(Object.assign(new Error("private"), { code: 42 }))).toHaveProperty(
+    "causeCode",
+    "42",
+  );
+  expect(serverCause(Object.assign(new Error("private"), { code: Number.NaN }))).not.toHaveProperty(
     "causeCode",
   );
 });
@@ -46,25 +56,28 @@ test("server diagnostics preserve safe causes and write structured JSON to the m
 async function fixture() {
   const template = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const photo = await readFile(new URL("../public/landing/dohee-anime.webp", import.meta.url));
+  const mark = await readFile(new URL("../public/og-watermark-v1.png", import.meta.url));
+  const preview = previewFixture(photo);
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockImplementation(async (input) =>
-      new URL(input instanceof Request ? input.url : input).pathname === "/discovery/personas"
-        ? Response.json(publicPersonas)
-        : new Response(photo, { headers: { "Content-Type": "image/webp" } }),
-    );
+    .mockImplementation(async () => Response.json(publicPersonas));
   const assets = vi
     .fn<(request: Request) => Promise<Response>>()
-    .mockImplementation(async () => new Response(template));
+    .mockImplementation(async (request) =>
+      new URL(request.url).pathname === "/og-watermark-v1.png"
+        ? new Response(mark)
+        : new Response(template),
+    );
   const log = vi.fn<(event: ServerEvent) => void>();
   const handler = discoveryServer(fetcher, log);
-  const env = { ASSETS: { fetch: assets }, DISCOVERY_API_URL: "https://api.example" };
+  const env = { ...preview, ASSETS: { fetch: assets }, DISCOVERY_API_URL: "https://api.example" };
   return {
+    ...preview,
     fetcher,
     assets,
     log,
     send: (path: string, method = "GET") =>
-      handler(new Request(`https://renai.im${path}`, { method }), env),
+      handler(new Request(`https://renai.im${path}`, { method }), env, preview.cache),
   };
 }
 
@@ -91,22 +104,20 @@ test("a direct profile request includes readable public HTML, canonical SEO, sty
   const html = await response.text();
   expect(html).toContain("햇살 좋은 날엔 같이 걸어요.");
   expect(html).toContain("좋아하는 것");
-  expect(html).toContain("https://images.example/jia-photo.webp");
+  expect(html).toContain(publicPersonas[0]!.portraits!.photo);
   expect(html).toContain('<link rel="canonical" href="https://renai.im/personas/jia"');
   expect(html).toContain(
-    '<meta property="og:url" content="https://renai.im/personas/jia?style=photo"',
+    '<meta property="og:url" content="https://renai.im/personas/jia?style=photo&amp;preview=v1"',
   );
-  expect(html).toContain(
-    '<meta property="og:image" content="https://images.example/jia-photo.webp"',
-  );
-  expect(html).toContain('name="twitter:card" content="summary"');
-  expect(html).toContain('property="og:image:type" content="image/webp"');
-  expect(html).toContain('property="og:image:width" content="928"');
-  expect(html).toContain('property="og:image:height" content="1152"');
-  expect(html).toContain(
-    'property="og:image:secure_url" content="https://images.example/jia-photo.webp"',
-  );
-  expect(html).toContain('name="twitter:image" content="https://images.example/jia-photo.webp"');
+  expect(html).toContain(`<meta property="og:image" content="${photoPreview}"`);
+  expect(html).toContain('name="twitter:card" content="summary_large_image"');
+  expect(html).toContain('property="og:image:type" content="image/jpeg"');
+  expect(html).toContain('property="og:image:width" content="1200"');
+  expect(html).toContain('property="og:image:height" content="630"');
+  expect(html).toContain(`property="og:image:secure_url" content="${photoPreview}"`);
+  expect(html).toContain(`name="twitter:image" content="${photoPreview}"`);
+  expect(f.fetcher).toHaveBeenCalledOnce();
+  expect(f.PORTRAITS.get).not.toHaveBeenCalled();
   expect(html).toContain('type="application/ld+json"');
   expect(html).toContain('"@type":"CreativeWork"');
   expect(html).toContain('class="discovery-shell"');
@@ -149,7 +160,7 @@ test("the sitemap exposes current profile links without a separate directory or 
   expect(body).toContain("<loc>https://renai.im/personas/jia</loc>");
   expect(body).toContain("<loc>https://renai.im/explore</loc>");
   expect(body).not.toContain("<loc>https://renai.im/personas</loc>");
-  expect(body).toContain("<image:loc>https://images.example/jia-anime.webp</image:loc>");
+  expect(body).toContain(`<image:loc>${publicPersonas[0]!.portraits!.anime}</image:loc>`);
   f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
   expect(await (await f.send("/sitemap.xml")).text()).not.toContain("/personas/jia");
   f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
@@ -173,9 +184,7 @@ test("profiles without photos, structured profiles or a style query still have p
   expect(html).toContain('property="og:image:height" content="630"');
   expect(html).toContain('name="twitter:card" content="summary_large_image"');
   const normal = await (await f.send("/personas/jia?style=anime")).text();
-  expect(normal).toContain(
-    '<meta property="og:image" content="https://images.example/jia-anime.webp"',
-  );
+  expect(normal).toContain(`<meta property="og:image" content="${animePreview}"`);
 });
 
 test("routing handles HEAD, invalid paths, trailing slashes, methods, robots and static assets without unnecessary Catalog requests", async () => {
@@ -258,7 +267,7 @@ test("health reports artifact identity and Catalog readiness independently of st
     service: "discovery",
     revision: "development",
     status: "ready",
-    dependencies: { catalog: { status: "ready" } },
+    dependencies: { catalog: { status: "ready" }, preview: { status: "ready" } },
   });
   f.fetcher.mockRejectedValueOnce(new TypeError("secret"));
   const degraded = await f.send("/health");
@@ -267,7 +276,9 @@ test("health reports artifact identity and Catalog readiness independently of st
     status: "degraded",
     dependencies: { catalog: { status: "degraded" } },
   });
-  expect(f.assets).not.toHaveBeenCalled();
+  expect(f.assets).toHaveBeenCalledWith(
+    expect.objectContaining({ url: "https://renai.im/og-watermark-v1.png" }),
+  );
 });
 
 test("home and explorer return searchable application HTML and branded previews without adding navigation", async () => {
@@ -288,39 +299,88 @@ test("home and explorer return searchable application HTML and branded previews 
   expect(explore).toContain('<link rel="canonical" href="https://renai.im/explore"');
 });
 
-test("an unreadable preview image logs one correlated diagnostic and serves an indexable profile with a valid brand image", async () => {
+test("render failures keep the persona rendition URL and report a correlated retryable image failure instead of a brand substitution", async () => {
   const f = await fixture();
-  f.fetcher
-    .mockResolvedValueOnce(Response.json(publicPersonas))
-    .mockResolvedValueOnce(new Response("PRIVATE IMAGE PAYLOAD", { status: 403 }));
+  f.output.mockRejectedValue(
+    Object.assign(new Error("PRIVATE IMAGE PAYLOAD"), { name: "ImagesError", code: 9412 }),
+  );
   const response = await f.send("/personas/jia?style=photo&private=PRIVATE QUERY");
   expect(response.status).toBe(200);
   const html = await response.text();
-  expect(html).toContain('property="og:image" content="https://renai.im/social.png"');
+  expect(html).toContain(`property="og:image" content="${photoPreview}"`);
   expect(html).toContain("햇살 좋은 날엔 같이 걸어요.");
-  expect(f.log).toHaveBeenCalledTimes(2);
-  expect(f.log.mock.calls[0]![0]).toMatchObject({
-    requestId: response.headers.get("x-request-id"),
+  const failed = await f.send(new URL(photoPreview).pathname);
+  expect(failed.status).toBe(503);
+  expect(failed.headers.get("retry-after")).toBe("30");
+  expect(await failed.text()).not.toContain("social.png");
+  expect(f.log).toHaveBeenCalledTimes(3);
+  expect(f.log.mock.calls[1]![0]).toMatchObject({
+    requestId: failed.headers.get("x-request-id"),
     personaId: "jia",
     style: "photo",
-    stage: "image.read",
-    code: "SOCIAL_IMAGE_UNAVAILABLE",
-    upstreamStatus: 403,
-    level: "warn",
+    stage: "image.render",
+    causeName: "ImagesError",
+    causeCode: "9412",
+    level: "error",
   });
-  expect(f.log.mock.calls[1]![0]).toMatchObject({ stage: "request", status: 200, level: "info" });
+  expect(f.log.mock.calls[2]![0]).toMatchObject({ stage: "request", status: 503, level: "error" });
   expect(JSON.stringify(f.log.mock.calls)).not.toContain("PRIVATE");
 });
 
-test("local HTTP images do not claim secure URLs and image sitemaps escape query strings", async () => {
+test("owned local sources still advertise same-origin HTTPS renditions, and image sitemaps escape query strings", async () => {
   const f = await fixture();
   const persona = {
     ...publicPersonas[0]!,
-    portraits: { anime: "http://127.0.0.1:3729/images/photo.png?x=1&y=2" },
+    portraits: { anime: "http://127.0.0.1:3729/images/00000000-0000-0000-0000-000000000001.jpg" },
   };
   f.fetcher.mockResolvedValueOnce(Response.json([persona]));
   const html = await (await f.send("/personas/jia")).text();
-  expect(html).not.toContain('property="og:image:secure_url"');
-  f.fetcher.mockResolvedValueOnce(Response.json([persona]));
+  expect(html).toContain(`property="og:image:secure_url" content="${animePreview}"`);
+  f.fetcher.mockResolvedValueOnce(
+    Response.json([{ ...persona, portraits: { anime: `${persona.portraits.anime}?x=1&y=2` } }]),
+  );
   expect(await (await f.send("/sitemap.xml")).text()).toContain("?x=1&amp;y=2");
+});
+
+test("advertised rendition routes return JPEGs and reject withdrawn or stale gallery photos before cache access", async () => {
+  const f = await fixture();
+  const response = await f.send(new URL(animePreview).pathname);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("image/jpeg");
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.text()).toBe("rendered-persona-preview");
+  expect(f.PORTRAITS.get).toHaveBeenCalledExactlyOnceWith(
+    "00000000-0000-0000-0000-000000000001.jpg",
+  );
+  f.cache.match.mockResolvedValue(
+    new Response("cached", { headers: { "Content-Type": "image/jpeg" } }),
+  );
+  const head = await f.send(new URL(animePreview).pathname, "HEAD");
+  expect(head.headers.get("content-type")).toBe("image/jpeg");
+  expect(await head.text()).toBe("");
+  f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
+  expect((await f.send(new URL(animePreview).pathname)).status).toBe(404);
+  expect(
+    (await f.send(new URL(animePreview).pathname.replace(/[^/]+$/, "unknown.v1.jpg"))).status,
+  ).toBe(404);
+  expect(f.cache.match).toHaveBeenCalledTimes(2);
+  expect(f.PORTRAITS.get).toHaveBeenCalledOnce();
+});
+
+test("an unavailable preview executor degrades health even while the public Catalog is ready", async () => {
+  const f = await fixture();
+  f.IMAGE_TRANSFORMS.info.mockRejectedValue(
+    Object.assign(new Error("PRIVATE provider payload"), { code: 9412 }),
+  );
+  const response = await f.send("/health");
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    dependencies: { catalog: { status: "ready" }, preview: { status: "degraded" } },
+  });
+  expect(f.log.mock.calls[0]![0]).toMatchObject({
+    stage: "health.preview",
+    causeCode: "9412",
+    code: "PREVIEW_UNAVAILABLE",
+  });
+  expect(JSON.stringify(f.log.mock.calls)).not.toContain("PRIVATE");
 });
