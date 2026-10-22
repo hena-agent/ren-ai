@@ -6,8 +6,9 @@
 `@ren-ai/api-msg` is the DB-free Docker executor on the Mac at `https://api-msg.renai.im`.
 The executor forwards to `https://oc.renai.im` and
 `https://imsg.renai.im/rpc`. Discovery registration and Admin management use
-api-app; Discovery also reads its public profiles through api-app, which requests
-the current public Catalog from Admin on every read.
+api-app; Discovery also reads its public profiles through api-app's persisted
+public Catalog cache (60 seconds fresh, up to 300 additional seconds stale on
+upstream failure). Registration and Selection revalidate against Admin directly.
 
 Local `bun dev` serves api-app at `http://127.0.0.1:4879` and its Wrangler
 debugger at `http://127.0.0.1:5879`. Export `API_APP_PORT` or
@@ -63,8 +64,9 @@ imsg protocol.
 ## Discovery and Admin
 
 `GET /health` identifies `api-app` and the exact source revision embedded in the
-Worker. Database readiness and authenticated `api-msg` readiness are separate:
-an unavailable, unauthorized or wrong-service executor makes overall health
+Worker. Database, authenticated `api-msg` and a direct no-send Messages/APNs probe
+are separate dependencies. An unavailable, unauthorized or wrong-service executor,
+or an unavailable messaging transport, makes overall health
 `degraded` (HTTP 503), even while public Catalog reads remain available.
 `bootstrapOnly` reports the intake setting separately. Local runs use revision
 `development`; responses exclude credentials and upstream payloads.
@@ -81,6 +83,56 @@ requires editor readiness. API rollout records degraded
 dependency health without blocking artifact publication: the Mac updater needs
 the completed CI run before it can install that artifact. Verify executor health
 again after the Mac update before declaring an end-to-end deployment ready.
+
+### Messaging health and background recovery
+
+The alarm probes the existing Messages RPC through api-msg every two minutes.
+The native bridge checks APNs ping/pong and Apple registration readiness without
+sending a message. After a failed check, the persisted deadline advances by
+20 seconds; two consecutive failures raise `messaging-unavailable`. A successful
+check clears it and restores the two-minute interval, including after actor
+replacement. Public `/health` independently probes with a five-second deadline
+and reports `messaging: ready|unavailable`; it never waits for the alert threshold.
+
+Use the response's request ID to find `api-app.health` / `messaging.probe` and its
+Mac operation ID, then inspect that operation in the imsg logs. Verify the local
+imsg health and the public tunnel's exact artifact revision before restarting
+anything. Restore a sleeping/offline Mac or a stopped bridge through its existing
+LaunchAgent/updater procedure. APNs/registration failures may require the logged-in
+operator to restore connectivity or Apple Account registration; an HTTP-ready
+executor alone does not establish recovery. Confirm both dependencies are ready
+and the alert clears. A transport timeout never authorizes resending an uncertain
+message or releasing an Assignment.
+
+Each alarm stops admitting new items after 45 seconds or 40 admissions; SQL batches
+are at most five items. This is an admission budget, not a hard cancellation of an
+in-flight mutation. Existing per-operation deadlines still apply. Lane rotation,
+retry deadlines, per-session turn probes, Catalog scan/apply cursors and replay
+checkpoints persist in SQLite. Deferred work resumes after one second; a failed
+lane/session backs off from 30 seconds to five minutes without holding healthy
+lanes behind it. Failed startup releases partially acquired resources and can
+resume in the same actor. Health runs independently of execution startup backoff.
+
+Normal intake history queries and Mac follow backlog use 100-row pages; replay
+uses Handle/row cursors, and quote/reset/Tapback lookups use bounded GUID/latest
+queries. A first-ever intake bookmark still reads the existing history to establish
+the starting tail. Once a bookmark exists it is not repeated. Deploy the additive
+recent-query protocol to the Mac to get SQL-side limits; the client continues
+filtering responses from a Mac that has not yet updated. api-msg resets reconnect
+backoff after a follow subscription is successfully established. Idle observation
+during blocked intake backs off from one second to 30 seconds and resets on progress.
+
+### Public Catalog freshness
+
+Only public profile fields enter the durable cache. Concurrent refreshes coalesce;
+warm reads perform no storage writes. Failed refreshes retry after ten seconds
+within the hard six-minute snapshot lifetime. A missing/expired snapshot yields
+HTTP 503. Successful browse responses include `Age` and
+`Cache-Control: public, max-age=60, stale-while-revalidate=300`; other responses
+remain `no-store`. Registration and Selection never admit a stale-only candidate.
+Admin's authenticated Catalog refresh invalidates the stored snapshot and fences
+in-flight refreshes; already-cached browser/CDN responses can remain visible until
+their HTTP freshness window ends. State archives exclude this reconstructible cache.
 
 `renai.im` is the Discovery app in `apps/discovery`, and `admin.renai.im` is the
 Catalog and authoring Worker in `apps/admin`. GitHub Actions deploys both after the
@@ -301,7 +353,7 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 
    Initial inventory can be empty while a location initializes. Inspect the loaded location again before treating it as empty. On the deployed 2.0.19 instance, disabling versioned package targets did not disable the loaded plugins; their actual IDs (`henadev.anthropic-auth`, `opencode-discord-noti`, `opencode-translate`) did. Verify those plugins are absent or disabled after reloading the persona location, while ordinary locations retain them.
 
-2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Runtime modules receive `directory:/srv/ren-ai` and the callback URL, and read the existing `TOKEN_MANAGEMENT` from the OpenCode process environment; they run only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
+2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Runtime modules receive `directory:/srv/ren-ai` and the callback URL, and read the existing `TOKEN_MANAGEMENT` from the OpenCode process environment; they run only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. OpenCode triggers compaction at `(limit.input || limit.context) - buffer`: reducing this buffer to 40k would delay compaction to 960k on a 1M window. The embedded test host's 40k buffer belongs to its separate 100k model / 60k budget; it is not the production config's expected value. Re-evaluate the buffer against the resolved model limits when changing the production model. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
 3. Put `opencode.json` in `REN_AI_LOCATION_INPUT`, owner-only. Supply the existing `TOKEN_MANAGEMENT` to the OpenCode process through its protected environment; no separate token file is installed. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. The new exporter requires all five volumes: when upgrading an old four-volume deployment, first provision the new empty sessions volume (`docker volume create "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}"`) without mounting it into running services, then export with the **old** location volume selected. For an existing old plugin volume, select a **new** `REN_AI_LOCATION_VOLUME` (for example `ren-ai-opencode-location-v2`) and explicitly `docker volume create "$REN_AI_LOCATION_VOLUME"`; never overwrite the old volume. Keep the application in `BOOTSTRAP_ONLY=true` while migrating.
 4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The Worker bundles its ground rules as text; Node story adapters load the private template with `loadGroundRules`. No plugin constructs agents.
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.
@@ -320,6 +372,14 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
 ## Messages Mac
 
 The Mac messaging service is a separate package with its own [runbook](../../imsg/ops/README.md): artifact build, installation, tunnel, Fleet permissions and relocation.
+
+## Remote request deadlines
+
+OpenCode's shared client allows up to 30 seconds for response headers and another 30 seconds to decode a finite response body, including native session-folder RPCs. HTTP `session.wait` calls also have a 30-second response-header deadline; expiring a waiter does not interrupt the native Conversation or repeat its model work. Established OpenCode event streams remain open until their scope is cancelled.
+
+The shared Messages client bounds each finite RPC at 30 seconds, including response consumption. Its long-lived `follow` stream retains its scoped lifetime. Executor health and Discord delivery each have a 10-second deadline; cancellation aborts the underlying fetch, and unused webhook response bodies are cancelled. Existing shorter operation deadlines still apply.
+
+A deadline does not prove that a mutation failed before submission. Timed-out sends retain the durable uncertain-send fence and require status reconciliation; the transport does not automatically resend. These per-call limits do not bound an entire alarm's work: the alarm budget and persisted resumption are tracked separately in R03 of [the remediation record](../../../docs/specs/preopen-remediation.md).
 
 ## Event-driven execution release (ADR-0019)
 
