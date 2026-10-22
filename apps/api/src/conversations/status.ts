@@ -5,8 +5,10 @@ import type { ConversationEntry, ConversationQuery, PublicPersona } from "@ren-a
 type Entry = typeof ConversationEntry.Type;
 type Row = Omit<
   Entry,
-  "personaName" | "farewell" | "notice" | "canNotify" | "startingRelationship"
+  "personaName" | "farewell" | "notice" | "canNotify" | "startingRelationship" | "endedBy" | "key"
 > & {
+  key: string | null;
+  endedBy: Entry["endedBy"] | null;
   startingRelationship: Entry["startingRelationship"] | null;
   canNotify: number;
   farewellPending: number | null;
@@ -28,9 +30,9 @@ export const conversationStatus = (catalog: () => Promise<readonly PublicPersona
     const load = (input: typeof ConversationQuery.Type, id?: number, handle?: string) =>
       Effect.gen(function* () {
         const rows =
-          yield* sql<Row>`SELECT c.id, u.handle, c.persona_id AS personaID, c.session_id AS sessionID,
+          yield* sql<Row>`SELECT c.id, c.usage_key AS key, u.handle, c.persona_id AS personaID, c.session_id AS sessionID,
       c.started_at AS startedAt, c.ended_at AS endedAt, e.stopped_at AS stoppedAt,
-      c.starting_relationship AS startingRelationship,
+       c.starting_relationship AS startingRelationship, e.initiator AS endedBy,
       (c.ended_at IS NOT NULL AND e.consumed_at IS NULL
         AND NOT EXISTS(SELECT 1 FROM blocked WHERE handle = u.handle)
         AND NOT EXISTS(SELECT 1 FROM conversation newer WHERE newer.user_id = u.id AND newer.id > c.id)) AS canNotify,
@@ -59,10 +61,14 @@ export const conversationStatus = (catalog: () => Promise<readonly PublicPersona
             noticeState,
             canNotify,
             startingRelationship,
+            endedBy,
+            key,
             ...row
           }) => ({
             ...row,
+            ...(key && { key }),
             ...(startingRelationship && { startingRelationship }),
+            ...(endedBy && { endedBy }),
             personaName: names.get(row.personaID) ?? row.personaID,
             farewell: deliveryState(farewellPending, farewellState),
             notice: deliveryState(noticePending, noticeState),

@@ -15,7 +15,7 @@ import {
   PublicPersona,
   discoveryNotice,
 } from "@ren-ai/onboarding";
-import { submissionLimit } from "./rate-limit.ts";
+import { submissionLimit, verificationLimit } from "./rate-limit.ts";
 import { verifyTurnstile } from "./turnstile.ts";
 import { reselect, withoutEndedPersonas } from "./reselection.ts";
 import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
@@ -64,7 +64,26 @@ export const makeDiscoveryWeb = ({
     const sql = yield* SqlClient.SqlClient;
     const clock = yield* Clock.Clock;
     const limit = yield* submissionLimit;
+    const verification = yield* verificationLimit;
     const cached = yield* publicCatalog(catalog, log);
+    const checkedLimit = (check: Effect.Effect<boolean, Error>, requestId: string, stage: string) =>
+      check.pipe(
+        Effect.tapError((cause) =>
+          Effect.sync(() =>
+            log({
+              requestId,
+              operation: "discovery.registration",
+              stage,
+              code: "storage",
+              level: "error",
+              outcome: "failed",
+              durationMs: 0,
+              ...contactCause(cause),
+            }),
+          ),
+        ),
+        Effect.mapError(() => "storage" as const),
+      );
     const profiles = (requestId: string, fresh = false) =>
       Effect.gen(function* () {
         const started = performance.now();
@@ -95,7 +114,7 @@ export const makeDiscoveryWeb = ({
           Effect.provideService(Clock.Clock, clock),
         );
       });
-    const join = (input: DiscoveryRequest, requestId: string) =>
+    const join = (input: DiscoveryRequest, requestId: string, ip: string | undefined) =>
       Effect.gen(function* () {
         const started = performance.now();
         if (
@@ -110,6 +129,14 @@ export const makeDiscoveryWeb = ({
           ))
         )
           return yield* Effect.fail("verification" as const);
+        if (
+          yield* checkedLimit(
+            limit(ip, yield* Clock.currentTimeMillis),
+            requestId,
+            "registration.limit",
+          )
+        )
+          return yield* Effect.fail("try_later" as const);
         const available = new Set((yield* profiles(requestId, true)).map((persona) => persona.id));
         if (!input.likedPersonaIDs.every((id) => available.has(id)))
           return yield* Effect.fail("personas" as const);
@@ -178,26 +205,14 @@ export const makeDiscoveryWeb = ({
             const now = yield* Clock.currentTimeMillis;
             const requestId = operationID(request.headers["x-operation-id"]);
             if (
-              yield* limit(request.headers["cf-connecting-ip"], now).pipe(
-                Effect.tapError((cause) =>
-                  Effect.sync(() =>
-                    contactLog({
-                      requestId,
-                      operation: "discovery.registration",
-                      stage: "registration.limit",
-                      code: "storage",
-                      level: "error",
-                      outcome: "failed",
-                      durationMs: 0,
-                      ...contactCause(cause),
-                    }),
-                  ),
-                ),
-                Effect.mapError(() => "storage" as const),
+              yield* checkedLimit(
+                verification(request.headers["cf-connecting-ip"], now),
+                requestId,
+                "verification.limit",
               )
             )
               return yield* Effect.fail("try_later" as const);
-            return yield* join(payload, requestId);
+            return yield* join(payload, requestId, request.headers["cf-connecting-ip"]);
           }),
         ),
     );

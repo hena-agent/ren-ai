@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { conversations } from "../conversations/conversations.ts";
 import { withLifecycle } from "../conversations/lifecycle.ts";
+import { eraseIntake } from "./erase.ts";
 
 interface PendingRemoval {
   readonly sessionID: string;
@@ -42,13 +43,15 @@ export const makeOperator = (
               SELECT user.handle, conversation.session_id FROM user
               JOIN conversation ON conversation.user_id = user.id WHERE user.handle = ${handle}`;
               yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
+                SELECT u.handle, s.session_id FROM usage_session s JOIN conversation c ON c.usage_key = s.conversation_key
+                JOIN user u ON u.id = c.user_id WHERE u.handle = ${handle}`;
+              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
                 SELECT r.handle, c.session_id FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
                 WHERE r.handle = ${handle} AND c.session_id IS NOT NULL`;
               if (!keep)
                 yield* sql`INSERT OR IGNORE INTO removal SELECT handle, session_id
               FROM retained_session WHERE handle = ${handle}`;
-              yield* sql`DELETE FROM intake_seen WHERE session_id IN
-              (SELECT session_id FROM removal WHERE handle = ${handle})`;
+              yield* eraseIntake(handle).pipe(Effect.provideService(SqlClient.SqlClient, sql));
               yield* sql`DELETE FROM send WHERE handle = ${handle}`;
               yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
               yield* sql`DELETE FROM discovery_registration WHERE handle = ${handle}`;

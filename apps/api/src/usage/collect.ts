@@ -38,7 +38,10 @@ export const usageCollector = (api: {
           } while (cursor);
           const session = yield* api.get(Session.ID.make(sessionID));
           const now = yield* Clock.currentTimeMillis;
-          yield* saveUsage(sql, session, messages, now).pipe(sql.withTransaction);
+          yield* Effect.gen(function* () {
+            const live = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
+            if (live.length) yield* saveUsage(sql, session, messages, now);
+          }).pipe(sql.withTransaction);
         });
         yield* work.pipe(
           Effect.timeout("30 seconds"),

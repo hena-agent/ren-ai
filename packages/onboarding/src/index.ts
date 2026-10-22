@@ -4,6 +4,7 @@ export { StartingRelationship } from "./relationship.ts";
 export {
   ConversationQuery,
   ConversationRecovery,
+  ConversationEnding,
   ConversationEntry,
   ConversationList,
   ConversationDetail,

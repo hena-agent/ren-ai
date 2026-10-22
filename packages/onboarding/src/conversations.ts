@@ -12,6 +12,12 @@ export const ConversationRecovery = Schema.Struct({
   requestId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/)),
   action: Schema.Literals(["stop", "farewell", "notice"]),
 });
+const conversationKey = Schema.String.check(Schema.isPattern(/^[0-9a-f]{32}$/));
+export const ConversationEnding = Schema.Struct({
+  id,
+  key: conversationKey,
+  requestId: ConversationRecovery.fields.requestId,
+});
 const delivery = Schema.Literals([
   "queued",
   "uncertain",
@@ -22,6 +28,7 @@ const delivery = Schema.Literals([
 ]);
 export const ConversationEntry = Schema.Struct({
   id,
+  key: Schema.optionalKey(conversationKey),
   startingRelationship: Schema.optionalKey(StartingRelationship),
   handle: Schema.String,
   personaID: Schema.String,
@@ -29,6 +36,7 @@ export const ConversationEntry = Schema.Struct({
   sessionID: Schema.String,
   startedAt: Schema.Number,
   endedAt: Schema.NullOr(Schema.Number),
+  endedBy: Schema.optionalKey(Schema.Literals(["persona", "operator"])),
   stoppedAt: Schema.NullOr(Schema.Number),
   canNotify: Schema.Boolean,
   lastReceivedAt: Schema.NullOr(Schema.Number),

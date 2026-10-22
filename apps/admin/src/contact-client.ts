@@ -4,13 +4,18 @@ import type { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
 import { ConversationList, ConversationDetail, ConversationRuntime } from "@ren-ai/onboarding";
-import type { ConversationQuery, ConversationRecovery } from "@ren-ai/onboarding";
+import type {
+  ConversationQuery,
+  ConversationRecovery,
+  ConversationEnding,
+} from "@ren-ai/onboarding";
 
 export interface ConversationClient {
   list: (input: typeof ConversationQuery.Type) => Promise<typeof ConversationList.Type>;
   detail: (id: number, registrationsBefore?: string) => Promise<typeof ConversationDetail.Type>;
   runtime: (id: number) => Promise<typeof ConversationRuntime.Type>;
   recover: (input: typeof ConversationRecovery.Type) => Promise<void>;
+  end: (input: typeof ConversationEnding.Type) => Promise<void>;
 }
 
 export interface ManagementClient {
@@ -44,7 +49,8 @@ export function managementClient(
     input?:
       | typeof SelectContacts.Type
       | typeof StartContact.Type
-      | typeof ConversationRecovery.Type,
+      | typeof ConversationRecovery.Type
+      | typeof ConversationEnding.Type,
     method = input ? "POST" : "GET",
   ) => {
     protect(token);
@@ -128,6 +134,9 @@ export function managementClient(
         ),
       recover: async (input) => {
         await request("/operator/conversations", input);
+      },
+      end: async (input) => {
+        await request(`/management/conversations/${input.id}/end`, input);
       },
     },
     languages: async (registrationID) => {

@@ -179,6 +179,36 @@ test("the public API allows the Discovery origin and rejects unrelated origins",
 const answering = (answer: () => Response) =>
   HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, answer())));
 
+test("failed human checks leave the five verified attempts available, while a separate gate bounds verification calls", async () => {
+  await run(
+    Effect.gen(function* () {
+      const { web, sql } = yield* setup();
+      let calls = 0;
+      const rejected = answering(() => {
+        calls++;
+        return Response.json({ success: false });
+      });
+      yield* Effect.tryPromise(async () => {
+        try {
+          for (let i = 0; i < 8; i++)
+            expect(await (await post(web, input, "shared-ip", rejected)).json()).toBe(
+              "verification",
+            );
+          for (let i = 0; i < 5; i++)
+            expect((await post(web, input, "shared-ip")).status).toBe(200);
+          expect(await (await post(web, input, "shared-ip")).json()).toBe("try_later");
+          for (let i = 0; i < 30; i++) await post(web, input, "abusive-ip", rejected);
+          expect(await (await post(web, input, "abusive-ip", rejected)).json()).toBe("try_later");
+          expect(calls).toBe(38);
+        } finally {
+          await web.dispose();
+        }
+      });
+      expect(yield* sql`SELECT COUNT(*) AS n FROM discovery_attempt`).toEqual([{ n: 5 }]);
+    }),
+  );
+});
+
 test("verification failures, missing secrets and outages never admit a registration", async () => {
   const rejecting = [
     () => Response.json({ success: false }),

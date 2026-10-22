@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { DiscoveryRequest, PublicPersona } from "@ren-ai/onboarding";
-import { reselectionHash } from "../conversations/end.ts";
+import { reselectionHash } from "../conversations/ending-record.ts";
 import { queueWaitlistNotification } from "./notifications.ts";
 
 /** Called inside registration's transaction, after consent, Turnstile and catalog validation. */

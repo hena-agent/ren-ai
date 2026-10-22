@@ -102,7 +102,8 @@ export const intake = (
     const changes = yield* watchEdits(messages, queue.enqueueEdit, timeZone, signal, arriving);
     // Replay can acknowledge a message while live admission is awaiting the same prompt ID.
     const markSeen = (sessionID: string, guid: string) =>
-      sql`INSERT INTO intake_seen (session_id, guid) VALUES (${sessionID}, ${guid})
+      sql`INSERT INTO intake_seen (session_id, guid) SELECT ${sessionID}, ${guid}
+        WHERE EXISTS (SELECT 1 FROM conversation WHERE session_id = ${sessionID} AND ended_at IS NULL)
         ON CONFLICT(session_id, guid) DO NOTHING`;
     const { current, history } = yield* readBookmark(messages);
     let last = current;
@@ -317,6 +318,9 @@ export const intake = (
             rendered.files,
           );
           yield* Effect.gen(function* () {
+            const active = yield* sql`SELECT 1 FROM conversation WHERE id = ${conversation.id}
+              AND session_id = ${conversation.sessionID} AND ended_at IS NULL`;
+            if (!active.length) return;
             yield* changes.remember(conversation, row);
             yield* markSeen(conversation.sessionID, row.guid);
             yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt}, first_received_at = COALESCE(first_received_at, ${row.createdAt}) WHERE id = ${conversation.id}`;
