@@ -77,6 +77,47 @@ test("handles convert between Apple URIs and the application's handles", () => {
   expect(uriOf(handle)).toBe(them);
 });
 
+test("targeted history uses indexed GUID and Handle cursors before loading a bounded page", () => {
+  const { history, directory } = open();
+  const db = new DatabaseSync(join(directory, "history.sqlite"));
+  try {
+    db.exec(`WITH RECURSIVE rows(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM rows WHERE i < 10000)
+      INSERT INTO message (guid, handle, created_at, text, from_me)
+      SELECT 'row-' || i, CASE WHEN i % 2 = 0 THEN 'chosen' ELSE 'other' END, i, 'history', 0 FROM rows`);
+    expect(history.recent("chosen", 0, { guid: "row-100", limit: 1 }).map((row) => row.id)).toEqual(
+      [100],
+    );
+    expect(history.recent("other", 0, { guid: "row-100" })).toEqual([]);
+    expect(history.recent("chosen", 0, { after: 9990, limit: 2 }).map((row) => row.id)).toEqual([
+      9992, 9994,
+    ]);
+    expect(history.recent("chosen", 0, { limit: 1, reverse: true }).map((row) => row.id)).toEqual([
+      10000,
+    ]);
+    expect(history.recent("chosen", 10001, { limit: 1 })).toEqual([]);
+    const guidPlan = JSON.stringify(
+      db
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT * FROM message WHERE handle = ? AND created_at >= ? AND guid = ? ORDER BY id LIMIT ?",
+        )
+        .all("chosen", 0, "row-100", 1),
+    );
+    const pagePlan = JSON.stringify(
+      db
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT * FROM message WHERE handle = ? AND created_at >= ? AND id > ? ORDER BY id LIMIT ?",
+        )
+        .all("chosen", 0, 9990, 2),
+    );
+    expect(guidPlan).toContain("sqlite_autoindex_message_1");
+    expect(pagePlan).toContain("message_handle");
+    expect(guidPlan + pagePlan).not.toContain("SCAN message");
+  } finally {
+    db.close();
+    history.close();
+  }
+});
+
 test("only one-to-one conversations with the service handle become rows", () => {
   const { history } = open();
   expect(history.lastID()).toBe(0);

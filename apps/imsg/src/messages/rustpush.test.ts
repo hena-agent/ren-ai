@@ -1,6 +1,8 @@
 import { Effect, Fiber } from "effect";
 import { afterEach, expect, test, vi } from "vitest";
 import type { IncomingMessage } from "./messages.ts";
+import { DatabaseSync } from "node:sqlite";
+import { join } from "node:path";
 import {
   bridgeFixture,
   cleanup,
@@ -15,6 +17,29 @@ const handle = "+821012345678";
 afterEach(cleanup);
 const sent = (bridge: ReturnType<typeof bridgeFixture>, method: string) =>
   bridge.requests.filter((request) => request.method === method).map((request) => request.params);
+
+test("follow drains a persisted backlog in ordered bounded pages before subscribing", async () => {
+  const f = adapter();
+  await f.run(({ messages }) =>
+    Effect.gen(function* () {
+      const db = new DatabaseSync(join(f.directory, "history.sqlite"));
+      try {
+        db.exec(`WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i < 101)
+        INSERT INTO message(guid, handle, created_at, text, from_me) SELECT 'page-' || i, 'user@example.test', i, 'stored', 0 FROM n`);
+      } finally {
+        db.close();
+      }
+      const seen: number[] = [];
+      const stop = yield* messages.follow(0, (row) =>
+        Effect.sync(() => {
+          seen.push(row.id);
+        }),
+      );
+      expect(seen).toEqual(Array.from({ length: 101 }, (_, i) => i + 1));
+      stop();
+    }),
+  );
+});
 
 test("texts are recorded before submission and settled by Apple's answer", async () => {
   const f = adapter();

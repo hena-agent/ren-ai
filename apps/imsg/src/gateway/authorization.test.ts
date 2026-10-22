@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { expect, test, vi } from "vitest";
-import { gatewayFixture } from "../../test/gateway.test-helper.ts";
+import { captureGatewayLogs, gatewayFixture } from "../../test/gateway.test-helper.ts";
 import { messageGateway } from "./server.ts";
 
 const healthRequest = (method = "GET", token = "secret") =>
@@ -42,18 +42,23 @@ test("messaging authorization fails closed for absent configuration and invalid 
 
 test("permission verification reports a denied Mac UI permission", async () => {
   const fixture = gatewayFixture();
-  fixture.gestures.gestures.probe = () => Effect.fail(new Error("Accessibility denied"));
+  const diagnostics = captureGatewayLogs();
+  fixture.gestures.gestures.probe = () =>
+    Effect.fail(Object.assign(new Error("Accessibility denied"), { code: "ACCESSIBILITY_DENIED" }));
   try {
     await fixture.run((remote) =>
       Effect.gen(function* () {
-        expect((yield* remote.probe().pipe(Effect.flip)).message).toBe(
-          "Error: Accessibility denied",
-        );
+        const failure = yield* remote.probe().pipe(Effect.flip);
+        expect(failure.message).toContain("Messaging operation failed");
+        expect(failure.requestId).toMatch(/^[0-9a-f-]{36}$/);
+        expect(diagnostics.logs.join("")).toContain(failure.requestId);
+        expect(diagnostics.logs.join("")).toContain("ACCESSIBILITY_DENIED");
         expect(fixture.local.bubbles).toEqual([]);
       }),
     );
   } finally {
     await fixture.server.dispose();
+    diagnostics.restore();
   }
 });
 

@@ -17,6 +17,18 @@ const since = { ...handle, since: Schema.Number };
 const cursor = {
   rowID: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
 };
+export const recentQuery = Schema.Struct({
+  guid: Schema.optionalKey(Schema.String),
+  after: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
+  limit: Schema.optionalKey(
+    Schema.Number.check(
+      Schema.isInt(),
+      Schema.isGreaterThanOrEqualTo(1),
+      Schema.isLessThanOrEqualTo(500),
+    ),
+  ),
+  reverse: Schema.optionalKey(Schema.Boolean),
+});
 /** The optional parts of a message row beyond its text. */
 export const messageDetail = Schema.Struct({
   attachments: Schema.optionalKey(
@@ -114,7 +126,7 @@ export const messagingApi = RpcGroup.make(
     error: Schema.String,
   }),
   Rpc.make("recent", {
-    payload: since,
+    payload: { ...since, ...recentQuery.fields },
     success: Schema.Array(incomingMessage),
     error: Schema.String,
   }),
