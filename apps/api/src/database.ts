@@ -269,6 +269,11 @@ export const migrate = Effect.gen(function* () {
           loaded_at INTEGER NOT NULL, retry_at INTEGER NOT NULL, generation INTEGER NOT NULL)`;
         yield* sql`INSERT INTO public_catalog VALUES (1, NULL, 0, 0, 0)`;
       }),
+      "041_verification_limit": Effect.gen(function* () {
+        yield* sql`CREATE TABLE discovery_verification (ip TEXT PRIMARY KEY, at INTEGER NOT NULL, attempts INTEGER NOT NULL)`;
+        yield* sql`CREATE INDEX verification_expiry ON discovery_verification(at)`;
+      }),
+      "042_operator_ending": sql`ALTER TABLE conversation_end ADD COLUMN initiator TEXT NOT NULL DEFAULT 'persona' CHECK(initiator IN ('persona', 'operator'))`,
     }),
   });
 });

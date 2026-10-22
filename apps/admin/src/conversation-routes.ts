@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Schema } from "effect";
-import { ConversationQuery, ConversationRecovery } from "@ren-ai/onboarding";
+import { ConversationQuery, ConversationRecovery, ConversationEnding } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import type { ConversationClient } from "./contact-client.ts";
 import type { ConversationView } from "./conversation-page.tsx";
@@ -17,6 +17,25 @@ async function recoverRequest(
   if (!match || request.headers.get("origin") !== url.origin)
     throw new PersonaError("invalid", "이 대화 관리 화면에서 제출해 주세요.");
   const form = await request.formData();
+  if (form.get("action") === "end") {
+    if (form.get("confirmEnding") !== "yes")
+      throw new PersonaError("invalid", "대상 사용자와 페르소나의 관계 종료를 확인해 주세요.");
+    let ending: typeof ConversationEnding.Type;
+    try {
+      ending = Schema.decodeUnknownSync(ConversationEnding)({
+        id: Number(match[1]),
+        key: form.get("key"),
+        requestId: form.get("requestId"),
+      });
+    } catch {
+      throw new PersonaError("invalid", "관계 종료 요청을 확인해 주세요.");
+    }
+    await operation("conversation.end", {}, () => client.end(ending));
+    return new Response(null, {
+      status: 303,
+      headers: { Location: `/conversations/${ending.id}?ended=1`, "Cache-Control": "no-store" },
+    });
+  }
   let input: typeof ConversationRecovery.Type;
   try {
     input = Schema.decodeUnknownSync(ConversationRecovery)({
@@ -89,6 +108,7 @@ export async function conversationRoutes(request: Request, client?: Conversation
       if (cursor) view.registrationsBefore = cursor;
       await loadDetail(client, id, view);
       view.queued = url.searchParams.has("queued");
+      view.ended = url.searchParams.has("ended");
     } else {
       if (url.pathname !== "/conversations") return render("대화를 찾을 수 없습니다.", 404);
       view.query = readQuery(url);

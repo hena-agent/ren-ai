@@ -27,18 +27,26 @@
 
 ## 실행 현황
 
-- 현재 단계: **R03·R08·R10·R11·R06·R02 구현·코드 검증 완료, 배포·운영 확인 대기**. 사용자 승인에 따라 중간 승인 없이 연속 처리했다. 아래 항목은 배포·운영 확인 전까지 검증 대기로 둔다.
-- 실행 순서: 수신·재연결·조회 경로 → alarm 예산·영속 재개 → 메시징 헬스 → 공개 Catalog 장애 대응. 전체 CI는 묶음 종료 시 한 번 실행한다.
+- 현재 단계: **R40 삭제 정리·R05 등록 제한·R38 고지 정합성과 Admin 사용자별 관계 종료 구현·코드 검증 완료, 배포·운영 확인 대기**. 기준은 `32a78e71d47bccb12b55f3326a699c7e62f18a23`이며 기존 묶음은 [PR #134](https://github.com/hena-agent/ren-ai/pull/134)로 main에 병합됐다. 실제 배포·운영 확인은 별도다.
+- 실행 순서: 삭제 정리 → 등록 제한·고지 → durable 관계 종료 API·Admin → 통합 검증·문서·최종 CI. 전체 CI는 묶음 종료 시 한 번 실행한다.
 - 기존 배포 대기: R09 구현·코드 검증 완료. 배포 후 운영 검증은 미실행이다.
 - 종결 항목: **R01 — 설정값 변경 불필요**. 운영·테스트의 서로 다른 모델 예산을 혼동한 지적으로 판정하고 주석·운영 문서를 보강했다.
 - 오픈 판단: 미확정. 아래 오픈 전 검토 대상의 차단 여부를 확인하고, 미해결 항목의 처리 또는 명시적 보류 결정을 기록한다.
 
-### 이번 묶음의 최종 검사
+### 이전 묶음의 최종 검사
 
-- 2026-10-22 / `00a4f8f53b64dbdcab912f24443cbf90da9d2458` 기반 작업 트리에서 최종 검토 후 `bun run ci`를 한 번 실행해 전체 통과했다. 코드 변경은 아직 커밋·배포하지 않았다.
+- 2026-10-22 / `00a4f8f53b64dbdcab912f24443cbf90da9d2458` 기반 작업 트리에서 최종 검토 후 `bun run ci`를 한 번 실행해 전체 통과했다. 이후 main 병합 트리에서도 341개 파일·1,576개 테스트·파일별 coverage 100%와 native 검사를 통과해 PR #134가 병합됐다. 이는 운영 배포 확인과 다르다.
 - Node v24.15.0·Bun 1.4.2: 포맷, lint, 17개 workspace 및 루트 타입, dead code, duplication 0, 예외 검사, Discovery production build, **340개 파일·1,568개 테스트·파일별 lines/functions/branches/statements 100%**, `verify-gates` 통과.
 - Rust 1.95의 Cargo PATH와 checkout 전용 `CARGO_TARGET_DIR`·`CARGO_BUILD_BUILD_DIR`를 사용했다. native 크기·복잡도·coverage 자체 검증, rustfmt, clippy, Rust **44개 단위 + 2개 CLI 테스트**, 기존 예외를 적용한 coverage 검사를 통과했다. 미해결 검사 실패 없음.
 - 여섯 카드의 운영 완료 조건은 미실행이다. API·Discovery·api-msg·Messages Mac의 실제 artifact revision과 해당 장애·부하 경계를 확인한 뒤 상태를 종결한다.
+
+### 현재 묶음의 결정·검증
+
+- 운영자가 특정 사용자의 현재 관계를 영구 종료한다. 전체 서비스 중지·Handle 차단·삭제와 별개이며 Persona 마지막 인사 없이 Ren AI 재선택 안내만 보낸다. 기록은 보존하고 다른 Persona를 선택할 수 있다.
+- Mac 연결 없이 Cloudflare SQLite에서 종료·Assignment 해제·복구 작업을 영속 기록한다. 숫자 ID와 기존 불변 Conversation key를 함께 검증해 삭제 후 ID 재사용·오래된 화면의 다른 관계 종료를 차단한다. 요청 receipt는 영속 중복 제거하며 실행 정지·전달 결과는 별도로 표시한다.
+- focused 검사에서 삭제 중 prompt/usage collector 완료 경합, 교체된 세션 정리, Turnstile 별도 예산, 실제 SQLite DO의 인증·bootstrap·Mac 불가·재시작 뒤 종료 보존, 한국어/영어/일본어 안내, 일반 발신 fence·uncertain 보존, 운영자 종료 후 재선택을 확인했다.
+- 최종 검사: Node v24.15.0·Bun 1.4.2, 343개 파일·1,588개 테스트·파일별 lines/functions/branches/statements 100%, 포맷·lint·17개 workspace/루트 타입·knip·duplication 0·예외·Discovery production build·verify-gates 통과. `bun run ci`의 production knip에서 테스트에서만 외부 사용한 export를 발견해 HTTP 경계와 SQL 작업을 기존 모듈별로 분리한 뒤 영향 검사와 남은 게이트를 순서대로 통과했다.
+- native 검사: 기존 attachment 재시도 테스트가 coverage 실행에서 3회 대신 2회를 관측해 실패했다. native 소스 변경 없이 `bun run ci:native`만 재실행해 Rust 44개 단위·2개 CLI와 coverage·크기·복잡도 검사를 통과했다. 개발 중 changed coverage 실행은 도구의 120초 제한으로 중단됐으며 이후 전체 coverage를 600초 예산으로 완료했다. 미해결 검사 실패 없음. 검사 트리는 기존 Discovery 언어 카드 커밋 `98719f2`도 포함한다.
 
 ### 처리 순서
 
@@ -109,11 +117,11 @@
 
 ### R05. Turnstile과 등록 제한의 순서·전역 상한
 
-- 원문: P0-4. 상태: **부분 확인**. 선행: R38과 데이터 처리 정책 정합성.
+- 원문: P0-4. 상태: **검증 대기**. 선행: R38과 데이터 처리 정책 정합성.
 - 지적·위치: `apps/api/src/discovery/rate-limit.ts`의 IP당 5회·1시간, 전체 10,000개 IP 제한과 SQLite 저장을 확인했다. `apps/api/src/discovery/discovery.ts`의 Turnstile 이전 차감 경로는 착수 시 재확인한다.
 - 방향: 검증 실패 요청이 정상 사용자의 등록 예산을 고갈시키는지 재현한다. Turnstile 이후 차감과 실패율 기준은 원문 제안이며 검증 호출 자체의 남용 방지도 함께 검토한다.
 - 완료 조건: 검증 실패·IPv6 다수 주소·동일 IP 동시 요청·만료 후 재시도에서 정상 등록과 자원 상한이 유지되고, 전체 방문자를 장시간 차단하는 경로가 통제된다.
-- 결과·검증·배포: 미착수.
+- 결과·검증·배포: Turnstile 이전의 등록 예산 차감을 확인·수정했다. 검증 호출은 별도 30회/분/IP, 검증 성공 후 등록 시도는 5회/시간/IP이며 각각 SQLite에 유지한다. 각 fingerprint 집합의 10,000개 상한에서는 가장 오래된 IP를 제거해 새 방문자를 전역 차단하지 않는다. 퇴출된 IP의 이전 예산은 잊히므로 이 상한은 대규모 분산 남용의 완전한 방어를 뜻하지 않는다. 실패 검증 8회 뒤 정상 등록 예산 5회, 검증 30회 gate, 창 만료·actor 교체·capacity·indexed 500행 cleanup을 테스트했다. 배포 후 실제 Turnstile·다중 방문자·유휴 만료를 확인한다.
 
 ### R06. Mac·게이트웨이·APNs 헬스 감지와 복구
 
@@ -384,11 +392,11 @@
 
 ### R38. IP 저장·해시·보관 고지
 
-- 원문: L3. 상태: **부분 확인**. 선행: R05와 처리 목적·보관 정책 결정.
+- 원문: L3. 상태: **검증 대기**. 선행: R05와 처리 목적·보관 정책 결정.
 - 지적·위치: `apps/api/src/discovery/rate-limit.ts`의 비밀키 없는 SHA-256과 1시간 SQLite 저장을 확인했다. 고지의 “서버 메모리에 일시적으로”라는 원문 인용은 현재 동의 문서에서 재확인해야 한다.
 - 방향: 실제 저장·삭제 시점과 고지를 맞추고 서버 secret 기반 해시 필요성을 검토한다. 요청이 없을 때 만료 행이 언제 물리 삭제되는지도 확인한다.
 - 완료 조건: 원 IP·식별자가 로그에 남지 않고, 해시·저장 위치·실제 보관 기간·비밀 교체 동작이 고지와 일치한다.
-- 결과·검증·배포: 미착수.
+- 결과·검증·배포: 한국어·영어·일본어 고지를 `discovery-2026-10-22`로 갱신했다. 비밀키 없는 SHA-256을 유지하며 완전 익명화라고 표현하지 않는다. Cloudflare SQLite의 검증 해시·시각·횟수(1분)와 등록 시도 해시·시각(1시간), 요청/예약 cleanup·장애 지연·별도 백업 보관을 명시했다. 두 테이블은 indexed deadline으로 Mac 실행 전에 최대 500행씩 정리하므로 방문이 끊겨도 alarm에서 만료된다. 비밀키 도입·교체 동작은 추가하지 않았다. 실제 고지 노출·동의 버전·운영 alarm 정리는 배포 후 확인한다.
 
 ### R39. Conversation 데이터 백업과 복구 리허설
 
@@ -400,11 +408,18 @@
 
 ### R40. 사용자 삭제의 전체 저장 경계 정리
 
-- 원문: L5(삭제). 상태: **미검증**. 선행: 데이터 위치·보관 예외 목록, R39.
+- 원문: L5(삭제). 상태: **검증 대기**. 선행: 데이터 위치·보관 예외 목록, R39.
 - 지적·위치: `operator.ts`의 remove가 `intake_pending`, `intake_edit`을 지우지 않아 평문 메시지 JSON·Handle이 남는다는 주장이다.
 - 방향: 모든 테이블·Mac 파일·세션·첨부·Notification·백업을 목록화하고 하나의 삭제 orchestration에서 재실행 가능하게 처리한다. 삭제 중 재유입과 보관해야 하는 익명 예산 기록을 구분한다.
 - 완료 조건: 활동 중·대기 중·실패 중·중단 후 재시도 삭제를 실제 저장 경계에서 확인하고, 잔존 식별정보·재생성·부분 삭제가 없거나 명시된 정책대로 처리된다.
-- 결과·검증·배포: 미착수.
+- 결과·검증·배포: `operator.remove`의 기존 트랜잭션에 `intake_pending`·`intake_edit`·세션별 intake/context/reply/failure/Catalog/usage 자료와 turn/replay 작업 삭제를 포함했다. 현재 Conversation뿐 아니라 같은 불변 usage key에 묶인 교체 전 세션도 durable removal에 수집한다. 삭제 중 enqueue/edit·prompt 완료·원격 usage 응답이 개인자료를 재생성하지 않도록 저장 경계를 검사한다. unavailable remote에서 로컬 정리·receipt 보존, actor 교체 뒤 재삭제, 형제 사용자·익명 발신 예산 보존을 테스트했다. 운영 DB·Mac 세션/첨부와 별도 백업의 잔존 검증은 미실행이다.
+
+| 삭제 경계                                                     | 현재 처리·보관 예외                                                                                                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloudflare 사용자·등록·Like·Assignment·Conversation·예약·send | 기존 remove와 FK cascade로 삭제한다. 이번 변경은 평문 intake와 세션별 보조자료 누락을 보완한다.                                           |
+| 원격 OpenCode 세션·폴더·첨부                                  | 기존 removeSession 경로를 재사용한다. 실패하면 removal을 유지해 재시도한다. 테스트 Handle은 기존 명시적 retained-session 정책을 유지한다. |
+| Notification                                                  | 기존 등록 삭제 cascade를 유지한다. 수신자 없는 시간당 발신 예산은 보존한다. 이미 Apple에 제출한 메시지를 회수하지 않는다.                 |
+| iMessage 원본·운영 백업                                       | 애플리케이션 remove의 물리 삭제 경계와 다르다. R39의 백업 보관·복원 절차와 실제 장비에서 별도로 확인한다.                                 |
 
 ### R41. 사용자 데이터 내보내기
 

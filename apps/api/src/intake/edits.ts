@@ -21,7 +21,8 @@ export const watchEdits = (
     const remember = (conversation: Conversation, row: IncomingMessage) =>
       row.text
         ? sql`INSERT OR IGNORE INTO intake_edit (session_id, guid, created_at, text, revision)
-          VALUES (${conversation.sessionID}, ${row.guid}, ${row.createdAt}, ${row.text}, 0)`.pipe(
+           SELECT ${conversation.sessionID}, ${row.guid}, ${row.createdAt}, ${row.text}, 0
+           WHERE EXISTS (SELECT 1 FROM conversation WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID} AND ended_at IS NULL)`.pipe(
             Effect.asVoid,
           )
         : Effect.void;

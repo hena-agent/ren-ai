@@ -1,5 +1,5 @@
 {
-  "version": "discovery-2026-10-19",
+  "version": "discovery-2026-10-22",
   "title": "Before you wait to hear from someone",
   "aiNotice": "The personas you meet here are AI. One of the personas you like may contact you first on iMessage later.",
   "sections": [
@@ -15,7 +15,7 @@
       "title": "Where is it processed?",
       "paragraphs": [
         "Waitlist registrations are stored in SQLite on service-managed servers. A new registration attempts one immediate iMessage notification from noti@renai.im, without starting an AI conversation. Delivery is not guaranteed. This address only sends notifications and does not read replies.",
-        "Cloudflare is involved in the website and public API; Apple iMessage delivers messages. Human verification uses Cloudflare Turnstile and its Privacy Addendum (https://www.cloudflare.com/turnstile-privacy-policy/). Per-IP rate-limit information is temporarily held in server memory and is not saved with registration data."
+        "Cloudflare is involved in the website and public API; Apple iMessage delivers messages. Human verification uses Cloudflare Turnstile and its Privacy Addendum (https://www.cloudflare.com/turnstile-privacy-policy/). To prevent request abuse, we store a SHA-256 hash instead of the raw IP address, together with request times and counts, in Cloudflare SQLite separately from registration data. Hashing does not make the information fully anonymous. Verification requests use a one-minute limit window; verified registration attempts use a one-hour window. Expired records are deleted by subsequent requests or scheduled cleanup. Outages or delayed work may delay deletion; operational backup retention is managed separately."
       ]
     },
     {

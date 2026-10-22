@@ -48,12 +48,15 @@ export const nextApplicationWake = Effect.gen(function* () {
     intake: number | null;
     failures: number | null;
     edits: number | null;
+    registrationExpiry: number | null;
   }>`SELECT
     (SELECT MIN(scheduled_at) FROM discovery_contact WHERE state = 'scheduled') AS contacts,
     (SELECT MIN(next_wake_at) FROM follow_up WHERE next_wake_at IS NOT NULL) AS followUps,
     (SELECT MIN(retry_at) FROM intake_handle) AS intake,
     (SELECT MIN(retry_at) FROM failed_turn WHERE review = 0) AS failures,
-    (SELECT MIN(created_at) + 900001 FROM intake_edit) AS edits`;
+    (SELECT MIN(created_at) + 900001 FROM intake_edit) AS edits,
+    MIN((SELECT COALESCE(MIN(at) + 3600000, 9007199254740991) FROM discovery_attempt),
+        (SELECT COALESCE(MIN(at) + 60000, 9007199254740991) FROM discovery_verification)) AS registrationExpiry`;
   const [recovery] = yield* sql<{
     rebuilds: number | null;
     stopped: number | null;
@@ -93,6 +96,7 @@ export const nextApplicationWake = Effect.gen(function* () {
     now + 1,
     Math.min(
       lanes.get("messaging-health") ?? Number.POSITIVE_INFINITY,
+      delayed(row!.registrationExpiry, now + 1_000),
       Math.max(retry?.attempts ? retry.due : 0, due),
     ),
   );

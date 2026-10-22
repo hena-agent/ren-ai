@@ -1,5 +1,5 @@
 {
-  "version": "discovery-2026-10-19",
+  "version": "discovery-2026-10-22",
   "title": "連絡を待つ前に",
   "aiNotice": "ここで出会うペルソナはAIです。いいねしたペルソナの1人から、後日iMessageで最初の連絡が届くことがあります。",
   "sections": [
@@ -15,7 +15,7 @@
       "title": "どこで処理しますか？",
       "paragraphs": [
         "ウェイトリストの登録は、サービスが管理するサーバーのSQLiteに保存します。新規登録時にnoti@renai.imからiMessageの通知をすぐに1件送信するよう試みますが、AIとの会話は始まりません。配信は保証されません。このアドレスは通知専用で、返信は確認していません。",
-        "サイトと公開APIにはCloudflare、メッセージの配信にはApple iMessageが関わります。認証にはCloudflare Turnstileを使用し、その情報にはCloudflare Turnstileのプライバシー補足規定（https://www.cloudflare.com/turnstile-privacy-policy/）が適用されます。IPごとの申請回数制限の情報はサーバーのメモリに一時保持し、登録データには保存しません。"
+        "サイトと公開APIにはCloudflare、メッセージの配信にはApple iMessageが関わります。認証にはCloudflare Turnstileを使用し、その情報にはCloudflare Turnstileのプライバシー補足規定（https://www.cloudflare.com/turnstile-privacy-policy/）が適用されます。不正な大量リクエストを防ぐため、元のIPアドレスの代わりにSHA-256ハッシュとリクエスト時刻・回数を、登録情報とは別にCloudflareのSQLiteへ保存します。ハッシュ化は完全な匿名化を意味しません。本人確認リクエストは1分、確認を通過した登録申請は1時間の制限に使用し、期限後は次のリクエストまたは予約されたクリーンアップで削除します。障害や処理の遅延により削除が遅れる場合があり、運用バックアップの保存期間は別途管理します。"
       ]
     },
     {

@@ -11,7 +11,7 @@ import { makeDiscoveryWeb } from "./discovery/discovery.ts";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { authorize } from "@ren-ai/transport/server";
 import { conversationStatus } from "./conversations/status.ts";
-import { conversationRecords } from "./conversations/http.ts";
+import { conversationRecords, requestOperatorEnding } from "./conversations/http.ts";
 import { usageQueries } from "./usage/query.ts";
 
 export interface ApplicationStoreConfig {
@@ -57,7 +57,11 @@ export const createApplicationStore = async (
     const usage = await run(usageQueries);
     const records = conversationRecords(statusStore, (effect) => Effect.runPromise(effect), usage);
     const privateRecords = config.managementToken
-      ? authorize(records, config.managementToken)
+      ? authorize(
+          (request) =>
+            request.method === "POST" ? requestOperatorEnding(request, run) : records(request),
+          config.managementToken,
+        )
       : async () => new Response("Unauthorized", { status: 401 });
     const httpContext = Context.make(HttpClient.HttpClient, config.httpClient);
     return {

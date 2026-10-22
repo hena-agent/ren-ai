@@ -22,15 +22,18 @@ export const intakeQueue = Effect.gen(function* () {
     Effect.gen(function* () {
       for (const row of rows)
         yield* sql`INSERT OR IGNORE INTO intake_pending (guid, handle, payload)
-      VALUES (${row.guid}, ${row.handle}, ${JSON.stringify(row)})`;
+          SELECT ${row.guid}, ${row.handle}, ${JSON.stringify(row)}
+          WHERE NOT EXISTS (SELECT 1 FROM removal WHERE handle = ${row.handle})`;
       const last = rows.at(-1);
       if (last)
         yield* sql`UPDATE bookmark SET row_id = ${last.id}, date = ${last.createdAt} WHERE id = 1`;
       return last;
     }).pipe(sql.withTransaction);
   const enqueueEdit = (conversation: Conversation, id: string, text: string) =>
-    sql`INSERT OR IGNORE INTO intake_pending (guid, handle, payload) VALUES
-      (${id}, ${conversation.handle}, ${JSON.stringify({ type: "edit", sessionID: conversation.sessionID, id, text })})`.pipe(
+    sql`INSERT OR IGNORE INTO intake_pending (guid, handle, payload)
+      SELECT ${id}, ${conversation.handle}, ${JSON.stringify({ type: "edit", sessionID: conversation.sessionID, id, text })}
+      WHERE EXISTS (SELECT 1 FROM conversation WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID} AND ended_at IS NULL)
+      AND NOT EXISTS (SELECT 1 FROM removal WHERE handle = ${conversation.handle})`.pipe(
       Effect.asVoid,
     );
   const drain = (

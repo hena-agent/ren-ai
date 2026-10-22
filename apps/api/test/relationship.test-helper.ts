@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { fromPartial } from "@total-typescript/shoehorn";
 import type { Persona } from "@ren-ai/personas";
@@ -32,5 +32,17 @@ export const relationshipFixture = Effect.gen(function* () {
     personas,
     (event) => logs.push(event),
   );
-  return { fake, ui, personas, app, sql, conversation, logs, ending };
+  const holdSends = Effect.gen(function* () {
+    const locked = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const holder = yield* Effect.forkScoped(
+      app.sends.exclusive(
+        conversation,
+        Deferred.succeed(locked, undefined).pipe(Effect.andThen(Deferred.await(release))),
+      ),
+    );
+    yield* Deferred.await(locked);
+    return { holder, release: Deferred.succeed(release, undefined) };
+  });
+  return { fake, ui, personas, app, sql, conversation, logs, ending, holdSends };
 });

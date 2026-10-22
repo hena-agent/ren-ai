@@ -13,6 +13,7 @@ export interface ConversationView {
   runtime?: typeof ConversationRuntime.Type;
   requestId: string;
   queued?: boolean;
+  ended?: boolean;
   registrationsBefore?: string;
 }
 const time = (value: number | null) =>
@@ -77,6 +78,7 @@ function Connections({ entries }: { entries: readonly (typeof ConversationEntry.
               </td>
               <td>
                 <strong>{entry.endedAt === null ? "활성" : "종료"}</strong>
+                {entry.endedBy === "operator" && <small>운영자가 관계 종료</small>}
                 {entry.startingRelationship && (
                   <small>시작 관계: {startingRelationships[entry.startingRelationship]}</small>
                 )}
@@ -123,7 +125,34 @@ function Detail({ view }: { view: ConversationView }) {
       {view.queued && (
         <output>복구 작업을 접수했습니다. 상태 다시 확인으로 진행 결과를 확인해 주세요.</output>
       )}
+      {view.ended && (
+        <output>관계가 종료되었습니다. 실행 정지와 Ren AI 재선택 안내는 별도로 처리됩니다.</output>
+      )}
       <Connections entries={[detail.entry]} />
+      {detail.entry.endedAt === null && detail.entry.key && (
+        <section aria-labelledby="end-title">
+          <h2 id="end-title">현재 관계 종료</h2>
+          <p>
+            이 사용자와 {detail.entry.personaName}의 관계를 영구 종료합니다. 기록은 보존하고 다른
+            페르소나를 선택할 수 있는 Ren AI 안내만 보냅니다.
+          </p>
+          <form method="post" action={`/conversations/${detail.entry.id}`} className="form-actions">
+            <input type="hidden" name="requestId" value={view.requestId} />
+            <input type="hidden" name="key" value={detail.entry.key} />
+            <label>
+              <input type="checkbox" name="confirmEnding" value="yes" required />{" "}
+              {detail.entry.handle}와 {detail.entry.personaName}의 현재 관계를 종료함을 확인합니다.
+            </label>
+            <button name="action" value="end" type="submit">
+              관계 종료
+            </button>
+            <p className="hint">
+              예약 연락과 이후 일반 발신을 차단합니다. 이미 전송 요청된 메시지는 회수하지 않으며,
+              실제 실행 정지·안내 전달 결과는 따로 확인합니다.
+            </p>
+          </form>
+        </section>
+      )}
       <section aria-labelledby="execution-title">
         <h2 id="execution-title">실제 OpenCode 실행 상태</h2>
         {runtime.failed && (

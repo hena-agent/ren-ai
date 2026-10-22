@@ -11,6 +11,7 @@ import { PersonaError } from "@ren-ai/personas";
 
 const entry: typeof ConversationEntry.Type = {
   id: 1,
+  key: "a".repeat(32),
   handle: "alma@example.com",
   personaID: "seoyul",
   personaName: "강서율",
@@ -55,6 +56,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
       nextWakeAt: 500,
     })),
     recover: vi.fn<ConversationClient["recover"]>(async () => {}),
+    end: vi.fn<ConversationClient["end"]>(async () => {}),
   };
   const admin = createAdmin(f.store, "test-password", "styles", {
     management: fromPartial<ManagementClient>({ conversations: client }),
@@ -83,6 +85,23 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect(active).toContain("시작 관계: 친구");
   expect(active).toContain("대기 작업 2개");
   expect(active).toContain("현재 언어 실력 보기");
+  expect(active).toContain("현재 관계 종료");
+  const ending = { action: "end", key: entry.key!, confirmEnding: "yes", requestId: randomUUID() };
+  expect(
+    (await admin(request("/conversations/1", { ...ending, confirmEnding: "no" }))).status,
+  ).toBe(400);
+  expect((await admin(request("/conversations/1", { ...ending, key: "bad" }))).status).toBe(400);
+  const endedResponse = await admin(request("/conversations/1", ending));
+  expect(endedResponse.status).toBe(303);
+  expect(endedResponse.headers.get("location")).toBe("/conversations/1?ended=1");
+  expect(client.end).toHaveBeenCalledExactlyOnceWith({
+    id: 1,
+    key: entry.key,
+    requestId: ending.requestId,
+  });
+  expect(await (await admin(request("/conversations/1?ended=1"))).text()).toContain(
+    "관계가 종료되었습니다",
+  );
   expect(active).toContain("이전 등록 25개");
   await admin(request(`/conversations/1?registrationsBefore=${registrationNextBefore}`));
   expect(client.detail).toHaveBeenLastCalledWith(1, registrationNextBefore);
@@ -98,6 +117,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   );
   const ended = {
     ...entry,
+    endedBy: "operator" as const,
     endedAt: 300,
     stoppedAt: 310,
     farewell: "failed" as const,
@@ -111,6 +131,8 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   });
   const stopped = await (await admin(request("/conversations/1?queued=1"))).text();
   expect(stopped).toContain("정지 확인");
+  expect(stopped).toContain("운영자가 관계 종료");
+  expect(stopped).not.toContain("현재 관계 종료");
   expect(stopped).toContain("확정 실패");
   expect(stopped).toContain("결과 불확실");
   expect(stopped).toContain("이전 등록");
@@ -221,6 +243,10 @@ test("conversation client authenticates and validates every response without lea
       failed = true;
       expect((await client.runtime(1)).failed).toBe(true);
       await client.recover({ id: 1, action: "notice", requestId: randomUUID() });
+      const ending = { id: 1, key: entry.key!, requestId: randomUUID() };
+      await client.end(ending);
+      expect(calls.at(-1)?.url).toBe("https://api.test/management/conversations/1/end");
+      expect(await calls.at(-1)?.json()).toEqual(ending);
       expect(
         calls.every((call) => call.headers.get("authorization") === "Bearer private-token"),
       ).toBe(true);

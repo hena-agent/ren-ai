@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { DurableObjectId } from "@cloudflare/workers-types";
 import { applicationTransport } from "../src/application-transport.ts";
 import { DeferredWork, WorkLaneFailure } from "../src/work-budget.ts";
+import { expireSubmissionLimits } from "../src/discovery/rate-limit.ts";
 import {
   finishApplicationWork,
   nextApplicationWake,
@@ -66,6 +67,7 @@ export class ApiApplication extends DurableObject<Environment> {
       // Persist recovery before I/O so an eviction cannot lose pending work.
       await this.ctx.storage.setAlarm(started + safetyInterval);
       const application = await this.application();
+      await application.store.run(expireSubmissionLimits(Date.now()));
       work = await application.store.run(scheduledApplicationWork);
       await application.tick(requestId);
       await application.store.run(finishApplicationWork(work, false));
