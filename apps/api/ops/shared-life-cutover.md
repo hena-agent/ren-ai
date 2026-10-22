@@ -41,10 +41,13 @@ it does not replay conversations or send messages.
    ```
 
    The command validates every source binding and native session before writing.
-   It refuses duplicate active owners, missing Catalog personas, missing sessions,
+   It refuses duplicate active owners, missing active Catalog personas, missing sessions,
    queued/running work, unfinished rebuilds and unrelated source locations. Folder restoration and
    native moves are separately retryable from the **same** source archives;
    conflicting existing target documents are rejected, never overwritten.
+   Root-level operator sessions without persona folders remain at their original location.
+   Retired personas absent from Catalog keep their archived identity and read-only
+   Relationship scopes; their shared life starts empty, without promoting private history.
    Ordinary `restore` accepts only version-2 persona-scoped archives; it cannot
    treat a version-1 Conversation snapshot as shared life.
 

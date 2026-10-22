@@ -5,12 +5,41 @@ import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 import { personaDirectory } from "@ren-ai/plugin-session-folder/paths";
 import type { Persona } from "@ren-ai/personas";
-import { sharedLifePlan } from "./shared-life-plan.ts";
+import { sharedLifePlan, type SharedLifePlan } from "./shared-life-plan.ts";
 import { randomUUID } from "node:crypto";
 import { contactCause, contactLog, type ContactLog } from "../discovery/diagnostics.ts";
 import { join } from "node:path";
 
 type Client = Effect.Success<ReturnType<typeof OpenCode.make>>;
+
+// Validate the complete native inventory before restoring any scope.
+const preflight = (client: Client, plan: SharedLifePlan, directory: string) =>
+  Effect.gen(function* () {
+    const active = yield* client.session.active();
+    for (const entry of plan.sessions) {
+      const sources = entry.personaID
+        ? [directory, join(directory, "sessions", entry.id)]
+        : [directory];
+      if (!sources.includes(entry.source))
+        return yield* Effect.fail(
+          new Error("Cutover source is outside the legacy persona location"),
+        );
+      const session = yield* client.session.get({ sessionID: entry.id });
+      const target = entry.personaID ? personaDirectory(directory, entry.personaID) : entry.source;
+      if (
+        (entry.personaID !== undefined && session.agent !== entry.personaID) ||
+        ![entry.source, target].includes(session.location.directory)
+      )
+        return yield* Effect.fail(new Error("Native session does not match the cutover archive"));
+      if (
+        Object.hasOwn(active, entry.id) ||
+        (yield* client.session.inbox.list({ sessionID: entry.id })).length
+      )
+        return yield* Effect.fail(
+          new Error("Interrupt running sessions and drain queued work before cutover"),
+        );
+    }
+  });
 
 export const runSharedLifeCutover = (
   client: Client,
@@ -37,28 +66,7 @@ export const runSharedLifeCutover = (
       const plan = yield* Effect.try(() =>
         sharedLifePlan(input.archive, input.application, input.personas, rules),
       );
-      const active = yield* client.session.active();
-      // Preflight every session before provisioning anything. Native move must never run a model.
-      for (const entry of plan.sessions) {
-        if (![input.directory, join(input.directory, "sessions", entry.id)].includes(entry.source))
-          return yield* Effect.fail(
-            new Error("Cutover source is outside the legacy persona location"),
-          );
-        const session = yield* client.session.get({ sessionID: entry.id });
-        const target = personaDirectory(input.directory, entry.personaID);
-        if (
-          session.agent !== entry.personaID ||
-          ![entry.source, target].includes(session.location.directory)
-        )
-          return yield* Effect.fail(new Error("Native session does not match the cutover archive"));
-        if (
-          Object.hasOwn(active, entry.id) ||
-          (yield* client.session.inbox.list({ sessionID: entry.id })).length
-        )
-          return yield* Effect.fail(
-            new Error("Interrupt running sessions and drain queued work before cutover"),
-          );
-      }
+      yield* preflight(client, plan, input.directory);
       stage = "restore-scopes";
       for (const snapshot of plan.folders)
         yield* client
@@ -66,6 +74,7 @@ export const runSharedLifeCutover = (
           .restore({ snapshot }, { location: { directory: input.directory } });
       stage = "move-sessions";
       for (const entry of plan.sessions) {
+        if (!entry.personaID) continue;
         const target = personaDirectory(input.directory, entry.personaID);
         if ((yield* client.session.get({ sessionID: entry.id })).location.directory === target)
           continue;

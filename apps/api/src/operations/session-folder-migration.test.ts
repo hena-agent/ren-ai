@@ -81,7 +81,12 @@ test.each(["catalog", "queued", "location"] as const)(
           root,
           blocked === "catalog" ? "missing" : "persona1",
         );
-        const input = yield* pausedInput(client, root, personas, [first, second]);
+        const input = yield* pausedInput(
+          client,
+          root,
+          personas,
+          blocked === "catalog" ? [second, first] : [first, second],
+        );
         if (blocked === "queued")
           yield* client.session.prompt({
             sessionID: second.id,

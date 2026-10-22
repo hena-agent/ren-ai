@@ -19,23 +19,26 @@ const legacyArchive = Schema.fromJsonString(
       Schema.Struct({
         info: Session.Info,
         pending: Schema.Array(SessionInbox.Info),
-        folder: Schema.Struct({
-          persona: folderSnapshot.fields.persona,
-          agent: Schema.String,
-          rules: Schema.String,
-          documents: folderSnapshot.fields.documents,
-          runtime: folderSnapshot.fields.runtime,
-        }),
+        folder: Schema.optionalKey(
+          Schema.Struct({
+            persona: folderSnapshot.fields.persona,
+            agent: Schema.String,
+            rules: Schema.String,
+            documents: folderSnapshot.fields.documents,
+            runtime: folderSnapshot.fields.runtime,
+          }),
+        ),
       }),
     ),
   }),
 );
-type LegacySession = (typeof legacyArchive.Type.sessions)[number];
+type LegacyEntry = (typeof legacyArchive.Type.sessions)[number];
+type LegacySession = LegacyEntry & { readonly folder: NonNullable<LegacyEntry["folder"]> };
 type Runtime = NonNullable<typeof folderSnapshot.Type.runtime>;
 type Binding = typeof sessionBinding.Type;
 export interface SharedLifePlan {
   readonly folders: readonly (typeof personaFolderSnapshot.Type)[];
-  readonly sessions: readonly { id: Session.ID; source: string; personaID: string }[];
+  readonly sessions: readonly { id: Session.ID; source: string; personaID?: string }[];
 }
 
 function tableRows(snapshot: StateSnapshot, name: string) {
@@ -107,12 +110,12 @@ const stored = (entry: LegacySession): Runtime =>
 function sharedRuntime(
   entries: readonly LegacySession[],
   bindings: ReadonlyMap<string, Binding>,
-  persona: Persona,
+  persona: Persona | undefined,
 ): Runtime {
   const active = entries.filter((entry) => bindings.get(entry.info.id)?.writable);
   if (active.length > 1)
     throw new Error("Cutover needs at most one existing active Conversation per persona");
-  const initial = runtimeFromDocuments(persona.initial);
+  const initial = runtimeFromDocuments(persona?.initial);
   const source = active[0] ? stored(active[0]) : initial;
   const { affection: _affection, ...state } = source.state ?? {};
   // Old reasons may name a user. Preserve them only inside the Relationship scope.
@@ -147,6 +150,36 @@ function relationshipRuntime(entry: LegacySession, binding: Binding): Runtime {
   };
 }
 
+function groupSessions(
+  sessions: readonly LegacyEntry[],
+  bindings: Map<string, Binding>,
+  personas: ReadonlyMap<string, Persona>,
+) {
+  const groups = new Map<string, LegacySession[]>();
+  for (const entry of sessions) {
+    if (entry.pending.length) throw new Error("Drain queued work before shared-life cutover");
+    if (!entry.folder) {
+      if (bindings.has(entry.info.id) || personas.has(entry.info.agent ?? ""))
+        throw new Error("Persona session is missing its archived folder");
+      continue;
+    }
+    const personaID = entry.folder.persona.id;
+    if (
+      entry.info.agent !== personaID ||
+      (bindings.has(entry.info.id) && bindings.get(entry.info.id)!.personaID !== personaID)
+    )
+      throw new Error("Cutover persona binding does not match");
+    if (!personas.has(personaID) && bindings.get(entry.info.id)?.writable)
+      throw new Error("Cutover Catalog is missing an active persona");
+    if (!bindings.has(entry.info.id))
+      bindings.set(entry.info.id, { personaID, conversationKey: entry.info.id, writable: false });
+    const group = groups.get(personaID) ?? [];
+    group.push({ ...entry, folder: entry.folder });
+    groups.set(personaID, group);
+  }
+  return groups;
+}
+
 export function sharedLifePlan(
   archive: string,
   application: string,
@@ -168,30 +201,15 @@ export function sharedLifePlan(
   for (const sessionID of bindings.keys())
     if (!ids.has(Session.ID.make(sessionID)))
       throw new Error("Application binding is missing from the session archive");
-  const groups = new Map<string, LegacySession[]>();
-  for (const entry of legacy.sessions) {
-    if (entry.pending.length) throw new Error("Drain queued work before shared-life cutover");
-    const personaID = entry.folder.persona.id;
-    if (
-      entry.info.agent !== personaID ||
-      (bindings.has(entry.info.id) && bindings.get(entry.info.id)!.personaID !== personaID)
-    )
-      throw new Error("Cutover persona binding does not match");
-    if (!personas.has(personaID)) throw new Error("Cutover Catalog is missing a persona");
-    if (!bindings.has(entry.info.id))
-      bindings.set(entry.info.id, { personaID, conversationKey: entry.info.id, writable: false });
-    const group = groups.get(personaID) ?? [];
-    group.push(entry);
-    groups.set(personaID, group);
-  }
+  const groups = groupSessions(legacy.sessions, bindings, personas);
   return {
     sessions: legacy.sessions.map((entry) => ({
       id: entry.info.id,
       source: entry.info.location.directory,
-      personaID: entry.folder.persona.id,
+      ...(entry.folder && { personaID: entry.folder.persona.id }),
     })),
     folders: [...groups].map(([id, entries]) => {
-      const persona = personas.get(id)!;
+      const persona = personas.get(id);
       const relationships: Record<string, Runtime> = {};
       for (const entry of entries) {
         const binding = bindings.get(entry.info.id)!;
@@ -201,7 +219,13 @@ export function sharedLifePlan(
       }
       return {
         snapshot: {
-          ...renderSnapshot(persona, rules),
+          ...(persona
+            ? renderSnapshot(persona, rules)
+            : {
+                persona: entries[0]!.folder.persona,
+                agent: entries[0]!.folder.agent,
+                rules,
+              }),
           runtime: sharedRuntime(entries, bindings, persona),
         },
         bindings: Object.fromEntries(
