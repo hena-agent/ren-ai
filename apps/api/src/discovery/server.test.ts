@@ -13,6 +13,7 @@ import { makeOperator } from "../operator/operator.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { withPublicProfile } from "@ren-ai/personas/profile";
 import { startTestCatalog } from "../../test/catalog.test-helper.ts";
+import { invalidatePublicCatalog } from "../personas/public-catalog.ts";
 
 test("the discovery HTTP adapter accepts real HTTP and operator removal deletes waiting preferences", async () => {
   const root = await mkdtemp(join(tmpdir(), "discovery-server-"));
@@ -49,10 +50,17 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
           if (!address || typeof address === "string")
             throw new Error("Missing discovery listener");
           const sql = yield* SqlClient.SqlClient;
+          const invalidate = invalidatePublicCatalog.pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
           yield* Effect.tryPromise(async () => {
             const base = `http://127.0.0.1:${address.port}`;
             const response = await fetch(`${base}/discovery/personas`);
             expect(response.status).toBe(200);
+            expect(response.headers.get("cache-control")).toBe(
+              "public, max-age=60, stale-while-revalidate=300",
+            );
+            expect(Number(response.headers.get("age"))).toBeGreaterThanOrEqual(0);
             expect(await response.json()).toEqual([
               {
                 id: "hayeon",
@@ -99,6 +107,10 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               },
               profile: { introduction: "함께 요리해요.", sections: [] },
             };
+            expect(await (await fetch(`${base}/discovery/personas`)).json()).toMatchObject([
+              { imageUrl: "https://example.net/hayeon.png" },
+            ]);
+            await Effect.runPromise(invalidate);
             const catalog = await fetch(`${base}/discovery/personas`);
             expect(await catalog.json()).toEqual([publicProfileEntry]);
             const extraUrl = (
@@ -109,6 +121,7 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
             ).replace("/images/", "https://persona-images.renai.im/");
             const portraitGallery = [portraits, { anime: extraUrl, photo: extraUrl }];
             await store.update({ ...(await store.get("hayeon")), portraitGallery });
+            await Effect.runPromise(invalidate);
             expect(await (await fetch(`${base}/discovery/personas`)).json()).toEqual([
               {
                 ...publicProfileEntry,
@@ -124,6 +137,7 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               descriptionVersion: 2,
               description: withPublicProfile("Private character source", publicProfile),
             });
+            await Effect.runPromise(invalidate);
             const enriched = await (await fetch(`${base}/discovery/personas`)).text();
             expect(JSON.parse(enriched)).toMatchObject([
               {

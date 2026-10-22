@@ -18,7 +18,12 @@ const snapshot = Schema.Struct({
 const window = 15 * 60_000;
 
 /** Transport observations only. Cloudflare owns admission, retries and all durable state. */
-const watchApplication = (messages: Messages, origin: string, token: string) => {
+const watchApplication = (
+  messages: Messages,
+  origin: string,
+  token: string,
+  ready: Effect.Effect<void>,
+) => {
   const request = (path: string, method: "GET" | "POST") =>
     Effect.tryPromise(async () => {
       const response = await fetch(`${origin}${path}`, {
@@ -53,6 +58,7 @@ const watchApplication = (messages: Messages, origin: string, token: string) => 
       ),
       (stop) => Effect.sync(stop),
     );
+    yield* ready;
     const edits = Effect.forever(
       Effect.gen(function* () {
         yield* Effect.sleep("10 seconds");
@@ -133,7 +139,14 @@ export const runApplicationWatch = (
     Effect.scoped(
       Effect.gen(function* () {
         const messages = yield* remoteMessages({ url: imsgUrl, token: imsgToken });
-        yield* watchApplication(messages, url.replace(/\/$/, ""), token);
+        yield* watchApplication(
+          messages,
+          url.replace(/\/$/, ""),
+          token,
+          Effect.sync(() => {
+            attempts = 0;
+          }),
+        );
       }),
     ).pipe(
       Effect.catch((cause) =>

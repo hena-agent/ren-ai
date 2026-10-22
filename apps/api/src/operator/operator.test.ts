@@ -90,8 +90,10 @@ test("blocking silences Intake, Outbox and session lookup but preserves User row
         const duringRead = yield* outbox(
           {
             ...fake.messages,
-            after: (id) =>
-              fake.messages.after(id).pipe(Effect.tap(() => directory.block(reacting.handle))),
+            recent: (handle, minutes, options) =>
+              fake.messages
+                .recent(handle, minutes, options)
+                .pipe(Effect.tap(() => directory.block(reacting.handle))),
           },
           gestures.gestures,
           new Map(),

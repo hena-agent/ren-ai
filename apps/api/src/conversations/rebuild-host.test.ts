@@ -18,17 +18,21 @@ test("a deleted session heals on the next message and an operator rebuild replac
   let beforeReplay: (() => Effect.Effect<void, Error>) | undefined;
   const messages = {
     ...fake.messages,
-    after: (cursor: number) =>
+    after: (cursor: number, limit?: number) =>
       Effect.gen(function* () {
         if (failReplay) {
           failReplay = false;
           return yield* Effect.fail(new Error("Messages unavailable"));
         }
+        return yield* fake.messages.after(cursor, limit);
+      }),
+    recent: (...args: Parameters<typeof fake.messages.recent>) =>
+      Effect.gen(function* () {
         if (beforeReplay) {
           yield* beforeReplay();
           beforeReplay = undefined;
         }
-        return yield* fake.messages.after(cursor);
+        return yield* fake.messages.recent(...args);
       }),
   };
   try {

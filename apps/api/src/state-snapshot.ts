@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { Effect, Exit, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { invalidatePublicCatalog } from "./personas/public-catalog.ts";
 
 const Scalar = Schema.Union([
   Schema.String,
@@ -33,9 +34,10 @@ const optionalTables = new Set(["failed_turn", "application_alert"]);
 
 const schemaTables = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  // These caches are reconstructed from their authoritative source, never imported as application state.
   const tables = yield* sql<{ name: string }>`SELECT name FROM sqlite_master WHERE type = 'table'
     AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*' AND name NOT GLOB '__cf_*'
-    AND name NOT IN ('effect_sql_migrations', 'application_import') ORDER BY name`;
+    AND name NOT IN ('effect_sql_migrations', 'application_import', 'public_catalog', 'intake_handle') ORDER BY name`;
   return yield* Effect.forEach(tables, (table) =>
     Effect.gen(function* () {
       const columns = yield* sql.unsafe<{ name: string }>(
@@ -125,6 +127,8 @@ export const importApplicationState = (snapshot: StateSnapshot) =>
           );
       }
       yield* sql`PRAGMA defer_foreign_keys = ON`;
+      yield* sql`DELETE FROM intake_handle`;
+      yield* invalidatePublicCatalog;
       for (const table of snapshot.tables) {
         const expected = target.find((value) => value.name === table.name);
         if (!expected || JSON.stringify(expected.columns) !== JSON.stringify(table.columns))

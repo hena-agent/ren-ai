@@ -1,5 +1,5 @@
 import type { Effect } from "effect";
-import type { OutgoingStatus } from "../gateway/protocol.ts";
+import type { OutgoingStatus, recentQuery } from "../gateway/protocol.ts";
 
 /** The adapter must force iMessage and must never fall back to SMS. */
 export interface Messages {
@@ -23,7 +23,11 @@ export interface Messages {
   /** Ordered by ROWID. Older deployed gateways may return more than the optional limit. */
   after(rowID: number, limit?: number): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
   /** All rows in this Handle's chat since the timestamp, including empty (unsent) texts. */
-  recent(handle: string, since: number): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
+  recent(
+    handle: string,
+    since: number,
+    query?: typeof recentQuery.Type,
+  ): Effect.Effect<ReadonlyArray<IncomingMessage>, Error>;
   /** The final status of an outgoing Messages row; error 22 is failed, not sent. */
   sendStatus(guid: string): Effect.Effect<"sent" | "delivered" | "failed" | "unknown", Error>;
   follow(
@@ -81,3 +85,21 @@ export interface IncomingMessage {
   /** Non-attachment iMessage payloads identified by the adapter. */
   readonly payload?: "location" | "app";
 }
+
+/** Accept complete responses from older Macs while newer ones push these bounds into SQL. */
+export const selectRecent = (
+  rows: readonly IncomingMessage[],
+  handle: string,
+  since: number,
+  query: typeof recentQuery.Type = {},
+) =>
+  rows
+    .filter(
+      (row) =>
+        row.handle === handle &&
+        row.createdAt >= since &&
+        (query.guid === undefined || row.guid === query.guid) &&
+        (query.after === undefined || row.id > query.after),
+    )
+    .toSorted((a, b) => (query.reverse ? b.id - a.id : a.id - b.id))
+    .slice(0, query.limit ?? rows.length);

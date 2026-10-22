@@ -11,6 +11,7 @@ import { migrate } from "../database.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 import { intake } from "../intake/intake.ts";
 import { rebuilder } from "./rebuild-session.ts";
+import { exhaustedAlarm } from "../../test/work-budget.test-helper.ts";
 
 const persona = {
   id: "persona1",
@@ -85,8 +86,16 @@ test("rebuilding through OpenCode replays the record once, fences blocked Users 
         expect(yield* recovery.rebuild(handle)).toBe("present");
         yield* host.sessions.remove(Session.ID.make(rebuilt.sessionID));
         yield* profileSql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
+        yield* exhaustedAlarm(recovery.pending);
+        expect(
+          yield* profileSql`SELECT rebuilding FROM conversation WHERE id = ${conversation.id}`,
+        ).toEqual([{ rebuilding: 1 }]);
         yield* recovery.pending;
         expect((yield* host.conversations.byHandle(handle))?.sessionID).not.toBe(rebuilt.sessionID);
+        const recoveredID = (yield* host.conversations.byHandle(handle))!.sessionID;
+        yield* profileSql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
+        yield* recovery.pending;
+        expect((yield* host.conversations.byHandle(handle))!.sessionID).toBe(recoveredID);
         yield* host.conversations.block(handle);
         expect(yield* host.operator.rebuild(handle)).toBe("not_found");
         expect(yield* host.conversations.bySession(rebuilt.sessionID)).toBeUndefined();

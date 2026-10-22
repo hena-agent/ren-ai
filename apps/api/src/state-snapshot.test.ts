@@ -29,12 +29,18 @@ test("application state transfers identities, links, cursors, uncertainty and bl
       yield* sql`INSERT INTO send (id,handle,conversation_id,kind,content,tool_call_id,state,recorded_at,updated_at) VALUES (33,'private-marker@example.test',9,'text','private greeting marker','call_preserved','uncertain',4,5)`;
       yield* sql`INSERT INTO bookmark VALUES (1,123,456)`;
       yield* sql`INSERT INTO intake_seen VALUES ('ses_preserved','guid_preserved')`;
+      yield* sql`INSERT INTO intake_pending(guid, handle, payload) VALUES ('pending', 'private-marker@example.test',
+        ${JSON.stringify({ id: 124, guid: "pending", handle: "private-marker@example.test", createdAt: 6, text: "queued", fromMe: false })})`;
+      yield* sql`INSERT INTO application_checkpoint VALUES ('replay:ses_preserved', ${JSON.stringify({ cursor: 40, previous: 2, firstReply: 1, latestReply: 2, latestSend: 0 })})`;
+      yield* sql`INSERT INTO catalog_plan VALUES ('ses_preserved', 'fingerprint', 'sora')`;
       yield* sql`CREATE TABLE probe_blob (id INTEGER PRIMARY KEY, value BLOB, nullable TEXT)`;
       yield* sql`INSERT INTO probe_blob VALUES (1,${new Uint8Array([1, 2, 255])},NULL)`;
       return yield* exportApplicationState;
     }),
   );
   expect(snapshot.tables.map((table) => table.name)).not.toContain("effect_sql_migrations");
+  expect(snapshot.tables.map((table) => table.name)).not.toContain("public_catalog");
+  expect(snapshot.tables.map((table) => table.name)).not.toContain("intake_handle");
   const decoded = readStateSnapshot(JSON.parse(JSON.stringify(snapshot)));
   await run(
     Effect.gen(function* () {
@@ -51,6 +57,15 @@ test("application state transfers identities, links, cursors, uncertainty and bl
       expect(yield* sql`SELECT * FROM bookmark`).toEqual([{ id: 1, row_id: 123, date: 456 }]);
       expect(yield* sql`SELECT * FROM intake_seen`).toEqual([
         { session_id: "ses_preserved", guid: "guid_preserved" },
+      ]);
+      expect(yield* sql`SELECT handle, head, retry_at FROM intake_handle`).toEqual([
+        { handle: "private-marker@example.test", head: 1, retry_at: 0 },
+      ]);
+      expect(yield* sql`SELECT name FROM application_checkpoint`).toEqual([
+        { name: "replay:ses_preserved" },
+      ]);
+      expect(yield* sql`SELECT session_id FROM catalog_plan`).toEqual([
+        { session_id: "ses_preserved" },
       ]);
       const [blob] = yield* sql<{
         value: Uint8Array;

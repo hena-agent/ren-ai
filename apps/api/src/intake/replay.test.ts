@@ -6,6 +6,9 @@ import { intake } from "./intake.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
+import { registration, runMessagingTest } from "../../test/messaging.test-helper.ts";
+import { TestClock } from "effect/testing";
+import { DeferredWork, withWorkBudget } from "../work-budget.ts";
 
 test("replay preserves send outcomes, first reply, follow-up order and removal fencing", async () => {
   await Effect.runPromise(
@@ -128,5 +131,56 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         expect(historyReads).toBe(before);
       }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
     ),
+  );
+});
+
+test("bounded replay checkpoints resume after actor replacement without re-prompting completed rows", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      yield* migrate;
+      const directory = yield* conversations;
+      const conversation = yield* directory.create(
+        registration("replay@example.com", "ses_replay"),
+      );
+      const fake = fakeMessages();
+      const prompted: string[] = [];
+      const open = intake(
+        fake.messages,
+        directory.byHandle,
+        (_session, id) =>
+          Effect.sync(() => {
+            prompted.push(id);
+          }),
+        () => "UTC",
+        undefined,
+        undefined,
+        undefined,
+        false,
+      );
+      let incoming = yield* open;
+      for (let i = 1; i <= 101; i++) yield* fake.text(conversation.handle, `message-${i}`, i);
+      expect(yield* withWorkBudget(incoming.replay(conversation)).pipe(Effect.flip)).toBeInstanceOf(
+        DeferredWork,
+      );
+      expect(prompted).toHaveLength(40);
+      const sql = yield* SqlClient.SqlClient;
+      expect(JSON.stringify(yield* sql`SELECT payload FROM application_checkpoint`)).toContain(
+        '\\"cursor\\":40',
+      );
+      incoming = yield* open;
+      expect(yield* withWorkBudget(incoming.replay(conversation)).pipe(Effect.flip)).toBeInstanceOf(
+        DeferredWork,
+      );
+      expect(prompted).toHaveLength(80);
+      yield* withWorkBudget(incoming.replay(conversation));
+      expect(prompted).toHaveLength(101);
+      expect(new Set(prompted).size).toBe(101);
+      yield* incoming.replay(conversation);
+      expect(prompted).toHaveLength(101);
+      expect(yield* sql`SELECT 1 FROM application_checkpoint`).toEqual([]);
+      expect(yield* sql`SELECT last_received_at, first_received_at FROM conversation`).toEqual([
+        { last_received_at: 101, first_received_at: 1 },
+      ]);
+    }).pipe(Effect.provide(TestClock.layer())),
   );
 });

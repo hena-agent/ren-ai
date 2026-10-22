@@ -22,6 +22,14 @@ export const contactLog: ContactLog = (event) => {
   (event.level === "info" ? process.stdout : process.stderr).write(`${JSON.stringify(event)}\n`);
 };
 
+// oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: allowlist an upstream failure's request correlation ID
+export function contactOperationId(cause: unknown) {
+  const id = cause instanceof Error && "requestId" in cause ? cause.requestId : undefined;
+  return typeof id === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)
+    ? id
+    : undefined;
+}
+
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrows a task/request failure into payload-free diagnostics
 export function contactCause(cause: unknown) {
   const error = cause instanceof Error ? cause : new Error("Non-Error failure");

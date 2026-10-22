@@ -11,6 +11,7 @@ import { withLifecycle } from "../conversations/lifecycle.ts";
 import type { conversations } from "../conversations/conversations.ts";
 import { contactCause, contactLog } from "./diagnostics.ts";
 import type { ContactLog } from "./diagnostics.ts";
+import { claimWork, workBatchSize } from "../work-budget.ts";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 
 interface Contact {
@@ -194,6 +195,7 @@ export const firstContacts = (
       });
     const tick = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
+      const limit = yield* workBatchSize;
       const rows =
         yield* sql<Contact>`SELECT r.id, r.handle, r.locale, l.conversation_language AS conversationLanguage, r.consent_version AS consentVersion,
       r.created_at AS consentAt, c.persona_id AS personaID, c.session_id AS sessionID, c.state,
@@ -202,8 +204,12 @@ export const firstContacts = (
        FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
         LEFT JOIN discovery_language l ON l.registration_id = r.id
         LEFT JOIN discovery_profile p ON p.registration_id = r.id
-       WHERE r.archived_at IS NULL AND ((c.state = 'scheduled' AND c.scheduled_at <= ${now}) OR c.state IN ('preparing','greeting','review')) ORDER BY c.scheduled_at`;
+        WHERE r.archived_at IS NULL AND c.state IN ('scheduled','preparing','greeting','review')
+        AND ((c.state = 'scheduled' AND c.scheduled_at <= ${now}) OR c.state IN ('preparing','greeting','review')) ORDER BY c.last_checked, c.scheduled_at, c.registration_id LIMIT ${limit}`;
       for (const row of rows) {
+        if (!(yield* claimWork)) break;
+        yield* sql`UPDATE discovery_contact SET last_checked = (SELECT COALESCE(MAX(last_checked), 0) + 1 FROM discovery_contact
+          WHERE state IN ('scheduled','preparing','greeting','review')) WHERE registration_id = ${row.id}`;
         const result = yield* Effect.result(
           directory.withHandle(row.handle)(row.state === "scheduled" ? start(row) : observe(row)),
         );

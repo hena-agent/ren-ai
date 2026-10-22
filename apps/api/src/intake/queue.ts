@@ -5,6 +5,7 @@ import type { IncomingMessage } from "@ren-ai/imsg";
 import { incomingMessage } from "@ren-ai/imsg/protocol";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import type { Conversation } from "../conversations/conversations.ts";
+import { claimWork, workBatchSize } from "../work-budget.ts";
 
 const edit = Schema.Struct({
   type: Schema.Literal("edit"),
@@ -38,29 +39,24 @@ export const intakeQueue = Effect.gen(function* () {
   ) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
-      const rows = yield* sql<{
-        id: number;
-        handle: string;
-        payload: string;
-      }>`SELECT p.id, p.handle, p.payload
-      FROM intake_pending p WHERE p.retry_at <= ${now}
-      AND NOT EXISTS (SELECT 1 FROM intake_pending earlier
-        WHERE earlier.handle = p.handle AND earlier.id < p.id AND earlier.retry_at > ${now})
-      ORDER BY p.id LIMIT 100`;
-      const groups = new Map<string, (typeof rows)[number][]>();
-      for (const row of rows) {
-        const group = groups.get(row.handle) ?? [];
-        group.push(row);
-        groups.set(row.handle, group);
-      }
+      const limit = yield* workBatchSize;
+      const handles = yield* sql<{ handle: string }>`SELECT handle FROM intake_handle
+        WHERE retry_at <= ${now} ORDER BY retry_at, head LIMIT ${limit}`;
       yield* Effect.forEach(
-        groups,
-        ([handle, group]) =>
+        handles,
+        ({ handle }) =>
           Effect.gen(function* () {
+            const group = yield* sql<{
+              id: number;
+              handle: string;
+              payload: string;
+            }>`SELECT id, handle, payload FROM intake_pending
+              WHERE handle = ${handle} ORDER BY id LIMIT ${Math.min(25, limit)}`;
             const started = yield* Clock.currentTimeMillis;
             const requestId = randomUUID();
-            const result = yield* Effect.forEach(group.slice(0, 25), (row) =>
+            const result = yield* Effect.forEach(group, (row) =>
               Effect.gen(function* () {
+                if (!(yield* claimWork)) return;
                 const message = yield* Schema.decodeUnknownEffect(payload)(row.payload);
                 yield* (
                   "type" in message ? receiveEdit(row.handle, message) : receive(message)
@@ -81,7 +77,8 @@ export const intakeQueue = Effect.gen(function* () {
                 level: "error",
                 ...contactCause(result.failure),
               });
-              yield* sql`UPDATE intake_pending SET retry_at = ${now + 30_000} WHERE handle = ${handle}`;
+              yield* sql`UPDATE intake_pending SET retry_at = ${now + 30_000}
+                WHERE id = (SELECT head FROM intake_handle WHERE handle = ${handle})`;
             } else contactLog({ ...fields, outcome: "completed", level: "info" });
           }),
         { concurrency: 4 },

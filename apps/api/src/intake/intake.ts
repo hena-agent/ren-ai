@@ -1,4 +1,4 @@
-import { Effect, Semaphore } from "effect";
+import { Effect, Schema, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { IncomingMessage, Messages } from "@ren-ai/imsg";
@@ -17,6 +17,30 @@ import { resetBoundary } from "../conversations/reset-boundary.ts";
 import { intakeQueue } from "./queue.ts";
 import { scheduleWork } from "../scheduling.ts";
 import { promptID } from "./message-id.ts";
+import { claimWork, DeferredWork } from "../work-budget.ts";
+
+const ReplayProgress = Schema.fromJsonString(
+  Schema.Struct({
+    cursor: Schema.Number,
+    previous: Schema.NullOr(Schema.Number),
+    firstReply: Schema.NullOr(Schema.Number),
+    latestReply: Schema.Number,
+    latestSend: Schema.Number,
+  }),
+);
+
+const observeWhileWaiting = <E, R>(observe: Effect.Effect<void, E, R>, cursor: () => number) =>
+  Effect.suspend(() => {
+    let delay = 1_000;
+    return Effect.forever(
+      Effect.gen(function* () {
+        yield* Effect.sleep(delay);
+        const before = cursor();
+        yield* observe;
+        delay = cursor() !== before ? 1_000 : Math.min(delay * 2, 30_000);
+      }),
+    );
+  });
 
 export interface PromptImage {
   readonly uri: string;
@@ -26,6 +50,23 @@ interface Bookmark {
   readonly rowID: number;
   readonly date: number;
 }
+
+const readBookmark = (messages: Messages) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    let [current] = yield* sql<Bookmark>`SELECT row_id AS rowID, date FROM bookmark WHERE id = 1`;
+    const history = yield* messages.after(
+      Math.max(0, (current?.rowID ?? 1) - 1),
+      current ? 101 : undefined,
+    );
+    if (!current) {
+      const tail = history.at(-1);
+      current = { rowID: tail?.id ?? 0, date: tail?.createdAt ?? 0 };
+      yield* sql`INSERT INTO bookmark (id, row_id, date) VALUES (1, ${current.rowID}, ${current.date})
+      ON CONFLICT(id) DO UPDATE SET row_id = excluded.row_id, date = excluded.date`;
+    }
+    return { current, history };
+  });
 
 export const intake = (
   messages: Messages,
@@ -59,25 +100,11 @@ export const intake = (
       for (const listener of listeners) listener(conversation);
     };
     const changes = yield* watchEdits(messages, queue.enqueueEdit, timeZone, signal, arriving);
-    const bookmark = () =>
-      Effect.map(
-        sql<Bookmark>`SELECT row_id AS rowID, date FROM bookmark WHERE id = 1`,
-        (rows) => rows[0],
-      );
-    const save = (row: Bookmark) =>
-      sql`INSERT INTO bookmark (id, row_id, date) VALUES (1, ${row.rowID}, ${row.date})
-        ON CONFLICT(id) DO UPDATE SET row_id = excluded.row_id, date = excluded.date`;
     // Replay can acknowledge a message while live admission is awaiting the same prompt ID.
     const markSeen = (sessionID: string, guid: string) =>
       sql`INSERT INTO intake_seen (session_id, guid) VALUES (${sessionID}, ${guid})
         ON CONFLICT(session_id, guid) DO NOTHING`;
-    let current = yield* bookmark();
-    const history = yield* messages.after(Math.max(0, (current?.rowID ?? 1) - 1));
-    if (!current) {
-      const tail = history.at(-1);
-      current = { rowID: tail?.id ?? 0, date: tail?.createdAt ?? 0 };
-      yield* save(current);
-    }
+    const { current, history } = yield* readBookmark(messages);
     let last = current;
     const fromPreviousRelationship = (conversation: Conversation, row: IncomingMessage) =>
       Effect.map(
@@ -109,7 +136,7 @@ export const intake = (
         signal(conversation);
       });
     const target = (row: IncomingMessage, guid: string) =>
-      Effect.map(messages.recent(row.handle, 0), (rows) => {
+      Effect.map(messages.recent(row.handle, 0, { guid, limit: 1 }), (rows) => {
         const found = rows.find((item) => item.guid === guid);
         if (!found) return "message unavailable";
         const content = found.text || (found.attachments?.length ? "photo" : "message unavailable");
@@ -167,49 +194,81 @@ export const intake = (
           FROM conversation WHERE id = ${conversation.id}`;
         const [followUp] = yield* sql<{ lastSentAt: number }>`SELECT last_sent_at AS lastSentAt
           FROM follow_up WHERE conversation_id = ${conversation.id}`;
-        const rows = (yield* messages.after(0))
-          .filter(
-            (row) =>
-              row.handle === conversation.handle &&
-              row.createdAt >= started[0]!.startedAt &&
-              row.tapback?.added !== false,
-          )
-          .toSorted((a, b) => a.id - b.id);
-        let previous: number | null = null;
-        let firstReply: number | null = null;
         const lastSentAt = followUp?.lastSentAt ?? 0;
-        let latestReply = lastSentAt;
-        let latestSend = lastSentAt;
-        for (const row of rows) {
-          if (
-            (yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID ||
-            (yield* beforeReset(row))
-          )
-            continue;
-          const seen =
-            yield* sql`SELECT 1 FROM intake_seen WHERE session_id = ${conversation.sessionID}
+        const key = `replay:${conversation.sessionID}`;
+        const [saved] = yield* sql<{
+          payload: string;
+        }>`SELECT payload FROM application_checkpoint WHERE name = ${key}`;
+        let progress = saved
+          ? Schema.decodeUnknownSync(ReplayProgress)(saved.payload)
+          : {
+              cursor: 0,
+              previous: null,
+              firstReply: null,
+              latestReply: lastSentAt,
+              latestSend: lastSentAt,
+            };
+        const checkpoint =
+          () => sql`INSERT INTO application_checkpoint(name, payload) VALUES (${key},
+          ${Schema.encodeSync(ReplayProgress)(progress)})
+          ON CONFLICT(name) DO UPDATE SET payload = excluded.payload`;
+        const replayRow = (row: IncomingMessage) =>
+          Effect.gen(function* () {
+            if (
+              row.tapback?.added === false ||
+              (yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID ||
+              (yield* beforeReset(row))
+            )
+              return;
+            const seen =
+              yield* sql`SELECT 1 FROM intake_seen WHERE session_id = ${conversation.sessionID}
               AND guid = ${row.guid}`;
-          if (row.fromMe) {
-            if (!(yield* replayOutgoing(conversation, row, seen.length > 0))) continue;
-            latestSend = Math.max(latestSend, row.createdAt);
-          } else {
-            firstReply ??= row.createdAt;
-            yield* changes.remember(conversation, row);
-            if (!seen.length) {
-              yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
-              const rendered = yield* content(row, previous, timeZone(conversation.personaID));
-              yield* prompt(
-                conversation.sessionID,
-                promptID(conversation.sessionID, row.guid),
-                rendered.text,
-                rendered.files,
-              );
+            if (row.fromMe) {
+              if (!(yield* replayOutgoing(conversation, row, seen.length > 0))) return;
+              progress = { ...progress, latestSend: Math.max(progress.latestSend, row.createdAt) };
+            } else {
+              progress = { ...progress, firstReply: progress.firstReply ?? row.createdAt };
+              yield* changes.remember(conversation, row);
+              if (!seen.length) {
+                yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
+                const rendered = yield* content(
+                  row,
+                  progress.previous,
+                  timeZone(conversation.personaID),
+                );
+                yield* prompt(
+                  conversation.sessionID,
+                  promptID(conversation.sessionID, row.guid),
+                  rendered.text,
+                  rendered.files,
+                );
+              }
+              progress = {
+                ...progress,
+                previous: row.createdAt,
+                latestReply: Math.max(progress.latestReply, row.createdAt),
+              };
             }
-            previous = row.createdAt;
-            latestReply = Math.max(latestReply, row.createdAt);
+            yield* markSeen(conversation.sessionID, row.guid);
+          });
+        for (;;) {
+          const rows = yield* messages.recent(conversation.handle, started[0]!.startedAt, {
+            after: progress.cursor,
+            limit: 100,
+          });
+          if (!rows.length) break;
+          for (const row of rows) {
+            if (!(yield* claimWork)) {
+              yield* checkpoint();
+              yield* Effect.fail(new DeferredWork());
+            }
+            yield* replayRow(row);
+            progress = { ...progress, cursor: row.id };
           }
-          yield* markSeen(conversation.sessionID, row.guid);
+          if (rows.length < 100) break;
+          yield* checkpoint();
         }
+        const { previous, firstReply, latestReply, latestSend } = progress;
         if ((yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID) return;
         if (previous !== null) {
           yield* sql`UPDATE conversation SET last_received_at = ${previous}, first_received_at = COALESCE(first_received_at, ${firstReply}) WHERE id = ${conversation.id}`;
@@ -217,6 +276,7 @@ export const intake = (
         }
         if (latestReply > lastSentAt) yield* received(conversation, latestReply);
         if (latestSend > Math.max(latestReply, lastSentAt)) yield* sent(conversation, latestSend);
+        yield* sql`DELETE FROM application_checkpoint WHERE name = ${key}`;
       });
     const predatesRelationship = (conversation: Conversation, row: IncomingMessage) =>
       sql`SELECT 1 FROM conversation WHERE id = ${conversation.id} AND started_at > ${row.createdAt}
@@ -313,7 +373,7 @@ export const intake = (
           ),
           // Admission can wait on media or the remote executor. Keep observing
           // arrivals during that wait, even when the caller is the single DO alarm.
-          Effect.forever(Effect.sleep("1 second").pipe(Effect.andThen(observe))),
+          observeWhileWaiting(observe, () => last.rowID),
         ),
       ),
     );
@@ -323,8 +383,9 @@ export const intake = (
         history.filter((row) => row.id > current.rowID || row.createdAt > current.date),
         reset,
       ).pipe(Effect.asVoid),
-      replay,
-      poll: heartbeat,
+      replay: (conversation: Conversation) =>
+        replay(conversation).pipe(Effect.provideService(SqlClient.SqlClient, sql)),
+      poll: heartbeat.pipe(Effect.provideService(SqlClient.SqlClient, sql)),
       onNew: (listener: (conversation: Conversation) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);

@@ -2,6 +2,7 @@ import { Clock, Effect, Random } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import { checkedPhone } from "../transcript/transcript.ts";
+import { workBatchSize } from "../work-budget.ts";
 
 interface Due {
   readonly conversationID: number;
@@ -51,21 +52,25 @@ export const followUps = (
             WHERE id = ${conversation.id} AND session_id = ${conversation.sessionID})`;
       });
     // Upgrade existing Conversations without requiring him to text again.
-    yield* Effect.gen(function* () {
+    const initialize = Effect.gen(function* () {
+      const limit = yield* workBatchSize;
       const missing = yield* sql<{ id: number; at: number }>`
         SELECT conversation.id, MAX(user.replied_at, COALESCE(conversation.last_received_at, 0),
           COALESCE((SELECT MAX(recorded_at) FROM send WHERE conversation_id = conversation.id
             AND state IN ('sent', 'delivered')), 0)) AS at
         FROM conversation JOIN user ON user.id = conversation.user_id
         LEFT JOIN follow_up ON follow_up.conversation_id = conversation.id
-        WHERE conversation.ended_at IS NULL AND user.replied_at IS NOT NULL AND follow_up.conversation_id IS NULL`;
+         WHERE conversation.ended_at IS NULL AND user.replied_at IS NOT NULL AND follow_up.conversation_id IS NULL
+         ORDER BY conversation.id LIMIT ${limit}`;
       for (const row of missing) {
         const wake = yield* next(row.at, false);
         yield* sql`INSERT OR IGNORE INTO follow_up (conversation_id, last_sent_at, next_wake_at)
           VALUES (${row.id}, ${row.at}, ${wake})`;
       }
-    }).pipe(sql.withTransaction);
+    });
+    yield* initialize;
     const tick = Effect.gen(function* () {
+      yield* initialize;
       const now = yield* Clock.currentTimeMillis;
       const [due] = yield* sql<Due>`SELECT follow_up.conversation_id AS conversationID,
           follow_up.next_wake_at AS nextWakeAt, conversation.session_id AS sessionID,

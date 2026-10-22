@@ -33,6 +33,7 @@ export const locationConfig = (input: {
           options: { directory: "/srv/ren-ai" },
         },
       ],
+      // OpenCode subtracts buffer from the model window: 1M - 400k = a 600k trigger.
       compaction: { buffer: 400_000, keep: { tokens: 12_000 } },
     }),
   );

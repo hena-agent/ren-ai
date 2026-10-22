@@ -1,5 +1,6 @@
 import worker, { ApiApplication } from "../worker/entry.ts";
 import { executionSnapshot } from "./execution-catalog.ts";
+import { Schema } from "effect";
 
 const catalog = [
   {
@@ -11,10 +12,18 @@ const catalog = [
   },
 ];
 
-const fakeUpstreams: typeof fetch = async (input) => {
+const fakeUpstreams: typeof fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : input.toString());
   if (url.hostname === "api-msg.example" && url.pathname === "/health")
     return Response.json({ service: "api-msg", revision: "development", status: "ready" });
+  if (url.hostname === "api-msg.example" && url.pathname.startsWith("/imsg/rpc")) {
+    const body = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.Number }))(
+      await new Request(input, init).json(),
+    );
+    return new Response(
+      `${JSON.stringify({ _tag: "Exit", requestId: body.id, exit: { _tag: "Success", value: null } })}\n`,
+    );
+  }
   if (url.hostname === "admin.example" && url.pathname === "/api/personas")
     return Response.json(catalog);
   if (url.hostname === "admin.example" && url.pathname === "/api/catalog")

@@ -263,9 +263,9 @@ test("catalog failures and partial database writes fail without a false waiting 
             new Request("http://localhost/discovery/personas"),
             Context.make(HttpClient.HttpClient, verified),
           );
-          expect(profiles.status).toBe(400);
+          expect(profiles.status).toBe(503);
           expect(await profiles.json()).toBe("storage");
-          expect((await post(web, input)).status).toBe(400);
+          expect((await post(web, input)).status).toBe(503);
         } finally {
           await web.dispose();
         }
@@ -278,7 +278,7 @@ test("catalog failures and partial database writes fail without a false waiting 
       yield* Effect.tryPromise(async () => {
         try {
           const response = await post(working, input);
-          expect(response.status).toBe(400);
+          expect(response.status).toBe(503);
           expect(await response.json()).toBe("storage");
         } finally {
           await working.dispose();
@@ -328,7 +328,7 @@ test("rate-limit persistence failure denies registration with a payload-free dia
       yield* Effect.promise(async () => {
         try {
           const response = await post(web, input);
-          expect(response.status).toBe(400);
+          expect(response.status).toBe(503);
           expect(await response.json()).toBe("storage");
           const logs = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
           expect(logs).toContain('"stage":"registration.limit"');

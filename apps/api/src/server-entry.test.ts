@@ -60,6 +60,7 @@ test("the retained source entry runs the Worker with Durable Object SQLite, neve
         revision: "development",
         status: "degraded",
         executor: { status: "unreachable" },
+        messaging: "unavailable",
         applicationRuntime: { revision: "development", status: "ready" },
         database: "ready",
         storage: "durable-object-sqlite",

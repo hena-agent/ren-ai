@@ -1,4 +1,4 @@
-import { Effect, Fiber, Layer } from "effect";
+import { Effect, Fiber, Layer, type Scope } from "effect";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   fakeGestures,
@@ -26,6 +26,23 @@ const captureFailures = () => {
   });
   return logs;
 };
+const editFixture = async () => {
+  const fake = fakeMessages();
+  const row = await Effect.runPromise(fake.text("private-handle", "private-text", 0));
+  const gateway = messageGateway(
+    fake.messages,
+    "imsg-secret",
+    fakeGestures().gestures,
+    fakeNotifications(),
+  );
+  return { fake, row, gateway, requests: Array.of<string>(), logs: captureFailures() };
+};
+const startWatch = () =>
+  runApplicationWatch("https://app", "secret", "https://imsg/rpc", "imsg-secret").pipe(
+    Effect.forkScoped,
+  );
+const runWatchTest = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
+  Effect.runPromise(Effect.scoped(effect.pipe(Effect.provide(watchServices))));
 
 const awaitRequests = (requests: readonly string[], expected: number) =>
   Effect.gen(function* () {
@@ -86,16 +103,7 @@ test("the Mac resumes from Cloudflare's bookmark and wakes only on new messages"
 });
 
 test("restored edit observations coalesce, retry failed hints, and expire without idle Worker polling", async () => {
-  const fake = fakeMessages();
-  const row = await Effect.runPromise(fake.text("private-handle", "private-text", 0));
-  const gateway = messageGateway(
-    fake.messages,
-    "imsg-secret",
-    fakeGestures().gestures,
-    fakeNotifications(),
-  );
-  const requests: string[] = [];
-  const logs = captureFailures();
+  const { fake, row, gateway, requests, logs } = await editFixture();
   let failed = true;
   vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const request = new Request(input, init);
@@ -185,6 +193,41 @@ test("an unavailable or malformed watch snapshot reconnects before resuming mess
           expect(logs.join("")).not.toMatch(/private-|secret/);
         }).pipe(Effect.provide(watchServices)),
       ),
+    );
+  } finally {
+    await gateway.dispose();
+  }
+});
+
+test("a healthy watch resets reconnect backoff before a later edit-probe failure", async () => {
+  const { fake, row, gateway, requests, logs } = await editFixture();
+  let failProbe = false;
+  const recent = fake.messages.recent.bind(fake.messages);
+  fake.messages.recent = (...args) =>
+    failProbe ? Effect.fail(new Error("private outage")) : recent(...args);
+  vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const request = new Request(input, init);
+    if (new URL(request.url).hostname === "imsg") return gateway.handler(request);
+    requests.push(request.method);
+    return requests.length <= 2
+      ? new Response(null, { status: 503 })
+      : Response.json({ rowID: row.id, watched: [row] });
+  });
+  try {
+    await runWatchTest(
+      Effect.gen(function* () {
+        yield* startWatch();
+        yield* awaitRequests(requests, 3);
+        failProbe = true;
+        yield* TestClock.adjust("10 seconds");
+        yield* Effect.promise(async () => {
+          await expect.poll(() => logs.length).toBe(3);
+        });
+        expect(logs[2]).toContain('"attempt":0');
+        yield* TestClock.adjust("2 seconds");
+        yield* awaitRequests(requests, 4);
+        expect(logs.join("")).not.toMatch(/private-|secret/);
+      }),
     );
   } finally {
     await gateway.dispose();
