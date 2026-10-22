@@ -72,7 +72,8 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
           const [scope] = yield* sql<{
             persona_id: string;
             conversation_key: string;
-          }>`SELECT persona_id, conversation_key FROM usage_session WHERE session_id = ${sessionID}`;
+          }>`SELECT persona_id, conversation_key FROM removal WHERE session_id = ${sessionID}
+            AND persona_id IS NOT NULL AND conversation_key IS NOT NULL`;
           yield* host.sessions
             .remove(Session.ID.make(sessionID))
             .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void));

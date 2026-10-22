@@ -280,6 +280,12 @@ export const migrate = Effect.gen(function* () {
         yield* sql`ALTER TABLE conversation ADD COLUMN replay_source_session_id TEXT`;
         yield* sql`CREATE INDEX send_conversation_guid ON send(conversation_id, guid)`;
       }),
+      "045_removal_scopes": Effect.gen(function* () {
+        for (const table of ["removal", "retained_session"]) {
+          yield* sql`ALTER TABLE ${sql(table)} ADD COLUMN persona_id TEXT`;
+          yield* sql`ALTER TABLE ${sql(table)} ADD COLUMN conversation_key TEXT`;
+        }
+      }),
     }),
   });
 });

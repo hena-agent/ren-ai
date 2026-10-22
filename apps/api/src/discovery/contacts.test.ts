@@ -180,7 +180,7 @@ test("eligibility excludes blocked, removed, resetting, admitted, pending and un
         yield* register(`${handle}@example.net`, [handle === "gone" ? "missing" : "jiwoo"]);
       yield* register("no-likes@example.net", []);
       yield* sql`INSERT INTO blocked VALUES ('blocked@example.net', 1)`;
-      yield* sql`INSERT INTO removal VALUES ('removed@example.net', 'old-session')`;
+      yield* sql`INSERT INTO removal (handle, session_id) VALUES ('removed@example.net', 'old-session')`;
       yield* sql`INSERT INTO reset (guid, handle, row_id, date, session_id) VALUES ('reset', 'reset@example.net', 1, 1, 'reset-session')`;
       yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, joined_at, persona_id) VALUES ('active@example.net', 'ko', 'v', 'ko', 1, 2, 'other')`;
       yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at) VALUES ('pending@example.net', 'ko', 'v', 'ko', 1)`;
