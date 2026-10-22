@@ -19,14 +19,17 @@ test("assignment migration preserves reservation IDs, pending sessions, active r
       yield* sql`CREATE TABLE discovery_contact(
       registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
       selection_id TEXT NOT NULL REFERENCES discovery_selection(request_id), persona_id TEXT NOT NULL UNIQUE,
-      scheduled_at INTEGER NOT NULL, state TEXT NOT NULL, session_id TEXT, started_at INTEGER, request_id TEXT NOT NULL)`;
+      scheduled_at INTEGER NOT NULL, state TEXT NOT NULL, session_id TEXT, started_at INTEGER, request_id TEXT NOT NULL,
+      last_checked INTEGER NOT NULL DEFAULT 0)`;
       yield* sql`CREATE INDEX contact_due ON discovery_contact(scheduled_at) WHERE state = 'scheduled'`;
+      yield* sql`CREATE INDEX contact_inspection ON discovery_contact(last_checked, scheduled_at, registration_id)
+        WHERE state IN ('scheduled','preparing','greeting','review')`;
       yield* sql`INSERT INTO user VALUES (11, 'active', 'luna'), (12, 'ended', NULL), (13, 'pending', 'jiwoo')`;
       yield* sql`INSERT INTO conversation VALUES (21, 11, 'luna', 'ses_active', NULL), (22, 12, 'luna', 'ses_ended', 20)`;
       yield* sql`INSERT INTO persona_assignment VALUES ('harin', 'uncertain')`;
       yield* sql`INSERT INTO discovery_registration VALUES ('registration')`;
       yield* sql`INSERT INTO discovery_selection VALUES ('selection')`;
-      yield* sql`INSERT INTO discovery_contact VALUES ('registration', 'selection', 'harin', 30, 'review', 'ses_prepared', NULL, 'request')`;
+      yield* sql`INSERT INTO discovery_contact VALUES ('registration', 'selection', 'harin', 30, 'review', 'ses_prepared', NULL, 'request', 25)`;
       const reservations = yield* sql`SELECT * FROM discovery_contact`;
       const conversations = yield* sql`SELECT * FROM conversation`;
       yield* sharedAssignmentsSchema.pipe(sql.withTransaction);
@@ -45,7 +48,7 @@ test("assignment migration preserves reservation IDs, pending sessions, active r
       expect(yield* claimPersona("luna", "ended")).toBe(false);
       expect(yield* claimPersona("luna", "newcomer")).toBe(true);
       yield* sql`INSERT INTO discovery_registration VALUES ('second')`;
-      yield* sql`INSERT INTO discovery_contact VALUES ('second', 'selection', 'harin', 40, 'scheduled', NULL, NULL, 'second-request')`;
+      yield* sql`INSERT INTO discovery_contact VALUES ('second', 'selection', 'harin', 40, 'scheduled', NULL, NULL, 'second-request', 0)`;
       expect(yield* sql`PRAGMA foreign_key_check`).toEqual([]);
       yield* sql`DELETE FROM discovery_registration WHERE id = 'registration'`;
       expect(yield* sql`SELECT registration_id FROM discovery_contact`).toEqual([
@@ -55,6 +58,10 @@ test("assignment migration preserves reservation IDs, pending sessions, active r
         detail: string;
       }>`EXPLAIN QUERY PLAN SELECT COUNT(*) FROM persona_assignment WHERE persona_id = 'luna'`;
       expect(plan.some((row) => row.detail.includes("assignment_persona"))).toBe(true);
+      const inspection = yield* sql<{ detail: string }>`EXPLAIN QUERY PLAN SELECT registration_id
+        FROM discovery_contact WHERE state IN ('scheduled','preparing','greeting','review')
+        ORDER BY last_checked, scheduled_at, registration_id LIMIT 10`;
+      expect(inspection.some((row) => row.detail.includes("contact_inspection"))).toBe(true);
     }),
   );
 });

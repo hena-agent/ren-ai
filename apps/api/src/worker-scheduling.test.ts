@@ -6,6 +6,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, expect, test, vi } from "vitest";
 import { ApiApplication } from "../worker/entry.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
+import { DeferredWork } from "./work-budget.ts";
 
 const state = vi.hoisted(() => ({ filename: "", fail: false, duringTick: async () => {} }));
 vi.mock("@ren-ai/plugin-session-folder/ground-rules", () => ({ default: "rules" }));
@@ -103,6 +104,17 @@ test("HTTP wakes survive actor replacement, concurrent hints survive an alarm, a
     expect(alarm).toBeLessThan(Date.now() + 1000);
     state.duringTick = async () => {};
     alarm = null;
+    await app.alarm();
+    expect(alarm).toBeGreaterThan(Date.now() + 290_000);
+    await wake();
+    state.duringTick = async () => {
+      throw new DeferredWork();
+    };
+    const yieldedAt = Date.now();
+    await app.alarm();
+    expect(alarm).toBeGreaterThanOrEqual(yieldedAt + 1_000);
+    expect(alarm).toBeLessThan(Date.now() + 2_000);
+    state.duringTick = async () => {};
     await app.alarm();
     expect(alarm).toBeGreaterThan(Date.now() + 290_000);
     await wake();

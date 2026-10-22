@@ -16,11 +16,12 @@ import {
   ReselectionRequest,
   discoveryNotice,
 } from "@ren-ai/onboarding";
-import { submissionLimit } from "./rate-limit.ts";
+import { submissionLimit, verificationLimit } from "./rate-limit.ts";
 import { verifyTurnstile } from "./turnstile.ts";
 import { reselect, reselectionAuthorization, withoutEndedPersonas } from "./reselection.ts";
 import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
 import { queueWaitlistNotification } from "./notifications.ts";
+import { publicCatalog } from "../personas/public-catalog.ts";
 
 const failure = Schema.Literals([
   "consent",
@@ -28,9 +29,9 @@ const failure = Schema.Literals([
   "personas",
   "unavailable",
   "try_later",
-  "storage",
   "reselection",
 ]).pipe(HttpApiSchema.status(400));
+const failures = [failure, Schema.Literal("storage").pipe(HttpApiSchema.status(503))];
 const namespace = "/discovery";
 const operationID = (parent: string | undefined) =>
   parent && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(parent) ? parent : randomUUID();
@@ -39,21 +40,21 @@ const discoveryApi = HttpApi.make(namespace).add(
     .add(
       HttpApiEndpoint.get("personas", `${namespace}/personas`, {
         success: Schema.Array(PublicPersona),
-        error: failure,
+        error: failures,
       }),
     )
     .add(
       HttpApiEndpoint.post("reselectionPersonas", `${namespace}/reselection/personas`, {
         payload: ReselectionRequest,
         success: Schema.Array(PublicPersona),
-        error: failure,
+        error: failures,
       }),
     )
     .add(
       HttpApiEndpoint.post("join", `${namespace}/waitlist`, {
         payload: DiscoveryRequest,
         success: DiscoveryAnswer,
-        error: failure,
+        error: failures,
       }),
     ),
 );
@@ -69,14 +70,38 @@ export const makeDiscoveryWeb = ({
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const clock = yield* Clock.Clock;
     const limit = yield* submissionLimit;
-    const profiles = (requestId: string) =>
+    const verification = yield* verificationLimit;
+    const cached = yield* publicCatalog(catalog, log);
+    const checkedLimit = (check: Effect.Effect<boolean, Error>, requestId: string, stage: string) =>
+      check.pipe(
+        Effect.tapError((cause) =>
+          Effect.sync(() =>
+            log({
+              requestId,
+              operation: "discovery.registration",
+              stage,
+              code: "storage",
+              level: "error",
+              outcome: "failed",
+              durationMs: 0,
+              ...contactCause(cause),
+            }),
+          ),
+        ),
+        Effect.mapError(() => "storage" as const),
+      );
+    const profiles = (requestId: string, fresh = false) =>
       Effect.gen(function* () {
         const started = performance.now();
-        return yield* Effect.tryPromise({
-          try: catalog,
-          catch: (cause) => new Error("Public Catalog unavailable", { cause }),
-        }).pipe(
+        const source = fresh
+          ? Effect.tryPromise({
+              try: catalog,
+              catch: (cause) => new Error("Public Catalog unavailable", { cause }),
+            })
+          : cached.read(requestId);
+        return yield* source.pipe(
           Effect.tapError((cause) =>
             Effect.sync(() =>
               log({
@@ -93,9 +118,10 @@ export const makeDiscoveryWeb = ({
           ),
           Effect.mapError(() => "storage" as const),
           Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.provideService(Clock.Clock, clock),
         );
       });
-    const join = (input: DiscoveryRequest, requestId: string) =>
+    const join = (input: DiscoveryRequest, requestId: string, ip: string | undefined) =>
       Effect.gen(function* () {
         const started = performance.now();
         if (
@@ -110,7 +136,15 @@ export const makeDiscoveryWeb = ({
           ))
         )
           return yield* Effect.fail("verification" as const);
-        const publicProfiles = yield* profiles(requestId);
+        if (
+          yield* checkedLimit(
+            limit(ip, yield* Clock.currentTimeMillis),
+            requestId,
+            "registration.limit",
+          )
+        )
+          return yield* Effect.fail("try_later" as const);
+        const publicProfiles = yield* profiles(requestId, true);
         const available = new Set(publicProfiles.map((persona) => persona.id));
         if (!input.likedPersonaIDs.every((id) => available.has(id)))
           return yield* Effect.fail("personas" as const);
@@ -176,22 +210,10 @@ export const makeDiscoveryWeb = ({
       const now = yield* Clock.currentTimeMillis;
       const requestId = operationID(request.headers["x-operation-id"]);
       if (
-        yield* limit(request.headers["cf-connecting-ip"], now).pipe(
-          Effect.tapError((cause) =>
-            Effect.sync(() =>
-              log({
-                requestId,
-                operation: "discovery.registration",
-                stage: "registration.limit",
-                code: "storage",
-                level: "error",
-                outcome: "failed",
-                durationMs: 0,
-                ...contactCause(cause),
-              }),
-            ),
-          ),
-          Effect.mapError(() => "storage" as const),
+        yield* checkedLimit(
+          limit(request.headers["cf-connecting-ip"], now),
+          requestId,
+          "registration.limit",
         )
       )
         return yield* Effect.fail("try_later" as const);
@@ -211,7 +233,7 @@ export const makeDiscoveryWeb = ({
             return yield* Effect.gen(function* () {
               const ending = yield* reselectionAuthorization(payload.reselectionToken);
               if (ending.consumedAt !== null) return yield* Effect.fail("reselection" as const);
-              return yield* withoutEndedPersonas(yield* profiles(requestId), ending.handle);
+              return yield* withoutEndedPersonas(yield* profiles(requestId, true), ending.handle);
             }).pipe(
               Effect.tapError((cause) =>
                 Effect.sync(
@@ -238,8 +260,18 @@ export const makeDiscoveryWeb = ({
         )
         .handle("join", ({ payload }) =>
           Effect.gen(function* () {
-            const requestId = yield* authorizeAttempt;
-            return yield* join(payload, requestId);
+            const request = yield* HttpServerRequest.HttpServerRequest;
+            const now = yield* Clock.currentTimeMillis;
+            const requestId = operationID(request.headers["x-operation-id"]);
+            if (
+              yield* checkedLimit(
+                verification(request.headers["cf-connecting-ip"], now),
+                requestId,
+                "verification.limit",
+              )
+            )
+              return yield* Effect.fail("try_later" as const);
+            return yield* join(payload, requestId, request.headers["cf-connecting-ip"]);
           }),
         ),
     );
@@ -263,8 +295,29 @@ export const makeDiscoveryWeb = ({
         headers.set("x-operation-id", requestId);
         args[0] = new Request(args[0], { headers });
         const response = await web.handler(...args);
-        response.headers.set("Cache-Control", "no-store");
         response.headers.set("X-Request-ID", requestId);
+        const cacheable =
+          args[0].method === "GET" &&
+          new URL(args[0].url).pathname === "/discovery/personas" &&
+          response.ok;
+        response.headers.set(
+          "Cache-Control",
+          cacheable ? "public, max-age=60, stale-while-revalidate=300" : "no-store",
+        );
+        if (cacheable) {
+          const [snapshot] = await Effect.runPromise(
+            sql<{ loaded_at: number }>`SELECT loaded_at FROM public_catalog WHERE id = 1`,
+          );
+          response.headers.set(
+            "Age",
+            String(
+              Math.max(
+                0,
+                Math.floor((clock.currentTimeMillisUnsafe() - snapshot!.loaded_at) / 1000),
+              ),
+            ),
+          );
+        }
         return response;
       },
     };

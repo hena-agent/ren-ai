@@ -235,8 +235,51 @@ export const migrate = Effect.gen(function* () {
           CHECK(starting_relationship IN ('dating', 'flirting', 'friends', 'strangers'))`;
         yield* sql`ALTER TABLE conversation ADD COLUMN registration_id TEXT REFERENCES discovery_registration(id) ON DELETE SET NULL`;
       }),
-      "039_shared_assignments": sharedAssignmentsSchema,
-      "040_replay_source": sql`ALTER TABLE conversation ADD COLUMN replay_source_session_id TEXT`,
+      "039_bounded_work": Effect.gen(function* () {
+        yield* sql`ALTER TABLE application_work ADD COLUMN resume INTEGER NOT NULL DEFAULT 0 CHECK(resume IN (0,1))`;
+        yield* sql`CREATE INDEX work_resume_due ON application_work(due, name) WHERE resume = 1`;
+        yield* sql`ALTER TABLE discovery_contact ADD COLUMN last_checked INTEGER NOT NULL DEFAULT 0`;
+        yield* sql`CREATE INDEX contact_inspection ON discovery_contact(last_checked, scheduled_at, registration_id)
+          WHERE state IN ('scheduled','preparing','greeting','review')`;
+        yield* sql`CREATE INDEX conversation_rebuild ON conversation(id, user_id) WHERE rebuilding = 1 AND ended_at IS NULL`;
+        yield* sql`CREATE INDEX ending_stop_due ON conversation_end(conversation_id) WHERE stopped_at IS NULL`;
+        yield* sql`CREATE INDEX ending_delivery_due ON conversation_end(last_checked, conversation_id)
+          WHERE (farewell_pending = 1 OR notice_pending = 1) AND consumed_at IS NULL`;
+        yield* sql`CREATE TABLE application_checkpoint (name TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
+        yield* sql`CREATE INDEX work_due ON application_work(due, name)`;
+        yield* sql`CREATE INDEX work_turn_due ON application_work(due) WHERE name GLOB 'turn:*'`;
+        yield* sql`CREATE INDEX work_fixed ON application_work(name, due) WHERE name NOT GLOB 'turn:*' AND name != 'retry'`;
+        yield* sql`CREATE TABLE catalog_plan(session_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, persona_id TEXT NOT NULL)`;
+        yield* sql`CREATE INDEX catalog_plan_scan ON catalog_plan(fingerprint, session_id)`;
+        yield* sql`CREATE TABLE intake_handle (handle TEXT PRIMARY KEY, head INTEGER, retry_at INTEGER NOT NULL)`;
+        yield* sql`INSERT INTO intake_handle SELECT handle, MIN(id), retry_at FROM intake_pending GROUP BY handle`;
+        yield* sql`CREATE INDEX intake_handle_due ON intake_handle(retry_at, head)`;
+        yield* sql`CREATE TRIGGER intake_handle_insert AFTER INSERT ON intake_pending BEGIN
+          INSERT INTO intake_handle(handle, head, retry_at) VALUES (NEW.handle, NEW.id, NEW.retry_at)
+          ON CONFLICT(handle) DO NOTHING; END`;
+        yield* sql`CREATE TRIGGER intake_handle_delete AFTER DELETE ON intake_pending BEGIN
+          UPDATE intake_handle SET head = (SELECT MIN(id) FROM intake_pending WHERE handle = OLD.handle)
+            WHERE handle = OLD.handle AND head = OLD.id;
+          UPDATE intake_handle SET retry_at = COALESCE((SELECT retry_at FROM intake_pending WHERE id = head), 0) WHERE handle = OLD.handle;
+          DELETE FROM intake_handle WHERE handle = OLD.handle AND head IS NULL; END`;
+        yield* sql`CREATE TRIGGER intake_handle_retry AFTER UPDATE OF retry_at ON intake_pending BEGIN
+          UPDATE intake_handle SET retry_at = NEW.retry_at WHERE handle = NEW.handle AND head = NEW.id; END`;
+      }),
+      "040_public_catalog": Effect.gen(function* () {
+        yield* sql`CREATE TABLE public_catalog (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT,
+          loaded_at INTEGER NOT NULL, retry_at INTEGER NOT NULL, generation INTEGER NOT NULL)`;
+        yield* sql`INSERT INTO public_catalog VALUES (1, NULL, 0, 0, 0)`;
+      }),
+      "041_verification_limit": Effect.gen(function* () {
+        yield* sql`CREATE TABLE discovery_verification (ip TEXT PRIMARY KEY, at INTEGER NOT NULL, attempts INTEGER NOT NULL)`;
+        yield* sql`CREATE INDEX verification_expiry ON discovery_verification(at)`;
+      }),
+      "042_operator_ending": sql`ALTER TABLE conversation_end ADD COLUMN initiator TEXT NOT NULL DEFAULT 'persona' CHECK(initiator IN ('persona', 'operator'))`,
+      "043_shared_assignments": sharedAssignmentsSchema,
+      "044_replay_source": Effect.gen(function* () {
+        yield* sql`ALTER TABLE conversation ADD COLUMN replay_source_session_id TEXT`;
+        yield* sql`CREATE INDEX send_conversation_guid ON send(conversation_id, guid)`;
+      }),
     }),
   });
 });

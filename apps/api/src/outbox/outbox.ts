@@ -243,8 +243,10 @@ export const outbox = (
           Effect.gen(function* () {
             const stopped = yield* before(conversation, "tapback", tapback, callID);
             if (stopped) return stopped;
-            const rows = yield* messages.after(0);
-            const latest = rows.filter((row) => row.handle === conversation.handle).at(-1);
+            const [latest] = yield* messages.recent(conversation.handle, 0, {
+              limit: 1,
+              reverse: true,
+            });
             if (!seenGUID || latest?.fromMe !== false || latest.tapback || latest.guid !== seenGUID)
               return notReacted("the latest message is not the one of his you saw");
             const attempted =

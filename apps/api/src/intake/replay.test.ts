@@ -6,6 +6,9 @@ import { intake } from "./intake.ts";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
+import { registration, runMessagingTest } from "../../test/messaging.test-helper.ts";
+import { TestClock } from "effect/testing";
+import { DeferredWork, withWorkBudget } from "../work-budget.ts";
 
 test("replay preserves send outcomes, first reply, follow-up order and removal fencing", async () => {
   await Effect.runPromise(
@@ -67,8 +70,8 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         const incoming = yield* intake(
           {
             ...fake.messages,
-            after: (id) =>
-              fake.messages.after(id).pipe(
+            recent: (...args) =>
+              fake.messages.recent(...args).pipe(
                 Effect.tap(() =>
                   Effect.sync(() => {
                     historyReads++;
@@ -134,5 +137,69 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         expect(historyReads).toBe(before);
       }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
     ),
+  );
+});
+
+test("bounded replay checkpoints resume after actor replacement without re-prompting completed rows", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      yield* migrate;
+      const directory = yield* conversations;
+      const source = yield* directory.create(registration("replay@example.com", "ses_source"));
+      yield* directory.replaceSession(source, "ses_replay");
+      const conversation = { ...source, sessionID: "ses_replay" };
+      const sql = yield* SqlClient.SqlClient;
+      const fake = fakeMessages();
+      const prompted: string[] = [];
+      const pages: number[] = [];
+      const open = intake(
+        {
+          ...fake.messages,
+          recent: (handle, since, query) => {
+            expect(query?.limit).toBe(100);
+            pages.push(query!.after!);
+            return fake.messages.recent(handle, since, query);
+          },
+        },
+        directory.byHandle,
+        (_session, id) =>
+          Effect.sync(() => {
+            prompted.push(id);
+          }),
+        () => "UTC",
+        undefined,
+        undefined,
+        undefined,
+        false,
+      );
+      let incoming = yield* open;
+      for (let i = 1; i <= 101; i++) {
+        const row = yield* fake.text(conversation.handle, `message-${i}`, i);
+        yield* sql`INSERT INTO intake_seen VALUES (${source.sessionID}, ${row.guid})`;
+      }
+      yield* sql`UPDATE conversation SET last_received_at = 101, first_received_at = 1`;
+      expect(yield* withWorkBudget(incoming.replay(conversation)).pipe(Effect.flip)).toBeInstanceOf(
+        DeferredWork,
+      );
+      expect(prompted).toHaveLength(40);
+      expect(JSON.stringify(yield* sql`SELECT payload FROM application_checkpoint`)).toContain(
+        '\\"cursor\\":40',
+      );
+      incoming = yield* open;
+      expect(yield* withWorkBudget(incoming.replay(conversation)).pipe(Effect.flip)).toBeInstanceOf(
+        DeferredWork,
+      );
+      expect(prompted).toHaveLength(80);
+      yield* withWorkBudget(incoming.replay(conversation));
+      expect(prompted).toHaveLength(101);
+      expect(new Set(prompted).size).toBe(101);
+      expect(pages).toEqual([0, 40, 80]);
+      yield* incoming.replay(conversation);
+      expect(prompted).toHaveLength(101);
+      expect(yield* sql`SELECT 1 FROM application_checkpoint`).toEqual([]);
+      expect(yield* sql`SELECT last_received_at, first_received_at FROM conversation`).toEqual([
+        { last_received_at: 101, first_received_at: 1 },
+      ]);
+    }).pipe(Effect.provide(TestClock.layer())),
   );
 });

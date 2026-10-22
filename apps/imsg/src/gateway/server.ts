@@ -22,7 +22,9 @@ export const messageGateway = (
       ),
     ...notificationHandlers(notifications),
     probe: () =>
-      messages.after(0, 1).pipe(Effect.andThen(gestures.probe()), Effect.mapError(String)),
+      messageRequest("messaging.probe", () =>
+        messages.after(0, 1).pipe(Effect.andThen(gestures.probe()), Effect.as({})),
+      ).pipe(Effect.asVoid),
     image: ({ reference }) => readAttachment(messages, reference).pipe(Effect.mapError(String)),
     sendText: ({ handle, text }) => messages.sendText(handle, text).pipe(Effect.mapError(String)),
     submitText: ({ handle, text, attemptID }) =>
@@ -60,8 +62,8 @@ export const messageGateway = (
         // Flush headers even when Messages is idle, so cancellation can close the request.
         Stream.prepend([null]),
       ),
-    recent: ({ handle, since }) =>
-      messages.recent(handle, since).pipe(
+    recent: ({ handle, since, ...query }) =>
+      messages.recent(handle, since, query).pipe(
         Effect.map((rows) => rows.map(transportRow)),
         Effect.mapError(String),
       ),

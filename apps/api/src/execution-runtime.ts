@@ -21,9 +21,11 @@ import { runtimeStatus, runtimeStatusRequest } from "./conversations/runtime-sta
 import { prepareMessaging } from "./application-tools.ts";
 import type { Persona } from "@ren-ai/personas";
 import { cachedCatalog } from "./personas/cached-catalog.ts";
-import { scheduleWork, safetyInterval } from "./scheduling.ts";
+import { scheduleWork } from "./scheduling.ts";
 import { usageCollector } from "./usage/collect.ts";
 import { waitlistNotifications } from "./discovery/notifications.ts";
+import { runWorkLanes, maintenanceWork, withWorkBudget, workBatchSize } from "./work-budget.ts";
+import { invalidatePublicCatalog } from "./personas/public-catalog.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -51,7 +53,9 @@ export async function createExecutionRuntime(
     remoteMessages({ url: execution.imsgRpcUrl, token: execution.managementToken }),
   );
   const notifications = await run(waitlistNotifications(messages));
-  const health = await run(createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher));
+  const health = await run(
+    createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher, messages.probe()),
+  );
   const catalog = catalogClient(
     { url: bindings.PERSONA_CATALOG_URL, token: bindings.TOKEN_CATALOG },
     fetcher,
@@ -149,54 +153,71 @@ export async function createExecutionRuntime(
             ),
           ),
       ),
-      tick: Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const now = yield* Clock.currentTimeMillis;
-        yield* host.heartbeat.intake;
-        yield* contacts.tick;
-        yield* host.heartbeat.followUps;
-        const [last] = yield* sql<{
-          at: number;
-        }>`SELECT at FROM application_clock WHERE name = 'recovery'`;
-        if (!last || last.at + safetyInterval <= now) {
-          yield* host.heartbeat.failedTurns;
-          yield* sql`INSERT INTO application_clock (name, at) VALUES ('recovery', ${now}) ON CONFLICT(name) DO UPDATE SET at = excluded.at`;
-        }
-        const due = yield* sql<{
-          sessionID: string;
-        }>`SELECT SUBSTR(name, 6) AS sessionID FROM application_work WHERE name LIKE 'turn:%' AND due <= ${now}
-            UNION SELECT session_id AS sessionID FROM failed_turn WHERE review = 0 AND retry_at <= ${now}`;
-        if (due.length) yield* host.heartbeat.checkTurns(due.map((row) => row.sessionID));
-        yield* host.heartbeat.rebuilds;
-        yield* usage.tick;
-        yield* Effect.all([host.heartbeat.stopped, host.heartbeat.endings], {
-          concurrency: "unbounded",
-        });
-        if (!last || last.at + safetyInterval <= now) yield* catalogSync.reconcile(groundRules);
-      }),
+      tick: runWorkLanes("execution.cursor", [
+        { name: "intake", run: host.heartbeat.intake },
+        { name: "contacts", run: contacts.tick },
+        { name: "followUps", run: host.heartbeat.followUps },
+        { name: "recovery", run: maintenanceWork("recovery", host.heartbeat.failedTurns) },
+        {
+          name: "turns",
+          run: Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const now = yield* Clock.currentTimeMillis;
+            const limit = yield* workBatchSize;
+            const due = yield* sql<{
+              name: string;
+              generation: number;
+            }>`SELECT name, generation FROM application_work
+            WHERE name LIKE 'turn:%' AND due <= ${now} ORDER BY due, name LIMIT ${limit}`;
+            const failed = yield* sql<{
+              sessionID: string;
+            }>`SELECT session_id AS sessionID FROM failed_turn
+            WHERE review = 0 AND retry_at <= ${now} ORDER BY retry_at, session_id LIMIT ${limit}`;
+            const ids = [
+              ...new Set([
+                ...due.map((row) => row.name.slice(5)),
+                ...failed.map((row) => row.sessionID),
+              ]),
+            ];
+            if (ids.length) yield* host.heartbeat.checkTurns(ids);
+            for (const row of due)
+              yield* sql`DELETE FROM application_work WHERE name = ${row.name} AND generation = ${row.generation}
+                AND NOT EXISTS (SELECT 1 FROM conversation c JOIN user u ON u.id = c.user_id WHERE c.session_id = SUBSTR(application_work.name, 6)
+                  AND c.ended_at IS NULL AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = u.handle))`;
+          }),
+        },
+        { name: "rebuilds", run: host.heartbeat.rebuilds },
+        { name: "usage", run: Effect.suspend(() => usage.tick) },
+        { name: "stopped", run: host.heartbeat.stopped },
+        { name: "endings", run: host.heartbeat.endings },
+        {
+          name: "catalog",
+          run: maintenanceWork("catalog.recovery", catalogSync.reconcile(groundRules)),
+        },
+      ]),
     };
   });
   let ready: Promise<Effect.Success<typeof boot>> | undefined;
   let initialized = false;
-  const open = () => {
+  const open = (correlation?: string) => {
     if (ready) return ready;
-    const started = performance.now();
-    const requestId = randomUUID();
-    ready = run(boot)
+    const requestId = correlation ?? randomUUID();
+    const attemptScope = Scope.forkUnsafe(scope);
+    ready = run(
+      withWorkBudget(boot, requestId).pipe(
+        Effect.provideService(Scope.Scope, attemptScope),
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit) ? Scope.close(attemptScope, exit) : Effect.void,
+        ),
+      ),
+    )
       .then((runtime) => {
         initialized = true;
         return runtime;
       })
       .catch((cause) => {
-        contactLog({
-          requestId,
-          operation: "api-app.execution",
-          stage: "execution.startup",
-          outcome: "failed",
-          durationMs: performance.now() - started,
-          level: "error",
-          ...contactCause(cause),
-        });
+        ready = undefined;
+        callback = undefined;
         throw cause;
       });
     return ready;
@@ -205,16 +226,24 @@ export async function createExecutionRuntime(
     get initialized() {
       return initialized;
     },
-    tick: async () => {
-      const results = await Promise.allSettled([
-        run(notifications.tick),
-        (async () => {
-          await run(health.tick);
-          const runtime = await open();
-          await run(runtime.tick);
-        })(),
-      ]);
-      for (const result of results) if (result.status === "rejected") throw result.reason;
+    tick: async (requestId: string = randomUUID()) => {
+      await run(health.tick);
+      await run(
+        withWorkBudget(
+          runWorkLanes("alarm.cursor", [
+            { name: "notifications", run: notifications.tick },
+            {
+              name: "execution",
+              run: Effect.tryPromise({
+                try: () => open(requestId),
+                catch: (cause) =>
+                  cause instanceof Error ? cause : new Error("Execution startup unavailable"),
+              }).pipe(Effect.flatMap((runtime) => runtime.tick)),
+            },
+          ]),
+          requestId,
+        ),
+      );
     },
     fetch: async (request: Request) => {
       const url = new URL(request.url);
@@ -223,8 +252,19 @@ export async function createExecutionRuntime(
           const response = await callback.handler(request);
           return new Response(await response.arrayBuffer(), response);
         }
-        // open observes startup failure once; this catch prevents an unhandled detached rejection.
-        void open().catch(() => {});
+        const started = performance.now();
+        const requestId = randomUUID();
+        void open(requestId).catch((cause) =>
+          contactLog({
+            requestId,
+            operation: "api-app.execution",
+            stage: "execution.startup",
+            outcome: "failed",
+            level: "error",
+            durationMs: performance.now() - started,
+            ...contactCause(cause),
+          }),
+        );
         return new Response("Execution is starting", { status: 503 });
       }
       if (
@@ -242,6 +282,7 @@ export async function createExecutionRuntime(
         const requestId = randomUUID();
         const fields = { requestId, operation: "catalog.refresh", stage: "catalog.sync" };
         try {
+          await run(invalidatePublicCatalog);
           await run((await open()).refreshCatalog);
           contactLog({
             ...fields,

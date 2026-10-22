@@ -64,6 +64,7 @@ const State = Schema.Struct({
   sends: Schema.Array(
     Schema.Struct({ state: Schema.String, tool_call_id: Schema.NullOr(Schema.String) }),
   ),
+  notifications: Schema.Array(Schema.Struct({ state: Schema.String })),
 });
 export const executionState = async (runtime: Miniflare, path = "/__fixture/state") => {
   const response = await runtime.dispatchFetch(`https://app${path}`);

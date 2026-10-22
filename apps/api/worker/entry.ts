@@ -6,6 +6,8 @@ import { contactCause, contactLog } from "../src/discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import type { DurableObjectId } from "@cloudflare/workers-types";
 import { applicationTransport } from "../src/application-transport.ts";
+import { DeferredWork, WorkLaneFailure } from "../src/work-budget.ts";
+import { expireSubmissionLimits } from "../src/discovery/rate-limit.ts";
 import {
   finishApplicationWork,
   nextApplicationWake,
@@ -65,8 +67,9 @@ export class ApiApplication extends DurableObject<Environment> {
       // Persist recovery before I/O so an eviction cannot lose pending work.
       await this.ctx.storage.setAlarm(started + safetyInterval);
       const application = await this.application();
+      await application.store.run(expireSubmissionLimits(Date.now()));
       work = await application.store.run(scheduledApplicationWork);
-      await application.tick();
+      await application.tick(requestId);
       await application.store.run(finishApplicationWork(work, false));
       await this.arm();
       contactLog({
@@ -82,14 +85,19 @@ export class ApiApplication extends DurableObject<Environment> {
         requestId,
         operation: "api-app.heartbeat",
         stage: "heartbeat",
-        outcome: "failed",
+        outcome: cause instanceof DeferredWork ? "completed" : "failed",
         durationMs: performance.now() - start,
-        level: "error",
+        level: cause instanceof DeferredWork ? "info" : "error",
         ...contactCause(cause),
       });
       try {
         const application = await this.application();
-        await application.store.run(finishApplicationWork(work, true));
+        await application.store.run(
+          finishApplicationWork(
+            work,
+            cause instanceof DeferredWork ? "deferred" : !(cause instanceof WorkLaneFailure),
+          ),
+        );
         await this.arm();
       } catch (recoveryCause) {
         contactLog({

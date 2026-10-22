@@ -9,6 +9,38 @@ import { migrate } from "../database.ts";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
 import { intake } from "../intake/intake.ts";
 import { outbox } from "../outbox/outbox.ts";
+import { runMessagingTest } from "../../test/messaging.test-helper.ts";
+import { withWorkBudget } from "../work-budget.ts";
+
+test("startup and replacement initialize quiet Conversations in bounded persisted batches", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      yield* migrate;
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i < 300)
+      INSERT INTO user(handle, locale, consent_version, consent_language, consent_at, joined_at, replied_at)
+      SELECT 'quiet-' || i, 'ko', 'v1', 'ko', 0, 0, 0 FROM n`;
+      yield* sql`INSERT INTO conversation(user_id, persona_id, session_id, started_at)
+      SELECT id, 'persona1', 'ses_' || id, 0 FROM user`;
+      const opening = withWorkBudget(
+        followUps(
+          () => Effect.succeed(false),
+          () => "Asia/Seoul",
+          () => Effect.die("no due prompt"),
+        ),
+      );
+      let follow = yield* opening;
+      expect(yield* sql`SELECT COUNT(*) AS n FROM follow_up`).toEqual([{ n: 5 }]);
+      yield* withWorkBudget(follow.tick);
+      expect(yield* sql`SELECT COUNT(*) AS n FROM follow_up`).toEqual([{ n: 10 }]);
+      follow = yield* opening;
+      yield* withWorkBudget(follow.tick);
+      expect(yield* sql`SELECT COUNT(*) AS n FROM follow_up`).toEqual([{ n: 20 }]);
+      const [before] = yield* sql<{ n: number }>`SELECT total_changes() AS n`;
+      expect(before!.n).toBeLessThan(1000);
+    }),
+  );
+});
 
 interface State {
   nextWakeAt: number | null;

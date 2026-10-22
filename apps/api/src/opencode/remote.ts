@@ -9,7 +9,7 @@ import type {
 import { Session } from "@opencode/schema";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Effect, Stream } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
+import { HttpClient, HttpClientError, HttpClientRequest } from "effect/unstable/http";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import type { Persona } from "@ren-ai/personas";
@@ -21,7 +21,7 @@ const recoveryID = (key: string) =>
 const remoteError = (error: Error & { readonly _tag: string }): Error | MissingSession =>
   error["_tag"] === "SessionNotFoundError"
     ? new MissingSession({ message: error.message })
-    : new Error(error.message);
+    : new Error(error.message, { cause: error });
 
 export interface RemoteConfig {
   readonly baseUrl: string;
@@ -35,11 +35,30 @@ export interface RemoteConfig {
 export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, Persona>) =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient;
-    const client = yield* OpenCode.make({ baseUrl: config.baseUrl }).pipe(
+    // The pinned SDK forwards decoder transforms to HttpApiClient. Streaming bodies
+    // are returned by the decoder, so this bounds finite bodies, not event lifetimes.
+    const options = {
+      baseUrl: config.baseUrl,
+      transformResponse: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        effect.pipe(Effect.timeout("30 seconds")),
+    };
+    const client = yield* OpenCode.make(options).pipe(
       Effect.provideService(
         HttpClient.HttpClient,
         http.pipe(
           HttpClient.mapRequest(HttpClientRequest.setHeader("authorization", config.authorization)),
+          HttpClient.transform((effect, request) =>
+            effect.pipe(
+              Effect.timeout("30 seconds"),
+              Effect.catchTag("TimeoutError", (cause) =>
+                Effect.fail(
+                  new HttpClientError.HttpClientError({
+                    reason: new HttpClientError.TransportError({ request, cause }),
+                  }),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

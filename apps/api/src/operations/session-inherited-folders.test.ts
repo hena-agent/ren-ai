@@ -59,6 +59,7 @@ test("native-created sessions and forks are archived with isolated copies of the
             .poll(
               async () =>
                 (await Effect.runPromise(remote.sessions.get(session.id))).location.directory,
+              { timeout: 5_000 },
             )
             .toBe(sessionDirectory(root, session.id));
         });

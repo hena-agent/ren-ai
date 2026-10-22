@@ -25,8 +25,8 @@ test("interrupted rebuild recovery keeps both scopes and the durable write fence
   let fail = false;
   const messages = {
     ...fake.messages,
-    after: (cursor: number) =>
-      fail ? Effect.fail(new Error("Replay unavailable")) : fake.messages.after(cursor),
+    recent: (...args: Parameters<typeof fake.messages.recent>) =>
+      fail ? Effect.fail(new Error("Replay unavailable")) : fake.messages.recent(...args),
   };
   try {
     await runMessagingTest(

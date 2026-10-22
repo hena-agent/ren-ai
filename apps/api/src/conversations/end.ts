@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { Clock, Effect, Result, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { messagingToolDefinitions } from "@ren-ai/plugin-application";
@@ -10,8 +10,7 @@ import { withLifecycle } from "./lifecycle.ts";
 import { contactCause, contactLog, type ContactLog } from "../discovery/diagnostics.ts";
 import { recoverEnding } from "./recover.ts";
 import type { ConversationRecovery } from "@ren-ai/onboarding";
-
-export const reselectionHash = (token: string) => createHash("sha256").update(token).digest("hex");
+import { recordEnding } from "./ending-record.ts";
 
 interface Ending extends Conversation {
   readonly callID: string;
@@ -23,17 +22,6 @@ interface Ending extends Conversation {
   readonly noticePending: number;
   readonly farewellUncertain: number;
 }
-
-const notice = (locale: string, token: string) => {
-  const link = `https://renai.im/#reselect=${token}`;
-  const text =
-    locale === "ko"
-      ? "[Ren AI] 이 페르소나와의 관계가 종료되었습니다. 아래 링크에서 다른 페르소나를 선택할 수 있어요. 기존 iMessage 주소로 신청해 주세요. 선택 후 첫 연락까지 기다림이 있을 수 있습니다."
-      : locale === "ja"
-        ? "[Ren AI] このペルソナとの関係は終了しました。以下のリンクから別のペルソナを選べます。同じiMessageアドレスでお申し込みください。最初の連絡までお待ちいただく場合があります。"
-        : "[Ren AI] This relationship has ended. You can choose another persona below using your existing iMessage address. There may be a wait before the first message.";
-  return `${text}\n${link}`;
-};
 
 /** Relationship endings are separate from service-wide blocking. Their private sessions remain intact. */
 export const conversationEndings = (
@@ -123,7 +111,8 @@ export const conversationEndings = (
           const requestId = randomUUID();
           const start = performance.now();
           yield* sql`UPDATE conversation_end SET last_checked = MAX(${yield* Clock.currentTimeMillis},
-            (SELECT MAX(last_checked) + 1 FROM conversation_end)) WHERE conversation_id = ${row.id}`;
+            (SELECT MAX(last_checked) + 1 FROM conversation_end
+              WHERE (farewell_pending = 1 OR notice_pending = 1) AND consumed_at IS NULL)) WHERE conversation_id = ${row.id}`;
           const result = yield* Effect.result(finish(row).pipe(Effect.timeout("3 seconds")));
           if (Result.isFailure(result))
             log({
@@ -170,18 +159,9 @@ export const conversationEndings = (
                 Effect.gen(function* () {
                   if (!(yield* directory.active(conversation)))
                     yield* Effect.fail(new Error("Conversation changed before ending"));
-                  const [user] = yield* sql<{
-                    locale: string;
-                  }>`SELECT locale FROM user WHERE handle = ${conversation.handle}`;
-                  const token = randomBytes(32).toString("hex");
-                  const now = yield* Clock.currentTimeMillis;
-                  yield* sql`INSERT INTO conversation_end (conversation_id, call_id, farewell, notice, token_hash)
-          VALUES (${conversation.id}, ${callID}, ${farewell}, ${notice(user!.locale, token)}, ${reselectionHash(token)})`;
-                  yield* sql`UPDATE conversation SET ended_at = ${now} WHERE id = ${conversation.id}`;
-                  yield* sql`DELETE FROM follow_up WHERE conversation_id = ${conversation.id}`;
-                  yield* sql`DELETE FROM failed_turn WHERE session_id = ${sessionID}`;
-                  yield* sql`DELETE FROM persona_assignment WHERE handle = ${conversation.handle}`;
-                  yield* sql`UPDATE user SET persona_id = NULL WHERE handle = ${conversation.handle}`;
+                  yield* recordEnding(conversation, farewell, callID, "persona").pipe(
+                    Effect.provideService(SqlClient.SqlClient, sql),
+                  );
                 }).pipe(sql.withTransaction),
               ),
             );

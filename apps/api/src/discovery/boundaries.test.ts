@@ -179,6 +179,36 @@ test("the public API allows the Discovery origin and rejects unrelated origins",
 const answering = (answer: () => Response) =>
   HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, answer())));
 
+test("failed human checks leave the five verified attempts available, while a separate gate bounds verification calls", async () => {
+  await run(
+    Effect.gen(function* () {
+      const { web, sql } = yield* setup();
+      let calls = 0;
+      const rejected = answering(() => {
+        calls++;
+        return Response.json({ success: false });
+      });
+      yield* Effect.tryPromise(async () => {
+        try {
+          for (let i = 0; i < 8; i++)
+            expect(await (await post(web, input, "shared-ip", rejected)).json()).toBe(
+              "verification",
+            );
+          for (let i = 0; i < 5; i++)
+            expect((await post(web, input, "shared-ip")).status).toBe(200);
+          expect(await (await post(web, input, "shared-ip")).json()).toBe("try_later");
+          for (let i = 0; i < 30; i++) await post(web, input, "abusive-ip", rejected);
+          expect(await (await post(web, input, "abusive-ip", rejected)).json()).toBe("try_later");
+          expect(calls).toBe(38);
+        } finally {
+          await web.dispose();
+        }
+      });
+      expect(yield* sql`SELECT COUNT(*) AS n FROM discovery_attempt`).toEqual([{ n: 5 }]);
+    }),
+  );
+});
+
 test("verification failures, missing secrets and outages never admit a registration", async () => {
   const rejecting = [
     () => Response.json({ success: false }),
@@ -263,9 +293,9 @@ test("catalog failures and partial database writes fail without a false waiting 
             new Request("http://localhost/discovery/personas"),
             Context.make(HttpClient.HttpClient, verified),
           );
-          expect(profiles.status).toBe(400);
+          expect(profiles.status).toBe(503);
           expect(await profiles.json()).toBe("storage");
-          expect((await post(web, input)).status).toBe(400);
+          expect((await post(web, input)).status).toBe(503);
         } finally {
           await web.dispose();
         }
@@ -278,7 +308,7 @@ test("catalog failures and partial database writes fail without a false waiting 
       yield* Effect.tryPromise(async () => {
         try {
           const response = await post(working, input);
-          expect(response.status).toBe(400);
+          expect(response.status).toBe(503);
           expect(await response.json()).toBe("storage");
         } finally {
           await working.dispose();
@@ -328,7 +358,7 @@ test("rate-limit persistence failure denies registration with a payload-free dia
       yield* Effect.promise(async () => {
         try {
           const response = await post(web, input);
-          expect(response.status).toBe(400);
+          expect(response.status).toBe(503);
           expect(await response.json()).toBe("storage");
           const logs = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
           expect(logs).toContain('"stage":"registration.limit"');

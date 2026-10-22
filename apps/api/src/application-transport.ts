@@ -24,19 +24,26 @@ const ApplicationHealth = Schema.Struct({
   storage: Schema.Literal("durable-object-sqlite"),
   bootstrapOnly: Schema.Boolean,
   executor: ExecutorHealth,
+  messaging: Schema.optionalKey(Schema.Literals(["ready", "unavailable"])),
 });
 
 async function workerHealth(response: Response) {
   try {
     const health = Schema.decodeUnknownSync(ApplicationHealth)(await response.json());
     const current = health.revision === buildRevision();
-    return healthResponse("api-app", health.status === "ready" && current ? "ready" : "degraded", {
-      database: health.database,
-      storage: health.storage,
-      bootstrapOnly: health.bootstrapOnly,
-      executor: health.executor,
-      applicationRuntime: { revision: health.revision, status: current ? "ready" : "outdated" },
-    });
+    const result = healthResponse(
+      "api-app",
+      health.status === "ready" && health.messaging === "ready" && current ? "ready" : "degraded",
+      {
+        database: health.database,
+        storage: health.storage,
+        bootstrapOnly: health.bootstrapOnly,
+        executor: health.executor,
+        messaging: health.messaging ?? "unavailable",
+        applicationRuntime: { revision: health.revision, status: current ? "ready" : "outdated" },
+      },
+    );
+    return result;
   } catch {
     return healthResponse("api-app", "degraded", { applicationRuntime: { status: "unavailable" } });
   }
@@ -47,9 +54,11 @@ export async function applicationTransport(request: Request, run: () => Promise<
   const start = performance.now();
   try {
     const response = await run();
-    return new URL(request.url).pathname === "/health" && request.method === "GET"
-      ? await workerHealth(response)
-      : response;
+    if (new URL(request.url).pathname !== "/health" || request.method !== "GET") return response;
+    const health = await workerHealth(response);
+    const requestId = response.headers.get("x-request-id");
+    if (requestId) health.headers.set("x-request-id", requestId);
+    return health;
   } catch (cause) {
     const requestId = randomUUID();
     contactLog({

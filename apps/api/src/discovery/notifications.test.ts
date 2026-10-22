@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { expect, test } from "vitest";
 import { withContactDatabase } from "./contact.test-helper.ts";
 import { notificationFixture } from "./notifications.test-helper.ts";
+import { exhaustedAlarm } from "../../test/work-budget.test-helper.ts";
 
 const submitAndRestart = (f: Effect.Success<typeof notificationFixture>) =>
   Effect.gen(function* () {
@@ -25,6 +26,8 @@ test("joining queues one Notification in the consent language without starting a
         expect(yield* f.snapshot).toMatchObject({
           entries: [{ notification: "queued", eligible: false, reason: "imessage_unverified" }],
         });
+        yield* exhaustedAlarm(f.tick);
+        expect(f.notify).not.toHaveBeenCalled();
         yield* f.tick;
         yield* f.tick;
         expect(f.notify).toHaveBeenCalledExactlyOnceWith(
@@ -191,7 +194,7 @@ test("an atomic registration failure cannot leave a Notification or Likes behind
         const f = yield* notificationFixture;
         expect((yield* f.join({ privacyNoticeVersion: "discovery-2026-10-17" })).status).toBe(400);
         yield* f.sql`CREATE TRIGGER fail_notification_insert BEFORE INSERT ON discovery_notification BEGIN SELECT RAISE(ABORT, 'storage unavailable'); END`;
-        expect((yield* f.join()).status).toBe(400);
+        expect((yield* f.join()).status).toBe(503);
         for (const rows of [
           yield* f.sql`SELECT * FROM discovery_registration`,
           yield* f.sql`SELECT * FROM discovery_like`,

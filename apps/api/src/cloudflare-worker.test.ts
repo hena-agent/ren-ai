@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
-import { discoveryNotice } from "@ren-ai/onboarding";
+import { ConversationDetail, discoveryNotice } from "@ren-ai/onboarding";
+import { Schema } from "effect";
 import { expect, test } from "vitest";
 import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
 import { readStateSnapshot } from "./state-snapshot.ts";
@@ -213,7 +214,7 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
 test("compiled SQLite DO imports linked private state atomically and recognizes a repeated archive", async () => {
   const persistence = await mkdtemp(join(tmpdir(), "api-app-state-transfer-"));
   try {
-    const runtime = await openWorker(persistence, true);
+    let runtime = await openWorker(persistence, true);
     const headers = {
       Authorization: "Bearer management-secret",
       "Content-Type": "application/json",
@@ -241,6 +242,7 @@ test("compiled SQLite DO imports linked private state atomically and recognizes 
       rebuilding: 0,
       last_received_at: 4,
       reset_guid: null,
+      usage_key: "a".repeat(32),
     };
     const snapshot = {
       ...empty,
@@ -274,6 +276,24 @@ test("compiled SQLite DO imports linked private state atomically and recognizes 
       "ses_preserved",
     );
     expect((await send(runtime, "/management/state/export")).status).toBe(401);
+    const path = "/management/conversations/9/end";
+    const input = { id: 9, key: "a".repeat(32), requestId: "00000000-0000-4000-8000-000000000029" };
+    const ending = { method: "POST", headers, body: JSON.stringify(input) };
+    expect((await send(runtime, path, ending)).status).toBe(503);
+    await stopRuntimes();
+    runtime = await openWorker(persistence, false);
+    expect((await send(runtime, path, { ...ending, headers: {} })).status).toBe(401);
+    expect((await send(runtime, path, ending)).status).toBe(202);
+    expect((await send(runtime, path, ending)).status).toBe(202);
+    await stopRuntimes();
+    runtime = await openWorker(persistence, false);
+    const detail = Schema.decodeUnknownSync(ConversationDetail)(
+      await (await send(runtime, "/management/conversations/9", { headers })).json(),
+    );
+    expect(detail.entry.endedBy).toBe("operator");
+    expect(detail.entry.endedAt).not.toBeNull();
+    expect(detail.entry.sessionID).toBe("ses_preserved");
+    expect(detail.entry.farewell).toBe("cancelled");
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });

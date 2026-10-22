@@ -74,6 +74,17 @@ test("retains the SQL context for effects, routes registry requests and closes s
     }),
   );
   expect(records.status).toBe(200);
+  expect(
+    (
+      await store.handler(
+        new Request("https://api.test/management/conversations/1/end", {
+          method: "POST",
+          headers: { Authorization: "Bearer test-token" },
+          body: "{}",
+        }),
+      )
+    ).status,
+  ).toBe(400);
   expect(await records.json()).toEqual({ entries: [], nextBefore: null });
   expect(
     (await store.handler(new Request("https://api.test/management/conversations"))).status,

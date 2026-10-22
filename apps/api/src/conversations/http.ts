@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { Schema } from "effect";
-import { ConversationQuery, ConversationRecovery } from "@ren-ai/onboarding";
+import { Effect, Result, Schema } from "effect";
+import { ConversationEnding, ConversationQuery, ConversationRecovery } from "@ren-ai/onboarding";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import type { conversationStatus } from "./status.ts";
-import type { Effect } from "effect";
+import type { SqlClient } from "effect/unstable/sql";
+import { operatorEnding } from "./operator-ending.ts";
+import { RecoveryConflict } from "./recover.ts";
 import type { usageQueries } from "../usage/query.ts";
 
 /** Shared diagnostic boundary for DB-only and executor-backed operator actions. */
@@ -101,3 +103,35 @@ export const conversationRecords = (
         : Response.json({ error: "not_found" }, { status: 404 });
     });
 };
+
+export const requestOperatorEnding = (
+  request: Request,
+  run: <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => Promise<A>,
+) =>
+  conversationRequest(request, async (requestId) => {
+    const match = /^\/management\/conversations\/(\d+)\/end$/.exec(new URL(request.url).pathname);
+    if (!match) return new Response(null, { status: 405 });
+    let input: typeof ConversationEnding.Type;
+    try {
+      input = Schema.decodeUnknownSync(ConversationEnding)(await request.json());
+      if (input.id !== Number(match[1]))
+        return Response.json({ error: "invalid_ending" }, { status: 400 });
+    } catch {
+      return Response.json({ error: "invalid_ending" }, { status: 400 });
+    }
+    const result = await run(operatorEnding(input).pipe(Effect.result));
+    if (Result.isFailure(result)) {
+      if (!(result.failure instanceof RecoveryConflict)) throw result.failure;
+      contactLog({
+        requestId,
+        operation: "conversation.end",
+        stage: "ending.commit",
+        outcome: "failed",
+        level: "warn",
+        durationMs: 0,
+        ...contactCause(result.failure),
+      });
+      return Response.json({ error: "ending_conflict" }, { status: 409 });
+    }
+    return Response.json({ queued: true }, { status: 202 });
+  });

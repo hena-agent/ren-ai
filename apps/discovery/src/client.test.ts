@@ -51,7 +51,7 @@ test("a later profile read requests api-app again and includes newly published p
   expect(await discoveryClient.profiles(signal)).toEqual([profile]);
   expect(await discoveryClient.profiles(signal)).toEqual([profile, added]);
   expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(fetcher).toHaveBeenLastCalledWith("/discovery/personas", { signal, cache: "no-store" });
+  expect(fetcher).toHaveBeenLastCalledWith("/discovery/personas", { signal });
 });
 
 test.each(["", "invalid", "a".repeat(64)])(
@@ -98,7 +98,7 @@ test("the browser client reads the catalog and validates the real registration a
       imageUrl: "https://example.net/nari.jpg",
     },
   ]);
-  expect(fetcher).toHaveBeenCalledWith("/discovery/personas", { signal, cache: "no-store" });
+  expect(fetcher).toHaveBeenCalledWith("/discovery/personas", { signal });
   const request = {
     handle: "+821012345678",
     locale: "ko",

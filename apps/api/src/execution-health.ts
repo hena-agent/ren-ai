@@ -1,7 +1,7 @@
 import { Clock, Effect, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { CloudflareConfiguration } from "./cloudflare-config.ts";
-import { contactCause, contactLog } from "./discovery/diagnostics.ts";
+import { contactCause, contactLog, contactOperationId } from "./discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import { parseHealth } from "@ren-ai/transport/health";
 
@@ -11,16 +11,18 @@ const Facts = Schema.Struct({
 });
 
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow health and notification failures into payload-free diagnostics
-const diagnose = (cause: unknown, stage: string) => {
+const diagnose = (cause: unknown, stage: string, durationMs: number) => {
   const root = cause instanceof Error && cause.cause instanceof Error ? cause.cause : cause;
+  const operationId = contactOperationId(cause);
   contactLog({
     requestId: randomUUID(),
     operation: "api-app.health",
     stage,
     outcome: "failed",
-    durationMs: 0,
+    durationMs,
     level: "error",
     ...contactCause(root),
+    ...(operationId && { operationId }),
     ...(root instanceof Error &&
       "status" in root &&
       typeof root.status === "number" && { status: root.status }),
@@ -28,24 +30,37 @@ const diagnose = (cause: unknown, stage: string) => {
 };
 
 const notify = (text: string, webhook: string | undefined, fetcher: typeof fetch) =>
-  Effect.tryPromise(async () => {
-    if (!webhook) return;
-    const response = await fetcher(webhook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: text }),
-    });
-    if (!response.ok)
-      throw Object.assign(new Error("Alert delivery failed"), {
-        status: response.status,
-        code: "ALERT_HTTP",
+  Effect.gen(function* () {
+    const started = yield* Clock.currentTimeMillis;
+    yield* Effect.tryPromise(async (signal) => {
+      if (!webhook) return;
+      const response = await fetcher(webhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text }),
+        signal,
       });
-  }).pipe(Effect.catch((cause) => Effect.sync(() => diagnose(cause, "alert.delivery"))));
+      await response.body?.cancel();
+      if (!response.ok)
+        throw Object.assign(new Error("Alert delivery failed"), {
+          status: response.status,
+          code: "ALERT_HTTP",
+        });
+    }).pipe(
+      Effect.timeout("10 seconds"),
+      Effect.catch((cause) =>
+        Effect.map(Clock.currentTimeMillis, (now) =>
+          diagnose(cause, "alert.delivery", now - started),
+        ),
+      ),
+    );
+  });
 
 export const createExecutionHealth = (
   configuration: CloudflareConfiguration["execution"],
   webhook: string | undefined,
   fetcher: typeof fetch,
+  messagingProbe: Effect.Effect<void, Error>,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -63,17 +78,17 @@ export const createExecutionHealth = (
           yield* sql`DELETE FROM application_alert WHERE name = ${name} RETURNING name`;
         if (changed.length) yield* notify(`Cleared: ${name}`, webhook, fetcher);
       }).pipe(Effect.orDie);
-    const tick = Effect.gen(function* () {
+    const executorTick = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const [last] = yield* sql<{
         at: number;
       }>`SELECT at FROM application_clock WHERE name = 'health'`;
       if (last && now < last.at + 300_000) return;
       yield* sql`INSERT INTO application_clock (name, at) VALUES ('health', ${now}) ON CONFLICT(name) DO UPDATE SET at = excluded.at`;
-      const check = Effect.tryPromise(async () => {
+      const check = Effect.tryPromise(async (signal) => {
         const response = await fetcher(new URL("/health", configuration.apiMsgUrl), {
           headers: { Authorization: `Bearer ${configuration.managementToken}` },
-          signal: AbortSignal.timeout(10_000),
+          signal,
           redirect: "manual",
         });
         if (response.status !== 200 && response.status !== 503)
@@ -94,6 +109,7 @@ export const createExecutionHealth = (
           });
         }
       }).pipe(
+        Effect.timeout("10 seconds"),
         Effect.flatMap((facts) =>
           Effect.all([
             facts.diskNearlyFull ? raise("disk-nearly-full") : clear("disk-nearly-full"),
@@ -106,12 +122,50 @@ export const createExecutionHealth = (
           ]),
         ),
         Effect.catch((cause) =>
-          Effect.sync(() => diagnose(cause, "executor.health")).pipe(
-            Effect.andThen(raise("executor-unavailable")),
-          ),
+          Effect.map(Clock.currentTimeMillis, (checked) =>
+            diagnose(cause, "executor.health", checked - now),
+          ).pipe(Effect.andThen(raise("executor-unavailable"))),
         ),
       );
       yield* check;
+    });
+    const messagingTick = Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      const claimed =
+        yield* sql`INSERT INTO application_clock(name, at) VALUES ('messaging-health', ${now + 120_000})
+        ON CONFLICT(name) DO UPDATE SET at = excluded.at WHERE at <= ${now} RETURNING at`;
+      if (!claimed.length) return;
+      const scheduleProbe = (
+        due: number,
+      ) => sql`INSERT INTO application_work(name, due) VALUES ('messaging-health', ${due})
+        ON CONFLICT(name) DO UPDATE SET due = excluded.due, generation = generation + 1`;
+      yield* scheduleProbe(now + 120_000);
+      const failed = yield* messagingProbe.pipe(
+        Effect.timeout("5 seconds"),
+        Effect.as(false),
+        Effect.catch((cause) =>
+          Effect.gen(function* () {
+            diagnose(cause, "messaging.probe", (yield* Clock.currentTimeMillis) - now);
+            return true;
+          }),
+        ),
+      );
+      if (!failed) {
+        yield* sql`DELETE FROM application_clock WHERE name = 'messaging.failures'`;
+        yield* clear("messaging-unavailable");
+        return;
+      }
+      const [count] = yield* sql<{
+        at: number;
+      }>`INSERT INTO application_clock(name, at) VALUES ('messaging.failures', 1)
+        ON CONFLICT(name) DO UPDATE SET at = MIN(2, at + 1) RETURNING at`;
+      yield* sql`UPDATE application_clock SET at = ${now + 20_000} WHERE name = 'messaging-health'`;
+      yield* scheduleProbe(now + 20_000);
+      if (count!.at >= 2) yield* raise("messaging-unavailable");
+    });
+    const tick = Effect.all([executorTick, messagingTick], {
+      concurrency: "unbounded",
+      discard: true,
     });
     return { raise, clear, tick };
   });

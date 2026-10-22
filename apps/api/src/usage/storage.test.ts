@@ -19,6 +19,26 @@ const sessionInfo = (id: string) =>
     cost: 0,
   });
 
+test("a usage snapshot returning after removal does not recreate session accounting", () =>
+  runMessagingTest(
+    Effect.gen(function* () {
+      yield* migrate;
+      const sql = yield* SqlClient.SqlClient;
+      const directory = yield* conversations;
+      yield* directory.create(registration("removed-usage@example.test", "ses_removed_usage"));
+      const collector = yield* usageCollector({
+        messages: () => Effect.succeed({ data: [], cursor: {} }),
+        get: () =>
+          sql`DELETE FROM usage_session WHERE session_id = 'ses_removed_usage'`.pipe(
+            Effect.as(sessionInfo("ses_removed_usage")),
+          ),
+      });
+      yield* collector.session("ses_removed_usage");
+      expect(yield* sql`SELECT 1 FROM usage_entry`).toEqual([]);
+      expect(yield* sql`SELECT 1 FROM usage_turn`).toEqual([]);
+    }),
+  ));
+
 test("unchanged usage survives collector replacement without snapshot writes; new turns leave unchanged rows untouched", () =>
   runMessagingTest(
     Effect.gen(function* () {

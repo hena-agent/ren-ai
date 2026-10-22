@@ -248,16 +248,8 @@ test("rebuilding and an operator change racing an ending cannot produce a false 
           ),
         ).toBe(true);
         yield* f.sql`UPDATE conversation SET rebuilding = 0`;
-        const locked = yield* Deferred.make<void>();
-        const release = yield* Deferred.make<void>();
         const checked = yield* Deferred.make<void>();
-        const holder = yield* Effect.forkScoped(
-          f.app.sends.exclusive(
-            f.conversation,
-            Deferred.succeed(locked, undefined).pipe(Effect.andThen(Deferred.await(release))),
-          ),
-        );
-        yield* Deferred.await(locked);
+        const { holder, release } = yield* f.holdSends;
         const ending = yield* conversationEndings(
           {
             ...f.app.directory,
@@ -277,7 +269,7 @@ test("rebuilding and an operator change racing an ending cannot produce a false 
         );
         yield* Deferred.await(checked);
         yield* f.sql`UPDATE conversation SET rebuilding = 1`;
-        yield* Deferred.succeed(release, undefined);
+        yield* release;
         yield* Fiber.join(holder);
         expect(Result.isFailure(yield* Fiber.join(pending))).toBe(true);
         expect(yield* f.sql`SELECT 1 FROM conversation_end`).toEqual([]);

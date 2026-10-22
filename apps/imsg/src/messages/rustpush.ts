@@ -73,7 +73,8 @@ const historyQueries = (history: ReturnType<typeof openHistory>) => ({
       return last && { delivered: last.state === "delivered", readAt: last.readAt };
     }),
   after: (rowID: number, limit?: number) => query(() => history.after(rowID, limit)),
-  recent: (handle: string, since: number) => query(() => history.recent(handle, since)),
+  recent: (handle: string, since: number, options?: Parameters<Messages["recent"]>[2]) =>
+    query(() => history.recent(handle, since, options)),
   status: (guid: string) => query(() => history.status(guid)),
   sendStatus: (guid: string) =>
     query(() => {
@@ -200,9 +201,13 @@ export const makeRustpushMessages = (options: RustpushOptions, alerts: Alerts) =
           const signal = yield* Queue.sliding<void>(1);
           let cursor = rowID;
           const drain = Effect.gen(function* () {
-            for (const row of yield* query(() => history.after(cursor))) {
-              yield* receive(row);
-              cursor = row.id;
+            for (;;) {
+              const rows = yield* query(() => history.after(cursor, 100));
+              for (const row of rows) {
+                yield* receive(row);
+                cursor = row.id;
+              }
+              if (rows.length < 100) break;
             }
           });
           followers.add(signal);

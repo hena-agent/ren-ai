@@ -1,5 +1,6 @@
 import { Clock, Effect } from "effect";
 import type { IncomingMessage, Messages } from "./messages.ts";
+import { selectRecent } from "./messages.ts";
 import type { OutgoingStatus } from "../gateway/protocol.ts";
 import { imageData } from "./images.ts";
 
@@ -53,8 +54,8 @@ export const fakeMessages = (events: string[] = []) => {
       }),
     after: (rowID, limit) =>
       Effect.sync(() => rows.filter((row) => row.id > rowID).slice(0, limit)),
-    recent: (handle, since) =>
-      Effect.sync(() => rows.filter((row) => row.handle === handle && row.createdAt >= since)),
+    recent: (handle, since, query = {}) =>
+      Effect.sync(() => selectRecent(rows, handle, since, query)),
     sendStatus: (guid) => Effect.sync(() => sendStatuses.get(guid) ?? "unknown"),
     follow: (rowID, receive) =>
       Effect.gen(function* () {

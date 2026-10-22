@@ -1,10 +1,11 @@
 import { Effect, Schema, Scope, Stream } from "effect";
 import { rpcClient } from "@ren-ai/transport/client";
 import { messagingApi, tapback as tapbackSchema } from "./protocol.ts";
-import type { IncomingMessage } from "../messages/messages.ts";
+import type { IncomingMessage, Messages } from "../messages/messages.ts";
+import { selectRecent } from "../messages/messages.ts";
 
 const failure = (error: string | Error): Error & { requestId?: string } => {
-  const result = new Error(String(error));
+  const result = new Error(String(error), { cause: error });
   const requestId = /request ([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/.exec(
     result.message,
   )?.[1];
@@ -15,37 +16,39 @@ const unavailable = (operation: string) =>
   Effect.catchDefect((cause) => Effect.fail(new Error(`${operation} RPC unavailable`, { cause })));
 const notificationFailure = unavailable("Notification");
 const sendFailure = unavailable("Identified send");
+const request = <A, E extends string | Error, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(Effect.timeout("30 seconds"), Effect.mapError(failure));
 
 export const remoteMessages = (config: { readonly url: string; readonly token: string }) =>
   Effect.gen(function* () {
     const lifetime = yield* Scope.Scope;
     const client = yield* rpcClient(messagingApi, config);
-    const probe = () => client.probe().pipe(Effect.mapError(failure));
+    const probe = () => request(client.probe());
     return {
       probe,
       availability: (handle: string) =>
-        client.availability({ handle }).pipe(unavailable("Availability"), Effect.mapError(failure)),
+        request(client.availability({ handle }).pipe(unavailable("Availability"))),
       notify: (handle: string, text: string) =>
-        client.notify({ handle, text }).pipe(notificationFailure, Effect.mapError(failure)),
+        request(client.notify({ handle, text }).pipe(notificationFailure)),
       notificationStatus: (guid: string) =>
-        client.notificationStatus({ guid }).pipe(notificationFailure, Effect.mapError(failure)),
+        request(client.notificationStatus({ guid }).pipe(notificationFailure)),
       image: (attachment: NonNullable<IncomingMessage["attachments"]>[number]) =>
-        client.image({ reference: attachment.path }).pipe(Effect.mapError(failure)),
+        request(client.image({ reference: attachment.path })),
       sendText: (handle: string, text: string, attemptID?: string) =>
-        (attemptID === undefined
-          ? client.sendText({ handle, text })
-          : client.submitText({ handle, text, attemptID }).pipe(sendFailure)
-        ).pipe(Effect.mapError(failure)),
+        request(
+          attemptID === undefined
+            ? client.sendText({ handle, text })
+            : client.submitText({ handle, text, attemptID }).pipe(sendFailure),
+        ),
       resolveSend: (attemptID: string) =>
-        client.resolveSend({ attemptID }).pipe(
-          sendFailure,
-          Effect.map((result) => result.state),
-          Effect.mapError(failure),
+        request(
+          client.resolveSend({ attemptID }).pipe(
+            sendFailure,
+            Effect.map((result) => result.state),
+          ),
         ),
       after: (rowID: number, limit?: number) =>
-        client
-          .after({ rowID, ...(limit === undefined ? {} : { limit }) })
-          .pipe(Effect.mapError(failure)),
+        request(client.after({ rowID, ...(limit === undefined ? {} : { limit }) })),
       follow: (rowID: number, receive: (row: IncomingMessage) => Effect.Effect<void, Error>) => {
         let date: number | null = null;
         return Effect.map(
@@ -74,23 +77,24 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
           (fiber) => () => fiber.interruptUnsafe(),
         );
       },
-      recent: (handle: string, since: number) =>
-        client.recent({ handle, since }).pipe(Effect.mapError(failure)),
-      status: (guid: string) => client.status({ guid }).pipe(Effect.mapError(failure)),
-      sendStatus: (guid: string) => client.sendStatus({ guid }).pipe(Effect.mapError(failure)),
-      textStatus: (handle: string, since: number) =>
-        client.textStatus({ handle, since }).pipe(Effect.mapError(failure)),
-      lastOutgoingStatus: (handle: string) =>
-        client.lastOutgoingStatus({ handle }).pipe(Effect.mapError(failure)),
+      recent: (handle: string, since: number, query: Parameters<Messages["recent"]>[2] = {}) =>
+        request(client.recent({ handle, since, ...query })).pipe(
+          Effect.map((rows) => selectRecent(rows, handle, since, query)),
+        ),
+      status: (guid: string) => request(client.status({ guid })),
+      sendStatus: (guid: string) => request(client.sendStatus({ guid })),
+      textStatus: (handle: string, since: number) => request(client.textStatus({ handle, since })),
+      lastOutgoingStatus: (handle: string) => request(client.lastOutgoingStatus({ handle })),
       gestures: {
         probe,
         typing: (handle: string, text: string, durationMillis: number) =>
-          client.typing({ handle, text, durationMillis }).pipe(Effect.mapError(failure)),
-        read: (handle: string) => client.read({ handle }).pipe(Effect.mapError(failure)),
+          request(client.typing({ handle, text, durationMillis })),
+        read: (handle: string) => request(client.read({ handle })),
         react: (handle: string, tapback: string) =>
-          Schema.decodeUnknownEffect(tapbackSchema)(tapback).pipe(
-            Effect.flatMap((value) => client.react({ handle, tapback: value })),
-            Effect.mapError(failure),
+          request(
+            Schema.decodeUnknownEffect(tapbackSchema)(tapback).pipe(
+              Effect.flatMap((value) => client.react({ handle, tapback: value })),
+            ),
           ),
       },
     };

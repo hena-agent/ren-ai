@@ -5,6 +5,7 @@ import { Model } from "@opencode/schema/model";
 import type { MessageListInput, MessageListOutput } from "@opencode/client/effect/api";
 import { DateTime, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { exhaustedAlarm } from "../../test/work-budget.test-helper.ts";
 import { expect, test, vi } from "vitest";
 import { runMessagingTest, registration } from "../../test/messaging.test-helper.ts";
 import { migrate } from "../database.ts";
@@ -70,6 +71,7 @@ test("all steps in an idle-delimited turn, including steered input, are durable 
       );
       const collector = yield* usageCollector({ messages, get: () => Effect.succeed(session) });
       yield* collector.session("not-bound");
+      yield* exhaustedAlarm(collector.tick);
       expect(messages).not.toHaveBeenCalled();
       yield* collector.tick;
       const query = yield* usageQueries;

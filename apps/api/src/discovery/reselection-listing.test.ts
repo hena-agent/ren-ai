@@ -151,7 +151,7 @@ test("private listing authorizes body tokens, is uncacheable and rate limited, a
         catalogOffline = true;
         const before = logs.length;
         const offline = yield* listing(token);
-        expect(offline.status).toBe(400);
+        expect(offline.status).toBe(503);
         expect(offline.headers.get("X-Request-ID")).toBe(requestId);
         expect(yield* Effect.promise(() => offline.json())).toBe("storage");
         expect(logs.slice(before)).toHaveLength(1);
@@ -184,7 +184,7 @@ test("private listing authorizes body tokens, is uncacheable and rate limited, a
         yield* r.sql`DROP TABLE persona_exclusion`;
         yield* r.sql`UPDATE conversation_end SET consumed_at = NULL`;
         const unavailable = yield* listing(token);
-        expect(unavailable.status).toBe(400);
+        expect(unavailable.status).toBe(503);
         expect(yield* Effect.promise(() => unavailable.json())).toBe("storage");
         expect(logs.at(-1)).toMatchObject({
           stage: "catalog.authorize",

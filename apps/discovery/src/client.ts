@@ -20,7 +20,7 @@ export class ReselectionError extends Error {}
 export const discoveryClient: DiscoveryClient = {
   profiles: async (signal, reselectionToken) => {
     const response = await (reselectionToken === undefined
-      ? fetch(path("/discovery/personas"), { signal, cache: "no-store" })
+      ? fetch(path("/discovery/personas"), { signal })
       : fetch(path("/discovery/reselection/personas"), {
           method: "POST",
           headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },

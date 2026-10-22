@@ -6,6 +6,7 @@ import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import { saveUsage } from "./save.ts";
 import { safetyInterval } from "../scheduling.ts";
+import { claimWork, workBatchSize } from "../work-budget.ts";
 
 export const usageCollector = (api: {
   readonly messages: (input: MessageListInput) => Effect.Effect<MessageListOutput, Error>;
@@ -37,7 +38,10 @@ export const usageCollector = (api: {
           } while (cursor);
           const session = yield* api.get(Session.ID.make(sessionID));
           const now = yield* Clock.currentTimeMillis;
-          yield* saveUsage(sql, session, messages, now).pipe(sql.withTransaction);
+          yield* Effect.gen(function* () {
+            const live = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
+            if (live.length) yield* saveUsage(sql, session, messages, now);
+          }).pipe(sql.withTransaction);
         });
         yield* work.pipe(
           Effect.timeout("30 seconds"),
@@ -67,6 +71,7 @@ export const usageCollector = (api: {
       tick: lock.withPermit(
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
+          const limit = Math.min(20, yield* workBatchSize);
           const rows = yield* sql<{
             sessionID: string;
             current: number | null;
@@ -76,11 +81,12 @@ export const usageCollector = (api: {
             LEFT JOIN conversation c ON c.session_id = s.session_id AND c.usage_key = s.conversation_key
             LEFT JOIN conversation_end e ON e.conversation_id = c.id
             WHERE s.next_check_at <= ${now}
-            ORDER BY s.next_check_at, s.session_id LIMIT 20`;
+             ORDER BY s.next_check_at, s.session_id LIMIT ${limit}`;
           yield* Effect.forEach(
             rows,
             (row) =>
               Effect.gen(function* () {
+                if (!(yield* claimWork)) return;
                 if (
                   row.current === null ||
                   (row.stoppedAt !== null && row.syncedAt !== null && row.syncedAt >= row.stoppedAt)

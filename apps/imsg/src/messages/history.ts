@@ -3,7 +3,7 @@ import { chmodSync, closeSync, openSync } from "node:fs";
 import { Schema } from "effect";
 import type { BridgeMessage } from "./bridge-protocol.ts";
 import { messageDetail } from "../gateway/protocol.ts";
-import type { IncomingMessage } from "./messages.ts";
+import type { IncomingMessage, Messages } from "./messages.ts";
 
 /** Messages' code for a recipient without iMessage, kept so statuses mean what they did. */
 export const noIMessage = 22;
@@ -195,8 +195,23 @@ export const openHistory = (path: string, serviceHandle: string) => {
     },
     after: (rowID: number, limit = -1) =>
       all(`SELECT * FROM message WHERE id > ? ORDER BY id LIMIT ?`, rowID, limit),
-    recent: (handle: string, since: number) =>
-      all(`SELECT * FROM message WHERE handle = ? AND created_at >= ? ORDER BY id`, handle, since),
+    recent: (handle: string, since: number, query: Parameters<Messages["recent"]>[2] = {}) => {
+      const predicates = ["handle = ?", "created_at >= ?"];
+      const values: Array<string | number> = [handle, since];
+      if (query.guid !== undefined) {
+        predicates.push("guid = ?");
+        values.push(query.guid);
+      }
+      if (query.after !== undefined) {
+        predicates.push("id > ?");
+        values.push(query.after);
+      }
+      values.push(query.limit ?? -1);
+      return all(
+        `SELECT * FROM message WHERE ${predicates.join(" AND ")} ORDER BY id ${query.reverse ? "DESC" : "ASC"} LIMIT ?`,
+        ...values,
+      );
+    },
     status: (guid: string) => {
       const row = one(`SELECT * FROM message WHERE guid = ? AND from_me = 1`, guid);
       return {

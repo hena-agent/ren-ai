@@ -1,19 +1,30 @@
 import type { OpenCode } from "@opencode/client/effect";
 import { Session } from "@opencode/schema";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { decodePersona, type PersonaRecord } from "@ren-ai/personas";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { managedFolder, personaDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { withLifecycle } from "../conversations/lifecycle.ts";
-import { managedSessions } from "./managed-sessions.ts";
 import { awaitPersonaAgent } from "./agent-readiness.ts";
 import { randomUUID } from "node:crypto";
 import { contactLog } from "../discovery/diagnostics.ts";
 import { cachedCatalog } from "../personas/cached-catalog.ts";
+import { createHash } from "node:crypto";
+import { claimWork, DeferredWork, workBatchSize } from "../work-budget.ts";
 
 type Client = Effect.Success<ReturnType<typeof OpenCode.make>>;
+const SyncProgress = Schema.fromJsonString(
+  Schema.Struct({
+    key: Schema.String,
+    phase: Schema.Literals(["bound", "native", "apply"]),
+    bound: Schema.Number,
+    offset: Schema.Number,
+    applied: Schema.String,
+    cursor: Schema.optionalKey(Schema.String.pipe(Schema.brand("SessionsCursor"))),
+  }),
+);
 
 const resolvePersona = Effect.fn("resolvePersona")(function* (
   client: Client,
@@ -93,44 +104,149 @@ const synchronize = Effect.fn("synchronize")(function* (
 ) {
   const sql = yield* SqlClient.SqlClient;
   const requestId = randomUUID();
-  const active = yield* sql<{
-    session_id: string;
-    persona_id: string;
-  }>`SELECT session_id, persona_id FROM conversation`;
-  const updates = new Map<string, { folderID: string; persona: PersonaRecord }>();
-  for (const row of active) {
-    const session = yield* client.session
-      .get({ sessionID: Session.ID.make(row.session_id) })
-      .pipe(Effect.catchTag("SessionNotFoundError", () => Effect.succeed(undefined)));
-    if (!session) continue;
-    if (session.location.directory !== personaDirectory(root, row.persona_id))
-      return yield* Effect.fail(
-        new Error("Migrate existing sessions to folders before starting intake"),
-      );
-    const missing = !personas.has(row.persona_id);
-    const persona = yield* resolvePersona(client, root, row.session_id, row.persona_id, personas);
-    if (!missing) updates.set(persona.id, { folderID: row.session_id, persona });
-  }
+  const [catalog] = yield* sql<{
+    revision: string;
+  }>`SELECT revision FROM runtime_catalog WHERE id = 1`;
+  const key = createHash("sha256")
+    .update(JSON.stringify([root, groundRules, catalog?.revision ?? [...personas]]))
+    .digest("hex");
+  const prefix = `${key}:`;
+  const [saved] = yield* sql<{
+    payload: string;
+  }>`SELECT payload FROM application_checkpoint WHERE name = 'catalog.sync'`;
+  const restored = saved && Schema.decodeUnknownSync(SyncProgress)(saved.payload);
+  let progress: typeof SyncProgress.Type =
+    restored && restored.key === key
+      ? restored
+      : { key, phase: "bound", bound: 0, offset: 0, applied: "" };
+  const save =
+    () => sql`INSERT INTO application_checkpoint (name, payload) VALUES ('catalog.sync', ${Schema.encodeSync(SyncProgress)(progress)})
+    ON CONFLICT(name) DO UPDATE SET payload = excluded.payload`;
+  const check = Effect.gen(function* () {
+    if (yield* claimWork) return undefined;
+    yield* save();
+    return yield* Effect.fail(new DeferredWork());
+  });
+  const resolve = (id: string, personaID: string) =>
+    Effect.gen(function* () {
+      const missing = !personas.has(personaID);
+      const persona = yield* resolvePersona(client, root, id, personaID, personas);
+      if (missing && catalog)
+        yield* sql`UPDATE runtime_catalog SET payload = ${JSON.stringify([...personas.values()])} WHERE id = 1 AND revision = ${catalog.revision}`;
+      if (!missing)
+        // One indexed plan per shared root, including across checkpoint resumption.
+        yield* sql`INSERT INTO catalog_plan(session_id, fingerprint, persona_id)
+      SELECT ${id}, ${prefix + persona.id}, ${persona.id}
+      WHERE NOT EXISTS (SELECT 1 FROM catalog_plan WHERE fingerprint = ${prefix + persona.id})
+      ON CONFLICT(session_id) DO UPDATE SET fingerprint = excluded.fingerprint, persona_id = excluded.persona_id
+      WHERE fingerprint != excluded.fingerprint OR persona_id != excluded.persona_id`;
+    });
+  const limit = yield* workBatchSize;
+  const scanBound = Effect.gen(function* () {
+    while (progress.phase === "bound") {
+      yield* check;
+      const active = yield* sql<{
+        id: number;
+        session_id: string;
+        persona_id: string;
+      }>`SELECT id, session_id, persona_id FROM conversation
+      WHERE id > ${progress.bound} ORDER BY id LIMIT ${limit}`;
+      for (const row of active) {
+        yield* check;
+        const session = yield* client.session
+          .get({ sessionID: Session.ID.make(row.session_id) })
+          .pipe(Effect.catchTag("SessionNotFoundError", () => Effect.succeed(undefined)));
+        if (session) {
+          if (session.location.directory !== personaDirectory(root, row.persona_id))
+            return yield* Effect.fail(
+              new Error("Migrate existing sessions to folders before starting intake"),
+            );
+          yield* resolve(row.session_id, row.persona_id);
+        }
+        progress = { ...progress, bound: row.id };
+      }
+      if (active.length < limit) progress = { ...progress, phase: "native" };
+      yield* save();
+    }
+    return undefined;
+  });
+  yield* scanBound;
   const folders = client.rpc(sessionFolders);
   const location = { location: { directory: root } };
-  for (let session of yield* managedSessions(client, root)) {
-    const source = managedFolder(root, session.location.directory);
-    if (!source) continue;
-    yield* folders.ensure({ folderID: session.id }, location);
-    session = yield* client.session.get({ sessionID: session.id });
-    if (!session.agent)
-      return yield* Effect.fail(new Error(`Managed session ${session.id} has no catalog persona`));
-    if (
-      session.location.directory !== personaDirectory(root, session.agent) ||
-      updates.has(session.agent)
-    )
-      continue;
-    const missing = !personas.has(session.agent);
-    const persona = yield* resolvePersona(client, root, session.id, session.agent, personas);
-    if (!missing) updates.set(persona.id, { folderID: session.id, persona });
-  }
-  for (const { folderID, persona } of updates.values())
-    yield* applyPersona(client, root, folderID, persona, groundRules, requestId);
+  const scanNative = Effect.gen(function* () {
+    if (progress.phase !== "native") return undefined;
+    for (;;) {
+      yield* check;
+      const page = yield* client.session.list({
+        limit,
+        cursor: progress.cursor,
+      });
+      for (let index = progress.offset; index < page.data.length; index++) {
+        yield* check;
+        let session = page.data[index]!;
+        const source = managedFolder(root, session.location.directory);
+        if (source) {
+          yield* folders.ensure({ folderID: session.id }, location);
+          session = yield* client.session.get({ sessionID: session.id });
+          const personaID = session.agent;
+          if (!personaID)
+            return yield* Effect.fail(
+              new Error(`Managed session ${session.id} has no catalog persona`),
+            );
+          if (session.location.directory === personaDirectory(root, personaID))
+            yield* resolve(session.id, personaID);
+        }
+        progress = { ...progress, offset: index + 1 };
+      }
+      if (!page.cursor.next) {
+        progress = { ...progress, phase: "apply" };
+        yield* save();
+        break;
+      }
+      if (page.cursor.next === progress.cursor)
+        return yield* Effect.fail(new Error("OpenCode session pagination did not advance"));
+      progress = { ...progress, cursor: page.cursor.next, offset: 0 };
+      yield* save();
+    }
+    return undefined;
+  });
+  yield* scanNative;
+  const apply = Effect.gen(function* () {
+    for (;;) {
+      yield* check;
+      const plans = yield* sql<{
+        session_id: string;
+        persona_id: string;
+        fingerprint: string;
+      }>`SELECT session_id, persona_id, fingerprint FROM catalog_plan
+        WHERE fingerprint >= ${prefix} AND fingerprint < ${`${key};`}
+        AND fingerprint > ${progress.applied} ORDER BY fingerprint LIMIT ${limit}`;
+      if (!plans.length) break;
+      for (const plan of plans) {
+        yield* check;
+        const exists = yield* client.session
+          .get({ sessionID: Session.ID.make(plan.session_id) })
+          .pipe(
+            Effect.as(true),
+            Effect.catchTag("SessionNotFoundError", () => Effect.succeed(false)),
+          );
+        if (!exists) yield* sql`DELETE FROM catalog_plan WHERE session_id = ${plan.session_id}`;
+        else
+          yield* applyPersona(
+            client,
+            root,
+            plan.session_id,
+            personas.get(plan.persona_id)!,
+            groundRules,
+            requestId,
+          );
+        progress = { ...progress, applied: plan.fingerprint };
+      }
+      yield* save();
+    }
+  });
+  yield* apply;
+  yield* sql`DELETE FROM application_checkpoint WHERE name = 'catalog.sync'`;
   return undefined;
 });
 

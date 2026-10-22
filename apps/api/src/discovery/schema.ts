@@ -19,11 +19,14 @@ export const sharedAssignmentsSchema = Effect.gen(function* () {
     selection_id TEXT NOT NULL REFERENCES discovery_selection(request_id), persona_id TEXT NOT NULL,
     scheduled_at INTEGER NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('scheduled','preparing','greeting','active','failed','review','blocked','unreachable')),
-    session_id TEXT, started_at INTEGER, request_id TEXT NOT NULL
+    session_id TEXT, started_at INTEGER, request_id TEXT NOT NULL,
+    last_checked INTEGER NOT NULL DEFAULT 0
   )`;
   yield* sql`INSERT INTO discovery_contact SELECT * FROM old_discovery_contact`;
   yield* sql`DROP TABLE old_discovery_contact`;
   yield* sql`CREATE INDEX contact_due ON discovery_contact(scheduled_at) WHERE state = 'scheduled'`;
+  yield* sql`CREATE INDEX contact_inspection ON discovery_contact(last_checked, scheduled_at, registration_id)
+    WHERE state IN ('scheduled','preparing','greeting','review')`;
   // No user FK: a relationship ending remains permanent through removal and test resets.
   yield* sql`CREATE TABLE persona_exclusion (handle TEXT NOT NULL, persona_id TEXT NOT NULL,
     PRIMARY KEY(handle, persona_id))`;

@@ -81,8 +81,10 @@ You are Persona1.
             },
             {
               ...imessage.messages,
-              after: (id) =>
-                reacted ? Effect.fail(new Error("imsg unavailable")) : imessage.messages.after(id),
+              recent: (handle, minutes, options) =>
+                reacted
+                  ? Effect.fail(new Error("imsg unavailable"))
+                  : imessage.messages.recent(handle, minutes, options),
             },
             {
               ...ui.gestures,

@@ -7,6 +7,13 @@ test("initialization and transport failure retain correlation and safe cause wit
   });
   const ok = new Response("ready");
   expect(await applicationTransport(request, async () => ok)).toBe(ok);
+  const methodDenied = new Response(null, { status: 405 });
+  expect(
+    await applicationTransport(
+      new Request("https://app.example/health", { method: "POST" }),
+      async () => methodDenied,
+    ),
+  ).toBe(methodDenied);
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   try {
     const response = await applicationTransport(request, () =>
@@ -65,6 +72,7 @@ test("health reports the edge artifact revision separately from a Durable Object
     storage: "durable-object-sqlite",
     bootstrapOnly: false,
     executor: { service: "api-msg", revision: "a".repeat(40), status: "ready" },
+    messaging: "unavailable",
     applicationRuntime: { revision: "a".repeat(40), status: "outdated" },
   });
 });
@@ -87,6 +95,7 @@ test.each([
             storage: "durable-object-sqlite",
             bootstrapOnly: false,
             executor: { service: "api-msg", status: "ready" },
+            messaging: "ready",
           },
           { status: expectedStatus },
         ),
@@ -101,10 +110,15 @@ test.each([
 );
 
 test("a malformed Durable Object health response stays degraded without echoing its payload", async () => {
+  const requestId = crypto.randomUUID();
   const response = await applicationTransport(new Request("https://app.example/health"), async () =>
-    Response.json({ service: "private-marker", revision: "sensitive-marker", status: "ready" }),
+    Response.json(
+      { service: "private-marker", revision: "sensitive-marker", status: "ready" },
+      { headers: { "x-request-id": requestId } },
+    ),
   );
   expect(response.status).toBe(503);
+  expect(response.headers.get("x-request-id")).toBe(requestId);
   expect(await response.json()).toEqual({
     service: "api-app",
     revision: "development",

@@ -80,7 +80,8 @@ export const prepareMessaging = (
           }>`SELECT guid FROM intake_seen WHERE session_id = ${sessionID} ORDER BY rowid DESC LIMIT 1`;
           const guid = seen[0]?.guid;
           const observed = guid && messageIDs.includes(promptID(sessionID, guid)) ? guid : null;
-          yield* sql`INSERT INTO context_seen (session_id, guid) VALUES (${sessionID}, ${observed})
+          yield* sql`INSERT INTO context_seen (session_id, guid) SELECT ${sessionID}, ${observed}
+            WHERE EXISTS (SELECT 1 FROM conversation WHERE session_id = ${sessionID} AND ended_at IS NULL)
             ON CONFLICT(session_id) DO UPDATE SET guid = excluded.guid WHERE guid IS NOT excluded.guid`;
           const conversation = yield* directory.bySession(sessionID);
           if (conversation) yield* sends.observe(conversation);

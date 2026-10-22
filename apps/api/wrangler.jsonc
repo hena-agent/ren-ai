@@ -15,7 +15,7 @@
     "API_MSG_URL": "https://api-msg.renai.im",
     "PERSONA_MODEL": "opencode-go/deepseek-v4.1-flash",
     "OPENCODE_DIRECTORY": "/srv/ren-ai",
-    "BOOTSTRAP_ONLY": "false",
+    "BOOTSTRAP_ONLY": "true",
   },
   "durable_objects": {
     "bindings": [{ "name": "APPLICATION", "class_name": "ApiApplication" }],
