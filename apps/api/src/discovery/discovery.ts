@@ -131,8 +131,8 @@ export const makeDiscoveryWeb = ({
           const id = randomUUID();
           const created = yield* Clock.currentTimeMillis;
           const inserted =
-            yield* sql`INSERT OR IGNORE INTO discovery_registration (id, handle, locale, consent_version, created_at)
-        VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${created}) RETURNING id`;
+            yield* sql`INSERT OR IGNORE INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship)
+        VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${created}, ${input.startingRelationship ?? "dating"}) RETURNING id`;
           if (inserted.length) {
             yield* sql`INSERT INTO discovery_profile (registration_id, name, age, gender)
               VALUES (${id}, ${input.name ?? null}, ${input.age ?? null}, ${input.gender ?? null})`;

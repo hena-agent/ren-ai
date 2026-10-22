@@ -9,9 +9,9 @@ import { readPublicPeople } from "./public-routing.ts";
 import { previewFixture } from "../test/preview.ts";
 
 const animePreview =
-  "https://renai.im/personas/jia/og/anime/00000000-0000-0000-0000-000000000001.v1.jpg";
+  "https://renai.im/personas/jia/og/anime/00000000-0000-0000-0000-000000000001.v2.jpg";
 const photoPreview =
-  "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v1.jpg";
+  "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v2.jpg";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -56,7 +56,7 @@ test("server diagnostics preserve safe causes and write structured JSON to the m
 async function fixture() {
   const template = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const photo = await readFile(new URL("../public/landing/dohee-anime.webp", import.meta.url));
-  const mark = await readFile(new URL("../public/og-watermark-v1.png", import.meta.url));
+  const mark = await readFile(new URL("../public/og-watermark-v2.png", import.meta.url));
   const preview = previewFixture(photo);
   const fetcher = vi
     .fn<typeof fetch>()
@@ -64,7 +64,7 @@ async function fixture() {
   const assets = vi
     .fn<(request: Request) => Promise<Response>>()
     .mockImplementation(async (request) =>
-      new URL(request.url).pathname === "/og-watermark-v1.png"
+      new URL(request.url).pathname === "/og-watermark-v2.png"
         ? new Response(mark)
         : new Response(template),
     );
@@ -107,7 +107,7 @@ test("a direct profile request includes readable public HTML, canonical SEO, sty
   expect(html).toContain(publicPersonas[0]!.portraits!.photo);
   expect(html).toContain('<link rel="canonical" href="https://renai.im/personas/jia"');
   expect(html).toContain(
-    '<meta property="og:url" content="https://renai.im/personas/jia?style=photo&amp;preview=v1"',
+    '<meta property="og:url" content="https://renai.im/personas/jia?style=photo&amp;preview=v2"',
   );
   expect(html).toContain(`<meta property="og:image" content="${photoPreview}"`);
   expect(html).toContain('name="twitter:card" content="summary_large_image"');
@@ -277,7 +277,7 @@ test("health reports artifact identity and Catalog readiness independently of st
     dependencies: { catalog: { status: "degraded" } },
   });
   expect(f.assets).toHaveBeenCalledWith(
-    expect.objectContaining({ url: "https://renai.im/og-watermark-v1.png" }),
+    expect.objectContaining({ url: "https://renai.im/og-watermark-v2.png" }),
   );
 });
 
@@ -361,7 +361,7 @@ test("advertised rendition routes return JPEGs and reject withdrawn or stale gal
   f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
   expect((await f.send(new URL(animePreview).pathname)).status).toBe(404);
   expect(
-    (await f.send(new URL(animePreview).pathname.replace(/[^/]+$/, "unknown.v1.jpg"))).status,
+    (await f.send(new URL(animePreview).pathname.replace(/[^/]+$/, "unknown.v2.jpg"))).status,
   ).toBe(404);
   expect(f.cache.match).toHaveBeenCalledTimes(2);
   expect(f.PORTRAITS.get).toHaveBeenCalledOnce();

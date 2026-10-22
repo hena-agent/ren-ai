@@ -227,7 +227,14 @@ export const migrate = Effect.gen(function* () {
           CHECK(imessage_status IN ('available', 'unavailable', 'failed'))`;
         yield* sql`ALTER TABLE discovery_registration ADD COLUMN imessage_checked_at INTEGER`;
       }),
-      "038_bounded_work": Effect.gen(function* () {
+      "038_starting_relationship": Effect.gen(function* () {
+        yield* sql`ALTER TABLE discovery_registration ADD COLUMN starting_relationship TEXT
+          CHECK(starting_relationship IN ('dating', 'flirting', 'friends', 'strangers'))`;
+        yield* sql`ALTER TABLE conversation ADD COLUMN starting_relationship TEXT
+          CHECK(starting_relationship IN ('dating', 'flirting', 'friends', 'strangers'))`;
+        yield* sql`ALTER TABLE conversation ADD COLUMN registration_id TEXT REFERENCES discovery_registration(id) ON DELETE SET NULL`;
+      }),
+      "039_bounded_work": Effect.gen(function* () {
         yield* sql`ALTER TABLE application_work ADD COLUMN resume INTEGER NOT NULL DEFAULT 0 CHECK(resume IN (0,1))`;
         yield* sql`CREATE INDEX work_resume_due ON application_work(due, name) WHERE resume = 1`;
         yield* sql`ALTER TABLE discovery_contact ADD COLUMN last_checked INTEGER NOT NULL DEFAULT 0`;
@@ -257,7 +264,7 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE TRIGGER intake_handle_retry AFTER UPDATE OF retry_at ON intake_pending BEGIN
           UPDATE intake_handle SET retry_at = NEW.retry_at WHERE handle = NEW.handle AND head = NEW.id; END`;
       }),
-      "039_public_catalog": Effect.gen(function* () {
+      "040_public_catalog": Effect.gen(function* () {
         yield* sql`CREATE TABLE public_catalog (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT,
           loaded_at INTEGER NOT NULL, retry_at INTEGER NOT NULL, generation INTEGER NOT NULL)`;
         yield* sql`INSERT INTO public_catalog VALUES (1, NULL, 0, 0, 0)`;

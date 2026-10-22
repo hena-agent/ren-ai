@@ -121,7 +121,13 @@ test("a delivered private reselection link admits another persona for the same U
         );
         yield* f.sql`DROP TRIGGER fail_reselection`;
         for (let attempt = 0; attempt < 2; attempt++) {
-          const response = yield* submit({ reselectionToken: token });
+          const response = yield* submit({
+            reselectionToken: token,
+            startingRelationship: "friends",
+            name: "새 이름",
+            age: 29,
+            gender: "female",
+          });
           expect(response.status).toBe(200);
           expect(yield* Effect.promise(() => response.json())).toEqual({ status: "waiting" });
         }
@@ -181,6 +187,14 @@ test("a delivered private reselection link admits another persona for the same U
           yield* f.sql`SELECT first_received_at FROM conversation WHERE id = ${previous.id}`,
         ).toEqual([{ first_received_at: 20 }]);
         expect(prompts).toHaveLength(1);
+        expect(prompts[0]).toContain('starting-relationship=\\"friends\\"');
+        expect(prompts[0]).toContain('user-name=\\"새 이름\\"');
+        expect(yield* app.tools.context(next.sessionID, [])).toMatchObject({
+          startingRelationship: "friends",
+        });
+        expect(yield* app.tools.context(previous.sessionID, [])).not.toHaveProperty(
+          "startingRelationship",
+        );
         expect(prompts[0]).not.toMatch(/ses_old|여기서 끝낼게요/);
         expect(yield* app.tools.send(next.sessionID, "안녕하세요, 하린이에요.", "greet-new")).toBe(
           "sent",
@@ -252,6 +266,9 @@ test("a valid latest ending link permits reselection before the service can conf
         );
         expect(response.status).toBe(200);
         expect(yield* Effect.promise(() => response.json())).toEqual({ status: "waiting" });
+        expect(
+          yield* f.sql`SELECT starting_relationship FROM discovery_registration WHERE archived_at IS NULL`,
+        ).toEqual([{ starting_relationship: "dating" }]);
         yield* f.ending.tick;
         expect(f.fake.bubbles).toEqual([]);
       }),

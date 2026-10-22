@@ -11,6 +11,7 @@ import { firstContacts } from "./first-contact.ts";
 import type { ContactDiagnostic } from "./diagnostics.ts";
 import { contactFixture, withContactDatabase } from "./contact.test-helper.ts";
 import { exhaustedAlarm } from "../../test/work-budget.test-helper.ts";
+import { StartingRelationship } from "@ren-ai/onboarding";
 
 const setup = Effect.gen(function* () {
   const fixture = yield* contactFixture;
@@ -108,6 +109,33 @@ test("a persisted reservation starts only when due and records web consent witho
     }),
   );
 });
+
+test.each(StartingRelationship.literals)(
+  "%s survives reservation, first Greeting and worker replacement",
+  async (mode) => {
+    await withContactDatabase(
+      Effect.gen(function* () {
+        const f = yield* setup;
+        yield* f.sql`UPDATE discovery_registration SET starting_relationship = ${mode} WHERE id = ${f.id}`;
+        yield* f.due;
+        yield* f.worker.tick;
+        expect(f.prompt.mock.calls[0]?.[0].text).toContain(`starting-relationship="${mode}"`);
+        expect(
+          yield* f.sql`SELECT registration_id, starting_relationship FROM conversation`,
+        ).toEqual([{ registration_id: f.id, starting_relationship: mode }]);
+        const restarted = yield* firstContacts(
+          f.host,
+          { textStatus: f.status },
+          f.directory,
+          "test/probe",
+          () => {},
+        );
+        yield* restarted.tick;
+        expect(f.prompt).toHaveBeenCalledOnce();
+      }),
+    );
+  },
+);
 
 test("the first greeting receives the separately persisted conversation preference without changing consent language", async () => {
   await withContactDatabase(

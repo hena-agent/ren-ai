@@ -110,8 +110,10 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   fireEvent.change(screen.getByLabelText("성별 (선택)"), { target: { value: "male" } });
   fireEvent.click(screen.getByRole("checkbox"));
   selectLanguage("대화하고 싶은 언어", "日本語");
+  fireEvent.click(screen.getByRole("radio", { name: /^친구/ }));
   selectLanguage("화면 언어", "English");
   expect(document.documentElement.lang).toBe("en");
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: /^Friends/ }).checked).toBe(true);
   expect(localStorage.getItem("renai.locale")).toBe("en");
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Mobile number" }).value).toBe(
     "010-1234-5678",
@@ -139,6 +141,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
     handle: "+821012345678",
     locale: "ja",
     conversationLanguage: "ja",
+    startingRelationship: "friends",
     name: "민수",
     age: 28,
     gender: "male",

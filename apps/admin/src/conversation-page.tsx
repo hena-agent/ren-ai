@@ -32,6 +32,12 @@ const execution = {
   unavailable: "조회 실패 — 정지 여부 미확인",
 };
 const openCodeServer = "https://oc.renai.im";
+const startingRelationships = {
+  dating: "연인",
+  flirting: "썸",
+  friends: "친구",
+  strangers: "낯선 사이",
+};
 
 function Connections({ entries }: { entries: readonly (typeof ConversationEntry.Type)[] }) {
   return (
@@ -71,6 +77,9 @@ function Connections({ entries }: { entries: readonly (typeof ConversationEntry.
               </td>
               <td>
                 <strong>{entry.endedAt === null ? "활성" : "종료"}</strong>
+                {entry.startingRelationship && (
+                  <small>시작 관계: {startingRelationships[entry.startingRelationship]}</small>
+                )}
                 <small>
                   {entry.endedAt === null
                     ? "실행 상태는 상세에서 확인"

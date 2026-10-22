@@ -37,13 +37,14 @@ Home, explorer and profile requests all return the actual application UI in thei
 first HTML. Each profile has a distinct title, description and canonical URL,
 Open Graph and Twitter metadata, and WebPage/CreativeWork JSON-LD that explicitly
 identifies a fictional AI persona. Sharing carries the selected `style` and a
-`preview=v1` rendition version, so new shares have a fresh identity after the OG
+`preview=v2` rendition version, so new shares have a fresh identity after the OG
 format changes. Open Graph and Twitter advertise a same-origin 1200×630 JPEG at
-`/personas/{id}/og/{style}/{photo-id}.v1.jpg`. Its source is the first published
+`/personas/{id}/og/{style}/{photo-id}.v2.jpg`. Its source is the first published
 same-style gallery photo: the Worker reads its owned object key directly from
 R2, then uses the Images binding to draw a blurred/dimmed backdrop, the uncropped
 portrait and a small Ren AI watermark in the lower-right corner. Watermark source
-is `design/og-watermark.html`; the transparent PNG is `public/og-watermark-v1.png`.
+is `design/og-watermark.html`; the transparent PNG is `public/og-watermark-v2.png`.
+The cherry-rose brand symbol and white wordmark have no surrounding background box.
 Bump the rendition version when changing its composition or watermark.
 
 HTML metadata generation does not fetch image bytes. This removes the original

@@ -13,6 +13,7 @@ test("operator records expose bounded searchable User–Persona–Session bindin
   await withContactDatabase(
     Effect.gen(function* () {
       const f = yield* relationshipFixture;
+      yield* f.sql`UPDATE conversation SET starting_relationship = 'friends' WHERE id = ${f.conversation.id}`;
       const status = yield* conversationStatus(async () => [
         { id: "seoyul", name: "강서율", bio: "public", imageUrl: "" },
       ]);
@@ -74,6 +75,7 @@ test("operator records expose bounded searchable User–Persona–Session bindin
         yield* Effect.promise(() => detail.json()),
       );
       expect(data.entry.personaName).toBe("강서율");
+      expect(data.entry.startingRelationship).toBe("friends");
       expect(data.entry.sessionID).toBe(f.conversation.sessionID);
       expect(data.history).toHaveLength(1);
       expect(data.registrations).toEqual([]);

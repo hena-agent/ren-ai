@@ -11,6 +11,8 @@ import type { Locale } from "./locale.tsx";
 import { PhoneField } from "./phone-field.tsx";
 import { LanguageSelect } from "./language-select.tsx";
 import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
+import { RelationshipSelect } from "./relationship-select.tsx";
+import type { StartingRelationship } from "@ren-ai/onboarding";
 
 const isMobileNumber = Schema.is(MobileNumber);
 
@@ -40,6 +42,7 @@ export function JoinForm({
   const { locale } = useLocale();
   const discoveryNotice = discoveryNotices[locale];
   const [conversationLanguage, setConversationLanguage] = useState<Locale>(locale);
+  const [startingRelationship, setStartingRelationship] = useState<StartingRelationship>("dating");
   const [contact, setContact] = useState<{
     phone: string | undefined;
     touched: boolean;
@@ -82,6 +85,7 @@ export function JoinForm({
           handle,
           locale,
           conversationLanguage,
+          startingRelationship,
           privacyNoticeVersion: discoveryNotice.version,
           likedPersonaIDs: liked.map((persona) => persona.id),
           turnstileToken: token,
@@ -144,6 +148,11 @@ export function JoinForm({
           </div>
         </div>
         <OptionalProfile disabled={pending} />
+        <RelationshipSelect
+          value={startingRelationship}
+          onChange={setStartingRelationship}
+          disabled={pending}
+        />
         <div className="contact-fields conversation-language-field">
           <label htmlFor="conversation-language">{copy.conversationLanguage}</label>
           <LanguageSelect

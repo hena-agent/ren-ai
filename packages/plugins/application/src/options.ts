@@ -1,6 +1,7 @@
 import type { OutgoingStatus, Tapback } from "@ren-ai/imsg/protocol";
 import type { Effect } from "effect";
 import type { Persona } from "./protocol.ts";
+import type { StartingRelationship } from "@ren-ai/onboarding";
 
 interface PluginConfig {
   readonly personaDirectory: string;
@@ -22,6 +23,7 @@ interface PluginConfig {
     messageIDs: readonly string[],
   ) => Effect.Effect<
     {
+      readonly startingRelationship?: StartingRelationship;
       readonly status: OutgoingStatus | undefined;
       readonly sends: ReadonlyArray<{
         readonly toolCallID: string | null;

@@ -67,7 +67,11 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                 profile: { introduction: "밤에는 음악을 만들어요.", sections: [] },
               },
             ]);
-            const submit = (likedPersonaIDs = ["sora"], name = "민수") =>
+            const submit = (
+              likedPersonaIDs = ["sora"],
+              name = "민수",
+              startingRelationship = "friends",
+            ) =>
               web.handler(
                 new Request("http://localhost/discovery/waitlist", {
                   method: "POST",
@@ -76,6 +80,7 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
                     handle: "+821012345678",
                     locale: "ko",
                     conversationLanguage: "ja",
+                    startingRelationship,
                     name,
                     age: 28,
                     gender: "male",
@@ -89,7 +94,8 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
             const response = await submit();
             expect(response.status).toBe(200);
             expect(await response.json()).toEqual({ status: "waiting" });
-            expect((await submit(["sora"], "다른 이름")).status).toBe(200);
+            expect((await submit(["sora"], "다른 이름", "dating")).status).toBe(200);
+            expect((await submit(["sora"], "민수", "invalid")).status).toBe(400);
           } finally {
             await web.dispose();
           }
@@ -114,6 +120,9 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
         ]);
         expect(yield* sql`SELECT name, age, gender FROM discovery_profile`).toEqual([
           { name: "민수", age: 28, gender: "male" },
+        ]);
+        expect(yield* sql`SELECT starting_relationship FROM discovery_registration`).toEqual([
+          { starting_relationship: "friends" },
         ]);
         yield* sql`DELETE FROM discovery_registration`;
         expect(yield* sql`SELECT * FROM discovery_profile`).toEqual([]);
