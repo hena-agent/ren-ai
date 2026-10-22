@@ -59,6 +59,40 @@ test("idle intake reads only the bookmark and new rows, even with a large histor
   );
 });
 
+test("stalled admission backs off idle observations instead of polling every second", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      yield* migrate;
+      const directory = yield* conversations;
+      yield* directory.create(registration("slow@example.com", "slow"));
+      const fake = fakeMessages();
+      const entered = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      let polls = 0;
+      const incoming = yield* intake(
+        {
+          ...fake.messages,
+          after: (id, limit) => {
+            polls++;
+            return fake.messages.after(id, limit);
+          },
+        },
+        directory.byHandle,
+        () => Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))),
+        () => "UTC",
+      );
+      yield* fake.text("slow@example.com", "pending", Date.now());
+      polls = 0;
+      const polling = yield* incoming.poll.pipe(Effect.forkScoped);
+      yield* Deferred.await(entered);
+      yield* TestClock.adjust("29 seconds");
+      expect(polls).toBe(5);
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(polling);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+});
+
 test("a failed Conversation cannot pin the global bookmark ahead of other users, and queued rows survive restart", async () => {
   await runMessagingTest(
     Effect.gen(function* () {

@@ -6,6 +6,7 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { withLifecycle } from "./lifecycle.ts";
+import { claimWork, workBatchSize } from "../work-budget.ts";
 
 interface Origin {
   readonly startedAt: number;
@@ -90,15 +91,30 @@ export const rebuilder = (
       for (const conversation of yield* directory.all()) yield* rebuild(conversation.handle);
     });
     const pending = Effect.gen(function* () {
-      const rows = yield* sql<{
+      const limit = Math.min(20, yield* workBatchSize);
+      const [cursor] = yield* sql<{
+        at: number;
+      }>`SELECT at FROM application_clock WHERE name = 'rebuild.cursor'`;
+      const select = (after: number) => sql<{
+        id: number;
         handle: string;
-      }>`SELECT u.handle FROM conversation c JOIN user u ON u.id = c.user_id
-        WHERE c.rebuilding = 1 AND c.ended_at IS NULL
+      }>`SELECT c.id, u.handle FROM conversation c JOIN user u ON u.id = c.user_id
+         WHERE c.id > ${after} AND c.rebuilding = 1 AND c.ended_at IS NULL
         AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = u.handle)
         AND NOT EXISTS (SELECT 1 FROM removal WHERE handle = u.handle)
-        ORDER BY c.id LIMIT 20`;
-      for (const row of rows) yield* rebuild(row.handle);
+         ORDER BY c.id LIMIT ${limit}`;
+      const after = yield* select(cursor?.at ?? 0);
+      const rows = after.length ? after : yield* select(0);
+      for (const row of rows) {
+        if (!(yield* claimWork)) break;
+        yield* sql`INSERT INTO application_clock(name, at) VALUES ('rebuild.cursor', ${row.id}) ON CONFLICT(name) DO UPDATE SET at = excluded.at`;
+        yield* rebuild(row.handle);
+      }
     });
-    return { rebuild, missing, pending };
+    return {
+      rebuild,
+      missing,
+      pending: pending.pipe(Effect.provideService(SqlClient.SqlClient, sql)),
+    };
   });
 };

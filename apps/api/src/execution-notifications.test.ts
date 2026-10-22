@@ -54,11 +54,12 @@ test("the execution tick sends through the dedicated Mac RPC even when Persona s
           );
         expect((yield* f.join()).status).toBe(200);
         for (let replacement = 0; replacement < 2; replacement++) {
+          yield* (yield* SqlClient.SqlClient)`UPDATE application_work SET due = 0 WHERE name = 'lane:alarm.cursor:execution'`;
           const runtime = yield* Effect.promise(open);
           try {
             yield* Effect.promise(() =>
               expect(runtime.tick()).rejects.toHaveProperty(
-                "cause.message",
+                "cause.cause.message",
                 "Catalog request failed (503; request unavailable)",
               ),
             );

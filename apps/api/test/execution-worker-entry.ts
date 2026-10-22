@@ -46,6 +46,7 @@ export class ExecutionApplication extends ApiApplication {
         Date.now(),
       );
     } else if (path === "/__fixture/due") {
+      this.ctx.storage.sql.exec("UPDATE application_work SET due = 0 WHERE name GLOB 'lane:*'");
       this.ctx.storage.sql.exec(
         "UPDATE discovery_contact SET scheduled_at = 0 WHERE state = 'scheduled'",
       );

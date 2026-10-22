@@ -10,6 +10,7 @@ import { conversations } from "../conversations/conversations.ts";
 import { firstContacts } from "./first-contact.ts";
 import type { ContactDiagnostic } from "./diagnostics.ts";
 import { contactFixture, withContactDatabase } from "./contact.test-helper.ts";
+import { exhaustedAlarm } from "../../test/work-budget.test-helper.ts";
 
 const setup = Effect.gen(function* () {
   const fixture = yield* contactFixture;
@@ -76,6 +77,9 @@ test("a persisted reservation starts only when due and records web consent witho
       yield* f.worker.tick;
       expect(f.created).not.toHaveBeenCalled();
       yield* f.due;
+      yield* exhaustedAlarm(f.worker.tick);
+      expect(f.created).not.toHaveBeenCalled();
+      expect(yield* f.sql`SELECT state FROM discovery_contact`).toEqual([{ state: "scheduled" }]);
       yield* Effect.all([f.worker.tick, f.worker.tick], { concurrency: "unbounded" });
       expect(f.created).toHaveBeenCalledOnce();
       expect(f.prompt).toHaveBeenCalledOnce();

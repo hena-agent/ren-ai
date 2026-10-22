@@ -1,9 +1,9 @@
+import { control } from "../test/execution-runtime.test-helper.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Context, Effect, Exit, Layer, Scope } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { SqlClient } from "effect/unstable/sql";
 import { migrate } from "./database.ts";
-import { HttpClient } from "effect/unstable/http";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ApplicationStore } from "./application-store.ts";
 import { cloudflareConfiguration } from "./cloudflare-config.ts";
@@ -11,175 +11,12 @@ import { createExecutionRuntime } from "./execution-runtime.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 import { Session } from "@opencode/schema/session";
-import type { RemoteConfig } from "./opencode/remote.ts";
-import type {
-  SessionActiveOutput,
-  MessageListInput,
-  MessageListOutput,
-} from "@opencode/client/effect/api";
-
-const control = vi.hoisted(() => ({
-  events: [] as string[],
-  failure: "",
-  requests: [] as string[],
-  startup: async () => {},
-  callback: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("callback")),
-  operator: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("operator")),
-  folderRead: vi.fn<() => Effect.Effect<typeof folderSnapshot.Type, Error>>(),
-  languageFailure: undefined as Error | undefined,
-  activeRead: vi.fn<() => Effect.Effect<SessionActiveOutput, Error>>(),
-  activeProbe: vi.fn<(id: Session.ID) => Effect.Effect<boolean, Error>>(),
-  onPrompt: vi.fn<(id: string) => Effect.Effect<void, Error>>(),
-  usageApi: undefined as
-    | {
-        messages: (input: MessageListInput) => Effect.Effect<MessageListOutput, Error>;
-        get: (id: Session.ID) => Effect.Effect<Session.Info, Error>;
-      }
-    | undefined,
-  removeSession: undefined as ((id: Session.ID) => Effect.Effect<void, Error>) | undefined,
-}));
-
-const step = (name: string) =>
-  Effect.sync(() => {
-    control.events.push(name);
-    if (control.failure === name) throw new Error(`failed ${name}`);
-  });
-
-vi.mock("./personas/catalog.ts", () => ({
-  catalogClient: () => ({
-    load: async () => {
-      control.events.push("catalog");
-      if (control.failure === "catalog") throw new Error("catalog unavailable");
-      return {
-        revision: String(control.events.filter((event) => event === "catalog").length),
-        personas: new Map(),
-      };
-    },
-  }),
-}));
-vi.mock("@ren-ai/imsg/client", () => ({
-  remoteMessages: () =>
-    Effect.gen(function* () {
-      const client = yield* HttpClient.HttpClient;
-      yield* client.post("https://api-msg.example/imsg/rpc/");
-      return { gestures: {} };
-    }),
-}));
-vi.mock("./execution-health.ts", () => ({
-  createExecutionHealth: () => Effect.succeed({ tick: step("health") }),
-}));
-vi.mock("./usage/collect.ts", () => ({
-  usageCollector: (api: typeof control.usageApi) =>
-    Effect.sync(() => {
-      control.usageApi = api;
-      return { tick: Effect.void, session: () => step("usage.snapshot") };
-    }),
-}));
-vi.mock("./opencode/application-gateway.ts", () => ({
-  applicationGateway: () => ({
-    handler: control.callback,
-    dispose: async () => {
-      control.events.push("callback.close");
-    },
-  }),
-}));
-vi.mock("./operator/api.ts", () => ({
-  operatorHandler: () => ({
-    handler: control.operator,
-    dispose: async () => {
-      control.events.push("operator.close");
-    },
-  }),
-}));
-vi.mock("./opencode/remote.ts", () => ({
-  remoteHost: (config: RemoteConfig) =>
-    Effect.gen(function* () {
-      control.onPrompt.mockImplementation(config.onPrompt!);
-      yield* Effect.addFinalizer(() => step("remote.close"));
-      yield* Effect.promise(() => control.startup());
-      yield* step("remote");
-      return {
-        client: {
-          session: { active: control.activeRead },
-          message: { list: () => Effect.fail(new Error("upstream usage failed")) },
-        },
-        sessions: {
-          get: () => Effect.succeed(fromPartial<Session.Info>({ id: "ses_usage" })),
-          remove: () => step("session.remove"),
-        },
-      };
-    }),
-}));
-vi.mock("./opencode/catalog-sync.ts", () => ({
-  syncFolders: () => step("folders"),
-  catalogRefresher: () => ({ refresh: () => step("refresh"), reconcile: () => step("reconcile") }),
-}));
-vi.mock("./discovery/first-contact.ts", () => ({
-  firstContacts: () => Effect.succeed({ tick: step("contacts") }),
-}));
-vi.mock("./conversations/runtime-status.ts", () => ({
-  runtimeStatus: (_host: object, active: (id: Session.ID) => Effect.Effect<boolean, Error>) =>
-    Effect.sync(() => {
-      control.activeProbe.mockImplementation(active);
-      return {};
-    }),
-  runtimeStatusRequest:
-    (_service: object, run: (effect: Effect.Effect<void>) => Promise<void>) => async () => {
-      await run(Effect.void);
-      return new Response("conversation-status");
-    },
-}));
-vi.mock("./discovery/conversation-languages.ts", () => ({
-  conversationLanguages:
-    (read: (id: string) => Effect.Effect<typeof folderSnapshot.Type, Error>) => () =>
-      read("ses_languages").pipe(
-        Effect.match({
-          onSuccess: () => new Response("languages"),
-          onFailure: (cause) => {
-            control.languageFailure = cause;
-            return new Response("unavailable", { status: 503 });
-          },
-        }),
-      ),
-}));
-vi.mock("./application.ts", () => ({
-  startMessagingApplication: (
-    _personas: Map<string, never>,
-    create: (
-      tools: object,
-    ) => Effect.Effect<{ sessions: { remove: (id: Session.ID) => Effect.Effect<void, Error> } }>,
-  ) =>
-    create({}).pipe(
-      Effect.tap((host) =>
-        Effect.sync(() => {
-          control.removeSession = host.sessions.remove;
-        }),
-      ),
-      Effect.map(() => ({
-        client: {
-          rpc: () => ({ read: control.folderRead }),
-          session: { active: control.activeRead },
-        },
-        operator: {},
-        conversations: {},
-        heartbeat: {
-          endings: step("endings"),
-          stopped: step("stopped"),
-          intake: step("intake"),
-          followUps: step("followUps"),
-          failedTurns: step("failedTurns"),
-          checkTurns: () => step("checkTurns"),
-          rebuilds: step("rebuilds"),
-        },
-      })),
-    ),
-}));
-vi.mock("./application-tools.ts", () => ({
-  prepareMessaging: () => Effect.succeed({ endings: {} }),
-}));
 
 let scope: Scope.Closeable;
 let database: Context.Context<SqlClient.SqlClient>;
+const execSql = (query: string) =>
+  Effect.runPromise(Context.get(database, SqlClient.SqlClient).unsafe(query));
+
 beforeEach(async () => {
   scope = await Effect.runPromise(Scope.make());
   database = await Effect.runPromise(
@@ -192,13 +29,12 @@ test("actor replacement reuses its applied Catalog and fails safely on a corrupt
   let runtime = await open();
   await runtime.tick();
   await Effect.runPromise(control.onPrompt("ses_due"));
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      yield* sql`UPDATE application_work SET due = 0 WHERE name = 'turn:ses_due'`;
-      yield* sql`DELETE FROM application_clock WHERE name = 'recovery'`;
-    }).pipe(Effect.provideContext(database)),
+  await execSql("UPDATE application_work SET due = 0 WHERE name = 'turn:ses_due'");
+  await execSql(
+    "INSERT INTO failed_turn(session_id, fingerprint, failures, quota, failed_at, retry_at) VALUES ('ses_due', 'checkpoint', 1, 0, 0, 0)",
   );
+  await execSql("DELETE FROM application_clock WHERE name = 'recovery'");
+  await execSql("DELETE FROM application_clock WHERE name = 'catalog.recovery'");
   await runtime.close();
   control.events.length = 0;
   runtime = await open();
@@ -212,13 +48,11 @@ test("actor replacement reuses its applied Catalog and fails safely on a corrupt
   await runtime.tick();
   expect(control.events.filter((entry) => entry === "reconcile")).toHaveLength(1);
   control.failure = "";
+  await execSql("UPDATE application_work SET due = 0 WHERE name = 'lane:execution.cursor:catalog'");
+  await runtime.tick();
+  expect(control.events.filter((entry) => entry === "reconcile")).toHaveLength(2);
   await runtime.close();
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      yield* sql`UPDATE runtime_catalog SET payload = 'private-invalid-cache'`;
-    }).pipe(Effect.provideContext(database)),
-  );
+  await execSql("UPDATE runtime_catalog SET payload = 'private-invalid-cache'");
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   runtime = await open();
   try {
@@ -446,13 +280,25 @@ test("propagates boot failure and releases partially acquired resources", async 
   expect(runtime.initialized).toBe(false);
   await runtime.close();
   expect(control.events).toEqual(["health", "catalog", "remote", "remote.close", "callback.close"]);
+  const retrying = await open();
+  control.failure = "";
+  control.startup = () => Promise.reject("private non-error startup failure");
+  await execSql("UPDATE application_work SET due = 0 WHERE name GLOB 'lane:*'");
+  await expect(retrying.tick()).rejects.toThrow("Execution startup unavailable");
+  control.startup = async () => {};
+  await execSql("UPDATE application_work SET due = 0 WHERE name GLOB 'lane:*'");
+  await retrying.tick();
+  expect(retrying.initialized).toBe(true);
+  await retrying.close();
 });
 
 test("observes a callback-triggered boot rejection without an unhandled promise", async () => {
   const runtime = await open();
   control.failure = "catalog";
   expect((await runtime.fetch(new Request("https://app/rpc"))).status).toBe(503);
-  await expect(runtime.tick()).rejects.toMatchObject({ cause: { message: "catalog unavailable" } });
+  await expect(runtime.tick()).rejects.toMatchObject({
+    cause: { cause: { message: "catalog unavailable" } },
+  });
   await runtime.close();
 });
 
@@ -464,7 +310,9 @@ test("a failed first heartbeat retains successful initialization and retries wit
   expect(runtime.initialized).toBe(true);
   expect(control.events).toContain("failedTurns");
   control.failure = "";
+  await execSql("UPDATE application_work SET due = 0 WHERE name = 'lane:execution.cursor:endings'");
   await runtime.tick();
+  expect(control.events.filter((event) => event === "endings")).toHaveLength(2);
   expect(control.events.filter((event) => event === "catalog")).toHaveLength(1);
   expect(control.events).not.toContain("callback.close");
   await runtime.close();

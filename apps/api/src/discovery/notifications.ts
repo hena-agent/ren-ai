@@ -10,6 +10,7 @@ import {
 } from "./diagnostics.ts";
 import { waitlistNotificationText } from "./notification-copy.ts";
 import { checkAvailability } from "./availability.ts";
+import { claimWork, workBatchSize } from "../work-budget.ts";
 
 export const notificationSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -56,14 +57,16 @@ export const waitlistNotifications = (transport: Transport, log: ContactLog = co
         return true;
       }).pipe(sql.withTransaction);
     const tick = Effect.gen(function* () {
+      const limit = Math.min(30, yield* workBatchSize);
       const queued = yield* sql<{
         id: string;
         handle: string;
         locale: keyof typeof waitlistNotificationText;
       }>`SELECT n.registration_id AS id, r.handle, r.locale FROM discovery_notification n
         JOIN discovery_registration r ON r.id = n.registration_id
-         WHERE n.state = 'queued' ORDER BY n.created_at, n.registration_id LIMIT 30`;
+         WHERE n.state = 'queued' ORDER BY n.created_at, n.registration_id LIMIT ${limit}`;
       for (const row of queued) {
+        if (!(yield* claimWork)) break;
         const started = performance.now();
         const fields: Pick<ContactDiagnostic, "requestId" | "operation" | "operationId"> = {
           requestId: row.id,

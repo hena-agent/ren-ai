@@ -15,6 +15,7 @@ import {
 } from "../../test/messaging.test-helper.ts";
 import { failedTurns } from "./failed-turns.ts";
 import { MissingSession, type PersonaRuntime } from "./runtime.ts";
+import { claimWork, withWorkBudget } from "../work-budget.ts";
 
 const fixture = () => {
   let now = 0;
@@ -111,6 +112,28 @@ const fixture = () => {
     },
   };
 };
+
+test("reconciled failures remain due when the alarm budget expires before retry dispatch", async () => {
+  const f = fixture();
+  await f.run(
+    Effect.gen(function* () {
+      const { directory, scheduler, sql } = yield* f.open;
+      f.states.set("budget", { idle: 1, outcome: "failed", error: "AuthenticationError" });
+      yield* directory.create(registration("budget@example.test", "ses_budget"));
+      yield* scheduler.check(["ses_budget"]);
+      f.time(1000);
+      yield* withWorkBudget(
+        Effect.forEach(Array.from({ length: 39 }), () => claimWork).pipe(
+          Effect.andThen(scheduler.check(["ses_budget"])),
+        ),
+      );
+      expect(f.calls).toEqual([]);
+      expect(yield* sql`SELECT retry_at FROM failed_turn`).toEqual([{ retry_at: 1000 }]);
+      yield* scheduler.check(["ses_budget"]);
+      expect(f.calls).toEqual(["budget"]);
+    }),
+  );
+});
 
 test.each([false, true])(
   "actor replacement retains the %s quota/provider deadline and probe rotation",

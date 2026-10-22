@@ -13,13 +13,16 @@ export const resetBoundary = (messages: Messages) =>
       SELECT guid, date, row_id AS rowID FROM reset WHERE handle = ${row.handle}
       ORDER BY date DESC, row_id DESC LIMIT 1`;
         if (!boundary) return false;
-        const rows = yield* messages.recent(row.handle, 0);
-        const cutoff = rows.find((item) => item.guid === boundary.guid)?.id ?? boundary.rowID;
+        const [reset] = yield* messages.recent(row.handle, 0, { guid: boundary.guid, limit: 1 });
+        const cutoff = reset?.id ?? boundary.rowID;
         const earlier = (item: IncomingMessage) =>
           item.createdAt < boundary.date || (item.createdAt === boundary.date && item.id <= cutoff);
         if (earlier(row)) return true;
         if (row.tapback) {
-          const target = rows.find((item) => item.guid === row.tapback!.targetGuid);
+          const [target] = yield* messages.recent(row.handle, 0, {
+            guid: row.tapback.targetGuid,
+            limit: 1,
+          });
           if (!target || earlier(target)) return true;
         }
         if (!row.fromMe) return false;

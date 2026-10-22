@@ -5,6 +5,8 @@ import { SqlClient } from "effect/unstable/sql";
 import type { PersonaRuntime } from "./runtime.ts";
 import type { Conversation, conversations } from "../conversations/conversations.ts";
 import { recoveryBatch } from "./recovery-batch.ts";
+import { workCheckpoint, claimWork, workBatchSize } from "../work-budget.ts";
+import { releaseQuotaTurns, turnWork } from "./turn-work.ts";
 
 type Directory = Effect.Success<typeof conversations>;
 type Failure = {
@@ -31,11 +33,6 @@ const probeDelay = 15 * 60_000;
 const retryDelay = (failures: number) => Math.min(2 ** (failures - 1), 900) * 1000;
 const quotaError = (assistant: SessionMessage.Info | undefined) =>
   assistant?.type === "assistant" && /quota/i.test(assistant.error?.type ?? "");
-const resume = (host: PersonaRuntime, directory: Directory, sessionID: string) =>
-  directory.admit(
-    sessionID,
-    host.retry(Session.ID.make(sessionID)).pipe(Effect.catchCause(Effect.logWarning)),
-  );
 
 /** Finite heartbeat reconciliation; all deadlines and probe rotation survive actor replacement. */
 export const failedTurns = (
@@ -47,8 +44,6 @@ export const failedTurns = (
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const lock = yield* Semaphore.make(1);
-    const pending = () => sql<Failure>`SELECT * FROM failed_turn WHERE review = 0
-      ORDER BY retry_at, last_retry_at, failed_at, session_id`;
 
     const forget = (sessionID: string) =>
       Effect.gen(function* () {
@@ -64,15 +59,11 @@ export const failedTurns = (
 
     const succeeded = (prior: Failure) =>
       Effect.gen(function* () {
-        const released = prior.quota ? yield* pending() : [];
         yield* forget(prior.session_id);
         if (prior.quota) {
-          yield* sql`DELETE FROM failed_turn WHERE quota = 1 AND review = 0`;
+          yield* releaseQuotaTurns;
           yield* alerts.clear(cap);
         }
-        return released
-          .filter((row) => row.session_id !== prior.session_id)
-          .map((row) => row.session_id);
       });
 
     const record = (
@@ -126,7 +117,7 @@ export const failedTurns = (
         if (Option.isNone(session)) {
           yield* sql`UPDATE conversation SET rebuilding = 1 WHERE id = ${conversation.id}`;
           yield* forget(sessionID);
-          return [];
+          return;
         }
         const inbox = yield* host.sessions.inbox(id);
         const [assistant] = yield* host.sessions.messages({
@@ -145,10 +136,11 @@ export const failedTurns = (
         const fingerprint = JSON.stringify([
           session.value.time.idle && DateTime.toEpochMillis(session.value.time.idle),
         ]);
-        if (!failed)
-          return prior && prior.fingerprint !== fingerprint ? yield* succeeded(prior) : [];
+        if (!failed) {
+          if (prior && prior.fingerprint !== fingerprint) yield* succeeded(prior);
+          return;
+        }
         yield* record(conversation, fingerprint, assistant, prior, now);
-        return [];
       });
 
     const dispatch = (row: Failure, now: number) =>
@@ -169,32 +161,29 @@ export const failedTurns = (
         }),
       );
 
+    const work = yield* turnWork(host, directory, (conversation, now) =>
+      reconcile(conversation, now).pipe(
+        Effect.asVoid,
+        Effect.provideService(SqlClient.SqlClient, sql),
+      ),
+    );
     const inspect = (sessionIDs?: readonly string[]) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
+        const limit = Math.min(20, yield* workBatchSize);
         const orphaned = yield* sql<{
           sessionID: string;
         }>`SELECT f.session_id AS sessionID FROM failed_turn f
           WHERE NOT EXISTS (SELECT 1 FROM conversation c JOIN user u ON u.id = c.user_id
             WHERE c.session_id = f.session_id AND c.ended_at IS NULL
-            AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = u.handle)) LIMIT 20`;
+            AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = u.handle)) LIMIT ${limit}`;
         for (const row of orphaned) yield* forget(row.sessionID);
         const batch = yield* recoveryBatch(sessionIDs).pipe(
           Effect.provideService(SqlClient.SqlClient, sql),
         );
         for (const conversation of batch.selected) {
-          let released: string[] = [];
-          yield* directory.admit(
-            conversation.sessionID,
-            reconcile(conversation, now).pipe(
-              Effect.tap((ids) =>
-                Effect.sync(() => {
-                  released = ids;
-                }),
-              ),
-            ),
-          );
-          for (const sessionID of released) yield* resume(host, directory, sessionID);
+          yield* workCheckpoint;
+          yield* work.inspect(conversation, now);
           if (!batch.priority.has(conversation.sessionID))
             yield* sql`INSERT INTO recovery_scan (id, conversation_id) VALUES (1, ${conversation.id})
             ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id`;
@@ -209,14 +198,20 @@ export const failedTurns = (
         }
         const selected =
           yield* sql<Failure>`SELECT * FROM failed_turn WHERE review = 0 AND retry_at <= ${now}
-          ORDER BY retry_at, last_retry_at, failed_at, session_id LIMIT ${status!.quota ? 1 : 20}`;
-        for (const row of selected) yield* dispatch(row, now);
+          AND NOT EXISTS (SELECT 1 FROM application_work w WHERE w.name = 'turn:' || failed_turn.session_id AND w.resume = 1)
+          ORDER BY retry_at, last_retry_at, failed_at, session_id LIMIT ${status!.quota ? 1 : limit}`;
+        for (const row of selected) {
+          if (!(yield* claimWork)) break;
+          yield* dispatch(row, now);
+        }
+        if (!status!.quota) yield* work.resumes;
       });
     const tick = inspect();
     if (eager) yield* tick;
     return {
-      tick: lock.withPermit(tick),
-      check: (ids: readonly string[]) => lock.withPermit(inspect(ids)),
+      tick: lock.withPermit(tick).pipe(Effect.provideService(SqlClient.SqlClient, sql)),
+      check: (ids: readonly string[]) =>
+        lock.withPermit(inspect(ids)).pipe(Effect.provideService(SqlClient.SqlClient, sql)),
       forget,
     };
   });

@@ -129,12 +129,12 @@ test(
     Effect.gen(function* () {
       yield* host.activeSession();
       const { entered, release } = yield* barrier;
-      const after = host.fake.messages.after.bind(host.fake.messages);
-      host.fake.messages.after = (cursor) =>
+      const recent = host.fake.messages.recent.bind(host.fake.messages);
+      host.fake.messages.recent = (...args) =>
         Effect.gen(function* () {
           yield* Deferred.succeed(entered, undefined);
           yield* Deferred.await(release);
-          return yield* after(cursor);
+          return yield* recent(...args);
         });
       const rebuilding = yield* host.recovery
         .rebuild("active@example.com", true)
