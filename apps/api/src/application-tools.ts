@@ -59,7 +59,19 @@ export const prepareMessaging = (
       send: (sessionID, text, callID) =>
         inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
       wait: (sessionID, seconds) =>
-        inConversation(sessionID, (conversation) => pace.wait(conversation.sessionID, seconds)),
+        inConversation(sessionID, (conversation) =>
+          directory
+            .active(conversation)
+            .pipe(
+              Effect.flatMap((active) =>
+                active
+                  ? pace.wait(conversation.sessionID, seconds)
+                  : Effect.succeed(
+                      "Historical replay is read-only. Finish this turn without waiting.",
+                    ),
+              ),
+            ),
+        ),
       context: (sessionID, messageIDs) =>
         Effect.gen(function* () {
           yield* pace.seen(sessionID, messageIDs);
@@ -88,6 +100,8 @@ export const prepareMessaging = (
         Effect.gen(function* () {
           const conversation = yield* directory.bySession(sessionID);
           if (!conversation) return yield* Effect.fail(new Error("No Conversation for session"));
+          if (!(yield* directory.active(conversation)))
+            return "not read: Conversation is replaying or inactive";
           return yield* gestures.read(conversation.handle).pipe(
             Effect.as("read"),
             Effect.catch((error) => Effect.succeed(`not read: ${error.message}`)),

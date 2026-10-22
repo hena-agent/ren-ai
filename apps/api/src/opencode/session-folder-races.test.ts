@@ -76,14 +76,14 @@ test("snapshot RPC reads wait for a complete multi-file update", () =>
         Effect.tap(() => Deferred.succeed(complete, undefined)),
         Effect.forkScoped,
       );
-      expect(yield* Effect.promise(() => host.files.read(session.id))).toEqual({
-        ...next,
-        persona: snapshot.persona,
-      });
+      const direct = yield* Effect.tryPromise(() => host.files.read(session.id)).pipe(
+        Effect.forkScoped,
+      );
       expect(yield* Deferred.isDone(complete)).toBe(false);
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(update);
-      expect(yield* Fiber.join(read)).toEqual(next);
+      expect(yield* Fiber.join(read)).toMatchObject(next);
+      expect(yield* Fiber.join(direct)).toMatchObject(next);
     }),
   ));
 
@@ -154,7 +154,7 @@ test("a disconnected create caller cannot interrupt server ownership between fol
               const session = await Effect.runPromise(host.remote.sessions.get(id));
               return session.location.directory;
             })
-            .toBe(host.files.path(id));
+            .toBe(host.files.path("persona1"));
         });
         expect(yield* Effect.promise(() => host.files.exists(id))).toBe(true);
       }),

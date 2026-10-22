@@ -15,13 +15,17 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         const sql = yield* SqlClient.SqlClient;
         const directory = yield* conversations;
         const create = (name: string) =>
-          directory.create({
-            handle: `${name}@example.com`,
-            locale: "ko",
-            consentVersion: "v1",
-            consentLanguage: "ko",
-            personaID: "persona1",
-            sessionID: name,
+          Effect.gen(function* () {
+            const source = yield* directory.create({
+              handle: `${name}@example.com`,
+              locale: "ko",
+              consentVersion: "v1",
+              consentLanguage: "ko",
+              personaID: "persona1",
+              sessionID: `${name}-source`,
+            });
+            yield* directory.replaceSession(source, name);
+            return { ...source, sessionID: name };
           });
         const first = yield* create("first");
         const outgoing = yield* create("outgoing");
@@ -31,7 +35,7 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         const fake = fakeMessages();
         const at = (yield* sql<{
           started_at: number;
-        }>`SELECT started_at FROM conversation WHERE id = ${first.id}`)[0]!.started_at;
+        }>`SELECT MAX(started_at) AS started_at FROM conversation`)[0]!.started_at;
         const reply = yield* fake.text(first.handle, "his first reply", at);
         const laterReply = yield* fake.text(first.handle, "his later reply", at + 2);
         const failed = yield* fake.outgoing(first.handle, "failed bubble", at + 30, "failed");
@@ -42,6 +46,12 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         yield* fake.text(race.handle, "before the block", at + 25);
         yield* fake.outgoing(manual.handle, "unrecorded manual send", at + 40);
         yield* fake.replace((yield* fake.messages.after(0)).toReversed());
+        for (const row of yield* fake.messages.after(0)) {
+          const sourceID = `${row.handle.split("@")[0]}-source`;
+          yield* sql`INSERT INTO intake_seen VALUES (${sourceID}, ${row.guid})`;
+        }
+        yield* sql`UPDATE user SET replied_at = ${reply.createdAt} WHERE handle = ${first.handle}`;
+        yield* sql`UPDATE conversation SET last_received_at = ${laterReply.createdAt} WHERE id = ${first.id}`;
         for (const row of [sent, older, between, newer]) {
           const sessionID = row.handle === outgoing.handle ? outgoing.sessionID : seen.sessionID;
           yield* sql`INSERT INTO intake_seen (session_id, guid) VALUES (${sessionID}, ${row.guid})`;
@@ -87,23 +97,19 @@ test("replay preserves send outcomes, first reply, follow-up order and removal f
         );
         for (const conversation of [first, outgoing, seen, race, manual])
           yield* incoming.replay(conversation);
-        expect(received).toEqual([
-          { id: first.id, date: laterReply.createdAt },
-          { id: seen.id, date: newer.createdAt },
-        ]);
-        expect(sentByHer).toEqual([
-          { id: outgoing.id, date: sent.createdAt },
-          { id: manual.id, date: at + 40 },
-        ]);
+        expect(received).toEqual([]);
+        expect(sentByHer).toEqual([]);
         yield* sql`UPDATE follow_up SET last_sent_at = ${sent.createdAt} WHERE conversation_id = ${outgoing.id}`;
         yield* incoming.replay(outgoing);
-        expect(sentByHer).toHaveLength(2);
+        expect(sentByHer).toHaveLength(0);
         expect(prompts).toHaveLength(4);
         expect(prompts[0]).toContain("his first reply");
         expect(prompts[1]).toContain("his later reply");
         expect(prompts[2]).toContain("before the block");
         expect(prompts[3]).toContain("unrecorded manual send");
-        expect(yield* sql`SELECT 1 FROM intake_seen WHERE guid = ${failed.guid}`).toEqual([]);
+        expect(
+          yield* sql`SELECT 1 FROM intake_seen WHERE session_id = ${first.sessionID} AND guid = ${failed.guid}`,
+        ).toEqual([]);
         expect(
           yield* sql<{ repliedAt: number | null }>`SELECT replied_at AS repliedAt FROM user
           WHERE handle = ${first.handle}`,

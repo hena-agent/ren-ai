@@ -102,10 +102,11 @@ export const requestText = (messages: ReadonlyArray<Message>) =>
     .map((part) => part.text)
     .join("\n");
 
+export const exportedArchive = (remote: Remote, ids: ReadonlyArray<Session.ID>) =>
+  exportSessions(remote.client, ids).pipe(Effect.map(Schema.decodeUnknownSync(sessionArchive)));
+
 export const exportedSession = (remote: Remote, id: Session.ID) =>
-  exportSessions(remote.client, [id]).pipe(
-    Effect.map((contents) => Schema.decodeUnknownSync(sessionArchive)(contents).sessions[0]!),
-  );
+  exportedArchive(remote, [id]).pipe(Effect.map((archive) => archive.sessions[0]!));
 
 export const pausedRestore = (
   remote: Remote,

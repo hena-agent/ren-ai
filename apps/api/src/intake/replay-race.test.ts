@@ -8,7 +8,7 @@ import { migrate } from "../database.ts";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 
 test.each([false, true])(
-  "replay and live intake can acknowledge the same message concurrently (outgoing: %s)",
+  "replay excludes an in-flight unread live message (outgoing: %s)",
   async (outgoing) => {
     await runMessagingTest(
       Effect.gen(function* () {
@@ -51,13 +51,13 @@ test.each([false, true])(
         yield* incoming.replay(conversation);
         yield* Deferred.succeed(resume, undefined);
         yield* Fiber.join(live);
-        expect(ids).toHaveLength(2);
+        expect(ids).toHaveLength(1);
         expect(new Set(ids).size).toBe(1);
         expect(
           yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID}`,
         ).toEqual([{ guid: row.guid }]);
         yield* incoming.poll;
-        expect(ids).toHaveLength(2);
+        expect(ids).toHaveLength(1);
         expect(yield* sql`SELECT row_id FROM bookmark WHERE id = 1`).toEqual([{ row_id: row.id }]);
       }),
     );

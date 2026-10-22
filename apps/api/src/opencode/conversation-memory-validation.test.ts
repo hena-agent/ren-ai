@@ -2,13 +2,19 @@ import { mkdtemp, mkdir, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { conversationMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { Effect, Schema } from "effect";
+import { readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { memoryFixture } from "../../test/memory.test-helper.ts";
+import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
+import { exportSessions, restoreSessions } from "./transfer.ts";
+import { sessionArchive } from "./transfer-format.ts";
 
 test("invalid state and memory updates never change the last committed Conversation documents", async () => {
   const root = await mkdtemp(join(tmpdir(), "memory-validation-"));
   try {
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     const state = {
+      scope: "life",
       scores: {},
       additions: {
         "연락하고 싶음": { value: true, meaning: "현재 연락 의사", reason: "새 화제가 생각났다." },
@@ -35,26 +41,35 @@ test("invalid state and memory updates never change the last committed Conversat
     await expect(
       memory.run(
         "update_memory",
-        { markdown: "private", reason: "private", extra: "private" },
+        { scope: "life", markdown: "private", reason: "private", extra: "private" },
         "extra",
         "first",
       ),
     ).rejects.toThrow("tool input");
     await expect(
-      memory.run("update_memory", { markdown: "private", reason: "private" }, "state", "first"),
+      memory.run(
+        "update_memory",
+        { scope: "life", markdown: "private", reason: "private" },
+        "state",
+        "first",
+      ),
     ).rejects.toThrow("different input");
     await expect(
       memory.run("update_state", { ...state, reason: "changed" }, "state", "first"),
     ).rejects.toThrow("different input");
     const record = {
+      scope: "life",
       topic: "취향",
       text: "차를 좋아한다.",
       summary: "차 취향",
       clarity: "clear",
       reason: "상대가 말했다.",
     };
+    expect(
+      await memory.run("remember", { ...record, id: "another-conversation" }, "missing", "first"),
+    ).toContain("SHARED_MEMORY_CONFLICT");
     await expect(
-      memory.run("remember", { ...record, id: "another-conversation" }, "missing", "first"),
+      memory.run("remember", { ...record, id: "another-conversation" }, "missing-retry", "first"),
     ).rejects.toThrow("not found");
     await expect(
       memory.run(
@@ -85,7 +100,7 @@ test("invalid state and memory updates never change the last committed Conversat
       "remove",
       "next",
     );
-    expect(await memory.context()).not.toContain("연락하고 싶음");
+    expect((await readRuntime(root))?.additional).not.toHaveProperty("연락하고 싶음");
     await memory.run(
       "update_state",
       {
@@ -145,7 +160,7 @@ test("invalid state and memory updates never change the last committed Conversat
 test("corrupt execution records and incomplete or invalid Markdown fail closed", async () => {
   const root = await mkdtemp(join(tmpdir(), "memory-corrupt-"));
   try {
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     await writeFile(join(root, "STATE.md"), "private invalid state");
     await expect(memory.context()).rejects.toThrow("both initial");
     await writeFile(join(root, "MEMORY.md"), "private memory");
@@ -156,7 +171,6 @@ test("corrupt execution records and incomplete or invalid Markdown fail closed",
     await rm(join(root, "STATE.md"), { recursive: true });
     await rm(join(root, "MEMORY.md"));
     await memory.roll("create", "first");
-    await expect(memory.restore({ private: "payload" })).rejects.toThrow("snapshot");
     const receipts = join(root, ".memory", "receipts.json");
     await writeFile(receipts, "not JSON: private");
     await expect(memory.context()).rejects.toThrow("memory files");
@@ -170,14 +184,37 @@ test("corrupt execution records and incomplete or invalid Markdown fail closed",
     await mkdir(empty);
     await symlink(empty, alias);
     try {
-      await expect(conversationMemory(alias).context()).rejects.toThrow("real session directory");
+      await expect(readRuntime(alias)).rejects.toThrow("real session directory");
     } finally {
       await rm(alias);
     }
-    await expect(conversationMemory(join(root, "MEMORY.md")).context()).rejects.toThrow(
-      "real session directory",
-    );
+    await expect(readRuntime(join(root, "MEMORY.md"))).rejects.toThrow("real session directory");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("an invalid archived memory snapshot is rejected before any restore writes and without exposing its payload", () =>
+  withRemoteHost((remote, directory, { transport }) =>
+    Effect.gen(function* () {
+      const session = yield* remote.createSession("persona1");
+      const archive = Schema.decodeUnknownSync(sessionArchive)(
+        yield* exportSessions(remote.client, [session.id]),
+      );
+      const malformed = JSON.stringify({
+        ...archive,
+        personas: archive.personas.map((persona) => ({
+          ...persona,
+          snapshot: { ...persona.snapshot, runtime: { private: "PRIVATE_MEMORY_SNAPSHOT" } },
+        })),
+      });
+      transport.requests.length = 0;
+      const error = yield* restoreSessions(remote.client, malformed, directory).pipe(Effect.flip);
+      expect(error.message).toBe("Invalid private session archive");
+      expect(error.message).not.toContain("PRIVATE_MEMORY_SNAPSHOT");
+      expect(transport.requests).toEqual([]);
+      expect(yield* exportSessions(remote.client, [session.id])).toBe(
+        Schema.encodeSync(sessionArchive)(archive),
+      );
+    }),
+  ));

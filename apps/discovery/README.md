@@ -9,7 +9,9 @@ style selection, profile browsing and waitlist registration. The Discovery logo
 returns home; native links support browser history, reloads and direct entry.
 Display language, image style and Likes retain their existing browser storage.
 Private `/#reselect=…` links sent through iMessage still open Discovery directly
-and retain their fragment for registration.
+and retain their fragment for registration. The browser also sends the token to
+the private Reselection listing, which hides personas who ended a relationship
+with that handle only. Public listings remain independent of relationship endings.
 
 ## Public profile links
 
@@ -26,9 +28,11 @@ Opening a profile updates the address; collapsing it returns to `/explore` while
 preserving the deck, selected photo and private reselection fragment. Shared URLs
 never contain that fragment, handles or browser choices.
 
-The Worker reads api-app's current `/discovery/personas` response on each request,
-including its retired-persona filtering. It validates and strips unknown fields,
-renders public content into the initial HTML, and embeds only that public snapshot
+The Worker reads api-app's current `/discovery/personas` response on each request.
+Published personas remain listed at their five-assignment capacity, without a
+capacity badge. Selection enforces capacity; Discovery makes no exclusivity promise
+and has no exclusivity section or its images. The Worker validates and strips unknown
+fields, renders public content into the initial HTML, and embeds only that public snapshot
 for the browser so swiping can continue without another Catalog request. No private
 persona description, State, Memory, identity sheet or authoring prompt is used.
 HTML, sitemap and health responses use `Cache-Control: no-store`.
@@ -61,7 +65,7 @@ authored language; controls support Korean, English and Japanese.
 
 `/sitemap.xml` lists home, `/explore` and current public profile URLs with public
 image locations. It never lists a separate directory or withdrawn personas.
-`/robots.txt` advertises the sitemap. A missing, unpublished or retired profile
+`/robots.txt` advertises the sitemap. A missing or unpublished profile
 returns an actual 404 with `noindex`. Catalog or rendering failures return 503
 with `Retry-After`, a request ID and payload-safe structured diagnostics.
 `/health` identifies service `discovery`, embeds the artifact's source commit

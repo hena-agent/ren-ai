@@ -93,12 +93,15 @@ test.each([false, true])(
               JSON.stringify({ ...fixture.persona, id: "different-persona" }),
             ),
           );
-          yield* remote.sessions.prompt({
-            sessionID: session.id,
-            text: "a non-matching snapshot must fail closed",
-          });
-          yield* remote.sessions.wait(session.id);
-          expect((yield* remote.sessions.get(session.id)).outcome).toBe("failed");
+          expect(
+            yield* remote.sessions
+              .prompt({
+                sessionID: session.id,
+                text: "a non-matching snapshot must fail closed",
+              })
+              .pipe(Effect.flip),
+          ).toBeInstanceOf(Error);
+          expect(yield* remote.sessions.inbox(session.id)).toEqual([]);
           expect(yield* llm.requests()).toHaveLength(beforeMismatch);
         }),
       );

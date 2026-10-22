@@ -1,9 +1,21 @@
 import { Effect, Schema } from "effect";
 import { Session } from "@opencode/schema/session";
+import { Agent } from "@opencode/schema";
 import { expect, test } from "vitest";
-import { withRemoteHost, pausedRestore } from "../../test/remote-host.test-helper.ts";
+import {
+  withRemoteHost,
+  pausedRestore,
+  exportedArchive,
+} from "../../test/remote-host.test-helper.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";
+
+const createdArchive = (remote: Parameters<typeof exportedArchive>[0]) =>
+  Effect.gen(function* () {
+    const session = yield* remote.createSession("persona1");
+    const archive = yield* exportedArchive(remote, [session.id]);
+    return { session, archive };
+  });
 
 test("a snapshot for another persona rejects the entire archive before any folder or session is written", () =>
   withRemoteHost((remote, directory, { transport }) =>
@@ -19,7 +31,7 @@ test("a snapshot for another persona rejects the entire archive before any folde
           entry.info.id === second.id
             ? {
                 ...entry,
-                folder: { ...entry.folder!, persona: { ...entry.folder!.persona, id: "another" } },
+                folder: { ...entry.folder, persona: { ...entry.folder.persona, id: "another" } },
               }
             : entry,
         ),
@@ -69,18 +81,24 @@ test.each([{ tools: [] }, { id: "msg_journal", tools: [{}] }])(
   (recovery) =>
     withRemoteHost((remote, directory, { transport }) =>
       Effect.gen(function* () {
-        const session = yield* remote.createSession("persona1");
+        const { session, archive } = yield* createdArchive(remote);
         const malformed = JSON.stringify({
-          version: 1,
+          ...archive,
           sessions: [
-            { info: Schema.encodeSync(Session.Info)(session), messages: [], pending: [], recovery },
+            {
+              ...archive.sessions[0],
+              info: Schema.encodeSync(Session.Info)(session),
+              messages: [],
+              pending: [],
+              recovery,
+            },
           ],
         });
         yield* remote.sessions.remove(session.id);
         transport.requests.length = 0;
         expect(
           (yield* restoreSessions(remote.client, malformed, directory).pipe(Effect.flip)).message,
-        ).toContain("Missing key");
+        ).toBe("Invalid private session archive");
         expect(transport.requests).toEqual([]);
       }),
     ),
@@ -107,3 +125,72 @@ test.each(["user", "synthetic"] as const)(
       }),
     ),
 );
+
+test("invalid scope inventory rejects the whole archive before any native or folder mutation", () =>
+  withRemoteHost((remote, directory, { transport }) =>
+    Effect.gen(function* () {
+      const { session, archive } = yield* createdArchive(remote);
+      const folder = archive.personas[0]!;
+      const entry = archive.sessions[0]!;
+      const binding = folder.bindings[session.id]!;
+      const cases = [
+        {
+          archive: { ...archive, personas: [folder, folder] },
+        },
+        {
+          archive: { ...archive, personas: [folder, { ...folder, sandboxID: "ses_duplicate" }] },
+        },
+        {
+          archive: {
+            ...archive,
+            personas: [
+              { ...folder, bindings: { [session.id]: { ...binding, personaID: "other" } } },
+            ],
+          },
+        },
+        {
+          archive: { ...archive, personas: [{ ...folder, relationships: {} }] },
+        },
+        {
+          archive: {
+            ...archive,
+            sessions: [
+              {
+                ...entry,
+                info: { ...entry.info, agent: Agent.ID.make("other") },
+                folder: { ...entry.folder, persona: { ...entry.folder.persona, id: "other" } },
+              },
+            ],
+          },
+        },
+        {
+          archive: {
+            ...archive,
+            sessions: [
+              {
+                ...entry,
+                folder: {
+                  ...entry.folder,
+                  binding: { ...binding, conversationKey: "wrong-relationship" },
+                },
+              },
+            ],
+          },
+        },
+        {
+          archive: { ...archive, personas: [] },
+        },
+      ];
+      for (const invalid of cases) {
+        transport.requests.length = 0;
+        const rejected = yield* restoreSessions(
+          remote.client,
+          Schema.encodeSync(sessionArchive)(invalid.archive),
+          directory,
+        ).pipe(Effect.flip);
+        expect(rejected).toBeInstanceOf(Error);
+        expect(transport.requests).toEqual([]);
+      }
+      expect(yield* exportedArchive(remote, [session.id])).toEqual(archive);
+    }),
+  ));

@@ -41,12 +41,22 @@ export const rebuilder = (
                 Effect.catchTag("Session.NotFoundError", () => Effect.succeed(false)),
               ));
               if (force || missing) {
-                const session = yield* host.createSession(conversation.personaID);
+                const [scope] = yield* sql<{
+                  usage_key: string;
+                }>`SELECT usage_key FROM conversation WHERE id = ${conversation.id}`;
+                if (!missing) yield* host.sessions.writable(Session.ID.make(oldID), false);
+                const session = yield* host.createSession(
+                  conversation.personaID,
+                  undefined,
+                  scope!.usage_key,
+                  false,
+                );
                 yield* directory.replaceSession(conversation, session.id);
                 conversation = { ...conversation, sessionID: session.id };
               } else if (!(yield* directory.rebuilding(conversation))) {
                 return "present" as const;
               }
+              yield* host.sessions.writable(Session.ID.make(conversation.sessionID), false);
               const [origin] = yield* sql<Origin>`SELECT conversation.started_at AS startedAt,
                 l.conversation_language AS conversationLanguage, p.name, p.age, p.gender,
                 conversation.starting_relationship AS startingRelationship
@@ -73,22 +83,65 @@ export const rebuilder = (
         }
         if (!persona)
           return yield* Effect.fail(new Error(`Unknown persona: ${conversation.personaID}`));
-        yield* host.sessions.prompt({
-          sessionID: Session.ID.make(conversation.sessionID),
-          id: SessionMessage.ID.make(`msg_started_${conversation.sessionID}`),
-          text: conversationStarted(
-            origin.startedAt,
-            persona.openingLine,
-            persona.timeZone,
-            origin.conversationLanguage ?? undefined,
-            origin,
-            origin.startingRelationship ?? undefined,
-          ),
-        });
-        yield* replay(conversation);
-        yield* directory.rebuilt(conversation);
-        if (oldID !== conversation.sessionID && !missing) yield* remove(oldID);
-        return "rebuilt" as const;
+        return yield* directory.withReplay(conversation.sessionID)(
+          Effect.gen(function* () {
+            if (
+              (yield* directory.byHandle(handle))?.sessionID !== conversation.sessionID ||
+              !(yield* directory.rebuilding(conversation))
+            )
+              return "present" as const;
+            const sessionID = Session.ID.make(conversation.sessionID);
+            const retrying =
+              (yield* host.sessions.get(sessionID)).outcome === "failed" ||
+              (yield* host.sessions.inbox(sessionID)).length > 0;
+            yield* directory.admit(
+              conversation.sessionID,
+              host.sessions.prompt({
+                sessionID: Session.ID.make(conversation.sessionID),
+                id: SessionMessage.ID.make(`msg_started_${conversation.sessionID}`),
+                text: conversationStarted(
+                  origin.startedAt,
+                  persona.openingLine,
+                  persona.timeZone,
+                  origin.conversationLanguage ?? undefined,
+                  origin,
+                  origin.startingRelationship ?? undefined,
+                ),
+              }),
+              true,
+            );
+            yield* replay(conversation);
+            yield* host.sessions.wait(sessionID);
+            if (retrying) {
+              yield* directory.admit(conversation.sessionID, host.retry(sessionID), true);
+              yield* host.sessions.wait(sessionID);
+            }
+            yield* directory.withHandle(handle)(
+              withLifecycle(
+                Effect.gen(function* () {
+                  const current = yield* directory.byHandle(handle);
+                  if (
+                    current?.sessionID !== conversation.sessionID ||
+                    !(yield* directory.rebuilding(current))
+                  )
+                    return;
+                  const completed = yield* host.sessions.get(sessionID);
+                  const pending = yield* host.sessions.inbox(sessionID);
+                  if (completed.outcome !== "succeeded" || pending.length > 0)
+                    yield* Effect.fail(
+                      new Error(
+                        "Historical replay did not complete successfully; rebuild remains read-only",
+                      ),
+                    );
+                  yield* host.sessions.writable(Session.ID.make(current.sessionID), true);
+                  yield* directory.rebuilt(current);
+                }),
+              ),
+            );
+            if (oldID !== conversation.sessionID && !missing) yield* remove(oldID);
+            return "rebuilt" as const;
+          }),
+        );
       });
     const missing = Effect.gen(function* () {
       for (const conversation of yield* directory.all()) yield* rebuild(conversation.handle);

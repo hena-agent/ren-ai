@@ -61,7 +61,7 @@ test("persona sessions are operated through the public OpenCode API", async () =
           failFolderRpc = false;
           expect(createError).toBeInstanceOf(Error);
           const session = yield* remote.createSession("persona1");
-          expect(session.location.directory).toBe(join(personaDirectory, "sessions", session.id));
+          expect(session.location.directory).toBe(join(personaDirectory, "personas", "persona1"));
           expect(
             yield* Effect.promise(() =>
               readdir(join(session.location.directory, ".opencode/agents")),
@@ -126,7 +126,7 @@ test("persona sessions are operated through the public OpenCode API", async () =
                   ).data.some((agent) => agent.id === "persona1"),
                 { timeout: 5000 },
               )
-              .toBe(false);
+              .toBe(true);
           });
           yield* restoreSessions(remote.client, archive, personaDirectory);
           expect((yield* remote.sessions.get(session.id)).title).toBe("operator title");

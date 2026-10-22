@@ -4,7 +4,10 @@ import { createEmbeddedRoutes } from "@opencode/server/routes";
 import { exportOffline } from "../src/operations/offline-export.ts";
 
 const [directory] = process.argv.slice(2);
-if (!directory) throw new Error("Supply the source persona location recorded in the old sessions");
+if (!directory)
+  throw new Error(
+    "Supply the recorded managed root with its stopped persona and Sandbox scopes mounted",
+  );
 await mkdir("/scratch/config", { recursive: true });
 await writeFile("/scratch/opencode.sqlite", await readFile("/snapshot/opencode.sqlite"), {
   flag: "wx",
@@ -25,5 +28,5 @@ const archive = await Effect.runPromise(
 );
 await writeFile("/output/sessions.json", archive, { flag: "wx", mode: 0o600 });
 process.stdout.write(
-  "Exported the stopped copy; no intake, restart sweep, or original database writes.\n",
+  "Exported the stopped database copy and existing managed scopes; no intake, lifecycle admission, or model execution.\n",
 );

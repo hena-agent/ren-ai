@@ -5,10 +5,12 @@ import type { SessionInbox } from "@opencode/schema/session-inbox";
 import { Effect, Schema } from "effect";
 import { sessionArchive } from "./transfer-format.ts";
 import { dirname } from "node:path";
-import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
-import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
-import { loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import type { Persona } from "@ren-ai/personas";
+import { sessionFolders, type personaFolderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
+import {
+  managedFolder,
+  personaDirectory,
+  sessionDirectory,
+} from "@ren-ai/plugin-session-folder/paths";
 
 type Client = Effect.Success<ReturnType<typeof OpenCode.make>>;
 type RestorableSession = Omit<(typeof sessionArchive.Type)["sessions"][number], "pending"> & {
@@ -16,8 +18,30 @@ type RestorableSession = Omit<(typeof sessionArchive.Type)["sessions"][number], 
 };
 const restorable = (item: SessionInbox.Info): item is SessionInbox.User | SessionInbox.Synthetic =>
   item.type === "user" || item.type === "synthetic";
-export const exportSessions = (client: Client, ids: ReadonlyArray<Session.ID>) =>
+export interface FolderSnapshotIO {
+  readonly inventory: (
+    root: string,
+  ) => Effect.Effect<ReadonlyArray<typeof personaFolderSnapshot.Type>, Error>;
+}
+
+export const exportSessions = (
+  client: Client,
+  ids: ReadonlyArray<Session.ID>,
+  inventory?: {
+    readonly root: string;
+    readonly snapshots: ReadonlyArray<typeof personaFolderSnapshot.Type>;
+  },
+) =>
   Effect.gen(function* () {
+    const folders = new Map<string, typeof personaFolderSnapshot.Type>();
+    for (const snapshot of inventory?.snapshots ?? []) {
+      const target = snapshot.sandboxID
+        ? sessionDirectory(inventory!.root, snapshot.sandboxID)
+        : personaDirectory(inventory!.root, snapshot.snapshot.persona.id);
+      if (folders.has(target))
+        return yield* Effect.fail(new Error("Duplicate persona scope in inventory"));
+      folders.set(target, snapshot);
+    }
     const sessions = yield* Effect.forEach(ids, (sessionID) =>
       Effect.gen(function* () {
         const pending = yield* client.session.inbox.list({ sessionID });
@@ -26,11 +50,41 @@ export const exportSessions = (client: Client, ids: ReadonlyArray<Session.ID>) =
         const directory = data.info.location.directory;
         const root = dirname(dirname(directory));
         const source = managedFolder(root, directory);
-        const folder = source
-          ? yield* client
-              .rpc(sessionFolders)
-              .read({ folderID: source }, { location: { directory: root } })
-          : undefined;
+        if (!source)
+          return yield* Effect.fail(
+            new Error("Migrate legacy sessions before exporting shared life"),
+          );
+        if (!folders.has(directory)) {
+          if (inventory)
+            return yield* Effect.fail(
+              new Error("Inventory has no session scope; retry after admission settles"),
+            );
+          const snapshot = yield* client
+            .rpc(sessionFolders)
+            .snapshot({ folderID: sessionID }, { location: { directory: root } });
+          const target = snapshot.sandboxID
+            ? sessionDirectory(root, snapshot.sandboxID)
+            : personaDirectory(root, snapshot.snapshot.persona.id);
+          if (target !== directory)
+            return yield* Effect.fail(
+              new Error(
+                "Session location does not match its durable persona scope; retry after admission settles",
+              ),
+            );
+          folders.set(directory, snapshot);
+        }
+        const saved = folders.get(directory);
+        const binding = saved?.bindings[sessionID];
+        if (!saved || !binding)
+          return yield* Effect.fail(
+            new Error("Snapshot has no session binding; retry after admission settles"),
+          );
+        const folder = {
+          persona: saved.snapshot.persona,
+          agent: saved.snapshot.agent,
+          rules: saved.snapshot.rules,
+          binding,
+        };
         const unfinished =
           last !== undefined &&
           data.messages.at(-1)?.type !== "idle" &&
@@ -40,7 +94,7 @@ export const exportSessions = (client: Client, ids: ReadonlyArray<Session.ID>) =
         return {
           ...data,
           pending,
-          ...(folder ? { folder } : {}),
+          folder,
           ...(unfinished
             ? {
                 recovery: {
@@ -57,7 +111,11 @@ export const exportSessions = (client: Client, ids: ReadonlyArray<Session.ID>) =
         };
       }),
     );
-    return Schema.encodeSync(sessionArchive)({ version: 1, sessions });
+    return Schema.encodeSync(sessionArchive)({
+      version: 2,
+      sessions,
+      personas: [...folders.values()],
+    });
   }).pipe(
     Effect.mapError(
       (error) => new Error(error instanceof Error ? error.message : JSON.stringify(error)),
@@ -97,9 +155,13 @@ const restoredHistory = (entry: (typeof sessionArchive.Type)["sessions"][number]
 };
 
 /** Decode and order the complete archive before any OpenCode mutations. */
-const orderedSessions = (contents: string, personas: ReadonlyMap<string, Persona> | undefined) =>
+const decodeArchive = (contents: string) =>
+  Schema.decodeUnknownEffect(sessionArchive)(contents).pipe(
+    Effect.mapError(() => new Error("Invalid private session archive")),
+  );
+
+const orderedSessions = (data: typeof sessionArchive.Type) =>
   Effect.gen(function* () {
-    const data = yield* Schema.decodeUnknownEffect(sessionArchive)(contents);
     const ids = new Set(data.sessions.map((entry) => entry.info.id));
     if (ids.size !== data.sessions.length)
       return yield* Effect.fail(new Error("Duplicate session in archive"));
@@ -112,12 +174,8 @@ const orderedSessions = (contents: string, personas: ReadonlyMap<string, Persona
       const pending = entry.pending;
       if (!pending.every(restorable))
         return yield* Effect.fail(new Error("Drain pending control operations before migration"));
-      if (entry.folder && entry.folder.persona.id !== entry.info.agent)
+      if (entry.folder.persona.id !== entry.info.agent)
         return yield* Effect.fail(new Error("Snapshot persona does not match session agent"));
-      if (!entry.folder && !personas?.has(entry.info.agent!))
-        return yield* Effect.fail(
-          new Error("Legacy restore requires the original persona catalog"),
-        );
       validated.push({ ...entry, pending });
     }
     const remaining = [...validated];
@@ -133,15 +191,44 @@ const orderedSessions = (contents: string, personas: ReadonlyMap<string, Persona
     return ordered;
   });
 
+const archiveBindings = (archive: typeof sessionArchive.Type) => {
+  const targets = new Map<string, string>();
+  const roots = new Set<string>();
+  for (const folder of archive.personas) {
+    const root = folder.sandboxID
+      ? `sandbox:${folder.sandboxID}`
+      : `persona:${folder.snapshot.persona.id}`;
+    if (roots.has(root)) throw new Error("Duplicate persona scope in archive");
+    roots.add(root);
+    for (const [id, binding] of Object.entries(folder.bindings)) {
+      const session = archive.sessions.find((entry) => entry.info.id === id);
+      if (
+        targets.has(id) ||
+        binding.personaID !== folder.snapshot.persona.id ||
+        !folder.relationships[binding.conversationKey]
+      )
+        throw new Error("Invalid or duplicate archived binding");
+      if (
+        session &&
+        (session.info.agent !== binding.personaID ||
+          session.folder?.binding?.conversationKey !== binding.conversationKey)
+      )
+        throw new Error("Archived session does not match persona binding");
+      targets.set(id, "");
+    }
+  }
+  for (const session of archive.sessions)
+    if (!targets.has(session.info.id))
+      throw new Error("Archive is missing a persona scope for its session");
+  return targets;
+};
+
 /** Validate the entire archive and all destination IDs before importing anything. */
-export const restoreSessions = (
-  client: Client,
-  contents: string,
-  directory: string,
-  personas?: ReadonlyMap<string, Persona>,
-) =>
+export const restoreSessions = (client: Client, contents: string, directory: string) =>
   Effect.gen(function* () {
-    const ordered = yield* orderedSessions(contents, personas);
+    const archive = yield* decodeArchive(contents);
+    const ordered = yield* orderedSessions(archive);
+    const targets = yield* Effect.try(() => archiveBindings(archive));
     for (const entry of ordered) {
       const present = yield* client.session.get({ sessionID: entry.info.id }).pipe(
         Effect.as(true),
@@ -149,17 +236,15 @@ export const restoreSessions = (
       );
       if (present) return yield* Effect.fail(new Error(`Session ${entry.info.id} already exists`));
     }
-    for (const entry of ordered) {
-      const sessionID = entry.info.id;
-      const folder =
-        entry.folder ??
-        renderSnapshot(
-          personas!.get(entry.info.agent!)!,
-          yield* Effect.tryPromise(loadGroundRules),
-        );
+    for (const folder of archive.personas) {
       const target = yield* client
         .rpc(sessionFolders)
-        .write({ folderID: sessionID, snapshot: folder }, { location: { directory } });
+        .restore({ snapshot: folder }, { location: { directory } });
+      for (const id of Object.keys(folder.bindings)) targets.set(id, target);
+    }
+    for (const entry of ordered) {
+      const sessionID = entry.info.id;
+      const target = targets.get(sessionID)!;
       // Recreated folders may still have an empty agent registry cached after deletion.
       yield* client.debug.location.evict({ location: { directory: target } });
       yield* client.session.import({

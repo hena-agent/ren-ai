@@ -82,7 +82,7 @@ test("folder RPC scopes files, preserves identity, and reloads native persona in
             "Always remember the blue umbrella.",
           );
           yield* rpc.write({ folderID: session.id, snapshot: updated }, location);
-          expect(yield* rpc.read({ folderID: other.id }, location)).toEqual(old);
+          expect(yield* rpc.read({ folderID: other.id }, location)).toMatchObject(updated);
           yield* Effect.promise(async () => {
             await expect
               .poll(
@@ -114,7 +114,7 @@ test("folder RPC scopes files, preserves identity, and reloads native persona in
           expect(requests).toContain("quiet photographer");
           expect(requests).toContain("blue umbrella");
           const unchanged = awaitFile(join(other.location.directory, "AGENTS.md"));
-          expect(yield* unchanged).not.toContain("blue umbrella");
+          expect(yield* unchanged).toContain("blue umbrella");
           yield* remote.sessions.remove(session.id);
           yield* remote.sessions.remove(session.id);
           expect(yield* reject(rpc.read({ folderID: session.id }, location))).toContain(
@@ -132,24 +132,40 @@ test("folder RPC scopes files, preserves identity, and reloads native persona in
               .toBe(true);
           });
 
-          const blocked = join(personaDirectory, "sessions", "ses_blocked");
+          const blocked = join(personaDirectory, "personas", "blocked");
           yield* Effect.promise(() => symlink(root, blocked));
           expect(
-            yield* reject(rpc.write({ folderID: "ses_blocked", snapshot: old }, location)),
-          ).toContain("real directory");
-          const broken = join(personaDirectory, "sessions", "ses_broken");
+            yield* reject(
+              rpc.write(
+                {
+                  folderID: "ses_blocked",
+                  snapshot: renderSnapshot({ ...old.persona, id: "blocked" }, old.rules),
+                },
+                location,
+              ),
+            ),
+          ).toContain("already exists");
+          const broken = join(personaDirectory, "personas", "broken");
           yield* Effect.promise(() => mkdir(broken));
           for (const file of ["persona.json", "AGENTS.md"]) {
             const occupied = join(broken, file);
             yield* Effect.promise(() => mkdir(occupied));
             expect(
-              yield* reject(rpc.write({ folderID: "ses_broken", snapshot: old }, location)),
+              yield* reject(
+                rpc.write(
+                  {
+                    folderID: "ses_broken",
+                    snapshot: renderSnapshot({ ...old.persona, id: "broken" }, old.rules),
+                  },
+                  location,
+                ),
+              ),
             ).toContain("Cannot write");
             yield* Effect.promise(() => rm(occupied, { recursive: true }));
           }
           yield* Effect.promise(async () => {
-            await rm(join(personaDirectory, "sessions"), { recursive: true });
-            await symlink(root, join(personaDirectory, "sessions"));
+            await rm(join(personaDirectory, "personas"), { recursive: true });
+            await symlink(root, join(personaDirectory, "personas"));
           });
           expect(yield* remote.createSession("persona1").pipe(Effect.flip)).toEqual(
             new Error("Cannot create persona session"),

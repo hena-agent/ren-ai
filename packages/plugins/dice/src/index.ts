@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode/plugin/effect";
 import { inPersonaLocation, conversationTool } from "@ren-ai/plugin-application";
-import { conversationMemory } from "@ren-ai/plugin-session-folder/memory";
+import { personaMemory } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 import { Effect, Schema, type JsonSchema } from "effect";
 import { isDeepStrictEqual } from "node:util";
@@ -33,12 +33,7 @@ export const dicePlugin = (options: { readonly personaDirectory: string }) =>
             options: { codemode: false },
             execute: (_, context) =>
               conversationTool("dice", context.sessionID, context.id, async () => {
-                if (
-                  managedFolder(options.personaDirectory, ctx.location.directory) !==
-                  context.sessionID
-                )
-                  throw new Error("Conversation dice binding mismatch");
-                return conversationMemory(ctx.location.directory).roll(
+                return personaMemory(ctx.location.directory, context.sessionID).roll(
                   context.id,
                   context.messageID,
                 );

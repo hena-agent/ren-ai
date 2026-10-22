@@ -11,6 +11,7 @@ import { contactFixture, withContactDatabase } from "./contact.test-helper.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
 import { firstContacts } from "./first-contact.ts";
 import { checkAvailability } from "./availability.ts";
+import { reselect } from "./reselection.ts";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { Session } from "@opencode/schema/session";
 import { SessionInbox } from "@opencode/schema/session-inbox";
@@ -99,6 +100,19 @@ test("a delivered private reselection link admits another persona for the same U
         expect((yield* submit({ handle: "+821098765432", reselectionToken: token })).status).toBe(
           400,
         );
+        expect(
+          yield* reselect({
+            handle: "+821098765432",
+            locale: "ko",
+            privacyNoticeVersion: discoveryNotice.version,
+            likedPersonaIDs: ["harin"],
+            turnstileToken: "human",
+            reselectionToken: token,
+          }).pipe(Effect.flip),
+        ).toBe("reselection");
+        expect(
+          yield* f.sql`SELECT 1 FROM discovery_registration WHERE handle = '+821098765432'`,
+        ).toEqual([]);
         expect((yield* submit({ likedPersonaIDs: ["luna"], reselectionToken: token })).status).toBe(
           400,
         );
@@ -217,10 +231,23 @@ test("a delivered private reselection link admits another persona for the same U
         const catalog = yield* Effect.promise(() =>
           web.handler(new Request("https://api.test/discovery/personas"), verified),
         );
-        expect(yield* Effect.promise(() => catalog.json())).toEqual([f.profiles[2]]);
+        expect(yield* Effect.promise(() => catalog.json())).toEqual(f.profiles);
         const latestToken = new URL(fake.bubbles.at(-1)!.text.split("\n").at(-1)!).hash.slice(
           "#reselect=".length,
         );
+        const privateCatalog = yield* Effect.promise(() =>
+          web.handler(
+            new Request("https://api.test/discovery/reselection/personas", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reselectionToken: latestToken }),
+            }),
+            verified,
+          ),
+        );
+        expect(privateCatalog.status).toBe(200);
+        expect(privateCatalog.headers.get("Cache-Control")).toBe("no-store");
+        expect(yield* Effect.promise(() => privateCatalog.json())).toEqual([f.profiles[2]]);
         expect(
           (yield* submit({ reselectionToken: latestToken, likedPersonaIDs: ["jiwoo"] })).status,
         ).toBe(200);

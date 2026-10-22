@@ -5,6 +5,7 @@ import { Effect, Schema } from "effect";
 import { expect, test } from "vitest";
 import { readRuntime, memoryToolNames } from "@ren-ai/plugin-session-folder/memory";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
+import { emptyMemory } from "../../test/memory.test-helper.ts";
 
 test.each(["absent", "wrong-schema", "wrong-description"] as const)(
   "OC removes %s memory tools before the model can use them",
@@ -40,9 +41,9 @@ test.each(["absent", "wrong-schema", "wrong-description"] as const)(
             request.tools.every((tool) => !memoryToolNames.some((name) => name === tool.name)),
           ),
         ).toBe(true);
-        expect(
-          yield* Effect.promise(() => readRuntime(session.location.directory)),
-        ).toBeUndefined();
+        expect(yield* Effect.promise(() => readRuntime(session.location.directory))).toMatchObject(
+          emptyMemory,
+        );
       }),
     ),
 );
@@ -78,6 +79,7 @@ test.each(["update_memory", "dice"] as const)(
               name === "dice"
                 ? {}
                 : {
+                    scope: "relationship",
                     markdown: "private new memory",
                     reason: "private reason",
                   },
@@ -91,9 +93,9 @@ test.each(["update_memory", "dice"] as const)(
         expect(JSON.stringify((yield* llm.requests()).at(-1)!.messages)).toContain(
           `Conversation ${name} failed`,
         );
-        expect(
-          yield* Effect.promise(() => readRuntime(session.location.directory)),
-        ).toBeUndefined();
+        expect(yield* Effect.promise(() => readRuntime(session.location.directory))).toMatchObject(
+          emptyMemory,
+        );
       }),
     ),
 );
@@ -112,13 +114,11 @@ test("root-location sessions do not receive Conversation memory or dice", () =>
       yield* remote.sessions.wait(session.id);
       const requests = yield* llm.requests();
       expect(requests.length).toBeGreaterThan(0);
-      expect(
-        requests.every((request) =>
-          request.tools.every(
-            (tool) => tool.name !== "dice" && !memoryToolNames.some((name) => name === tool.name),
-          ),
-        ),
-      ).toBe(true);
+      const offered = new Set(
+        requests.flatMap((request) => request.tools.map((tool) => tool.name)),
+      );
+      for (const forbidden of ["dice", ...memoryToolNames])
+        expect(offered).not.toContain(forbidden);
       expect(yield* Effect.promise(() => readRuntime(directory))).toBeUndefined();
     }),
   ));

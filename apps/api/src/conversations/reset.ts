@@ -8,6 +8,7 @@ import { timestamp } from "../transcript/transcript.ts";
 import { retainedSessions } from "./retained.ts";
 import { resetBoundary } from "./reset-boundary.ts";
 import { withLifecycle } from "./lifecycle.ts";
+import { stopSession } from "./stop.ts";
 
 export const resets = (
   directory: Effect.Success<typeof conversations>,
@@ -54,6 +55,10 @@ export const resets = (
                 if (!conversation) return undefined;
                 const persona = host.personas.get(conversation.personaID)!;
                 const sessionID = Session.ID.make(conversation.sessionID);
+                yield* stopSession(host, sessionID);
+                yield* host.sessions
+                  .writable(sessionID, false)
+                  .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void));
                 const title = `${persona.id[0]!.toUpperCase()}${persona.id.slice(1)} · ${row.handle} · reset ${timestamp(row.createdAt, persona.timeZone)}`;
                 yield* sql.withTransaction(
                   Effect.gen(function* () {

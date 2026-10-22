@@ -8,9 +8,6 @@
   align-items: center;
   gap: clamp(40px, 6vw, 96px);
 }
-.home-feature + .home-feature {
-  margin-top: 112px;
-}
 .home-feature h2 {
   font-size: clamp(36px, 3.7vw, 56px);
   line-height: 1.2;
@@ -99,104 +96,6 @@
   font-size: 16px;
   line-height: 1.6;
   word-break: keep-all;
-}
-.home-exclusive {
-  column-gap: clamp(32px, 4vw, 64px);
-  padding-block: 72px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.home-exclusive-heading h2 {
-  font-size: clamp(44px, 4.5vw, 64px);
-  line-height: 1.14;
-  letter-spacing: -0.065em;
-}
-.home-exclusive-heading h2 > em {
-  color: var(--accent);
-  font-style: normal;
-}
-.home-connection {
-  --connection-size: 112px;
-  display: grid;
-  grid-template-columns: var(--connection-size) minmax(56px, 1fr) var(--connection-size);
-  align-items: start;
-  width: min(100%, 460px);
-  justify-self: center;
-  margin: 0;
-}
-.home-connection-persona,
-.home-connection-recipient {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-  text-align: center;
-}
-.home-connection-avatar,
-.home-connection-you {
-  width: var(--connection-size);
-  height: var(--connection-size);
-  margin-bottom: 16px;
-  overflow: hidden;
-  border-radius: 50%;
-}
-.home-connection-avatar > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.home-connection-you {
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  background: var(--canvas);
-  font-size: 20px;
-  font-weight: 600;
-}
-.home-connection-persona > strong {
-  margin-bottom: 4px;
-  font-size: 16px;
-  font-weight: 600;
-}
-.home-connection-persona > span,
-.home-connection-recipient > span {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.home-connection-link {
-  display: grid;
-  grid-template-columns: 1fr 28px 1fr;
-  align-items: center;
-  gap: 12px;
-  height: var(--connection-size);
-  padding-inline: 16px;
-  color: var(--accent);
-}
-.home-connection-link::before,
-.home-connection-link::after {
-  height: 1px;
-  background: currentColor;
-  content: "";
-}
-.home-exclusive-body {
-  max-width: 420px;
-  padding-top: 28px;
-}
-.home-exclusive-body > p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 17px;
-  line-height: 1.9;
-  word-break: keep-all;
-}
-.home-exclusive-body > .home-exclusive-note {
-  margin-top: 24px;
-  color: var(--ink);
-  font-size: 17px;
-  line-height: 1.8;
-  white-space: pre-line;
 }
 .home-start {
   margin-top: 48px;
@@ -344,9 +243,6 @@
   .home-feature h2 {
     font-size: clamp(32px, 8.7vw, 48px);
   }
-  .home-feature + .home-feature {
-    margin-top: 64px;
-  }
   .home-feature-copy > p:not(.home-eyebrow) {
     margin-top: 20px;
     font-size: 16px;
@@ -359,37 +255,6 @@
   .home-notification > img {
     width: 44px;
     height: 44px;
-  }
-  .home-exclusive {
-    padding-block: 40px;
-  }
-  .home-exclusive-heading h2 {
-    font-size: clamp(40px, 10vw, 56px);
-  }
-  .home-exclusive-heading .home-eyebrow {
-    margin-bottom: 16px;
-  }
-  .home-exclusive-body {
-    padding-top: 20px;
-  }
-  .home-exclusive-body > p {
-    font-size: 16px;
-  }
-  .home-exclusive-body > .home-exclusive-note {
-    margin-top: 20px;
-    font-size: 16px;
-  }
-  .home-connection {
-    --connection-size: 88px;
-    margin-block: 12px;
-  }
-  .home-connection-link {
-    gap: 8px;
-    padding-inline: 10px;
-  }
-  .home-connection-persona > span,
-  .home-connection-recipient > span {
-    font-size: 12px;
   }
   .home-start {
     margin-top: 48px;

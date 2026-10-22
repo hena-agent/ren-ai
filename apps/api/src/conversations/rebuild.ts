@@ -4,7 +4,7 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import type { Messages, IncomingMessage } from "@ren-ai/imsg";
-import { intake } from "../intake/intake.ts";
+import { intake, type PromptImage } from "../intake/intake.ts";
 import { rebuilder } from "./rebuild-session.ts";
 import { resets } from "./reset.ts";
 
@@ -22,19 +22,24 @@ export const setupRebuilding = (
   Effect.gen(function* () {
     let restore: (handle: string) => Effect.Effect<void, Error>;
     const reset = yield* resets(directory, host, forget, messages);
+    const prompt = (
+      sessionID: string,
+      id: string,
+      text: string,
+      files?: ReadonlyArray<PromptImage>,
+    ) =>
+      host.sessions
+        .prompt({
+          sessionID: Session.ID.make(sessionID),
+          id: SessionMessage.ID.make(id),
+          text,
+          files,
+        })
+        .pipe(Effect.asVoid);
     const incoming = yield* intake(
       messages,
       directory.byHandle,
-      (sessionID, id, text, files) =>
-        directory.admit(
-          sessionID,
-          host.sessions.prompt({
-            sessionID: Session.ID.make(sessionID),
-            id: SessionMessage.ID.make(id),
-            text,
-            files,
-          }),
-        ),
+      prompt,
       (personaID) => host.personas.get(personaID)!.timeZone,
       reconcile,
       received,
@@ -43,13 +48,19 @@ export const setupRebuilding = (
       sent,
       reset.receive,
       arriving,
+      directory.admitLive,
+      (sessionID, id, text, files) =>
+        directory.admit(sessionID, prompt(sessionID, id, text, files), true),
     );
     const recovery = yield* rebuilder(directory, host, incoming.replay);
     restore = (handle) =>
-      recovery.rebuild(handle).pipe(
-        Effect.asVoid,
-        Effect.mapError((error) => new Error(String(error))),
-      );
+      Effect.gen(function* () {
+        for (;;) {
+          yield* recovery.rebuild(handle);
+          const current = yield* directory.byHandle(handle);
+          if (!current || !(yield* directory.rebuilding(current))) return;
+        }
+      }).pipe(Effect.mapError((error) => new Error(String(error))));
     if (eager) {
       yield* incoming.resetPending;
       yield* recovery.missing;

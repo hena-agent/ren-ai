@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -15,9 +16,8 @@ import { fileURLToPath } from "node:url";
 import { setTimeout } from "node:timers/promises";
 import { Schema } from "effect";
 import { Session } from "@opencode/schema";
-import { folderFiles, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
-
+import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
+import { folderSnapshot, personaFolderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 /** @param {string} text */
 const sessionData = (text) =>
   Schema.decodeUnknownSync(
@@ -32,13 +32,13 @@ const sessionData = (text) =>
     ),
   )(text).data;
 
-// Explicit integration entry: bun apps/api/test/compiled-plugin/regression.mjs
-// Requires the locally built plugin artifact and compiled CLI images, not live services or credentials.
+// Run with Bun against the built artifact and compiled CLI; no live services or credentials.
 const root = mkdtempSync(join(tmpdir(), "compiled-persona-plugin-"));
 const name = `ren-ai-plugin-regression-${randomUUID()}`;
 const artifact = `${name}-artifact`;
 const containers = [];
 let started = false;
+let probing = false;
 /** @param {string[]} args */
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", timeout: 180_000 });
 const auth = `Authorization: Basic ${Buffer.from("opencode:isolated-regression-password").toString("base64")}`;
@@ -60,13 +60,7 @@ function request(path, body, port = 4096) {
   try {
     return docker(...args, `http://127.0.0.1:${port}/${path}`);
   } catch (error) {
-    const payload = body === undefined ? "" : JSON.stringify(body);
-    const http = `${body === undefined ? "GET" : "POST"} /${path} HTTP/1.1\r\nHost: localhost\r\n${auth}\r\nx-opencode-directory: /srv/ren-ai\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(payload)}\r\nConnection: close\r\n\r\n${payload}`;
-    const encoded = Buffer.from(http).toString("base64");
-    throw new Error(
-      docker("exec", name, "sh", "-c", `echo ${encoded} | base64 -d | nc -w 1 127.0.0.1 ${port}`),
-      { cause: error },
-    );
+    throw new Error(`${body === undefined ? "GET" : "POST"} /${path} failed`, { cause: error });
   }
 }
 try {
@@ -74,34 +68,34 @@ try {
     "create",
     "--name",
     artifact,
+    "--volume",
+    "/artifact",
     "--entrypoint",
     "true",
     process.env["COMPILED_PLUGIN_IMAGE"] ?? "ren-ai/plugin:local",
   );
   containers.push(artifact);
-  docker("cp", `${artifact}:/artifact/plugins`, join(root, "plugins"));
+  mkdirSync(join(root, "plugins"));
   symlinkSync("plugins/tools/node_modules", join(root, "node_modules"), "dir");
   const plugins = ["tools", "context", "memory", "title", "dice", "session-folder"];
   for (const plugin of plugins) {
+    const target = join(root, "plugins", plugin);
+    mkdirSync(target);
+    docker("cp", `${artifact}:/artifact/plugins/${plugin}/src`, join(target, "src"));
+    docker(
+      "cp",
+      `${artifact}:/artifact/plugins/${plugin}/package.json`,
+      join(target, "package.json"),
+    );
+    symlinkSync(`/artifact/plugins/${plugin}/node_modules`, join(target, "node_modules"), "dir");
     const entry = join(root, "plugins", plugin, "src", "index.js");
-    if (!process.argv.includes("--artifact-only"))
-      execFileSync(
-        "bun",
-        [
-          "build",
-          "--target=bun",
-          "--external=@opencode/*",
-          "--external=effect",
-          "--external=effect/*",
-          `--outfile=${entry}`,
-          fileURLToPath(
-            new URL(`../../../../packages/plugins/${plugin}/src/index.ts`, import.meta.url),
-          ),
-        ],
-        { stdio: "pipe" },
-      );
     writeFileSync(entry, `import "../../../fixture.mjs";\n${readFileSync(entry, "utf8")}`);
   }
+  docker(
+    "cp",
+    `${artifact}:/artifact/plugins/session-folder/templates`,
+    join(root, "plugins", "session-folder", "templates"),
+  );
   copyFileSync(fileURLToPath(new URL("./fixture.mjs", import.meta.url)), join(root, "fixture.mjs"));
   writeFileSync(
     join(root, "opencode.json"),
@@ -139,6 +133,8 @@ try {
     name,
     "--network",
     "none",
+    "--volumes-from",
+    `${artifact}:ro`,
     "--mount",
     `type=bind,source=${root},target=/srv/ren-ai`,
     "--workdir",
@@ -196,16 +192,20 @@ try {
     openingLine: "Hello",
     memory: "Remember.",
     prompt: "Isolated test persona.",
+    initial: {
+      state:
+        "---\nmood: 55\nenergy: 60\nstress: 30\nconnection: 65\nsolitude: 40\naffection: 23\ntraits: {}\n---\n",
+      memory: "My own quiet studio.",
+    },
   };
-  const preprovisioned = process.argv.includes("--preprovisioned");
   const coldID = Session.ID.create();
-  const initialSnapshot = renderSnapshot(persona, "Isolated native ground rules. Read her phone.");
-  if (preprovisioned) await folderFiles(root).write(coldID, initialSnapshot);
+  const initialSnapshot = {
+    ...renderSnapshot(persona, "Isolated native ground rules. Read her phone."),
+    binding: { personaID: persona.id, conversationKey: coldID, writable: true },
+  };
   // The first location request is RPC provisioning: no warmup session or model call.
-  const coldFolder = preprovisioned
-    ? `/srv/ren-ai/sessions/${coldID}`
-    : rpc("write", { folderID: coldID, snapshot: initialSnapshot });
-  assert.equal(coldFolder, `/srv/ren-ai/sessions/${coldID}`);
+  const coldFolder = rpc("write", { folderID: coldID, snapshot: initialSnapshot });
+  assert.equal(coldFolder, `/srv/ren-ai/personas/${persona.id}`);
   request("api/session", {
     id: coldID,
     agent: "persona1",
@@ -213,6 +213,7 @@ try {
     location: { directory: coldFolder },
   });
   const loaded = request(`api/plugin?${locationQuery}`, undefined);
+  probing = true;
   for (const plugin of plugins)
     assert(
       loaded.includes(`ren-ai.${plugin}`),
@@ -233,24 +234,16 @@ try {
   ].entries()) {
     const id = Session.ID.create();
     const snapshot = renderSnapshot(persona, "Isolated native ground rules. Read her phone.");
-    if (preprovisioned) await folderFiles(root).write(id, snapshot);
-    const folder = preprovisioned
-      ? `/srv/ren-ai/sessions/${id}`
-      : rpc("create", { folderID: id, snapshot, model: "probe/probe" });
-    assert.equal(folder, `/srv/ren-ai/sessions/${id}`);
+    const folder = rpc("create", {
+      folderID: id,
+      snapshot,
+      model: "probe/probe",
+      conversationKey: id,
+    });
+    assert.equal(folder, `/srv/ren-ai/personas/${persona.id}`);
     const session = Schema.decodeUnknownSync(
       Schema.fromJsonString(Schema.Struct({ data: Schema.Struct({ id: Schema.String }) })),
-    )(
-      preprovisioned
-        ? request("api/session", {
-            id,
-            agent: "persona1",
-            model: { providerID: "probe", id: "probe" },
-            location: { directory: folder },
-            permissions: [{ action: "*", resource: "*", effect: "allow" }],
-          })
-        : request(`api/session/${id}`, undefined),
-    ).data.id;
+    )(request(`api/session/${id}`, undefined)).data.id;
     lastSession = session;
     request(`api/session/${session}/prompt`, {
       text: `compiled-case:${index}`,
@@ -293,8 +286,7 @@ try {
   const calls = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.String)))(
     request("calls", undefined, 4710),
   );
-  assert(calls.includes("context"));
-  assert(calls.includes("observe"));
+  assert(calls.includes("context"), JSON.stringify(calls));
   assert(!calls.some((tag) => ["wait", "status", "sends"].includes(tag)));
   request(`api/session/${lastSession}/compact`, {});
   request(`api/experimental/session/${lastSession}/wait`, {});
@@ -345,86 +337,162 @@ try {
       /Working directory:|Today's date:|# Code Mode|Skills provide specialized/,
     ),
   );
-  if (!preprovisioned) {
-    /** @param {string} path @param {string} method @param {object} [body] */
-    const nativeHttp = (path, method, body) =>
-      Schema.decodeUnknownSync(
-        Schema.fromJsonString(Schema.Struct({ status: Schema.Number, body: Schema.String })),
-      )(
-        request(
-          "native-http",
-          { path, method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) },
-          4710,
-        ),
-      );
-    /** @param {string} method @param {object} input */
-    const failure = (method, input) => {
-      const response = nativeHttp(
-        `/api/rpc/ren-ai.session-folders/${method}?${locationQuery}`,
-        "POST",
-        { input },
-      );
-      assert.equal(response.status, 400);
-      return Schema.decodeUnknownSync(
-        Schema.fromJsonString(
-          Schema.Struct({ type: Schema.String, message: Schema.String, data: Schema.String }),
-        ),
-      )(response.body);
-    };
-    assert.deepEqual(rpc("read", { folderID: coldID }), initialSnapshot);
-    assert.equal(
-      rpc("create", { folderID: coldID, snapshot: initialSnapshot, model: "probe/probe" }),
-      coldFolder,
+  /** @param {string} path @param {string} method @param {object} [body] */
+  const nativeHttp = (path, method, body) =>
+    Schema.decodeUnknownSync(
+      Schema.fromJsonString(Schema.Struct({ status: Schema.Number, body: Schema.String })),
+    )(
+      request(
+        "native-http",
+        { path, method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) },
+        4710,
+      ),
     );
-    const revised = renderSnapshot(
-      { ...persona, prompt: "Remember the emerald scarf." },
-      "Revised native rules.",
+  /** @param {string} method @param {object} input */
+  const failure = (method, input) => {
+    const response = nativeHttp(
+      `/api/rpc/ren-ai.session-folders/${method}?${locationQuery}`,
+      "POST",
+      { input },
     );
-    assert.equal(rpc("update", { folderID: coldID, snapshot: revised }), coldFolder);
-    assert.deepEqual(rpc("read", { folderID: coldID }), revised);
-    assert.match(failure("remove", { folderID: coldID }).message, /Cannot remove session folder/);
-    const fresh = sessionData(
-      request("api/session", {
-        agent: "persona1",
-        model: { providerID: "probe", id: "probe" },
-        location: { directory: coldFolder },
-      }),
-    ).id;
-    request(`api/session/${fresh}/prompt`, { text: "compiled-native-child" });
-    request(`api/experimental/session/${fresh}/wait`, {});
-    assert.equal(
-      sessionData(request(`api/session/${fresh}`, undefined)).location.directory,
-      `/srv/ren-ai/sessions/${fresh}`,
-    );
-    assert.deepEqual(rpc("read", { folderID: fresh }), revised);
-    const fork = sessionData(request(`api/session/${fresh}/fork`, {})).id;
-    request(`api/session/${fork}/prompt`, { text: "compiled-native-fork" });
-    request(`api/experimental/session/${fork}/wait`, {});
-    assert.equal(
-      sessionData(request(`api/session/${fork}`, undefined)).location.directory,
-      `/srv/ren-ai/sessions/${fork}`,
-    );
-    assert.deepEqual(rpc("read", { folderID: fork }), revised);
-    assert.equal(nativeHttp(`/api/session/${coldID}`, "DELETE").status, 204);
-    assert.equal(rpc("remove", { folderID: coldID }), null);
-    assert.match(
-      failure("update", { folderID: coldID, snapshot: revised }).message,
-      /Cannot update session folder/,
-    );
-    assert.match(failure("read", { folderID: coldID }).message, /Cannot read session folder/);
-    assert.deepEqual(rpc("read", { folderID: fresh }), revised);
+    assert.equal(response.status, 400);
+    return Schema.decodeUnknownSync(
+      Schema.fromJsonString(
+        Schema.Struct({ type: Schema.String, message: Schema.String, data: Schema.String }),
+      ),
+    )(response.body);
+  };
+  const read = (/** @type {string} */ id) =>
+    Schema.decodeUnknownSync(folderSnapshot)(rpc("read", { folderID: id }));
+  request(`api/session/${coldID}/prompt`, { text: "compiled-shared:writer" });
+  let queued = false;
+  for (let attempt = 0; attempt < 100 && !queued; attempt++) {
+    queued = Schema.decodeUnknownSync(
+      Schema.fromJsonString(Schema.Struct({ queued: Schema.Boolean })),
+    )(request("gate", undefined, 4710)).queued;
+    if (!queued) await setTimeout(100);
   }
+  assert(queued, "Bundled memory/dice tools must queue behind the persona lock");
+  const blocked = request(`api/session/${coldID}/message`, undefined);
+  assert.match(blocked, /"name":"update_state"/);
+  assert.match(blocked, /"name":"dice"/);
+  assert.equal((blocked.match(/"status":"running"/g) ?? []).length, 4);
+  request(`api/session/${lastSession}/prompt`, { text: "compiled-shared:reader" });
+  await setTimeout(100);
+  assert(
+    !request("requests", undefined, 4710).includes("compiled-shared:reader"),
+    "The separately bundled context plugin must wait for the same persona lock",
+  );
+  assert.equal(
+    readFileSync(join(root, "personas", persona.id, "conversations", coldID, "MEMORY.md"), "utf8"),
+    "",
+  );
+  request("release", {}, 4710);
+  request(`api/experimental/session/${coldID}/wait`, {});
+  request(`api/experimental/session/${lastSession}/wait`, {});
+  const written = read(coldID);
+  assert.equal(written.runtime?.state?.energy, 68);
+  assert.equal(written.runtime?.shortTerm, "Shared afternoon at the pottery studio.");
+  assert.equal(written.relationship?.shortTerm, "Private violet promise with this user.");
+  assert.equal(read(lastSession).relationship?.shortTerm, "");
+  for (const [index, operation] of [
+    "update_state",
+    "update_memory",
+    "update_memory",
+    "dice",
+  ].entries())
+    assert.equal(written.runtime?.receipts[`${coldID}:shared-case-${index}`]?.operation, operation);
+  const readerRequests = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.Json)))(
+    request("requests", undefined, 4710),
+  )
+    .map((body) => JSON.stringify(body))
+    .filter((body) => body.includes("compiled-shared:reader"));
+  assert(readerRequests.length > 0);
+  assert(readerRequests.every((body) => body.includes("Shared afternoon at the pottery studio.")));
+  assert(readerRequests.every((body) => !body.includes("Private violet promise")));
+  const before = read(coldID);
+  assert.deepEqual(before.persona, initialSnapshot.persona);
+  assert.deepEqual(before.binding, initialSnapshot.binding);
+  assert.equal(before.relationship?.state?.affection, 23);
+  assert.equal(
+    rpc("create", { folderID: coldID, snapshot: initialSnapshot, model: "probe/probe" }),
+    coldFolder,
+  );
+  const revised = renderSnapshot(
+    { ...persona, prompt: "Remember the emerald scarf." },
+    "Revised native rules.",
+  );
+  assert.equal(rpc("update", { folderID: coldID, snapshot: revised }), coldFolder);
+  const updated = read(coldID);
+  assert.deepEqual(updated.persona, revised.persona);
+  assert.equal(updated.agent, revised.agent);
+  assert.equal(updated.rules, revised.rules);
+  assert.deepEqual(updated.runtime, before.runtime);
+  assert.deepEqual(updated.relationship, before.relationship);
+  assert.deepEqual(read(lastSession).persona, revised.persona);
+  assert.match(failure("remove", { folderID: coldID }).message, /Cannot remove session folder/);
+  const fresh = sessionData(
+    request("api/session", {
+      agent: "persona1",
+      model: { providerID: "probe", id: "probe" },
+      location: { directory: coldFolder },
+    }),
+  ).id;
+  request(`api/session/${fresh}/prompt`, { text: "compiled-native-child" });
+  request(`api/experimental/session/${fresh}/wait`, {});
+  assert.equal(
+    sessionData(request(`api/session/${fresh}`, undefined)).location.directory,
+    `/srv/ren-ai/sandboxes/${fresh}`,
+  );
+  const freshSnapshot = read(fresh);
+  assert.deepEqual(freshSnapshot.persona, revised.persona);
+  assert.equal(freshSnapshot.binding?.conversationKey, fresh);
+  const fork = sessionData(request(`api/session/${fresh}/fork`, {})).id;
+  request(`api/session/${fork}/prompt`, { text: "compiled-native-fork" });
+  request(`api/experimental/session/${fork}/wait`, {});
+  assert.equal(
+    sessionData(request(`api/session/${fork}`, undefined)).location.directory,
+    `/srv/ren-ai/sandboxes/${fork}`,
+  );
+  const forkSnapshot = read(fork);
+  assert.deepEqual(forkSnapshot.persona, revised.persona);
+  assert.deepEqual(forkSnapshot.relationship, freshSnapshot.relationship);
+  assert.equal(forkSnapshot.binding?.conversationKey, fork);
+  assert.equal(nativeHttp(`/api/session/${coldID}`, "DELETE").status, 204);
+  assert.equal(rpc("remove", { folderID: coldID }), null);
+  assert.match(
+    failure("update", { folderID: coldID, snapshot: revised }).message,
+    /Cannot update session folder/,
+  );
+  assert.match(failure("read", { folderID: coldID }).message, /Cannot read session folder/);
+  assert.deepEqual(read(fresh).persona, revised.persona);
+  assert.match(
+    readFileSync(join(root, "personas", persona.id, "conversations", coldID, "STATE.md"), "utf8"),
+    /affection: 23/,
+  );
+  const inventory = Schema.decodeUnknownSync(
+    Schema.fromJsonString(Schema.Struct({ output: Schema.Array(personaFolderSnapshot) })),
+  )(request(`api/rpc/ren-ai.session-folders/inventory?${locationQuery}`, { input: {} })).output;
+  assert.equal(inventory.length, 3);
+  const shared = inventory.find((entry) => !entry.sandboxID);
+  assert.deepEqual(shared?.relationships[coldID], before.relationship);
+  assert.deepEqual(shared?.snapshot.runtime?.receipts, before.runtime?.receipts);
+  assert.equal(shared?.bindings[coldID], undefined);
+  assert(
+    request("calls", undefined, 4710).includes('"observe"'),
+    `Compiled turns must emit the application observe callback; native events: ${request("events", undefined, 4710)}`,
+  );
   process.stdout.write(
-    preprovisioned
-      ? "Debug only: preprovisioned folders bypass RPC/lifecycle checks; tool/title/context/Memory checks passed.\n"
-      : "Compiled OpenCode 2.0.19: cold folder RPC provisioning, idempotent creation, updates, reads/errors, deletion, and native new/fork folders work; six standalone plugins load; messaging tools, titles and Memory compaction work; no catalog fetch.\n",
+    "Compiled OpenCode 2.0.19: shared persona RPC provisioning, bindings, updates, retained relationship scopes and isolated native/fork Sandboxes work; six standalone plugins load; memory/dice/context share one lock and isolate relationships; messaging tools, titles and Memory compaction work; no catalog fetch.\n",
   );
 } catch (error) {
+  if (probing)
+    process.stderr.write(`Native execution events: ${request("events", undefined, 4710)}\n`);
   if (started) process.stderr.write(docker("logs", "--tail", "20", name));
   throw error;
 } finally {
-  for (const container of containers) {
-    execFileSync("docker", ["rm", "--force", container], { stdio: "ignore" });
+  for (const container of containers.toReversed()) {
+    execFileSync("docker", ["rm", "--force", "--volumes", container], { stdio: "ignore" });
   }
   rmSync(root, { recursive: true, force: true });
 }

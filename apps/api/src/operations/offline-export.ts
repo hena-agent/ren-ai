@@ -9,6 +9,7 @@ import {
   HttpServerRequest,
 } from "effect/unstable/http";
 import { exportLocation } from "./session-transfer.ts";
+import { folderFiles } from "@ren-ai/plugin-session-folder/files";
 
 /** Read only a throwaway COPY: native migrations may change it. No restart sweep/listener. */
 export const exportOffline = (routes: ReturnType<typeof createEmbeddedRoutes>, directory: string) =>
@@ -22,5 +23,11 @@ export const exportOffline = (routes: ReturnType<typeof createEmbeddedRoutes>, d
       Effect.provide(FetchHttpClient.layer),
       Effect.provideService(FetchHttpClient.Fetch, (input, init) => web(new Request(input, init))),
     );
-    return yield* exportLocation(client, directory);
+    return yield* exportLocation(client, directory, {
+      inventory: (root) =>
+        Effect.tryPromise({
+          try: () => folderFiles(root).inventory(),
+          catch: (cause) => new Error("Cannot inventory stopped persona scopes", { cause }),
+        }),
+    });
   });

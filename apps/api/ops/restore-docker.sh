@@ -3,8 +3,8 @@ set -euo pipefail
 backup="${1:?Usage: restore-docker.sh VERIFIED-BACKUP-DIRECTORY NEW-CONFIG-DIRECTORY}"
 destination="${2:?Use a new config directory}"
 backup="$(cd "$backup" && pwd)"
-volumes=("${REN_AI_STATE_VOLUME:-ren-ai-application-state}" "${OC_HOME_VOLUME:-oc-hena-dev_opencode-home}" "${OC_PROXY_VOLUME:-oc-hena-dev_auth-proxy-data}" "${REN_AI_LOCATION_VOLUME:-ren-ai-opencode-location}" "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}")
-[[ "$(printf '%s\n' "${volumes[@]}" | sort -u | wc -l | tr -d ' ')" == 5 ]] || { echo 'Five distinct volume names are required' >&2; exit 1; }
+volumes=("${REN_AI_STATE_VOLUME:-ren-ai-application-state}" "${OC_HOME_VOLUME:-oc-hena-dev_opencode-home}" "${OC_PROXY_VOLUME:-oc-hena-dev_auth-proxy-data}" "${REN_AI_LOCATION_VOLUME:-ren-ai-opencode-location}" "${REN_AI_PERSONA_VOLUME:-ren-ai-opencode-personas}" "${REN_AI_SANDBOX_VOLUME:-ren-ai-opencode-sandboxes}")
+[[ "$(printf '%s\n' "${volumes[@]}" | sort -u | wc -l | tr -d ' ')" == 6 ]] || { echo 'Six distinct volume names are required' >&2; exit 1; }
 [[ ! -e "$destination" ]] || { echo 'Existing config is never overwritten' >&2; exit 1; }
 (
   cd "$backup"

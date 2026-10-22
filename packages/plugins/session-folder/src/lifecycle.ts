@@ -4,11 +4,14 @@ import { Cause, Effect, Schema, Semaphore } from "effect";
 import { folderFiles, personaPermissions } from "./files.ts";
 import { folderSnapshot } from "./protocol.ts";
 import { managedFolder } from "./paths.ts";
+import { readSessionBinding } from "./bindings.ts";
 
 export const io = <A>(operation: () => Promise<A>) =>
-  Effect.tryPromise({ try: operation, catch: (error) => new Error(String(error)) });
+  Effect.tryPromise({ try: operation, catch: (error) => new Error(String(error)) }).pipe(
+    Effect.uninterruptible,
+  );
 
-// ponytail: one lock per root, including native admission; split by session if throughput needs it.
+// ponytail: serialize folder admission at the installation root; model turns use per-persona locks.
 const roots = new Map<string, { lock: Semaphore.Semaphore; references: number }>();
 export const rootLock = (root: string) =>
   Effect.acquireRelease(
@@ -40,37 +43,59 @@ export const folderLifecycle = (ctx: Plugin.Context, root: string) => {
         ),
       );
   const bound = (session: Session.Info, id: string, personaID: string) =>
-    session.location.directory !== files.path(id) || session.agent !== personaID
-      ? Effect.fail(new Error("Session folder or persona binding does not match"))
-      : Effect.void;
+    Effect.gen(function* () {
+      const binding = yield* io(() => files.locate(id));
+      yield* io(() => readSessionBinding(binding.directory, id));
+      if (
+        session.location.directory !== binding.directory ||
+        session.agent !== personaID ||
+        binding.personaID !== personaID
+      )
+        return yield* Effect.fail(new Error("Session folder or persona binding does not match"));
+      return binding.directory;
+    });
+  const relocate = (session: Session.Info, target: string, personaID: string) =>
+    Effect.gen(function* () {
+      yield* ctx.session.update({ sessionID: session.id, permissions: personaPermissions });
+      if (!session.agent)
+        yield* ctx.session.switchAgent({ sessionID: session.id, agent: Agent.ID.make(personaID) });
+      yield* ctx.session.move({ sessionID: session.id, directory: AbsolutePath.make(target) });
+      yield* ctx.session.wait({ sessionID: session.id });
+      return target;
+    });
+  const resume = (session: Session.Info, id: string) =>
+    Effect.gen(function* () {
+      const binding = yield* io(() => files.locate(id));
+      if (!binding.sandbox || session.location.directory === binding.directory)
+        return yield* bound(session, id, session.agent ?? "");
+      const sourceSnapshot = yield* io(() => files.readAt(session.location.directory));
+      yield* io(() => readSessionBinding(binding.directory, id));
+      if (
+        sourceSnapshot.persona.id !== binding.personaID ||
+        (session.agent && session.agent !== binding.personaID)
+      )
+        return yield* Effect.fail(new Error("Pending Sandbox persona binding does not match"));
+      return yield* relocate(session, binding.directory, binding.personaID);
+    });
   const ensure = (id: string) =>
     Effect.gen(function* () {
       const session = yield* get(id);
       if (!session) return yield* Effect.fail(new Error("Session does not exist"));
       const source = managedFolder(root, session.location.directory);
       if (!source) return yield* Effect.fail(new Error("Session is outside the managed folders"));
-      const target = files.path(id);
-      if (source === id) return target;
-      const snapshot = yield* io(() => files.read(source));
+      if (yield* io(() => files.exists(id))) return yield* resume(session, id);
+      const parentID = session.fork?.sessionID ?? session.parentID;
+      const snapshot = parentID
+        ? yield* io(() => files.read(parentID))
+        : yield* io(() => files.readAt(session.location.directory));
       if (session.agent !== undefined && session.agent !== snapshot.persona.id)
         return yield* Effect.fail(
           new Error("Native session persona does not match its source folder"),
         );
-      if (!(yield* io(() => files.exists(id)))) yield* io(() => files.write(id, snapshot));
-      else {
-        const prior = yield* io(() => files.read(id));
-        if (prior.persona.id !== snapshot.persona.id)
-          return yield* Effect.fail(new Error("Native session folder belongs to another persona"));
-      }
-      yield* ctx.session.update({ sessionID: session.id, permissions: personaPermissions });
-      if (!session.agent)
-        yield* ctx.session.switchAgent({
-          sessionID: session.id,
-          agent: Agent.ID.make(snapshot.persona.id),
-        });
-      yield* ctx.session.move({ sessionID: session.id, directory: AbsolutePath.make(target) });
-      yield* ctx.session.wait({ sessionID: session.id });
-      return target;
+      const target = yield* io(() =>
+        files.write(id, snapshot, { sandbox: true, conversationKey: id, writable: true }),
+      );
+      return yield* relocate(session, target, snapshot.persona.id);
     });
   return {
     files,
@@ -85,7 +110,7 @@ export const folderLifecycle = (ctx: Plugin.Context, root: string) => {
         const session = yield* get(id);
         if (!session) return yield* Effect.fail(new Error("Session does not exist"));
         yield* bound(session, id, snapshot.persona.id);
-        return yield* io(() => files.write(id, snapshot));
+        return yield* io(() => files.update(id, snapshot));
       }),
     remove: (id: string) =>
       Effect.gen(function* () {
@@ -93,17 +118,29 @@ export const folderLifecycle = (ctx: Plugin.Context, root: string) => {
           return yield* Effect.fail(new Error("Remove the session before its folder"));
         return yield* io(() => files.remove(id));
       }),
-    create: (id: string, snapshot: typeof folderSnapshot.Type, model: string) =>
+    create: (
+      id: string,
+      snapshot: typeof folderSnapshot.Type,
+      model: string,
+      conversationKey?: string,
+      writable?: boolean,
+    ) =>
       Effect.gen(function* () {
         const session = yield* get(id);
         if (session) {
-          yield* bound(session, id, snapshot.persona.id);
-          return files.path(id);
+          const target = yield* bound(session, id, snapshot.persona.id);
+          const binding = yield* io(() => files.locate(id));
+          if (conversationKey !== undefined && binding.conversationKey !== conversationKey)
+            return yield* Effect.fail(new Error("Session Conversation binding does not match"));
+          return target;
         }
-        if (yield* io(() => files.exists(id)))
-          return yield* Effect.fail(new Error("Session folder already exists"));
         const selected = yield* Effect.try(() => Model.Ref.parse(model));
-        const directory = yield* io(() => files.write(id, snapshot));
+        const directory = yield* io(() =>
+          files.write(id, snapshot, {
+            ...(conversationKey !== undefined && { conversationKey }),
+            ...(writable !== undefined && { writable }),
+          }),
+        );
         yield* ctx.session
           .create({
             id: Session.ID.make(id),

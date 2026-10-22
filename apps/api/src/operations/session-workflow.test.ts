@@ -1,15 +1,43 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { AbsolutePath, Agent } from "@opencode/schema";
+import { AbsolutePath, Session } from "@opencode/schema";
 import { Plugin } from "@opencode/schema/plugin";
 import { Effect, Schema } from "effect";
 import { expect, test } from "vitest";
-import { legacySession, withTransferClient } from "../../test/operations-transfer.test-helper.ts";
+import {
+  managedTransferSession,
+  withTransferClient,
+} from "../../test/operations-transfer.test-helper.ts";
 import { sessionArchive } from "../opencode/transfer-format.ts";
 import { runSessionTransfer } from "./session-transfer.ts";
-import { sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
+import { personaDirectory } from "@ren-ai/plugin-session-folder/paths";
+import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
+import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 
-test.each(["restore", "folders"] as const)(
+test("native export refuses a corrupt persona folder and leaves the output absent", () =>
+  withTransferClient(({ client, root, personas }) =>
+    Effect.gen(function* () {
+      const { directory } = yield* managedTransferSession(
+        { client, root, personas },
+        "Export instructions",
+        "corruption-check",
+      );
+      yield* Effect.promise(() => writeFile(join(directory, "persona.json"), "invalid"));
+      const file = join(root, "must-not-exist.json");
+      const error = yield* runSessionTransfer(client, {
+        operation: "export",
+        file,
+        directory: root,
+        confirmation: undefined,
+      }).pipe(Effect.flip);
+      expect(error.message).toContain("Cannot");
+      yield* Effect.promise(async () => {
+        await expect(stat(file)).rejects.toMatchObject({ code: "ENOENT" });
+      });
+    }),
+  ));
+
+test.each(["restore", "shared-life"] as const)(
   "%s refuses unconfirmed migration before reading a file or contacting OpenCode",
   (operation) =>
     withTransferClient(({ client, root, calls }) =>
@@ -32,27 +60,53 @@ test.each(["restore", "folders"] as const)(
             (yield* runSessionTransfer(client, { ...input, confirmation: "yes" }).pipe(Effect.flip))
               .message,
           ).toContain("ENOENT");
+        else {
+          expect(
+            (yield* runSessionTransfer(client, { ...input, confirmation: "yes" }).pipe(Effect.flip))
+              .message,
+          ).toBe("Shared-life cutover requires an application state file");
+          expect(
+            (yield* runSessionTransfer(client, {
+              ...input,
+              confirmation: "yes",
+              applicationFile: join(root, "missing-application.json"),
+            }).pipe(Effect.flip)).message,
+          ).toContain("ENOENT");
+        }
         expect(calls).toEqual([]);
       }),
     ),
 );
 
 test("workflow exports and restores native sessions while keeping pending work stopped and other locations intact", () =>
-  withTransferClient(({ client, root, personas }) =>
+  withTransferClient(({ client, root, personas, calls }) =>
     Effect.gen(function* () {
-      const directory = join(root, "source");
-      yield* Effect.promise(() => mkdir(directory));
-      const source = yield* client.session.create({
-        agent: Agent.ID.make("persona1"),
-        title: "retained reset",
-        location: { directory: AbsolutePath.make(directory) },
-      });
+      const directory = root;
+      const elsewhere = join(root, "operator-project");
+      yield* Effect.promise(() => mkdir(elsewhere));
+      const sourceID = Session.ID.create();
+      yield* client.rpc(sessionFolders).create(
+        {
+          folderID: sourceID,
+          snapshot: renderSnapshot(personas.get("persona1")!, "Exported instructions."),
+          model: "test/probe",
+          conversationKey: "retained-relationship",
+        },
+        { location: { directory } },
+      );
+      const source = yield* client.session.get({ sessionID: sourceID });
       const unrelated = yield* client.session.create({
         title: "operator project",
-        location: { directory: AbsolutePath.make(root) },
+        location: { directory: AbsolutePath.make(elsewhere) },
       });
+      for (let index = 0; index < 100; index++)
+        yield* client.session.create({
+          title: `unrelated ${index}`,
+          location: { directory: AbsolutePath.make(elsewhere) },
+        });
       yield* client.session.prompt({ sessionID: source.id, text: "queued message", resume: false });
       const file = join(root, "archive.json");
+      calls.length = 0;
       yield* runSessionTransfer(client, {
         operation: "export",
         file,
@@ -61,8 +115,17 @@ test("workflow exports and restores native sessions while keeping pending work s
       });
       const contents = yield* Effect.promise(() => readFile(file, "utf8"));
       const archive = Schema.decodeUnknownSync(sessionArchive)(contents);
+      expect(
+        calls.filter((call) => call.method === "GET" && call.path === "/api/session").length,
+      ).toBeGreaterThan(1);
       expect(archive.sessions.map((entry) => entry.info.id)).toEqual([source.id]);
       expect(archive.sessions[0]?.pending).toHaveLength(1);
+      expect(archive.personas).toHaveLength(1);
+      expect(archive.personas[0]!.bindings[source.id]).toEqual({
+        personaID: "persona1",
+        conversationKey: "retained-relationship",
+        writable: true,
+      });
       expect((yield* Effect.promise(() => stat(file))).mode & 0o777).toBe(0o600);
       yield* client.session.remove({ sessionID: source.id });
       const destination = root;
@@ -74,8 +137,13 @@ test("workflow exports and restores native sessions while keeping pending work s
         personas,
       });
       expect((yield* client.session.get({ sessionID: source.id })).location.directory).toBe(
-        sessionDirectory(destination, source.id),
+        personaDirectory(destination, "persona1"),
       );
+      expect(
+        yield* client
+          .rpc(sessionFolders)
+          .snapshot({ folderID: source.id }, { location: { directory: destination } }),
+      ).toEqual(archive.personas[0]);
       const pending = yield* client.session.inbox.list({ sessionID: source.id });
       expect(pending.map((item) => item.id)).toEqual(
         archive.sessions[0]?.pending.map((item) => item.id),
@@ -91,31 +159,39 @@ test("workflow exports and restores native sessions while keeping pending work s
           directory: destination,
           confirmation: "yes",
         }).pipe(Effect.flip)).message,
-      ).toContain("JSON");
+      ).toBe("Invalid private session archive");
     }),
   ));
 
 test("export and plugin inventory create owner-only output exclusively and never overwrite an existing file", () =>
-  withTransferClient(({ client, root, calls }) =>
+  withTransferClient(({ client, root, calls, personas }) =>
     Effect.gen(function* () {
-      const session = yield* legacySession(client, root);
+      const sessionID = Session.ID.create();
+      const directory = yield* client.rpc(sessionFolders).create(
+        {
+          folderID: sessionID,
+          snapshot: renderSnapshot(personas.get("persona1")!, "Preserve export evidence"),
+          model: "test/probe",
+          conversationKey: "export-evidence",
+        },
+        { location: { directory: root } },
+      );
       calls.length = 0;
       const file = join(root, "operator-evidence.json");
       yield* Effect.promise(() => writeFile(file, "keep existing evidence"));
-      for (const operation of ["export", "plugins", "folders"] as const) {
+      for (const operation of ["export", "plugins"] as const) {
         const error = yield* runSessionTransfer(client, {
           operation,
           file,
           directory: root,
-          confirmation: operation === "folders" ? "yes" : undefined,
+          confirmation: undefined,
         }).pipe(Effect.flip);
         expect(error.message).toContain("EEXIST");
         expect(yield* Effect.promise(() => readFile(file, "utf8"))).toBe("keep existing evidence");
-        expect((yield* client.session.get({ sessionID: session.id })).location.directory).toBe(
-          root,
-        );
+        expect((yield* client.session.get({ sessionID })).location.directory).toBe(directory);
       }
       const inventoryFile = join(root, "plugins.json");
+      calls.length = 0;
       yield* runSessionTransfer(client, {
         operation: "plugins",
         file: inventoryFile,

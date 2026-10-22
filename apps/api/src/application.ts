@@ -11,6 +11,7 @@ import { failedTurns, type FailureAlerts } from "./opencode/failed-turns.ts";
 import { setupRebuilding } from "./conversations/rebuild.ts";
 import { retainedSessions } from "./conversations/retained.ts";
 import { stoppedConversations } from "./conversations/stop.ts";
+import { SqlClient } from "effect/unstable/sql";
 
 export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
   personas: ReadonlyMap<string, Persona>,
@@ -26,7 +27,16 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       messages,
       gestures,
     );
-    const host = yield* connect(tools);
+    let fenceEnding: (sessionID: string) => Effect.Effect<void, Error>;
+    const host = yield* connect({
+      ...tools,
+      endConversation: (sessionID, farewell, callID) =>
+        tools
+          .endConversation(sessionID, farewell, callID)
+          .pipe(Effect.tap(() => fenceEnding(sessionID))),
+    });
+    fenceEnding = (sessionID) => host.sessions.writable(Session.ID.make(sessionID), false);
+    const sql = yield* SqlClient.SqlClient;
     const stopped = yield* stoppedConversations(host);
     if (eager) yield* stopped.resume;
     const follow = yield* followUps(
@@ -58,9 +68,17 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
     const operator = yield* makeOperator(
       directory,
       (sessionID) =>
-        host.sessions
-          .remove(Session.ID.make(sessionID))
-          .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void)),
+        Effect.gen(function* () {
+          const [scope] = yield* sql<{
+            persona_id: string;
+            conversation_key: string;
+          }>`SELECT persona_id, conversation_key FROM usage_session WHERE session_id = ${sessionID}`;
+          yield* host.sessions
+            .remove(Session.ID.make(sessionID))
+            .pipe(Effect.catchTag("Session.NotFoundError", () => Effect.void));
+          if (scope)
+            yield* host.sessions.removeRelationship(scope.persona_id, scope.conversation_key);
+        }),
       (handle) => recovery.rebuild(handle, true),
       (sessionID, handle) =>
         retained.retainRemoved(sessionID, handle).pipe(Effect.tap(() => failed.forget(sessionID))),

@@ -2,13 +2,14 @@ import { Plugin } from "@opencode/plugin/effect";
 import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
-import { Effect, Schema, Stream } from "effect";
+import { readSessionBinding } from "@ren-ai/plugin-session-folder/bindings";
+import { Cause, Effect, Schema, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { applicationApi, persona } from "./protocol.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import type { PersonaPluginOptions } from "./options.ts";
 import { localWait } from "./wait.ts";
-import { observeTurns } from "./observe.ts";
+import { observationFailure, observeTurns } from "./observe.ts";
 
 export const inPersonaLocation = (directory: string, root: string) => {
   return (
@@ -103,26 +104,37 @@ export const remotePlugin = (id: string, factory: Factory, config: RemoteConfig)
           !inPersonaLocation(ctx.location.directory, config.directory)
         )
           return;
-        const sessionID = managedFolder(resolve(config.directory), resolve(ctx.location.directory));
         const remote = yield* remoteOptions(
           config,
           id === "ren-ai.tools"
             ? ctx.event.subscribe().pipe(
+                Stream.filter(
+                  (event) =>
+                    event.type === "session.inbox.enqueued" ||
+                    event.type === "session.execution.failed" ||
+                    event.type === "session.execution.succeeded",
+                ),
+                Stream.filterEffect((event) => {
+                  const requestId = crypto.randomUUID();
+                  const started = performance.now();
+                  return ctx.session.get({ sessionID: event.data.sessionID }).pipe(
+                    Effect.map((session) => session.location.directory === ctx.location.directory),
+                    Effect.catchCause((cause) =>
+                      Effect.sync(() => {
+                        observationFailure(Cause.squash(cause), "turn.session", requestId, started);
+                        return false;
+                      }),
+                    ),
+                  );
+                }),
                 Stream.map((event) => ({
                   type: event.type,
-                  ...((event.type === "session.inbox.enqueued" ||
-                    event.type === "session.execution.failed" ||
-                    event.type === "session.execution.succeeded") &&
-                  event.data.sessionID === sessionID
-                    ? {
-                        data: {
-                          sessionID: event.data.sessionID,
-                          ...(event.type === "session.inbox.enqueued"
-                            ? { messageID: event.data.inboxID }
-                            : {}),
-                        },
-                      }
-                    : {}),
+                  data: {
+                    sessionID: event.data.sessionID,
+                    ...(event.type === "session.inbox.enqueued"
+                      ? { messageID: event.data.inboxID }
+                      : {}),
+                  },
                 })),
               )
             : Stream.never,
@@ -135,7 +147,20 @@ export const remotePlugin = (id: string, factory: Factory, config: RemoteConfig)
             ),
           ),
         );
-        yield* factory(remote.options).effect(ctx);
+        yield* factory({
+          ...remote.options,
+          wait: (sessionID: string, seconds: number) =>
+            Effect.tryPromise({
+              try: () => readSessionBinding(ctx.location.directory, sessionID),
+              catch: (error) => new Error(String(error)),
+            }).pipe(
+              Effect.flatMap((binding) =>
+                binding.writable
+                  ? remote.options.wait(sessionID, seconds)
+                  : Effect.succeed("This session is read-only. Finish this turn without waiting."),
+              ),
+            ),
+        }).effect(ctx);
       }).pipe(Effect.orDie, Effect.provide(FetchHttpClient.layer)),
   });
 

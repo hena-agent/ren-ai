@@ -2,29 +2,34 @@
 
 ## 범위와 초기값
 
-Persona는 OpenCode에서 실행한다. 정체성·기본 성향·말투는 Persona agent에,
-공통 행동 규칙은 각 세션의 `AGENTS.md`에 둔다. **런타임 상태와 기억은 Conversation별로 독립**이다.
-동일 Persona라도 다른 상대의 생활 진행·컨디션·사실·약속·관계를 공유하지 않는다.
+Persona는 OpenCode에서 실행한다. [ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)에 따라
+**State와 Life memory는 인물의 모든 Conversation이 공유**한다. 호감도 등 Relationship state,
+사용자의 사실·약속·관계 이력인 Relationship memory와 대화 원문은 해당 Conversation만 본다.
+공유 문서와 변경 근거에는 사용자의 신원·사적 사실·다른 관계의 내용을 넣지 않는다.
+정체성·기본 성향·말투는 Persona agent에, 공통 행동 규칙은 인물 루트의 `AGENTS.md`에 둔다.
 
 Admin의 Persona·초기 State·초기 Memory는 D1 Catalog에 보관한다.
-[작성 계약](persona-authoring-profiles.md)에 따라 신규 Conversation에만 초기 파일을 설치한다.
-기존 Conversation의 문서는 Catalog 수정·서버 재시작으로 다시 초기화하지 않는다.
+[작성 계약](persona-authoring-profiles.md)에 따라 첫 Conversation에서 공유 범위를 한 번 초기화한다.
+이후 새 Conversation은 현재 공유 범위를 사용하고 자체 Relationship 범위를 만든다.
+Catalog 초기값 수정은 이후 Conversation의 출발 호감도와 Discovery의 공개 초기 언어 실력에만 반영한다.
+기존 공유·관계 문서는 Catalog 수정·서버 재시작으로 다시 초기화하지 않는다.
 초기값이 없는 기존 인물에게 임의의 50점 상태나 상대와의 경험을 만들어 넣지 않는다.
 
 ## 현재 문서
 
-- `STATE.md`: 기분·활력·스트레스·교류 욕구·혼자 있을 욕구인 다섯 컨디션과 호감도 `affection`, traits.
+- 공유 `STATE.md`: 기분·활력·스트레스·교류 욕구·혼자 있을 욕구인 다섯 컨디션, traits, 언어 실력과 인물 자신의 추가 값.
+- Relationship `STATE.md`: 호감도 `affection`과 해당 사용자에 관한 추가 값.
   상태 수치는 0–100 정수다. 신규 Persona 생성과 State 재생성은 성향·관계관·연락 기대를 근거로
   AI가 초기 affection을 제안하며 운영자는 State 원문에서 직접 수정하고 저장한다.
   출발값은 상대에 대한 긍정적인 마음과 관심이며 친숙함·신뢰나 행동 확률이 아니다.
   [시작 관계](starting-relationship.md)는 사용자가 별도로 선택하고, 호감도는 연인을 해금하는 점수가 아니다.
   신규 작성·공개 검증에서는 affection을 요구한다. 기존 Conversation은 값이 없어도 현재 문서를
-  유지하며 임의의 기본값으로 채우지 않는다. 템플릿 수정은 새 Conversation에만 적용한다.
+  유지하며 임의의 기본값으로 채우지 않는다. 출발 호감도 수정은 새 Conversation에만 적용한다.
   런타임의 `additional`에는 필요한 숫자·문자열·불리언 상태와 의미·근거를 추가할 수 있다.
   마지막 갱신의 근거·출처·시각을 함께 전달한다. 고정 성격을 현재값으로 바꾸지 않는다.
-- `MEMORY.md`: 매 실행에 떠올릴 현재 생활, 핵심 사실, 진행 중 화제와 미완료 약속.
+- 각 범위의 `MEMORY.md`: Life에는 현재 생활·계획·자신의 경험, Relationship에는 사용자 사실·진행 중 화제·약속.
   최신 내용으로 정리하며 16,000자 이내다. 상대의 취향 등 사실은 State보다 Memory에 둔다.
-- `long-term/<id>.md`: 필요할 때 찾을 사실·경험·약속 결과·변화의 계기.
+- 각 범위의 `long-term/<id>.md`: 필요할 때 찾을 사실·경험·약속 결과·변화의 계기.
   주제·본문·짧은 핵심·근거·출처·생성/갱신 시각과 `clear`/`faded`/`forgotten`을 보관한다.
 
 단기에서 빠진 중요한 내용은 장기에 남긴다. 장기 내용을 현재 판단에 자주 쓰게 되면 단기로
@@ -32,22 +37,32 @@ Admin의 Persona·초기 State·초기 Memory는 D1 Catalog에 보관한다.
 
 ## OC의 읽기와 갱신
 
-context plugin은 매 모델 실행에 현재 세션의 State·단기 Memory·희미하거나 소실된 기억의
-선명도 정보를 전달한다. 장기 기억 전체를 상시 주입하지 않는다. 전달 문서는 데이터이며,
+context plugin은 매 모델 실행에 공유 State·Life 단기 기억과 현재 세션 자신의 Relationship state·단기 기억,
+희미하거나 소실된 기억의 선명도 정보를 전달한다. 장기 기억 전체를 상시 주입하지 않는다. 전달 문서는 데이터이며,
 현재 문서와 명시적 정정이 이전 요약·검색 결과보다 우선한다. affection은 이후 실제 경험을 근거로
 갱신하며 매번 dice로 다시 정하거나 초기값으로 되돌리지 않는다. 높은 호감도만으로 친숙함·신뢰·
 관계 단계·반말 합의가 성립하지 않는다.
 
-| 도구            | 동작                                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------------- |
-| `update_state`  | 다섯 축·traits를 갱신하고 추가 상태를 생성·변경·제거한다. 기존 축을 추가 항목으로 덮어쓸 수 없다. |
-| `update_memory` | 현재 Conversation의 단기 기억을 교체한다.                                                         |
-| `remember`      | 장기 기억을 만들거나 기존 id의 내용을 정정하고 선명도를 변경한다.                                 |
-| `search_memory` | 현재 Conversation의 장기 기억을 단어로 검색해 최근 갱신순 최대 10개와 출처를 반환한다.            |
-| `dice`          | 0–10000 정수를 반환한다. 동일 호출의 결과는 영속 receipt에서 재사용한다.                          |
+공유 항목에는 마지막 변경 시각·이 Conversation에서 바뀌었는지 여부·안전한 변경 근거를 전달한다.
+Life 단기 기억에는 세션이 마지막으로 읽은 뒤의 변경 요약을 제한된 길이로 제공한다.
+출처와 마지막 읽기 정보는 재시작 후에도 보존한다. 다른 Conversation에서 바뀐 값은 인물 자신의
+생활 변화이지 오류나 현재 사용자의 행동이 아니다. 직접 질문받으면 Ren AI 페르소나이며 다른 사람과도
+대화한다고 사실대로 답하되 먼저 꺼내거나 비교·질투 소재로 쓰거나 다른 사용자의 정보를 드러내지 않는다.
+
+| 도구            | 동작                                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------- |
+| `update_state`  | 공유 State 또는 자신의 Relationship state를 갱신한다. 기존 축을 추가 항목으로 덮어쓸 수 없다. |
+| `update_memory` | Life 또는 자신의 Relationship 단기 기억을 교체한다.                                           |
+| `remember`      | 허용된 범위의 장기 기억을 만들거나 기존 id의 내용을 정정하고 선명도를 변경한다.               |
+| `search_memory` | Life 또는 자신의 Relationship 장기 기억을 검색해 최근 갱신순 최대 10개와 출처를 반환한다.     |
+| `dice`          | 0–10000 정수를 반환한다. 동일 호출의 결과는 영속 receipt에서 재사용한다.                      |
 
 도구는 실행 세션과 폴더의 결합을 검사한다. 모델은 다른 Conversation의 경로나 ID를 선택하지 않는다.
 허용 도구에는 여전히 임의의 파일 읽기·쓰기나 셸 실행이 없다.
+
+세션의 턴은 병렬로 실행한다. 공유 쓰기는 건드리는 항목별로 마지막 관측 버전을 검사한다.
+State 필드 하나·Life 단기 문서·장기 레코드 하나 중 바뀐 항목이 있으면 오래된 쓰기를 거부하고
+현재 값과 변경 내용을 돌려준다. 모델은 이를 읽고 다시 판단한다. 무관한 항목 변경은 충돌시키지 않는다.
 
 ## 우연·회상·망각
 
@@ -70,26 +85,50 @@ Persona가 성향·현재 상태·관계·시간·중요도를 보고 후보와 
 
 ## 저장·복구·진단
 
-세션 폴더의 `STATE.md`·`MEMORY.md`·`long-term/<id>.md`가 현재 상태와 기억의 원본이다.
+`/srv/ren-ai/personas/<persona-id>/`의 공유 문서와 `conversations/<conversation-key>/`의
+Relationship 문서가 현재 상태와 기억의 원본이다. Conversation key는 재사용하지 않는다.
+활성·보존·종료 세션 모두 같은 인물 루트를 사용하고 agent·ground rules·`persona.json`은 한 번만 갱신한다.
 일반 Markdown 파일을 직접 읽고 갱신하며 별도 JSON 원본·버전 폴더·symlink를 만들지 않는다.
 State의 추가 값과 갱신 근거, 장기 기억의 메타데이터는 각 문서의 YAML frontmatter에 둔다.
 장기 기억의 본문은 선명하면 세부 내용, 희미하면 남은 핵심이며 소실되면 비운다.
 
-동일 프로세스의 세션별 읽기·쓰기·내보내기·폴더 삭제는 같은 잠금으로 직렬화한다.
+인물 루트별 잠금 하나가 API와 plugin의 별도 번들을 포함한 모든 읽기·쓰기·내보내기·삭제를 조정한다.
 갱신 도구와 dice의 동일 호출·동일 입력 재실행은 이미 확정한 결과를 돌려주며, 다른 입력으로 같은 호출을
-재사용하면 거부한다. 호출 ID·입력 해시·결과만 `.memory/receipts.json`에 보관한다.
+재사용하면 거부한다. receipt는 세션 ID와 도구 호출 ID로 이름공간을 구분하고 입력 해시·결과를 보관한다.
 변경할 파일과 receipt는 임시 `.memory/pending.json`에 먼저 확정하고 각 파일을 atomic rename으로 교체한다.
 중단된 쓰기는 다음 읽기나 재시도 전에 끝내며, 완료하면 pending 파일을 삭제한다. 이전 기억 사본은 남기지 않고
 변경된 파일만 교체한다. 검색과 컨텍스트는 현재 Markdown을 읽으며 직접 수정한 내용도 반영한다.
-세션 export/restore에는 Markdown에서 읽은 현재 상태·기억과 receipts를 포함한다.
+export/restore에는 Markdown에서 읽은 두 범위와 receipts·출처·마지막 읽기 메타데이터를 포함한다.
+위치 전체를 내보낼 때는 native 세션 목록과 별도로 인물·Sandbox 루트를 확인한다.
+마지막 세션을 삭제한 뒤에도 남아 있는 생활과 Relationship 범위를 빠뜨리지 않는다.
 볼륨 백업에는 현재 Markdown과 내부 실행 기록인 `.memory/`를 포함한다.
+
+세션 삭제·재구축으로 어느 범위도 삭제하지 않는다. 재구축 replay가 끝날 때까지 State·Memory 쓰기를
+거부한다. 재구축의 원본 세션과 이미 접수한 이력의 경계는 저장하며 재시작해도 유지한다.
+새로 도착한 입력은 이 읽기 전용 replay에 섞어 처리 완료로 표시하지 않고, 재구축 완료 뒤
+쓰기 가능한 현재 세션에 전달한다. 교체되거나 종료된 세션은 늦게 replay가 끝나도 쓰기 권한을 되찾지 않는다.
+테스트 handle reset은 이전 Relationship 범위를 검토용으로 보존하고 다음 Conversation에
+새 범위를 만들며 공유 생활은 계속된다. Relationship 범위는 그 Conversation 데이터 삭제 때만 제거한다.
+운영자가 native UI에서 만든 세션과 fork는 각각 복사본을 쓰는 Sandbox로 옮긴다.
+테스트 handle은 실제 배정 수에 포함되고 공유 생활을 변경한다.
 
 실패는 처리 전에 operation·세션·호출·서버 생성 request ID·원인 코드·안전한 stack frame·소요 시간을
 기록한다. 문서·기억·프롬프트·키는 진단에 포함하지 않는다. 실패한 실행은 기존 OC 복구 경로를 사용한다.
 
+## 보존 전환
+
+운영 전환은 실행을 멈추고 대응하는 애플리케이션·OpenCode 백업을 확보한 뒤 수행한다.
+기존 활성 Conversation의 다섯 컨디션·traits·언어 실력은 공유 State로 옮긴다.
+호감도·기존 additional·단기/장기 기억은 모두 해당 Relationship 범위에 보존한다.
+Life memory는 Catalog 초기 Memory에서 시작하며 기존 사용자 기억을 공유로 승격하지 않는다.
+종료·보존 세션의 Relationship 범위도 보존하고 모든 세션을 인물 루트로 옮긴다.
+구체적인 전환·검증·복구는 [운영 runbook](../../apps/api/ops/README.md)을 따른다.
+
 ## 검증
 
 실제 OC와 결정적 모델로 컨텍스트 전달·도구 호출·Conversation 격리·검색·실패 복구·export/restore를 검사한다.
+두 Conversation의 공유 변경 관측, 사적 범위 접근 차단, 같은 항목의 stale 쓰기 거부와 무관한 항목의 병렬 쓰기,
+번들 간 잠금·세션별 receipt·출처와 읽기 기록의 재시작 보존, reset·삭제·replay·Sandbox 경계를 검사한다.
 저장 경계에서는 동시 읽기/쓰기·중복 호출·숫자/문자열/불리언 상태·망각·정정·직접 Markdown 수정·
 잘못된 문서/실행 기록·중단된 저장의 복구를 검사한다.
 압축에서도 현재 파일과 선명도 지침을 유지하고, 실제 요청/도구 실패의 진단과 비공개 내용 제외를 확인한다.

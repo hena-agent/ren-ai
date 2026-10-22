@@ -87,7 +87,7 @@ export function managementClient(
         "conflict",
         path.startsWith("/operator/conversations")
           ? "종료·전송 상태가 변경되었거나 결과가 아직 불확실합니다. 상태를 다시 확인해 주세요."
-          : "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 상태를 새로고침해 확인해 주세요.",
+          : "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 배정 한도 5명과 이 연락처의 관계 종료 이력·현재 상태를 확인해 주세요.",
       );
     if (response.status === 404 && path.startsWith("/management/conversations/"))
       throw new PersonaError("not_found", "대화를 찾을 수 없습니다.");

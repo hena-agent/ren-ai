@@ -14,7 +14,9 @@ Persona Markdown 본문은 D1 버전 이력의 유일한 작성 원본이다. �
 관리 컬럼에, 사진 연결은 별도 관계 테이블에 둔다. 디자이너의 인증된 `persona.md` 내려받기는
 관리 메타데이터를 frontmatter로 직렬화한 뷰다. `description`, `bio`, `profile-details` 사본은 저장하지 않는다.
 초기 State·Memory는 별도 D1 텍스트 컬럼이다. 비공개 Catalog가 이를 iMessage에 전달하며,
-새 Conversation 폴더에만 `STATE.md`·`MEMORY.md`로 설치한다. 기존 문서는 Catalog 수정으로 초기화하지 않는다.
+첫 Conversation에서 인물의 공유 State·Life memory를 한 번 초기화한다. 새 Conversation마다 초기
+affection으로 사적인 Relationship state를 만들고 사용자 기억은 새로 시작한다. 이후 초기값 편집은
+미래 Conversation의 affection과 Discovery의 공개 초기 실력에만 반영한다. 기존 두 범위는 초기화하지 않는다.
 
 - 내부 대화 설정은 전체 본문에서 읽는다.
 - `## 공개 프로필` 앞은 비공개 인물 설정, 뒤는 공개 자기표현이다.
@@ -27,7 +29,7 @@ Persona Markdown 본문은 D1 버전 이력의 유일한 작성 원본이다. �
 ## Persona 문서 버전과 복원
 
 - 저장한 Persona 문서만 불변 버전으로 보관한다. 비공개 인물 설정과 공개 프로필을 함께
-  담되 사진·공통 초기 State/Memory·실제 Conversation의 상태와 기억은 버전에 포함하지 않는다.
+  담되 사진·공통 초기 State/Memory·공유 State/Life memory·사적인 Relationship 범위는 버전에 포함하지 않는다.
 - 첫 저장은 v1이다. 문서가 달라진 저장은 번호를 하나 늘리고 저장 시각을 남긴다.
   동일 문서 재저장과 사진·초기값·관리 정보만 바꾼 저장은 문서 버전을 늘리지 않는다.
   줄바꿈 방식과 본문 앞뒤 공백만 다른 입력은 같은 문서로 취급하고 기존 원문을 유지한다.
@@ -46,12 +48,13 @@ Persona Markdown 본문은 D1 버전 이력의 유일한 작성 원본이다. �
   기록 이동·복원을 거부하고 편집본을 보존한다. 이력 원문과 복원 출처는 공개 응답에 넣지 않는다.
 - 편집 원본과 private Catalog의 직렬화된 메타데이터에 `version`을 포함한다. 원문이
   같아지는 복원 후에도 예전 편집 화면의 덮어쓰기를 막으며 프롬프트 본문에는 번호를 넣지 않는다.
-- Catalog는 최신 버전 하나만 공급한다. 세션별 `persona.json`에 적용 버전을 기록하고
+- Catalog는 최신 버전 하나만 공급한다. 인물 루트의 `persona.json`에 적용 버전을 기록하고
   낮은 번호로의 덮어쓰기는 거부한다. 현재 응답을 중단하거나 세션을 재생성하지 않는다.
 - 동기화는 OpenCode의 실제 agent 목록에서 현재 지침을 읽는 것까지 확인한 뒤 새 입력을
   처리한다. 파일 감시/캐시 갱신을 최대 5초 기다리고 실패하면 다음 heartbeat에서 재시도한다.
   Catalog 갱신은 admission과 같은 lifecycle 잠금 안에서 실행한다. 이 과정에서 기존
-  State/Memory·실행 기록과 보존된 과거 세션은 바꾸지 않는다.
+  공유·관계 문서와 실행 기록은 보존한다. 활성·보존·종료 세션은 같은 루트의 최신 agent와 ground rules를
+  읽으며 정체성의 과거 이력은 Persona 버전으로 보존한다. 폴더 소유권은 [ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)을 따른다.
 - 버전 조회·저장·복원의 실패는 기존 요청 ID·단계·원인/코드로 진단한다. 적용 성공에는
   Persona ID·버전·소요 시간을 기록하며 원문·프롬프트·기억 내용은 로그에서 제외한다.
 

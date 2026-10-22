@@ -2,17 +2,18 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { SessionInbox } from "@opencode/schema/session-inbox";
 import { Schema } from "effect";
-import { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
+import { folderSnapshot, personaFolderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 
 export const sessionArchive = Schema.fromJsonString(
   Schema.Struct({
-    version: Schema.Literal(1),
+    version: Schema.Literal(2),
+    personas: Schema.Array(personaFolderSnapshot),
     sessions: Schema.Array(
       Schema.Struct({
         info: Session.Info,
         messages: Schema.Array(SessionMessage.Info),
         pending: Schema.Array(SessionInbox.Info),
-        folder: Schema.optionalKey(folderSnapshot),
+        folder: folderSnapshot,
         recovery: Schema.optionalKey(
           Schema.Struct({
             id: SessionMessage.ID,

@@ -9,6 +9,21 @@ import { migrate } from "../database.ts";
 import { exportApplicationState, importApplicationState } from "../state-snapshot.ts";
 import { relationshipFixture as fixture } from "../../test/relationship.test-helper.ts";
 
+test("historical replay neither waits for live input nor sends read receipts", async () => {
+  await withContactDatabase(
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      yield* f.sql`UPDATE conversation SET rebuilding = 1 WHERE id = ${f.conversation.id}`;
+      expect(yield* f.app.tools.read(f.conversation.sessionID)).toContain("replaying");
+      expect(yield* f.app.tools.wait(f.conversation.sessionID, 3600)).toContain("read-only");
+      expect(f.ui.reads).toEqual([]);
+      yield* f.sql`UPDATE conversation SET rebuilding = 0 WHERE id = ${f.conversation.id}`;
+      expect(yield* f.app.tools.read(f.conversation.sessionID)).toBe("read");
+      expect(f.ui.reads).toEqual([f.conversation.handle]);
+    }),
+  );
+});
+
 test("a persona can end only her own relationship, stop all normal actions and deliver one farewell and reselection notice", async () => {
   await withContactDatabase(
     Effect.gen(function* () {

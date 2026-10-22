@@ -4,7 +4,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { ContactEntry, SelectContacts, StartContact } from "@ren-ai/onboarding";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { withLifecycle } from "../conversations/lifecycle.ts";
-import { claimPersona } from "./assignment.ts";
+import { assignmentCapacity, claimPersona } from "./assignment.ts";
 
 class StartUnavailable extends Data.TaggedError("StartUnavailable") {}
 
@@ -56,11 +56,13 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           registrationID: string;
           personaID: string;
         }>`SELECT l.registration_id AS registrationID, l.persona_id AS personaID FROM discovery_like l
-          JOIN discovery_registration r ON r.id = l.registration_id WHERE r.archived_at IS NULL`;
-        const taken = yield* sql<{ id: string }>`SELECT persona_id AS id FROM persona_assignment
-      UNION SELECT COALESCE(conversation.persona_id, user.persona_id) FROM user
-      LEFT JOIN conversation ON conversation.user_id = user.id`;
-        const occupied = new Set(taken.map((row) => row.id));
+          JOIN discovery_registration r ON r.id = l.registration_id WHERE r.archived_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM persona_exclusion e WHERE e.handle = r.handle AND e.persona_id = l.persona_id)`;
+        const assignments = yield* sql<{
+          id: string;
+          count: number;
+        }>`SELECT persona_id AS id, COUNT(*) AS count FROM persona_assignment GROUP BY persona_id`;
+        const counts = new Map(assignments.map((row) => [row.id, row.count]));
         const byID = new Map(profiles.map((profile) => [profile.id, profile]));
         const byRegistration = new Map<string, (typeof likes)[number][]>();
         for (const like of likes) {
@@ -68,7 +70,11 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           group.push(like);
           byRegistration.set(like.registrationID, group);
         }
-        const available = new Set(profiles.map((p) => p.id).filter((id) => !occupied.has(id)));
+        const available = new Map(
+          profiles
+            .map((p) => [p.id, assignmentCapacity - (counts.get(p.id) ?? 0)] as const)
+            .filter(([, remaining]) => remaining > 0),
+        );
         const result = entries.map((row) => {
           const likedPersonas = (byRegistration.get(row.id) ?? []).map((like) => ({
             id: like.personaID,
@@ -184,7 +190,9 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
               const persona = candidates[randomInt(candidates.length)]!;
               const at = now + randomInt(300_000, 3_600_001);
               if (!(yield* reserve(row, persona.id, at, decoded.requestId, requestId))) continue;
-              available.delete(persona.id);
+              const remaining = available.get(persona.id)! - 1;
+              if (remaining) available.set(persona.id, remaining);
+              else available.delete(persona.id);
               count++;
             }
           }

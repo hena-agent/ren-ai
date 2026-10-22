@@ -4,7 +4,6 @@ import { HttpClient } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { migrate } from "./database.ts";
-import { checkAssignments } from "./discovery/assignment.ts";
 import { contacts } from "./discovery/contacts.ts";
 import { contactManagement } from "./discovery/management.ts";
 import { makeDiscoveryWeb } from "./discovery/discovery.ts";
@@ -44,7 +43,6 @@ export const createApplicationStore = async (
     Effect.runPromise(Effect.provideContext(effect, context));
   try {
     await run(migrate);
-    await run(checkAssignments);
     const contactsStore = await run(contacts(config.catalog));
     const discovery = await run(
       makeDiscoveryWeb({

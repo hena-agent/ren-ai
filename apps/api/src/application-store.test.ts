@@ -113,7 +113,7 @@ const register = (runtime: Miniflare, handle: string) =>
       locale: "ko",
       privacyNoticeVersion: discoveryNotice.version,
       turnstileToken: "human",
-      likedPersonaIDs: ["sora", "luna"],
+      likedPersonaIDs: ["sora"],
     }),
   });
 
@@ -208,7 +208,8 @@ test("registry persists state on the Durable Object across recreation", async ()
     expect((await call(runtime, "/unknown")).status).toBe(404);
 
     const state = await call(runtime, "/__fixture/state");
-    expect(await state.json()).toEqual({
+    const persisted = await state.json();
+    expect(persisted).toEqual({
       registrations: [
         { id: registrationID, handle: "+821012345678" },
         { id: otherRegistrationID, handle: "+821087654321" },
@@ -218,8 +219,8 @@ test("registry persists state on the Durable Object across recreation", async ()
         { requestId: "00000000-0000-4000-8000-000000000002" },
       ],
       assignments: [
-        { personaID: "luna", handle: "+821087654321" },
         { personaID: "sora", handle: "+821012345678" },
+        { personaID: "sora", handle: "+821087654321" },
       ],
     });
 
@@ -231,17 +232,15 @@ test("registry persists state on the Durable Object across recreation", async ()
     const restoredList = await contactEntries(() => restored.text());
     expect(restoredList.entries).toHaveLength(2);
     expect(restoredList.entries.some((entry) => entry.id === registrationID)).toBe(true);
-    expect(
-      (
-        await call(runtime, "/__fixture/reopen-conflict", {
-          method: "POST",
-        })
-      ).status,
-    ).toBe(200);
-    const failedStartup = await call(runtime, "/management/discovery", {
+    expect(await (await call(runtime, "/__fixture/state")).json()).toEqual(persisted);
+    const reopened = await call(runtime, "/__fixture/reopen-conflict", { method: "POST" });
+    expect(reopened.status).toBe(200);
+    expect(await reopened.json()).toEqual({ initialized: true });
+    const sharedStartup = await call(runtime, "/management/discovery", {
       headers: { Authorization: "Bearer management-test" },
     });
-    expect(failedStartup.status).toBe(500);
+    expect(sharedStartup.status).toBe(200);
+    expect(await (await call(runtime, "/__fixture/state")).json()).toEqual(persisted);
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });

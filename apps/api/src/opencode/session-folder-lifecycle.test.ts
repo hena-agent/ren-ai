@@ -1,11 +1,18 @@
-import { readdir, mkdir, writeFile } from "node:fs/promises";
+import { readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { AbsolutePath, Agent, Model, Session } from "@opencode/schema";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
+import { sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { Effect, Schema } from "effect";
 import { expect, test } from "vitest";
 import { folderSession, withSessionFolders } from "../../test/session-folder.test-helper.ts";
+
+const identity = (snapshot: typeof folderSnapshot.Type) => ({
+  persona: snapshot.persona,
+  agent: snapshot.agent,
+  rules: snapshot.rules,
+});
 
 test("creation owns its folder, is idempotent, and updates reject missing or mismatched sessions", () =>
   withSessionFolders((host) =>
@@ -13,6 +20,14 @@ test("creation owns its folder, is idempotent, and updates reject missing or mis
       const { session: original, snapshot } = yield* folderSession(host);
       const input = { folderID: original.id, snapshot, model: "test/probe" };
       expect(yield* host.rpc.create(input, host.location)).toBe(original.location.directory);
+      expect(
+        yield* host.rpc
+          .create({ ...input, conversationKey: "another-conversation" }, host.location)
+          .pipe(Effect.flip),
+      ).toMatchObject({ message: "Cannot create persona session" });
+      expect(
+        (yield* host.rpc.read({ folderID: original.id }, host.location)).binding?.conversationKey,
+      ).toBe(original.id);
       expect(
         yield* host.rpc
           .create(
@@ -42,7 +57,7 @@ test("creation owns its folder, is idempotent, and updates reject missing or mis
       expect(
         yield* host.rpc.update({ folderID: original.id, snapshot: updated }, host.location),
       ).toBe(original.location.directory);
-      expect(yield* host.rpc.read({ folderID: original.id }, host.location)).toEqual(updated);
+      expect(yield* host.rpc.read({ folderID: original.id }, host.location)).toMatchObject(updated);
       yield* host.remote.sessions.remove(original.id);
       expect(
         yield* host.rpc
@@ -56,27 +71,56 @@ test("creation owns its folder, is idempotent, and updates reject missing or mis
       const preexisting = Session.ID.create();
       yield* host.rpc.write({ folderID: preexisting, snapshot }, host.location);
       yield* Effect.promise(() =>
-        writeFile(join(host.files.path(preexisting), "unrelated.txt"), "Keep me."),
+        writeFile(join(host.files.path("persona1"), "unrelated.txt"), "Keep me."),
       );
-      expect(
-        yield* host.rpc
-          .create({ ...input, folderID: preexisting }, host.location)
-          .pipe(Effect.flip),
-      ).toMatchObject({ message: "Cannot create persona session" });
-      expect(yield* Effect.promise(() => readdir(host.files.path(preexisting)))).toContain(
+      expect(yield* host.rpc.create({ ...input, folderID: preexisting }, host.location)).toBe(
+        host.files.path("persona1"),
+      );
+      expect(yield* Effect.promise(() => readdir(host.files.path("persona1")))).toContain(
         "unrelated.txt",
       );
     }),
   ));
 
-test("genuine create failure removes only the new folder", () =>
+test("an unreadable durable locator is an error rather than permission to recreate its session", () =>
+  withSessionFolders((host) =>
+    Effect.gen(function* () {
+      const { session, snapshot } = yield* folderSession(host);
+      const locator = join(host.directory, "personas", ".bindings", `${session.id}.json`);
+      yield* Effect.promise(async () => {
+        await rm(locator);
+        await mkdir(locator);
+      });
+      yield* Effect.promise(async () => {
+        await expect(host.files.exists(session.id)).rejects.toMatchObject({ code: "EISDIR" });
+      });
+      expect(
+        yield* host.rpc
+          .create({ folderID: session.id, snapshot, model: "test/probe" }, host.location)
+          .pipe(Effect.flip),
+      ).toMatchObject({ message: "Cannot create persona session" });
+      expect((yield* host.remote.sessions.get(session.id)).location.directory).toBe(
+        session.location.directory,
+      );
+      expect(
+        (yield* Effect.promise(() => host.files.readAt(session.location.directory))).persona,
+      ).toEqual(snapshot.persona);
+    }),
+  ));
+
+test("genuine create failure removes the binding and preserves the persona scope", () =>
   withSessionFolders(
     (host) =>
       Effect.gen(function* () {
         expect(yield* host.remote.createSession("persona1").pipe(Effect.flip)).toEqual(
           new Error("Cannot create persona session"),
         );
-        expect(yield* Effect.promise(() => readdir(join(host.directory, "sessions")))).toEqual([]);
+        expect(
+          yield* Effect.promise(() => readdir(join(host.directory, "personas", ".bindings"))),
+        ).toEqual([]);
+        expect(yield* Effect.promise(() => readdir(join(host.directory, "personas")))).toContain(
+          "persona1",
+        );
       }),
     (ctx) => ({
       ...ctx,
@@ -97,11 +141,13 @@ test("a create that commits before failing keeps its folder and can be retried s
         expect(yield* host.rpc.create(input, host.location).pipe(Effect.flip)).toMatchObject({
           message: "Cannot create persona session",
         });
-        expect((yield* host.remote.sessions.get(id)).location.directory).toBe(host.files.path(id));
-        expect(yield* host.rpc.read({ folderID: id }, host.location)).toEqual(
+        expect((yield* host.remote.sessions.get(id)).location.directory).toBe(
+          host.files.path("persona1"),
+        );
+        expect(yield* host.rpc.read({ folderID: id }, host.location)).toMatchObject(
           Schema.decodeUnknownSync(folderSnapshot)(snapshot),
         );
-        expect(yield* host.rpc.create(input, host.location)).toBe(host.files.path(id));
+        expect(yield* host.rpc.create(input, host.location)).toBe(host.files.path("persona1"));
       }),
     (ctx) => ({
       ...ctx,
@@ -127,19 +173,25 @@ test("native new sessions and forks get independent snapshots before prompt exec
       yield* host.remote.sessions.prompt({ sessionID: fresh.id, text: "Immediate native prompt" });
       yield* host.remote.sessions.wait(fresh.id);
       expect((yield* host.remote.sessions.get(fresh.id)).location.directory).toBe(
-        host.files.path(fresh.id),
+        sessionDirectory(host.directory, fresh.id),
       );
-      expect(yield* host.rpc.read({ folderID: fresh.id }, host.location)).toEqual(snapshot);
+      expect(yield* host.rpc.read({ folderID: fresh.id }, host.location)).toMatchObject(
+        identity(snapshot),
+      );
       const fork = yield* host.remote.client.session.fork({ sessionID: fresh.id });
       yield* host.remote.sessions.prompt({ sessionID: fork.id, text: "Immediate fork prompt" });
       yield* host.remote.sessions.wait(fork.id);
       expect((yield* host.remote.sessions.get(fork.id)).location.directory).toBe(
-        host.files.path(fork.id),
+        sessionDirectory(host.directory, fork.id),
       );
-      expect(yield* host.rpc.read({ folderID: fork.id }, host.location)).toEqual(snapshot);
+      expect(yield* host.rpc.read({ folderID: fork.id }, host.location)).toMatchObject(
+        identity(snapshot),
+      );
       expect(JSON.stringify(yield* host.llm.requests())).toContain("You are Persona1.");
       yield* host.remote.sessions.remove(original.id);
-      expect(yield* host.rpc.read({ folderID: fresh.id }, host.location)).toEqual(snapshot);
+      expect(yield* host.rpc.read({ folderID: fresh.id }, host.location)).toMatchObject(
+        identity(snapshot),
+      );
       const elsewhere = join(host.directory, "ordinary-project");
       yield* Effect.promise(() => mkdir(elsewhere));
       const unrelated = yield* host.remote.client.session.create({
@@ -160,11 +212,12 @@ test("native relocation resumes prepared folders, selects the persona default, a
       yield* host.rpc.write({ folderID: prepared, snapshot }, host.location);
       yield* host.remote.client.session.create({
         id: prepared,
+        agent: Agent.ID.make("persona1"),
         model: Model.Ref.parse("test/probe"),
         location: original.location,
       });
       expect(yield* host.rpc.ensure({ folderID: prepared }, host.location)).toBe(
-        host.files.path(prepared),
+        host.files.path("persona1"),
       );
       expect((yield* host.remote.sessions.get(prepared)).agent).toBe("persona1");
       const conflict = Session.ID.create();
@@ -184,7 +237,7 @@ test("native relocation resumes prepared folders, selects the persona default, a
         JSON.stringify(
           yield* host.rpc.ensure({ folderID: conflict }, host.location).pipe(Effect.flip),
         ),
-      ).toContain("another persona");
+      ).toContain("binding does not match");
       const wrongAgent = yield* host.remote.client.session.create({
         agent: Agent.ID.make("build"),
         location: original.location,
@@ -200,7 +253,7 @@ test("native relocation resumes prepared folders, selects the persona default, a
             .update({ folderID: wrongAgent.id, snapshot }, host.location)
             .pipe(Effect.flip),
         ),
-      ).toContain("binding does not match");
+      ).toContain("no managed binding");
     }),
   ));
 

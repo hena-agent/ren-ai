@@ -13,11 +13,12 @@ import {
   DiscoveryAnswer,
   DiscoveryRequest,
   PublicPersona,
+  ReselectionRequest,
   discoveryNotice,
 } from "@ren-ai/onboarding";
 import { submissionLimit } from "./rate-limit.ts";
 import { verifyTurnstile } from "./turnstile.ts";
-import { reselect, withoutEndedPersonas } from "./reselection.ts";
+import { reselect, reselectionAuthorization, withoutEndedPersonas } from "./reselection.ts";
 import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
 import { queueWaitlistNotification } from "./notifications.ts";
 
@@ -37,6 +38,13 @@ const discoveryApi = HttpApi.make(namespace).add(
   HttpApiGroup.make("discovery")
     .add(
       HttpApiEndpoint.get("personas", `${namespace}/personas`, {
+        success: Schema.Array(PublicPersona),
+        error: failure,
+      }),
+    )
+    .add(
+      HttpApiEndpoint.post("reselectionPersonas", `${namespace}/reselection/personas`, {
+        payload: ReselectionRequest,
         success: Schema.Array(PublicPersona),
         error: failure,
       }),
@@ -69,7 +77,6 @@ export const makeDiscoveryWeb = ({
           try: catalog,
           catch: (cause) => new Error("Public Catalog unavailable", { cause }),
         }).pipe(
-          Effect.flatMap(withoutEndedPersonas),
           Effect.tapError((cause) =>
             Effect.sync(() =>
               log({
@@ -103,10 +110,17 @@ export const makeDiscoveryWeb = ({
           ))
         )
           return yield* Effect.fail("verification" as const);
-        const available = new Set((yield* profiles(requestId)).map((persona) => persona.id));
+        const publicProfiles = yield* profiles(requestId);
+        const available = new Set(publicProfiles.map((persona) => persona.id));
         if (!input.likedPersonaIDs.every((id) => available.has(id)))
           return yield* Effect.fail("personas" as const);
         return yield* Effect.gen(function* () {
+          const eligible = yield* withoutEndedPersonas(publicProfiles, input.handle).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
+          const eligibleIDs = new Set(eligible.map((persona) => persona.id));
+          if (!input.likedPersonaIDs.every((id) => eligibleIDs.has(id)))
+            return yield* Effect.fail("personas" as const);
           const blocked = yield* sql`SELECT handle FROM blocked WHERE handle = ${input.handle}
         UNION SELECT handle FROM removal WHERE handle = ${input.handle}`;
           if (blocked.length) return yield* Effect.fail("unavailable" as const);
@@ -157,6 +171,32 @@ export const makeDiscoveryWeb = ({
           Effect.mapError((error) => (typeof error === "string" ? error : ("storage" as const))),
         );
       });
+    const authorizeAttempt = Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const now = yield* Clock.currentTimeMillis;
+      const requestId = operationID(request.headers["x-operation-id"]);
+      if (
+        yield* limit(request.headers["cf-connecting-ip"], now).pipe(
+          Effect.tapError((cause) =>
+            Effect.sync(() =>
+              log({
+                requestId,
+                operation: "discovery.registration",
+                stage: "registration.limit",
+                code: "storage",
+                level: "error",
+                outcome: "failed",
+                durationMs: 0,
+                ...contactCause(cause),
+              }),
+            ),
+          ),
+          Effect.mapError(() => "storage" as const),
+        )
+      )
+        return yield* Effect.fail("try_later" as const);
+      return requestId;
+    });
     const handlers = HttpApiBuilder.group(discoveryApi, "discovery", (group) =>
       group
         .handle("personas", () =>
@@ -165,31 +205,40 @@ export const makeDiscoveryWeb = ({
             return yield* profiles(operationID(request.headers["x-operation-id"]));
           }),
         )
-        .handle("join", ({ payload }) =>
+        .handle("reselectionPersonas", ({ payload }) =>
           Effect.gen(function* () {
-            const request = yield* HttpServerRequest.HttpServerRequest;
-            const now = yield* Clock.currentTimeMillis;
-            const requestId = operationID(request.headers["x-operation-id"]);
-            if (
-              yield* limit(request.headers["cf-connecting-ip"], now).pipe(
-                Effect.tapError((cause) =>
-                  Effect.sync(() =>
-                    contactLog({
+            const requestId = yield* authorizeAttempt;
+            return yield* Effect.gen(function* () {
+              const ending = yield* reselectionAuthorization(payload.reselectionToken);
+              if (ending.consumedAt !== null) return yield* Effect.fail("reselection" as const);
+              return yield* withoutEndedPersonas(yield* profiles(requestId), ending.handle);
+            }).pipe(
+              Effect.tapError((cause) =>
+                Effect.sync(
+                  () =>
+                    cause !== "storage" &&
+                    log({
                       requestId,
-                      operation: "discovery.registration",
-                      stage: "registration.limit",
-                      code: "storage",
-                      level: "error",
+                      operation: "discovery.reselection",
+                      stage: "catalog.authorize",
+                      code: typeof cause === "string" ? cause : "storage",
+                      level: typeof cause === "string" ? "warn" : "error",
                       outcome: "failed",
                       durationMs: 0,
-                      ...contactCause(cause),
+                      ...(typeof cause !== "string" && contactCause(cause)),
                     }),
-                  ),
                 ),
-                Effect.mapError(() => "storage" as const),
-              )
-            )
-              return yield* Effect.fail("try_later" as const);
+              ),
+              Effect.mapError((error) =>
+                typeof error === "string" ? error : ("storage" as const),
+              ),
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
+          }),
+        )
+        .handle("join", ({ payload }) =>
+          Effect.gen(function* () {
+            const requestId = yield* authorizeAttempt;
             return yield* join(payload, requestId);
           }),
         ),
@@ -206,5 +255,17 @@ export const makeDiscoveryWeb = ({
         ),
       ),
     );
-    return web;
+    return {
+      ...web,
+      handler: async (...args: Parameters<typeof web.handler>) => {
+        const headers = new Headers(args[0].headers);
+        const requestId = operationID(headers.get("x-operation-id") ?? undefined);
+        headers.set("x-operation-id", requestId);
+        args[0] = new Request(args[0], { headers });
+        const response = await web.handler(...args);
+        response.headers.set("Cache-Control", "no-store");
+        response.headers.set("X-Request-ID", requestId);
+        return response;
+      },
+    };
   });

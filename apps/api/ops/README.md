@@ -221,12 +221,12 @@ messaging and plugin tokens. Configure the Admin Catalog at
 `https://admin.renai.im`. Current application state belongs to Durable Object
 SQLite; preserve any stopped legacy volume only for reviewed export/rollback.
 
-Before rollout, inspect live `user`/`conversation` persona assignments. Duplicate
-live assignments stop application startup and need explicit operator resolution.
-No conversations are automatically deleted. Migration 019 creates the durable
-assignment/selection/contact tables. Operator removal and test reset release
-assignments. Failed, blocked, unreachable and uncertain first contacts keep
-their reservation until the operator resolves/removes them.
+Each handle has one current Assignment; each persona has at most five, including
+pending, failed and uncertain first contacts and test handles. Reservation checks
+and writes share a transaction. Operator removal and test reset release their
+Assignment; a failed, blocked or uncertain first contact retains its slot.
+Relationship endings exclude that persona only for the same handle. Personas at
+capacity remain visible in Discovery; Selection waits for capacity.
 
 Selection and its 5–60 minute schedule commit together. The worker records a
 session ID before creating its native folder, and records the Conversation
@@ -244,8 +244,9 @@ api-app's `/discovery/personas`; the browser does not bind D1 or run a catalog A
 
 Admin sends `POST /management/catalog/refresh` with `TOKEN_MANAGEMENT` after
 committing catalog edits. This route belongs to api-app, not the Mac executor;
-it loads the latest authenticated Admin catalog and synchronizes active native
-session folders. Live State/Memory and retained folders are preserved. The
+it loads the latest authenticated Admin catalog and synchronizes persona
+folders. Live State and both Memory scopes are preserved. Retained and ended
+sessions use the same current agent and ground rules as active sessions. The
 route returns 204 after synchronization, 503 on failure (with a request ID),
 and rejects writes during bootstrap. Duplicate notifications are safe. Catalog
 loading runs at execution startup and on notifications, never on heartbeats.
@@ -255,12 +256,12 @@ No script below performs the live cutover, stops existing services, changes an e
 
 ## Services and credentials
 
-| Service     | Runtime                                                            | Persistent state                                                                                            | Ingress / auth                                                              |
-| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                   | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                  |
-| Application | `@ren-ai/api-app` Cloudflare Worker                                | SQLite-backed application Durable Object; remote Admin D1 Catalog                                           | `api.renai.im`; plugin callback Bearer                                      |
-| Executor    | `@ren-ai/api-msg` Docker container on the Mac                      | None                                                                                                        | `api-msg.renai.im` → Docker; `TOKEN_MANAGEMENT`                             |
-| OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable session folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers |
+| Service     | Runtime                                                            | Persistent state                                                                                                        | Ingress / auth                                                              |
+| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Messages    | [Native Mac GUI LaunchAgent](../../imsg/ops/README.md), Bun + imsg | Apple Messages; dedicated messaging token                                                                               | `imsg.renai.im` → loopback 4702, Cloudflare Tunnel; Bearer                  |
+| Application | `@ren-ai/api-app` Cloudflare Worker                                | SQLite-backed application Durable Object; remote Admin D1 Catalog                                                       | `api.renai.im`; plugin callback Bearer                                      |
+| Executor    | `@ren-ai/api-msg` Docker container on the Mac                      | None                                                                                                                    | `api-msg.renai.im` → Docker; `TOKEN_MANAGEMENT`                             |
+| OpenCode    | Existing `ghcr.io/anomalyco/opencode:2.0.19`                       | Whole `oc-hena-dev_opencode-home`, proxy signing state, read-only plugin location, writable persona and Sandbox folders | `oc.renai.im`; native Basic for machines, existing cookie flow for browsers |
 
 The following host-relocation notes describe the prior Docker application deployment and are retained only for archived backup/rollback work. They do not provision or deploy api-app or api-msg. For the current Mac executor setup, use [api-msg provisioning](../../api-msg/ops/README.md). The current executor uses the existing OpenCode upstream through authenticated public `https://oc.renai.im`; do not alter its tunnel or proxy for api-msg.
 
@@ -268,7 +269,7 @@ The inspected Alpine/aarch64 OpenCode 2.0.19 image needs `gcompat=1.1.0-r4` and 
 
 The removed `application.env.example` applied to the old Docker application. For the executor's minimal protected environment, use [`api-msg.env.example`](../../api-msg/ops/api-msg.env.example): it reuses `TOKEN_MANAGEMENT`, native `OPENCODE_AUTHORIZATION`, and existing `IMSG_TOKEN`. The Mac needs no Turnstile secret, application database or provider credential.
 
-Compose variables: `REN_AI_APP_ENV` (absolute protected env file), `REN_AI_TUNNEL_TOKEN` (application tunnel), `REN_AI_LOCATION_INPUT` (absolute reviewed plugin config/token staging directory). Volume names are overridable through `REN_AI_STATE_VOLUME`, `REN_AI_LOCATION_VOLUME`, `REN_AI_SESSION_VOLUME`. The application never mounts either OpenCode volume; session-folder writes use authenticated public plugin RPC.
+Compose variables: `REN_AI_APP_ENV` (absolute protected env file), `REN_AI_TUNNEL_TOKEN` (application tunnel), `REN_AI_LOCATION_INPUT` (absolute reviewed plugin config/token staging directory). Volume names are overridable through `REN_AI_STATE_VOLUME`, `REN_AI_LOCATION_VOLUME`, `REN_AI_PERSONA_VOLUME` and `REN_AI_SANDBOX_VOLUME`. The application never mounts OpenCode volumes; folder writes use authenticated public plugin RPC.
 
 The Catalog is the Admin Worker's Drizzle/D1 database and starts empty. Set
 `PERSONA_CATALOG_URL` and `TOKEN_CATALOG` in the protected application
@@ -293,17 +294,25 @@ diff -u /Users/chris/git/hena-agent/oc.hena.dev/auth-proxy/server.ts /absolute/p
 
 The adapter matches six reviewed anchors and refuses missing, duplicated or already-patched shapes. Incoming Basic credentials go upstream unchanged, including WebSocket upgrades. A machine 401 **never** retries with the proxy's cached privileged credentials; native OpenCode validates the supplied credential. Existing cookie login still uses the cached native credential. **Initial deployment prerequisite:** at the approved proxy deployment step inspect the full diff, install the reviewed copy and rebuild only the existing proxy, without changing its internal origin networking. Through `https://oc.renai.im`, verify valid machine Basic credentials return native API JSON, invalid credentials return401 without privileged fallback, and SSE, terminals and cookie login still work. Record this verification before any application/bootstrap start or import; do not substitute an internal HTTP URL. Tests exercise HTTP and WebSocket credential forwarding; they do not claim the live public ingress is verified.
 
-## Session-folder plugins/config installation (ADR-0012)
+## Persona-folder plugins/config installation (ADR-0023)
 
-The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/srv/ren-ai:ro`. Keep code, dependencies, root config and token read-only. The repository-owned `opencode.sessions.compose.yml` overlay retains that mount and adds **only** a new writable volume at `/srv/ren-ai/sessions` to `opencode-upstream`; it changes no proxy, tunnel, ports, home volume or unrelated location. Do not edit the external Compose source automatically.
+The upstream mounts `ren-ai-opencode-location` at `/srv/ren-ai:ro`. Keep code,
+dependencies and root config read-only. The repository-owned
+`opencode.sessions.compose.yml` overlay mounts separate writable volumes at
+`/srv/ren-ai/personas` and `/srv/ren-ai/sandboxes`. It changes no proxy, tunnel,
+ports, home volume or unrelated location. All of a persona's managed sessions
+open `/srv/ren-ai/personas/<persona-id>`; only operator experiments open Sandbox
+folders. Preserve the old sessions volume as rollback evidence during the
+[shared-life cutover](shared-life-cutover.md). Do not edit the external Compose
+source automatically.
 
 1. After completing the public-HTTPS proxy prerequisite above, inspect inherited plugins with authenticated `ops/session-transfer.ts plugins NEW-inventory.json`, setting `OPENCODE_URL=https://oc.renai.im` and `OPENCODE_DIRECTORY=/srv/ren-ai`. Review each plugin's ID/target/source; create a JSON array of **all unrelated inherited plugin IDs/targets**, including discovered global plugin directory targets. An empty list is appropriate only when inventory proves there are none. OpenCode V2 supports `-target` removal entries, not an invented isolation setting. Native `opencode.config.instruction` and `opencode.config.agent` must remain enabled: the generator strips them from the exclusion list. It always excludes the obsolete `personas` ID and `/srv/ren-ai/plugin` target.
 
    Initial inventory can be empty while a location initializes. Inspect the loaded location again before treating it as empty. On the deployed 2.0.19 instance, disabling versioned package targets did not disable the loaded plugins; their actual IDs (`henadev.anthropic-auth`, `opencode-discord-noti`, `opencode-translate`) did. Verify those plugins are absent or disabled after reloading the persona location, while ordinary locations retain them.
 
-2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at each bundle's entry directory: `/srv/ren-ai/plugins/{tools,context,memory,title,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Runtime modules receive `directory:/srv/ren-ai` and the callback URL, and read the existing `TOKEN_MANAGEMENT` from the OpenCode process environment; they run only for direct session descendants. Session-folder needs only `directory` and registers RPC in the root location. Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. Source declarations and installed platform dependencies stay pinned to OpenCode 2.0.19.
-3. Put `opencode.json` in `REN_AI_LOCATION_INPUT`, owner-only. Supply the existing `TOKEN_MANAGEMENT` to the OpenCode process through its protected environment; no separate token file is installed. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. The new exporter requires all five volumes: when upgrading an old four-volume deployment, first provision the new empty sessions volume (`docker volume create "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}"`) without mounting it into running services, then export with the **old** location volume selected. For an existing old plugin volume, select a **new** `REN_AI_LOCATION_VOLUME` (for example `ren-ai-opencode-location-v2`) and explicitly `docker volume create "$REN_AI_LOCATION_VOLUME"`; never overwrite the old volume. Keep the application in `BOOTSTRAP_ONLY=true` while migrating.
-4. Validate `docker compose -f ops/compose.yml config --quiet`, then explicitly `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume; it installs five separate bundles, pinned dependencies/locks and the session-folder template, protects config/token files, and creates the sessions mountpoint. The Worker bundles its ground rules as text; Node story adapters load the private template with `loadGroundRules`. No plugin constructs agents.
+2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at `/srv/ren-ai/plugins/{tools,context,memory,title,dice,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Runtime modules receive the root directory and callback URL and read `TOKEN_MANAGEMENT` from the process environment. They resolve the event's session ID through its durable binding, rather than deriving it from a directory name. The folder RPC is registered in the root location. Source declarations and installed platform dependencies remain pinned to OpenCode 2.0.19.
+3. Put `opencode.json` in `REN_AI_LOCATION_INPUT`, owner-only. Supply `TOKEN_MANAGEMENT` through the protected environment. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. Select a **new**, empty `REN_AI_LOCATION_VOLUME` and create it explicitly; never overwrite the previous plugin volume. Keep `BOOTSTRAP_ONLY=true` throughout the [cutover](shared-life-cutover.md).
+4. Validate `docker compose -f ops/compose.yml config --quiet`, then run `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume and creates persona and Sandbox mountpoints. The Worker bundles ground rules as text; Node adapters use `loadGroundRules`.
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.
 
    ```sh
@@ -312,10 +321,10 @@ The upstream already mounts the reserved `ren-ai-opencode-location` volume at `/
      -f "$PWD/apps/api/ops/opencode.sessions.compose.yml" config
    ```
 
-   At the approved deployment step, use those same arguments with `up -d --no-deps opencode-upstream`. Keep using the overlay on later starts/recreates. Verify the root mount is read-only and the sessions submount is writable; existing whole-home, compatibility image, proxy and tunnel settings must be unchanged. The application has neither mount. Start its callback in bootstrap mode before migration.
+   At the approved deployment step, use those same arguments with `up -d --no-deps opencode-upstream`. Keep using the overlay on later starts/recreates. Verify the root mount is read-only and both persona and Sandbox submounts are writable. Existing whole-home, compatibility image, proxy and tunnel settings stay unchanged. The application has none of these mounts. Start its callback in bootstrap mode before migration.
 
-6. With old intake stopped and bootstrap confirmed, **interrupt/drain active execution and queued inbox work** for all sessions to move. Run `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts folders /absolute/private/NEW-pre-cutover-archive.json` using protected `OPENCODE_URL`, `OPENCODE_AUTHORIZATION` and `OPENCODE_DIRECTORY=/srv/ren-ai`. If source definitions are needed, supply `PERSONA_CATALOG_URL` and `TOKEN_CATALOG`; missing IDs fail rather than loading files. The command exclusively creates the archive and skips already-moved sessions. Review partial results and use a new archive path before retrying. Exports include persona/agent/rules and current Conversation documents; restore recreates folders before importing. Preserve rollback archives and never enable a second intake.
-7. Inspect root and session-location inventories. Verify obsolete `personas` is absent, no unrelated inherited plugin remains, native agent/instruction loaders are enabled, and each session has `.opencode/agents/<id>.md`, `AGENTS.md`, `persona.json`, and `opencode.json` with `default_agent` and disabled `build`/`plan`/`general`/`explore`. Verify only send/read/react/wait/dice and update_state/update_memory/remember/search_memory, compaction, ordinary project writes, native UI features and retained-session history. Runtime memory writes publish `.memory/current`; include hidden revisions and symlinks in volume backups. Active Persona/ground-rule snapshots refresh at startup/catalog change; current State/Memory and retained snapshots do not reset. A dedicated location is **not** a security sandbox.
+6. Follow [Shared-life cutover](shared-life-cutover.md) for existing ADR-0012 sessions. Preserve native session IDs and history while moving their locations. Restore into a replacement host with the current session archive format only; the one-off cutover is the explicit converter for old data. Keep rollback archives and enable exactly one intake.
+7. Verify native agent/instruction loaders and the scoped tools, compaction and retained-session history. Each persona root has `.opencode/agents/<id>.md`, `AGENTS.md`, `persona.json`, `opencode.json`, shared `STATE.md`/`MEMORY.md`/`long-term`, and `conversations/<key>` Relationship scopes. Include hidden bindings and `.memory` execution metadata in backups. Markdown is authoritative; interrupted writes recover through a transient write-ahead record. Catalog refresh changes identity and rules once per persona while preserving live State and Memory. A dedicated location is **not** a security sandbox.
 
 ## Messages Mac
 
@@ -326,7 +335,7 @@ The Mac messaging service is a separate package with its own [runbook](../../ims
 The Worker and application plugins must be released together: streaming `wait`, `status` and `sends` RPCs have been replaced by local waiting and a combined finite `context` response. The context request carries the actual model-visible message IDs. Terminal execution notifications use `observe`.
 
 1. Stage the tested Worker and fresh plugin bundles using the session-folder installation procedure above. Preserve the existing plugin volume and export state during the planned pause. api-msg's CI artifact contains its observer; its protected `APPLICATION_API_URL` defaults to `https://api.renai.im` and uses the existing `TOKEN_MANAGEMENT`. Set it explicitly for staging/local operation. Its private environment is not changed by the automatic updater.
-2. Put the application in `BOOTSTRAP_ONLY=true`, interrupt/drain active OpenCode execution, and record uncertain sends. Keep Messages receiving. Install the fresh plugin location and recreate OpenCode with that location; retain the writable sessions volume and current State/Memory.
+2. Put the application in `BOOTSTRAP_ONLY=true`, interrupt/drain active OpenCode execution, and record uncertain sends. Keep Messages receiving. Install the fresh plugin location and recreate OpenCode with that location; retain the writable persona/Sandbox volumes and current State/Memory.
 3. Deploy the matching Worker in bootstrap mode, then enable execution. Confirm the installed api-msg revision matches its artifact. Its wake requests may retry while the Worker is paused. Send one authenticated `POST /management/intake/wake` after enabling execution to initialize/catch up intake promptly; a new empty application must establish its initial bookmark before accepting live Conversations.
 4. With a marked test Handle, verify burst replies, an interrupted local wait, an edit across a Worker restart, incoming messages received during the pause, scheduled first contact/follow-up, and failed-turn recovery. Confirm an idle alarm is approximately five minutes away and Catalog reads/folder writes do not repeat on actor replacement. Mac outage alerts now use a five-minute safety interval.
 5. Check public `/health` identity, exact artifact revision and readiness for api-app, api-msg and imsg. A published artifact or a degraded Worker-only smoke check is not an end-to-end rollout. For rollback, pause first and restore the matching Worker/plugin pair after reconciling send records.
@@ -340,18 +349,54 @@ Cloudflare owns all application state. The Mac observer has no application datab
 3. `CONFIRM_SOURCE_STOPPED=yes bash ops/snapshot-legacy.sh OLD-STATE NEW-SNAPSHOT` preserves complete application state, bookmarks/bindings/send records, plus coherent `server.sqlite` and `opencode.sqlite` copies. No original database writes. This tooling requires the original state tree, not the old GET-only viewer.
 4. `bash ops/export-legacy.sh NEW-SNAPSHOT OLD-PERSONA-DIRECTORY` runs the pinned native 2.0.19 core/server **only inside a network-disabled one-off image** against a throwaway copy. It exports through native HTTP route APIs without opening a listener, invoking a restart sweep, calling the model, or loading the old plugin. Native schema migrations may update only that disposable copy. Review fidelity against stopped 2.0.16 snapshots before cutover; keep original snapshots unchanged. `sessions.json` includes all sessions in the old location (active, retained resets/removals and children) and pending user/synthetic inbox data.
 5. The historical `install-application-state.sh` copies a stopped snapshot to an empty archival volume only. It is not a Worker import. Use the coordinated read-only export and empty Durable Object import described above; do not start another local SQLite writer. Keep the Worker bootstrap-only while reviewing IDs/bookmarks and uncertain sends.
-6. Install/verify the plugin location and sessions overlay with the callback alive. Use `CONFIRM_BOOTSTRAP_ONLY=yes bun ops/session-transfer.ts restore NEW-SNAPSHOT/sessions.json` against the existing OpenCode. Restore checks the complete archive and target IDs, refuses collisions/cycles/control work and fork/revert metadata, preserves IDs, creates folders before import and imports parents first. Modern archives carry persona/agent/rules and Conversation document snapshots. If an archive needs definitions, supply the authenticated Catalog connection; missing IDs fail. For root sessions, use the paused `session-transfer.ts folders NEW-ARCHIVE.json` command after draining execution and inbox work. Native2.0.19 import omits fork/revert information; such archives require a full OpenCode home-volume restore. Pending work is queued with `resume:false`, including inline images. Existing sessions are never overwritten. Inspect partial target IDs before retrying an import.
+6. These initial relocation notes are historical. Use the checkout matching an old archive when restoring it, then follow the [ADR-0023 cutover](shared-life-cutover.md). Current `session-transfer.ts restore` consumes the current persona-scoped archive, restores each persona scope once, preserves native IDs and imports parents before children. Native 2.0.19 import omits fork/revert metadata; those archives require full OpenCode home-volume restore. Pending work stays queued with `resume:false`. Existing sessions are never overwritten; inspect partial target IDs before retrying an import.
 7. Verify session/message/tool history, retained sessions, app bindings, plugin policy, both public authenticated endpoints, native cookie/machine/UI flows, and Messages attachment/status/read/typing/reaction behavior. Reconcile physical-send uncertainty against Messages history; **never retry an uncertain send just because it is absent from imported session memory**. Pending control operations must be drained/settled before migration, not silently dropped.
 8. Explicitly restart the app with `BOOTSTRAP_ONLY=false` only after verification. Recovery activates imported pending inbox work through supported APIs, intake catches up Messages history and GUID deduplication prevents replay. Verify messages received during the pause, scheduling and delivery reconciliation with a marked test Handle, not personal conversations.
 9. Only after acceptance retire the old `dev.hena.ren-ai`, old log agent, viewer-only asset LaunchAgent/listeners 4700/4701/47987 and the old Tailscale8447 mapping. Do not delete snapshots or unrelated Keychain items. Old source is rollback evidence, not a second active intake. Rollback after any new physical send requires reviewing both sides' send records before resuming the old app.
+
+## Offline scoped export
+
+Current offline exports use the version-2 persona-scoped archive. Supply a stopped
+OpenCode database at `/snapshot/opencode.sqlite` and make a complete stopped copy
+of the recorded managed root available at that same absolute path inside the
+export container. The root must include `personas/` (including `.bindings`, each
+persona's `.sessions`, State, Life memory and Conversation scopes) and `sandboxes/`.
+Keep the plugin-location, persona and Sandbox mount layout together when copying
+or restoring these scopes. A database-only copy cannot produce this archive.
+
+Run `ops/offline-export.ts RECORDED-MANAGED-ROOT` in the network-disabled migration
+image with `/output` pointing at a new protected output directory. It copies the
+database into `/scratch`, reads existing validated bindings and snapshots from
+the copied scopes, and writes `/output/sessions.json` exclusively. The embedded
+native routes use `project:false`; no plugin lifecycle, adoption, session moves,
+restart sweep or model execution runs. Missing scopes or incoherent native
+locations fail the export. Preserve the original database and scope backups;
+restore their recorded mounts before retrying. Legacy version-1 sources require
+the explicit ADR-0023 cutover, not an export fallback.
 
 ## Independent future relocation
 
 **Mac:** follow [Relocate to another Mac](../../imsg/ops/README.md#relocate-to-another-mac). Docker services and OpenCode credentials stay untouched.
 
-**Docker:** at an approved pause stop all consumers of the **five** exported volumes, including both OpenCode upstream and cookie proxy. `OC_DEPLOYMENT_DIRECTORY=… REN_AI_TUNNEL_TOKEN=… bash ops/export-docker.sh NEW-PRIVATE-BACKUP` refuses running mounts and captures **whole home** (all locations/sessions/provider credentials/projects), proxy data (browser cookie signing identity), read-only persona location (plugins/config/token/dependencies/templates), application state, and writable session folders (agents/instructions/persona snapshots/session configs). It also copies the external Compose/source/env read-only, the sessions overlay, external catalog, application env and separate application tunnel token. Restore supplies the latter as protected `application-tunnel.token`; read it into the Compose environment without logging it. Set custom location/session volume variables consistently for both Compose and export/restore. These five-volume archives are the ADR-0012 format; older four-volume backups need attended migration, not a silent empty session volume. Fleet database/certificates/secrets are exported separately by its tooling; restore them as part of a complete Docker-host move. Full-home restore preserves native fork/revert metadata and all unrelated OpenCode locations; scoped session exports are not a full-host backup.
+**Docker:** stop all consumers of the **six** exported volumes, including OpenCode
+and its cookie proxy. `ops/export-docker.sh` refuses running mounts and captures
+whole OpenCode home, proxy state, plugin location, archived application state,
+persona roots and Sandboxes, plus the reviewed deployment/configuration. Set
+`REN_AI_PERSONA_VOLUME` and `REN_AI_SANDBOX_VOLUME` consistently for Compose and
+backup/restore. Old five-volume backups belong to ADR-0012 and require its
+matching restore tooling followed by the explicit cutover. Full-home backup
+preserves native fork metadata and unrelated projects; scoped native exports do
+not replace it. Preserve Fleet state using its own backup tooling.
 
-On the new host, `bash ops/restore-docker.sh VERIFIED-BACKUP NEW-CONFIG-DIRECTORY` verifies checksums and restores into **new, nonexistent** named volumes; it never merges databases or starts containers. Default volume names match the current OpenCode project. Include restored `opencode.sessions.compose.yml` after the external base Compose file and review both volume names; never start a restored stack without its writable sessions submount. Review catalog/env host paths, retain the verified Basic-compatible proxy, and verify the restored public HTTPS OpenCode endpoint before application/bootstrap start or import. Start the callback/application in bootstrap mode and verify plugin/catalog/session counts, native UI/cookie/Basic/SSE/terminal operation and public Mac integration before moving production traffic. Review image architecture/version and keep `https://oc.renai.im` across hosts; use a protected staging HTTPS hostname when checking a replacement before switching the stable route. Do not invent a private HTTP/shared-filesystem or Tailscale dependency. Activate intake only once, reconcile uncertain sends and pause-period messages, then retire the old Docker host. Keep application/OC/Fleet backups and credentials together under access control.
+On the replacement host, `ops/restore-docker.sh VERIFIED-BACKUP NEW-CONFIG-DIRECTORY`
+verifies checksums and restores into **new, nonexistent** volumes without starting
+services. Apply the restored overlay and verify writable persona and Sandbox
+mounts. Keep the callback bootstrap-only while checking native IDs, current
+documents, bindings, plugin policy, public authentication and Mac integration.
+Verify exact artifact revisions and readiness before switching traffic to the
+stable public addresses. Reconcile uncertain sends and pause-period intake,
+activate exactly one intake, then retire the old host. Keep backups and
+credentials together under access control.
 
 ## Verification scope
 

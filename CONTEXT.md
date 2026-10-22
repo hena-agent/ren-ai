@@ -11,7 +11,7 @@ The official product name, written with this capitalization and space in logos, 
 _Avoid_: Ren, RenAI
 
 **Persona**:
-A fictional character the service plays in iMessage. A conversation's persona is chosen at onboarding and never changes.
+A fictional character the service plays in iMessage. She lives one life across all her Conversations. A conversation's persona is chosen at onboarding and never changes.
 _Avoid_: bot, character, agent (an agent is the OpenCode mechanism that implements a persona)
 
 **Persona description**:
@@ -39,11 +39,11 @@ A neutral multi-view reference image of one persona in one image style. Every ph
 _Avoid_: main photo, representative photo, reference portrait
 
 **Persona version**:
-An immutable saved edition of one persona's identity document, including its private description and public profile. It excludes photos, initial State and Memory, and the evolving state and memories of Conversations.
+An immutable saved edition of one persona's identity document, including its private description and public profile. It excludes photos, initial State and Memory, and her evolving State and Memory.
 _Avoid_: description format version, conversation snapshot
 
 **Persona restoration**:
-A new latest Persona version containing the document from an earlier version. It preserves the intervening versions and the persona's existing Conversations.
+A new latest Persona version containing the document from an earlier version. It preserves the intervening versions, her current State and Memory, and her existing Conversations.
 _Avoid_: memory reset, session rebuild
 
 **Catalog**:
@@ -83,7 +83,7 @@ Becoming a user: joining the waitlist through Discovery, being selected, and rec
 _Avoid_: signup, registration
 
 **Test handle**:
-A handle the operator marks for trying the service as a user would. Only a test handle's conversation can be reset, and only a test handle can skip Selection to start with a chosen persona right away.
+A handle the operator marks for trying the service as a user would: its Conversations count toward a persona's assignments and change her State and Life memory like any other. Only a test handle's conversation can be reset, and only a test handle can skip Selection to start with a chosen persona right away.
 _Avoid_: developer handle, dev number, allowlist
 
 **Greeting**:
@@ -91,43 +91,51 @@ The first message a persona sends a new user.
 _Avoid_: welcome message, intro
 
 **Conversation**:
-A user's distinct 1:1 relationship with one persona over iMessage. A later relationship with another persona is a new Conversation even when it shares the same iMessage thread.
+A user's distinct 1:1 relationship with one persona over iMessage. The persona holds her other Conversations at the same time, and none of them sees this relationship. A later relationship with another persona is a new Conversation even when it shares the same iMessage thread.
 _Avoid_: chat, thread, session (a session is OpenCode's)
 
 **Relationship ending**:
-A persona's permanent decision to end her Conversation with one user. It is distinct from declining a suggestion, taking a break, or blocking the user from the service.
-_Avoid_: ban, reset, pause
-
-**Retired persona**:
-A persona whose Conversation has ended. She never appears in Discovery again; the operator keeps her relationship history.
-_Avoid_: archived, deleted, unpublished
+A persona's permanent decision to end her Conversation with one user, who can never be assigned her again. Her other Conversations continue, and other people can still be assigned her. It is distinct from declining a suggestion, taking a break, or blocking the user from the service.
+_Avoid_: ban, reset, pause, retirement
 
 **Reselection**:
-A user choosing other personas through Discovery after a Relationship ending, followed by Selection and a new Conversation. The previous Conversation's private memories and judgments belong only to that previous relationship.
+A user choosing other personas through Discovery after a Relationship ending, followed by Selection and a new Conversation. The previous Conversation's Relationship state and Relationship memory belong only to that previous relationship.
 _Avoid_: persona switch, reset, relationship restart
 
 **Memory**:
-What a persona remembers of her life and one conversation. It includes short-term and long-term memory; neither carries over to another conversation.
+What a persona remembers, in two scopes: her Life memory, shared by all her Conversations, and each Conversation's Relationship memory. Each scope has short-term and long-term memory.
 _Avoid_: context, history, session
 
+**Life memory**:
+What a persona remembers of her own life: her days, plans and experiences. All her Conversations read and change the same Life memory, so it never identifies a user or describes her relationships with them.
+_Avoid_: shared memory, global memory, persona memory
+
+**Relationship memory**:
+What a persona remembers of one Conversation: that user, what they shared and what they agreed or promised. Only that Conversation can see it, and it never carries over to another.
+_Avoid_: user memory, conversation memory, history
+
 **Short-term memory**:
-What is currently on the persona's mind: current life, relevant facts, ongoing topics and unfinished plans or promises.
+The part of Life memory or Relationship memory that is always on the persona's mind: current life, relevant facts, ongoing topics and unfinished plans or promises.
 _Avoid_: transcript, summary of every message
 
 **Long-term memory**:
-Lasting facts and experiences recalled when relevant, with their provenance and current clarity. A clear memory retains detail, a faded memory retains only its remaining gist, and a forgotten memory has lost its content.
+The part of Life memory or Relationship memory recalled only when relevant: lasting facts and experiences with their provenance and current clarity. A clear memory retains detail, a faded memory retains only its remaining gist, and a forgotten memory has lost its content.
 _Avoid_: complete conversation archive
 
 **State**:
-The persona's current condition and other current values needed for her choices within one conversation. State changes with events and time; it is distinct from her fixed identity and the facts she remembers.
+The persona's current condition, shared by all her Conversations: mood, energy, stress, desires for connection and solitude, traits and language proficiency. Events in any Conversation and the passage of time change it; it is distinct from her fixed identity, the facts she remembers and each Conversation's Relationship state.
 _Avoid_: personality, memory, probability
 
+**Relationship state**:
+The persona's current values about one Conversation's user, such as Affection. Only that Conversation can see or change it.
+_Avoid_: user state, relationship stage
+
 **Affection**:
-The persona's positive feelings toward one conversation's user. A persona-specific starting value describes her initial interest; subsequent affection reflects that conversation's experience. It is distinct from familiarity, trust, desire to chat and the relationship itself. Affection does not unlock dating or automatically turn friendship into romance.
+The persona's positive feelings toward one Conversation's user, held in its Relationship state. A persona-specific starting value describes her initial interest; subsequent affection reflects that Conversation's experience. It is distinct from familiarity, trust, desire to chat and the relationship itself. Affection does not unlock dating or automatically turn friendship into romance.
 _Avoid_: action probability, relationship stage
 
 **Starting relationship**:
-The relationship a user chooses when requesting contact in Discovery: dating, flirting, friends or strangers. Dating is the default and means the two have just started dating. It belongs to that Conversation and establishes their relationship without inventing user facts or shared experiences. Later mutually agreed changes belong to that Conversation's Memory.
+The relationship a user chooses when requesting contact in Discovery: dating, flirting, friends or strangers. Dating is the default and means the two have just started dating. It belongs to that Conversation and establishes their relationship without inventing user facts or shared experiences. Later mutually agreed changes belong to that Conversation's Relationship memory.
 _Avoid_: persona personality, affection level
 
 **Language background**:
@@ -135,8 +143,8 @@ A Persona's native languages, primary language and history of learning languages
 _Avoid_: current proficiency, display language
 
 **Language proficiency**:
-What a Persona can currently understand and express in one language within one Conversation. It starts from operator-approved initial State and can develop through that Conversation's practice. Learned expressions and learning experiences belong to Memory.
-_Avoid_: native language, experience points, shared Persona progress
+What a Persona can currently understand and express in one language. It is part of her State: it starts from operator-approved initial State and develops through practice in any of her Conversations. Learned expressions and learning experiences belong to Memory.
+_Avoid_: native language, experience points
 
 **Display language**:
 The language a person uses to read Discovery's controls and notices. Public profiles remain in their original language, and changing this setting does not change a Persona's proficiency.
@@ -155,11 +163,11 @@ People waiting to start a conversation. Each registration includes a handle, lik
 _Avoid_: queue, signup list
 
 **Selection**:
-The operator's choice to admit up to N randomly chosen eligible waiting people, each with one randomly chosen available persona from their Likes.
+The operator's choice to admit up to N randomly chosen eligible waiting people, each with one randomly chosen available persona from their Likes: one with fewer than five current assignments who has never ended a Conversation with them.
 _Avoid_: matching, approval, first-come-first-served
 
 **Assignment**:
-An exclusive pairing of one persona with one handle, including the time before the first Greeting is sent. A persona and a handle can each have only one current assignment; a failed or uncertain first contact keeps the assignment.
+A pairing of one persona with one handle, including the time before the first Greeting is sent. A handle has at most one current assignment and a persona at most five; a failed or uncertain first contact keeps the assignment.
 _Avoid_: Like, session, recommendation
 
 **First contact reservation**:
@@ -167,8 +175,12 @@ The selected persona's planned first Greeting, scheduled once between five minut
 _Avoid_: Notice, immediate onboarding, automatic selection
 
 **Reset**:
-Returning a test handle to before onboarding, so its next conversation starts as a first meeting. The persona's previous memory is kept for review.
+Returning a test handle to before onboarding, so its next Conversation starts as a first meeting with a new Relationship state and Relationship memory. The previous ones are kept for review; the persona's State and Life memory continue.
 _Avoid_: clear, restart, new conversation
+
+**Sandbox**:
+An operator's experiment with a persona on a copy of her State and Memory, outside every Conversation, so nothing in it changes her.
+_Avoid_: test conversation, fork, copy
 
 **Operator**:
 The person who runs the service: watches conversations as they happen and fixes what breaks.

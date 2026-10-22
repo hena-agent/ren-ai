@@ -73,6 +73,7 @@ test(
     Effect.gen(function* () {
       const active = yield* host.activeSession();
       yield* host.fake.text("active@example.com", "Remember my name is Mina.", Date.now());
+      yield* host.incoming.poll;
       const old = host.personas.get("persona1")!;
       const gate = yield* pauseFolderWrite(host, old.prompt.trim());
       const rebuilding = yield* host.recovery

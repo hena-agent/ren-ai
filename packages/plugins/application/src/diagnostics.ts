@@ -15,6 +15,8 @@ export const conversationOperation = <A>(
     catch: (cause) =>
       cause instanceof Error ? cause : new Error("Non-Error Conversation failure"),
   }).pipe(
+    // Filesystem promises cannot be cancelled; finish them before releasing the native scope.
+    Effect.uninterruptible,
     Effect.catch((error) => {
       const root = error.cause instanceof Error ? error.cause : error;
       const code =

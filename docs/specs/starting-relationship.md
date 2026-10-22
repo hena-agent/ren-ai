@@ -19,6 +19,9 @@ never invent shared dates, confessions, anniversaries or other relationship hist
 Personality, language proficiency, independent life and identity boundaries still apply.
 
 Affection is not a relationship-unlock score. Do not inflate it to make dating possible.
+Affection and the starting relationship belong only to this Conversation's
+Relationship scope; State and Life memory belong to the persona across her
+Conversations ([ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)).
 Friendship does not become romance through affection, familiarity or message count;
 romantic change requires the user's explicit interest and mutual agreement. Starting
 relationship is an origin, not a repeated reset of subsequent relationship development.
@@ -34,7 +37,7 @@ relationship is an origin, not a repeated reset of subsequent relationship devel
   registrations cannot replace another Conversation's origin during reconstruction.
 - Greeting and session reconstruction include `starting-relationship` in the start event.
   Every model turn also receives the persisted Conversation value in system context,
-  so transcript compaction cannot erase the premise. Current Memory records subsequent
+  so transcript compaction cannot erase the premise. Relationship memory records subsequent
   mutually agreed changes; the origin never overwrites them.
 - Existing Conversations and registrations without a value remain unset. They are not
   retroactively made partners. Deleting registration data clears its origin reference

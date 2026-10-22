@@ -79,6 +79,7 @@ export const createHost = (options: HostOptions) =>
     );
     const services = yield* runtime.contextEffect;
     const sessions = Context.get(services, Session.Service);
+    const files = folderFiles(options.personaDirectory);
     const plugins = Context.get(services, SdkPlugins.Service);
     yield* Effect.tryPromise(() =>
       runtime.runPromise(plugins.register(sessionFolderPlugin(options.personaDirectory))),
@@ -92,7 +93,23 @@ export const createHost = (options: HostOptions) =>
     >(services)(Context.get(services, HttpRouter.HttpRouter).asHttpEffect());
     return {
       personas: options.personas,
-      sessions,
+      sessions: {
+        ...sessions,
+        writable: (id: Session.ID, writable: boolean) =>
+          sessions.get(id).pipe(
+            Effect.andThen(
+              Effect.tryPromise({
+                try: () => files.writable(id, writable),
+                catch: (error) => new Error(String(error)),
+              }),
+            ),
+          ),
+        removeRelationship: (personaID: string, conversationKey: string) =>
+          Effect.tryPromise({
+            try: () => files.removeRelationship(personaID, conversationKey),
+            catch: (error) => new Error(String(error)),
+          }),
+      },
       events: Context.get(services, Bus.Service),
       plugins,
       outcomes: Context.get(services, Bus.Service).subscribe([
@@ -102,15 +119,21 @@ export const createHost = (options: HostOptions) =>
       retry: sessions.resume,
       run: runtime.runPromise.bind(runtime),
       web,
-      createSession: (personaID: string) =>
+      createSession: (
+        personaID: string,
+        sessionID?: Session.ID,
+        conversationKey?: string,
+        writable = true,
+      ) =>
         Effect.gen(function* () {
           if (!options.personas.has(personaID))
             return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
-          const id = Session.ID.create();
+          const id = sessionID ?? Session.ID.create();
           const directory = yield* Effect.tryPromise(async () =>
             folderFiles(options.personaDirectory).write(
               id,
               renderSnapshot(options.personas.get(personaID)!, await loadGroundRules()),
+              { conversationKey: conversationKey ?? id, writable },
             ),
           );
           return yield* sessions.create({

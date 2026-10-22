@@ -78,7 +78,7 @@ export const firstContacts = (
           durationMs: 0,
         });
         const execution = Effect.gen(function* () {
-          const session = yield* host.createSession(row.personaID, sessionID);
+          const session = yield* host.createSession(row.personaID, sessionID, sessionID);
           createdID = session.id;
           const now = yield* Clock.currentTimeMillis;
           stage = "conversation.commit";
@@ -94,8 +94,8 @@ export const firstContacts = (
           VALUES (${row.handle}, ${row.locale}, ${row.consentVersion}, ${row.locale}, ${row.consentAt}, ${row.personaID}, ${now})
           ON CONFLICT(handle) DO UPDATE SET locale = excluded.locale,
             persona_id = excluded.persona_id, joined_at = COALESCE(user.joined_at, excluded.joined_at), replied_at = NULL`;
-            yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at, registration_id, starting_relationship)
-          VALUES ((SELECT id FROM user WHERE handle = ${row.handle}), ${row.personaID}, ${session.id}, ${now}, ${row.id}, ${row.startingRelationship})`;
+            yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, usage_key, started_at, registration_id, starting_relationship)
+          VALUES ((SELECT id FROM user WHERE handle = ${row.handle}), ${row.personaID}, ${session.id}, ${sessionID}, ${now}, ${row.id}, ${row.startingRelationship})`;
             yield* bindUsageSessions(sql);
             yield* sql`UPDATE discovery_contact SET session_id = ${session.id}, started_at = ${now}, state = 'greeting' WHERE registration_id = ${row.id}`;
             return true;

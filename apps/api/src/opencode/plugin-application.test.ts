@@ -11,18 +11,24 @@ import {
 } from "@ren-ai/plugin-application";
 import { messagingFixture } from "../../test/messaging.test-helper.ts";
 
-test("plugin scope includes only the root and direct session folders", () => {
-  for (const path of ["/srv/ren-ai", "/srv/ren-ai/", "/srv/ren-ai/sessions/ses_123"]) {
+test("plugin scope includes only the root and direct persona or Sandbox folders", () => {
+  for (const path of [
+    "/srv/ren-ai",
+    "/srv/ren-ai/",
+    "/srv/ren-ai/sandboxes/ses_123",
+    "/srv/ren-ai/personas/persona1",
+  ]) {
     expect(inPersonaLocation(path, "/srv/ren-ai")).toBe(true);
   }
   for (const path of [
     "/srv/ren-ai-sibling",
-    "/srv/ren-ai/sessions",
-    "/srv/ren-ai/sessions/../..",
-    "/srv/ren-ai/sessions/ses_123/nested",
+    "/srv/ren-ai/sandboxes",
+    "/srv/ren-ai/sandboxes/../..",
+    "/srv/ren-ai/sandboxes/ses_123/nested",
     "/srv/ren-ai/other/ses_123",
-    "/srv/ren-ai/sessions/.hidden",
-    "/srv/ren-ai/sessions\\ses_not_a_descendant",
+    "/srv/ren-ai/sandboxes/.hidden",
+    "/srv/ren-ai/sandboxes\\ses_not_a_descendant",
+    "/srv/ren-ai/sessions/ses_legacy",
   ]) {
     expect(inPersonaLocation(path, "/srv/ren-ai")).toBe(false);
   }
@@ -57,7 +63,7 @@ test("wait accepts only positive seconds up to 3300 at the tool boundary", async
 
 test("snapshot reads refresh runtime metadata and reject malformed files at the boundary", async () => {
   const { root, personaDirectory } = await messagingFixture("snapshot-metadata-");
-  const folder = join(personaDirectory, "sessions", "ses_snapshot");
+  const folder = join(personaDirectory, "sandboxes", "ses_snapshot");
   await mkdir(folder, { recursive: true });
   const persona = {
     id: "persona1",

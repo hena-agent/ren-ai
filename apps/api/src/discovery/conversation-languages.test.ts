@@ -7,7 +7,7 @@ import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { parseConversationState, serializeInitialState } from "@ren-ai/personas";
 import type { ContactDiagnostic } from "./diagnostics.ts";
 
-test("operator current-language reads use the bound Conversation State and expose no other memory or private instructions", async () => {
+test("operator current-language reads use shared Persona State and expose no relationship memory or private instructions", async () => {
   await withContactDatabase(
     Effect.gen(function* () {
       const f = yield* contactFixture;
@@ -64,7 +64,17 @@ test("operator current-language reads use the bound Conversation State and expos
           at: "2026-10-16T10:00:00.000Z",
         },
       };
-      read.mockReturnValueOnce(Effect.succeed({ ...snapshot, runtime }));
+      read.mockReturnValueOnce(
+        Effect.succeed({
+          ...snapshot,
+          runtime,
+          relationship: {
+            ...runtime,
+            state: { ...runtime.state, languageProficiency: { en: "beginner" } },
+            shortTerm: "Private relationship",
+          },
+        }),
+      );
       response = yield* handler(request());
       const body = yield* Effect.promise(() => response.json());
       expect(body).toEqual({

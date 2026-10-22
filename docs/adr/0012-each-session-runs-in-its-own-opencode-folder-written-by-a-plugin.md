@@ -4,6 +4,8 @@ status: accepted
 
 # Each session runs in its own OpenCode folder, written by a plugin from the catalog
 
+[ADR-0023](0023-personas-share-one-life-across-up-to-five-conversations.md) replaces the one-folder-per-session layout below: each persona has one folder that all her sessions open in, and operator-created sessions and forks run as Sandboxes on copies. Rendering folder files from the Catalog through the plugin stands.
+
 Users now choose among several personas, and the operator wants each persona session to be inspectable as plain OpenCode: one folder per session, holding the persona as `.opencode/agents/<persona-id>.md` and the ground rules as `AGENTS.md`. The catalog stays the source of truth; folder files are rendered from it, and the persona plugin builds no agents itself. This revises ADR-0004's "OpenCode never parses the persona repo" and extends ADR-0010's persona location.
 
 ## Decision

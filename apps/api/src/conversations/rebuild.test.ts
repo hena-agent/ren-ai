@@ -135,10 +135,16 @@ test("replay stops admitting rows when the User is blocked mid-replay", async ()
       Effect.gen(function* () {
         yield* migrate;
         const directory = yield* conversations;
-        const conversation = yield* directory.create({ ...conversationInput, sessionID: "new" });
+        const source = yield* directory.create({ ...conversationInput, sessionID: "source" });
+        const sql = yield* SqlClient.SqlClient;
         const now = Date.now() + 1;
-        yield* fake.text(handle, "first", now);
-        yield* fake.text(handle, "second", now + 1);
+        for (const row of [
+          yield* fake.text(handle, "first", now),
+          yield* fake.text(handle, "second", now + 1),
+        ])
+          yield* sql`INSERT INTO intake_seen VALUES (${source.sessionID}, ${row.guid})`;
+        yield* directory.replaceSession(source, "new");
+        const conversation = { ...source, sessionID: "new" };
         const prompts: string[] = [];
         const incoming = yield* intake(
           fake.messages,
@@ -164,8 +170,10 @@ test("replay stops admitting rows when the User is blocked mid-replay", async ()
           handle: "other@example.com",
           sessionID: "other",
         });
-        yield* fake.outgoing(outbound.handle, "manual", Date.now() + 1);
-        yield* incoming.replay(outbound);
+        const manual = yield* fake.outgoing(outbound.handle, "manual", Date.now() + 1);
+        yield* sql`INSERT INTO intake_seen VALUES (${outbound.sessionID}, ${manual.guid})`;
+        yield* directory.replaceSession(outbound, "other-rebuilt");
+        yield* incoming.replay({ ...outbound, sessionID: "other-rebuilt" });
         expect(prompts).toHaveLength(2);
         expect(prompts[1]).toContain("<sent-by-you");
         const pending = yield* directory.create({
@@ -182,7 +190,7 @@ test("replay stops admitting rows when the User is blocked mid-replay", async ()
   );
 });
 
-test("replay preserves a follow-up's wake until a newer iMessage row arrives", async () => {
+test("replay preserves follow-up scheduling and unread messages trigger callbacks only through live intake", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -192,6 +200,9 @@ test("replay preserves a follow-up's wake until a newer iMessage row arrives", a
         const directory = yield* conversations;
         const conversation = yield* directory.create({ ...conversationInput, sessionID: "fresh" });
         const first = yield* fake.text(handle, "already delivered", Date.now() + 1);
+        yield* sql`INSERT INTO intake_seen VALUES (${conversation.sessionID}, ${first.guid})`;
+        yield* directory.replaceSession(conversation, "replayed");
+        const replayed = { ...conversation, sessionID: "replayed" };
         yield* sql`INSERT INTO follow_up (conversation_id, last_sent_at, next_wake_at, unanswered)
           VALUES (${conversation.id}, ${first.createdAt}, 12345, 2)`;
         const received: number[] = [];
@@ -210,18 +221,21 @@ test("replay preserves a follow-up's wake until a newer iMessage row arrives", a
           undefined,
           false,
         );
-        yield* incoming.replay(conversation);
+        yield* incoming.replay(replayed);
         expect(received).toEqual([]);
         expect(yield* sql`SELECT next_wake_at, unanswered FROM follow_up`).toEqual([
           { next_wake_at: 12345, unanswered: 2 },
         ]);
         const newer = yield* fake.text(handle, "missed while offline", first.createdAt + 1);
-        yield* incoming.replay(conversation);
+        yield* incoming.replay(replayed);
+        expect(received).toEqual([]);
+        yield* directory.rebuilt(replayed);
+        yield* incoming.poll;
         expect(received).toEqual([newer.createdAt]);
         expect(yield* sql`SELECT next_wake_at, unanswered FROM follow_up`).toEqual([
           { next_wake_at: 67890, unanswered: 0 },
         ]);
-        yield* incoming.replay(conversation);
+        yield* incoming.poll;
         expect(received).toEqual([newer.createdAt]);
       }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
     ),

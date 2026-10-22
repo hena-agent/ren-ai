@@ -36,13 +36,8 @@ test("the home explains the service without loading profiles and offers real nav
   expect(document.title).toBe("Ren AI — 일상에, 기다려지는 메시지 하나");
   expect(screen.getByRole("heading", { name: "페르소나가 연락할 거예요" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "새 앱 말고, 늘 쓰던 메시지에서." })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: /오직\s*당신\s*과만\./ })).toBeTruthy();
-  expect(screen.getByText("당신과 연결된 페르소나는 다른 누구와도 대화하지 않아요.")).toBeTruthy();
-  expect(screen.getByRole("figure", { name: "페르소나 전용 연결 예시" })).toBeTruthy();
-  expect(screen.getByText(/당신이 궁금해진 페르소나가,/)).toBeTruthy();
+  expect(screen.getByText("새 앱 설치 없이, 익숙한 iMessage에서.")).toBeTruthy();
   expect(screen.getByText(/당신을 더 알고 싶은 페르소나가 iMessage로 먼저 인사해요/)).toBeTruthy();
-  expect(document.querySelectorAll(".home-connection-link svg")).toHaveLength(1);
-  expect(document.querySelectorAll(".home-exclusive-image")).toHaveLength(1);
   expect(screen.getByRole("heading", { name: "다음 메시지가 기다려지는 사람." })).toBeTruthy();
 });
 
@@ -60,7 +55,7 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(within(englishConversation).getAllByRole("listitem")).toHaveLength(9);
   expect(within(englishConversation).getAllByRole("list")).toHaveLength(1);
   expect(within(englishConversation).getAllByText("Jia")).toHaveLength(1);
-  expect(screen.getAllByText("Jia")).toHaveLength(5);
+  expect(screen.getAllByText("Jia")).toHaveLength(4);
   for (const name of ["Subin", "Jia", "Harin"]) {
     expect(screen.getByRole("button", { name: `${name} profile photo` })).toBeTruthy();
   }
@@ -73,17 +68,13 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(document.title).toBe("Ren AI — A little more to look forward to");
   expect(screen.getByRole("heading", { name: "A persona will reach out" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "A new person. Not another app." })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: /Only\s+you\s*\./ })).toBeTruthy();
-  expect(
-    screen.getByText("Your persona doesn't have conversations with anyone else."),
-  ).toBeTruthy();
-  expect(screen.getByText(/A persona who's curious about you/)).toBeTruthy();
+  expect(screen.getByText("No new app. Just iMessage.", { selector: ".home-intro" })).toBeTruthy();
   selectLanguage("Display language", "日本語");
   expect(screen.getAllByRole("link", { name: "ペルソナに出会う" })).toHaveLength(2);
   expect(screen.getByText("実在する人と話すのですか？")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.ja.title)).toBeTruthy();
   expect(document.documentElement.lang).toBe("ja");
-  expect(screen.getAllByText("ジア")).toHaveLength(5);
+  expect(screen.getAllByText("ジア")).toHaveLength(4);
   for (const name of ["スビン", "ジア", "ハリン"]) {
     expect(screen.getByRole("button", { name: `${name} プロフィール写真` })).toBeTruthy();
   }
@@ -92,8 +83,7 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(
     screen.getByRole("heading", { name: "新しいアプリより、 いつものメッセージで。" }),
   ).toBeTruthy();
-  expect(screen.getByRole("heading", { name: /あなた\s*とだけ。/ })).toBeTruthy();
-  expect(screen.getByText(/あなたのことが気になったペルソナが、/)).toBeTruthy();
+  expect(screen.getByText("新しいアプリなしで、いつものiMessageから。")).toBeTruthy();
   expect(
     within(screen.getByRole("figure", { name: "サービスを紹介する架空の会話例" })).getByText(
       "ちょっと休憩に来た。今日の日差し、気持ちいい ☀️",
@@ -122,9 +112,6 @@ test("landing starts in anime and changes every image together while retaining t
   expect(document.querySelector(".home-notification img")?.getAttribute("src")).toBe(
     "/icons/imessage.svg",
   );
-  expect(document.querySelector(".home-exclusive-image")?.getAttribute("src")).toBe(
-    "/landing/dohee-exclusive.webp",
-  );
   expect(document.querySelector(".home-closing-photo > img")?.getAttribute("src")).toBe(
     "/landing/dohee-daily.webp",
   );
@@ -134,9 +121,6 @@ test("landing starts in anime and changes every image together while retaining t
   );
   expect(document.querySelector(".conversation-contact img")?.getAttribute("src")).toBe(
     "/landing/dohee-anime.webp",
-  );
-  expect(document.querySelector(".home-exclusive-image")?.getAttribute("src")).toBe(
-    "/landing/dohee-exclusive-anime.webp",
   );
   await selectImageStyle("실사");
   first.unmount();

@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { Effect, Logger, Schema } from "effect";
 import { expect, test, vi } from "vitest";
 import { TestLLM } from "@opencode/ai/testing";
-import { conversationMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { memoryFixture } from "../../test/memory.test-helper.ts";
 import { conversationOperation } from "@ren-ai/plugin-application";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
 
@@ -17,20 +18,29 @@ test("a failed storage commit keeps the old documents and a lost acknowledgement
   const root = await mkdtemp(join(tmpdir(), "memory-storage-failure-"));
   const rename = fs.rename;
   try {
-    const memory = conversationMemory(root);
-    const original = { markdown: "# 현재 생활\n\n이전 작업을 진행 중이다.", reason: "현재 생활" };
+    const memory = await memoryFixture(root);
+    const original = {
+      scope: "life",
+      markdown: "# 현재 생활\n\n이전 작업을 진행 중이다.",
+      reason: "현재 생활",
+    };
     await memory.run("update_memory", original, "before", "first");
-    const before = await memory.context();
+    await memory.context();
+    const before = await readFile(join(root, "MEMORY.md"), "utf8");
     const failing = vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
       if (String(target).endsWith("/.memory/pending.json"))
         throw Object.assign(new Error("private persistence payload"), { code: "ENOSPC" });
       await rename(source, target);
     });
-    const next = { markdown: "# 현재 생활\n\n새로운 작업을 시작했다.", reason: "작업이 바뀌었다." };
+    const next = {
+      scope: "life",
+      markdown: "# 현재 생활\n\n새로운 작업을 시작했다.",
+      reason: "작업이 바뀌었다.",
+    };
     await expect(memory.run("update_memory", next, "commit", "next")).rejects.toThrow(
       "private persistence payload",
     );
-    expect(await memory.context()).toBe(before);
+    expect(await readFile(join(root, "MEMORY.md"), "utf8")).toBe(before);
     failing.mockRestore();
     const remove = fs.rm;
     const acknowledgement = vi.spyOn(fs, "rm").mockImplementation(async (path, options) => {
@@ -41,11 +51,11 @@ test("a failed storage commit keeps the old documents and a lost acknowledgement
       "Acknowledgement lost",
     );
     acknowledgement.mockRestore();
-    expect(await conversationMemory(root).run("update_memory", next, "commit", "next")).toBe(
+    expect(await (await memoryFixture(root)).run("update_memory", next, "commit", "next")).toBe(
       "Short-term Memory updated",
     );
     expect(await readFile(join(root, "MEMORY.md"), "utf8")).toContain("새로운 작업");
-    expect(await readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
+    expect(await readdir(join(root, ".memory"))).toEqual(["observations.json", "receipts.json"]);
   } finally {
     vi.restoreAllMocks();
     await rm(root, { recursive: true, force: true });
@@ -85,7 +95,7 @@ test("real OC context failures are diagnosed before recovery without exposing pr
         yield* remote.retry(session.id);
         yield* remote.sessions.wait(session.id);
         expect((yield* remote.sessions.get(session.id)).outcome).toBe("succeeded");
-        expect(yield* Effect.promise(() => readRuntime(path))).toBeUndefined();
+        expect((yield* Effect.promise(() => readRuntime(path)))?.state).toBeUndefined();
         let attempted = false;
         yield* llm.serve((request) => {
           if (!attempted && request.tools.some((tool) => tool.name === "update_state")) {
@@ -108,7 +118,7 @@ test("real OC context failures are diagnosed before recovery without exposing pr
         expect(validation).toContain("SchemaError");
         expect(validation).toContain("callID");
         expect(validation).not.toContain("private_input_reason");
-        expect(yield* Effect.promise(() => readRuntime(path))).toBeUndefined();
+        expect((yield* Effect.promise(() => readRuntime(path)))?.state).toBeUndefined();
       } finally {
         logged.mockRestore();
         errors.mockRestore();

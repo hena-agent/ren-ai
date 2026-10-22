@@ -47,17 +47,9 @@ Use cherry rose for decisive actions, selection, hearts and connection details;
 do not fill the closing section with the accent color. Keep the brand symbol,
 favicon and touch icon consistent with the accent.
 
-Make two benefits prominent in the hero copy and after the conversation:
-**no additional app to install**, and **each persona connects exclusively with
-one user—you, rather than being shared with other users**. This is a promise
-about the persona's exclusive connection, not merely a limit on how many personas
-a visitor can talk to. State this directly in the headline, description and
-simple one-to-one diagram. Use a short heading with only the visitor word accented
-and a single-sentence explanation. Show the new section-specific persona image
-as a small circle opposite an equally sized circle labeled with the visitor word.
-Connect them with thin line segments and a real SVG heart; both segments must end
-with a clear gap before the heart. Do not run a line through a masked icon or
-use a table, recipient rows or a large profile card. Keep the image style-aware.
+Make **no additional app to install** prominent. Remove the exclusivity section,
+its one-to-one diagram and section-specific images. A persona can hold up to five
+current assignments; the landing makes no exclusive-connection promise.
 The follow-up invitation says a persona curious about the visitor will reach out
 first. Keep operational selection/availability language in registration notes
 and FAQs rather than this relationship-focused section.
@@ -83,7 +75,7 @@ given names (Subin, Jia, Harin), and Japanese given names (スビン, ジア, �
 Use 한수빈, 백지아 and 강하린 as the Korean full names. These editorial names are
 independent of live Catalog names; asset keys retain their source identifiers.
 Apply these names to portrait selectors and accessible labels, conversation
-headers, notification examples, the relationship diagram and closing greeting.
+headers, notification examples and closing greeting.
 Keep photo/persona selection stable across locale changes. Actual Catalog names
 in Discovery's explorer remain in their original language.
 Desktop navigation uses one horizontal row; smaller screens use a single-row
@@ -123,6 +115,12 @@ Reduced motion shows immediate control states.
 Use native CSS before introducing animation dependencies.
 
 ## Public profiles and sharing
+
+Keep published personas visible even at capacity, with no capacity badge.
+The token-aware Reselection listing hides a persona who ended a relationship
+with the current handle only; public profiles and other visitors' decks remain
+available. Selection and test starts enforce that exclusion and the five-assignment
+limit at reservation time.
 
 The contact form asks for a Starting relationship using one native radio group:
 Dating (selected by default, newly dating), Flirting, Friends and Strangers. Show
@@ -172,8 +170,8 @@ first HTML for all visitors, including non-JavaScript crawlers. Render home and
 explorer in the same way, keeping home independent of the live Catalog. Sitemap
 and image locations reflect publication changes without rebuilding. JSON-LD
 describes fictional creative works rather than claiming personas are real people.
-Shared URLs contain no private fragments, handles or browser choices. Missing,
-unpublished and retired personas return 404/noindex; upstream failures return
+Shared URLs contain no private fragments, handles or browser choices. Missing
+and unpublished personas return 404/noindex; upstream failures return
 retryable 503s rather than masquerading as missing profiles.
 
 ## Review

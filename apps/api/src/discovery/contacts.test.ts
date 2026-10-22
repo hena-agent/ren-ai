@@ -2,22 +2,20 @@ import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 import { expect, test } from "vitest";
 import { contacts } from "./contacts.ts";
-import { checkAssignments, claimPersona } from "./assignment.ts";
+import { claimPersona } from "./assignment.ts";
 import { contactFixture, withContactDatabase } from "./contact.test-helper.ts";
 
-test("selection reserves exclusive personas, bounded times and durable deduplication", async () => {
+test("selection reserves up to five assignments of the same persona, bounded times and durable deduplication", async () => {
   await withContactDatabase(
     Effect.gen(function* () {
       const { store, register, sql } = yield* contactFixture;
-      yield* register("first@example.net", ["luna", "harin"]);
-      yield* register("second@example.net", ["luna", "harin"]);
-      yield* register("third@example.net", ["luna", "harin"]);
-      expect((yield* store.list).eligibleCount).toBe(3);
+      for (let index = 0; index < 6; index++) yield* register(`user${index}@example.net`);
+      expect((yield* store.list).eligibleCount).toBe(6);
       const input = { requestId: randomUUID(), count: 10 };
       const started = Date.now();
       const selected = yield* store.select(input, "server-request");
-      expect(selected.entries).toHaveLength(2);
-      expect(new Set(selected.entries.map((row) => row.persona!.id)).size).toBe(2);
+      expect(selected.entries).toHaveLength(5);
+      expect(new Set(selected.entries.map((row) => row.persona!.id))).toEqual(new Set(["luna"]));
       for (const row of selected.entries) {
         expect(row.state).toBe("scheduled");
         expect(row.scheduledAt).toBeGreaterThanOrEqual(started + 300_000);
@@ -25,7 +23,7 @@ test("selection reserves exclusive personas, bounded times and durable deduplica
         expect(row.requestId).toBe("server-request");
       }
       expect(yield* store.select(input, "retry")).toEqual(selected);
-      expect(yield* sql`SELECT * FROM discovery_contact`).toHaveLength(2);
+      expect(yield* sql`SELECT * FROM discovery_contact`).toHaveLength(5);
       expect((yield* store.list).eligibleCount).toBe(0);
       yield* Effect.promise(async () =>
         expect(
@@ -53,7 +51,8 @@ test("a waiting test handle starts now with its chosen available Like, once per 
       expect(yield* start(stranger, "jiwoo")).toBeNull();
       expect(yield* start(tester, "jiwoo")).toBeNull();
       expect(yield* start(randomUUID(), "luna")).toBeNull();
-      yield* sql`INSERT INTO persona_assignment VALUES ('harin', 'other@example.net')`;
+      for (let index = 0; index < 5; index++)
+        yield* sql`INSERT INTO persona_assignment VALUES ('harin', ${`other${index}@example.net`})`;
       expect(yield* start(tester, "harin")).toBeNull();
       expect(yield* sql`SELECT * FROM discovery_selection`).toEqual([]);
       const input = { requestId: randomUUID(), registrationID: tester, personaID: "luna" };
@@ -76,6 +75,10 @@ test("a waiting test handle starts now with its chosen available Like, once per 
       expect(yield* store.start(input, "retry")).toEqual(started);
       expect(yield* start(tester, "luna")).toBeNull();
       expect(yield* sql`SELECT persona_id FROM persona_assignment ORDER BY persona_id`).toEqual([
+        { persona_id: "harin" },
+        { persona_id: "harin" },
+        { persona_id: "harin" },
+        { persona_id: "harin" },
         { persona_id: "harin" },
         { persona_id: "luna" },
       ]);
@@ -122,6 +125,8 @@ test("a test start that loses its persona to a concurrent claim leaves no reserv
       const { store, register, sql } = yield* contactFixture;
       const tester = yield* register("tester@example.net");
       yield* sql`INSERT INTO test_handle VALUES ('tester@example.net')`;
+      for (let index = 0; index < 4; index++)
+        yield* sql`INSERT INTO persona_assignment VALUES ('luna', ${`other${index}`})`;
       yield* sql`CREATE TRIGGER concurrent_claim AFTER INSERT ON discovery_selection
       BEGIN INSERT INTO persona_assignment VALUES ('luna', 'winner@example.net'); END`;
       expect(
@@ -133,6 +138,7 @@ test("a test start that loses its persona to a concurrent claim leaves no reserv
       expect(yield* sql`SELECT * FROM discovery_selection`).toEqual([]);
       expect(yield* sql`SELECT * FROM discovery_contact`).toEqual([]);
       yield* sql`DROP TRIGGER concurrent_claim`;
+      yield* sql`DELETE FROM persona_assignment`;
       yield* sql`CREATE TRIGGER fail_contact BEFORE INSERT ON discovery_contact BEGIN SELECT RAISE(ABORT, 'fail'); END`;
       yield* store
         .start({ requestId: randomUUID(), registrationID: tester, personaID: "luna" }, "failed")
@@ -142,21 +148,26 @@ test("a test start that loses its persona to a concurrent claim leaves no reserv
   );
 });
 
-test("concurrent selections cannot allocate a persona or handle twice", async () => {
+test("concurrent selections cannot exceed five assignments or allocate a handle twice", async () => {
   await withContactDatabase(
     Effect.gen(function* () {
       const { store, register, sql } = yield* contactFixture;
-      yield* register("one@example.net");
-      yield* register("two@example.net");
+      for (let index = 0; index < 8; index++) yield* register(`user${index}@example.net`);
       const results = yield* Effect.all(
         [
-          store.select({ requestId: randomUUID(), count: 1 }, "a"),
-          store.select({ requestId: randomUUID(), count: 1 }, "b"),
+          store.select({ requestId: randomUUID(), count: 4 }, "a"),
+          store.select({ requestId: randomUUID(), count: 4 }, "b"),
         ],
         { concurrency: "unbounded" },
       );
-      expect(results.flatMap((result) => result.entries)).toHaveLength(1);
-      expect(yield* sql`SELECT * FROM persona_assignment`).toHaveLength(1);
+      expect(results.flatMap((result) => result.entries)).toHaveLength(5);
+      expect(yield* sql`SELECT * FROM persona_assignment`).toHaveLength(5);
+      yield* sql`UPDATE discovery_contact SET state = 'review'`;
+      expect((yield* store.list).eligibleCount).toBe(0);
+      yield* sql`UPDATE discovery_contact SET state = 'failed'`;
+      expect(
+        (yield* store.select({ requestId: randomUUID(), count: 4 }, "failed-reservations")).entries,
+      ).toEqual([]);
     }),
   );
 });
@@ -187,21 +198,20 @@ test("eligibility excludes blocked, removed, resetting, admitted, pending and un
   );
 });
 
-test("claiming includes legacy conversations and assignments and detects conflicting live data", async () => {
+test("claiming is idempotent per handle and enforces five assignments", async () => {
   await withContactDatabase(
     Effect.gen(function* () {
       const { sql } = yield* contactFixture;
       expect(yield* claimPersona("luna", "one@example.net")).toBe(true);
       expect(yield* claimPersona("luna", "one@example.net")).toBe(true);
-      expect(yield* claimPersona("luna", "two@example.net")).toBe(false);
+      expect(yield* claimPersona("luna", "two@example.net")).toBe(true);
       expect(yield* claimPersona("harin", "one@example.net")).toBe(false);
-      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, persona_id) VALUES ('legacy', 'ko', 'v', 'ko', 1, 'harin')`;
-      expect(yield* claimPersona("harin", "third@example.net")).toBe(false);
-      yield* checkAssignments;
-      yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, persona_id) VALUES ('duplicate', 'ko', 'v', 'ko', 1, 'harin')`;
-      expect(yield* checkAssignments.pipe(Effect.flip)).toEqual(
-        new Error("Existing personas have multiple users; resolve assignments before deployment"),
-      );
+      for (const handle of ["three", "four", "five"])
+        expect(yield* claimPersona("luna", handle)).toBe(true);
+      expect(yield* claimPersona("luna", "six")).toBe(false);
+      expect(yield* claimPersona("luna", "one@example.net")).toBe(true);
+      yield* sql`INSERT INTO persona_exclusion VALUES ('six', 'harin')`;
+      expect(yield* claimPersona("harin", "six")).toBe(false);
     }),
   );
 });
@@ -235,6 +245,8 @@ test("stale Catalog labels preserve booked IDs and a concurrent claimant wins sa
       expect((yield* store.list).entries[0]?.persona).toEqual({ id: "luna", name: "luna" });
       yield* sql`DELETE FROM discovery_contact`;
       yield* sql`DELETE FROM persona_assignment`;
+      for (let index = 0; index < 4; index++)
+        yield* sql`INSERT INTO persona_assignment VALUES ('luna', ${`other${index}`})`;
       profiles.push({
         id: "luna",
         name: "luna",

@@ -9,23 +9,24 @@ import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 const quiet = () => Effect.void;
 export const silentAlerts: FailureAlerts = { raise: quiet, clear: quiet };
 
-export const messagingFixture = async (prefix: string, opening = "Hi") => {
+export const messagingFixture = async (prefix: string, opening = "Hi", personaCount = 1) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), prefix)));
   const personaDirectory = join(root, "content");
   await mkdir(personaDirectory);
-  await writeFile(
-    join(personaDirectory, "persona1.md"),
-    `---\nname: 수아\npublished: true\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: ${opening}\nmemory: Remember.\n---\nYou are Persona1.\n\n## 공개 프로필\n\n24살 대학생\n`,
-  );
+  for (let index = 1; index <= personaCount; index++)
+    await writeFile(
+      join(personaDirectory, `persona${index}.md`),
+      `---\nname: 수아\npublished: true\ntime-zone: Asia/Seoul\nlanguage: ko\nopening-line: ${opening}\nmemory: Remember.\n---\nYou are Persona${index}.\n\n## 공개 프로필\n\n24살 대학생\n`,
+    );
   return { root, personaDirectory };
 };
 
-export const registration = (handle: string, sessionID: string) => ({
+export const registration = (handle: string, sessionID: string, personaID = "persona1") => ({
   handle,
   locale: "ko",
   consentVersion: "v1",
   consentLanguage: "ko",
-  personaID: "persona1",
+  personaID,
   sessionID,
 });
 

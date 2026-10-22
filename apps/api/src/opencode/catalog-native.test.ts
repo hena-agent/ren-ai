@@ -1,9 +1,9 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { AbsolutePath, Agent, Session } from "@opencode/schema";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadPersonas } from "@ren-ai/personas";
-import { sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
+import { sessionDirectory, personaDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { retainedSessions } from "../conversations/retained.ts";
 import { expect, test } from "vitest";
 import {
@@ -14,18 +14,20 @@ import {
   beginRetainingParent,
   beginCatalogEdit,
   catalogWithoutHarin,
+  expectRetainedIdentity,
 } from "./catalog-sync.test-helper.ts";
 import { syncFolders } from "./catalog-sync.ts";
 import { unrestricted } from "../../test/host.test-helper.ts";
 
 test(
-  "catalog edits reach managed native sessions and forks even without application conversations",
+  "catalog edits reach managed sessions while existing fork Sandboxes preserve their copies",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const parent = yield* host.metParent();
       const native = yield* host.remote.createSession("persona1");
       const fork = yield* host.nativeChild(parent, "fork");
       yield* host.ensure(fork.id);
+      const forkSnapshot = yield* host.read(fork.id);
       expect(yield* host.directory.bySession(native.id)).toBeUndefined();
       expect(yield* host.directory.bySession(fork.id)).toBeUndefined();
       const updated = authoredDefinition({
@@ -37,14 +39,14 @@ test(
       yield* host.watch();
       yield* expectProfile(host, "수아 수정");
       yield* expectPrompt(host, native.id, updated.prompt);
-      yield* expectPrompt(host, fork.id, updated.prompt);
+      yield* expectPrompt(host, fork.id, forkSnapshot.persona.prompt);
       yield* expectPrompt(host, parent.id, updated.prompt);
     }),
   ),
 );
 
 test.each(["new", "fork"] as const)(
-  "a native %s from a retained folder follows the live catalog while pending removal and retained parents stay frozen",
+  "a native %s copies the current retained persona folder into a Sandbox",
   (kind) =>
     catalogTest((host, fixture) =>
       Effect.gen(function* () {
@@ -57,7 +59,10 @@ test.each(["new", "fork"] as const)(
         yield* Effect.promise(() => fixture.store.update(updated));
         yield* host.watch();
         yield* expectProfile(host, "수아 수정");
-        expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
+        expect(yield* host.read(retained.parent.id)).toMatchObject({
+          persona: { prompt: updated.prompt },
+          relationship: retained.snapshot.relationship,
+        });
         expect(yield* retained.finish).toBe("removed");
         yield* Effect.sleep("200 millis");
         const child = yield* host.nativeChild(retained.parent, kind);
@@ -65,13 +70,13 @@ test.each(["new", "fork"] as const)(
         expect((yield* host.remote.sessions.get(child.id)).location.directory).toBe(
           sessionDirectory(fixture.personaDirectory, child.id),
         );
-        expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
+        yield* expectRetainedIdentity(host, retained.parent.id, retained.snapshot, updated.prompt);
       }),
     )(),
 );
 
 test(
-  "a native session admitted after the refresh inventory receives the edit on a later refresh",
+  "a Sandbox admitted during refresh preserves the copied revision while the retained session refreshes",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const retained = yield* beginRetainingParent(host);
@@ -88,14 +93,14 @@ test(
       expect((yield* host.read(child.id)).persona.prompt).toBe(retained.snapshot.persona.prompt);
       yield* gate.release;
       yield* expectProfile(host, "수아 수정");
-      yield* expectPrompt(host, child.id, updated.prompt);
-      expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
+      yield* expectPrompt(host, child.id, retained.snapshot.persona.prompt);
+      yield* expectRetainedIdentity(host, retained.parent.id, retained.snapshot, updated.prompt);
     }),
   ),
 );
 
 test(
-  "startup adopts inherited native locations, updates them, and never changes an explicitly retained binding",
+  "startup preserves managed shared-folder bindings and refreshes retained identity without reopening writes",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const parent = yield* host.activeSession();
@@ -116,10 +121,14 @@ test(
       const next = yield* loadPersonas(fixture.catalogDirectory);
       yield* syncFolders(host.remote.client, fixture.personaDirectory, next, fixture.groundRules);
       expect((yield* host.remote.sessions.get(child.id)).location.directory).toBe(
-        sessionDirectory(fixture.personaDirectory, child.id),
+        personaDirectory(fixture.personaDirectory, "persona1"),
       );
       yield* expectPrompt(host, child.id, updated.prompt);
-      expect(yield* host.read(parent.id)).toEqual(original);
+      expect(yield* host.read(parent.id)).toMatchObject({
+        persona: { prompt: updated.prompt },
+        relationship: original.relationship,
+        binding: original.binding,
+      });
     }),
   ),
 );
@@ -153,7 +162,7 @@ test(
       });
       yield* host.remote.sessions.wait(unrelated.id);
       yield* expectPrompt(host, unrelated.id, updated.prompt);
-      expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
+      yield* expectRetainedIdentity(host, retained.parent.id, retained.snapshot, updated.prompt);
     }),
   ),
 );
@@ -236,13 +245,35 @@ test(
           updated,
           fixture.groundRules,
         ).pipe(Effect.flip)).message,
-      ).toContain(`Managed session ${id} has no catalog persona`);
+      ).toContain("Cannot ensure session folder");
       expect(yield* host.read(active.id)).toEqual(original);
       yield* host.remote.client.session.switchAgent({
         sessionID: id,
         agent: Agent.ID.make("persona1"),
       });
       yield* host.remote.sessions.wait(id);
+      let admitted = false;
+      host.transport.after = async (request, response) => {
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/ensure")) admitted = true;
+        if (!admitted || request.method !== "GET" || path !== `/api/session/${id}`) return response;
+        const { data } = Schema.decodeUnknownSync(
+          Schema.fromJsonString(Schema.Struct({ data: Session.Info })),
+        )(await response.text());
+        const { agent, ...withoutAgent } = data;
+        expect(agent).toBe("persona1");
+        return Response.json({ data: Schema.encodeSync(Session.Info)(withoutAgent) });
+      };
+      expect(
+        (yield* syncFolders(
+          host.remote.client,
+          fixture.personaDirectory,
+          updated,
+          fixture.groundRules,
+        ).pipe(Effect.flip)).message,
+      ).toContain("has no catalog persona");
+      expect(yield* host.read(active.id)).toEqual(original);
+      host.transport.after = (_, response) => Promise.resolve(response);
       yield* syncFolders(
         host.remote.client,
         fixture.personaDirectory,
@@ -279,7 +310,24 @@ test(
           missing,
           fixture.groundRules,
         ).pipe(Effect.flip)).message,
-      ).toContain("snapshot persona ID does not match");
+      ).toContain("Cannot read session folder");
+      yield* Effect.promise(() =>
+        writeFile(
+          join(active.location.directory, ".sessions", `${active.id}.json`),
+          JSON.stringify({ ...original.binding, personaID: "harin" }),
+        ),
+      );
+      expect(
+        (yield* syncFolders(
+          host.remote.client,
+          fixture.personaDirectory,
+          missing,
+          fixture.groundRules,
+        ).pipe(Effect.flip)).message,
+      ).toBe("Session snapshot persona ID does not match Conversation");
+      expect(missing.has("persona1")).toBe(false);
+      expect((yield* host.remote.sessions.get(active.id)).agent).toBe("persona1");
+      expect(host.personas.get("persona1")?.prompt).toBe(original.persona.prompt);
     }),
   ),
 );
@@ -300,8 +348,11 @@ test(
       yield* expectProfile(host, "수아 수정");
       const child = yield* host.nativeChild(retained.parent);
       yield* host.reconcile;
+      expect((yield* host.remote.sessions.get(child.id)).location.directory).toBe(
+        sessionDirectory(fixture.personaDirectory, child.id),
+      );
       yield* expectPrompt(host, child.id, updated.prompt);
-      expect(yield* host.read(retained.parent.id)).toEqual(retained.snapshot);
+      yield* expectRetainedIdentity(host, retained.parent.id, retained.snapshot, updated.prompt);
     }),
   ),
 );

@@ -1,11 +1,7 @@
 import { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import { Schema } from "effect";
-import {
-  conversationMemory,
-  memoryTools,
-  memoryToolNames,
-} from "@ren-ai/plugin-session-folder/memory";
+import { personaMemory, memoryTools, memoryToolNames } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 import {
   configuredPlugin,
@@ -22,7 +18,6 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
       Effect.gen(function* () {
         const folder = managedFolder(options.personaDirectory, ctx.location.directory);
         if (!folder) return;
-        const memory = conversationMemory(ctx.location.directory);
         yield* ctx.tool.transform((editor) => {
           for (const name of memoryToolNames)
             editor.add({
@@ -37,9 +32,12 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
               options: { codemode: false },
               execute: (input, context) =>
                 conversationTool(name, context.sessionID, context.id, async () => {
-                  if (context.sessionID !== folder)
-                    throw new Error("Conversation memory binding mismatch");
-                  return memory.run(name, input, context.id, context.messageID);
+                  return personaMemory(ctx.location.directory, context.sessionID).run(
+                    name,
+                    input,
+                    context.id,
+                    context.messageID,
+                  );
                 }),
             });
         });
@@ -50,7 +48,7 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
             const current = yield* conversationOperation(
               "memory.compaction.context",
               event.sessionID,
-              () => memory.context(),
+              () => personaMemory(ctx.location.directory, event.sessionID).context(false),
             );
             // Let OpenCode execute and account for compaction instead of an unmetered session.generate.
             // Its validator requires a native heading; the content remains first-person Persona Memory.
@@ -63,7 +61,7 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
               content: [
                 {
                   type: "text",
-                  text: `${persona.memory}\nWrite her Memory in ${persona.language}, from her point of view. Use four parts: about him, the two of them, plans and promises, and lately, under ## Important Context. The current Conversation documents and memory-clarity override older summaries and tool results. Preserve known facts and unfinished promises, but omit forgotten details and keep faded memories uncertain; never reconstruct lost details from old transcript or tool results. Describe photos worth remembering. Update any previous Memory with what happened since. This summary is a conversation checkpoint, not a replacement for the persistent short-term or long-term files. Do not call tools.\n\n${current}`,
+                  text: `${persona.memory}\nWrite her Memory in ${persona.language}, from her point of view. Use four parts: about him, the two of them, plans and promises, and lately, under ## Important Context. Current shared State and Life memory, this Conversation's Relationship state and Relationship memory, and memory-clarity override older summaries and tool results. Keep the two scopes distinct; another Conversation's shared-life changes are not this user's doing, and private relationship facts never become Life memory. Preserve known facts and unfinished promises, but omit forgotten details and keep faded memories uncertain; never reconstruct lost details from old transcript or tool results. Describe photos worth remembering. Update any previous Memory with what happened since. This summary is a conversation checkpoint, not a replacement for the persistent short-term or long-term files. Do not call tools.\n\n${current}`,
                 },
               ],
             });

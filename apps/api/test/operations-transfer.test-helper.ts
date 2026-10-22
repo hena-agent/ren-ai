@@ -7,7 +7,8 @@ import { remoteHost } from "../src/opencode/remote.ts";
 import { loadPersonas, type Persona } from "@ren-ai/personas";
 import { messagingFixture } from "./messaging.test-helper.ts";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import { AbsolutePath, Agent } from "@opencode/schema";
+import { AbsolutePath, Agent, Session } from "@opencode/schema";
+import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 
 type Host = Effect.Success<ReturnType<typeof remoteHost>>;
 
@@ -25,6 +26,25 @@ interface Fixture {
   readonly personas: ReadonlyMap<string, Persona>;
   readonly transport: { fetch: (request: Request) => Promise<Response> };
 }
+
+export const managedTransferSession = (
+  { client, root, personas }: Pick<Fixture, "client" | "root" | "personas">,
+  rules: string,
+  conversationKey?: string,
+) =>
+  Effect.gen(function* () {
+    const id = Session.ID.create();
+    const directory = yield* client.rpc(sessionFolders).create(
+      {
+        folderID: id,
+        snapshot: renderSnapshot(personas.get("persona1")!, rules),
+        model: "test/probe",
+        ...(conversationKey && { conversationKey }),
+      },
+      { location: { directory: root } },
+    );
+    return { id, directory };
+  });
 
 export const withTransferClient = async <A, E>(
   body: (fixture: Fixture) => Effect.Effect<A, E, Scope.Scope>,

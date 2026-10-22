@@ -27,6 +27,7 @@ import {
 import { silentAlerts } from "../../test/messaging.test-helper.ts";
 import { dueContact } from "../discovery/contact.test-helper.ts";
 import { firstContacts } from "../discovery/first-contact.ts";
+import { memoryToolNames } from "@ren-ai/plugin-session-folder/memory";
 const xdg = await vi.hoisted(async () => {
   const { mkdtempSync, mkdirSync } = await import("node:fs");
   const { tmpdir: temporaryDirectory } = await import("node:os");
@@ -96,9 +97,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
                     Effect.map(ctx.tool.list(), (tools) => {
                       registeredTools = tools.map((tool) => tool.name);
                       personaTools = tools
-                        .filter((tool) =>
-                          /this Conversation|standard tapback/.test(tool.description),
-                        )
+                        .filter((tool) => memoryToolNames.some((name) => name === tool.name))
                         .map((tool) => tool.name);
                       expect(tools.find((tool) => tool.name === "wait")?.description).not.toBe(
                         "Pause for the requested seconds (up to 3300 seconds / 55 minutes), or until something new arrives. Call wait again if you still need to sleep or remain busy.",
@@ -127,7 +126,7 @@ test("the sealed host creates a deny-all persona session and admits a scripted r
           });
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(registeredTools).not.toContain("send");
-          expect(personaTools).toEqual(["update_memory", "remember", "search_memory"]);
+          expect(personaTools.toSorted()).toEqual([...memoryToolNames].toSorted());
           const requests = yield* llm.requests();
           // The title hook must skip a second model request.
           expect(requests.map((r) => r.tools.map((t) => t.name))).toEqual([

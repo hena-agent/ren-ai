@@ -5,7 +5,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { decodePersona, type PersonaRecord } from "@ren-ai/personas";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
-import { managedFolder, sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
+import { managedFolder, personaDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { managedSessions } from "./managed-sessions.ts";
 import { awaitPersonaAgent } from "./agent-readiness.ts";
@@ -71,7 +71,7 @@ const applyPersona = Effect.fn("applyPersona")(function* (
   yield* client
     .rpc(sessionFolders)
     .update({ folderID, snapshot }, { location: { directory: root } });
-  yield* awaitPersonaAgent(client.agent, sessionDirectory(root, folderID), persona);
+  yield* awaitPersonaAgent(client.agent, personaDirectory(root, persona.id), persona);
   contactLog({
     requestId,
     level: "info",
@@ -97,40 +97,39 @@ const synchronize = Effect.fn("synchronize")(function* (
     session_id: string;
     persona_id: string;
   }>`SELECT session_id, persona_id FROM conversation`;
-  const frozen = new Set(
-    (yield* sql<{ session_id: string }>`SELECT session_id FROM retained_session
-    UNION SELECT session_id FROM removal`).map((row) => row.session_id),
-  );
-  const updates = new Map<string, PersonaRecord>();
+  const updates = new Map<string, { folderID: string; persona: PersonaRecord }>();
   for (const row of active) {
     const session = yield* client.session
       .get({ sessionID: Session.ID.make(row.session_id) })
       .pipe(Effect.catchTag("SessionNotFoundError", () => Effect.succeed(undefined)));
     if (!session) continue;
-    if (session.location.directory !== sessionDirectory(root, row.session_id))
+    if (session.location.directory !== personaDirectory(root, row.persona_id))
       return yield* Effect.fail(
         new Error("Migrate existing sessions to folders before starting intake"),
       );
     const missing = !personas.has(row.persona_id);
     const persona = yield* resolvePersona(client, root, row.session_id, row.persona_id, personas);
-    if (!frozen.has(row.session_id) && !missing) updates.set(row.session_id, persona);
+    if (!missing) updates.set(persona.id, { folderID: row.session_id, persona });
   }
   const folders = client.rpc(sessionFolders);
   const location = { location: { directory: root } };
   for (let session of yield* managedSessions(client, root)) {
     const source = managedFolder(root, session.location.directory);
-    if (!source || frozen.has(session.id) || updates.has(session.id)) continue;
-    if (source !== session.id) {
-      yield* folders.ensure({ folderID: session.id }, location);
-      session = yield* client.session.get({ sessionID: session.id });
-    }
+    if (!source) continue;
+    yield* folders.ensure({ folderID: session.id }, location);
+    session = yield* client.session.get({ sessionID: session.id });
     if (!session.agent)
       return yield* Effect.fail(new Error(`Managed session ${session.id} has no catalog persona`));
+    if (
+      session.location.directory !== personaDirectory(root, session.agent) ||
+      updates.has(session.agent)
+    )
+      continue;
     const missing = !personas.has(session.agent);
     const persona = yield* resolvePersona(client, root, session.id, session.agent, personas);
-    if (!missing) updates.set(session.id, persona);
+    if (!missing) updates.set(persona.id, { folderID: session.id, persona });
   }
-  for (const [folderID, persona] of updates)
+  for (const { folderID, persona } of updates.values())
     yield* applyPersona(client, root, folderID, persona, groundRules, requestId);
   return undefined;
 });

@@ -4,7 +4,7 @@ import { Schema } from "effect";
 
 const memoryPath = Schema.String.check(
   Schema.isPattern(
-    /^(?:STATE\.md|MEMORY\.md|\.memory\/receipts\.json|long-term\/[a-zA-Z0-9_-]{1,100}\.md)$/,
+    /^(?:conversations\/[a-zA-Z0-9_-]{1,200}\/)?(?:STATE\.md|MEMORY\.md|\.memory\/(?:receipts|observations)\.json|long-term\/[a-zA-Z0-9_-]{1,100}\.md)$/,
   ),
 );
 const changes = Schema.Array(
@@ -51,6 +51,7 @@ export async function recoverMemory(directory: string) {
 }
 
 export async function commitMemory(directory: string, pending: Changes) {
+  await mkdir(join(directory, ".memory"), { recursive: true, mode: 0o700 });
   // Only unfinished writes live here; completed operations leave no memory history.
   await replace(directory, ".memory/pending.json", JSON.stringify(pending));
   await recoverMemory(directory);

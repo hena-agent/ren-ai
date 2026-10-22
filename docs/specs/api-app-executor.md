@@ -8,9 +8,11 @@ Status: implementation contract approved in the operator conversation.
 - `api-app` is the Cloudflare application. One SQLite-backed Durable Object is
   the only writer of users, registrations, Likes, assignments, conversations,
   intake bookmarks/deduplication, sends, resets, removals and follow-ups.
-- The Persona Catalog stays in the existing Admin D1. New conversation
-  documents use its initial State/Memory; running OpenCode documents continue
-  evolving without being reset to initial documents.
+- The Persona Catalog stays in the existing Admin D1. The first Conversation
+  initializes a persona's shared State and Life memory once. Later Conversations
+  use that shared life and create private Relationship scopes; later initial-value
+  edits affect only future starting affection and public initial proficiency.
+  See [ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md).
 - `api-msg` is a DB-free authenticated execution gateway in Docker on the Mac. It performs
   OpenCode/imsg operations, but owns no user/admission policy or durable journal.
 - The current `main` has moved the application to `apps/api` and the native
@@ -43,7 +45,9 @@ Status: implementation contract approved in the operator conversation.
 - New registrations wait for operator selection. Preserve Discovery and Admin
   handling of every answer the running API can give, including the current
   confirmed immediate-start operation for a waiting test handle.
-- Preserve exclusive Persona/Handle assignment and the once-only 5–60 minute
+- Enforce at most one current assignment per handle and five per persona in the
+  reservation transaction, including pending/uncertain first contacts and test
+  handles. Relationship endings exclude a persona only for that handle. Preserve the once-only 5–60 minute
   first-contact reservation, failed/uncertain-send fences, intake replay,
   edits/unsends, test resets, retained sessions, removals and follow-ups.
 - Registration/listing must not depend on the Mac or OpenCode being available.

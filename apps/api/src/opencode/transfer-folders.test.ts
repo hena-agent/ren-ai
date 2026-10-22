@@ -4,12 +4,12 @@ import { Effect, Schema } from "effect";
 import { expect, test } from "vitest";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import { sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
+import { personaDirectory, sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";
 
-test("restore uses archived persona, agent and ground rules even after the catalog changes", () =>
+test("restore uses archived persona, agent and ground rules", () =>
   withRemoteHost((remote, root, { llm }) =>
     Effect.gen(function* () {
       const session = yield* remote.createSession("persona1");
@@ -28,19 +28,13 @@ test("restore uses archived persona, agent and ground rules even after the catal
       );
       const contents = yield* exportSessions(remote.client, [session.id]);
       const saved = Schema.decodeUnknownSync(sessionArchive)(contents).sessions[0]!;
-      const updated = new Map([
-        [
-          "persona1",
-          { ...remote.personas.get("persona1")!, prompt: "You are the current pianist." },
-        ],
-      ]);
       yield* remote.sessions.remove(session.id);
-      yield* restoreSessions(remote.client, contents, root, updated);
+      yield* restoreSessions(remote.client, contents, root);
       expect(
         yield* remote.client
           .rpc(sessionFolders)
           .read({ folderID: session.id }, { location: { directory: root } }),
-      ).toEqual(saved.folder);
+      ).toMatchObject(saved.folder);
       const restored = yield* remote.client.session.export({
         sessionID: session.id,
         sanitize: false,
@@ -49,7 +43,7 @@ test("restore uses archived persona, agent and ground rules even after the catal
         id: session.id,
         agent: "persona1",
         title: "persona1 · reset yesterday",
-        location: { directory: sessionDirectory(root, session.id) },
+        location: { directory: personaDirectory(root, "persona1") },
       });
       expect(restored.messages).toEqual(saved.messages);
       // This folder reuses a native location cache; explicitly reload both native
@@ -77,7 +71,7 @@ test("restore uses archived persona, agent and ground rules even after the catal
     }),
   ));
 
-test("legacy archives require a supplied catalog and render folders before importing paused work", () =>
+test("ordinary restore rejects legacy unsplit memory and current archives missing persona scopes before mutations", () =>
   withRemoteHost((remote, root, { transport }) =>
     Effect.gen(function* () {
       const session = yield* remote.createSession("persona1");
@@ -89,38 +83,23 @@ test("legacy archives require a supplied catalog and render folders before impor
       const saved = Schema.decodeUnknownSync(sessionArchive)(
         yield* exportSessions(remote.client, [session.id]),
       );
-      const contents = Schema.encodeSync(sessionArchive)({
-        ...saved,
-        sessions: saved.sessions.map(({ folder: _folder, ...entry }) => entry),
-      });
       yield* remote.sessions.remove(session.id);
-      for (const personas of [undefined, new Map()]) {
+      for (const archive of [
+        { ...saved, version: 1 },
+        { ...saved, version: "PRIVATE_ARCHIVE_PAYLOAD" },
+        { version: 2, sessions: saved.sessions },
+        { ...saved, personas: [] },
+      ]) {
         transport.requests.length = 0;
-        expect(
-          (yield* restoreSessions(remote.client, contents, root, personas).pipe(Effect.flip))
-            .message,
-        ).toContain("original persona catalog");
+        const rejected = yield* restoreSessions(
+          remote.client,
+          JSON.stringify({ ...archive, privateMarker: "PRIVATE_ARCHIVE_PAYLOAD" }),
+          root,
+        ).pipe(Effect.flip);
+        expect(rejected).toBeInstanceOf(Error);
+        expect(rejected.message).not.toContain("PRIVATE_ARCHIVE_PAYLOAD");
         expect(transport.requests).toEqual([]);
       }
-      transport.requests.length = 0;
-      yield* restoreSessions(remote.client, contents, root, remote.personas);
-      const writes = transport.requests.filter((request) => request.method === "POST");
-      expect(new URL(writes[0]!.url).pathname).toContain("rpc");
-      expect(new URL(writes[1]!.url).pathname).toContain("import");
-      const folder = yield* remote.client
-        .rpc(sessionFolders)
-        .read({ folderID: session.id }, { location: { directory: root } });
-      expect(folder.persona).toMatchObject({
-        id: "persona1",
-        prompt: "You are Persona1.\n\n## 공개 프로필\n\n24살 대학생\n",
-      });
-      expect(folder.rules).toContain("<conversation-started>");
-      expect((yield* remote.sessions.inbox(session.id)).map((item) => item.id)).toEqual(
-        saved.sessions[0]!.pending.map((item) => item.id),
-      );
-      expect((yield* remote.sessions.get(session.id)).location.directory).toBe(
-        sessionDirectory(root, session.id),
-      );
     }),
   ));
 
@@ -131,7 +110,29 @@ test("unreadable folder snapshots fail export instead of silently producing lega
       yield* Effect.promise(() => rm(join(session.location.directory, "AGENTS.md")));
       expect(
         (yield* exportSessions(remote.client, [session.id]).pipe(Effect.flip)).message,
-      ).toContain("Cannot read session folder");
+      ).toContain("Cannot snapshot persona folder");
+    }),
+  ));
+
+test("export rejects a native location that differs from its durable scope", () =>
+  withRemoteHost((remote, root, { transport }) =>
+    Effect.gen(function* () {
+      const session = yield* remote.createSession("persona1");
+      const forward = transport.fetch;
+      transport.fetch = async (request) => {
+        const response = await forward(request);
+        if (!new URL(request.url).pathname.endsWith(`/${session.id}/export`)) return response;
+        return new Response(
+          (await response.text()).replace(
+            JSON.stringify(session.location.directory),
+            JSON.stringify(sessionDirectory(root, session.id)),
+          ),
+          { headers: response.headers },
+        );
+      };
+      expect(
+        (yield* exportSessions(remote.client, [session.id]).pipe(Effect.flip)).message,
+      ).toContain("Session location does not match its durable persona scope");
     }),
   ));
 
@@ -141,12 +142,13 @@ test("failed folder creation does not import its session", () =>
       const session = yield* remote.createSession("persona1");
       const contents = yield* exportSessions(remote.client, [session.id]);
       yield* remote.sessions.remove(session.id);
-      yield* Effect.promise(() =>
-        mkdir(join(sessionDirectory(root, session.id), "persona.json"), { recursive: true }),
-      );
+      yield* Effect.promise(async () => {
+        await rm(personaDirectory(root, "persona1"), { recursive: true });
+        await mkdir(join(personaDirectory(root, "persona1"), "persona.json"), { recursive: true });
+      });
       expect(
         (yield* restoreSessions(remote.client, contents, root).pipe(Effect.flip)).message,
-      ).toContain("Cannot write session folder");
+      ).toContain("Cannot restore persona folder");
       expect(
         yield* remote.client.session
           .get({ sessionID: session.id })

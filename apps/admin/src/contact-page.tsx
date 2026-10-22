@@ -36,7 +36,7 @@ const reasons = {
   blocked: "차단·삭제 처리 중",
   active: "이미 대화 중",
   reserved: "배정됨",
-  no_persona: "공개된 미배정 Like 후보 없음",
+  no_persona: "배정 여유가 있는 공개 Like 후보 없음",
   no_imessage: "iMessage 미지원",
   imessage_unverified: "iMessage 확인 전 선정 보류",
 };
@@ -264,7 +264,8 @@ export function ContactPage({ view }: { view: ContactView }) {
         </div>
       )}
       <p className="hint contact-policy">
-        Like한 페르소나를 무작위로 독점 배정하고, 선정 후 5분~1시간 뒤 첫 연락을 예약합니다.
+        Like한 페르소나 중 현재 배정이 5명 미만인 후보를 무작위로 배정하고, 선정 후 5분~1시간 뒤 첫
+        연락을 예약합니다. 테스트 연락처와 실패·불확실한 첫 연락도 배정 수에 포함합니다.
       </p>
       {view.tab === "waitlist" && view.snapshot && (
         <TestStarts entries={view.snapshot.entries} requestId={view.startRequestId} />

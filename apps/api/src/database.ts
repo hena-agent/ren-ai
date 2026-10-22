@@ -3,6 +3,7 @@ import { Migrator, SqlClient } from "effect/unstable/sql";
 import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
 import { usageSchema } from "./usage/schema.ts";
 import { notificationSchema } from "./discovery/notifications.ts";
+import { sharedAssignmentsSchema } from "./discovery/schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -234,6 +235,8 @@ export const migrate = Effect.gen(function* () {
           CHECK(starting_relationship IN ('dating', 'flirting', 'friends', 'strangers'))`;
         yield* sql`ALTER TABLE conversation ADD COLUMN registration_id TEXT REFERENCES discovery_registration(id) ON DELETE SET NULL`;
       }),
+      "039_shared_assignments": sharedAssignmentsSchema,
+      "040_replay_source": sql`ALTER TABLE conversation ADD COLUMN replay_source_session_id TEXT`,
     }),
   });
 });

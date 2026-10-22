@@ -10,6 +10,7 @@ export const retainedSessions = (host: PersonaRuntime) => {
     Effect.gen(function* () {
       const id = Session.ID.make(sessionID);
       yield* stopSession(host, sessionID);
+      yield* host.sessions.writable(id, false);
       yield* host.sessions.rename({ sessionID: id, title });
     }).pipe(
       Effect.catch((error) =>

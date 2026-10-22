@@ -1,8 +1,6 @@
 import { useCopy } from "./locale.tsx";
-import type { ImageStyle } from "./image-style.ts";
-import { landingImage } from "./landing-images.ts";
 
-export function HomeHighlights({ style }: { style: ImageStyle }) {
+export function HomeHighlights() {
   const { home } = useCopy();
   return (
     <section className="home-how" id="how-it-works" aria-labelledby="how-title">
@@ -39,56 +37,6 @@ export function HomeHighlights({ style }: { style: ImageStyle }) {
             </div>
           </div>
           <figcaption>{home.exampleNote}</figcaption>
-        </figure>
-      </div>
-      <div className="home-feature home-exclusive">
-        <div className="home-exclusive-copy">
-          <div className="home-exclusive-heading">
-            <p className="home-eyebrow">{home.exclusiveEyebrow}</p>
-            <h2>
-              {home.exclusiveTitle}
-              <em>{home.exclusiveAccent}</em>
-              {home.exclusiveSuffix}
-            </h2>
-          </div>
-          <div className="home-exclusive-body">
-            <p>{home.exclusiveBody}</p>
-            <p className="home-exclusive-note">{home.exclusiveNote}</p>
-          </div>
-        </div>
-        <figure className="home-connection" aria-label={home.exclusiveExample}>
-          <div className="home-connection-persona">
-            <div className="home-connection-avatar">
-              <img
-                className="home-exclusive-image"
-                src={landingImage("dohee-exclusive", style)}
-                width="112"
-                height="112"
-                alt={home.exclusivePhoto}
-                loading="lazy"
-              />
-            </div>
-            <strong>{home.personaNames.dohee}</strong>
-            <span>{home.personaLabel}</span>
-          </div>
-          <div className="home-connection-link" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              width="28"
-              height="28"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
-            </svg>
-          </div>
-          <div className="home-connection-recipient">
-            <div className="home-connection-you">{home.exclusiveYou}</div>
-            <span>{home.exclusiveRecipient}</span>
-          </div>
         </figure>
       </div>
       <div className="home-start">

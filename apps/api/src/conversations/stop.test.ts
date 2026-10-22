@@ -49,6 +49,10 @@ test("termination stops execution and cancels inbox work once across application
       let pending = [fromPartial<SessionInbox.Info>({ id: SessionMessage.ID.make("msg_pending") })];
       const host = fromPartial<PersonaRuntime>({
         sessions: {
+          writable: (_id: Session.ID, writable: boolean) =>
+            Effect.sync(() => {
+              expect(writable).toBe(false);
+            }),
           interrupt: () =>
             Effect.sync(() => {
               events.push("interrupt");
@@ -102,6 +106,7 @@ test("termination stops execution and cancels inbox work once across application
       expect((yield* running.inspect(f.conversation.id))?.state).toBe("running");
       const missing = fromPartial<PersonaRuntime>({
         sessions: {
+          writable: () => Effect.fail(new MissingSession({ message: "missing" })),
           get: () => Effect.fail(new MissingSession({ message: "missing" })),
           interrupt: () => Effect.fail(new MissingSession({ message: "missing" })),
         },
@@ -211,6 +216,7 @@ test("session retention preserves and propagates an unrelated tagged executor fa
       });
       const host = fromPartial<PersonaRuntime>({
         sessions: {
+          writable: () => Effect.void,
           interrupt: () => Effect.succeed(false),
           inbox: () => Effect.succeed([]),
           wait: () => Effect.void,

@@ -5,16 +5,16 @@ import { runSessionTransfer } from "../src/operations/session-transfer.ts";
 import { catalogClient } from "../src/personas/catalog.ts";
 import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 
-const [command, file] = process.argv.slice(2);
+const [command, file, applicationFile] = process.argv.slice(2);
 const operation = Schema.decodeUnknownSync(
-  Schema.Literals(["export", "restore", "plugins", "folders"]),
+  Schema.Literals(["export", "restore", "plugins", "shared-life"]),
 )(command);
 const baseUrl = process.env["OPENCODE_URL"];
 const authorization = process.env["OPENCODE_AUTHORIZATION"];
 const directory = process.env["OPENCODE_DIRECTORY"] ?? "/srv/ren-ai";
 if (!file || !baseUrl || !authorization)
   throw new Error(
-    "Usage: OPENCODE_URL=... OPENCODE_AUTHORIZATION=... bun ops/session-transfer.ts export|restore|plugins|folders FILE",
+    "Usage: OPENCODE_URL=... OPENCODE_AUTHORIZATION=... bun ops/session-transfer.ts export|restore|plugins|shared-life FILE [APPLICATION-STATE.json]",
   );
 await Effect.runPromise(
   Effect.scoped(
@@ -32,6 +32,7 @@ await Effect.runPromise(
       yield* runSessionTransfer(host.client, {
         operation,
         file,
+        ...(applicationFile ? { applicationFile } : {}),
         directory,
         confirmation: process.env["CONFIRM_BOOTSTRAP_ONLY"],
         ...(process.env["PERSONA_CATALOG_URL"]

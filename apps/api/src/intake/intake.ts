@@ -27,15 +27,17 @@ interface Bookmark {
   readonly date: number;
 }
 
+type Prompt = (
+  sessionID: string,
+  id: string,
+  text: string,
+  files?: ReadonlyArray<PromptImage>,
+) => Effect.Effect<void, Error>;
+
 export const intake = (
   messages: Messages,
   byHandle: (handle: string) => Effect.Effect<Conversation | undefined, Error>,
-  prompt: (
-    sessionID: string,
-    id: string,
-    text: string,
-    files?: ReadonlyArray<PromptImage>,
-  ) => Effect.Effect<void, Error>,
+  prompt: Prompt,
   timeZone: (personaID: string) => string,
   reconcile?: (conversation: Conversation, row: IncomingMessage) => Effect.Effect<boolean, Error>,
   received: (conversation: Conversation, date: number) => Effect.Effect<void, Error> = () =>
@@ -47,6 +49,11 @@ export const intake = (
   reset: (row: IncomingMessage) => Effect.Effect<void, Error> = () => Effect.void,
   arriving: (sessionID: string, messageID: string) => Effect.Effect<void, Error> = () =>
     Effect.void,
+  admit: (
+    conversation: Conversation,
+    action: Effect.Effect<void, Error>,
+  ) => Effect.Effect<void, Error> = (_conversation, action) => action,
+  replayPrompt: Prompt = prompt,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -67,7 +74,7 @@ export const intake = (
     const save = (row: Bookmark) =>
       sql`INSERT INTO bookmark (id, row_id, date) VALUES (1, ${row.rowID}, ${row.date})
         ON CONFLICT(id) DO UPDATE SET row_id = excluded.row_id, date = excluded.date`;
-    // Replay can acknowledge a message while live admission is awaiting the same prompt ID.
+    // Native admission and this receipt share the handle lock with session replacement.
     const markSeen = (sessionID: string, guid: string) =>
       sql`INSERT INTO intake_seen (session_id, guid) VALUES (${sessionID}, ${guid})
         ON CONFLICT(session_id, guid) DO NOTHING`;
@@ -91,22 +98,28 @@ export const intake = (
         if (!reconcile) return;
         const conversation = yield* byHandle(row.handle);
         if (!conversation) return;
-        if (yield* fromPreviousRelationship(conversation, row)) return;
-        const matched = yield* reconcile(conversation, row);
-        const status = yield* messages.sendStatus(row.guid);
-        if (matched || status === "failed") return;
-        if (status === "sent" || status === "delivered") yield* sent(conversation, row.createdAt);
-        const seen =
-          yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
-        if (seen.length) return;
-        yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
-        yield* prompt(
-          conversation.sessionID,
-          promptID(conversation.sessionID, row.guid),
-          sentByYou(row.text, row.createdAt, timeZone(conversation.personaID)),
+        yield* admit(
+          conversation,
+          Effect.gen(function* () {
+            if (yield* fromPreviousRelationship(conversation, row)) return;
+            const matched = yield* reconcile(conversation, row);
+            const status = yield* messages.sendStatus(row.guid);
+            if (matched || status === "failed") return;
+            if (status === "sent" || status === "delivered")
+              yield* sent(conversation, row.createdAt);
+            const seen =
+              yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
+            if (seen.length) return;
+            yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
+            yield* prompt(
+              conversation.sessionID,
+              promptID(conversation.sessionID, row.guid),
+              sentByYou(row.text, row.createdAt, timeZone(conversation.personaID)),
+            );
+            yield* markSeen(conversation.sessionID, row.guid);
+            signal(conversation);
+          }),
         );
-        yield* markSeen(conversation.sessionID, row.guid);
-        signal(conversation);
       });
     const target = (row: IncomingMessage, guid: string) =>
       Effect.map(messages.recent(row.handle, 0), (rows) => {
@@ -152,7 +165,7 @@ export const intake = (
         if (yield* fromPreviousRelationship(conversation, row)) return false;
         if ((yield* messages.sendStatus(row.guid)) === "failed") return false;
         if (seen) return true;
-        yield* prompt(
+        yield* replayPrompt(
           conversation.sessionID,
           promptID(conversation.sessionID, row.guid),
           sentByYou(row.text, row.createdAt, timeZone(conversation.personaID)),
@@ -163,23 +176,23 @@ export const intake = (
       Effect.gen(function* () {
         const active = yield* byHandle(conversation.handle);
         if (active?.sessionID !== conversation.sessionID) return;
-        const started = yield* sql<{ startedAt: number }>`SELECT started_at AS startedAt
-          FROM conversation WHERE id = ${conversation.id}`;
-        const [followUp] = yield* sql<{ lastSentAt: number }>`SELECT last_sent_at AS lastSentAt
-          FROM follow_up WHERE conversation_id = ${conversation.id}`;
+        const [origin] = yield* sql<{
+          startedAt: number;
+        }>`SELECT started_at AS startedAt FROM conversation WHERE id = ${conversation.id}`;
+        const admitted = yield* sql<{ guid: string }>`SELECT guid FROM intake_seen
+          WHERE session_id = (SELECT replay_source_session_id FROM conversation WHERE id = ${conversation.id})
+          UNION SELECT guid FROM send WHERE conversation_id = ${conversation.id} AND guid IS NOT NULL`;
+        const guids = new Set(admitted.map((entry) => entry.guid));
         const rows = (yield* messages.after(0))
           .filter(
             (row) =>
               row.handle === conversation.handle &&
-              row.createdAt >= started[0]!.startedAt &&
+              row.createdAt >= origin!.startedAt &&
+              guids.has(row.guid) &&
               row.tapback?.added !== false,
           )
           .toSorted((a, b) => a.id - b.id);
         let previous: number | null = null;
-        let firstReply: number | null = null;
-        const lastSentAt = followUp?.lastSentAt ?? 0;
-        let latestReply = lastSentAt;
-        let latestSend = lastSentAt;
         for (const row of rows) {
           if (
             (yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID ||
@@ -191,14 +204,11 @@ export const intake = (
               AND guid = ${row.guid}`;
           if (row.fromMe) {
             if (!(yield* replayOutgoing(conversation, row, seen.length > 0))) continue;
-            latestSend = Math.max(latestSend, row.createdAt);
           } else {
-            firstReply ??= row.createdAt;
             yield* changes.remember(conversation, row);
             if (!seen.length) {
-              yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
               const rendered = yield* content(row, previous, timeZone(conversation.personaID));
-              yield* prompt(
+              yield* replayPrompt(
                 conversation.sessionID,
                 promptID(conversation.sessionID, row.guid),
                 rendered.text,
@@ -206,17 +216,9 @@ export const intake = (
               );
             }
             previous = row.createdAt;
-            latestReply = Math.max(latestReply, row.createdAt);
           }
           yield* markSeen(conversation.sessionID, row.guid);
         }
-        if ((yield* byHandle(conversation.handle))?.sessionID !== conversation.sessionID) return;
-        if (previous !== null) {
-          yield* sql`UPDATE conversation SET last_received_at = ${previous}, first_received_at = COALESCE(first_received_at, ${firstReply}) WHERE id = ${conversation.id}`;
-          yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${firstReply}) WHERE handle = ${conversation.handle}`;
-        }
-        if (latestReply > lastSentAt) yield* received(conversation, latestReply);
-        if (latestSend > Math.max(latestReply, lastSentAt)) yield* sent(conversation, latestSend);
       });
     const predatesRelationship = (conversation: Conversation, row: IncomingMessage) =>
       sql`SELECT 1 FROM conversation WHERE id = ${conversation.id} AND started_at > ${row.createdAt}
@@ -239,32 +241,41 @@ export const intake = (
         }
         const conversation = yield* byHandle(row.handle);
         if (conversation) {
-          if (yield* predatesRelationship(conversation, row)) return;
-          const seen =
-            yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
-          if (seen.length) {
-            return;
-          }
-          const earlier = yield* sql<{
-            date: number | null;
-          }>`SELECT last_received_at AS date FROM conversation WHERE id = ${conversation.id}`;
-          yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
-          const rendered = yield* content(row, earlier[0]!.date, timeZone(conversation.personaID));
-          yield* prompt(
-            conversation.sessionID,
-            promptID(conversation.sessionID, row.guid),
-            rendered.text,
-            rendered.files,
-          );
-          yield* Effect.gen(function* () {
-            yield* changes.remember(conversation, row);
-            yield* markSeen(conversation.sessionID, row.guid);
-            yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt}, first_received_at = COALESCE(first_received_at, ${row.createdAt}) WHERE id = ${conversation.id}`;
-            yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
+          yield* admit(
+            conversation,
+            Effect.gen(function* () {
+              if (yield* predatesRelationship(conversation, row)) return;
+              const seen =
+                yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
+              if (seen.length) {
+                return;
+              }
+              const earlier = yield* sql<{
+                date: number | null;
+              }>`SELECT last_received_at AS date FROM conversation WHERE id = ${conversation.id}`;
+              yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
+              const rendered = yield* content(
+                row,
+                earlier[0]!.date,
+                timeZone(conversation.personaID),
+              );
+              yield* prompt(
+                conversation.sessionID,
+                promptID(conversation.sessionID, row.guid),
+                rendered.text,
+                rendered.files,
+              );
+              yield* Effect.gen(function* () {
+                yield* changes.remember(conversation, row);
+                yield* markSeen(conversation.sessionID, row.guid);
+                yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt}, first_received_at = COALESCE(first_received_at, ${row.createdAt}) WHERE id = ${conversation.id}`;
+                yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;
-            yield* received(conversation, row.createdAt);
-          }).pipe(sql.withTransaction);
-          signal(conversation);
+                yield* received(conversation, row.createdAt);
+              }).pipe(sql.withTransaction);
+              signal(conversation);
+            }),
+          );
           return;
         }
       });
@@ -306,8 +317,10 @@ export const intake = (
           drainLock.withPermit(
             queue.drain(receive, (handle, entry) =>
               Effect.gen(function* () {
-                if ((yield* byHandle(handle))?.sessionID !== entry.sessionID) return;
-                yield* prompt(entry.sessionID, entry.id, entry.text);
+                if (ensure) yield* ensure(handle);
+                const conversation = yield* byHandle(handle);
+                if (conversation?.sessionID !== entry.sessionID) return;
+                yield* admit(conversation, prompt(entry.sessionID, entry.id, entry.text));
               }),
             ),
           ),

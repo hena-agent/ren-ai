@@ -12,7 +12,9 @@ Status: agreed design; Korean pilot implementation first. See [ADR-0021](../adr/
    headings and private descriptions in Korean; speech examples and public writing
    use the Persona's primary language. Preserve evidenced native languages.
 4. Before the 200 stage, page Discovery results in visitor-specific random order
-   and exclude assigned/retired personas. Keep selection and language/style choices.
+   and preserve per-handle relationship-ending exclusions in the token-aware
+   Reselection listing. Keep personas at capacity publicly listed without a badge;
+   Selection enforces five current assignments per persona. Keep language/style choices.
 5. Runs of up to 200, then pause to decide budget, capacity and further scaling.
 
 Implementation does not itself confirm a paid run or publish its results. The

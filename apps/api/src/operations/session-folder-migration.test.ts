@@ -1,136 +1,77 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { AbsolutePath, Agent, Session } from "@opencode/schema";
-import { SessionMessage } from "@opencode/schema/session-message";
+import { AbsolutePath, Session } from "@opencode/schema";
 import { Effect, Schema } from "effect";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import { sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
+import { personaDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { legacySession, withTransferClient } from "../../test/operations-transfer.test-helper.ts";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
-import { sessionArchive } from "../opencode/transfer-format.ts";
-import { exportLocation, runSessionTransfer } from "./session-transfer.ts";
+import { runSharedLifeCutover } from "./shared-life-cutover.ts";
+import { runSessionTransfer } from "./session-transfer.ts";
 
-test("paused migration preserves legacy and retained history, snapshots existing folders, and excludes unrelated projects across pages", () =>
-  withTransferClient(({ client, root, personas, calls }) =>
-    Effect.gen(function* () {
-      const active = yield* client.session.create({
-        agent: Agent.ID.make("persona1"),
-        title: "current Conversation",
-        location: { directory: AbsolutePath.make(root) },
-      });
-      const retained = yield* client.session.create({
-        agent: Agent.ID.make("persona1"),
-        title: "persona1 · reset yesterday",
-        location: { directory: AbsolutePath.make(root) },
-      });
-      yield* client.session.remove({ sessionID: retained.id });
-      yield* client.session.import({
-        info: Session.Info.make(Object.assign({}, retained, { parentID: active.id })),
-        location: retained.location,
-        messages: [
-          SessionMessage.Synthetic.make({
-            id: SessionMessage.ID.make("msg_retained_memory"),
-            time: { created: retained.time.created },
-            text: "His old Memory stays here.",
-          }),
+type Client = Parameters<typeof runSharedLifeCutover>[0];
+type Input = Parameters<typeof runSharedLifeCutover>[1];
+
+const pausedInput = (
+  client: Client,
+  directory: string,
+  personas: Input["personas"],
+  sessions: readonly Session.Info[],
+) =>
+  Effect.gen(function* () {
+    const entries = yield* Effect.forEach(sessions, (session) =>
+      Effect.gen(function* () {
+        const native = yield* client.session.export({ sessionID: session.id, sanitize: false });
+        const persona = { ...personas.get("persona1")!, id: session.agent! };
+        return {
+          info: Schema.encodeSync(Session.Info)(native.info),
+          pending: [],
+          folder: {
+            ...renderSnapshot(persona, "Original pre-upgrade instructions."),
+            runtime: {
+              additional: {},
+              shortTerm: `Private memory for ${session.id}`,
+              longTerm: [],
+              receipts: {},
+            },
+          },
+        };
+      }),
+    );
+    return {
+      directory,
+      personas,
+      confirmation: "yes",
+      log: vi.fn<NonNullable<Input["log"]>>(),
+      archive: JSON.stringify({ version: 1, sessions: entries }),
+      application: JSON.stringify({
+        version: 1,
+        tables: [
+          {
+            name: "conversation",
+            columns: ["session_id", "persona_id", "usage_key", "ended_at"],
+            rows: sessions.map((session, index) => [
+              session.id,
+              session.agent,
+              session.id,
+              index ? 1 : null,
+            ]),
+          },
         ],
-      });
-      const before = yield* client.session.export({ sessionID: retained.id, sanitize: false });
-      const managedID = Session.ID.create();
-      const managed = yield* client.rpc(sessionFolders).write(
-        {
-          folderID: managedID,
-          snapshot: renderSnapshot(personas.get("persona1")!, "Retained historical ground rules."),
-        },
-        { location: { directory: root } },
-      );
-      const original = yield* client
-        .rpc(sessionFolders)
-        .read({ folderID: managedID }, { location: { directory: root } });
-      yield* client.session.create({
-        id: managedID,
-        agent: Agent.ID.make("persona1"),
-        location: { directory: AbsolutePath.make(managed) },
-      });
-      const elsewhere = join(root, "operator-project");
-      yield* Effect.promise(() => mkdir(elsewhere));
-      for (let index = 0; index < 101; index++)
-        yield* client.session.create({
-          title: `unrelated ${index}`,
-          location: { directory: AbsolutePath.make(elsewhere) },
-        });
-      const wrongFolder = join(root, "sessions", "not-a-session-id");
-      yield* Effect.promise(() => mkdir(wrongFolder));
-      const unrelated = yield* client.session.create({
-        location: { directory: AbsolutePath.make(wrongFolder) },
-      });
-      calls.length = 0;
-      const file = join(root, "pre-cutover.json");
-      yield* runSessionTransfer(client, {
-        operation: "folders",
-        file,
-        directory: root,
-        confirmation: "yes",
-        personas,
-      });
-      const evidence = Schema.decodeUnknownSync(sessionArchive)(
-        yield* Effect.promise(() => readFile(file, "utf8")),
-      );
-      expect(evidence.sessions.map((entry) => entry.info.id).toSorted()).toEqual(
-        [active.id, retained.id, managedID].toSorted(),
-      );
-      expect(
-        evidence.sessions.find((entry) => entry.info.id === retained.id)?.info.location.directory,
-      ).toBe(root);
-      expect(evidence.sessions.find((entry) => entry.info.id === managedID)?.folder).toEqual(
-        original,
-      );
-      expect((yield* Effect.promise(() => stat(file))).mode & 0o777).toBe(0o600);
-      expect(calls.filter((call) => call.path === "/api/session").length).toBeGreaterThan(2);
-      const after = yield* client.session.export({ sessionID: retained.id, sanitize: false });
-      expect(after.info).toMatchObject({
-        id: retained.id,
-        agent: "persona1",
-        title: "persona1 · reset yesterday",
-        parentID: active.id,
-        location: { directory: sessionDirectory(root, retained.id) },
-      });
-      expect(after.messages.slice(0, before.messages.length)).toEqual(before.messages);
-      expect(after.messages.slice(before.messages.length).map((message) => message.type)).toEqual([
-        "location-switched",
-        "idle",
-      ]);
-      expect((yield* client.session.get({ sessionID: active.id })).location.directory).toBe(
-        sessionDirectory(root, active.id),
-      );
-      expect((yield* client.session.get({ sessionID: unrelated.id })).location.directory).toBe(
-        wrongFolder,
-      );
-      expect(
-        yield* client
-          .rpc(sessionFolders)
-          .read({ folderID: managedID }, { location: { directory: root } }),
-      ).toEqual(original);
-      yield* runSessionTransfer(client, {
-        operation: "folders",
-        file: join(root, "second-evidence.json"),
-        directory: root,
-        confirmation: "yes",
-      });
-      const exported = Schema.decodeUnknownSync(sessionArchive)(
-        yield* exportLocation(client, root),
-      );
-      expect(exported.sessions).toHaveLength(3);
-      expect(exported.sessions.every((entry) => entry.folder?.persona.id === "persona1")).toBe(
-        true,
-      );
-    }),
-  ));
+      }),
+    };
+  });
 
-test.each(["catalog", "queued"] as const)(
-  "migration preflights every legacy session before writing any folder (%s)",
+const singleSource = (client: Client, directory: string, personas: Input["personas"]) =>
+  Effect.gen(function* () {
+    const session = yield* legacySession(client, directory);
+    return { session, input: yield* pausedInput(client, directory, personas, [session]) };
+  });
+
+test.each(["catalog", "queued", "location"] as const)(
+  "shared-life cutover preflights every source before any writes (%s)",
   (blocked) =>
     withTransferClient(({ client, root, personas, calls }) =>
       Effect.gen(function* () {
@@ -140,40 +81,49 @@ test.each(["catalog", "queued"] as const)(
           root,
           blocked === "catalog" ? "missing" : "persona1",
         );
+        const input = yield* pausedInput(client, root, personas, [first, second]);
         if (blocked === "queued")
           yield* client.session.prompt({
             sessionID: second.id,
-            text: "queued work",
+            text: "Queued after the backup",
             resume: false,
           });
+        let secondDirectory = root;
+        if (blocked === "location") {
+          secondDirectory = join(root, "operator-project");
+          yield* Effect.promise(() => mkdir(secondDirectory));
+          yield* client.session.move({
+            sessionID: second.id,
+            directory: AbsolutePath.make(secondDirectory),
+          });
+          yield* client.session.wait({ sessionID: second.id });
+        }
         calls.length = 0;
-        const file = join(root, "rejected-migration.json");
-        const error = yield* runSessionTransfer(client, {
-          operation: "folders",
-          file,
-          directory: root,
-          confirmation: "yes",
-          personas,
-        }).pipe(Effect.flip);
-        expect(error.message).toContain(
-          blocked === "catalog" ? "Missing persona" : "drain queued work",
+        const error = yield* runSharedLifeCutover(client, input).pipe(Effect.flip);
+        expect(error.message).toContain("Shared-life cutover failed (request ");
+        expect(input.log).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            stage: "preflight",
+            outcome: "failed",
+            code: "SHARED_LIFE_CUTOVER_FAILED",
+          }),
         );
-        expect(
-          Schema.decodeUnknownSync(sessionArchive)(
-            yield* Effect.promise(() => readFile(file, "utf8")),
-          ).sessions,
-        ).toHaveLength(2);
         expect(calls.every((call) => call.method === "GET")).toBe(true);
-        for (const session of [first, second])
-          expect((yield* client.session.get({ sessionID: session.id })).location.directory).toBe(
-            root,
-          );
+        expect((yield* client.session.get({ sessionID: first.id })).location.directory).toBe(root);
+        expect((yield* client.session.get({ sessionID: second.id })).location.directory).toBe(
+          secondDirectory,
+        );
+        yield* Effect.promise(async () => {
+          await expect(
+            readFile(join(personaDirectory(root, "persona1"), "persona.json")),
+          ).rejects.toMatchObject({ code: "ENOENT" });
+        });
       }),
     ),
 );
 
-test("running native execution must be interrupted before a session can move", () =>
-  withRemoteHost((remote, root, { llm }) =>
+test("running native execution prevents any cutover writes or movement", () =>
+  withRemoteHost((remote, root, { llm, transport }) =>
     Effect.gen(function* () {
       const session = yield* remote.createSession("persona1");
       const snapshot = yield* remote.client
@@ -182,8 +132,6 @@ test("running native execution must be interrupted before a session can move", (
       yield* Effect.promise(async () => {
         await mkdir(join(root, ".opencode", "agents"), { recursive: true });
         await writeFile(join(root, ".opencode", "agents", "persona1.md"), snapshot.agent);
-      });
-      yield* Effect.promise(async () => {
         await expect
           .poll(async () =>
             (
@@ -197,74 +145,107 @@ test("running native execution must be interrupted before a session can move", (
         directory: AbsolutePath.make(root),
       });
       yield* remote.sessions.wait(session.id);
+      const source = yield* remote.sessions.get(session.id);
+      const input = yield* pausedInput(remote.client, root, remote.personas, [source]);
       const gate = yield* llm.gate();
-      yield* remote.sessions.prompt({ sessionID: session.id, text: "work during planned pause" });
+      yield* remote.sessions.prompt({ sessionID: session.id, text: "Work during planned pause" });
       yield* gate.started;
-      const input = {
-        operation: "folders" as const,
-        file: join(root, "running.json"),
-        directory: root,
-        confirmation: "yes",
-        personas: remote.personas,
-      };
-      expect((yield* runSessionTransfer(remote.client, input).pipe(Effect.flip)).message).toContain(
-        "Interrupt running sessions",
+      transport.requests.length = 0;
+      const error = yield* runSharedLifeCutover(remote.client, input).pipe(Effect.flip);
+      expect(error.message).toContain("Shared-life cutover failed (request ");
+      expect(input.log).toHaveBeenLastCalledWith(
+        expect.objectContaining({ stage: "preflight", outcome: "failed" }),
       );
+      expect(transport.requests.every((request) => request.method === "GET")).toBe(true);
       expect((yield* remote.sessions.get(session.id)).location.directory).toBe(root);
       yield* remote.sessions.interrupt(session.id);
       yield* gate.release;
       yield* remote.sessions.wait(session.id);
-      yield* runSessionTransfer(remote.client, { ...input, file: join(root, "interrupted.json") });
-      expect((yield* remote.sessions.get(session.id)).location.directory).toBe(
-        sessionDirectory(root, session.id),
-      );
     }),
   ));
 
-test("migration rejects an acknowledged move that did not change the native session location", () =>
+test("shared-life cutover detects an acknowledged native move that did not change location", () =>
   withTransferClient(({ client, root, personas, transport }) =>
     Effect.gen(function* () {
-      const session = yield* legacySession(client, root);
+      const { session, input } = yield* singleSource(client, root, personas);
       const forward = transport.fetch;
-      transport.fetch = (request) =>
-        new URL(request.url).pathname.endsWith("/move")
-          ? Promise.resolve(new Response(null, { status: 204 }))
-          : forward(request);
-      expect(
-        (yield* runSessionTransfer(client, {
-          operation: "folders",
-          file: join(root, "unmoved.json"),
-          directory: root,
-          confirmation: "yes",
-          personas,
-        }).pipe(Effect.flip)).message,
-      ).toContain(`Session ${session.id} did not move`);
+      let moves = 0;
+      transport.fetch = (request) => {
+        if (!new URL(request.url).pathname.endsWith("/move")) return forward(request);
+        moves++;
+        return Promise.resolve(new Response(null, { status: 204 }));
+      };
+      const error = yield* runSharedLifeCutover(client, input).pipe(Effect.flip);
+      expect(error.message).toContain("Shared-life cutover failed (request ");
+      expect(input.log).toHaveBeenLastCalledWith(
+        expect.objectContaining({ stage: "move-sessions", outcome: "failed" }),
+      );
+      expect(moves).toBe(1);
       expect((yield* client.session.get({ sessionID: session.id })).location.directory).toBe(root);
     }),
   ));
 
-test("folder RPC failures preserve migration evidence and never move a session", () =>
+test("storage RPC failure preserves existing destination data and the source native session", () =>
   withTransferClient(({ client, root, personas }) =>
     Effect.gen(function* () {
-      const session = yield* legacySession(client, root);
-      yield* Effect.promise(() =>
-        mkdir(join(sessionDirectory(root, session.id), "persona.json"), { recursive: true }),
+      const { session, input } = yield* singleSource(client, root, personas);
+      const target = personaDirectory(root, "persona1");
+      yield* Effect.promise(async () => {
+        await mkdir(join(target, "persona.json"), { recursive: true });
+        await writeFile(join(target, "MEMORY.md"), "Existing data must survive");
+      });
+      const native = yield* client.session.export({ sessionID: session.id, sanitize: false });
+      expect((yield* runSharedLifeCutover(client, input).pipe(Effect.flip)).message).toContain(
+        "Shared-life cutover failed (request ",
       );
-      const file = join(root, "failed-write.json");
+      expect(input.log).toHaveBeenLastCalledWith(
+        expect.objectContaining({ stage: "restore-scopes", outcome: "failed" }),
+      );
+      expect(yield* Effect.promise(() => readFile(join(target, "MEMORY.md"), "utf8"))).toBe(
+        "Existing data must survive",
+      );
+      expect(yield* client.session.export({ sessionID: session.id, sanitize: false })).toEqual(
+        native,
+      );
+    }),
+  ));
+
+test("the shared-life command consumes both existing backups without overwriting either", () =>
+  withTransferClient(({ client, root, personas }) =>
+    Effect.gen(function* () {
+      const { session, input } = yield* singleSource(client, root, personas);
+      const file = join(root, "pre-upgrade-sessions.json");
+      const applicationFile = join(root, "application-state.json");
+      yield* Effect.promise(() =>
+        Promise.all([
+          writeFile(file, input.archive),
+          writeFile(applicationFile, input.application),
+        ]),
+      );
       expect(
         (yield* runSessionTransfer(client, {
-          operation: "folders",
+          operation: "shared-life",
           file,
+          applicationFile,
           directory: root,
           confirmation: "yes",
-          personas,
         }).pipe(Effect.flip)).message,
-      ).toContain("Cannot write session folder");
-      expect(
-        Schema.decodeUnknownSync(sessionArchive)(
-          yield* Effect.promise(() => readFile(file, "utf8")),
-        ).sessions[0]?.info.id,
-      ).toBe(session.id);
+      ).toContain("Shared-life cutover failed (request ");
       expect((yield* client.session.get({ sessionID: session.id })).location.directory).toBe(root);
+      yield* runSessionTransfer(client, {
+        operation: "shared-life",
+        file,
+        applicationFile,
+        directory: root,
+        personas,
+        confirmation: "yes",
+      });
+      expect(yield* Effect.promise(() => readFile(file, "utf8"))).toBe(input.archive);
+      expect(yield* Effect.promise(() => readFile(applicationFile, "utf8"))).toBe(
+        input.application,
+      );
+      expect((yield* client.session.get({ sessionID: session.id })).location.directory).toBe(
+        personaDirectory(root, "persona1"),
+      );
     }),
   ));
