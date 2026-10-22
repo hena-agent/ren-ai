@@ -40,7 +40,7 @@ export const conversationStatus = (catalog: () => Promise<readonly PublicPersona
       (SELECT MAX(recorded_at) FROM send WHERE conversation_id = c.id AND state IN ('sent','delivered')) AS lastSentAt,
       e.farewell_pending AS farewellPending, e.notice_pending AS noticePending,
       (SELECT state FROM send WHERE conversation_id = c.id AND tool_call_id = e.call_id || ':farewell:' || e.farewell_attempt) AS farewellState,
-      (SELECT state FROM send WHERE conversation_id = c.id AND tool_call_id = e.call_id || ':notice:' || e.notice_attempt) AS noticeState
+       (SELECT state FROM ending_notification WHERE conversation_id = c.id AND call_id = e.call_id || ':notice:' || e.notice_attempt) AS noticeState
       FROM conversation c JOIN user u ON u.id = c.user_id LEFT JOIN conversation_end e ON e.conversation_id = c.id
       WHERE (${input.filter} = 'all' OR (${input.filter} = 'active' AND c.ended_at IS NULL) OR (${input.filter} = 'ended' AND c.ended_at IS NOT NULL))
       AND (${input.before ?? null} IS NULL OR c.id < ${input.before ?? null})

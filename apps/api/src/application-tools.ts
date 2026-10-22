@@ -12,6 +12,9 @@ import { conversationEndings } from "./conversations/end.ts";
 import { scheduleWork } from "./scheduling.ts";
 import { promptID } from "./intake/message-id.ts";
 import type { StartingRelationship } from "@ren-ai/onboarding";
+import type { NotificationTransport } from "./conversations/notifications.ts";
+
+export type ApplicationMessages = Messages & NotificationTransport;
 
 export type MessagingTools = {
   readonly [
@@ -22,7 +25,7 @@ export type MessagingTools = {
 /** Preparing callbacks does not start intake, scheduling, or OpenCode execution. */
 export const prepareMessaging = (
   personas: ReadonlyMap<string, Persona>,
-  messages: Messages,
+  messages: ApplicationMessages,
   gestures: Gestures,
 ) =>
   Effect.gen(function* () {
