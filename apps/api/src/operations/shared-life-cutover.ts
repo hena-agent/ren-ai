@@ -39,6 +39,7 @@ const preflight = (client: Client, plan: SharedLifePlan, directory: string) =>
           new Error("Interrupt running sessions and drain queued work before cutover"),
         );
     }
+    return undefined;
   });
 
 export const runSharedLifeCutover = (
