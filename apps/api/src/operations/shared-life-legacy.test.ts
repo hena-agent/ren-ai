@@ -6,6 +6,8 @@ import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { legacySession, withTransferClient } from "../../test/operations-transfer.test-helper.ts";
 import { runSharedLifeCutover } from "./shared-life-cutover.ts";
 import { sharedLifePlan } from "./shared-life-plan.ts";
+import { exportLocation } from "./session-transfer.ts";
+import { sessionArchive } from "../opencode/transfer-format.ts";
 
 test.each([true, false])(
   "cutover preserves unscoped operator sessions and a retired persona (explicit agent: %s)",
@@ -59,6 +61,14 @@ test.each([true, false])(
         expect(saved.persona).toEqual(folder.persona);
         expect(yield* client.session.export({ sessionID: operator.id, sanitize: false })).toEqual(
           before,
+        );
+        const exported = Schema.decodeUnknownSync(sessionArchive)(
+          yield* exportLocation(client, root),
+        );
+        expect(exported.sessions.map((entry) => entry.info.id)).toEqual([retired.id]);
+        expect(exported.personas).toHaveLength(1);
+        expect(exported.personas[0]?.relationships[retired.id]?.shortTerm).toBe(
+          "Retained private fact",
         );
       }),
     ),

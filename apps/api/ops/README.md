@@ -21,9 +21,9 @@ api-app and api-msg, and `TOKEN_CATALOG` identical in Admin and api-app.
 The example keeps bootstrap mode enabled until explicitly configured for execution.
 
 CI deploys api-app only from `main` after every quality gate, then probes its
-safe health and public Catalog endpoints. The production Wrangler config temporarily sets
-`BOOTSTRAP_ONLY=true` for the shared-life cutover. Restore `false` only after
-the paused migration and artifact/data verification to resume intake and scheduling.
+safe health and public Catalog endpoints. The production Wrangler config sets
+`BOOTSTRAP_ONLY=false` after the verified shared-life cutover, so deployments run
+intake and background scheduling.
 The old application must remain stopped to prevent duplicate intake. For a
 state restore, set bootstrap-only mode while importing and verifying the
 archive, then restore `false`. No script changes live ingress or stops a service.

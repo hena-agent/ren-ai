@@ -46,6 +46,8 @@ it does not replay conversations or send messages.
    native moves are separately retryable from the **same** source archives;
    conflicting existing target documents are rejected, never overwritten.
    Root-level operator sessions without persona folders remain at their original location.
+   Version-2 exports inventory persona/Sandbox scopes; these unscoped operator
+   sessions remain preserved by the original archive and full OpenCode home backup.
    Retired personas absent from Catalog keep their archived identity and read-only
    Relationship scopes; their shared life starts empty, without promoting private history.
    Ordinary `restore` accepts only version-2 persona-scoped archives; it cannot
