@@ -43,6 +43,14 @@ function mount(bootstrap = true) {
   return api;
 }
 
+function consentAndVerify(token: string) {
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+    target: { value: "01012345678" },
+  });
+  fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
+  act(() => verification!(token));
+}
+
 test("a shared URL opens the target in the original Discovery reading view and collapses back to the same prioritized card", async () => {
   const api = mount();
   expect(api.profiles).not.toHaveBeenCalled();
@@ -80,11 +88,7 @@ test("previously passed shared personas can be Liked without losing siblings, th
   expect(
     within(screen.getByRole("list", { name: "관심을 전할 페르소나" })).getAllByRole("listitem"),
   ).toHaveLength(2);
-  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
-    target: { value: "01012345678" },
-  });
-  fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
-  act(() => verification!("passed"));
+  consentAndVerify("passed");
   await act(async () =>
     fireEvent.submit(screen.getByRole("button", { name: "동의하고 대기 등록" }).closest("form")!),
   );
@@ -131,6 +135,72 @@ test("local direct entry loads the Catalog, retains authored writing across loca
   await screen.findByRole("heading", { name: "This profile isn't public." });
   expect(screen.getByRole("link", { name: "Back to profiles" }).getAttribute("href")).toBe(
     "/explore",
+  );
+});
+
+test("reselection reloads its private Catalog before browsing and submits only eligible Likes after a retry", async () => {
+  const token = "a".repeat(64);
+  window.history.replaceState(null, "", `/explore#reselect=${token}`);
+  localStorage.setItem("ren-ai.discovery.choices", JSON.stringify({ jia: true }));
+  const script = document.createElement("script");
+  script.id = "public-personas";
+  script.type = "application/json";
+  script.textContent = JSON.stringify(publicPersonas);
+  document.body.append(script);
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValueOnce(Response.json([publicPersonas[1]]))
+    .mockResolvedValueOnce(Response.json({ status: "waiting" }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<Site />);
+  expect(screen.getByText("만날 사람들을 불러오고 있어요.")).toBeTruthy();
+  expect(screen.queryByText("백지아")).toBeNull();
+  await screen.findByRole("heading", { name: "프로필을 불러오지 못했어요." });
+  expect(screen.queryByText("백지아")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "다시 불러오기" }));
+  await screen.findByRole("heading", { name: "한수빈" });
+  expect(screen.queryByText("백지아")).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  for (const [url, options] of fetcher.mock.calls) {
+    expect(url).toBe("/discovery/reselection/personas");
+    expect(options).toMatchObject({
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: JSON.stringify({ reselectionToken: token }),
+      cache: "no-store",
+    });
+  }
+  choose(true);
+  fireEvent.click(screen.getByRole("button", { name: "연락받기" }));
+  expect(screen.getByRole("list", { name: "관심을 전할 페르소나" }).textContent).toBe("한수빈");
+  consentAndVerify("reselection");
+  fireEvent.submit(screen.getByRole("button", { name: "동의하고 대기 등록" }).closest("form")!);
+  await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
+  const body = fetcher.mock.calls[2]![1]!.body;
+  if (typeof body !== "string") throw new Error("Expected a JSON request body");
+  expect(JSON.parse(body)).toMatchObject({
+    likedPersonaIDs: ["subin"],
+    reselectionToken: token,
+  });
+  expect(script.textContent).toBe(JSON.stringify(publicPersonas));
+  expect(window.location.hash).toBe(`#reselect=${token}`);
+  expect(localStorage.getItem("ren-ai.discovery.choices")).not.toContain(token);
+});
+
+test("a reselection profile URL cannot reopen an ended persona and retains the token when returning to explore", async () => {
+  const token = "b".repeat(64);
+  const api = mount();
+  cleanup();
+  window.history.replaceState(null, "", `/personas/jia#reselect=${token}`);
+  api.profiles.mockResolvedValue([publicPersonas[1]!]);
+  render(<Site client={api} />);
+  expect(screen.queryByRole("region", { name: /백지아/ })).toBeNull();
+  await screen.findByRole("heading", { name: "이 프로필은 공개되어 있지 않아요." });
+  expect(api.profiles).toHaveBeenCalledWith(expect.any(AbortSignal), token);
+  expect(screen.queryByText("백지아")).toBeNull();
+  expect(screen.getByRole("link", { name: "탐색으로 돌아가기" }).getAttribute("href")).toBe(
+    `/explore#reselect=${token}`,
   );
 });
 

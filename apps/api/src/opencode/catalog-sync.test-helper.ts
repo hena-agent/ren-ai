@@ -107,6 +107,7 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
               files,
             })
             .pipe(Effect.asVoid),
+          true,
         ),
       (id) => personas.get(id)!.timeZone,
       undefined,
@@ -207,6 +208,7 @@ const catalogHost = (fixture: Awaited<ReturnType<typeof catalogFixture>>) =>
       profileName,
       transport,
       recovery,
+      incoming,
     };
   });
 
@@ -299,6 +301,20 @@ export const beginRetainingParent = (host: Host) =>
       return yield* Fiber.join(removing);
     });
     return { parent, snapshot, finish };
+  });
+
+export const expectRetainedIdentity = (
+  host: Host,
+  id: string,
+  snapshot: typeof folderSnapshot.Type,
+  prompt: string,
+) =>
+  Effect.gen(function* () {
+    expect(yield* host.read(id)).toMatchObject({
+      persona: { prompt },
+      relationship: snapshot.relationship,
+      binding: { writable: false },
+    });
   });
 
 export const markedOperator = (host: Host) =>

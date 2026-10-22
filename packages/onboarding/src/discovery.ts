@@ -54,6 +54,10 @@ export const PublicPersona = Schema.Struct({
 });
 export type PublicPersona = typeof PublicPersona.Type;
 
+export const ReselectionRequest = Schema.Struct({
+  reselectionToken: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+});
+
 export const DiscoveryRequest = Schema.Struct({
   handle: MobileNumber,
   locale: DiscoveryLocale,
@@ -64,7 +68,7 @@ export const DiscoveryRequest = Schema.Struct({
   gender: Schema.optionalKey(Schema.Literals(["female", "male", "other"])),
   privacyNoticeVersion: text,
   turnstileToken: text,
-  reselectionToken: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
+  reselectionToken: Schema.optionalKey(ReselectionRequest.fields.reselectionToken),
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;

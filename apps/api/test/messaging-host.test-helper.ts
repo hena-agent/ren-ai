@@ -7,7 +7,7 @@ import { startMessagingHost, startPersonaHost } from "./application.test-helper.
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 import type { ApplicationMessages as Messages } from "../src/application-tools.ts";
 import { fakeGestures } from "@ren-ai/imsg/testing";
-import { silentAlerts } from "./messaging.test-helper.ts";
+import { registration, silentAlerts } from "./messaging.test-helper.ts";
 
 const messagingOptions = (
   root: string,
@@ -73,4 +73,17 @@ export const quietTestHost = (
     const llm = yield* scriptedPersona();
     yield* llm.serve(() => TestLLM.text("quiet", "answer"));
     return yield* startTestHost(root, personaDirectory, llm, messages, databasePath);
+  });
+
+export const startConversationHost = (
+  fixture: { root: string; personaDirectory: string },
+  llm: TestLLM.TestInterface,
+  messages: Messages,
+  handle: string,
+) =>
+  Effect.gen(function* () {
+    const host = yield* startTestHost(fixture.root, fixture.personaDirectory, llm, messages);
+    const original = yield* host.createSession("persona1");
+    const conversation = yield* host.conversations.create(registration(handle, original.id));
+    return { host, original, conversation };
   });

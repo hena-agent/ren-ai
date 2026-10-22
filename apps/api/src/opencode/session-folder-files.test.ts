@@ -1,11 +1,15 @@
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { folderFiles, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
-import { managedFolder, sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
+import {
+  managedFolder,
+  sessionDirectory,
+  personaDirectory as personaPath,
+} from "@ren-ai/plugin-session-folder/paths";
 import { expect, test, vi } from "vitest";
 import { messagingFixture } from "../../test/messaging.test-helper.ts";
-import { conversationMemory } from "@ren-ai/plugin-session-folder/memory";
-import { parseConversationState, serializeInitialState } from "@ren-ai/personas";
+import { personaMemory } from "@ren-ai/plugin-session-folder/memory";
+import { serializeInitialState } from "@ren-ai/personas";
 
 vi.mock("node:fs/promises", async (original) => ({
   ...(await original<typeof import("node:fs/promises")>()),
@@ -22,6 +26,8 @@ const snapshot = renderSnapshot(
   },
   "Original rules.",
 );
+const initialState =
+  "---\nmood: 50\nenergy: 50\nstress: 50\nconnection: 50\nsolitude: 50\ntraits: {}\n---\n";
 const withFiles = async (
   run: (files: ReturnType<typeof folderFiles>, directory: string) => Promise<void>,
 ) => {
@@ -40,7 +46,7 @@ test("session snapshots record one applied version, reject stale writers and pre
       {
         ...snapshot.persona,
         version: 1,
-        initial: { state: "current State", memory: "current Memory" },
+        initial: { state: initialState, memory: "current Memory" },
       },
       snapshot.rules,
     );
@@ -71,8 +77,32 @@ test("new folder writes publish only complete snapshots and clean failed staging
     );
     await expect(files.write("ses_initial", snapshot)).rejects.toThrow("Disk unavailable");
     expect(await files.exists("ses_initial")).toBe(false);
-    expect(await fs.readdir(join(directory, "sessions"))).toEqual([]);
+    expect(await fs.readdir(join(directory, "personas"))).toEqual([]);
   }));
+
+test.each([
+  { state: "mood: 55", message: "Expected initial State frontmatter" },
+  { state: "---\nmood: [\n---\n", message: "Invalid initial State frontmatter" },
+])("malformed initial State ($message) never publishes a partial life", ({ state, message }) =>
+  withFiles(async (files, directory) => {
+    await expect(
+      files.write("ses_malformed", {
+        ...snapshot,
+        documents: { state, memory: "This life must not be partially published" },
+      }),
+    ).rejects.toThrow(message);
+    expect(await files.exists("ses_malformed")).toBe(false);
+    await expect(fs.stat(files.path("persona1"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await fs.readdir(join(directory, "personas"))).toEqual([]);
+    await files.write("ses_malformed", {
+      ...snapshot,
+      documents: { state: initialState, memory: "Corrected life" },
+    });
+    const recovered = await files.read("ses_malformed");
+    expect(recovered.documents?.memory).toBe("Corrected life");
+    expect(recovered.relationship?.shortTerm).toBe("");
+  }),
+);
 
 test("failed live writes preserve every old snapshot file and unrelated files", () =>
   withFiles(async (files, directory) => {
@@ -90,9 +120,12 @@ test("failed live writes preserve every old snapshot file and unrelated files", 
         renderSnapshot({ ...snapshot.persona, prompt: "Changed." }, "Changed rules."),
       ),
     ).rejects.toThrow("Commit unavailable");
-    expect(await files.read("ses_update")).toEqual(snapshot);
+    expect(await files.read("ses_update")).toMatchObject(snapshot);
     expect(await fs.readFile(join(target, "unrelated.txt"), "utf8")).toBe("Keep me.");
-    expect(await fs.readdir(join(directory, "sessions"))).toEqual(["ses_update"]);
+    expect((await fs.readdir(join(directory, "personas"))).toSorted()).toEqual([
+      ".bindings",
+      "persona1",
+    ]);
     await fs.rm(join(target, "AGENTS.md"));
     await expect(files.write("ses_update", snapshot)).rejects.toThrow("Commit unavailable");
     await expect(fs.stat(join(target, "AGENTS.md"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -127,8 +160,8 @@ test("preflight read failures never publish part of an update and canonical path
     expect(await fs.readFile(join(target, ".opencode", "agents", "persona1.md"), "utf8")).toBe(
       snapshot.agent,
     );
-    expect(sessionDirectory(directory, "ses_read")).toBe(target);
-    expect(managedFolder(directory, target)).toBe("ses_read");
+    expect(personaPath(directory, "persona1")).toBe(target);
+    expect(managedFolder(directory, target)).toBe("persona1");
     expect(managedFolder(directory, join(directory, "sessions", "not-a-session"))).toBeUndefined();
     expect(managedFolder(directory, directory)).toBeUndefined();
     expect(() => sessionDirectory(directory, "ses_../../escape")).toThrow(/Expected/);
@@ -136,13 +169,13 @@ test("preflight read failures never publish part of an update and canonical path
 
 test("initial Catalog documents seed new Conversations; updates and snapshot transfers preserve evolving documents", () =>
   withFiles(async (files) => {
-    const initial = { state: "initial private State", memory: "initial private Memory" };
+    const initial = { state: initialState, memory: "initial private Memory" };
     const seeded = renderSnapshot({ ...snapshot.persona, initial }, snapshot.rules);
     const target = await files.write("ses_seeded", seeded);
     expect((await files.read("ses_seeded")).documents).toEqual(initial);
     await expect(
       files.write("ses_seeded", { ...seeded, persona: { ...seeded.persona, id: "different" } }),
-    ).rejects.toThrow("persona cannot change");
+    ).rejects.toThrow("binding");
     const current = { state: "current State", memory: "current Memory".repeat(2000) };
     await fs.writeFile(join(target, "STATE.md"), current.state);
     await fs.writeFile(join(target, "MEMORY.md"), current.memory);
@@ -157,12 +190,14 @@ test("initial Catalog documents seed new Conversations; updates and snapshot tra
     expect(preserved.documents).toEqual(current);
     await files.write("ses_restored", preserved);
     expect((await files.read("ses_restored")).documents).toEqual(current);
-    const unbound = files.path("ses_unbound");
+    const unbound = files.path("unbound");
     await fs.mkdir(unbound);
     await fs.writeFile(join(unbound, "STATE.md"), current.state);
     await fs.writeFile(join(unbound, "MEMORY.md"), current.memory);
-    await files.write("ses_unbound", seeded);
-    expect((await files.read("ses_unbound")).documents).toEqual(current);
+    await expect(
+      files.write("ses_unbound", { ...seeded, persona: { ...seeded.persona, id: "unbound" } }),
+    ).rejects.toThrow("already exists");
+    expect(await fs.readFile(join(unbound, "STATE.md"), "utf8")).toBe(current.state);
     await fs.rm(join(target, "STATE.md"));
     await expect(files.read("ses_seeded")).rejects.toThrow("both STATE.md and MEMORY.md");
     await fs.writeFile(join(target, "STATE.md"), current.state);
@@ -188,10 +223,11 @@ test("starting affection seeds only new Conversations and never resets current o
     const initial = { state, memory: "# 현재 생활\n\n사진전을 준비 중이다." };
     const seeded = renderSnapshot({ ...snapshot.persona, initial }, snapshot.rules);
     const path = await files.write("ses_affection", seeded);
-    expect(
-      parseConversationState((await files.read("ses_affection")).documents!.state).affection,
-    ).toBe(27);
-    const memory = conversationMemory(path);
+    const first = await files.read("ses_affection");
+    expect(first.relationship?.state?.affection).toBe(27);
+    expect(first.documents!.state).not.toContain("affection");
+    const memory = personaMemory(path, "ses_affection");
+    await memory.context();
     await memory.run(
       "update_state",
       {
@@ -212,20 +248,22 @@ test("starting affection seeds only new Conversations and never resets current o
     );
     await files.write("ses_affection", next);
     const current = await files.read("ses_affection");
-    expect(current.runtime?.state?.affection).toBe(58);
+    expect(current.relationship?.state?.affection).toBe(58);
     expect(await memory.context()).toContain("affection: 58");
     await files.write("ses_new_affection", next);
-    expect(
-      parseConversationState((await files.read("ses_new_affection")).documents!.state).affection,
-    ).toBe(90);
+    expect((await files.read("ses_new_affection")).relationship?.state?.affection).toBe(90);
     await files.write("ses_restored_affection", current);
-    expect((await files.read("ses_restored_affection")).runtime?.state?.affection).toBe(58);
+    expect((await files.read("ses_restored_affection")).relationship?.state?.affection).toBe(58);
     const prior = renderSnapshot(
       { ...snapshot.persona, initial: { ...initial, state: state.replace("affection: 27\n", "") } },
       snapshot.rules,
     );
     const oldPath = await files.write("ses_existing_affection", prior);
-    const existing = conversationMemory(oldPath);
+    expect(
+      (await files.read("ses_existing_affection")).relationship?.state?.affection,
+    ).toBeUndefined();
+    const existing = personaMemory(oldPath, "ses_existing_affection");
+    await existing.context();
     await existing.run(
       "update_state",
       { scores: { stress: 20 }, additions: {}, remove: [], reason: "휴식을 취했다." },
@@ -250,6 +288,7 @@ test("starting affection seeds only new Conversations and never resets current o
         "update_state",
         {
           scores: {},
+          scope: "relationship",
           additions: { affection: { value: 50, meaning: "호감도", reason: "중복" } },
           remove: [],
           reason: "중복 항목",
@@ -258,5 +297,5 @@ test("starting affection seeds only new Conversations and never resets current o
         "message-3",
       ),
     ).rejects.toThrow("built-in");
-    expect((await files.read("ses_affection")).runtime?.state?.affection).toBe(58);
+    expect((await files.read("ses_affection")).relationship?.state?.affection).toBe(58);
   }));

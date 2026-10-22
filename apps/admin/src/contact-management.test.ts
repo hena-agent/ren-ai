@@ -62,7 +62,7 @@ test("waitlist reads use Workers-supported redirect mode and reject redirects wi
   expect(JSON.stringify(logs)).not.toContain("secret-token");
 });
 
-test("authenticated Admin lists, confirms and displays exclusive selection and reservations", async () => {
+test("authenticated Admin lists, confirms and displays selection and reservations", async () => {
   const waiting = entry();
   const scheduled = {
     ...entry("scheduled"),

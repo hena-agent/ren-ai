@@ -49,6 +49,10 @@ test("termination stops execution and cancels inbox work once across application
       let pending = [fromPartial<SessionInbox.Info>({ id: SessionMessage.ID.make("msg_pending") })];
       const host = fromPartial<PersonaRuntime>({
         sessions: {
+          writable: (_id: Session.ID, writable: boolean) =>
+            Effect.sync(() => {
+              expect(writable).toBe(false);
+            }),
           interrupt: () =>
             Effect.sync(() => {
               events.push("interrupt");
@@ -73,7 +77,7 @@ test("termination stops execution and cancels inbox work once across application
       const logs: ContactDiagnostic[] = [];
       const initiallyActive = yield* runtimeStatus(host, () => Effect.succeed(false), f.ending);
       expect((yield* initiallyActive.inspect(f.conversation.id))?.state).toBe("idle");
-      const stopped = yield* stoppedConversations(host, (event) => logs.push(event));
+      const stopped = yield* stoppedConversations(host, logs.push.bind(logs));
       yield* f.ending.end(f.conversation.sessionID, "bye", "stop");
       yield* stopped.tick;
       expect(events).toEqual(["interrupt", "cancel", "wait"]);
@@ -102,11 +106,18 @@ test("termination stops execution and cancels inbox work once across application
       expect((yield* running.inspect(f.conversation.id))?.state).toBe("running");
       const missing = fromPartial<PersonaRuntime>({
         sessions: {
+          writable: () => Effect.fail(new MissingSession({ message: "missing" })),
           get: () => Effect.fail(new MissingSession({ message: "missing" })),
           interrupt: () => Effect.fail(new MissingSession({ message: "missing" })),
         },
       });
       yield* stopSession(missing, f.conversation.sessionID);
+      yield* f.sql`UPDATE conversation_end SET stopped_at = NULL`;
+      const missingStop = yield* stoppedConversations(missing, logs.push.bind(logs));
+      yield* missingStop.tick;
+      expect(
+        (yield* f.sql<{ at: number | null }>`SELECT stopped_at AS at FROM conversation_end`)[0]!.at,
+      ).not.toBeNull();
       const gone = yield* runtimeStatus(missing, () => Effect.succeed(false), f.ending);
       expect((yield* gone.inspect(f.conversation.id))?.state).toBe("missing");
       pending = [fromPartial<SessionInbox.Info>({ id: SessionMessage.ID.make("msg_uncancelled") })];
@@ -218,6 +229,7 @@ test.each(["missing", "untagged", "tagged"])(
                 });
         const host = fromPartial<PersonaRuntime>({
           sessions: {
+            writable: () => Effect.void,
             interrupt: () => Effect.succeed(false),
             inbox: () => Effect.succeed([]),
             wait: () => Effect.void,

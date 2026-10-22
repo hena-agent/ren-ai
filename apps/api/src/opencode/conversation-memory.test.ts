@@ -1,12 +1,13 @@
 import { TestLLM } from "@opencode/ai/testing";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Stream } from "effect";
 import { expect, test, vi } from "vitest";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
-import { conversationMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { personaMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { restoreMemory, emptyMemory } from "../../test/memory.test-helper.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
 import { providerUnavailable } from "../../test/messaging-host.test-helper.ts";
 
-test("real OC tools persist current State, short-term and searchable long-term Memory without crossing Conversations", () =>
+test("real OC tools share current life while keeping affection and Relationship memory private", () =>
   withRemoteHost((remote, _directory, { llm }) =>
     Effect.gen(function* () {
       const first = yield* remote.createSession("persona1");
@@ -14,6 +15,7 @@ test("real OC tools persist current State, short-term and searchable long-term M
         {
           name: "update_state",
           input: {
+            scope: "life",
             scores: {
               mood: 55,
               energy: 30,
@@ -36,6 +38,7 @@ test("real OC tools persist current State, short-term and searchable long-term M
         {
           name: "update_memory",
           input: {
+            scope: "relationship",
             markdown: "# 현재 생활\n\n내일 사진전 소식을 이야기하기로 했다.",
             reason: "약속을 확인했다.",
           },
@@ -43,6 +46,7 @@ test("real OC tools persist current State, short-term and searchable long-term M
         {
           name: "remember",
           input: {
+            scope: "relationship",
             topic: "상대의 취향",
             text: "상대는 민트 차를 좋아한다.",
             summary: "민트 차를 좋아함",
@@ -79,18 +83,21 @@ test("real OC tools persist current State, short-term and searchable long-term M
       expect(current).not.toContain("민트 차를 좋아한다");
       expect(JSON.stringify(requests.at(-1)!.messages)).toContain("민트 차를 좋아한다");
       expect(
-        yield* Effect.promise(() => conversationMemory(first.location.directory).context()),
+        yield* Effect.promise(() => personaMemory(first.location.directory, first.id).context()),
       ).toContain("사진 선정");
       const second = yield* remote.createSession("persona1");
       yield* llm.serve(() => TestLLM.text("처음 만나요.", "answer"));
       yield* remote.sessions.prompt({ sessionID: second.id, text: "안녕하세요." });
       yield* remote.sessions.wait(second.id);
       const other = JSON.stringify((yield* llm.requests()).at(-1)!);
-      expect(other).not.toContain("사진 선정");
+      expect(other).toContain("사진 선정");
+      expect(other).toContain("energy: 30");
+      expect(other).not.toContain("affection: 27");
+      expect(other).not.toContain("내일 사진전 소식");
       expect(other).not.toContain("민트 차");
       expect(
         yield* Effect.promise(() =>
-          conversationMemory(second.location.directory).run(
+          personaMemory(second.location.directory, second.id).run(
             "search_memory",
             { query: "민트" },
             "search",
@@ -107,6 +114,7 @@ test("dice and memory receipts survive failed work and an exported/restored nati
       const session = yield* remote.createSession("persona1");
       const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
       const input = {
+        scope: "relationship",
         topic: "취향",
         text: "상대는 민트 차를 좋아한다.",
         summary: "민트 차",
@@ -152,14 +160,16 @@ test("dice and memory receipts survive failed work and an exported/restored nati
         yield* remote.retry(session.id);
         yield* remote.sessions.wait(session.id);
         expect((yield* remote.sessions.get(session.id)).outcome).toBe("succeeded");
-        const memory = conversationMemory(session.location.directory);
+        const memory = personaMemory(session.location.directory, session.id);
         const results = yield* Effect.promise(() =>
           memory.run("search_memory", { query: "민트" }, "search", "after-restore"),
         );
         expect(JSON.parse(results)).toHaveLength(1);
         const replayRandom = vi.fn<() => number>(() => 0.9);
         expect(
-          yield* Effect.promise(() => memory.roll(diceID, "after-restore", replayRandom)),
+          yield* Effect.promise(() =>
+            memory.roll(diceID.slice(session.id.length + 1), "after-restore", replayRandom),
+          ),
         ).toBe("5000");
         expect(replayRandom).not.toHaveBeenCalled();
         const restored = yield* Effect.promise(() => readRuntime(session.location.directory));
@@ -176,12 +186,13 @@ test("real OC compaction receives current Memory and loss markers without resett
   withRemoteHost((remote, _directory, { llm }) =>
     Effect.gen(function* () {
       const session = yield* remote.createSession("persona1");
-      const memory = conversationMemory(session.location.directory);
+      const memory = personaMemory(session.location.directory, session.id);
       const record = yield* Effect.promise(async () =>
         Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ id: Schema.String })))(
           await memory.run(
             "remember",
             {
+              scope: "relationship",
               topic: "생일",
               text: "birthday-detail-0317",
               summary: "생일 날짜",
@@ -196,7 +207,11 @@ test("real OC compaction receives current Memory and loss markers without resett
       yield* Effect.promise(() =>
         memory.run(
           "update_memory",
-          { markdown: "# 현재 생활\n\nbirthday-detail-0317", reason: "현재 기억" },
+          {
+            scope: "relationship",
+            markdown: "# 현재 생활\n\nbirthday-detail-0317",
+            reason: "현재 기억",
+          },
           "short-birthday",
           "first",
         ),
@@ -213,6 +228,7 @@ test("real OC compaction receives current Memory and loss markers without resett
         memory.run(
           "remember",
           {
+            scope: "relationship",
             id: record.id,
             topic: "생일",
             text: "",
@@ -255,5 +271,86 @@ test("real OC compaction receives current Memory and loss markers without resett
           memory.run("search_memory", { query: "생일" }, "after-compaction", "later"),
         ),
       ).toBe("[]");
+    }),
+  ));
+
+test("real OC rejects a concurrent stale shared write with correlated JSON stderr diagnostics and current model data", () =>
+  withRemoteHost((remote, _directory, { llm }) =>
+    Effect.gen(function* () {
+      const first = yield* remote.createSession("persona1");
+      const second = yield* remote.createSession("persona1");
+      yield* Effect.promise(() =>
+        restoreMemory(first.location.directory, {
+          ...emptyMemory,
+          state: { mood: 50, energy: 60, stress: 20, connection: 40, solitude: 30, traits: {} },
+        }),
+      );
+      const logs: string[] = [];
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+        logs.push(String(chunk));
+        return true;
+      });
+      let firstStep = true;
+      try {
+        yield* llm.serve((request) => {
+          if (!request.tools.some((tool) => tool.name === "update_state"))
+            return TestLLM.text("Persona1", "title");
+          if (!firstStep) return TestLLM.text("I will use my current energy.", "done");
+          firstStep = false;
+          expect(JSON.stringify(request.system)).toContain("energy: 60");
+          return Stream.fromEffect(
+            Effect.promise(async () => {
+              const other = personaMemory(second.location.directory, second.id);
+              await other.context();
+              await other.run(
+                "update_state",
+                {
+                  scores: { energy: 20 },
+                  additions: {},
+                  remove: [],
+                  reason: "private-safe-evidence-token",
+                },
+                "other-change",
+                "private-source-token",
+              );
+            }).pipe(Effect.orDie),
+          ).pipe(
+            Stream.flatMap(() =>
+              Stream.fromIterable(
+                TestLLM.tool("stale-model-write", "update_state", {
+                  scores: { energy: 90 },
+                  additions: {},
+                  remove: [],
+                  reason: "private-model-prompt-token",
+                }),
+              ),
+            ),
+          );
+        });
+        yield* remote.sessions.prompt({ sessionID: first.id, text: "Check your energy." });
+        yield* remote.sessions.wait(first.id);
+        const latest = (yield* llm.requests()).at(-1)!;
+        expect(JSON.stringify(latest.system)).toContain("energy: 20");
+        expect(JSON.stringify(latest.messages)).toContain("SHARED_MEMORY_CONFLICT");
+        const warning = Schema.decodeUnknownSync(
+          Schema.fromJsonString(
+            Schema.Struct({
+              level: Schema.Literal("warn"),
+              stage: Schema.Literal("compare-and-swap"),
+              code: Schema.Literal("SHARED_MEMORY_CONFLICT"),
+              requestID: Schema.String,
+              sessionID: Schema.String,
+              callID: Schema.String,
+              durationMs: Schema.Number,
+            }),
+          ),
+        )(logs.find((line) => line.includes("SHARED_MEMORY_CONFLICT")));
+        expect(warning.sessionID).toBe(first.id);
+        expect(warning.callID).toBe("stale-model-write");
+        expect(JSON.stringify(latest.messages)).toContain(warning.requestID);
+        expect(logs.join("")).not.toContain("private-");
+      } finally {
+        stderr.mockRestore();
+      }
     }),
   ));

@@ -6,10 +6,13 @@ services:
       TOKEN_MANAGEMENT: ${TOKEN_MANAGEMENT:?Set the existing management token in the protected environment}
     volumes:
       - persona-location:/srv/ren-ai:ro
-      - persona-sessions:/srv/ren-ai/sessions
+      - persona-life:/srv/ren-ai/personas
+      - persona-sandboxes:/srv/ren-ai/sandboxes
 volumes:
   persona-location:
     external: true
     name: ${REN_AI_LOCATION_VOLUME:-ren-ai-opencode-location}
-  persona-sessions:
-    name: ${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}
+  persona-life:
+    name: ${REN_AI_PERSONA_VOLUME:-ren-ai-opencode-personas}
+  persona-sandboxes:
+    name: ${REN_AI_SANDBOX_VOLUME:-ren-ai-opencode-sandboxes}

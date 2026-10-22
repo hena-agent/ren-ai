@@ -19,7 +19,7 @@ export const selectionKey = (input: Input) =>
 export const selectionChoices = (
   input: Input,
   entries: readonly Entry[],
-  available: ReadonlySet<string>,
+  available: ReadonlyMap<string, number>,
 ) =>
   Effect.gen(function* () {
     if (input.registrationIDs && input.registrationIDs.length !== input.count)
@@ -27,22 +27,21 @@ export const selectionChoices = (
         new SelectionConflict("Selection count must match selected registrations"),
       );
     const choices = new Map<string, string>();
-    const personas = new Set<string>();
+    const remaining = new Map(available);
     for (const assignment of input.assignments ?? []) {
       const row = entries.find((entry) => entry.id === assignment.registrationID);
       if (
         !input.registrationIDs?.includes(assignment.registrationID) ||
         !row?.eligible ||
-        !available.has(assignment.personaID) ||
+        !(remaining.get(assignment.personaID) ?? 0) ||
         !row.likedPersonas.some((p) => p.id === assignment.personaID) ||
-        choices.has(assignment.registrationID) ||
-        personas.has(assignment.personaID)
+        choices.has(assignment.registrationID)
       )
         return yield* Effect.fail(
           new SelectionConflict("Chosen persona is not an available Like for this waiter"),
         );
       choices.set(assignment.registrationID, assignment.personaID);
-      personas.add(assignment.personaID);
+      remaining.set(assignment.personaID, remaining.get(assignment.personaID)! - 1);
     }
     return choices;
   });
@@ -50,7 +49,7 @@ export const selectionChoices = (
 /** Reserve explicit choices first so a random allocation cannot consume their candidates. */
 export const chooseContact = (
   waiting: Entry[],
-  available: ReadonlySet<string>,
+  available: ReadonlyMap<string, number>,
   choices: ReadonlyMap<string, string>,
 ) => {
   const fixed = waiting.findIndex((row) => choices.has(row.id));

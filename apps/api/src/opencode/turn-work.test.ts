@@ -104,9 +104,10 @@ test("quota release persists a bounded restartable resume queue, fences outgoing
         const { sql, directory } = yield* setup;
         const entries = [];
         for (let i = 0; i < 8; i++) {
-          const conversation = yield* directory.create(
-            registration(`quota-${i}@example.test`, `ses_quota${i}`),
-          );
+          const conversation = yield* directory.create({
+            ...registration(`quota-${i}@example.test`, `ses_quota${i}`),
+            personaID: `persona${Math.floor(i / 5)}`,
+          });
           entries.push(conversation);
           yield* sql`INSERT INTO failed_turn(session_id, fingerprint, failures, quota, failed_at, retry_at) VALUES (${conversation.sessionID}, 'checkpoint', 1, 1, 0, 0)`;
         }

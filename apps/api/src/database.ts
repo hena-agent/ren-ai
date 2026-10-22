@@ -3,6 +3,7 @@ import { Migrator, SqlClient } from "effect/unstable/sql";
 import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
 import { usageSchema } from "./usage/schema.ts";
 import { notificationSchema } from "./discovery/notifications.ts";
+import { sharedAssignmentsSchema } from "./discovery/schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -289,6 +290,17 @@ export const migrate = Effect.gen(function* () {
         yield* sql`ALTER TABLE conversation_end RENAME COLUMN ending_initiator TO initiator`;
       }),
       "045_selection_input": sql`ALTER TABLE discovery_selection ADD COLUMN input TEXT`,
+      "046_shared_assignments": sharedAssignmentsSchema,
+      "047_replay_source": Effect.gen(function* () {
+        yield* sql`ALTER TABLE conversation ADD COLUMN replay_source_session_id TEXT`;
+        yield* sql`CREATE INDEX send_conversation_guid ON send(conversation_id, guid)`;
+      }),
+      "048_removal_scopes": Effect.gen(function* () {
+        for (const table of ["removal", "retained_session"]) {
+          yield* sql`ALTER TABLE ${sql(table)} ADD COLUMN persona_id TEXT`;
+          yield* sql`ALTER TABLE ${sql(table)} ADD COLUMN conversation_key TEXT`;
+        }
+      }),
     }),
   });
 });

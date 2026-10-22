@@ -8,7 +8,6 @@ import {
   promotedCheckpoint,
 } from "../../test/remote-host.test-helper.ts";
 import { SessionMessage } from "@opencode/schema/session-message";
-import { AbsolutePath } from "@opencode/schema";
 import { exportSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";
 
@@ -66,10 +65,11 @@ test("a settled assistant without an idle marker does not manufacture recovery w
   ));
 
 test("an active native shell can be exported before any settled history exists", () =>
-  withRemoteHost((remote, directory) =>
+  withRemoteHost((remote) =>
     Effect.gen(function* () {
-      const session = yield* remote.client.session.create({
-        location: { directory: AbsolutePath.make(directory) },
+      const session = yield* remote.createSession("persona1");
+      yield* remote.client.session.update({
+        sessionID: session.id,
         permissions: [{ action: "*", resource: "*", effect: "allow" }],
       });
       yield* Effect.forkIn(

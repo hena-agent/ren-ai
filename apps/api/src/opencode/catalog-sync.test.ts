@@ -14,7 +14,7 @@ import {
 import { unrestricted } from "../../test/host.test-helper.ts";
 
 test(
-  "an edit between startup sync and watching reaches active native sessions and the public catalog, but not retained folders",
+  "an edit between startup sync and watching reaches active and retained sessions in their shared folder",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const active = yield* host.activeSession();
@@ -22,7 +22,10 @@ test(
       const retention = yield* retainedSessions(host.remote);
       yield* retention.retainRemoved(retained.id, "retained@example.com");
       const old = yield* host.read(retained.id);
-      yield* host.write(active.id, { ...old, rules: "Rules from before the deployment." });
+      yield* host.write(active.id, {
+        ...(yield* host.read(active.id)),
+        rules: "Rules from before the deployment.",
+      });
       yield* syncFolders(
         host.remote.client,
         fixture.personaDirectory,
@@ -40,7 +43,11 @@ test(
       yield* host.refresh;
       yield* expectPrompt(host, active.id, updated.prompt);
       yield* expectProfile(host, "수아 수정");
-      expect(yield* host.read(retained.id)).toEqual(old);
+      expect(yield* host.read(retained.id)).toMatchObject({
+        persona: { prompt: updated.prompt },
+        relationship: old.relationship,
+        binding: old.binding,
+      });
       // Native location/config initialization is asynchronous even after the RPC completes.
       yield* Effect.promise(async () => {
         await expect
@@ -68,7 +75,11 @@ test(
       yield* Effect.promise(() => fixture.store.update(live));
       yield* host.refresh;
       yield* expectPrompt(host, active.id, live.prompt);
-      expect(yield* host.read(retained.id)).toEqual(old);
+      expect(yield* host.read(retained.id)).toMatchObject({
+        persona: { prompt: live.prompt },
+        relationship: old.relationship,
+        binding: old.binding,
+      });
       expect((yield* host.read(active.id)).rules).toBe(rules);
     }),
   ),

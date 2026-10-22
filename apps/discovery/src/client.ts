@@ -12,14 +12,22 @@ function path(route: string) {
 }
 
 export type DiscoveryClient = {
-  profiles: (signal: AbortSignal) => Promise<readonly PublicPersona[]>;
+  profiles: (signal: AbortSignal, reselectionToken?: string) => Promise<readonly PublicPersona[]>;
   join: (request: DiscoveryRequest) => Promise<DiscoveryAnswer>;
 };
 export class ReselectionError extends Error {}
 
 export const discoveryClient: DiscoveryClient = {
-  profiles: async (signal) => {
-    const response = await fetch(path("/discovery/personas"), { signal });
+  profiles: async (signal, reselectionToken) => {
+    const response = await (reselectionToken === undefined
+      ? fetch(path("/discovery/personas"), { signal })
+      : fetch(path("/discovery/reselection/personas"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+          body: JSON.stringify({ reselectionToken }),
+          signal,
+          cache: "no-store",
+        }));
     if (!response.ok) throw new Error("Profiles unavailable");
     return Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await response.json());
   },

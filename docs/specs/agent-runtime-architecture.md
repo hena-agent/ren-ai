@@ -1,5 +1,10 @@
 # Agent 아키텍처 · 읽는 순서
 
+> 소유권·저장·세션 수명은 [ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)이
+> 이 미래 설계보다 우선한다. State·Life memory는 공유하고 Relationship state·memory와 이력은
+> 호출 Conversation에만 허용한다. 아래 Core·`context.md`·DB는 제안된 표현이며 현재 저장 계약은
+> [상태·기억](persona-state-memory.md)을 따른다. 추가 Agent가 사적 범위를 넓힐 수 없다.
+
 [Agent lifecycle · 전체 흐름](agent-runtime-lifecycle.md) · [실행 순서와 호출 계약](agent-runtime-api-flow.md) · [원본 스펙](agent-runtime.md)
 
 이 도면들은 **장기적으로 만들 구조**다. 상자는 독립 실행 역할 또는 지속 기록이고, 화살표는 경계를 넘어 전달되는 **관찰 또는 결과**다. 중앙 실행 조정자가 한 턴의 역할을 선택하지 않는다. Persona·Life·Kizuna는 각자 새 대화·상태나 자신의 시각을 확인한다. Advisor는 유저의 호출 때만 최신 대화·상태를 읽는다. 네 Agent가 같은 프롬프트나 세션을 공유한다는 뜻은 아니다.
@@ -68,9 +73,9 @@ flowchart LR
 ```mermaid
 flowchart LR
     S["인물 설정<br/>고정된 정체성"] -->|매 실행| C["Persona에게 전달할<br/>이번 실행의 Context"]
-    ST[("개인·관계 상태<br/>Conversation 범위")] -->|최신 확정값| C
+    ST[("공유 State + 자신의 Relationship state")] -->|최신 확정값| C
 
-    subgraph FILE["Conversation별 context.md"]
+    subgraph FILE["공유 Life + 자신의 Relationship · 미래 기억 표현"]
         direction TB
         CORE["Core 기억<br/>장기 경험의 현재적 의미"]
         SHORT["단기 기억<br/>진행 중인 화제 · 약속"]
@@ -98,7 +103,7 @@ flowchart LR
 
 | 조립 단계 | Persona에게 실제로 들어가는 내용                                             | 경계                                                                                 |
 | --------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 항상      | Persona 설정, 해당 Conversation의 확정 상태, `context.md`의 Core·단기 영역   | 다른 Conversation의 관계 기억을 넣지 않는다.                                         |
+| 항상      | Persona 설정, 공유 State·Life와 자신의 Relationship state·memory             | 다른 Conversation의 관계 기억을 넣지 않는다.                                         |
 | 조건부    | 장기 DB에서 찾은 관련 경험과 **근거·시각·사실/해석 구분**                    | 검색 **전에** Persona·Conversation·인물 ID 범위를 확인한다. 결과가 없으면 빈 결과다. |
 | 이번 실행 | 아직 처리하지 않은 실제 메시지·관찰한 생활 사건·현재 시각                    | 메시지 원문과 발생 시각을 보존하고 오래된 제안을 현재 사실처럼 넣지 않는다.          |
 | 제외      | Kizuna의 목표·버린 후보, Advisor의 비공개 상담, Persona가 모르는 Life의 계획 | 확정된 사건 또는 유저가 실제로 말한 사실만 역할 경계를 넘는다.                       |

@@ -7,7 +7,11 @@ type Catalog =
   | { phase: "failed" }
   | { phase: "ready"; people: readonly PublicPersona[] };
 
-export function useCatalog(client: DiscoveryClient, initialPeople?: readonly PublicPersona[]) {
+export function useCatalog(
+  client: DiscoveryClient,
+  initialPeople?: readonly PublicPersona[],
+  reselectionToken?: string,
+) {
   const [catalog, setCatalog] = useState<Catalog>(
     initialPeople ? { phase: "ready", people: initialPeople } : { phase: "loading" },
   );
@@ -15,7 +19,7 @@ export function useCatalog(client: DiscoveryClient, initialPeople?: readonly Pub
   const load = useCallback(
     (controller: AbortController) => {
       void client
-        .profiles(controller.signal)
+        .profiles(controller.signal, reselectionToken)
         .then((people) => {
           if (!controller.signal.aborted) setCatalog({ phase: "ready", people });
           return undefined;
@@ -24,7 +28,7 @@ export function useCatalog(client: DiscoveryClient, initialPeople?: readonly Pub
           if (!controller.signal.aborted) setCatalog({ phase: "failed" });
         });
     },
-    [client],
+    [client, reselectionToken],
   );
   useEffect(() => {
     if (initialPeople) return undefined;

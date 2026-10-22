@@ -119,7 +119,13 @@ test("maintenance bounds usage checks, spaces unchanged checks and excludes repl
       const sql = yield* SqlClient.SqlClient;
       const directory = yield* conversations;
       for (let index = 0; index < 25; index++)
-        yield* directory.create(registration(`batch-${index}@example.test`, `ses_batch_${index}`));
+        yield* directory.create(
+          registration(
+            `batch-${index}@example.test`,
+            `ses_batch_${index}`,
+            `persona${Math.floor(index / 5) + 1}`,
+          ),
+        );
       const get = vi.fn<(id: Session.ID) => Effect.Effect<Session.Info>>((id) =>
         Effect.succeed(sessionInfo(id)),
       );

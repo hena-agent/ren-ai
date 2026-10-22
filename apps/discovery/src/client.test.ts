@@ -54,6 +54,27 @@ test("a later profile read requests api-app again and includes newly published p
   expect(fetcher).toHaveBeenLastCalledWith("/discovery/personas", { signal });
 });
 
+test.each(["", "invalid", "a".repeat(64)])(
+  "an unusable reselection token fails safely without falling back to the public Catalog (%s)",
+  async (reselectionToken) => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("private upstream details", { status: 400 }));
+    vi.stubGlobal("fetch", fetcher);
+    const signal = new AbortController().signal;
+    await expect(discoveryClient.profiles(signal, reselectionToken)).rejects.toThrow(
+      "Profiles unavailable",
+    );
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith("/discovery/reselection/personas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: JSON.stringify({ reselectionToken }),
+      signal,
+      cache: "no-store",
+    });
+  },
+);
+
 test("the browser client reads the catalog and validates the real registration answer", async () => {
   const fetcher = vi.fn<typeof fetch>();
   vi.stubGlobal("fetch", fetcher);

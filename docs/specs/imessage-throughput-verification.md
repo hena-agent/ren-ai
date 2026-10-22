@@ -63,7 +63,7 @@ Behavioral load regressions are included in the normal suite:
 | 1,000 Conversations                    | 20 recovery inspections per heartbeat, durable fair traversal                         |
 | Failed Handle with 100 queued messages | Another Handle progresses; pending messages survive runtime replacement               |
 | 128 stalled RPC requests               | Requests fail, capacity recovers, and sends are not replayed                          |
-| 1,000 waitlist registrations           | Selection uses one catalog fetch and exclusive persona reservations                   |
+| 1,000 waitlist registrations           | One Catalog fetch; atomic reservations capped at five/persona and one/handle          |
 | 10,000 tracked IPs                     | Admission memory is bounded and expired entries release capacity                      |
 
 Existing reset, replay, ordering, uncertain-send, delivery, and protocol tests also

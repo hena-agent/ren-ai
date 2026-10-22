@@ -12,7 +12,7 @@ export const ConversationRecovery = Schema.Struct({
   requestId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/)),
   action: Schema.Literals(["stop", "farewell", "notice"]),
 });
-const conversationKey = Schema.String.check(Schema.isPattern(/^[0-9a-f]{32}$/));
+const conversationKey = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,128}$/));
 export const ConversationEnding = Schema.Struct({
   id,
   key: conversationKey,

@@ -1,8 +1,12 @@
 import { Effect } from "effect";
+import { join } from "node:path";
 import { SqlClient } from "effect/unstable/sql";
 import { Session } from "@opencode/schema/session";
+import { readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { readSessionBinding } from "@ren-ai/plugin-session-folder/bindings";
 import { expect, test } from "vitest";
 import { registration } from "../../test/messaging.test-helper.ts";
+import { emptyMemory, restoreMemory } from "../../test/memory.test-helper.ts";
 import { resetFixture, bindTestHandle, startTestHandle } from "../../test/reset.test-helper.ts";
 
 test("a test handle ends the relationship and reselects without copying its preserved history", async () => {
@@ -15,8 +19,31 @@ test("a test handle ends the relationship and reselects without copying its pres
         const at = Date.now();
         yield* fake.text(handle, "My secret is marmalade", at);
         yield* host.sessions.wait(old.id);
+        const root = old.location.directory;
+        const binding = yield* Effect.promise(() => readSessionBinding(root, old.id));
+        const relationship = join(root, "conversations", binding.conversationKey);
+        const life = {
+          ...emptyMemory,
+          state: { mood: 77, energy: 50, stress: 50, connection: 50, solitude: 50 },
+          shortTerm: "Her life continues",
+        };
+        const privateMemory = {
+          ...emptyMemory,
+          state: { affection: 83 },
+          shortTerm: "Private marmalade memory",
+        };
+        yield* Effect.promise(async () => {
+          await restoreMemory(root, life);
+          await restoreMemory(relationship, privateMemory);
+        });
         const command = yield* fake.text(handle, " /Reset \n", at + 1);
         yield* startTestHandle(host, fake.messages, handle);
+        expect(yield* Effect.promise(() => readRuntime(root))).toEqual(life);
+        expect(yield* Effect.promise(() => readRuntime(relationship))).toEqual(privateMemory);
+        expect(yield* Effect.promise(() => readSessionBinding(root, old.id))).toMatchObject({
+          ...binding,
+          writable: false,
+        });
         const sql = yield* SqlClient.SqlClient;
         expect(yield* sql`SELECT state FROM discovery_notification`).toEqual([{ state: "queued" }]);
         const fresh = (yield* host.conversations.byHandle(handle))!;
@@ -77,11 +104,11 @@ test("only a complete command from a marked, active User resets and unrelated ha
       Effect.gen(function* () {
         const host = yield* start;
         const old = yield* host.createSession("persona1");
-        const other = yield* host.createSession("persona2");
+        const other = yield* host.createSession("persona1");
         yield* host.conversations.create(registration(handle, old.id));
         yield* host.conversations.create({
           ...registration("other@example.com", other.id),
-          personaID: "persona2",
+          personaID: "persona1",
         });
         yield* fake.text(handle, "/reset", Date.now());
         expect((yield* host.conversations.byHandle(handle))!.sessionID).toBe(old.id);

@@ -25,8 +25,8 @@ export const sessionFolderPlugin = (root: string) =>
         const prepare = <A, E>(work: Effect.Effect<A, E>) =>
           synchronize.pipe(Effect.andThen(locked(work)));
         const registration = yield* ctx.rpc.register(sessionFolders, {
-          create: ({ folderID, snapshot, model }, call) =>
-            prepare(lifecycle.create(folderID, snapshot, model)).pipe(
+          create: ({ folderID, snapshot, model, conversationKey, writable }, call) =>
+            prepare(lifecycle.create(folderID, snapshot, model, conversationKey, writable)).pipe(
               Effect.mapError((error) =>
                 call.error("failed", "Cannot create persona session", String(error)),
               ),
@@ -61,6 +61,38 @@ export const sessionFolderPlugin = (root: string) =>
               Effect.as(null),
               Effect.mapError((error) =>
                 call.error("failed", "Cannot remove session folder", String(error)),
+              ),
+            ),
+          writable: ({ folderID, writable }, call) =>
+            locked(io(() => files.writable(folderID, writable))).pipe(
+              Effect.as(null),
+              Effect.mapError((error) =>
+                call.error("failed", "Cannot change session write access", String(error)),
+              ),
+            ),
+          removeRelationship: ({ personaID, conversationKey }, call) =>
+            locked(io(() => files.removeRelationship(personaID, conversationKey))).pipe(
+              Effect.as(null),
+              Effect.mapError((error) =>
+                call.error("failed", "Cannot remove Relationship scope", String(error)),
+              ),
+            ),
+          snapshot: ({ folderID }, call) =>
+            locked(io(() => files.snapshot(folderID))).pipe(
+              Effect.mapError((error) =>
+                call.error("failed", "Cannot snapshot persona folder", String(error)),
+              ),
+            ),
+          inventory: (_, call) =>
+            prepare(io(() => files.inventory())).pipe(
+              Effect.mapError((error) =>
+                call.error("failed", "Cannot inventory persona scopes", String(error)),
+              ),
+            ),
+          restore: ({ snapshot }, call) =>
+            prepare(io(() => files.restore(snapshot))).pipe(
+              Effect.mapError((error) =>
+                call.error("failed", "Cannot restore persona folder", String(error)),
               ),
             ),
         });

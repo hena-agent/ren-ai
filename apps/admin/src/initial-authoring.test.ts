@@ -125,7 +125,10 @@ test("AI proposes starting affection and an operator can edit and save it withou
   const generated = await setup.admin(request(path, { ...submitted, intent: "state" }));
   expect(generated.status).toBe(200);
   const page = await generated.text();
-  expect(page).toContain("출발 호감도");
+  expect(page).toContain("공유 State는 첫 대화에서 한 번 초기화합니다.");
+  expect(page).toContain(
+    "새 대화의 출발 affection과 Discovery의 공개 초기 언어 실력에만 반영합니다.",
+  );
   const draft = draftTokens("test-password").decode(tokenOf(page));
   const documents = documentsOf(draft);
   expect(parseInitialState(documents.state).affection).toBe(27);

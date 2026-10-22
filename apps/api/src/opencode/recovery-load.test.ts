@@ -15,7 +15,9 @@ test("recovery has a bounded fair inspection budget that survives runtime replac
       const directory = yield* conversations;
       const all = vi.spyOn(directory, "all");
       for (let i = 0; i < 1000; i++)
-        yield* directory.create(registration(`user-${i}@example.com`, `ses_${i}`));
+        yield* directory.create(
+          registration(`user-${i}@example.com`, `ses_${i}`, `persona${Math.floor(i / 5) + 1}`),
+        );
       const inspected: string[] = [];
       const host = fromPartial<PersonaRuntime>({
         sessions: {

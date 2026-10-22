@@ -21,7 +21,9 @@ import { remotePersonaPlugins } from "../test/persona-plugins.test-helper.ts";
 import { listenerUrl } from "../test/listener.test-helper.ts";
 import { executionState, executionWorker } from "../test/execution-worker.ts";
 import type { Miniflare } from "miniflare";
-import { parseInitialState } from "@ren-ai/personas";
+import { locateBinding, readSessionBinding } from "@ren-ai/plugin-session-folder/bindings";
+import { readState } from "../../../packages/plugins/session-folder/src/memory-markdown.ts";
+import { emptyMemory, restoreMemory } from "../test/memory.test-helper.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import { applicationApi } from "./opencode/application-protocol.ts";
 import { FetchHttpClient } from "effect/unstable/http";
@@ -234,12 +236,34 @@ test.each(["sent", "uncertain"] as const)(
                 );
                 expect(context.sends).toEqual([]);
               }
-              const session = join(personaDirectory, "sessions", creates[0]!);
+              const located = (await locateBinding(personaDirectory, creates[0]!))!;
+              expect(located).toMatchObject({ personaID: "persona1", sandbox: false });
+              const session = located.directory;
+              const binding = await readSessionBinding(session, creates[0]!);
+              expect(binding.conversationKey).toBe(located.conversationKey);
+              const relationship = join(session, "conversations", binding.conversationKey);
               const files = async () => ({
                 state: await readFile(join(session, "STATE.md"), "utf8"),
                 memory: await readFile(join(session, "MEMORY.md"), "utf8"),
+                relationshipState: await readFile(join(relationship, "STATE.md"), "utf8"),
+                relationshipMemory: await readFile(join(relationship, "MEMORY.md"), "utf8"),
+              });
+              const initialized = await files();
+              expect(readState(initialized.state).state).toMatchObject({ mood: 50 });
+              expect(readState(initialized.state).state).not.toHaveProperty("affection");
+              expect(initialized.memory).toContain("initial Memory");
+              expect(readState(initialized.relationshipState).state).toEqual({ affection: 50 });
+              expect(initialized.relationshipMemory.trim()).toBe("");
+              await restoreMemory(relationship, {
+                ...emptyMemory,
+                state: { affection: 73 },
+                shortTerm: "This user prefers evening messages.",
               });
               const initial = await files();
+              expect(readState(initial.relationshipState).state).toEqual({ affection: 73 });
+              expect(initial.relationshipMemory).toContain("This user prefers evening messages.");
+              expect(initial.memory).toBe(initialized.memory);
+              expect(initial.state).toBe(initialized.state);
               const languageUrl = `https://app/operator/languages?registrationID=${selection.entries[0]!.id}`;
               expect((await runtime.dispatchFetch(languageUrl)).status).toBe(401);
               const languageResponse = await runtime.dispatchFetch(languageUrl, {
@@ -247,8 +271,6 @@ test.each(["sent", "uncertain"] as const)(
               });
               expect(languageResponse.status).toBe(200);
               expect(await languageResponse.json()).toEqual({});
-              expect(parseInitialState(initial.state).mood).toBe(50);
-              expect(initial.memory).toContain("initial Memory");
               await executionState(runtime, "/__fixture/catalog");
               const idle = await executionState(runtime, "/__fixture/alarm");
               expect(idle.catalogReads).toBe(state.catalogReads);
@@ -268,6 +290,7 @@ test.each(["sent", "uncertain"] as const)(
               );
               await executionState(runtime, "/__fixture/alarm");
               expect((await executionState(runtime)).conversations).toEqual(state.conversations);
+              expect((await executionState(runtime)).sends).toEqual(state.sends);
               expect((await executionState(runtime)).catalogReads).toBe(0);
               expect(creates).toHaveLength(1);
               expect(attempts).toBe(1);

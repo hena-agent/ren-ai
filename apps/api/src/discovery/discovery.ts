@@ -13,11 +13,12 @@ import {
   DiscoveryAnswer,
   DiscoveryRequest,
   PublicPersona,
+  ReselectionRequest,
   discoveryNotice,
 } from "@ren-ai/onboarding";
 import { submissionLimit, verificationLimit } from "./rate-limit.ts";
 import { verifyTurnstile } from "./turnstile.ts";
-import { reselect, withoutEndedPersonas } from "./reselection.ts";
+import { reselect, reselectionAuthorization, withoutEndedPersonas } from "./reselection.ts";
 import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
 import { queueWaitlistNotification } from "./notifications.ts";
 import { publicCatalog } from "../personas/public-catalog.ts";
@@ -38,6 +39,13 @@ const discoveryApi = HttpApi.make(namespace).add(
   HttpApiGroup.make("discovery")
     .add(
       HttpApiEndpoint.get("personas", `${namespace}/personas`, {
+        success: Schema.Array(PublicPersona),
+        error: failures,
+      }),
+    )
+    .add(
+      HttpApiEndpoint.post("reselectionPersonas", `${namespace}/reselection/personas`, {
+        payload: ReselectionRequest,
         success: Schema.Array(PublicPersona),
         error: failures,
       }),
@@ -94,7 +102,6 @@ export const makeDiscoveryWeb = ({
             })
           : cached.read(requestId);
         return yield* source.pipe(
-          Effect.flatMap(withoutEndedPersonas),
           Effect.tapError((cause) =>
             Effect.sync(() =>
               log({
@@ -137,10 +144,17 @@ export const makeDiscoveryWeb = ({
           )
         )
           return yield* Effect.fail("try_later" as const);
-        const available = new Set((yield* profiles(requestId, true)).map((persona) => persona.id));
+        const publicProfiles = yield* profiles(requestId, true);
+        const available = new Set(publicProfiles.map((persona) => persona.id));
         if (!input.likedPersonaIDs.every((id) => available.has(id)))
           return yield* Effect.fail("personas" as const);
         return yield* Effect.gen(function* () {
+          const eligible = yield* withoutEndedPersonas(publicProfiles, input.handle).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
+          const eligibleIDs = new Set(eligible.map((persona) => persona.id));
+          if (!input.likedPersonaIDs.every((id) => eligibleIDs.has(id)))
+            return yield* Effect.fail("personas" as const);
           const blocked = yield* sql`SELECT handle FROM blocked WHERE handle = ${input.handle}
         UNION SELECT handle FROM removal WHERE handle = ${input.handle}`;
           if (blocked.length) return yield* Effect.fail("unavailable" as const);
@@ -191,12 +205,57 @@ export const makeDiscoveryWeb = ({
           Effect.mapError((error) => (typeof error === "string" ? error : ("storage" as const))),
         );
       });
+    const authorizeAttempt = Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const now = yield* Clock.currentTimeMillis;
+      const requestId = operationID(request.headers["x-operation-id"]);
+      if (
+        yield* checkedLimit(
+          limit(request.headers["cf-connecting-ip"], now),
+          requestId,
+          "registration.limit",
+        )
+      )
+        return yield* Effect.fail("try_later" as const);
+      return requestId;
+    });
     const handlers = HttpApiBuilder.group(discoveryApi, "discovery", (group) =>
       group
         .handle("personas", () =>
           Effect.gen(function* () {
             const request = yield* HttpServerRequest.HttpServerRequest;
             return yield* profiles(operationID(request.headers["x-operation-id"]));
+          }),
+        )
+        .handle("reselectionPersonas", ({ payload }) =>
+          Effect.gen(function* () {
+            const requestId = yield* authorizeAttempt;
+            return yield* Effect.gen(function* () {
+              const ending = yield* reselectionAuthorization(payload.reselectionToken);
+              if (ending.consumedAt !== null) return yield* Effect.fail("reselection" as const);
+              return yield* withoutEndedPersonas(yield* profiles(requestId, true), ending.handle);
+            }).pipe(
+              Effect.tapError((cause) =>
+                Effect.sync(
+                  () =>
+                    cause !== "storage" &&
+                    log({
+                      requestId,
+                      operation: "discovery.reselection",
+                      stage: "catalog.authorize",
+                      code: typeof cause === "string" ? cause : "storage",
+                      level: typeof cause === "string" ? "warn" : "error",
+                      outcome: "failed",
+                      durationMs: 0,
+                      ...(typeof cause !== "string" && contactCause(cause)),
+                    }),
+                ),
+              ),
+              Effect.mapError((error) =>
+                typeof error === "string" ? error : ("storage" as const),
+              ),
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
           }),
         )
         .handle("join", ({ payload }) =>
@@ -231,7 +290,12 @@ export const makeDiscoveryWeb = ({
     return {
       ...web,
       handler: async (...args: Parameters<typeof web.handler>) => {
+        const headers = new Headers(args[0].headers);
+        const requestId = operationID(headers.get("x-operation-id") ?? undefined);
+        headers.set("x-operation-id", requestId);
+        args[0] = new Request(args[0], { headers });
         const response = await web.handler(...args);
+        response.headers.set("X-Request-ID", requestId);
         const cacheable =
           args[0].method === "GET" &&
           new URL(args[0].url).pathname === "/discovery/personas" &&

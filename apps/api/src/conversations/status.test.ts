@@ -23,7 +23,7 @@ test("operator records expose bounded searchable User–Persona–Session bindin
           locale: "ko",
           consentVersion: "v1",
           consentLanguage: "ko",
-          personaID: "harin",
+          personaID: `persona${Math.floor(index / 5) + 1}`,
           sessionID: `ses_${index}`,
         });
       const usage = yield* usageQueries;
@@ -66,8 +66,8 @@ test("operator records expose bounded searchable User–Persona–Session bindin
       );
       expect(matched.entries[0]).toMatchObject({
         handle: "user-25@example.com",
-        personaID: "harin",
-        personaName: "harin",
+        personaID: "persona6",
+        personaName: "persona6",
         sessionID: "ses_25",
       });
       const detail = yield* request(`/management/conversations/${f.conversation.id}`);

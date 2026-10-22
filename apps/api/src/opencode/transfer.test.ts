@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect";
+import { rm } from "node:fs/promises";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
 import { withRemoteHost, replaceCheckpoint } from "../../test/remote-host.test-helper.ts";
@@ -54,6 +55,8 @@ test("a promoted input with an unfinished assistant resumes after migration", ()
       yield* gate.release;
       yield* remote.sessions.wait(session.id);
       yield* remote.sessions.remove(session.id);
+      // Model observation may advance after the export; restore into an empty destination.
+      yield* Effect.promise(() => rm(session.location.directory, { recursive: true }));
       yield* restoreSessions(remote.client, contents, directory);
       expect(yield* remote.sessions.inbox(session.id)).toHaveLength(1);
       yield* llm.serve(() => TestLLM.text("recovered in-flight work", "answer"));
@@ -148,7 +151,7 @@ test("duplicate sessions and pending control work are rejected before changing t
         yield* exportSessions(remote.client, [session.id]),
       );
       const entry = archive.sessions[0]!;
-      const duplicate = Schema.encodeSync(sessionArchive)({ version: 1, sessions: [entry, entry] });
+      const duplicate = Schema.encodeSync(sessionArchive)({ ...archive, sessions: [entry, entry] });
       expect(
         (yield* restoreSessions(remote.client, duplicate, directory).pipe(Effect.flip)).message,
       ).toContain("Duplicate session in archive");
@@ -159,7 +162,7 @@ test("duplicate sessions and pending control work are rejected before changing t
       };
       yield* remote.sessions.remove(session.id);
       const pendingControl = Schema.encodeSync(sessionArchive)({
-        version: 1,
+        ...archive,
         sessions: [{ ...entry, pending: [control] }],
       });
       expect(

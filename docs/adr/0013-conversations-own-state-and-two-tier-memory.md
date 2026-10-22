@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0023
 ---
 
 # Conversations own current State and two-tier Memory

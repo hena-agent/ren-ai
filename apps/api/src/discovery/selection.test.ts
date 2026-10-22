@@ -10,6 +10,10 @@ test("explicit Like assignments are reserved before random choices and retry tar
   withContactDatabase(
     Effect.gen(function* () {
       const f = yield* contactFixture;
+      for (let index = 0; index < 4; index++) {
+        yield* f.sql`INSERT INTO persona_assignment VALUES ('luna', ${`luna${index}@example.net`})`;
+        yield* f.sql`INSERT INTO persona_assignment VALUES ('harin', ${`harin${index}@example.net`})`;
+      }
       const random = yield* f.register("random@example.net", ["luna", "harin"]);
       const fixed = yield* f.register("fixed@example.net", ["luna", "harin"]);
       const input = {
@@ -44,7 +48,7 @@ test("explicit Like assignments are reserved before random choices and retry tar
     }),
   ));
 
-test("designated candidates must be distinct, eligible, selected, published, unassigned Likes", () =>
+test("designated candidates must be eligible, selected, published Likes with remaining capacity", () =>
   withContactDatabase(
     Effect.gen(function* () {
       const f = yield* contactFixture;
@@ -62,10 +66,6 @@ test("designated candidates must be distinct, eligible, selected, published, una
         [
           { registrationID: first, personaID: "luna" },
           { registrationID: first, personaID: "harin" },
-        ],
-        [
-          { registrationID: first, personaID: "luna" },
-          { registrationID: second, personaID: "luna" },
         ],
       ])
         expect(
@@ -101,7 +101,8 @@ test("designated candidates must be distinct, eligible, selected, published, una
           ),
         ),
       ).toBe(true);
-      yield* f.sql`INSERT INTO persona_assignment VALUES ('luna', 'already@example.net')`;
+      for (let index = 0; index < 5; index++)
+        yield* f.sql`INSERT INTO persona_assignment VALUES ('luna', ${`already${index}@example.net`})`;
       const listing = yield* f.store.list;
       expect(listing.entries.find((row) => row.id === first)?.assignablePersonas).toEqual([
         { id: "harin", name: "harin" },
@@ -121,7 +122,7 @@ test("designated candidates must be distinct, eligible, selected, published, una
       yield* f.sql`DELETE FROM persona_assignment`;
       const assignments = [
         { registrationID: first, personaID: "luna" },
-        { registrationID: second, personaID: "harin" },
+        { registrationID: second, personaID: "luna" },
       ];
       const input = {
         requestId: randomUUID(),
@@ -131,6 +132,7 @@ test("designated candidates must be distinct, eligible, selected, published, una
       };
       const selected = yield* f.store.select(input, "two-fixed");
       expect(selected.entries).toHaveLength(2);
+      expect(selected.entries.every((row) => row.persona?.id === "luna")).toBe(true);
       expect(
         yield* f.store.select({ ...input, assignments: assignments.toReversed() }, "retry"),
       ).toEqual(selected);
@@ -142,6 +144,8 @@ test("a racing explicit claim rolls back the entire selection and its retry iden
     Effect.gen(function* () {
       const f = yield* contactFixture;
       const id = yield* f.register("one@example.net", ["luna"]);
+      for (let index = 0; index < 4; index++)
+        yield* f.sql`INSERT INTO persona_assignment VALUES ('luna', ${`already${index}@example.net`})`;
       yield* f.sql`CREATE TRIGGER concurrent_assignment AFTER INSERT ON discovery_selection
       BEGIN INSERT INTO persona_assignment VALUES ('luna', 'winner@example.net'); END`;
       const input = {
@@ -152,9 +156,93 @@ test("a racing explicit claim rolls back the entire selection and its retry iden
       };
       expect(Result.isFailure(yield* Effect.result(f.store.select(input, "racing")))).toBe(true);
       expect(yield* f.sql`SELECT 1 FROM discovery_selection`).toEqual([]);
-      expect(yield* f.sql`SELECT 1 FROM persona_assignment`).toEqual([]);
+      expect(yield* f.sql`SELECT 1 FROM persona_assignment`).toHaveLength(4);
       yield* f.sql`DROP TRIGGER concurrent_assignment`;
       expect((yield* f.store.select(input, "retry")).entries[0]?.persona?.id).toBe("luna");
+    }),
+  ));
+
+test.each(["scheduled", "review", "failed"])(
+  "%s reservations count toward explicit-choice capacity and cannot be reassigned",
+  (state) =>
+    withContactDatabase(
+      Effect.gen(function* () {
+        const f = yield* contactFixture;
+        for (let index = 0; index < 4; index++) yield* f.register(`reserved${index}@example.net`);
+        const reserved = yield* f.store.select({ requestId: randomUUID(), count: 4 }, "reserve");
+        yield* f.sql`UPDATE discovery_contact SET state = ${state}`;
+        const first = yield* f.register("first@example.net", ["luna", "harin"]);
+        const second = yield* f.register("second@example.net", ["luna", "harin"]);
+        const input = {
+          requestId: randomUUID(),
+          count: 2,
+          registrationIDs: [first, second],
+          assignments: [
+            { registrationID: first, personaID: "luna" },
+            { registrationID: second, personaID: "luna" },
+          ],
+        };
+        expect(Result.isFailure(yield* Effect.result(f.store.select(input, "over-capacity")))).toBe(
+          true,
+        );
+        const held = reserved.entries[0]!;
+        expect(
+          Result.isFailure(
+            yield* Effect.result(
+              f.store.select(
+                {
+                  requestId: randomUUID(),
+                  count: 1,
+                  registrationIDs: [held.id],
+                  assignments: [{ registrationID: held.id, personaID: "luna" }],
+                },
+                "already-reserved",
+              ),
+            ),
+          ),
+        ).toBe(true);
+        expect(yield* f.sql`SELECT 1 FROM discovery_selection`).toHaveLength(1);
+        expect(yield* f.sql`SELECT 1 FROM persona_assignment`).toHaveLength(4);
+        const selected = yield* f.store.select(
+          { ...input, assignments: [{ registrationID: first, personaID: "luna" }] },
+          "last-slot",
+        );
+        expect(selected.entries.find((row) => row.id === first)?.persona?.id).toBe("luna");
+        expect(selected.entries.find((row) => row.id === second)?.persona?.id).toBe("harin");
+        expect(
+          yield* f.sql`SELECT 1 FROM persona_assignment WHERE persona_id = 'luna'`,
+        ).toHaveLength(5);
+      }),
+    ),
+);
+
+test("a permanent relationship exclusion rejects only that handle's explicit choice", () =>
+  withContactDatabase(
+    Effect.gen(function* () {
+      const f = yield* contactFixture;
+      const ended = yield* f.register("ended@example.net", ["luna", "harin"]);
+      const other = yield* f.register("other@example.net", ["luna"]);
+      yield* f.sql`INSERT INTO persona_exclusion VALUES ('ended@example.net', 'luna')`;
+      const input = {
+        requestId: randomUUID(),
+        count: 2,
+        registrationIDs: [ended, other],
+        assignments: [
+          { registrationID: ended, personaID: "luna" },
+          { registrationID: other, personaID: "luna" },
+        ],
+      };
+      expect(Result.isFailure(yield* Effect.result(f.store.select(input, "excluded")))).toBe(true);
+      expect(yield* f.sql`SELECT 1 FROM persona_assignment`).toEqual([]);
+      expect(
+        (yield* f.store.list).entries.find((row) => row.id === ended)?.assignablePersonas,
+      ).toEqual([{ id: "harin", name: "harin" }]);
+      const selected = yield* f.store.select(
+        { ...input, assignments: [{ registrationID: other, personaID: "luna" }] },
+        "per-handle",
+      );
+      expect(selected.entries.find((row) => row.id === ended)?.persona?.id).toBe("harin");
+      expect(selected.entries.find((row) => row.id === other)?.persona?.id).toBe("luna");
     }),
   ));
 

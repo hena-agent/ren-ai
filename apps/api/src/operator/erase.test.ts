@@ -29,6 +29,9 @@ test("removal erases pending text, edits and recovery metadata before unavailabl
         yield* sql`INSERT INTO catalog_plan VALUES (${conversation.sessionID}, 'version', 'persona1')`;
         yield* sql`INSERT INTO application_checkpoint VALUES (${`replay:${conversation.sessionID}`}, 'private')`;
         yield* sql`INSERT INTO application_work(name, due) VALUES (${`turn:${conversation.sessionID}`}, 0)`;
+        yield* sql`INSERT INTO usage_turn(id, session_id, started_at) VALUES (${conversation.sessionID}, ${conversation.sessionID}, 0)`;
+        yield* sql`INSERT INTO usage_entry(id, session_id, source, started_at, outcome, error_type)
+          VALUES (${conversation.sessionID}, ${conversation.sessionID}, 'message', 0, 'failed', 'private upstream error')`;
       }
       yield* sql`INSERT INTO notification_attempt(at) VALUES (0)`;
       yield* directory.replaceSession(own, "ses_replaced");
@@ -41,11 +44,19 @@ test("removal erases pending text, edits and recovery metadata before unavailabl
         "failed_turn",
         "catalog_plan",
         "usage_session",
+        "usage_turn",
+        "usage_entry",
       ])
         expect(yield* sql`SELECT session_id FROM ${sql(table)}`).toEqual([
           { session_id: sibling.sessionID },
         ]);
       expect(yield* sql`SELECT handle FROM intake_pending`).toEqual([{ handle: sibling.handle }]);
+      expect(
+        yield* sql`SELECT session_id, persona_id, conversation_key FROM removal ORDER BY session_id`,
+      ).toEqual([
+        { session_id: own.sessionID, persona_id: own.personaID, conversation_key: own.sessionID },
+        { session_id: "ses_replaced", persona_id: own.personaID, conversation_key: own.sessionID },
+      ]);
       expect(yield* sql`SELECT name FROM application_checkpoint`).toEqual([
         { name: `replay:${sibling.sessionID}` },
       ]);

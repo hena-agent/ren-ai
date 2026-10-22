@@ -2,6 +2,11 @@
 
 인물 모델: [Persona Engine](persona-engine.md). MVP에서는 이 엔진을 먼저 검증한 뒤 채널과 이미지를 연결한다.
 
+아래는 Persona Lab의 실험용 엔진 계약이다. 제품 OpenCode 런타임의 소유권·수명은
+[ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)을 따른다.
+제품의 State·Life memory는 인물 공통이며 Relationship 범위는 각 Conversation 전용이다.
+운영자 native 세션·fork 실험은 복사본을 쓰는 Sandbox에서 수행한다.
+
 ## 작업 목록
 
 - [x] `packages/persona-engine`에 빌드 없는 JIT 패키지(`@ren-ai/persona-engine`)를 만든다. 웹·저장소·특정 모델 공급자에 의존하지 않는다.

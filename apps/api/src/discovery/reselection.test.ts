@@ -11,6 +11,7 @@ import { contactFixture, withContactDatabase } from "./contact.test-helper.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
 import { firstContacts } from "./first-contact.ts";
 import { checkAvailability } from "./availability.ts";
+import { reselect } from "./reselection.ts";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { Session } from "@opencode/schema/session";
 import { SessionInbox } from "@opencode/schema/session-inbox";
@@ -109,6 +110,19 @@ test.each(["persona", "operator"])(
             400,
           );
           expect(
+            yield* reselect({
+              handle: "+821098765432",
+              locale: "ko",
+              privacyNoticeVersion: discoveryNotice.version,
+              likedPersonaIDs: ["harin"],
+              turnstileToken: "human",
+              reselectionToken: token,
+            }).pipe(Effect.flip),
+          ).toBe("reselection");
+          expect(
+            yield* f.sql`SELECT 1 FROM discovery_registration WHERE handle = '+821098765432'`,
+          ).toEqual([]);
+          expect(
             (yield* submit({ likedPersonaIDs: ["luna"], reselectionToken: token })).status,
           ).toBe(400);
           yield* f.sql`CREATE TRIGGER fail_reselection BEFORE INSERT ON discovery_like BEGIN SELECT RAISE(ABORT, 'private mutation payload'); END`;
@@ -189,9 +203,12 @@ test.each(["persona", "operator"])(
           const next = (yield* app.directory.byHandle(previous.handle))!;
           expect(next.personaID).toBe("harin");
           expect(next.sessionID).toBe("ses_new");
-          expect(yield* f.sql`SELECT joined_at, consent_version FROM user`).toEqual([
-            { joined_at: 10, consent_version: "v1" },
+          expect(yield* f.sql`SELECT joined_at, replied_at, consent_version FROM user`).toEqual([
+            { joined_at: 10, replied_at: 20, consent_version: "v1" },
           ]);
+          expect(
+            yield* f.sql`SELECT first_received_at FROM conversation WHERE id = ${next.id}`,
+          ).toEqual([{ first_received_at: null }]);
           expect(
             yield* f.sql`SELECT first_received_at FROM conversation WHERE id = ${previous.id}`,
           ).toEqual([{ first_received_at: 20 }]);
@@ -226,10 +243,23 @@ test.each(["persona", "operator"])(
           const catalog = yield* Effect.promise(() =>
             web.handler(new Request("https://api.test/discovery/personas"), verified),
           );
-          expect(yield* Effect.promise(() => catalog.json())).toEqual([f.profiles[2]]);
+          expect(yield* Effect.promise(() => catalog.json())).toEqual(f.profiles);
           const latestToken = new URL(fake.bubbles.at(-1)!.text.split("\n").at(-1)!).hash.slice(
             "#reselect=".length,
           );
+          const privateCatalog = yield* Effect.promise(() =>
+            web.handler(
+              new Request("https://api.test/discovery/reselection/personas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reselectionToken: latestToken }),
+              }),
+              verified,
+            ),
+          );
+          expect(privateCatalog.status).toBe(200);
+          expect(privateCatalog.headers.get("Cache-Control")).toBe("no-store");
+          expect(yield* Effect.promise(() => privateCatalog.json())).toEqual([f.profiles[2]]);
           expect(
             (yield* submit({ reselectionToken: latestToken, likedPersonaIDs: ["jiwoo"] })).status,
           ).toBe(200);

@@ -5,7 +5,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { decodePersona, type PersonaRecord } from "@ren-ai/personas";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
-import { managedFolder, sessionDirectory } from "@ren-ai/plugin-session-folder/paths";
+import { managedFolder, personaDirectory } from "@ren-ai/plugin-session-folder/paths";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { awaitPersonaAgent } from "./agent-readiness.ts";
 import { randomUUID } from "node:crypto";
@@ -82,7 +82,7 @@ const applyPersona = Effect.fn("applyPersona")(function* (
   yield* client
     .rpc(sessionFolders)
     .update({ folderID, snapshot }, { location: { directory: root } });
-  yield* awaitPersonaAgent(client.agent, sessionDirectory(root, folderID), persona);
+  yield* awaitPersonaAgent(client.agent, personaDirectory(root, persona.id), persona);
   contactLog({
     requestId,
     level: "info",
@@ -110,6 +110,7 @@ const synchronize = Effect.fn("synchronize")(function* (
   const key = createHash("sha256")
     .update(JSON.stringify([root, groundRules, catalog?.revision ?? [...personas]]))
     .digest("hex");
+  const prefix = `${key}:`;
   const [saved] = yield* sql<{
     payload: string;
   }>`SELECT payload FROM application_checkpoint WHERE name = 'catalog.sync'`;
@@ -126,17 +127,17 @@ const synchronize = Effect.fn("synchronize")(function* (
     yield* save();
     return yield* Effect.fail(new DeferredWork());
   });
-  const frozen = (id: string) =>
-    sql`SELECT 1 FROM retained_session WHERE session_id = ${id} UNION SELECT 1 FROM removal WHERE session_id = ${id}
-      UNION SELECT 1 FROM conversation WHERE session_id = ${id} AND ended_at IS NOT NULL`;
   const resolve = (id: string, personaID: string) =>
     Effect.gen(function* () {
       const missing = !personas.has(personaID);
       const persona = yield* resolvePersona(client, root, id, personaID, personas);
       if (missing && catalog)
         yield* sql`UPDATE runtime_catalog SET payload = ${JSON.stringify([...personas.values()])} WHERE id = 1 AND revision = ${catalog.revision}`;
-      if (!missing && !(yield* frozen(id)).length)
-        yield* sql`INSERT INTO catalog_plan(session_id, fingerprint, persona_id) VALUES (${id}, ${key}, ${persona.id})
+      if (!missing)
+        // One indexed plan per shared root, including across checkpoint resumption.
+        yield* sql`INSERT INTO catalog_plan(session_id, fingerprint, persona_id)
+      SELECT ${id}, ${prefix + persona.id}, ${persona.id}
+      WHERE NOT EXISTS (SELECT 1 FROM catalog_plan WHERE fingerprint = ${prefix + persona.id})
       ON CONFLICT(session_id) DO UPDATE SET fingerprint = excluded.fingerprint, persona_id = excluded.persona_id
       WHERE fingerprint != excluded.fingerprint OR persona_id != excluded.persona_id`;
     });
@@ -156,7 +157,7 @@ const synchronize = Effect.fn("synchronize")(function* (
           .get({ sessionID: Session.ID.make(row.session_id) })
           .pipe(Effect.catchTag("SessionNotFoundError", () => Effect.succeed(undefined)));
         if (session) {
-          if (session.location.directory !== sessionDirectory(root, row.session_id))
+          if (session.location.directory !== personaDirectory(root, row.persona_id))
             return yield* Effect.fail(
               new Error("Migrate existing sessions to folders before starting intake"),
             );
@@ -184,20 +185,16 @@ const synchronize = Effect.fn("synchronize")(function* (
         yield* check;
         let session = page.data[index]!;
         const source = managedFolder(root, session.location.directory);
-        const [bound] = yield* sql<{
-          persona_id: string;
-        }>`SELECT persona_id FROM conversation WHERE session_id = ${session.id}`;
-        if (source && !(yield* frozen(session.id)).length) {
-          if (source !== session.id) {
-            yield* folders.ensure({ folderID: session.id }, location);
-            session = yield* client.session.get({ sessionID: session.id });
-          }
-          const personaID = bound?.persona_id ?? session.agent;
+        if (source) {
+          yield* folders.ensure({ folderID: session.id }, location);
+          session = yield* client.session.get({ sessionID: session.id });
+          const personaID = session.agent;
           if (!personaID)
             return yield* Effect.fail(
               new Error(`Managed session ${session.id} has no catalog persona`),
             );
-          yield* resolve(session.id, personaID);
+          if (session.location.directory === personaDirectory(root, personaID))
+            yield* resolve(session.id, personaID);
         }
         progress = { ...progress, offset: index + 1 };
       }
@@ -220,8 +217,10 @@ const synchronize = Effect.fn("synchronize")(function* (
       const plans = yield* sql<{
         session_id: string;
         persona_id: string;
-      }>`SELECT session_id, persona_id FROM catalog_plan
-        WHERE fingerprint = ${key} AND session_id > ${progress.applied} ORDER BY session_id LIMIT ${limit}`;
+        fingerprint: string;
+      }>`SELECT session_id, persona_id, fingerprint FROM catalog_plan
+        WHERE fingerprint >= ${prefix} AND fingerprint < ${`${key};`}
+        AND fingerprint > ${progress.applied} ORDER BY fingerprint LIMIT ${limit}`;
       if (!plans.length) break;
       for (const plan of plans) {
         yield* check;
@@ -232,7 +231,7 @@ const synchronize = Effect.fn("synchronize")(function* (
             Effect.catchTag("SessionNotFoundError", () => Effect.succeed(false)),
           );
         if (!exists) yield* sql`DELETE FROM catalog_plan WHERE session_id = ${plan.session_id}`;
-        else if (!(yield* frozen(plan.session_id)).length)
+        else
           yield* applyPersona(
             client,
             root,
@@ -241,7 +240,7 @@ const synchronize = Effect.fn("synchronize")(function* (
             groundRules,
             requestId,
           );
-        progress = { ...progress, applied: plan.session_id };
+        progress = { ...progress, applied: plan.fingerprint };
       }
       yield* save();
     }

@@ -14,7 +14,6 @@ import { remoteHost, type RemoteConfig } from "../src/opencode/remote.ts";
 import { syncFolders, catalogRefresher } from "../src/opencode/catalog-sync.ts";
 import { makeDiscoveryWeb } from "../src/discovery/discovery.ts";
 import { contacts } from "../src/discovery/contacts.ts";
-import { checkAssignments } from "../src/discovery/assignment.ts";
 import { contactManagement } from "../src/discovery/management.ts";
 import { firstContacts } from "../src/discovery/first-contact.ts";
 import { migrate } from "../src/database.ts";
@@ -45,7 +44,6 @@ export const composeServer = (config: ServerConfig) =>
     const messages = yield* remoteMessages(config.messaging);
     const catalog = catalogClient(config.catalog);
     const { personas } = yield* Effect.tryPromise(catalog.load);
-    yield* checkAssignments;
     const discovery = yield* makeDiscoveryWeb({
       catalog: catalog.publicList,
       turnstileSecret: config.secrets.TURNSTILE_SECRET,

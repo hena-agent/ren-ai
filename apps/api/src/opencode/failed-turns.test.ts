@@ -53,7 +53,7 @@ const model = SessionRunnerModel.resolved(
 );
 
 test("quota holds Conversations and probes one every 15 minutes before releasing the rest", async () => {
-  const { root, personaDirectory } = await messagingFixture("failed-turns-");
+  const { root, personaDirectory } = await messagingFixture("failed-turns-", "Hi", 2);
   try {
     await Effect.runPromise(
       Effect.scoped(
@@ -112,19 +112,12 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
             false,
           );
           const TestClock = heartbeatClock(host.heartbeat.failedTurns);
-          const bind = (sessionID: string, handle: string) =>
-            host.conversations.create({
-              handle,
-              locale: "ko",
-              consentVersion: "v1",
-              consentLanguage: "ko",
-              personaID: "persona1",
-              sessionID,
-            });
+          const bind = (session: Session.Info, handle: string) =>
+            host.conversations.create(registration(handle, session.id, session.agent));
           // A provider failure that clears before any cap must not stop the event listener.
           mode = "auth";
           const early = yield* host.createSession("persona1");
-          yield* bind(early.id, "early@example.com");
+          yield* bind(early, "early@example.com");
           yield* host.sessions.prompt({ sessionID: early.id, text: "early" });
           yield* host.sessions.wait(early.id);
           yield* TestClock.adjust("20 millis");
@@ -138,7 +131,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           for (const handle of ["first@example.com", "second@example.com"]) {
             const session = yield* host.createSession("persona1");
             sessions.push(session);
-            yield* bind(session.id, handle);
+            yield* bind(session, handle);
             yield* host.sessions.prompt({ sessionID: session.id, text: handle });
             yield* host.sessions.wait(session.id);
             expect((yield* host.sessions.get(session.id)).outcome).toBe("failed");
@@ -206,7 +199,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* TestClock.adjust("7 minutes");
           mode = "quota";
           const later = yield* host.createSession("persona1");
-          yield* bind(later.id, "later@example.com");
+          yield* bind(later, "later@example.com");
           yield* host.sessions.prompt({ sessionID: later.id, text: "later" });
           yield* host.sessions.wait(later.id);
           yield* TestClock.adjust("20 millis");
@@ -224,7 +217,7 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           // A non-retryable provider error uses our own per-Conversation schedule.
           mode = "auth";
           const broken = yield* host.createSession("persona1");
-          yield* bind(broken.id, "broken@example.com");
+          yield* bind(broken, "broken@example.com");
           yield* host.sessions.prompt({ sessionID: broken.id, text: "hi" });
           yield* host.sessions.wait(broken.id);
           yield* TestClock.adjust("20 millis");
@@ -267,19 +260,19 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           // A cap holds failures that originally came from another provider problem too.
           mode = "auth";
           cappedRequest = "cap@example.com";
-          const heldByCap = yield* host.createSession("persona1");
-          const capped = yield* host.createSession("persona1");
+          const heldByCap = yield* host.createSession("persona2");
+          const capped = yield* host.createSession("persona2");
           for (const [session, handle] of [
             [heldByCap, "held@example.com"],
             [capped, cappedRequest],
           ] as const) {
-            yield* bind(session.id, handle);
+            yield* bind(session, handle);
             yield* host.sessions.prompt({ sessionID: session.id, text: handle });
             yield* host.sessions.wait(session.id);
             yield* TestClock.adjust("20 millis");
           }
-          const duringCap = yield* host.createSession("persona1");
-          yield* bind(duringCap.id, "during@example.com");
+          const duringCap = yield* host.createSession("persona2");
+          yield* bind(duringCap, "during@example.com");
           yield* host.sessions.prompt({ sessionID: duringCap.id, text: "during@example.com" });
           yield* host.sessions.wait(duringCap.id);
           yield* TestClock.adjust("20 millis");
@@ -308,12 +301,12 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
 
           // This failure predates the Conversation binding, so only startup scanning can find it.
           mode = "auth";
-          const orphan = yield* host.createSession("persona1");
+          const orphan = yield* host.createSession("persona2");
           yield* host.sessions.prompt({ sessionID: orphan.id, text: "before restart" });
           yield* host.sessions.wait(orphan.id);
           yield* TestClock.adjust("10 minutes");
           expect(alerts.filter((item) => item === "raise:provider-failing")).toHaveLength(1);
-          yield* bind(orphan.id, "restored@example.com");
+          yield* bind(orphan, "restored@example.com");
           mode = "ok";
           const beforeRecovery = (yield* llm.requests()).length;
           yield* (yield* failedTurns(host, host.conversations, notifications)).tick;
@@ -346,8 +339,8 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
           yield* TestClock.adjust("1 second");
           expect(yield* llm.requests()).toHaveLength(requests);
 
-          const missing = yield* host.createSession("persona1");
-          yield* bind(missing.id, "missing@example.com");
+          const missing = yield* host.createSession("persona2");
+          yield* bind(missing, "missing@example.com");
           yield* host.sessions.remove(missing.id);
           expect(Option.isNone(yield* host.sessions.get(missing.id).pipe(Effect.option))).toBe(
             true,

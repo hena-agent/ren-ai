@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 import { Schema } from "effect";
-import { conversationMemory } from "@ren-ai/plugin-session-folder/memory";
+import { memoryFixture } from "../../test/memory.test-helper.ts";
 
 test("a conversation persists state and short-term memory together with replay receipts", async () => {
   const root = await mkdtemp(join(tmpdir(), "conversation-memory-"));
@@ -13,8 +13,9 @@ test("a conversation persists state and short-term memory together with replay r
       "---\nmood: 55\nenergy: 60\nstress: 35\nconnection: 55\nsolitude: 60\ntraits: {}\n---\n",
     );
     await writeFile(join(root, "MEMORY.md"), "# 현재 생활\n\n사진전을 준비 중이다.");
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     const input = {
+      scope: "life",
       scores: { energy: 30 },
       additions: {
         "사진전 준비 단계": {
@@ -30,6 +31,7 @@ test("a conversation persists state and short-term memory together with replay r
     await memory.run(
       "update_memory",
       {
+        scope: "life",
         markdown:
           "# 현재 생활\n\n사진전 작품을 고르는 중이다. 내일 상대에게 진행 상황을 이야기하기로 했다.",
         reason: "새 약속을 확인했다.",
@@ -44,15 +46,15 @@ test("a conversation persists state and short-term memory together with replay r
       "message-3",
     );
     expect(
-      await conversationMemory(root).run("update_state", input, "state-call", "message-1"),
+      await (await memoryFixture(root)).run("update_state", input, "state-call", "message-1"),
     ).toBe(changed);
-    const current = await conversationMemory(root).context();
+    const current = await (await memoryFixture(root)).context();
     expect(current).toContain("energy: 45");
     expect(current).toContain("작품 선정 중");
     expect(current).toContain("내일 상대에게 진행 상황");
     expect(await readFile(join(root, "STATE.md"), "utf8")).toContain("energy: 45");
     expect(await readFile(join(root, "MEMORY.md"), "utf8")).toContain("내일 상대에게 진행 상황");
-    expect(await readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
+    expect(await readdir(join(root, ".memory"))).toEqual(["observations.json", "receipts.json"]);
     expect((await lstat(join(root, "STATE.md"))).isSymbolicLink()).toBe(false);
     expect((await lstat(join(root, "MEMORY.md"))).isSymbolicLink()).toBe(false);
   } finally {
@@ -63,8 +65,9 @@ test("a conversation persists state and short-term memory together with replay r
 test("Markdown edits are authoritative after tool updates and dice writes only execution receipts", async () => {
   const root = await mkdtemp(join(tmpdir(), "memory-markdown-source-"));
   try {
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     const input = {
+      scope: "life",
       topic: "취향",
       text: "차를 좋아한다.",
       summary: "차 취향",
@@ -87,7 +90,7 @@ test("Markdown edits are authoritative after tool updates and dice writes only e
     await writeFile(statePath, state);
     await writeFile(join(root, "MEMORY.md"), "# 현재 생활\n\n직접 수정한 기억.");
     await writeFile(longPath, longTerm);
-    const restarted = conversationMemory(root);
+    const restarted = await memoryFixture(root);
     expect(await restarted.context()).toContain("수정한 상태");
     expect(await restarted.context()).toContain("직접 수정한 기억");
     expect(await restarted.run("search_memory", { query: "커피" }, "search", "next")).toContain(
@@ -100,7 +103,7 @@ test("Markdown edits are authoritative after tool updates and dice writes only e
     expect((await lstat(statePath)).ino).toBe(stateBefore.ino);
     expect(await readFile(statePath, "utf8")).toBe(state);
     expect(await readFile(longPath, "utf8")).toBe(longTerm);
-    expect(await readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
+    expect(await readdir(join(root, ".memory"))).toEqual(["observations.json", "receipts.json"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -109,9 +112,10 @@ test("Markdown edits are authoritative after tool updates and dice writes only e
 test("concurrent Conversation writers preserve sibling updates and deduplicate the same memory and dice calls", async () => {
   const root = await mkdtemp(join(tmpdir(), "memory-concurrent-"));
   try {
-    const first = conversationMemory(root);
-    const second = conversationMemory(root);
+    const first = await memoryFixture(root);
+    const second = await memoryFixture(root);
     const record = {
+      scope: "life",
       topic: "취향",
       text: "차를 좋아한다.",
       summary: "차 취향",
@@ -126,7 +130,11 @@ test("concurrent Conversation writers preserve sibling updates and deduplicate t
       second.roll("same-roll", "first", random),
       first.run(
         "update_memory",
-        { markdown: "# 현재 생활\n\n사진전을 준비한다.", reason: "현재 생활" },
+        {
+          scope: "life",
+          markdown: "# 현재 생활\n\n사진전을 준비한다.",
+          reason: "현재 생활",
+        },
         "short",
         "first",
       ),
@@ -147,13 +155,14 @@ test("concurrent Conversation writers preserve sibling updates and deduplicate t
 test("long-term fading and loss remove old details from recall and synchronize short-term Memory", async () => {
   const root = await mkdtemp(join(tmpdir(), "memory-loss-"));
   try {
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     const created = Schema.decodeUnknownSync(
       Schema.fromJsonString(Schema.Struct({ id: Schema.String })),
     )(
       await memory.run(
         "remember",
         {
+          scope: "life",
           topic: "생일 약속",
           text: "상대의 생일은 3월 17일이다. 케이크를 준비하기로 했다.",
           summary: "생일에 케이크를 준비할 약속이 있다.",
@@ -167,6 +176,7 @@ test("long-term fading and loss remove old details from recall and synchronize s
     await memory.run(
       "update_memory",
       {
+        scope: "life",
         markdown: "# 현재 생활\n\n상대의 생일은 3월 17일이다. 케이크를 준비하기로 했다.",
         reason: "현재 약속",
       },
@@ -179,6 +189,7 @@ test("long-term fading and loss remove old details from recall and synchronize s
         "remember",
         {
           id: created.id,
+          scope: "life",
           topic: "생일 약속",
           text: "",
           summary: "생일에 할 일이 있었다.",
@@ -194,6 +205,7 @@ test("long-term fading and loss remove old details from recall and synchronize s
       "remember",
       {
         id: created.id,
+        scope: "life",
         topic: "생일 약속 3월 17일 케이크",
         text: "",
         summary: "생일에 할 일이 있었다.",
@@ -218,6 +230,7 @@ test("long-term fading and loss remove old details from recall and synchronize s
       "remember",
       {
         id: created.id,
+        scope: "life",
         topic: "생일 약속",
         text: "",
         summary: "",
@@ -232,7 +245,7 @@ test("long-term fading and loss remove old details from recall and synchronize s
     expect(await memory.run("search_memory", { query: "생일" }, "search-1", "much-later")).toBe(
       "[]",
     );
-    const context = await conversationMemory(root).context();
+    const context = await (await memoryFixture(root)).context();
     expect(context).toContain("forgotten");
     expect(context).not.toContain("3월 17일");
     expect(context).not.toContain("케이크");

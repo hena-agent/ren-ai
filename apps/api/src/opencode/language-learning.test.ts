@@ -1,12 +1,12 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { conversationMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { personaMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
 import { folderFiles, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { serializeInitialState } from "@ren-ai/personas";
 
-test("learning persists per Conversation, preserves sibling languages and survives replay and Catalog edits", async () => {
+test("learning is shared across Conversations while private learning experiences stay isolated through replay and Catalog edits", async () => {
   const root = await mkdtemp(join(tmpdir(), "language-learning-"));
   try {
     const files = folderFiles(root);
@@ -29,19 +29,41 @@ test("learning persists per Conversation, preserves sibling languages and surviv
       prompt: "You are Harin",
       initial: { state, memory: "# 현재 생활\n\n영어를 배우고 있다." },
     };
-    await files.write("sesFirst", renderSnapshot(persona, "Rules"));
-    await files.write("sesSecond", renderSnapshot(persona, "Rules"));
-    const memory = conversationMemory(files.path("sesFirst"));
+    const directory = await files.write("sesFirst", renderSnapshot(persona, "Rules"), {
+      conversationKey: "first",
+    });
+    expect(
+      await files.write("sesSecond", renderSnapshot(persona, "Rules"), {
+        conversationKey: "second",
+      }),
+    ).toBe(directory);
+    const memory = personaMemory(directory, "sesFirst");
+    const sibling = personaMemory(directory, "sesSecond");
+    await memory.context();
     await memory.run(
       "remember",
       {
+        scope: "life",
         topic: "영어 표현",
-        text: "사용자가 grab a coffee라는 표현을 알려줬다.",
+        text: "grab a coffee라는 표현은 커피를 마시러 간다는 뜻이다.",
         summary: "커피 마시러 가기",
         clarity: "clear",
-        reason: "직접 설명해 줬다.",
+        reason: "일상 영어 표현을 익혔다.",
       },
       "expression",
+      "message-1",
+    );
+    await memory.run(
+      "remember",
+      {
+        scope: "relationship",
+        topic: "함께 영어 연습",
+        text: "사용자가 토요일에 영어 표현을 설명해 줬다.",
+        summary: "함께 연습한 기억",
+        clarity: "clear",
+        reason: "직접 함께 연습했다.",
+      },
+      "private-learning",
       "message-1",
     );
     const input = {
@@ -64,13 +86,8 @@ test("learning persists per Conversation, preserves sibling languages and surviv
       "tired",
       "message-22",
     );
-    await conversationMemory(files.path("sesFirst")).run(
-      "update_state",
-      input,
-      "learn",
-      "message-20",
-    );
-    expect((await readRuntime(files.path("sesFirst")))?.state?.languageProficiency).toEqual({
+    await personaMemory(directory, "sesFirst").run("update_state", input, "learn", "message-20");
+    expect((await readRuntime(directory))?.state?.languageProficiency).toEqual({
       ko: "fluent",
       en: "conversational",
       ja: "beginner",
@@ -78,6 +95,16 @@ test("learning persists per Conversation, preserves sibling languages and surviv
     expect(await memory.run("search_memory", { query: "grab" }, "search", "message-23")).toContain(
       "grab a coffee",
     );
+    expect(await sibling.run("search_memory", { query: "grab" }, "search", "message-23")).toContain(
+      "grab a coffee",
+    );
+    expect(
+      await memory.run("search_memory", { query: "토요일" }, "private-search", "message-23"),
+    ).toContain("토요일");
+    expect(
+      await sibling.run("search_memory", { query: "토요일" }, "private-search", "message-23"),
+    ).toBe("[]");
+    expect(await sibling.context()).toContain("en: conversational");
     await files.write(
       "sesFirst",
       renderSnapshot(
@@ -86,7 +113,7 @@ test("learning persists per Conversation, preserves sibling languages and surviv
       ),
     );
     expect((await files.read("sesFirst")).documents?.state).toContain("en: conversational");
-    expect((await files.read("sesSecond")).documents?.state).toContain("en: beginner");
+    expect((await files.read("sesSecond")).documents?.state).toContain("en: conversational");
     await expect(
       memory.run(
         "update_state",
@@ -108,6 +135,7 @@ test("learning persists per Conversation, preserves sibling languages and surviv
         "update_state",
         {
           ...input,
+          scope: "life",
           additions: {
             languageProficiency: { value: "fluent", meaning: "override", reason: "test" },
           },
@@ -116,24 +144,30 @@ test("learning persists per Conversation, preserves sibling languages and surviv
         "message-26",
       ),
     ).rejects.toThrow("built-in");
-    expect((await readRuntime(files.path("sesFirst")))?.stateChange?.source).toBe("message-22");
-    const unset = await mkdtemp(join(tmpdir(), "language-unset-"));
-    try {
-      await writeFile(
-        join(unset, "STATE.md"),
-        state.replace(/languageProficiency:[\s\S]*?(?=---)/, ""),
-      );
-      await writeFile(join(unset, "MEMORY.md"), "# 현재 생활\n\n공부 중이다.");
-      await conversationMemory(unset).run(
-        "update_state",
-        { ...input, languageProficiency: { en: "beginner" } },
-        "start",
-        "message",
-      );
-      expect((await readRuntime(unset))?.state?.languageProficiency).toEqual({ en: "beginner" });
-    } finally {
-      await rm(unset, { recursive: true, force: true });
-    }
+    expect((await readRuntime(directory))?.stateChange?.source).toBe("first");
+    const unset = await files.write(
+      "sesUnset",
+      renderSnapshot(
+        {
+          ...persona,
+          id: "unset",
+          initial: {
+            state: state.replace(/languageProficiency:[\s\S]*?(?=---)/, ""),
+            memory: "# 현재 생활\n\n공부 중이다.",
+          },
+        },
+        "Rules",
+      ),
+    );
+    const learner = personaMemory(unset, "sesUnset");
+    await learner.context();
+    await learner.run(
+      "update_state",
+      { ...input, languageProficiency: { en: "beginner" } },
+      "start",
+      "message",
+    );
+    expect((await readRuntime(unset))?.state?.languageProficiency).toEqual({ en: "beginner" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

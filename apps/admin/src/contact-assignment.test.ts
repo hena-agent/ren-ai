@@ -12,7 +12,7 @@ const waiter: typeof ContactEntry.Type = {
   likedPersonas: [
     { id: "luna", name: "루나" },
     { id: "harin", name: "하린" },
-    { id: "occupied", name: "이미 배정됨" },
+    { id: "full", name: "배정 정원 도달" },
   ],
   assignablePersonas: [
     { id: "luna", name: "루나" },
@@ -47,8 +47,10 @@ test("direct selection offers random or available Likes and preserves exact pers
   expect(choices).toContain("무작위 배정");
   expect(choices).toContain('<option value="luna">루나</option>');
   expect(choices).toContain('<option value="harin">하린</option>');
-  expect(choices).not.toContain("이미 배정됨");
+  expect(choices).not.toContain("배정 정원 도달");
   expect(page).toContain("무작위 선정");
+  expect(page).toContain("현재 배정이 5명 미만");
+  expect(page).not.toContain("독점");
   const fields = {
     action: "select-specific",
     requestId: randomUUID(),
@@ -103,7 +105,10 @@ test("random row choices use normal direct selection, while refused assignment p
     request("/waitlist", { ...fields, [`personaID:${waiter.id}`]: "harin" }),
   );
   expect(refused.status).toBe(400);
-  expect(await refused.text()).toContain("배정할 수 없는 Like 후보");
+  const conflict = await refused.text();
+  expect(conflict).toContain("배정할 수 없는 Like 후보");
+  expect(conflict).toContain("배정 한도 5명");
+  expect(conflict).not.toContain("같은 페르소나를 중복 지정");
   expect(fetcher).toHaveBeenCalledTimes(3);
   const form = new FormData();
   form.set("action", "select-specific");

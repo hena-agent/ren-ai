@@ -1,16 +1,18 @@
 import { Schema } from "effect";
-import { ConversationState } from "@ren-ai/personas";
 import { parseDocument, stringify } from "yaml";
-import { memoryRecord, runtimeSnapshot, type RuntimeSnapshot } from "./memory-model.ts";
+import {
+  memoryRecord,
+  runtimeSnapshot,
+  runtimeState,
+  type RuntimeSnapshot,
+} from "./memory-model.ts";
 
 const metadata = {
   additional: Schema.optionalKey(runtimeSnapshot.fields.additional),
   lastChange: runtimeSnapshot.fields.stateChange,
+  fieldChanges: runtimeSnapshot.fields.fieldChanges,
 };
-const stateDocument = Schema.Union([
-  Schema.Struct({ ...ConversationState.fields, ...metadata }),
-  Schema.Struct(metadata),
-]);
+const stateDocument = Schema.Struct({ ...runtimeState.fields, ...metadata });
 const recordMetadata = Schema.Struct({
   ...memoryRecord.fields,
   text: Schema.optionalKey(Schema.String),
@@ -32,18 +34,35 @@ export function readState(source: string) {
     const {
       additional = {},
       lastChange,
+      fieldChanges,
       ...scores
     } = Schema.decodeUnknownSync(stateDocument)(document.toJS(), { onExcessProperty: "error" });
     return {
       ...(Object.keys(scores).length && {
-        state: Schema.decodeUnknownSync(ConversationState)(scores),
+        state: Schema.decodeUnknownSync(runtimeState)(scores),
       }),
       additional,
       ...(lastChange && { stateChange: lastChange }),
+      ...(fieldChanges && { fieldChanges }),
     };
   } catch (cause) {
     throw new Error("Invalid Conversation STATE.md", { cause });
   }
+}
+
+export function readShortTerm(source: string) {
+  if (!source.startsWith("---\n") && !source.startsWith("---\r\n"))
+    return { shortTerm: Schema.decodeUnknownSync(runtimeSnapshot.fields.shortTerm)(source) };
+  const { document, body } = frontmatter(source);
+  const { changes } = Schema.decodeUnknownSync(
+    Schema.Struct({
+      changes: runtimeSnapshot.fields.shortTermChanges,
+    }),
+  )(document.toJS(), { onExcessProperty: "error" });
+  return {
+    shortTerm: Schema.decodeUnknownSync(runtimeSnapshot.fields.shortTerm)(body),
+    ...(changes && { shortTermChanges: changes }),
+  };
 }
 
 export function readLongTerm(source: string, id: string) {

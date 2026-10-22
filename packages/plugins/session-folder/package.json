@@ -9,6 +9,7 @@
     "./protocol": "./src/protocol.ts",
     "./files": "./src/files.ts",
     "./paths": "./src/paths.ts",
+    "./bindings": "./src/bindings.ts",
     "./memory": "./src/memory.ts"
   },
   "scripts": {

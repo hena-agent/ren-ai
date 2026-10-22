@@ -14,10 +14,9 @@ const managementHandler = vi.fn<(request: Request) => Promise<Response>>(
   async () => new Response("management"),
 );
 
-vi.mock("./database.ts", () => ({ migrate: Effect.void }));
-vi.mock("./discovery/assignment.ts", () => ({
-  get checkAssignments() {
-    return controls.failStartup ? Effect.fail(new Error("assignment conflict")) : Effect.void;
+vi.mock("./database.ts", () => ({
+  get migrate() {
+    return controls.failStartup ? Effect.fail(new Error("migration failure")) : Effect.void;
   },
 }));
 vi.mock("./discovery/contacts.ts", () => ({
@@ -107,7 +106,7 @@ test("conversation records fail closed when the application's management token i
   }
 });
 
-test("closes the SQLite scope if startup assignment validation fails", async () => {
+test("closes the SQLite scope if startup migration fails", async () => {
   controls.failStartup = true;
   const exit = await Effect.runPromiseExit(
     Effect.tryPromise(() => createApplicationStore(storage, config)),

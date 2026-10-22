@@ -1,5 +1,11 @@
 # Agent 실행 · Context 주입 · 호출 순서
 
+> 소유권·저장·세션 수명은 [ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)이
+> 이 미래 호출도보다 우선한다. 공유 State·Life와 호출 Conversation의 Relationship 범위만 허용한다.
+> 공유 쓰기는 변경 대상 항목별 CAS와 인물 루트별 번들 공통 잠금을 사용하고, 세션/호출별 receipt와
+> 출처·마지막 읽기 정보를 보존한다. 아래 단일 버전·Core·`context.md`·DB 표기는 현재 구현 계약이
+> 아니다. 현재 계약은 [상태·기억](persona-state-memory.md)을 따른다.
+
 [Agent lifecycle · 전체 흐름](agent-runtime-lifecycle.md) · [구성요소 아키텍처](agent-runtime-architecture.md) · [원본 스펙](agent-runtime.md)
 
 **장기 방향의 논리적 API 호출도**다. `inputs.appendOnce` 같은 이름은 역할 사이의 계약을 보여 주기 위한 표기이며, 실제 HTTP 경로·프로세스 개수·데이터베이스 테이블을 확정하지 않는다. `DB`는 서비스의 지속 상태를 뜻하고, iMessage의 실제 Conversation 원문은 채널에서 확인한다. Persona·Life·Kizuna는 같은 대화·상태 변화를 **서로 다른 관찰 위치와 시각**에서 읽는다. 모델 호출은 각 Agent의 **자기 Context**만 사용하며, Advisor는 유저가 호출할 때만 실행한다.
@@ -39,14 +45,14 @@ sequenceDiagram
     autonumber
     participant RUN as Persona 전용 실행
     participant DB as 상태·입력 저장소
-    participant CTX as Conversation별 context.md
+    participant CTX as 공유 Life + 자신의 Relationship 기억
     participant MEM as 장기 기억 DB
     participant P as Persona Agent
     participant MODEL as Persona의 모델
 
     RUN->>DB: claim(personaId, conversationId, 관찰 위치, expectedVersion)
     DB-->>RUN: 최신 개인·관계 상태, 미처리 메시지[], 확정 사건[], version
-    RUN->>CTX: read(conversationId)
+    RUN->>CTX: read(personaId, 자신의 conversationId)
     CTX-->>RUN: Core, 단기 기억, 파일 버전
     opt 현재 맥락에 관련된 과거 경험이 필요함
         RUN->>MEM: search(personaId, conversationId, personIds[], query)
@@ -223,7 +229,7 @@ sequenceDiagram
     DB-->>RUN: 새 입력 변경 힌트 · 놓쳐도 자체 스캔 가능
     RUN->>DB: observeSince(personaCursor) · claim(conversationId, 상태 버전)
     DB-->>RUN: 이미 확정한 판단/미처리 3건/결과 불명확 발신
-    RUN->>CTX: read(해당 Conversation의 확정된 Core·단기·관련 장기)
+    RUN->>CTX: read(공유 Life + 자신의 Relationship 범위)
     CTX-->>RUN: 마지막 확정 버전의 기억 · 불일치 시 버전 대조
     RUN->>P: persona.run(세 원문을 시각순으로, 현재 14:00을 명시)
     P-->>RUN: 취소된 오늘 제안 대신 내일에 관한 판단

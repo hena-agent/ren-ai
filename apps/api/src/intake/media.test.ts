@@ -194,6 +194,9 @@ test("rebuilding replays photos, replies, tapbacks and placeholders like live In
           tapback: { emoji: "👍", targetGuid: original.guid, added: false },
         });
         yield* fake.text(handle, "", when + 240_000, { payload: "location" });
+        for (const row of yield* fake.messages.after(0))
+          yield* sql`INSERT INTO intake_seen VALUES ('media-source', ${row.guid})`;
+        yield* sql`UPDATE conversation SET replay_source_session_id = 'media-source', rebuilding = 1 WHERE id = ${conversation.id}`;
         const prompts: { text: string; images: ReadonlyArray<PromptImage> | undefined }[] = [];
         const record = capture(prompts);
         const incoming = yield* intake(
@@ -216,7 +219,9 @@ test("rebuilding replays photos, replies, tapbacks and placeholders like live In
         ]);
         expect(prompts[2]?.text).toContain('emoji="👍" on="his message: hello"');
         expect(prompts[3]?.text).toContain("<location at=");
-        expect(yield* sql`SELECT 1 FROM intake_seen WHERE guid = ${removed.guid}`).toEqual([]);
+        expect(
+          yield* sql`SELECT 1 FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${removed.guid}`,
+        ).toEqual([]);
       }).pipe(
         Effect.provide(Layer.merge(fixture.layer, SqliteClient.layer({ filename: ":memory:" }))),
       ),

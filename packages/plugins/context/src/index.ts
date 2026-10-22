@@ -12,11 +12,7 @@ import {
 import { phone } from "@ren-ai/plugin-application/phone";
 import { isDiceTool } from "@ren-ai/plugin-dice";
 import { cleanContext } from "./clean.ts";
-import {
-  conversationMemory,
-  memoryToolNames,
-  isMemoryTool,
-} from "@ren-ai/plugin-session-folder/memory";
+import { personaMemory, memoryToolNames, isMemoryTool } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 
 export const contextPlugin = (options: PersonaPluginOptions) =>
@@ -53,11 +49,9 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                 ...memoryToolNames.filter((name) => isMemoryTool(name, event.tools[name])),
               ]),
             );
-            if (
-              managedFolder(options.personaDirectory, ctx.location.directory) === event.sessionID
-            ) {
+            if (managedFolder(options.personaDirectory, ctx.location.directory)) {
               const memory = yield* conversationOperation("memory.context", event.sessionID, () =>
-                conversationMemory(ctx.location.directory).context(),
+                personaMemory(ctx.location.directory, event.sessionID).context(),
               );
               event.system.push({ type: "text", text: memory });
             }

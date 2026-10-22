@@ -83,6 +83,12 @@ test("a persisted reservation starts only when due and records web consent witho
       expect(yield* f.sql`SELECT state FROM discovery_contact`).toEqual([{ state: "scheduled" }]);
       yield* Effect.all([f.worker.tick, f.worker.tick], { concurrency: "unbounded" });
       expect(f.created).toHaveBeenCalledOnce();
+      const [, plannedSession, conversationKey] = f.created.mock.calls[0]!;
+      expect(conversationKey).toBe(plannedSession);
+      expect(conversationKey).toMatch(/^ses_/);
+      expect(yield* f.sql`SELECT usage_key FROM conversation`).toEqual([
+        { usage_key: conversationKey },
+      ]);
       expect(f.prompt).toHaveBeenCalledOnce();
       const [user] = yield* f.sql<{
         consent_at: number;

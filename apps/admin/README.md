@@ -6,7 +6,7 @@ named `global`) owns private drafts, the image FIFO and submission deduplication
 Persona documents are immutable numbered versions in D1; each Catalog read uses
 the current version pointer. Existing persona rows migrate their current Markdown
 to v1. Version restoration creates a new current version and leaves photos,
-initial documents and conversation state/memory unchanged.
+initial documents, shared State/Life memory and private Relationship scopes unchanged.
 New Catalog schemas start empty. Existing saved Markdown and images can be
 explicitly imported into local D1/R2 with the one-off command below.
 
@@ -169,10 +169,12 @@ Generate schema changes with `bun run db:generate` and apply them before code
 that needs them. The initial SQL creates an empty schema only. Check packaging
 and bindings with `bunx wrangler deploy --dry-run`.
 
-Deploy the updated session-folder plugin before the messaging application: its
-optional `documents` snapshot field initializes new Conversation folders with
-`STATE.md` and `MEMORY.md`. Catalog updates preserve evolving Conversation
-documents; session snapshots include the current pair for export/restore.
+Follow the [paused ADR-0023 cutover](../api/ops/README.md) when adopting shared
+persona roots. The first Conversation initializes shared State and Life memory
+from the Catalog once; later initial-value edits affect only future starting
+affection and Discovery's public initial proficiency. Each Conversation has its
+own Relationship state and Relationship memory. Catalog/ground-rule updates refresh
+one root per persona, including retained and ended sessions, and preserve both scopes.
 Point both API services at the same Worker. Publish newly authored personas
 before Discovery offers them.
 
@@ -222,18 +224,25 @@ delivery contains request correlation and retry metadata, never persona text.
 
 `/waitlist` lists registrations from the messaging API, not Admin D1. Enter
 1–100 people and confirm **N명 선정하기**. The server randomly chooses people
-with currently public, unassigned Likes, then assigns one available liked
-persona to each. The result may contain fewer than N people. A persona belongs
-to one handle from reservation onward, including failed/uncertain attempts.
+with currently public, eligible Likes, then assigns one available liked
+persona to each. The result may contain fewer than N people. A handle has at most
+one current assignment; a persona has at most five, including pending, failed or
+uncertain first contacts and test handles. Capacity is checked in the reservation
+transaction. A persona who ended a relationship with that handle is ineligible
+only for that handle; her other relationships and public listing continue.
 Each selected Greeting is scheduled once 5–60 minutes later.
 
 Handles marked with the API operator's `test-handle` command show **테스트 연락처**.
 A waiting test handle with an available Like also appears under **테스트 연락처
 바로 시작**: choose one of its liked personas and confirm **지금 시작** to reserve
 that persona and schedule the first Greeting immediately, without random
-selection. The API refuses other handles, unliked or taken personas and handles
+selection. The API refuses other handles, unliked or full personas, personas who
+ended a relationship with that handle, and handles
 that are no longer waiting with `409`. This is how a test handle starts a new
 conversation after `/reset`: register again through Discovery, then start it here.
+Reset retains the previous Relationship scope for review and starts a new one;
+the persona's shared State and Life memory continue. Test handles change those
+shared documents like other users. Use an operator Sandbox for isolated experiments.
 Discovery accepts only mobile numbers, so a test handle that restarts this way is
 the tester's iPhone number, not an Apple ID email.
 Deploy the API before Admin; an older API answers the start with `404`.

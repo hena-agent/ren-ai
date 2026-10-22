@@ -91,7 +91,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect(
     (await admin(request("/conversations/1", { ...ending, confirmEnding: "no" }))).status,
   ).toBe(400);
-  expect((await admin(request("/conversations/1", { ...ending, key: "bad" }))).status).toBe(400);
+  expect((await admin(request("/conversations/1", { ...ending, key: "../bad" }))).status).toBe(400);
   const endedResponse = await admin(request("/conversations/1", ending));
   expect(endedResponse.status).toBe(303);
   expect(endedResponse.headers.get("location")).toBe("/conversations/1?ended=1");

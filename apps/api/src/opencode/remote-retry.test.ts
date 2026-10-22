@@ -1,4 +1,6 @@
-import { Effect } from "effect";
+import { Deferred, Effect, Fiber } from "effect";
+import { conversationOperation } from "@ren-ai/plugin-application";
+import { personaMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
 import { TestLLM } from "@opencode/ai/testing";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { expect, test } from "vitest";
@@ -9,6 +11,41 @@ import {
   replaceCheckpoint,
 } from "../../test/remote-host.test-helper.ts";
 import { providerUnavailable } from "../../test/messaging-host.test-helper.ts";
+
+test("cancelling a native memory operation waits for its observation save before scope cleanup", () =>
+  withRemoteHost((remote) =>
+    Effect.gen(function* () {
+      const session = yield* remote.createSession("persona1");
+      const entered = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const completed = yield* Deferred.make<void>();
+      const order: string[] = [];
+      const saving = yield* conversationOperation("memory.context", session.id, async () => {
+        Effect.runSync(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(release));
+        await personaMemory(session.location.directory, session.id).context();
+        order.push("saved");
+        Effect.runSync(Deferred.succeed(completed, undefined));
+      }).pipe(Effect.forkScoped);
+      yield* Deferred.await(entered);
+      const cancelled = yield* Fiber.interrupt(saving).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            order.push("cancelled");
+          }),
+        ),
+        Effect.forkScoped,
+      );
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(cancelled);
+      // Join the underlying Promise even on the failing path so cleanup cannot hide the assertion.
+      yield* Deferred.await(completed);
+      const saved = yield* Effect.promise(() => readRuntime(session.location.directory));
+      expect(saved?.observations?.[session.id]).toBeDefined();
+      expect(order).toEqual(["saved", "cancelled"]);
+    }),
+  ));
 
 test("repeated pending-work recovery stays cancellable through the HTTP router", () =>
   withRemoteHost((remote, _directory, { llm }) =>

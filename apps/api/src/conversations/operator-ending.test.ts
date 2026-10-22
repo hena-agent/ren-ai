@@ -18,7 +18,14 @@ test.each(["ko", "en", "ja"])(
         const f = yield* relationshipFixture;
         yield* f.sql`UPDATE user SET locale = ${locale}`;
         yield* f.sql`UPDATE conversation SET rebuilding = 1`;
-        yield* f.sql`INSERT INTO persona_assignment VALUES ('seoyul', ${f.conversation.handle})`;
+        const sibling = yield* f.app.directory.create({
+          handle: "+821088888888",
+          personaID: "seoyul",
+          sessionID: "ses_sibling",
+          locale: "ko",
+          consentLanguage: "ko",
+          consentVersion: "v1",
+        });
         yield* f.sql`INSERT INTO failed_turn(session_id, fingerprint, failures, quota, failed_at, retry_at) VALUES (${f.conversation.sessionID}, 'private', 1, 0, 0, 0)`;
         yield* f.sql`INSERT INTO application_work(name, due) VALUES (${`turn:${f.conversation.sessionID}`}, 0)`;
         const status = yield* conversationStatus(async () => []);
@@ -33,8 +40,21 @@ test.each(["ko", "en", "ja"])(
           { initiator: "operator", farewell_pending: 0, notice_pending: 1, stopped_at: null },
         ]);
         expect(
-          yield* f.sql`SELECT 1 FROM persona_assignment UNION SELECT 1 FROM blocked UNION SELECT 1 FROM failed_turn`,
+          yield* f.sql`SELECT 1 FROM persona_assignment WHERE handle = ${f.conversation.handle} UNION SELECT 1 FROM blocked UNION SELECT 1 FROM failed_turn`,
         ).toEqual([]);
+        expect(yield* f.sql`SELECT handle, persona_id FROM persona_exclusion`).toEqual([
+          { handle: f.conversation.handle, persona_id: "seoyul" },
+        ]);
+        expect(yield* f.app.directory.active(sibling)).toBe(true);
+        const newcomer = yield* f.app.directory.create({
+          handle: "+821077777777",
+          personaID: "seoyul",
+          sessionID: "ses_newcomer",
+          locale: "ko",
+          consentLanguage: "ko",
+          consentVersion: "v1",
+        });
+        expect(yield* f.app.directory.active(newcomer)).toBe(true);
         expect(yield* f.sql`SELECT name FROM application_work`).toEqual([{ name: "endings" }]);
         expect(yield* f.app.directory.byHandle(f.conversation.handle)).toBeUndefined();
         expect((yield* status.detail(input.id))?.entry.endedBy).toBe("operator");
@@ -108,9 +128,12 @@ test("ending HTTP validates identity, rejects conflicting receipts and rolls bac
       yield* f.sql`UPDATE conversation_recovery SET action = 'end', conversation_id = ${input.id}`;
       // Deletion can reuse a numeric row ID; the immutable binding from the old page cannot end its replacement.
       yield* f.sql`DELETE FROM user`;
+      expect(yield* f.sql`SELECT handle, persona_id FROM persona_exclusion`).toEqual([
+        { handle: f.conversation.handle, persona_id: "seoyul" },
+      ]);
       const replacement = yield* f.app.directory.create({
         handle: f.conversation.handle,
-        personaID: "seoyul",
+        personaID: "harin",
         sessionID: "ses_replacement",
         locale: "ko",
         consentLanguage: "ko",

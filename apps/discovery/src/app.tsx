@@ -22,6 +22,7 @@ type Entry = {
   personaId?: string | undefined;
   initialStyle?: ImageStyle | undefined;
   initialPeople?: readonly PublicPersona[] | undefined;
+  reselectionToken?: string | undefined;
 };
 
 function Deck({
@@ -133,9 +134,10 @@ function DiscoveryApp({
   initialPeople,
   personaId,
   initialStyle,
+  reselectionToken,
 }: Entry & { client: DiscoveryClient }) {
   const copy = useCopy();
-  const { catalog, retry } = useCatalog(client, initialPeople);
+  const { catalog, retry } = useCatalog(client, initialPeople, reselectionToken);
   const requested =
     catalog.phase === "ready" && catalog.people.find((person) => person.id === personaId);
   const missing = catalog.phase === "ready" && Boolean(personaId) && !requested;
@@ -152,7 +154,15 @@ function DiscoveryApp({
               <div className="empty-card">
                 <h1>{copy.publicProfile.notFound}</h1>
                 <p>{copy.publicProfile.notFoundHint}</p>
-                <a href="/explore">{copy.back}</a>
+                <a
+                  href={
+                    reselectionToken === undefined
+                      ? "/explore"
+                      : `/explore#reselect=${encodeURIComponent(reselectionToken)}`
+                  }
+                >
+                  {copy.back}
+                </a>
               </div>
             </main>
           </>

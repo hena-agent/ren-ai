@@ -2,7 +2,8 @@ import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, test, vi } from "vitest";
-import { conversationMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { readRuntime } from "@ren-ai/plugin-session-folder/memory";
+import { memoryFixture } from "../../test/memory.test-helper.ts";
 
 vi.mock("node:fs/promises", async (original) => ({
   ...(await original<typeof import("node:fs/promises")>()),
@@ -12,10 +13,11 @@ test("an interrupted paired memory change recovers before concurrent readers and
   const root = await fs.mkdtemp(join(tmpdir(), "memory-interrupted-"));
   const rename = fs.rename;
   try {
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     await memory.run(
       "remember",
       {
+        scope: "life",
         topic: "생일",
         text: "private-birthday-0317",
         summary: "생일 약속",
@@ -29,6 +31,7 @@ test("an interrupted paired memory change recovers before concurrent readers and
     const before = (await readRuntime(root))!;
     const next = {
       id: before.longTerm[0]!.id,
+      scope: "life",
       topic: "생일",
       text: "",
       summary: "생일 약속이 있었다.",
@@ -46,7 +49,7 @@ test("an interrupted paired memory change recovers before concurrent readers and
     );
     expect(await fs.readdir(join(root, ".memory"))).toContain("pending.json");
     failing.mockRestore();
-    const restarted = conversationMemory(root);
+    const restarted = await memoryFixture(root);
     const [context, search, receipt] = await Promise.all([
       restarted.context(),
       restarted.run("search_memory", { query: "생일" }, "search", "next"),
@@ -59,7 +62,7 @@ test("an interrupted paired memory change recovers before concurrent readers and
     const random = vi.fn<() => number>(() => 0.9);
     expect(await restarted.roll("decision", "next", random)).toBe("5000");
     expect(random).not.toHaveBeenCalled();
-    expect(await fs.readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
+    expect(await fs.readdir(join(root, ".memory"))).toEqual(["observations.json", "receipts.json"]);
     await restarted.restore({ ...before, longTerm: [] });
     expect(await fs.readdir(join(root, "long-term"))).toEqual([]);
     expect(await restarted.run("search_memory", { query: "생일" }, "search", "next")).toBe("[]");
@@ -72,7 +75,7 @@ test("an interrupted paired memory change recovers before concurrent readers and
 test("invalid pending writes cannot escape the Conversation directory or overwrite its documents", async () => {
   const root = await fs.mkdtemp(join(tmpdir(), "memory-pending-validation-"));
   try {
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     await memory.roll("create", "first", () => 0);
     const pending = join(root, ".memory", "pending.json");
     const original = await fs.readFile(join(root, "MEMORY.md"), "utf8");
@@ -88,7 +91,7 @@ test("invalid pending writes cannot escape the Conversation directory or overwri
     await fs.rm(pending);
     await fs.writeFile(join(root, ".memory", "write.tmp"), "interrupted private write");
     expect(await memory.context()).toContain("current-state");
-    expect(await fs.readdir(join(root, ".memory"))).toEqual(["receipts.json"]);
+    expect(await fs.readdir(join(root, ".memory"))).toEqual(["observations.json", "receipts.json"]);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -97,10 +100,11 @@ test("invalid pending writes cannot escape the Conversation directory or overwri
 test("Markdown validation rejects malformed state and long-term records rather than substituting hidden copies", async () => {
   const root = await fs.mkdtemp(join(tmpdir(), "memory-markdown-validation-"));
   try {
-    const memory = conversationMemory(root);
+    const memory = await memoryFixture(root);
     await memory.run(
       "remember",
       {
+        scope: "life",
         topic: "취향",
         text: "차를 좋아한다.",
         summary: "차 취향",

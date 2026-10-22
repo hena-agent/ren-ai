@@ -5,8 +5,8 @@ oc="${OC_DEPLOYMENT_DIRECTORY:?Point at the reviewed existing OpenCode Compose d
 app="${REN_AI_APP_ENV:?Set the protected application env file}"
 personas="${REN_AI_PERSONAS:?Set the reviewed persona directory}"
 tunnel="${REN_AI_TUNNEL_TOKEN:?Set the application Cloudflare Tunnel token so relocation preserves it}"
-volumes=("${REN_AI_STATE_VOLUME:-ren-ai-application-state}" "${OC_HOME_VOLUME:-oc-hena-dev_opencode-home}" "${OC_PROXY_VOLUME:-oc-hena-dev_auth-proxy-data}" "${REN_AI_LOCATION_VOLUME:-ren-ai-opencode-location}" "${REN_AI_SESSION_VOLUME:-ren-ai-opencode-sessions}")
-[[ "$(printf '%s\n' "${volumes[@]}" | sort -u | wc -l | tr -d ' ')" == 5 ]] || { echo 'Five distinct volume names are required' >&2; exit 1; }
+volumes=("${REN_AI_STATE_VOLUME:-ren-ai-application-state}" "${OC_HOME_VOLUME:-oc-hena-dev_opencode-home}" "${OC_PROXY_VOLUME:-oc-hena-dev_auth-proxy-data}" "${REN_AI_LOCATION_VOLUME:-ren-ai-opencode-location}" "${REN_AI_PERSONA_VOLUME:-ren-ai-opencode-personas}" "${REN_AI_SANDBOX_VOLUME:-ren-ai-opencode-sandboxes}")
+[[ "$(printf '%s\n' "${volumes[@]}" | sort -u | wc -l | tr -d ' ')" == 6 ]] || { echo 'Six distinct volume names are required' >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo 'Use a new backup directory' >&2; exit 1; }
 for volume in "${volumes[@]}"; do
   docker volume inspect "$volume" >/dev/null

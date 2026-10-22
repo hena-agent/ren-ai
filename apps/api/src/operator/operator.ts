@@ -39,19 +39,23 @@ export const makeOperator = (
                 UNION SELECT 1 FROM discovery_registration WHERE handle = ${handle}`).length > 0;
               const keep =
                 (yield* sql`SELECT 1 FROM test_handle WHERE handle = ${handle}`).length > 0;
-              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
-              SELECT user.handle, conversation.session_id FROM user
+              // Keep scope identity in the retry marker before erasing accounting and live rows.
+              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id, persona_id, conversation_key)
+              SELECT user.handle, conversation.session_id, conversation.persona_id, conversation.usage_key FROM user
               JOIN conversation ON conversation.user_id = user.id WHERE user.handle = ${handle}`;
-              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
-                SELECT u.handle, s.session_id FROM usage_session s JOIN conversation c ON c.usage_key = s.conversation_key
+              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id, persona_id, conversation_key)
+                SELECT u.handle, s.session_id, s.persona_id, s.conversation_key FROM usage_session s JOIN conversation c ON c.usage_key = s.conversation_key
                 JOIN user u ON u.id = c.user_id WHERE u.handle = ${handle}`;
-              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id)
-                SELECT r.handle, c.session_id FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
+              yield* sql`INSERT OR IGNORE INTO removal (handle, session_id, persona_id, conversation_key)
+                SELECT r.handle, c.session_id, c.persona_id, c.session_id FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
                 WHERE r.handle = ${handle} AND c.session_id IS NOT NULL`;
               if (!keep)
-                yield* sql`INSERT OR IGNORE INTO removal SELECT handle, session_id
-              FROM retained_session WHERE handle = ${handle}`;
-              yield* eraseIntake(handle).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+                yield* sql`INSERT OR IGNORE INTO removal (handle, session_id, persona_id, conversation_key)
+                  SELECT r.handle, r.session_id, COALESCE(r.persona_id, s.persona_id), COALESCE(r.conversation_key, s.conversation_key)
+                  FROM retained_session r LEFT JOIN usage_session s ON s.session_id = r.session_id WHERE r.handle = ${handle}`;
+              yield* eraseIntake(handle, keep).pipe(
+                Effect.provideService(SqlClient.SqlClient, sql),
+              );
               yield* sql`DELETE FROM send WHERE handle = ${handle}`;
               yield* sql`DELETE FROM blocked WHERE handle = ${handle}`;
               yield* sql`DELETE FROM discovery_registration WHERE handle = ${handle}`;
@@ -64,8 +68,12 @@ export const makeOperator = (
             }).pipe(sql.withTransaction, withLifecycle);
             if (!state.pending.length && !state.existed) return "not_found" as const;
             for (const pending of state.pending) {
-              if (state.keep) yield* retainSession(pending.sessionID, handle);
-              else yield* removeSession(pending.sessionID);
+              if (state.keep) {
+                yield* retainSession(pending.sessionID, handle);
+                yield* sql`UPDATE retained_session SET (persona_id, conversation_key) =
+                  (SELECT persona_id, conversation_key FROM removal WHERE session_id = ${pending.sessionID})
+                  WHERE session_id = ${pending.sessionID}`;
+              } else yield* removeSession(pending.sessionID);
             }
             if (!state.keep) yield* sql`DELETE FROM retained_session WHERE handle = ${handle}`;
             yield* sql`DELETE FROM removal WHERE handle = ${handle}`;

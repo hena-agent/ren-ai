@@ -22,6 +22,7 @@ export {
 export {
   PublicPersona,
   DiscoveryRequest,
+  ReselectionRequest,
   DiscoveryAnswer,
   discoveryNotice,
   discoveryNotices,

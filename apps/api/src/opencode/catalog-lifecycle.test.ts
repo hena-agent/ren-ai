@@ -17,7 +17,7 @@ import {
 } from "./catalog-sync.test-helper.ts";
 
 test.each(["reset", "remove"] as const)(
-  "%s waits for an in-flight catalog scan/write, so the retained snapshot never changes afterwards",
+  "%s waits for an in-flight catalog scan/write while retained identity keeps refreshing without changing the Relationship",
   (action) =>
     catalogTest((host, fixture) =>
       Effect.gen(function* () {
@@ -45,13 +45,14 @@ test.each(["reset", "remove"] as const)(
         yield* expectProfile(host, "수아 수정");
         const snapshot = yield* host.read(active.id);
         expect(snapshot.persona.prompt).toBe(updated.prompt);
-        yield* Effect.promise(() =>
-          fixture.store.update(
-            authoredDefinition({ ...updated, prompt: "An edit only for ongoing conversations." }),
-          ),
-        );
-        yield* Effect.sleep("200 millis");
-        expect(yield* host.read(active.id)).toEqual(snapshot);
+        const latest = authoredDefinition({ ...updated, prompt: "An edit for her shared life." });
+        yield* Effect.promise(() => fixture.store.update(latest));
+        yield* host.refresh;
+        yield* expectPrompt(host, active.id, latest.prompt);
+        expect(yield* host.read(active.id)).toMatchObject({
+          relationship: snapshot.relationship,
+          binding: snapshot.binding,
+        });
         expect(yield* host.directory.byHandle("active@example.com")).toBeUndefined();
         yield* operator.testHandle("active@example.com", false);
         expect(yield* operator.remove("active@example.com")).toBe("removed");
@@ -68,6 +69,7 @@ test(
     Effect.gen(function* () {
       const active = yield* host.activeSession();
       yield* host.fake.text("active@example.com", "Remember my name is Mina.", Date.now());
+      yield* host.incoming.poll;
       const old = host.personas.get("persona1")!;
       const gate = yield* pauseFolderWrite(host, old.prompt.trim());
       const rebuilding = yield* host.recovery

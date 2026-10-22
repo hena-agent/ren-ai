@@ -16,6 +16,8 @@ export interface PersonaRuntime {
   readonly createSession: (
     personaID: string,
     sessionID?: Session.ID,
+    conversationKey?: string,
+    writable?: boolean,
   ) => Effect.Effect<Session.Info, RuntimeError>;
   readonly outcomes: Stream.Stream<
     | SessionEvent.Execution.Failed
@@ -40,6 +42,11 @@ export interface PersonaRuntime {
     readonly interrupt: (id: Session.ID) => Effect.Effect<boolean, RuntimeError>;
     readonly wait: (id: Session.ID) => Effect.Effect<void, RuntimeError>;
     readonly remove: (id: Session.ID) => Effect.Effect<void, RuntimeError>;
+    readonly writable: (id: Session.ID, writable: boolean) => Effect.Effect<void, RuntimeError>;
+    readonly removeRelationship: (
+      personaID: string,
+      conversationKey: string,
+    ) => Effect.Effect<void, RuntimeError>;
     readonly inbox: (
       id: Session.ID,
     ) => Effect.Effect<ReadonlyArray<SessionInbox.Info>, RuntimeError>;

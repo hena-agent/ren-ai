@@ -81,7 +81,7 @@ export function Home() {
           <ConversationScene style={style} />
         </section>
 
-        <HomeHighlights style={style} />
+        <HomeHighlights />
 
         <section className="home-faq" id="faq" aria-labelledby="faq-title">
           <div>

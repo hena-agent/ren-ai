@@ -7,16 +7,19 @@ import { publicRoute, readPublicPeople } from "./public-routing.ts";
 
 export function Site({ client = discoveryClient }: { client?: DiscoveryClient }) {
   const route = publicRoute(new URL(window.location.href));
-  const reselecting = new URLSearchParams(window.location.hash.slice(1)).has("reselect");
-  if (route.id || window.location.pathname === "/explore" || reselecting) {
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  if (route.id || window.location.pathname === "/explore" || fragment.has("reselect")) {
     return (
       <App
         client={client}
         personaId={route.id}
         initialStyle={route.style}
-        initialPeople={readPublicPeople(
-          document.getElementById("public-personas")?.textContent ?? null,
-        )}
+        reselectionToken={fragment.get("reselect") ?? undefined}
+        initialPeople={
+          fragment.has("reselect")
+            ? undefined
+            : readPublicPeople(document.getElementById("public-personas")?.textContent ?? null)
+        }
       />
     );
   }

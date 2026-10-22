@@ -1,4 +1,4 @@
-# 언어 배경·대화별 실력·Discovery 다국어
+# 언어 배경·공유 실력·Discovery 다국어
 
 ## 작성과 소유권
 
@@ -35,18 +35,18 @@ languageProficiency:
 
 ## 대화와 학습
 
-- 새 Conversation은 초기 실력을 복사한다. 이후 Catalog 편집은 현재 State를 초기화하지 않는다.
+- 첫 Conversation에서 인물의 공유 State에 초기 실력을 한 번 설치한다. 이후 Conversation은 현재 실력을 함께 사용한다. Catalog 편집은 현재 State를 초기화하지 않으며 Discovery에는 편집한 초기 실력을 계속 표시한다. 소유권은 [ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)을 따른다.
 - 공통 한국어 강제를 제거한다. 현재 State의 실력에 맞춰 쉬운 문장·되묻기·주 사용 언어 혼용으로 표현하며 억지 오타를 반복하지 않는다.
-- 표현과 교정은 Memory에 남기고 재사용한다. 한 표현을 배웠다고 단계가 즉시 오르지는 않는다.
+- 표현과 학습 경험은 Life memory에 남기고 모든 Conversation에서 재사용한다. 누가 가르쳤는지와 사적 대화 내용은 해당 Relationship memory에만 둔다. 한 표현을 배웠다고 단계가 즉시 오르지는 않는다.
 - 지속적인 연습과 실제 사용을 근거로 `update_state.languageProficiency`에 언어별 패치와 변경 이유를 전달한다. 새로 배우는 언어는 서버에서도 beginner부터 허용한다. 다른 언어와 다른 State 값은 보존한다.
 - 사용자의 승급 선언, 한 번의 따라 하기, 피로·긴장·단어 하나의 망각은 단계 변경의 근거가 아니다. 모델의 자연스러운 학습 판단은 지침으로 유도하며 경험치나 자동 승급 알고리즘은 두지 않는다.
-- 도구 호출의 출처·시각과 재실행 영수증을 기존 원자적 Memory snapshot에 저장한다. 재전송·재시작·세션 이동 후 같은 변경을 중복 적용하지 않는다.
+- 도구 호출의 출처·시각과 세션/호출별 재실행 영수증을 영속 저장한다. 공유 언어 항목의 오래된 쓰기는 현재 값과 변경 근거를 반환해 재판단하게 한다. 재전송·재시작·세션 이동 후 같은 변경을 중복 적용하지 않는다.
 
 ## 표시와 개인정보 경계
 
 Discovery 카드에는 최대 두 언어, 상세에는 전체 초기 실력을 표시한다. 초기 State에서 공개하는 것은 언어 실력뿐이며 컨디션·호감도·특성·Memory는 반환하지 않는다. 언어 배경은 공개 표시용 언어 코드만 추출한다.
 
-Admin 첫 연락 화면의 활성 대화에서 ‘현재 언어 실력’을 열면 해당 Conversation의 현재 실력과 최근 **State 전체의** 변경 근거·시각을 읽는다. 현재 실력이 미설정이면 이를 그대로 표시한다. 이 조회는 Admin 인증과 executor의 management token 인증 안에서 수행하며 `Cache-Control: no-store`를 사용한다. 로그에는 학습 근거·대화·Handle·Persona 원문을 넣지 않는다.
+Admin 첫 연락 화면의 활성 대화에서 ‘현재 언어 실력’을 열면 해당 Persona의 공유 현재 실력과 State 변경 근거·시각을 읽는다. 다른 Conversation에서 성장한 실력도 동일하다. 현재 실력이 미설정이면 이를 그대로 표시한다. 이 조회는 Admin 인증과 executor의 management token 인증 안에서 수행하며 `Cache-Control: no-store`를 사용한다. 로그에는 학습 근거·대화·Handle·Persona 원문을 넣지 않는다.
 
 ## Discovery 화면과 첫 인사
 

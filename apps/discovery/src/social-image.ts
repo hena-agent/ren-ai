@@ -17,7 +17,7 @@ export const brandSocialImage: SocialImage = {
   type: "image/png",
   width: 1200,
   height: 630,
-  alt: "Ren AI — 오직 당신과만, iMessage에서. AI 페르소나와 나누는 일상.",
+  alt: "Ren AI — iMessage에서. AI 페르소나와 나누는 일상.",
 };
 export function personaPreview(persona: PublicPersona, style: ImageStyle) {
   const source = withImageStyle(persona, style).imageUrl;

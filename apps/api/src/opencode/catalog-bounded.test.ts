@@ -97,7 +97,7 @@ test.each([35, 36])(
 );
 
 test(
-  "Catalog pagination validates every page, rejects loops, and prunes deleted or frozen apply plans",
+  "Catalog pagination validates every page, rejects loops, prunes deleted plans, and refreshes retained shared roots",
   catalogTest((host, fixture) =>
     Effect.gen(function* () {
       const active = yield* host.activeSession();
@@ -134,7 +134,7 @@ test(
         });
       host.personas.set("persona1", {
         ...host.personas.get("persona1")!,
-        name: "Updated inventory",
+        prompt: "Updated shared identity.",
       });
       yield* withWorkBudget(
         syncFolders(client, fixture.personaDirectory, host.personas, fixture.groundRules),
@@ -143,11 +143,77 @@ test(
       const [plan] = yield* sql<{
         fingerprint: string;
       }>`SELECT fingerprint FROM catalog_plan LIMIT 1`;
-      yield* sql`INSERT INTO catalog_plan VALUES ('ses_deleted', ${plan!.fingerprint}, 'persona1')`;
+      yield* sql`INSERT INTO catalog_plan VALUES ('ses_deleted', ${plan!.fingerprint + "-deleted"}, 'deleted-persona')`;
       yield* sql`INSERT INTO retained_session(session_id, handle, title) VALUES (${active.id}, 'retained', 'retained')`;
       yield* syncFolders(client, fixture.personaDirectory, host.personas, fixture.groundRules);
       expect(yield* sql`SELECT 1 FROM catalog_plan WHERE session_id = 'ses_deleted'`).toEqual([]);
-      expect(yield* host.read(active.id)).toEqual(before);
+      const after = yield* host.read(active.id);
+      expect(after).toMatchObject({
+        persona: { prompt: "Updated shared identity." },
+        relationship: before.relationship,
+      });
+      expect(after.runtime).toEqual(before.runtime);
+    }),
+  ),
+);
+
+test(
+  "bounded Catalog resumption applies each shared root once and leaves unchanged plans unwritten",
+  catalogTest((host, fixture) =>
+    Effect.gen(function* () {
+      for (const persona of ["persona1", "harin"])
+        for (let index = 0; index < 4; index++)
+          yield* host.activeSession(persona, `${persona}-${index}@example.test`);
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`CREATE TABLE catalog_plan_writes (operation TEXT NOT NULL)`;
+      yield* sql`CREATE TRIGGER catalog_plan_insert AFTER INSERT ON catalog_plan BEGIN
+        INSERT INTO catalog_plan_writes VALUES ('insert'); END`;
+      yield* sql`CREATE TRIGGER catalog_plan_update AFTER UPDATE ON catalog_plan BEGIN
+        INSERT INTO catalog_plan_writes VALUES ('update'); END`;
+      const updated = new Map(
+        [...host.personas].map(([id, persona]) => [
+          id,
+          { ...persona, prompt: `${persona.prompt}\nYou enjoy the shared observatory.` },
+        ]),
+      );
+      let writes = 0;
+      host.transport.before = (request) => {
+        if (new URL(request.url).pathname.endsWith("/update")) writes++;
+        return Promise.resolve();
+      };
+      const paused = yield* withWorkBudget(
+        Effect.forEach(Array.from({ length: 20 }), () => claimWork).pipe(
+          Effect.andThen(
+            syncFolders(host.remote.client, fixture.personaDirectory, updated, fixture.groundRules),
+          ),
+        ),
+      ).pipe(Effect.flip);
+      expect(paused).toBeInstanceOf(DeferredWork);
+      expect(writes).toBe(0);
+      yield* withWorkBudget(
+        syncFolders(host.remote.client, fixture.personaDirectory, updated, fixture.groundRules),
+      );
+      expect(writes).toBe(2);
+      expect(yield* sql`SELECT persona_id FROM catalog_plan ORDER BY persona_id`).toEqual([
+        { persona_id: "harin" },
+        { persona_id: "persona1" },
+      ]);
+      expect(yield* sql`SELECT operation FROM catalog_plan_writes`).toEqual([
+        { operation: "insert" },
+        { operation: "insert" },
+      ]);
+      yield* withWorkBudget(
+        syncFolders(host.remote.client, fixture.personaDirectory, updated, fixture.groundRules),
+      );
+      expect(writes).toBe(2);
+      expect(yield* sql`SELECT operation FROM catalog_plan_writes`).toHaveLength(2);
+      expect(
+        JSON.stringify(
+          yield* sql`EXPLAIN QUERY PLAN SELECT session_id, persona_id, fingerprint
+        FROM catalog_plan WHERE fingerprint >= 'revision:' AND fingerprint < 'revision;'
+        AND fingerprint > '' ORDER BY fingerprint LIMIT 5`,
+        ),
+      ).toContain("catalog_plan_scan");
     }),
   ),
 );

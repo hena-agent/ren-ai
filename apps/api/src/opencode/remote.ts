@@ -93,6 +93,23 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
           Effect.asVoid,
           Effect.mapError((error) => new Error(JSON.stringify(error))),
         ),
+      writable: (sessionID: Session.ID, writable: boolean) =>
+        client.session
+          .get({ sessionID })
+          .pipe(
+            Effect.mapError(remoteError),
+            Effect.andThen(
+              folders
+                .writable({ folderID: sessionID, writable }, location)
+                .pipe(Effect.mapError((error) => new Error(error.message))),
+            ),
+            Effect.asVoid,
+          ),
+      removeRelationship: (personaID: string, conversationKey: string) =>
+        folders.removeRelationship({ personaID, conversationKey }, location).pipe(
+          Effect.asVoid,
+          Effect.mapError((error) => new Error(error.message)),
+        ),
       inbox: (sessionID: Session.ID) =>
         client.session.inbox.list({ sessionID }).pipe(Effect.mapError(remoteError)),
       cancelInbox: (input: SessionInboxCancelInput) =>
@@ -143,7 +160,12 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
             })
             .pipe(Effect.mapError(remoteError));
         }),
-      createSession: (personaID: string, sessionID?: Session.ID) =>
+      createSession: (
+        personaID: string,
+        sessionID?: Session.ID,
+        conversationKey?: string,
+        writable?: boolean,
+      ) =>
         Effect.gen(function* () {
           if (!personas.has(personaID))
             return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
@@ -154,6 +176,8 @@ export const remoteHost = (config: RemoteConfig, personas: ReadonlyMap<string, P
                 folderID: id,
                 snapshot: renderSnapshot(personas.get(personaID)!, config.groundRules),
                 model: config.model,
+                conversationKey: conversationKey ?? id,
+                ...(writable !== undefined && { writable }),
               },
               location,
             )

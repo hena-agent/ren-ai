@@ -7,6 +7,48 @@ import { exportSessions, restoreSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";
 import { remoteHost } from "./remote.ts";
 import { FetchHttpClient } from "effect/unstable/http";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+import { readSessionBinding } from "@ren-ai/plugin-session-folder/bindings";
+
+test("failed folder RPCs preserve write access and Relationship data until an explicit successful removal", () =>
+  withRemoteHost((remote, _directory, { transport }) =>
+    Effect.gen(function* () {
+      const first = yield* remote.createSession("persona1");
+      const sibling = yield* remote.createSession("persona1");
+      const path = join(first.location.directory, "conversations", first.id);
+      const forward = transport.fetch;
+      transport.fetch = (request) =>
+        request.method === "POST"
+          ? Promise.resolve(new Response("Unavailable", { status: 503 }))
+          : forward(request);
+      expect(yield* remote.sessions.writable(first.id, false).pipe(Effect.flip)).toBeInstanceOf(
+        Error,
+      );
+      expect(
+        yield* remote.sessions.removeRelationship("persona1", first.id).pipe(Effect.flip),
+      ).toBeInstanceOf(Error);
+      expect(
+        (yield* Effect.promise(() => readSessionBinding(first.location.directory, first.id)))
+          .writable,
+      ).toBe(true);
+      expect((yield* Effect.promise(() => stat(path))).isDirectory()).toBe(true);
+      transport.fetch = forward;
+      yield* remote.sessions.remove(first.id);
+      yield* remote.sessions.removeRelationship("persona1", first.id);
+      yield* Effect.promise(async () => {
+        await expect(stat(path)).rejects.toMatchObject({ code: "ENOENT" });
+      });
+      expect(
+        (yield* Effect.promise(() =>
+          stat(join(sibling.location.directory, "conversations", sibling.id)),
+        )).isDirectory(),
+      ).toBe(true);
+      expect((yield* remote.sessions.get(sibling.id)).location.directory).toBe(
+        first.location.directory,
+      );
+    }),
+  ));
 
 test("missing-session errors retain the native diagnostic for the operator", () =>
   withRemoteHost((remote, directory, { transport }) =>
@@ -70,7 +112,7 @@ test("recovery leaves an empty session alone and can recover a failure before an
       );
       const entry = data.sessions[0]!;
       const failure = Schema.encodeSync(sessionArchive)({
-        version: 1,
+        ...data,
         sessions: [
           {
             ...entry,
@@ -109,7 +151,7 @@ test.each([false, true])(
         );
         const entry = data.sessions[0]!;
         const contents = Schema.encodeSync(sessionArchive)({
-          version: 1,
+          ...data,
           sessions: [
             {
               ...entry,
