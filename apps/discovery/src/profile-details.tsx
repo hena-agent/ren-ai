@@ -19,19 +19,6 @@ function profileWithoutLegacyAge(profile: NonNullable<StyledPersona["profile"]>)
   };
 }
 
-function ProfileContent({ persona }: { persona: StyledPersona }) {
-  return (
-    <>
-      {persona.profile ? (
-        <PublicProfileView profile={profileWithoutLegacyAge(persona.profile)} />
-      ) : (
-        <p>{persona.bio}</p>
-      )}
-      <ProfileLanguages persona={persona} />
-    </>
-  );
-}
-
 function DetailsGallery({
   persona,
   image,
@@ -131,8 +118,13 @@ export function ProfileDetails({
             {persona.name}
             {persona.age !== undefined && `, ${persona.age}`}
           </h2>
-          <ProfileContent persona={persona} />
+          {persona.profile ? (
+            <PublicProfileView profile={profileWithoutLegacyAge(persona.profile)} />
+          ) : (
+            <p>{persona.bio}</p>
+          )}
         </div>
+        <ProfileLanguages persona={persona} />
         <div className="details-footer">
           <ProfileShare persona={persona} imageStyle={persona.imageStyle} disabled={disabled} />
         </div>
