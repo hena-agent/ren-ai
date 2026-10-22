@@ -20,8 +20,8 @@ test("startup and replacement initialize quiet Conversations in bounded persiste
       yield* sql`WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i < 300)
       INSERT INTO user(handle, locale, consent_version, consent_language, consent_at, joined_at, replied_at)
       SELECT 'quiet-' || i, 'ko', 'v1', 'ko', 0, 0, 0 FROM n`;
-      yield* sql`INSERT INTO conversation(user_id, persona_id, session_id, started_at)
-      SELECT id, 'persona1', 'ses_' || id, 0 FROM user`;
+      yield* sql`INSERT INTO conversation(user_id, persona_id, session_id, started_at, first_received_at)
+      SELECT id, 'persona1', 'ses_' || id, 0, 0 FROM user`;
       const opening = withWorkBudget(
         followUps(
           () => Effect.succeed(false),
@@ -95,8 +95,8 @@ test("wakes after quiet, stops after two unanswered follow-ups, and restarts onl
         let follow = yield* create();
         expect(yield* state(ignored.id)).toBeUndefined();
         yield* follow.sent(ignored);
-        yield* sql`UPDATE user SET replied_at = ${yield* Clock.currentTimeMillis} WHERE handle IN
-          (${first.handle}, ${blocked.handle}, ${removed.handle})`;
+        yield* sql`UPDATE conversation SET first_received_at = ${yield* Clock.currentTimeMillis} WHERE id IN
+          (${first.id}, ${blocked.id}, ${removed.id})`;
         yield* follow.received(first, yield* Clock.currentTimeMillis);
         const initial = (yield* state(first.id))!.nextWakeAt!;
         expect(initial - (yield* Clock.currentTimeMillis)).toBeGreaterThanOrEqual(
@@ -174,7 +174,7 @@ test("restores existing replied Conversations and their persisted wake on restar
           sessionID: "returning",
         });
         const now = yield* Clock.currentTimeMillis;
-        yield* sql`UPDATE user SET replied_at = ${now} WHERE handle = ${existing.handle}`;
+        yield* sql`UPDATE conversation SET first_received_at = ${now} WHERE id = ${existing.id}`;
         const prompts: string[] = [];
         let checked = false;
         let allowed = false;

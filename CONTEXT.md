@@ -83,7 +83,7 @@ Becoming a user: joining the waitlist through Discovery, being selected, and rec
 _Avoid_: signup, registration
 
 **Test handle**:
-A handle the operator marks for trying the service as a user would. Only a test handle's conversation can be reset, and only a test handle can skip Selection to start with a chosen persona right away.
+A handle the operator marks for trying the service as a user would. Only a test handle can use Reset to end its current relationship, and only a test handle can skip Selection to start with a chosen persona right away.
 _Avoid_: developer handle, dev number, allowlist
 
 **Greeting**:
@@ -95,7 +95,7 @@ A user's distinct 1:1 relationship with one persona over iMessage. A later relat
 _Avoid_: chat, thread, session (a session is OpenCode's)
 
 **Relationship ending**:
-A persona's permanent decision to end her Conversation with one user. It is distinct from declining a suggestion, taking a break, or blocking the user from the service.
+The permanent end of one Conversation, initiated by its Persona, the Operator, or a test handle using Reset. It is distinct from declining a suggestion, taking a break, or blocking the user from the service.
 _Avoid_: ban, reset, pause
 
 **Retired persona**:
@@ -155,7 +155,7 @@ People waiting to start a conversation. Each registration includes a handle, lik
 _Avoid_: queue, signup list
 
 **Selection**:
-The operator's choice to admit up to N randomly chosen eligible waiting people, each with one randomly chosen available persona from their Likes.
+The operator's choice to admit eligible waiting people, either picked directly or up to N chosen at random. Each receives one available persona from their Likes, chosen by the operator or allocated at random.
 _Avoid_: matching, approval, first-come-first-served
 
 **Assignment**:
@@ -167,7 +167,7 @@ The selected persona's planned first Greeting, scheduled once between five minut
 _Avoid_: Notice, immediate onboarding, automatic selection
 
 **Reset**:
-Returning a test handle to before onboarding, so its next conversation starts as a first meeting. The persona's previous memory is kept for review.
+The test-only command for a user to end their current Conversation and enter Reselection. It preserves the User and the previous relationship's history and memories.
 _Avoid_: clear, restart, new conversation
 
 **Operator**:

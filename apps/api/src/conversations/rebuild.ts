@@ -21,7 +21,7 @@ export const setupRebuilding = (
 ) =>
   Effect.gen(function* () {
     let restore: (handle: string) => Effect.Effect<void, Error>;
-    const reset = yield* resets(directory, host, forget, messages);
+    const reset = yield* resets(directory, forget, messages);
     const incoming = yield* intake(
       messages,
       directory.byHandle,
@@ -54,7 +54,6 @@ export const setupRebuilding = (
       yield* incoming.resetPending;
       yield* recovery.missing;
     }
-    yield* reset.resume;
     if (eager) yield* incoming.poll;
     return { incoming, recovery };
   });

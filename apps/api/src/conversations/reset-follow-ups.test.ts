@@ -1,4 +1,5 @@
-import { rm } from "node:fs/promises";
+import { copyFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { Clock, Duration, Effect } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
 import { Session } from "@opencode/schema/session";
@@ -10,6 +11,7 @@ import { bindTestHandle, startTestHandle } from "../../test/reset.test-helper.ts
 
 test("sending the reset Greeting does not schedule a follow-up until the User replies", async () => {
   const { root, personaDirectory } = await messagingFixture("reset-follow-");
+  await copyFile(join(personaDirectory, "persona1.md"), join(personaDirectory, "persona2.md"));
   const fake = fakeMessages();
   const handle = "+821012345678";
   let offset = 0;
@@ -33,7 +35,8 @@ test("sending the reset Greeting does not schedule a follow-up until the User re
         yield* startTestHandle(host, fake.messages, handle);
         const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
         yield* host.sessions.wait(id);
-        expect(fake.bubbles).toContainEqual({ handle, text: "Hello stranger" });
+        expect(fake.bubbles.at(-1)?.text).toContain("Hello stranger");
+        expect(fake.bubbles.at(-1)?.text).toContain("다른 페르소나");
         offset += 8 * 86_400_000;
         yield* host.heartbeat.followUps;
         yield* host.sessions.wait(id);

@@ -118,6 +118,9 @@ languages under a new consent version at the Step 2 release.
 - The existing localized relationship-ended and Reselection copy uses the User's
   locale and explains that this address does not read replies. The Waitlist-only
   30-per-hour admission cap does not discard relationship-ending notices.
+- A test handle's `/reset` is also a user-initiated Relationship ending. It sends
+  the same Notice with copy that says the User requested the ending; it does not
+  delete the User, reset their consent, or create a new Conversation automatically.
 
 ## Explicit exceptions and deferred work
 

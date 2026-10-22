@@ -79,7 +79,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           });
           if (kind === "quota") {
             failing = true;
-            const subsequent = yield* bindTestHandle(host, "subsequent@example.com", "persona2");
+            const subsequent = yield* bindTestHandle(host, "subsequent@example.com", "persona3");
             yield* host.sessions.prompt({
               sessionID: subsequent.id,
               text: "subsequent quota failure",
@@ -107,7 +107,7 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           expect(alerts).toContain(`clear:conversation-turn-failing:${old.id}`);
           if (kind === "quota") expect(alerts).toContain("clear:go-cap");
           if (kind === "quota") expect(yield* requestsFor("subsequent quota failure")).toBe(2);
-          if (kind.includes("provider")) expect(alerts).not.toContain("clear:go-cap");
+          if (kind.includes("provider")) expect(alerts).toContain("clear:go-cap");
           if (kind === "other-quota")
             yield* Effect.promise(async () => {
               await expect

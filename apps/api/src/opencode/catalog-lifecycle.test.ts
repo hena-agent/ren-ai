@@ -23,12 +23,7 @@ test.each(["reset", "remove"] as const)(
       Effect.gen(function* () {
         const active = yield* host.activeSession();
         const operator = yield* markedOperator(host);
-        const reset = yield* resets(
-          host.directory,
-          host.remote,
-          () => Effect.void,
-          host.fake.messages,
-        );
+        const reset = yield* resets(host.directory, () => Effect.void, host.fake.messages);
         const updated = authoredDefinition({
           ...host.personas.get("persona1")!,
           name: "수아 수정",

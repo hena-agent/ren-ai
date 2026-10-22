@@ -47,14 +47,13 @@ export const failedTurns = (
 
     const forget = (sessionID: string) =>
       Effect.gen(function* () {
-        const removed =
-          yield* sql<Failure>`DELETE FROM failed_turn WHERE session_id = ${sessionID} RETURNING *`;
+        yield* sql`DELETE FROM failed_turn WHERE session_id = ${sessionID}`;
         yield* alerts.clear(turnAlert(sessionID));
         const [active] = yield* sql<{ quota: number; provider: number }>`SELECT
           EXISTS(SELECT 1 FROM failed_turn WHERE review = 0 AND quota = 1) AS quota,
           EXISTS(SELECT 1 FROM failed_turn WHERE review = 0 AND quota = 0) AS provider`;
-        if (removed.some((row) => row.quota) && !active!.quota) yield* alerts.clear(cap);
-        if (removed.some((row) => !row.quota) && !active!.provider) yield* alerts.clear(provider);
+        if (!active!.quota) yield* alerts.clear(cap);
+        if (!active!.provider) yield* alerts.clear(provider);
       }).pipe(Effect.catchCause(Effect.logWarning));
 
     const succeeded = (prior: Failure) =>

@@ -16,7 +16,7 @@ test.each(["renumbered", "missing"])(
           yield* f.fake.text(f.handle, "second old fact", at);
           const command = yield* f.fake.text(f.handle, "/reset", at);
           yield* startTestHandle(host, f.fake.messages, f.handle);
-          const reset = yield* resets(host.conversations, host, () => Effect.void, f.fake.messages);
+          const reset = yield* resets(host.conversations, () => Effect.void, f.fake.messages);
           yield* reset.receive({ ...old, text: "/reset" });
           yield* reset.receive({ ...old, guid: "unseen-old-command", text: "/reset" });
           expect((yield* host.conversations.byHandle(f.handle))?.sessionID).toBe(
@@ -45,7 +45,7 @@ test.each(["renumbered", "missing"])(
           yield* f.fake.replace([later]);
           yield* host.heartbeat.intake;
           const memory = yield* currentMemory(host, f.handle);
-          expect(memory.text).toContain("new equal timestamp");
+          expect(memory.text).not.toContain("new equal timestamp");
           expect(memory.text).toContain("new lower rowid");
           expect(memory.text).not.toContain("<tapback");
           expect(memory.text).not.toContain("/reset");

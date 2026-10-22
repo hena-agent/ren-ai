@@ -281,6 +281,13 @@ export const migrate = Effect.gen(function* () {
         guid TEXT,
         PRIMARY KEY (conversation_id, call_id)
       )`,
+      "044_user_ending": Effect.gen(function* () {
+        yield* sql`ALTER TABLE conversation_end ADD COLUMN ending_initiator TEXT NOT NULL DEFAULT 'persona'
+          CHECK(ending_initiator IN ('persona','operator','user'))`;
+        yield* sql`UPDATE conversation_end SET ending_initiator = initiator`;
+        yield* sql`ALTER TABLE conversation_end DROP COLUMN initiator`;
+        yield* sql`ALTER TABLE conversation_end RENAME COLUMN ending_initiator TO initiator`;
+      }),
     }),
   });
 });

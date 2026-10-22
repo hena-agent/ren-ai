@@ -202,27 +202,38 @@ test("an unavailable farewell observation cannot block the service notice or mas
   );
 });
 
-test("session retention preserves and propagates an unrelated tagged executor failure", async () => {
-  await withContactDatabase(
-    Effect.gen(function* () {
-      const f = yield* relationshipFixture;
-      const failure = Object.assign(new Error("executor rename failed"), {
-        _tag: "ExecutorFailure",
-      });
-      const host = fromPartial<PersonaRuntime>({
-        sessions: {
-          interrupt: () => Effect.succeed(false),
-          inbox: () => Effect.succeed([]),
-          wait: () => Effect.void,
-          rename: () => Effect.fail(failure),
-        },
-      });
-      yield* f.sql`INSERT INTO retained_session (session_id, handle, title) VALUES (${f.conversation.sessionID}, ${f.conversation.handle}, 'retained')`;
-      const retained = yield* retainedSessions(host);
-      const result = yield* Effect.result(retained.resume);
-      expect(Result.isFailure(result)).toBe(true);
-      if (Result.isFailure(result)) expect(result.failure).toBe(failure);
-      expect((yield* f.sql`SELECT session_id FROM retained_session`).length).toBe(1);
-    }),
-  );
-});
+test.each(["missing", "untagged", "tagged"])(
+  "session retention handles %s executor failures without discarding review history",
+  async (kind) => {
+    await withContactDatabase(
+      Effect.gen(function* () {
+        const f = yield* relationshipFixture;
+        const failure =
+          kind === "missing"
+            ? new MissingSession({ message: "Session missing" })
+            : kind === "untagged"
+              ? new Error("executor rename failed")
+              : Object.assign(new Error("executor rename failed"), {
+                  _tag: "ExecutorFailure",
+                });
+        const host = fromPartial<PersonaRuntime>({
+          sessions: {
+            interrupt: () => Effect.succeed(false),
+            inbox: () => Effect.succeed([]),
+            wait: () => Effect.void,
+            rename: () => Effect.fail(failure),
+          },
+        });
+        yield* f.sql`INSERT INTO retained_session (session_id, handle, title) VALUES (${f.conversation.sessionID}, ${f.conversation.handle}, 'retained')`;
+        const retained = yield* retainedSessions(host);
+        const result = yield* Effect.result(retained.resume);
+        expect(Result.isFailure(result)).toBe(kind !== "missing");
+        if (Result.isFailure(result)) expect(result.failure).toBe(failure);
+        expect((yield* f.sql`SELECT session_id FROM retained_session`).length).toBe(1);
+        expect(yield* f.sql`SELECT stopped FROM retained_session`).toEqual([
+          { stopped: Number(kind === "missing") },
+        ]);
+      }),
+    );
+  },
+);

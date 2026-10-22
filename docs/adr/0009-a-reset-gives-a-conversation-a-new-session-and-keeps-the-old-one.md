@@ -1,5 +1,9 @@
 # A reset returns a test handle to onboarding and keeps the old session for review
 
+Superseded for `/reset` by the [Relationship ending contract](../specs/persona-relationship-boundaries.md#테스트-주소의-reset): the test-only command now ends the current relationship, preserves the User and Conversation history, and sends the private Reselection link from `noti@renai.im`.
+
+The original decision below describes the former onboarding-reset flow.
+
 A test handle can text `/reset` to return to before onboarding. The old OpenCode session is interrupted and retained for review, and the active user and conversation are removed. Submitting the handle at discovery.hena.dev again records fresh consent and sends a new notice and greeting in a new session. This revises the original memory-only reset decision: retaining admission status prevented operators from testing onboarding from the beginning. The physical iMessage thread stays the same; rebuilding never restores memory from before the latest reset.
 
 ## Considered Options
