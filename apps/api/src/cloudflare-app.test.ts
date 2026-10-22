@@ -1,5 +1,5 @@
 import { fromPartial } from "@total-typescript/shoehorn";
-import { Deferred, Effect, Exit } from "effect";
+import { Deferred, Effect, Exit, Schema } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { SqlClient } from "effect/unstable/sql";
 import { SqliteClient } from "@effect/sql-sqlite-node";
@@ -13,6 +13,8 @@ import { applicationGateway } from "./opencode/application-gateway.ts";
 import { applicationApi } from "./opencode/application-protocol.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import type { MessagingTools } from "./application-tools.ts";
+import { captureGatewayLogs, gatewayFixture } from "../../imsg/test/gateway.test-helper.ts";
+import { captureDiagnostics } from "../test/diagnostics.test-helper.ts";
 
 type RuntimeDouble = {
   initialized: boolean;
@@ -65,13 +67,62 @@ const bindings: CloudflareBindings = {
   TOKEN_MANAGEMENT: "management-token",
   API_MSG_URL: "https://api-msg.example",
 };
-const fetcher: typeof fetch = async () =>
-  Response.json({ service: "api-msg", revision: "development", status: "ready" });
+const fetcher: typeof fetch = async (input, init) => {
+  const request = new Request(input, init);
+  if (request.method === "POST") {
+    const body = Schema.decodeUnknownSync(
+      Schema.fromJsonString(Schema.Struct({ id: Schema.Number })),
+    )(await request.text());
+    return new Response(
+      `${JSON.stringify({ _tag: "Exit", requestId: body.id, exit: { _tag: "Success", value: null } })}\n`,
+    );
+  }
+  return Response.json({ service: "api-msg", revision: "development", status: "ready" });
+};
 const settledRuntime = () => {
   const result = controls.runtime.mock.settledResults.at(-1);
   if (result?.type !== "fulfilled") throw new Error("Execution did not open");
   return result.value;
 };
+
+test("a ready database and executor cannot hide APNs failure, and the Mac diagnostic remains correlated", async () => {
+  const gateway = gatewayFixture();
+  gateway.gestures.gestures.probe = () =>
+    Effect.fail(Object.assign(new Error("private Apple detail"), { code: "APNS_UNAVAILABLE" }));
+  const { logs, restore } = captureDiagnostics();
+  const mac = captureGatewayLogs();
+  const app = await createCloudflareApplication(
+    storage,
+    { ...bindings, TOKEN_MANAGEMENT: "secret" },
+    "rules",
+    (input, init) => {
+      const request = new Request(input, init);
+      return request.method === "POST"
+        ? gateway.transport.fetch(new Request(new URL("/rpc", request.url), request))
+        : fetcher(request);
+    },
+  );
+  try {
+    const response = await app.fetch(new Request("https://app/health"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      database: "ready",
+      executor: { status: "ready" },
+      messaging: "unavailable",
+    });
+    const diagnostic = logs.find((line) => line.includes('"stage":"messaging.probe"'))!;
+    expect(diagnostic).toContain(response.headers.get("x-request-id"));
+    expect(diagnostic).toContain('"operationId":');
+    expect(mac.logs.join("")).toContain("APNS_UNAVAILABLE");
+    expect(mac.logs.join("")).toContain(/"operationId":"([0-9a-f-]{36})"/.exec(diagnostic)![1]);
+    expect(logs.join("")).not.toMatch(/private Apple detail|management-token|private-conversation/);
+  } finally {
+    await app.close();
+    await gateway.server.dispose();
+    mac.restore();
+    restore();
+  }
+});
 
 test("an unconfigured management boundary cannot expose edit baselines or accept wake hints", async () => {
   const app = await createCloudflareApplication(
@@ -113,6 +164,7 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
     storage: "durable-object-sqlite",
     bootstrapOnly: true,
     executor: { service: "api-msg", revision: "development", status: "ready" },
+    messaging: "ready",
   });
   expect(health.headers.get("cache-control")).toBe("no-store");
   expect(
@@ -186,6 +238,7 @@ test("a ready executor cannot conceal an unavailable application database", asyn
       storage: "durable-object-sqlite",
       bootstrapOnly: true,
       executor: { service: "api-msg", revision: "development", status: "ready" },
+      messaging: "ready",
     });
     const logs = JSON.stringify(stderr.mock.calls);
     expect(logs).toContain(response.headers.get("x-request-id"));
@@ -320,6 +373,7 @@ test.each([200, 401])(
         storage: "durable-object-sqlite",
         bootstrapOnly: true,
         executor: { status: status === 401 ? "unauthorized" : "unexpected_response" },
+        messaging: "unavailable",
       });
       expect(JSON.stringify(stderr.mock.calls)).toContain(response.headers.get("x-request-id"));
       expect(JSON.stringify(stderr.mock.calls)).toContain(

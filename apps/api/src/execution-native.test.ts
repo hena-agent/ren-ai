@@ -189,7 +189,8 @@ test.each(["sent", "uncertain"] as const)(
               // Registration and selection completed while execution was unavailable.
               expect(attempts).toBe(0);
               const offline = await executionState(runtime, "/__fixture/alarm");
-              expect(offline.alarm).toBeGreaterThan(Date.now() + 25_000);
+              // Messaging gets its own 20-second recheck while startup backs off.
+              expect(offline.alarm).toBeGreaterThan(Date.now() + 15_000);
               expect((await runtime.dispatchFetch("https://app/discovery/personas")).status).toBe(
                 200,
               );

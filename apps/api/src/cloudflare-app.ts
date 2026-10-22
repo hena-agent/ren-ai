@@ -10,15 +10,16 @@ import { createExecutionRuntime } from "./execution-runtime.ts";
 import { applicationRequest } from "./application-request.ts";
 import { stateTransfer } from "./state-transfer.ts";
 import { healthResponse, probeHealth } from "@ren-ai/transport/health";
-import { contactCause, contactLog } from "./discovery/diagnostics.ts";
+import { contactCause, contactLog, contactOperationId } from "./discovery/diagnostics.ts";
 import { intakeRequests } from "./intake/http.ts";
+import { probeMessaging } from "./messaging-health.ts";
 
 export interface CloudflareApplication {
   readonly store: ApplicationStore;
   readonly configuration: CloudflareConfiguration;
   readonly fetch: (request: Request) => Promise<Response>;
   readonly close: () => Promise<void>;
-  readonly tick: () => Promise<void>;
+  readonly tick: (requestId?: string) => Promise<void>;
 }
 
 const isWriteRequest = (request: Request) =>
@@ -72,14 +73,35 @@ const health = async (
       code: `executor_${executor.status}`,
       status: 503,
     });
+  let messaging: "ready" | "unavailable" = "ready";
+  const messagingStarted = performance.now();
+  try {
+    await Effect.runPromise(probeMessaging(configuration.execution, fetcher));
+  } catch (cause) {
+    messaging = "unavailable";
+    const operationId = contactOperationId(cause);
+    contactLog({
+      requestId,
+      operation: "api-app.health",
+      stage: "messaging.probe",
+      outcome: "failed",
+      level: "error",
+      durationMs: performance.now() - messagingStarted,
+      ...contactCause(cause),
+      ...(operationId && { operationId }),
+    });
+  }
   return healthResponse(
     "api-app",
-    database === "ready" && executor.status === "ready" ? "ready" : "degraded",
+    database === "ready" && executor.status === "ready" && messaging === "ready"
+      ? "ready"
+      : "degraded",
     {
       database,
       storage: "durable-object-sqlite",
       bootstrapOnly: configuration.bootstrapOnly,
       executor,
+      messaging,
     },
   );
 };
@@ -142,11 +164,11 @@ export const createCloudflareApplication = async (
           }
           return store.handler(request);
         }),
-      tick: async () => {
+      tick: async (requestId?: string) => {
         if (configuration.bootstrapOnly) return;
         const current = execution();
         try {
-          await (await current).tick();
+          await (await current).tick(requestId);
         } catch (cause) {
           const initialized = await current.then(
             (value) => value.initialized,
