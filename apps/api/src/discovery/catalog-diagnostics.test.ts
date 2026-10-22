@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { Context, Effect } from "effect";
+import { Context, Effect, Exit, Layer, Scope } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { contactCause } from "./diagnostics.ts";
 import { catalogClient } from "../personas/catalog.ts";
@@ -25,6 +25,10 @@ test("Catalog failures retain allowlisted status and cause code without the upst
 test("Discovery maps an invalid Catalog profile to storage and logs correlated safe diagnostics", async () => {
   const events: object[] = [];
   const requestId = "00000000-0000-4000-8000-000000000017";
+  const scope = await Effect.runPromise(Scope.make());
+  const database = await Effect.runPromise(
+    Layer.buildWithScope(SqliteClient.layer({ filename: ":memory:" }), scope),
+  );
   const web = await Effect.runPromise(
     Effect.gen(function* () {
       yield* migrate;
@@ -43,7 +47,7 @@ test("Discovery maps an invalid Catalog profile to storage and logs correlated s
         turnstileSecret: "secret",
         log: (event) => events.push(event),
       });
-    }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+    }).pipe(Effect.provideContext(database)),
   );
   try {
     const response = await web.handler(
@@ -57,7 +61,7 @@ test("Discovery maps an invalid Catalog profile to storage and logs correlated s
         ),
       ),
     );
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(503);
     expect(await response.json()).toBe("storage");
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
@@ -75,5 +79,6 @@ test("Discovery maps an invalid Catalog profile to storage and logs correlated s
     expect(JSON.stringify(events)).not.toContain("private.png");
   } finally {
     await web.dispose();
+    await Effect.runPromise(Scope.close(scope, Exit.succeed(undefined)));
   }
 });

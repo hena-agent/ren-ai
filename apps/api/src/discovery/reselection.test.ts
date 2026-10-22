@@ -109,7 +109,7 @@ test("a delivered private reselection link admits another persona for the same U
           return true;
         });
         try {
-          expect((yield* submit({ reselectionToken: token })).status).toBe(400);
+          expect((yield* submit({ reselectionToken: token })).status).toBe(503);
         } finally {
           stderr.mockRestore();
         }

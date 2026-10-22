@@ -1,9 +1,9 @@
 import { Schema } from "effect";
 import { PublicProfile } from "@ren-ai/personas/public-profile";
 import { MobileNumber } from "./shapes.ts";
-import disclosure from "./discovery-notice.json";
-import englishDisclosure from "./discovery-notice.en.json";
-import japaneseDisclosure from "./discovery-notice.ja.json";
+import disclosure from "./discovery-notice.json" with { type: "json" };
+import englishDisclosure from "./discovery-notice.en.json" with { type: "json" };
+import japaneseDisclosure from "./discovery-notice.ja.json" with { type: "json" };
 import { PublicLanguages } from "@ren-ai/personas/languages";
 
 export const discoveryNotice = disclosure;

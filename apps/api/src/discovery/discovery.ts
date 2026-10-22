@@ -20,6 +20,7 @@ import { verifyTurnstile } from "./turnstile.ts";
 import { reselect, withoutEndedPersonas } from "./reselection.ts";
 import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
 import { queueWaitlistNotification } from "./notifications.ts";
+import { publicCatalog } from "../personas/public-catalog.ts";
 
 const failure = Schema.Literals([
   "consent",
@@ -27,9 +28,9 @@ const failure = Schema.Literals([
   "personas",
   "unavailable",
   "try_later",
-  "storage",
   "reselection",
 ]).pipe(HttpApiSchema.status(400));
+const failures = [failure, Schema.Literal("storage").pipe(HttpApiSchema.status(503))];
 const namespace = "/discovery";
 const operationID = (parent: string | undefined) =>
   parent && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(parent) ? parent : randomUUID();
@@ -38,14 +39,14 @@ const discoveryApi = HttpApi.make(namespace).add(
     .add(
       HttpApiEndpoint.get("personas", `${namespace}/personas`, {
         success: Schema.Array(PublicPersona),
-        error: failure,
+        error: failures,
       }),
     )
     .add(
       HttpApiEndpoint.post("join", `${namespace}/waitlist`, {
         payload: DiscoveryRequest,
         success: DiscoveryAnswer,
-        error: failure,
+        error: failures,
       }),
     ),
 );
@@ -61,14 +62,19 @@ export const makeDiscoveryWeb = ({
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const clock = yield* Clock.Clock;
     const limit = yield* submissionLimit;
-    const profiles = (requestId: string) =>
+    const cached = yield* publicCatalog(catalog, log);
+    const profiles = (requestId: string, fresh = false) =>
       Effect.gen(function* () {
         const started = performance.now();
-        return yield* Effect.tryPromise({
-          try: catalog,
-          catch: (cause) => new Error("Public Catalog unavailable", { cause }),
-        }).pipe(
+        const source = fresh
+          ? Effect.tryPromise({
+              try: catalog,
+              catch: (cause) => new Error("Public Catalog unavailable", { cause }),
+            })
+          : cached.read(requestId);
+        return yield* source.pipe(
           Effect.flatMap(withoutEndedPersonas),
           Effect.tapError((cause) =>
             Effect.sync(() =>
@@ -86,6 +92,7 @@ export const makeDiscoveryWeb = ({
           ),
           Effect.mapError(() => "storage" as const),
           Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.provideService(Clock.Clock, clock),
         );
       });
     const join = (input: DiscoveryRequest, requestId: string) =>
@@ -103,7 +110,7 @@ export const makeDiscoveryWeb = ({
           ))
         )
           return yield* Effect.fail("verification" as const);
-        const available = new Set((yield* profiles(requestId)).map((persona) => persona.id));
+        const available = new Set((yield* profiles(requestId, true)).map((persona) => persona.id));
         if (!input.likedPersonaIDs.every((id) => available.has(id)))
           return yield* Effect.fail("personas" as const);
         return yield* Effect.gen(function* () {
@@ -206,5 +213,33 @@ export const makeDiscoveryWeb = ({
         ),
       ),
     );
-    return web;
+    return {
+      ...web,
+      handler: async (...args: Parameters<typeof web.handler>) => {
+        const response = await web.handler(...args);
+        const cacheable =
+          args[0].method === "GET" &&
+          new URL(args[0].url).pathname === "/discovery/personas" &&
+          response.ok;
+        response.headers.set(
+          "Cache-Control",
+          cacheable ? "public, max-age=60, stale-while-revalidate=300" : "no-store",
+        );
+        if (cacheable) {
+          const [snapshot] = await Effect.runPromise(
+            sql<{ loaded_at: number }>`SELECT loaded_at FROM public_catalog WHERE id = 1`,
+          );
+          response.headers.set(
+            "Age",
+            String(
+              Math.max(
+                0,
+                Math.floor((clock.currentTimeMillisUnsafe() - snapshot!.loaded_at) / 1000),
+              ),
+            ),
+          );
+        }
+        return response;
+      },
+    };
   });

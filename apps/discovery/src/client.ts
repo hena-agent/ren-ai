@@ -19,7 +19,7 @@ export class ReselectionError extends Error {}
 
 export const discoveryClient: DiscoveryClient = {
   profiles: async (signal) => {
-    const response = await fetch(path("/discovery/personas"), { signal, cache: "no-store" });
+    const response = await fetch(path("/discovery/personas"), { signal });
     if (!response.ok) throw new Error("Profiles unavailable");
     return Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await response.json());
   },
