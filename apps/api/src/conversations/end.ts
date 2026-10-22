@@ -11,6 +11,7 @@ import { contactCause, contactLog, type ContactLog } from "../discovery/diagnost
 import { recoverEnding } from "./recover.ts";
 import type { ConversationRecovery } from "@ren-ai/onboarding";
 import { recordEnding } from "./ending-record.ts";
+import { endingNotifications, type NotificationTransport } from "./notifications.ts";
 
 interface Ending extends Conversation {
   readonly callID: string;
@@ -27,7 +28,7 @@ interface Ending extends Conversation {
 export const conversationEndings = (
   directory: Effect.Success<typeof conversations>,
   sends: Effect.Success<ReturnType<typeof outbox>>,
-  messages: Messages,
+  messages: Messages & NotificationTransport,
   gestures: Gestures,
   personas: ReadonlyMap<string, Persona>,
   log: ContactLog = contactLog,
@@ -35,6 +36,7 @@ export const conversationEndings = (
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const lock = yield* Semaphore.make(1);
+    const notifications = yield* endingNotifications(messages, log);
     const available = (conversation: Conversation) =>
       Effect.map(
         sql`SELECT 1 FROM conversation c JOIN conversation_end e ON e.conversation_id = c.id
@@ -53,10 +55,11 @@ export const conversationEndings = (
       Effect.gen(function* () {
         const attempt = part === "notice" ? row.noticeAttempt : row.farewellAttempt;
         const callID = `${row.callID}:${part}:${attempt}`;
-        let state = yield* closing.delivery(row, callID);
+        const transport = part === "notice" ? notifications : closing;
+        let state = yield* transport.delivery(row, callID);
         if (state === undefined) {
-          yield* closing.send(row, row[part], callID);
-          state = yield* closing.delivery(row, callID);
+          yield* transport.send(row, row[part], callID);
+          state = yield* transport.delivery(row, callID);
         }
         return state;
       });
@@ -67,7 +70,21 @@ export const conversationEndings = (
           : (["farewell", "notice"] as const);
         for (const part of parts) {
           if (!(part === "notice" ? row.noticePending : row.farewellPending)) continue;
-          const state = yield* deliver(row, part);
+          const state = yield* deliver(row, part).pipe(
+            Effect.catch((cause) => {
+              log({
+                requestId: randomUUID(),
+                operation: "conversation.end",
+                stage: `ending.${part}`,
+                outcome: "failed",
+                level: "error",
+                personaId: row.personaID,
+                durationMs: 0,
+                ...contactCause(cause),
+              });
+              return Effect.succeed(undefined);
+            }),
+          );
           if (
             state === "failed" ||
             state === "not_sent" ||
@@ -78,12 +95,13 @@ export const conversationEndings = (
               yield* sql`UPDATE conversation_end SET notice_pending = 0 WHERE conversation_id = ${row.id} AND notice_attempt = ${row.noticeAttempt}`;
             else
               yield* sql`UPDATE conversation_end SET farewell_pending = 0 WHERE conversation_id = ${row.id} AND farewell_attempt = ${row.farewellAttempt}`;
+            const failed = state === "failed" || state === "not_sent";
             log({
               requestId: randomUUID(),
               operation: "conversation.end",
               stage: `ending.${part}`,
-              outcome: state === "failed" || state === "not_sent" ? "failed" : "completed",
-              level: state === "failed" || state === "not_sent" ? "error" : "info",
+              outcome: failed ? "failed" : "completed",
+              level: failed ? "error" : "info",
               code: `ending_${state}`,
               personaId: row.personaID,
               durationMs: 0,
@@ -192,7 +210,7 @@ export const conversationEndings = (
       tick,
       recover: (input: typeof ConversationRecovery.Type) =>
         lock.withPermit(
-          recoverEnding(input, closing.delivery).pipe(
+          recoverEnding(input, (input.action === "notice" ? notifications : closing).delivery).pipe(
             Effect.provideService(SqlClient.SqlClient, sql),
             sql.withTransaction,
             Effect.timeout("3 seconds"),
@@ -217,22 +235,24 @@ export const conversationEndings = (
           if (!row) return;
           for (const part of ["farewell", "notice"] as const) {
             const attempt = part === "notice" ? row.noticeAttempt : row.farewellAttempt;
-            yield* closing.delivery(row, `${row.callID}:${part}:${attempt}`).pipe(
-              Effect.catch((cause) =>
-                Effect.sync(() =>
-                  log({
-                    requestId,
-                    operation: "conversation.end",
-                    stage: `ending.observe.${part}`,
-                    outcome: "failed",
-                    level: "error",
-                    personaId: row.personaID,
-                    durationMs: 0,
-                    ...contactCause(cause),
-                  }),
+            yield* (part === "notice" ? notifications : closing)
+              .delivery(row, `${row.callID}:${part}:${attempt}`)
+              .pipe(
+                Effect.catch((cause) =>
+                  Effect.sync(() =>
+                    log({
+                      requestId,
+                      operation: "conversation.end",
+                      stage: `ending.observe.${part}`,
+                      outcome: "failed",
+                      level: "error",
+                      personaId: row.personaID,
+                      durationMs: 0,
+                      ...contactCause(cause),
+                    }),
+                  ),
                 ),
-              ),
-            );
+              );
           }
         }),
     };

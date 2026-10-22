@@ -3,7 +3,8 @@ import { loadPersonas } from "@ren-ai/personas";
 import { isolatedHost } from "./isolated-host.test-helper.ts";
 import type { HostOptions, PersonaHostOptions } from "./embedded-host.test-helper.ts";
 import { startMessagingApplication } from "../src/application.ts";
-import type { Messages, Gestures } from "@ren-ai/imsg";
+import type { Gestures } from "@ren-ai/imsg";
+import type { ApplicationMessages as Messages } from "../src/application-tools.ts";
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 
 type MessagingOptions = Omit<

@@ -3,8 +3,12 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { Persona } from "@ren-ai/personas";
 import type { PersonaRuntime } from "./opencode/runtime.ts";
-import { prepareMessaging, type MessagingTools } from "./application-tools.ts";
-import type { Messages, Gestures } from "@ren-ai/imsg";
+import {
+  prepareMessaging,
+  type MessagingTools,
+  type ApplicationMessages,
+} from "./application-tools.ts";
+import type { Gestures } from "@ren-ai/imsg";
 import { followUps } from "./follow-ups/follow-ups.ts";
 import { makeOperator } from "./operator/operator.ts";
 import { failedTurns, type FailureAlerts } from "./opencode/failed-turns.ts";
@@ -16,7 +20,7 @@ import { SqlClient } from "effect/unstable/sql";
 export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
   personas: ReadonlyMap<string, Persona>,
   connect: (tools: MessagingTools) => Effect.Effect<Host, E, R>,
-  messages: Messages,
+  messages: ApplicationMessages,
   gestures: Gestures,
   alerts: FailureAlerts,
   eager = true,

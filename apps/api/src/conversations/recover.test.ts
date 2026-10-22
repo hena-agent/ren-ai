@@ -48,7 +48,7 @@ test("operator recovery is scoped, idempotent, observes uncertain sends and inde
       expect((yield* recover("notice", resend)).status).toBe(200);
       yield* f.ending.tick;
       expect(f.fake.bubbles).toHaveLength(4);
-      yield* f.sql`UPDATE send SET state = 'uncertain', guid = NULL, attempt_id = NULL, recorded_at = 9999999999999 WHERE tool_call_id = 'recover:notice:1'`;
+      yield* f.sql`UPDATE ending_notification SET state = 'uncertain', guid = NULL WHERE call_id = 'recover:notice:1'`;
       expect((yield* recover("notice")).status).toBe(409);
       expect(f.fake.bubbles).toHaveLength(4);
       yield* f.sql`UPDATE conversation_end SET consumed_at = 1`;

@@ -114,10 +114,8 @@ test("operator records expose bounded searchable User–Persona–Session bindin
       expect(
         (yield* status.list({ filter: "ended", search: "821099999999" })).entries[0]?.notice,
       ).toBe("queued");
-      const notice = (yield* f.sql<{ notice: string }>`SELECT notice FROM conversation_end`)[0]!
-        .notice;
       yield* f.sql`INSERT INTO send(handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
-      VALUES (${f.conversation.handle}, ${f.conversation.id}, 'text', ${notice}, 'status:notice:0', 'recorded', 1, 1)`;
+      VALUES (${f.conversation.handle}, ${f.conversation.id}, 'text', 'private farewell', 'status:farewell:0', 'recorded', 1, 1)`;
       for (const [state, expected] of [
         ["recorded", "uncertain"],
         ["uncertain", "uncertain"],
@@ -127,7 +125,12 @@ test("operator records expose bounded searchable User–Persona–Session bindin
         ["not_sent", "failed"],
       ]) {
         yield* f.sql`UPDATE send SET state = ${state} WHERE conversation_id = ${f.conversation.id}`;
-        expect((yield* status.detail(f.conversation.id))?.entry.notice).toBe(expected);
+        expect((yield* status.detail(f.conversation.id))?.entry.farewell).toBe(expected);
+      }
+      yield* f.sql`INSERT INTO ending_notification VALUES (${f.conversation.id}, 'status:notice:0', 'uncertain', NULL)`;
+      for (const state of ["uncertain", "sent", "delivered", "failed"]) {
+        yield* f.sql`UPDATE ending_notification SET state = ${state}`;
+        expect((yield* status.detail(f.conversation.id))?.entry.notice).toBe(state);
       }
       expect(JSON.stringify(yield* status.detail(f.conversation.id))).not.toContain(
         "private farewell",

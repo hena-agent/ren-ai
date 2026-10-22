@@ -107,8 +107,11 @@ export/restore에는 Markdown에서 읽은 두 범위와 receipts·출처·마�
 거부한다. 재구축의 원본 세션과 이미 접수한 이력의 경계는 저장하며 재시작해도 유지한다.
 새로 도착한 입력은 이 읽기 전용 replay에 섞어 처리 완료로 표시하지 않고, 재구축 완료 뒤
 쓰기 가능한 현재 세션에 전달한다. 교체되거나 종료된 세션은 늦게 replay가 끝나도 쓰기 권한을 되찾지 않는다.
-테스트 handle reset은 이전 Relationship 범위를 검토용으로 보존하고 다음 Conversation에
-새 범위를 만들며 공유 생활은 계속된다. Relationship 범위는 그 Conversation 데이터 삭제 때만 제거한다.
+테스트 handle의 `/reset`은 현재 Conversation을 영구 종료하고 User·동의·등록·대화 이력을 유지한다.
+이전 Relationship 범위는 읽기 전용 검토용으로 보존하며, 인물의 하나뿐인 공유 State·언어 실력·Life memory는 계속된다.
+새 Conversation은 자동으로 만들지 않는다. Notification handle인 `noti@renai.im`에서 받은 비공개 링크로
+재선택·Selection을 거친 뒤 다른 Persona의 현재 공유 범위와 새로운 Relationship 범위에서 시작한다.
+종료된 세션은 공유·관계 범위 모두 갱신할 수 없다. Relationship 범위는 그 Conversation 데이터 삭제 때만 제거한다.
 운영자가 native UI에서 만든 세션과 fork는 각각 복사본을 쓰는 Sandbox로 옮긴다.
 테스트 handle은 실제 배정 수에 포함되고 공유 생활을 변경한다.
 

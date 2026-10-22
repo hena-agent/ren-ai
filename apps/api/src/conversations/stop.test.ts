@@ -77,7 +77,7 @@ test("termination stops execution and cancels inbox work once across application
       const logs: ContactDiagnostic[] = [];
       const initiallyActive = yield* runtimeStatus(host, () => Effect.succeed(false), f.ending);
       expect((yield* initiallyActive.inspect(f.conversation.id))?.state).toBe("idle");
-      const stopped = yield* stoppedConversations(host, (event) => logs.push(event));
+      const stopped = yield* stoppedConversations(host, logs.push.bind(logs));
       yield* f.ending.end(f.conversation.sessionID, "bye", "stop");
       yield* stopped.tick;
       expect(events).toEqual(["interrupt", "cancel", "wait"]);
@@ -112,6 +112,12 @@ test("termination stops execution and cancels inbox work once across application
         },
       });
       yield* stopSession(missing, f.conversation.sessionID);
+      yield* f.sql`UPDATE conversation_end SET stopped_at = NULL`;
+      const missingStop = yield* stoppedConversations(missing, logs.push.bind(logs));
+      yield* missingStop.tick;
+      expect(
+        (yield* f.sql<{ at: number | null }>`SELECT stopped_at AS at FROM conversation_end`)[0]!.at,
+      ).not.toBeNull();
       const gone = yield* runtimeStatus(missing, () => Effect.succeed(false), f.ending);
       expect((yield* gone.inspect(f.conversation.id))?.state).toBe("missing");
       pending = [fromPartial<SessionInbox.Info>({ id: SessionMessage.ID.make("msg_uncancelled") })];
@@ -207,28 +213,39 @@ test("an unavailable farewell observation cannot block the service notice or mas
   );
 });
 
-test("session retention preserves and propagates an unrelated tagged executor failure", async () => {
-  await withContactDatabase(
-    Effect.gen(function* () {
-      const f = yield* relationshipFixture;
-      const failure = Object.assign(new Error("executor rename failed"), {
-        _tag: "ExecutorFailure",
-      });
-      const host = fromPartial<PersonaRuntime>({
-        sessions: {
-          writable: () => Effect.void,
-          interrupt: () => Effect.succeed(false),
-          inbox: () => Effect.succeed([]),
-          wait: () => Effect.void,
-          rename: () => Effect.fail(failure),
-        },
-      });
-      yield* f.sql`INSERT INTO retained_session (session_id, handle, title) VALUES (${f.conversation.sessionID}, ${f.conversation.handle}, 'retained')`;
-      const retained = yield* retainedSessions(host);
-      const result = yield* Effect.result(retained.resume);
-      expect(Result.isFailure(result)).toBe(true);
-      if (Result.isFailure(result)) expect(result.failure).toBe(failure);
-      expect((yield* f.sql`SELECT session_id FROM retained_session`).length).toBe(1);
-    }),
-  );
-});
+test.each(["missing", "untagged", "tagged"])(
+  "session retention handles %s executor failures without discarding review history",
+  async (kind) => {
+    await withContactDatabase(
+      Effect.gen(function* () {
+        const f = yield* relationshipFixture;
+        const failure =
+          kind === "missing"
+            ? new MissingSession({ message: "Session missing" })
+            : kind === "untagged"
+              ? new Error("executor rename failed")
+              : Object.assign(new Error("executor rename failed"), {
+                  _tag: "ExecutorFailure",
+                });
+        const host = fromPartial<PersonaRuntime>({
+          sessions: {
+            writable: () => Effect.void,
+            interrupt: () => Effect.succeed(false),
+            inbox: () => Effect.succeed([]),
+            wait: () => Effect.void,
+            rename: () => Effect.fail(failure),
+          },
+        });
+        yield* f.sql`INSERT INTO retained_session (session_id, handle, title) VALUES (${f.conversation.sessionID}, ${f.conversation.handle}, 'retained')`;
+        const retained = yield* retainedSessions(host);
+        const result = yield* Effect.result(retained.resume);
+        expect(Result.isFailure(result)).toBe(kind !== "missing");
+        if (Result.isFailure(result)) expect(result.failure).toBe(failure);
+        expect((yield* f.sql`SELECT session_id FROM retained_session`).length).toBe(1);
+        expect(yield* f.sql`SELECT stopped FROM retained_session`).toEqual([
+          { stopped: Number(kind === "missing") },
+        ]);
+      }),
+    );
+  },
+);

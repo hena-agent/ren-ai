@@ -62,7 +62,7 @@ test("waitlist reads use Workers-supported redirect mode and reject redirects wi
   expect(JSON.stringify(logs)).not.toContain("secret-token");
 });
 
-test("authenticated Admin lists, confirms and displays exclusive selection and reservations", async () => {
+test("authenticated Admin lists, confirms and displays selection and reservations", async () => {
   const waiting = entry();
   const scheduled = {
     ...entry("scheduled"),
@@ -113,7 +113,7 @@ test("Waitlist shows Notification outcomes without offering resend or changing s
   ])
     expect(page).toContain(label);
   expect(page).not.toContain("resend");
-  expect(page.match(/form="contact-direct-selection"/g)).toHaveLength(5);
+  expect(page.match(/name="registrationIDs"/g)).toHaveLength(5);
 });
 
 test("Waitlist holds unverified iMessage entries and enables only confirmed available entries", async () => {

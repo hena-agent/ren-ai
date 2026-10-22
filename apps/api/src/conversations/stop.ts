@@ -32,9 +32,11 @@ export const stoppedConversations = (host: PersonaRuntime, log: ContactLog = con
         yield* sql`UPDATE conversation_end SET stop_checked = (SELECT MAX(stop_checked) + 1 FROM conversation_end)
       WHERE conversation_id = ${row.id}`;
         const result = yield* Effect.result(
-          host.sessions
-            .writable(Session.ID.make(row.sessionID), false)
-            .pipe(Effect.andThen(stopSession(host, row.sessionID)), Effect.timeout("5 seconds")),
+          host.sessions.writable(Session.ID.make(row.sessionID), false).pipe(
+            Effect.andThen(stopSession(host, row.sessionID)),
+            Effect.catchTag("Session.NotFoundError", () => Effect.void),
+            Effect.timeout("5 seconds"),
+          ),
         );
         if (Result.isSuccess(result))
           yield* sql`UPDATE conversation_end SET stopped_at = ${yield* Clock.currentTimeMillis} WHERE conversation_id = ${row.id}`;

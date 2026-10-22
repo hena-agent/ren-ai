@@ -4,6 +4,7 @@ import type {
   ContactSelection,
   ContactState,
   ConversationLanguages,
+  SelectContacts,
 } from "@ren-ai/onboarding";
 import { LanguageReadout } from "./language-panel.tsx";
 
@@ -13,6 +14,7 @@ export interface ContactView {
   startRequestId: string;
   directRequestId: string;
   registrationIDs: readonly string[];
+  assignments: NonNullable<typeof SelectContacts.Type.assignments>;
   directAttempted?: boolean;
   count: number;
   attempted?: boolean;
@@ -58,6 +60,39 @@ const time = (at: number) =>
     timeStyle: "short",
     timeZone: "Asia/Seoul",
   }).format(at);
+function AssignmentChoice({
+  entry,
+  selection,
+}: {
+  entry: typeof ContactEntry.Type;
+  selection: ContactView;
+}) {
+  return (
+    <label>
+      배정할 페르소나
+      <select
+        name={`personaID:${entry.id}`}
+        form="contact-direct-selection"
+        aria-label={`${entry.handle} 배정할 페르소나`}
+        defaultValue={
+          selection.assignments.find((assignment) => assignment.registrationID === entry.id)
+            ?.personaID ?? ""
+        }
+        disabled={!entry.eligible || selection.directAttempted}
+      >
+        <option value="">무작위 배정</option>
+        {entry.assignablePersonas?.map((persona) => (
+          <option key={persona.id} value={persona.id}>
+            {persona.name}
+          </option>
+        ))}
+      </select>
+      {!entry.assignablePersonas && (
+        <small>지정 후보를 불러오려면 메시징 API 배포 상태를 확인해 주세요.</small>
+      )}
+    </label>
+  );
+}
 function Rows({
   entries,
   selection,
@@ -125,6 +160,8 @@ function Rows({
                       {entry.scheduledAt === null ? "예정 시각 없음" : time(entry.scheduledAt)}
                     </small>
                   </>
+                ) : selection ? (
+                  <AssignmentChoice entry={entry} selection={selection} />
                 ) : (
                   "미배정"
                 )}
@@ -197,6 +234,15 @@ function DirectSelection({ view }: { view: ContactView }) {
         view.registrationIDs.map((id) => (
           <input key={id} type="hidden" name="registrationIDs" value={id} />
         ))}
+      {view.directAttempted &&
+        view.assignments.map((assignment) => (
+          <input
+            key={assignment.registrationID}
+            type="hidden"
+            name={`personaID:${assignment.registrationID}`}
+            value={assignment.personaID}
+          />
+        ))}
       <button type="submit" disabled={!view.directAttempted && !view.snapshot?.eligibleCount}>
         {view.directAttempted ? "같은 직접 선정 요청 확인" : "선택한 대기자 선정하기"}
       </button>
@@ -264,8 +310,10 @@ export function ContactPage({ view }: { view: ContactView }) {
         </div>
       )}
       <p className="hint contact-policy">
-        Like한 페르소나 중 현재 배정이 5명 미만인 후보를 무작위로 배정하고, 선정 후 5분~1시간 뒤 첫
-        연락을 예약합니다. 테스트 연락처와 실패·불확실한 첫 연락도 배정 수에 포함합니다.
+        공개 Like 후보 중 현재 배정이 5명 미만이고 이 연락처와 관계를 종료한 적 없는 페르소나를
+        지정하거나 무작위로 배정합니다. 직접 선정은 행별로 페르소나를 고를 수 있으며 기본값은
+        무작위입니다. 선정 후 5분~1시간 뒤 첫 연락을 예약합니다. 테스트 연락처와 실패·불확실한 첫
+        연락도 배정 수에 포함합니다.
       </p>
       {view.tab === "waitlist" && view.snapshot && (
         <TestStarts entries={view.snapshot.entries} requestId={view.startRequestId} />

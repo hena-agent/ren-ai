@@ -5,7 +5,7 @@ import { Effect } from "effect";
 import { scriptedOverrides } from "./host.test-helper.ts";
 import { startMessagingHost, startPersonaHost } from "./application.test-helper.ts";
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
-import type { Messages } from "@ren-ai/imsg";
+import type { ApplicationMessages as Messages } from "../src/application-tools.ts";
 import { fakeGestures } from "@ren-ai/imsg/testing";
 import { registration, silentAlerts } from "./messaging.test-helper.ts";
 

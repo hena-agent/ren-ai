@@ -11,7 +11,8 @@ import { join } from "node:path";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { startMessagingHost, type startPersonaHost } from "./application.test-helper.ts";
-import type { Messages, Gestures } from "@ren-ai/imsg";
+import type { Gestures } from "@ren-ai/imsg";
+import type { ApplicationMessages as Messages } from "../src/application-tools.ts";
 import { silentAlerts } from "./messaging.test-helper.ts";
 
 export const expectLateResults = (messages: ReadonlyArray<Message>) => {

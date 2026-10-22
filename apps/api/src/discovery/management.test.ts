@@ -68,7 +68,7 @@ test("authenticated management validates, lists, selects and safely correlates f
               JSON.stringify({ ...input, count: 2 }),
             )
           ).status,
-        ).toBe(503);
+        ).toBe(409);
         const denied = await contactManagement(f.store, "", (entry) => logs.push(entry))(
           new Request("https://api.test/management/discovery"),
         );

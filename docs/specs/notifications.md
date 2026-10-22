@@ -44,7 +44,7 @@ persistence. Step 2 uses consent version `discovery-2026-10-19` in all locales.
 - Joining succeeds before sending. Attempt on the next background tick, normally
   within seconds. This is informational, with no confirmation reply or number
   verification and no delivery result exposed on the public site.
-- Cap Notifications at 30 per hour across the service. Excess joins still succeed;
+- Cap Waitlist Notifications at 30 per hour across the service. Excess joins still succeed;
   their Notifications are skipped, not deferred into a later backlog.
   Admission to a send attempt uses a rolling hour of anonymous timestamps in
   SQLite, committed with the uncertain state before calling the Mac. Removing a
@@ -102,9 +102,28 @@ Conversation; a selected Persona later texts from `hi@renai.im`. Delivery is not
 guaranteed. Replace “contact hi@renai.im” with “email hi@renai.im”. Update all three
 languages under a new consent version at the Step 2 release.
 
+## Relationship ending Notifications
+
+- After a Persona or operator ends a relationship, send the relationship-ended
+  notice and private Reselection link from `noti@renai.im` using `notify` and
+  `notificationStatus`. The Persona's farewell remains on `hi@renai.im`.
+- Persist the notice work with the ending, and record each attempt in the separate
+  `ending_notification` ledger before submitting it. It never enters Persona
+  message history or ordinary send reconciliation. Missing acknowledgements remain
+  uncertain across restarts and never trigger automatic resubmission.
+- Farewell failure or uncertainty does not block the Notification. Admin observes
+  Notification receipts and can explicitly re-send a settled notice; uncertain
+  attempts must be checked first. Blocking, removal, or completed Reselection
+  suppresses further notices for the old relationship.
+- The existing localized relationship-ended and Reselection copy uses the User's
+  locale and explains that this address does not read replies. The Waitlist-only
+  30-per-hour admission cap does not discard relationship-ending notices.
+- A test handle's `/reset` is also a user-initiated Relationship ending. It sends
+  the same Notice with copy that says the User requested the ending; it does not
+  delete the User, reset their consent, or create a new Conversation automatically.
+
 ## Explicit exceptions and deferred work
 
-- The existing Reselection message stays on `hi@renai.im` until a later change.
 - The new-Conversation marker remains prefixed to the new Persona's first bubble,
   so a change of Persona is visible in the shared `hi@` thread.
 - No Selection Notification, keyword opt-out, reply inbox, number verification,

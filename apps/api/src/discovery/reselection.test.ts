@@ -203,9 +203,12 @@ test.each(["persona", "operator"])(
           const next = (yield* app.directory.byHandle(previous.handle))!;
           expect(next.personaID).toBe("harin");
           expect(next.sessionID).toBe("ses_new");
-          expect(yield* f.sql`SELECT joined_at, consent_version FROM user`).toEqual([
-            { joined_at: 10, consent_version: "v1" },
+          expect(yield* f.sql`SELECT joined_at, replied_at, consent_version FROM user`).toEqual([
+            { joined_at: 10, replied_at: 20, consent_version: "v1" },
           ]);
+          expect(
+            yield* f.sql`SELECT first_received_at FROM conversation WHERE id = ${next.id}`,
+          ).toEqual([{ first_received_at: null }]);
           expect(
             yield* f.sql`SELECT first_received_at FROM conversation WHERE id = ${previous.id}`,
           ).toEqual([{ first_received_at: 20 }]);

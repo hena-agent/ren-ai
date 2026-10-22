@@ -275,12 +275,27 @@ export const migrate = Effect.gen(function* () {
         yield* sql`CREATE INDEX verification_expiry ON discovery_verification(at)`;
       }),
       "042_operator_ending": sql`ALTER TABLE conversation_end ADD COLUMN initiator TEXT NOT NULL DEFAULT 'persona' CHECK(initiator IN ('persona', 'operator'))`,
-      "043_shared_assignments": sharedAssignmentsSchema,
-      "044_replay_source": Effect.gen(function* () {
+      "043_ending_notifications": sql`CREATE TABLE ending_notification (
+        conversation_id INTEGER NOT NULL REFERENCES conversation_end(conversation_id) ON DELETE CASCADE,
+        call_id TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(state IN ('uncertain','sent','delivered','failed')),
+        guid TEXT,
+        PRIMARY KEY (conversation_id, call_id)
+      )`,
+      "044_user_ending": Effect.gen(function* () {
+        yield* sql`ALTER TABLE conversation_end ADD COLUMN ending_initiator TEXT NOT NULL DEFAULT 'persona'
+          CHECK(ending_initiator IN ('persona','operator','user'))`;
+        yield* sql`UPDATE conversation_end SET ending_initiator = initiator`;
+        yield* sql`ALTER TABLE conversation_end DROP COLUMN initiator`;
+        yield* sql`ALTER TABLE conversation_end RENAME COLUMN ending_initiator TO initiator`;
+      }),
+      "045_selection_input": sql`ALTER TABLE discovery_selection ADD COLUMN input TEXT`,
+      "046_shared_assignments": sharedAssignmentsSchema,
+      "047_replay_source": Effect.gen(function* () {
         yield* sql`ALTER TABLE conversation ADD COLUMN replay_source_session_id TEXT`;
         yield* sql`CREATE INDEX send_conversation_guid ON send(conversation_id, guid)`;
       }),
-      "045_removal_scopes": Effect.gen(function* () {
+      "048_removal_scopes": Effect.gen(function* () {
         for (const table of ["removal", "retained_session"]) {
           yield* sql`ALTER TABLE ${sql(table)} ADD COLUMN persona_id TEXT`;
           yield* sql`ALTER TABLE ${sql(table)} ADD COLUMN conversation_key TEXT`;

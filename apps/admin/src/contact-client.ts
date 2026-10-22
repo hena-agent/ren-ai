@@ -39,6 +39,13 @@ async function selection(response: Response) {
   }
 }
 
+const conflictMessage = (path: string) =>
+  path.includes("/conversations")
+    ? "종료·전송 상태가 변경되었거나 결과가 아직 불확실합니다. 상태를 다시 확인해 주세요."
+    : path.endsWith("/start")
+      ? "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 배정 한도 5명과 이 연락처의 관계 종료 이력·현재 상태를 확인해 주세요."
+      : "선정 요청이나 배정 후보가 변경되었습니다. 배정 한도 5명과 각 연락처의 관계 종료 이력·현재 상태, 배정할 수 없는 Like 후보가 있는지 확인해 주세요. 상태를 새로고침한 뒤 새 요청으로 제출해 주세요.";
+
 export function managementClient(
   url: string,
   token: string,
@@ -88,13 +95,7 @@ export function managementClient(
         cause,
       );
     }
-    if (response.status === 409)
-      throw new PersonaError(
-        "conflict",
-        path.startsWith("/operator/conversations")
-          ? "종료·전송 상태가 변경되었거나 결과가 아직 불확실합니다. 상태를 다시 확인해 주세요."
-          : "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 배정 한도 5명과 이 연락처의 관계 종료 이력·현재 상태를 확인해 주세요.",
-      );
+    if (response.status === 409) throw new PersonaError("conflict", conflictMessage(path));
     if (response.status === 404 && path.startsWith("/management/conversations/"))
       throw new PersonaError("not_found", "대화를 찾을 수 없습니다.");
     if (!response.ok) {
@@ -168,9 +169,11 @@ export function managementClient(
     select: async (input) =>
       selection(
         await request(
-          input.registrationIDs
-            ? "/management/discovery/select-specific"
-            : "/management/discovery/select",
+          input.assignments
+            ? "/management/discovery/select-assigned"
+            : input.registrationIDs
+              ? "/management/discovery/select-specific"
+              : "/management/discovery/select",
           input,
         ),
       ),

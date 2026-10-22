@@ -83,7 +83,7 @@ Becoming a user: joining the waitlist through Discovery, being selected, and rec
 _Avoid_: signup, registration
 
 **Test handle**:
-A handle the operator marks for trying the service as a user would: its Conversations count toward a persona's assignments and change her State and Life memory like any other. Only a test handle's conversation can be reset, and only a test handle can skip Selection to start with a chosen persona right away.
+A handle the operator marks for trying the service as a user would: its Conversations count toward a persona's assignments and change her State and Life memory like any other. Only a test handle can use Reset to end its current relationship, and only a test handle can skip Selection to start with a chosen persona right away.
 _Avoid_: developer handle, dev number, allowlist
 
 **Greeting**:
@@ -95,7 +95,7 @@ A user's distinct 1:1 relationship with one persona over iMessage. The persona h
 _Avoid_: chat, thread, session (a session is OpenCode's)
 
 **Relationship ending**:
-A persona's permanent decision to end her Conversation with one user, who can never be assigned her again. Her other Conversations continue, and other people can still be assigned her. It is distinct from declining a suggestion, taking a break, or blocking the user from the service.
+The permanent end of one Conversation, initiated by its Persona, the Operator, or a test handle using Reset; that user can never be assigned that persona again. Her other Conversations continue and other people can still be assigned her, so an ending is distinct from a pause or blocking the user from the service.
 _Avoid_: ban, reset, pause, retirement
 
 **Reselection**:
@@ -163,7 +163,7 @@ People waiting to start a conversation. Each registration includes a handle, lik
 _Avoid_: queue, signup list
 
 **Selection**:
-The operator's choice to admit up to N randomly chosen eligible waiting people, each with one randomly chosen available persona from their Likes: one with fewer than five current assignments who has never ended a Conversation with them.
+The operator's choice to admit eligible waiting people, either picked directly or up to N chosen at random. Each receives one persona from their Likes, chosen by the operator or allocated at random, with fewer than five current assignments and no ended Conversation with that handle.
 _Avoid_: matching, approval, first-come-first-served
 
 **Assignment**:
@@ -175,7 +175,7 @@ The selected persona's planned first Greeting, scheduled once between five minut
 _Avoid_: Notice, immediate onboarding, automatic selection
 
 **Reset**:
-Returning a test handle to before onboarding, so its next Conversation starts as a first meeting with a new Relationship state and Relationship memory. The previous ones are kept for review; the persona's State and Life memory continue.
+The test-only command for a user to end their current Conversation and enter Reselection. It preserves the User and the previous relationship's history, Relationship state and Relationship memory for read-only review; the persona's shared State, including language proficiency, and Life memory continue.
 _Avoid_: clear, restart, new conversation
 
 **Sandbox**:

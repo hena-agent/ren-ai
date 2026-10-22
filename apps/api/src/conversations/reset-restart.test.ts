@@ -52,7 +52,7 @@ test("restart and a missing session cannot restore pre-reset Memory, including a
         yield* fake.text(handle, "new identity after onboarding", Date.now());
         const { id, text } = yield* currentMemory(host, handle);
         expect(id).not.toBe(original);
-        expect((yield* host.sessions.get(original)).title).toContain(" · reset ");
+        expect((yield* host.sessions.get(original)).title).not.toContain(" · reset ");
         expect(text).not.toContain("first secret");
         yield* host.sessions.remove(id);
       }),
@@ -88,7 +88,7 @@ test("restart and a missing session cannot restore pre-reset Memory, including a
 });
 
 test.each([false, true])(
-  "a restart completes interrupted session retention before allowing onboarding (old session missing: %s)",
+  "a restart resumes an interrupted relationship stop before reselection (old session missing: %s)",
   async (missing) => {
     const { start, run, fake, handle, cleanup } = await resetFixture("reset-interrupted-");
     try {
@@ -97,16 +97,16 @@ test.each([false, true])(
           const entered = yield* Deferred.make<void>();
           const host = yield* start;
           const original = yield* bindTestHandle(host, handle);
-          const rename = vi
-            .spyOn(host.sessions, "rename")
+          const interrupt = vi
+            .spyOn(host.sessions, "interrupt")
             .mockImplementationOnce(() =>
               Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
             );
-          yield* fake.text(handle, "/reset", Date.now()).pipe(Effect.forkScoped);
+          yield* fake.text(handle, "/reset", Date.now());
+          yield* host.heartbeat.stopped.pipe(Effect.forkScoped);
           yield* Deferred.await(entered);
-          rename.mockRestore();
+          interrupt.mockRestore();
           expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
-          expect(yield* startTestHandle(host, fake.messages, handle)).toBe("unavailable");
           if (missing) yield* host.sessions.remove(original.id);
           return original.id;
         }),
@@ -137,13 +137,8 @@ test("startup finishes a committed reset whose command is already behind the boo
     await f.run(
       Effect.gen(function* () {
         const host = yield* f.startMarked;
-        const sql = yield* SqlClient.SqlClient;
-        const old = yield* currentMemory(host, f.handle);
-        yield* sql`INSERT INTO retained_session (session_id, handle, title)
-        VALUES (${old.id}, ${f.handle}, 'old reset session')`;
-        yield* sql`INSERT INTO reset (guid, handle, row_id, date, session_id)
-        VALUES ('offline-reset', ${f.handle}, 1, 2, ${old.id})`;
-        yield* sql`DELETE FROM user WHERE handle = ${f.handle}`;
+        yield* currentMemory(host, f.handle);
+        yield* f.fake.text(f.handle, "/reset", Date.now());
       }),
     );
     await f.run(

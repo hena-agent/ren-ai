@@ -94,7 +94,7 @@ export const firstContacts = (
             yield* sql`INSERT INTO user (handle, locale, consent_version, consent_language, consent_at, persona_id, joined_at)
           VALUES (${row.handle}, ${row.locale}, ${row.consentVersion}, ${row.locale}, ${row.consentAt}, ${row.personaID}, ${now})
           ON CONFLICT(handle) DO UPDATE SET locale = excluded.locale,
-            persona_id = excluded.persona_id, joined_at = COALESCE(user.joined_at, excluded.joined_at), replied_at = NULL`;
+            persona_id = excluded.persona_id, joined_at = COALESCE(user.joined_at, excluded.joined_at)`;
             yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, usage_key, started_at, registration_id, starting_relationship)
           VALUES ((SELECT id FROM user WHERE handle = ${row.handle}), ${row.personaID}, ${session.id}, ${sessionID}, ${now}, ${row.id}, ${row.startingRelationship})`;
             yield* bindUsageSessions(sql);

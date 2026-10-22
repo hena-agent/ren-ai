@@ -5,6 +5,7 @@ import { ContactEntry, SelectContacts, StartContact } from "@ren-ai/onboarding";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { assignmentCapacity, claimPersona } from "./assignment.ts";
+import { SelectionConflict, selectionKey, selectionChoices, chooseContact } from "./selection.ts";
 
 class StartUnavailable extends Data.TaggedError("StartUnavailable") {}
 
@@ -36,7 +37,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           imessageCheckedAt: number | null;
         }>`SELECT r.id, r.handle, r.created_at AS createdAt, c.state, c.persona_id AS personaID,
       c.scheduled_at AS scheduledAt, c.request_id AS requestId, v.ended_at AS endedAt,
-      EXISTS(SELECT 1 FROM send s WHERE s.conversation_id = v.id AND s.tool_call_id = e.call_id || ':notice:' || e.notice_attempt AND s.state IN ('sent','delivered')) AS endingComplete,
+       EXISTS(SELECT 1 FROM ending_notification n WHERE n.conversation_id = v.id AND n.call_id = e.call_id || ':notice:' || e.notice_attempt AND n.state IN ('sent','delivered')) AS endingComplete,
       EXISTS(SELECT 1 FROM blocked WHERE handle = r.handle) OR EXISTS(SELECT 1 FROM removal WHERE handle = r.handle)
         OR EXISTS(SELECT 1 FROM reset WHERE handle = r.handle AND complete = 0) AS unavailable,
       EXISTS(SELECT 1 FROM user u WHERE u.handle = r.handle AND u.joined_at IS NOT NULL
@@ -95,6 +96,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
             handle: row.handle,
             createdAt: row.createdAt,
             likedPersonas,
+            assignablePersonas: likedPersonas.filter((p) => available.has(p.id)),
             state: row.state ?? (row.admitted ? "active" : "waiting"),
             eligible: reason === "ready",
             reason,
@@ -126,10 +128,15 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       Effect.flatMap(snapshot),
       Effect.map(({ entries, eligibleCount }) => ({ entries, eligibleCount })),
     );
-    const recorded = (selectionID: string) =>
-      sql<{
-        requested: number;
-      }>`SELECT requested FROM discovery_selection WHERE request_id = ${selectionID}`;
+    const recorded = (selectionID: string, key: string) =>
+      Effect.gen(function* () {
+        const [previous] = yield* sql<{
+          input: string | null;
+        }>`SELECT input FROM discovery_selection WHERE request_id = ${selectionID}`;
+        if (previous && previous.input !== key)
+          return yield* Effect.fail(new SelectionConflict("Selection request conflict"));
+        return Boolean(previous);
+      });
     const reserve = (
       row: typeof ContactEntry.Type,
       personaID: string,
@@ -166,30 +173,31 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       Effect.flatMap(loadProfiles, (profiles) =>
         Effect.gen(function* () {
           const decoded = Schema.decodeUnknownSync(SelectContacts)(input);
-          if (decoded.registrationIDs && decoded.registrationIDs.length !== decoded.count)
-            return yield* Effect.fail(
-              new Error("Selection count must match selected registrations"),
-            );
-          const [previous] = yield* recorded(decoded.requestId);
-          if (previous && previous.requested !== decoded.count)
-            return yield* Effect.fail(new Error("Selection request conflict"));
+          const key = selectionKey(decoded);
+          const previous = yield* recorded(decoded.requestId, key);
           if (!previous) {
             const now = yield* Clock.currentTimeMillis;
             const { entries, available } = yield* snapshot(profiles);
+            const choices = yield* selectionChoices(decoded, entries, available);
             const waiting = entries.filter(
               (row) =>
                 row.eligible &&
                 (!decoded.registrationIDs || decoded.registrationIDs.includes(row.id)),
             );
-            yield* sql`INSERT INTO discovery_selection VALUES (${decoded.requestId}, ${decoded.count}, ${now})`;
+            yield* sql`INSERT INTO discovery_selection (request_id, requested, created_at, input) VALUES (${decoded.requestId}, ${decoded.count}, ${now}, ${key})`;
             let count = 0;
             while (waiting.length && count < decoded.count) {
-              const row = waiting.splice(randomInt(waiting.length), 1)[0]!;
-              const candidates = row.likedPersonas.filter((p) => available.has(p.id));
-              if (!candidates.length) continue;
-              const persona = candidates[randomInt(candidates.length)]!;
+              const chosen = chooseContact(waiting, available, choices);
+              if (!chosen) continue;
+              const { row, persona } = chosen;
               const at = now + randomInt(300_000, 3_600_001);
-              if (!(yield* reserve(row, persona.id, at, decoded.requestId, requestId))) continue;
+              if (!(yield* reserve(row, persona.id, at, decoded.requestId, requestId))) {
+                if (choices.has(row.id))
+                  return yield* Effect.fail(
+                    new SelectionConflict("Chosen persona is no longer available"),
+                  );
+                continue;
+              }
               const remaining = available.get(persona.id)! - 1;
               if (remaining) available.set(persona.id, remaining);
               else available.delete(persona.id);
@@ -204,7 +212,11 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       Effect.flatMap(loadProfiles, (profiles) =>
         Effect.gen(function* () {
           const decoded = Schema.decodeUnknownSync(StartContact)(input);
-          const [previous] = yield* recorded(decoded.requestId);
+          const key = JSON.stringify({
+            registrationID: decoded.registrationID,
+            personaID: decoded.personaID,
+          });
+          const previous = yield* recorded(decoded.requestId, key);
           if (!previous) {
             const now = yield* Clock.currentTimeMillis;
             const { entries, available } = yield* snapshot(profiles);
@@ -216,7 +228,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
               !row.likedPersonas.some((p) => p.id === decoded.personaID)
             )
               return yield* Effect.fail(new StartUnavailable());
-            yield* sql`INSERT INTO discovery_selection VALUES (${decoded.requestId}, 1, ${now})`;
+            yield* sql`INSERT INTO discovery_selection (request_id, requested, created_at, input) VALUES (${decoded.requestId}, 1, ${now}, ${key})`;
             if (!(yield* reserve(row, decoded.personaID, now, decoded.requestId, requestId)))
               return yield* Effect.fail(new StartUnavailable());
           }

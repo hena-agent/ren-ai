@@ -27,9 +27,9 @@ test("operator commands mark test handles and preserve their sessions on removal
         yield* host.sessions.wait(fresh);
         expect(yield* runOperatorCli(["remove", handle], connection)).toContain("Removed");
         expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
-        expect((yield* host.sessions.get(old.id)).title).toContain(" · reset ");
+        expect((yield* host.sessions.get(old.id)).title).toContain(" · removed ");
         expect((yield* host.sessions.get(fresh)).title).toMatch(
-          /^Persona1 · \+821012345678 · removed \d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}$/,
+          /^Persona2 · \+821012345678 · removed \d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}$/,
         );
         expect(yield* runOperatorCli(["remove", handle], connection)).toBe(`No User for ${handle}`);
         expect(yield* runOperatorCli(["untest-handle", handle], connection)).toContain("Unmarked");

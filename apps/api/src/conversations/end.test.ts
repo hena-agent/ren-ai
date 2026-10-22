@@ -72,6 +72,14 @@ test("a persona can end only her own relationship, stop all normal actions and d
       expect(f.fake.bubbles).toHaveLength(2);
       expect(f.fake.bubbles[0]?.text).toBe("이 대화는 여기까지 할게요.");
       expect(f.fake.bubbles[1]?.text).toContain("https://renai.im/#reselect=");
+      expect(f.fake.notifications).toHaveLength(1);
+      expect(f.fake.notifications[0]?.text).toContain("답장을 확인하지 않습니다");
+      expect(
+        (yield* f.fake.messages.recent(f.conversation.handle, 0)).map((row) => row.text),
+      ).toEqual(["이 대화는 여기까지 할게요."]);
+      expect(yield* f.sql`SELECT content FROM send`).toEqual([
+        { content: "이 대화는 여기까지 할게요." },
+      ]);
       expect(yield* f.sql`SELECT 1 FROM blocked`).toEqual([]);
       const snapshot = yield* exportApplicationState;
       yield* Effect.promise(() =>
@@ -193,17 +201,17 @@ test("an uncertain notice is reconciled after restart without being resent", asy
     Effect.gen(function* () {
       const f = yield* fixture;
       yield* f.ending.end(f.conversation.sessionID, "bye", "notice-pending");
-      const [ending] = yield* f.sql<{ notice: string }>`SELECT notice FROM conversation_end`;
       yield* f.sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
       VALUES (${f.conversation.handle}, ${f.conversation.id}, 'text', 'bye', 'notice-pending:farewell:0', 'sent', 0, 0)`;
-      yield* f.sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
-      VALUES (${f.conversation.handle}, ${f.conversation.id}, 'text', ${ending!.notice}, 'notice-pending:notice:0', 'uncertain', 0, 0)`;
+      yield* f.sql`INSERT INTO ending_notification (conversation_id, call_id, state, guid)
+      VALUES (${f.conversation.id}, 'notice-pending:notice:0', 'uncertain', 'notice-guid')`;
       yield* f.ending.tick;
       expect(yield* f.sql`SELECT notice_pending AS pending FROM conversation_end`).toEqual([
         { pending: 1 },
       ]);
-      yield* f.fake.outgoing(f.conversation.handle, ending!.notice, 1, "delivered");
-      yield* f.ending.tick;
+      f.fake.notificationStatuses.set("notice-guid", "delivered");
+      const restarted = yield* prepareMessaging(f.personas, f.fake.messages, f.ui.gestures);
+      yield* restarted.endings.tick;
       expect(yield* f.sql`SELECT notice_pending AS pending FROM conversation_end`).toEqual([
         { pending: 0 },
       ]);
