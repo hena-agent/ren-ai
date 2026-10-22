@@ -288,6 +288,7 @@ export const migrate = Effect.gen(function* () {
         yield* sql`ALTER TABLE conversation_end DROP COLUMN initiator`;
         yield* sql`ALTER TABLE conversation_end RENAME COLUMN ending_initiator TO initiator`;
       }),
+      "045_selection_input": sql`ALTER TABLE discovery_selection ADD COLUMN input TEXT`,
     }),
   });
 });

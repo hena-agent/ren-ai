@@ -12,11 +12,19 @@ const select = (form: FormData, view: ContactView, client: ManagementClient) => 
   let input: typeof SelectContacts.Type;
   const specific = form.get("action") === "select-specific";
   const registrationIDs = form.getAll("registrationIDs");
+  const assignments = specific
+    ? registrationIDs.flatMap((id) => {
+        if (typeof id !== "string") return [];
+        const personaID = form.get(`personaID:${id}`);
+        return personaID ? [{ registrationID: id, personaID }] : [];
+      })
+    : [];
   try {
     input = Schema.decodeUnknownSync(SelectContacts)({
       requestId: form.get("requestId"),
       count: specific ? registrationIDs.length : Number(form.get("count")),
       ...(specific && { registrationIDs }),
+      ...(assignments.length && { assignments }),
     });
   } catch {
     throw new PersonaError(
@@ -27,6 +35,7 @@ const select = (form: FormData, view: ContactView, client: ManagementClient) => 
   if (input.registrationIDs) {
     view.directRequestId = input.requestId;
     view.registrationIDs = input.registrationIDs;
+    view.assignments = input.assignments ?? [];
     view.directAttempted = true;
   } else {
     view.requestId = input.requestId;
@@ -59,6 +68,7 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
     startRequestId: randomUUID(),
     directRequestId: randomUUID(),
     registrationIDs: [],
+    assignments: [],
     count: 1,
   };
   const render = (error = "", status = 200) =>
