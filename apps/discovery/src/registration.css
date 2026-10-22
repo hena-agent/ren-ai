@@ -75,7 +75,7 @@
   font-size: 14px;
   font-weight: 600;
 }
-input:not([type="checkbox"]),
+input:not([type="checkbox"]):not([type="radio"]),
 .optional-profile select {
   width: 100%;
   min-height: 52px;
@@ -236,4 +236,65 @@ input[type="checkbox"] {
   .join-panel {
     padding: 24px 20px;
   }
+}
+.relationship-select {
+  border: 0;
+  padding: 0;
+  margin: 24px 0;
+  min-width: 0;
+}
+
+.relationship-select legend {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.relationship-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.relationship-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.relationship-option:has(:checked) {
+  border-color: var(--accent);
+  background: #fff6f8;
+}
+
+.relationship-option:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.relationship-option input {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: 4px 0 0;
+  accent-color: var(--accent);
+}
+
+.relationship-option strong,
+.relationship-option small {
+  display: block;
+}
+
+.relationship-option small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.relationship-select:disabled {
+  opacity: 0.6;
 }

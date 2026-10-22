@@ -1,5 +1,6 @@
 export { normalizeHandle } from "./handle.ts";
 export { MobileNumber } from "./shapes.ts";
+export { StartingRelationship } from "./relationship.ts";
 export {
   ConversationQuery,
   ConversationRecovery,

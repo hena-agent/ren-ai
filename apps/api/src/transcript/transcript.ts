@@ -1,4 +1,5 @@
 import { timestamp } from "@ren-ai/plugin-application/phone";
+import type { StartingRelationship } from "@ren-ai/onboarding";
 export { timestamp } from "@ren-ai/plugin-application/phone";
 export const sent = () => "sent";
 export const notSent = (reason: string) => `not sent: ${reason}`;
@@ -56,8 +57,9 @@ export const conversationStarted = (
   timeZone: string,
   preferredLanguage?: string,
   profile?: { name: string | null; age: number | null; gender: string | null },
+  startingRelationship?: StartingRelationship,
 ) =>
-  `<conversation-started at="${timestamp(at, timeZone)}"${preferredLanguage ? ` preferred-language="${attribute(preferredLanguage)}"` : ""}${profile ? profileAttributes(profile) : ""}/>\n${openingLine}\n<notice>${words(webConsent)}</notice>`;
+  `<conversation-started at="${timestamp(at, timeZone)}"${preferredLanguage ? ` preferred-language="${attribute(preferredLanguage)}"` : ""}${profile ? profileAttributes(profile) : ""}${startingRelationship ? ` starting-relationship="${startingRelationship}"` : ""}/>\n${openingLine}\n<notice>${words(webConsent)}</notice>`;
 
 const profileAttributes = (profile: {
   name: string | null;

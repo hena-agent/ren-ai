@@ -135,12 +135,17 @@ test("a pending registration cannot repeat, and failure retains the form for a f
     .mockResolvedValueOnce({ status: "active" });
   mount();
   fill();
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: /^연인/ }).checked).toBe(true);
+  fireEvent.click(screen.getByRole("radio", { name: /^친구/ }));
   const form = screen.getByRole("button", { name: "동의하고 대기 등록" }).closest("form")!;
   fireEvent.submit(form);
   fireEvent.submit(form);
   expect(submit).toHaveBeenCalledTimes(1);
   expect(number().hasAttribute("disabled")).toBe(true);
   expect(country().hasAttribute("disabled")).toBe(true);
+  expect(
+    screen.getByRole("group", { name: "어떤 사이로 시작할까요?" }).hasAttribute("disabled"),
+  ).toBe(true);
   expect(screen.getByRole("checkbox").hasAttribute("disabled")).toBe(true);
   expect(
     screen.getByRole("group", { name: "나에 대해 조금 더 (선택)" }).hasAttribute("disabled"),
@@ -160,6 +165,7 @@ test("a pending registration cannot repeat, and failure retains the form for a f
   );
   expect(number().getAttribute("aria-invalid")).toBe("false");
   expect(number().value).toBe("010-1234-5678");
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: /^친구/ }).checked).toBe(true);
   expect(screen.getByRole("button", { name: "동의하고 대기 등록" }).hasAttribute("disabled")).toBe(
     true,
   );
@@ -172,6 +178,7 @@ test("a pending registration cannot repeat, and failure retains the form for a f
     handle: "+821012345678",
     locale: "ko",
     conversationLanguage: "ko",
+    startingRelationship: "friends",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["ena"],
     turnstileToken: "fresh",

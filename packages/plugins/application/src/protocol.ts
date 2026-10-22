@@ -1,5 +1,6 @@
 import { outgoingStatus, tapback } from "@ren-ai/imsg/protocol";
 import { Schema } from "effect";
+import { StartingRelationship } from "@ren-ai/onboarding";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 
 const session = { sessionID: Schema.String };
@@ -45,6 +46,7 @@ export const applicationApi = RpcGroup.make(
   Rpc.make("context", {
     payload: { ...session, messageIDs: Schema.Array(Schema.String) },
     success: Schema.Struct({
+      startingRelationship: Schema.optionalKey(StartingRelationship),
       status: Schema.UndefinedOr(outgoingStatus),
       sends: Schema.Array(
         Schema.Struct({

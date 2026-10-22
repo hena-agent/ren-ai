@@ -146,6 +146,26 @@
   "proficient": "Proficient",
   "fluent": "Fluent",
   "conversationLanguage": "Preferred conversation language",
+  "startingRelationship": {
+    "title": "How would you like to start?",
+    "hint": "Your first greeting starts from this relationship. You'll discover each other's life and tastes as you talk.",
+    "dating": {
+      "title": "Dating",
+      "description": "You've just started dating, with affection from the beginning."
+    },
+    "flirting": {
+      "title": "Flirting",
+      "description": "You're interested in each other, but not a couple yet."
+    },
+    "friends": {
+      "title": "Friends",
+      "description": "Share everyday life as friends, without romantic expectations."
+    },
+    "strangers": {
+      "title": "Strangers",
+      "description": "Get to know each other slowly, starting with hello."
+    }
+  },
   "conversationLanguageHint": "The first greeting reflects their proficiency in this language. If they don't speak it, they'll greet you in their primary language.",
   "profilePhoto": "profile photo",
   "fullProfile": "View full profile",

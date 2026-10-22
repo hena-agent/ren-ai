@@ -123,8 +123,12 @@ The persona's current condition and other current values needed for her choices 
 _Avoid_: personality, memory, probability
 
 **Affection**:
-The persona's positive interest in getting to know one conversation's user. A persona-specific starting value describes her interest on first meeting; subsequent affection reflects that conversation's experience. It is distinct from familiarity, trust, desire to chat and intent to date.
+The persona's positive feelings toward one conversation's user. A persona-specific starting value describes her initial interest; subsequent affection reflects that conversation's experience. It is distinct from familiarity, trust, desire to chat and the relationship itself. Affection does not unlock dating or automatically turn friendship into romance.
 _Avoid_: action probability, relationship stage
+
+**Starting relationship**:
+The relationship a user chooses when requesting contact in Discovery: dating, flirting, friends or strangers. Dating is the default and means the two have just started dating. It belongs to that Conversation and establishes their relationship without inventing user facts or shared experiences. Later mutually agreed changes belong to that Conversation's Memory.
+_Avoid_: persona personality, affection level
 
 **Language background**:
 A Persona's native languages, primary language and history of learning languages. This is identity; becoming fluent in a learned language does not make it a native language.

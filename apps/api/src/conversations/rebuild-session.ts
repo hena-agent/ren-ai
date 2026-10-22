@@ -6,10 +6,12 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { withLifecycle } from "./lifecycle.ts";
+import type { StartingRelationship } from "@ren-ai/onboarding";
 
 interface Origin {
   readonly startedAt: number;
   readonly conversationLanguage: string | null;
+  readonly startingRelationship: StartingRelationship | null;
   readonly name: string | null;
   readonly age: number | null;
   readonly gender: string | null;
@@ -46,9 +48,10 @@ export const rebuilder = (
                 return "present" as const;
               }
               const [origin] = yield* sql<Origin>`SELECT conversation.started_at AS startedAt,
-                l.conversation_language AS conversationLanguage, p.name, p.age, p.gender
+                l.conversation_language AS conversationLanguage, p.name, p.age, p.gender,
+                conversation.starting_relationship AS startingRelationship
           FROM user JOIN conversation ON conversation.user_id = user.id
-          LEFT JOIN discovery_registration r ON r.handle = user.handle
+          LEFT JOIN discovery_registration r ON r.id = conversation.registration_id
           LEFT JOIN discovery_language l ON l.registration_id = r.id
           LEFT JOIN discovery_profile p ON p.registration_id = r.id
           WHERE conversation.id = ${conversation.id} AND conversation.session_id = ${conversation.sessionID}`;
@@ -79,6 +82,7 @@ export const rebuilder = (
             persona.timeZone,
             origin.conversationLanguage ?? undefined,
             origin,
+            origin.startingRelationship ?? undefined,
           ),
         });
         yield* replay(conversation);

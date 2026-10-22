@@ -5,6 +5,7 @@ import {
   malformedRpcReply,
 } from "../../test/application-rpc.test-helper.ts";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
+import { SqlClient } from "effect/unstable/sql";
 
 test.each([
   ["send", { sessionID: "session", callID: "send-call" }],
@@ -33,6 +34,7 @@ test.each([
   { tag: "catalog", value: [{ id: "persona1" }] },
   { tag: "context", value: { status: { delivered: "true", readAt: null }, sends: [] } },
   { tag: "context", value: { sends: [{ toolCallID: 1, state: "sent", updatedAt: 100 }] } },
+  { tag: "context", value: { startingRelationship: "unsupported", status: undefined, sends: [] } },
 ] as const)("the application client rejects malformed $tag results", async ({ tag, value }) => {
   await expect(
     runMessagingTest(
@@ -72,5 +74,13 @@ test("the application catalog and diagnostics preserve their public data", () =>
         status: { delivered: true, readAt: 1234 },
         sends: [],
       });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`UPDATE conversation SET starting_relationship = 'friends' WHERE id = ${fixture.conversation.id}`;
+      expect(yield* fixture.client.context({ sessionID: "session", messageIDs: [] })).toMatchObject(
+        { startingRelationship: "friends" },
+      );
+      expect(
+        yield* fixture.client.context({ sessionID: "missing", messageIDs: [] }),
+      ).not.toHaveProperty("startingRelationship");
     }),
   ));

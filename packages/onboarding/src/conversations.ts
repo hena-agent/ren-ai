@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { StartingRelationship } from "./relationship.ts";
 
 const id = Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0));
 export const ConversationQuery = Schema.Struct({
@@ -21,6 +22,7 @@ const delivery = Schema.Literals([
 ]);
 export const ConversationEntry = Schema.Struct({
   id,
+  startingRelationship: Schema.optionalKey(StartingRelationship),
   handle: Schema.String,
   personaID: Schema.String,
   personaName: Schema.String,
