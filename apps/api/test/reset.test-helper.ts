@@ -22,6 +22,10 @@ export const resetFixture = async (prefix: string) => {
     join(fixture.personaDirectory, "persona1.md"),
     join(fixture.personaDirectory, "persona2.md"),
   );
+  await copyFile(
+    join(fixture.personaDirectory, "persona1.md"),
+    join(fixture.personaDirectory, "persona3.md"),
+  );
   const fake = fakeMessages();
   const start = quietTestHost(
     fixture.root,
@@ -47,15 +51,30 @@ const verified = HttpClient.make((request) =>
   Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ success: true }))),
 );
 
-/** How a test handle starts over after `/reset`: register through Discovery, then start it directly. */
+/** Reselect an unused Persona through the ending's private link, then use test-handle Selection. */
 export const startTestHandle = (
   host: Host,
   messages: Pick<Messages, "textStatus" | "availability">,
   handle: string,
-  personaID = "persona1",
+  personaID?: string,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    if (yield* host.conversations.byHandle(handle)) return "unavailable" as const;
+    yield* host.heartbeat.stopped;
+    const used = yield* sql<{
+      id: string;
+    }>`SELECT COALESCE(c.persona_id, u.persona_id) AS id FROM user u LEFT JOIN conversation c ON c.user_id = u.id
+      UNION SELECT persona_id AS id FROM persona_assignment`;
+    const target =
+      personaID ?? [...host.personas.keys()].find((id) => !used.some((row) => row.id === id));
+    if (!target) return "unavailable" as const;
+    const [ending] = yield* sql<{
+      notice: string;
+    }>`SELECT e.notice FROM conversation_end e JOIN conversation c ON c.id = e.conversation_id
+      JOIN user u ON u.id = c.user_id WHERE u.handle = ${handle} ORDER BY c.id DESC LIMIT 1`;
+    const reselectionToken =
+      ending && new URL(ending.notice.split("\n").at(-1)!).hash.slice("#reselect=".length);
     const catalog = async () =>
       [...host.personas.values()].map((persona) => ({
         id: persona.id,
@@ -75,7 +94,8 @@ export const startTestHandle = (
             locale: "ko",
             privacyNoticeVersion: discoveryNotice.version,
             turnstileToken: "human",
-            likedPersonaIDs: [personaID],
+            likedPersonaIDs: [target],
+            ...(reselectionToken && { reselectionToken }),
           }),
         }),
         Context.make(HttpClient.HttpClient, verified),
@@ -84,21 +104,21 @@ export const startTestHandle = (
     expect(joined.status).toBe(200);
     const [registered] = yield* sql<{
       id: string;
-    }>`SELECT id FROM discovery_registration WHERE handle = ${handle}`;
+    }>`SELECT id FROM discovery_registration WHERE handle = ${handle} AND archived_at IS NULL`;
     if (!registered) return "unavailable" as const;
     yield* checkAvailability(
       registered.id,
       {
-        availability: (target) =>
+        availability: (address) =>
           messages
-            .availability(target)
+            .availability(address)
             .pipe(Effect.map((result) => ({ ...result, requestId: randomUUID() }))),
       },
       () => {},
     );
     const store = yield* contacts(catalog);
     const started = yield* store.start(
-      { requestId: randomUUID(), registrationID: registered.id, personaID },
+      { requestId: randomUUID(), registrationID: registered.id, personaID: target },
       randomUUID(),
     );
     if (!started) return "unavailable" as const;

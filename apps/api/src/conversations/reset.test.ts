@@ -5,14 +5,14 @@ import { expect, test } from "vitest";
 import { registration } from "../../test/messaging.test-helper.ts";
 import { resetFixture, bindTestHandle, startTestHandle } from "../../test/reset.test-helper.ts";
 
-test("a test handle resets Memory into a new session and keeps the old session for review", async () => {
+test("a test handle ends the relationship and reselects without copying its preserved history", async () => {
   const { fake, handle, start, run, cleanup } = await resetFixture("reset-");
   try {
     await run(
       Effect.gen(function* () {
         const host = yield* start;
         const old = yield* bindTestHandle(host, handle);
-        const at = Date.parse("2026-09-29T05:03:00.000Z");
+        const at = Date.now();
         yield* fake.text(handle, "My secret is marmalade", at);
         yield* host.sessions.wait(old.id);
         const command = yield* fake.text(handle, " /Reset \n", at + 1);
@@ -23,15 +23,12 @@ test("a test handle resets Memory into a new session and keeps the old session f
         expect(fresh.sessionID).not.toBe(old.id);
         const id = Session.ID.make(fresh.sessionID);
         yield* host.sessions.wait(id);
-        expect((yield* host.sessions.get(old.id)).title).toBe(
-          "Persona1 · +821012345678 · reset 2026-09-29 Tue 14:03",
-        );
+        expect((yield* host.sessions.get(old.id)).title).toBe("Persona1 · +821012345678");
         const listed = yield* Effect.promise(() =>
           host.web(new Request("http://opencode/api/session")).then((response) => response.text()),
         );
         expect(listed).toContain(old.id);
         expect(listed).toContain(id);
-        expect(listed).toContain(" · reset ");
         expect(JSON.stringify(yield* host.sessions.messages({ sessionID: old.id }))).toContain(
           "marmalade",
         );
@@ -52,7 +49,7 @@ test("a test handle resets Memory into a new session and keeps the old session f
         expect(replayed).toContain("Hello again");
         expect(replayed).not.toContain("marmalade");
         expect(replayed).not.toContain("/Reset");
-        expect((yield* host.sessions.get(old.id)).title).toContain(" · reset ");
+        expect((yield* host.sessions.get(old.id)).title).toBe("Persona1 · +821012345678");
         const history = yield* fake.messages.after(0);
         yield* fake.redeliver({ ...command, id: history.at(-1)!.id + 1 });
         expect((yield* host.conversations.byHandle(handle))!.sessionID).toBe(rebuilt);

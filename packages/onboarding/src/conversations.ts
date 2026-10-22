@@ -36,7 +36,7 @@ export const ConversationEntry = Schema.Struct({
   sessionID: Schema.String,
   startedAt: Schema.Number,
   endedAt: Schema.NullOr(Schema.Number),
-  endedBy: Schema.optionalKey(Schema.Literals(["persona", "operator"])),
+  endedBy: Schema.optionalKey(Schema.Literals(["persona", "operator", "user"])),
   stoppedAt: Schema.NullOr(Schema.Number),
   canNotify: Schema.Boolean,
   lastReceivedAt: Schema.NullOr(Schema.Number),

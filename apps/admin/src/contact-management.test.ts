@@ -113,7 +113,7 @@ test("Waitlist shows Notification outcomes without offering resend or changing s
   ])
     expect(page).toContain(label);
   expect(page).not.toContain("resend");
-  expect(page.match(/form="contact-direct-selection"/g)).toHaveLength(5);
+  expect(page.match(/name="registrationIDs"/g)).toHaveLength(5);
 });
 
 test("Waitlist holds unverified iMessage entries and enables only confirmed available entries", async () => {

@@ -4,6 +4,7 @@ import { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import type { contacts } from "./contacts.ts";
 import { contactCause, contactLog } from "./diagnostics.ts";
 import type { ContactLog, ContactDiagnostic } from "./diagnostics.ts";
+import { SelectionConflict } from "./selection.ts";
 
 const digest = (text: string) => createHash("sha256").update(text).digest();
 export const contactManagement =
@@ -69,7 +70,12 @@ export const contactManagement =
       }
       stage = `${name}.commit`;
       const result = await Effect.runPromise(Effect.result(run(input)));
-      if (Result.isFailure(result)) return failure(`${name}_failed`, 503, result.failure);
+      if (Result.isFailure(result))
+        return failure(
+          `${name}_failed`,
+          result.failure instanceof SelectionConflict ? 409 : 503,
+          result.failure,
+        );
       return result.success ? respond(result.success, 200) : failure(`${name}_unavailable`, 409);
     };
     if (
@@ -91,16 +97,18 @@ export const contactManagement =
     if (request.method !== "POST") return failure("not_found", 404);
     if (path === "/management/discovery/select")
       return commit("selection", SelectContacts, (input) => store.select(input, requestId));
-    if (path === "/management/discovery/select-specific")
+    if (
+      path === "/management/discovery/select-specific" ||
+      path === "/management/discovery/select-assigned"
+    )
       return commit(
         "selection",
         Schema.Struct({
           ...SelectContacts.fields,
-          registrationIDs: Schema.Array(SelectContacts.fields.requestId).check(
-            Schema.isMinLength(1),
-            Schema.isMaxLength(100),
-            Schema.isUnique(),
-          ),
+          registrationIDs: Schema.requiredKey(SelectContacts.fields.registrationIDs),
+          ...(path.endsWith("select-assigned") && {
+            assignments: Schema.requiredKey(SelectContacts.fields.assignments),
+          }),
         }),
         (input) => store.select(input, requestId),
       );

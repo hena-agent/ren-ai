@@ -3,6 +3,7 @@ import type { IncomingMessage, Messages } from "./messages.ts";
 import { selectRecent } from "./messages.ts";
 import type { OutgoingStatus } from "../gateway/protocol.ts";
 import { imageData } from "./images.ts";
+import type { remoteMessages } from "../gateway/client.ts";
 
 export const fakeMessages = (events: string[] = []) => {
   const bubbles: { handle: string; text: string }[] = [];
@@ -13,7 +14,24 @@ export const fakeMessages = (events: string[] = []) => {
   const sendStatuses = new Map<string, "sent" | "delivered" | "failed" | "unknown">();
   const watchers = new Set<(row: IncomingMessage) => Effect.Effect<void, Error>>();
   const statuses = new Map<string, "sent" | "no_imessage" | "unknown">();
-  const messages: Messages = {
+  const notifications: { handle: string; text: string; guid: string }[] = [];
+  const notificationStatuses = new Map<string, "pending" | "sent" | "delivered" | "failed">();
+  const messages: Messages &
+    Pick<Effect.Success<ReturnType<typeof remoteMessages>>, "notify" | "notificationStatus"> = {
+    notify: (handle, text) =>
+      Effect.sync(() => {
+        const guid = crypto.randomUUID();
+        notifications.push({ handle, text, guid });
+        bubbles.push({ handle, text });
+        notificationStatuses.set(guid, "sent");
+        return { guid, requestId: crypto.randomUUID() };
+      }),
+    notificationStatus: (guid) =>
+      Effect.sync(() => ({
+        state: notificationStatuses.get(guid) ?? "pending",
+        error: 0,
+        dateRead: null,
+      })),
     availability: () => Effect.succeed({ available: true }),
     image: imageData,
     sendText: (handle, text, attemptID) =>
@@ -111,6 +129,8 @@ export const fakeMessages = (events: string[] = []) => {
   return {
     messages,
     bubbles,
+    notifications,
+    notificationStatuses,
     events,
     statuses,
     status: (handle: string, status: OutgoingStatus) => lastStatuses.set(handle, status),

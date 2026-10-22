@@ -9,7 +9,7 @@ import {
 } from "../../test/reset.test-helper.ts";
 
 test.each(["+821092836686", "+14155550100"])(
-  "%s can onboard from the beginning after reset",
+  "%s reselects after reset while retaining its user and registration history",
   async (handle) => {
     const f = await resetFixture("reset-onboarding-");
     try {
@@ -23,12 +23,12 @@ test.each(["+821092836686", "+14155550100"])(
           const old = yield* currentMemory(host, handle);
           const command = yield* f.fake.text(handle, " /RESET ", Date.now());
           expect(yield* host.conversations.byHandle(handle)).toBeUndefined();
-          expect(yield* sql`SELECT id FROM user WHERE handle = ${handle}`).toEqual([]);
+          expect(yield* sql`SELECT id FROM user WHERE handle = ${handle}`).toHaveLength(1);
           expect(
             yield* sql`SELECT id FROM discovery_registration WHERE handle = ${handle}`,
-          ).toEqual([]);
+          ).toHaveLength(1);
           expect(yield* sql`SELECT * FROM persona_assignment`).toEqual([]);
-          expect((yield* host.sessions.get(old.id)).title).toContain(" · reset ");
+          expect((yield* host.sessions.get(old.id)).title).not.toContain(" · reset ");
           expect((yield* host.sessions.list()).data).toHaveLength(1);
           yield* f.fake.redeliver(command);
           expect(yield* startTestHandle(host, f.fake.messages, handle)).toBe("started");
@@ -38,9 +38,14 @@ test.each(["+821092836686", "+14155550100"])(
           expect(fresh.text).not.toContain("old memory");
           expect(fresh.text).not.toContain("/RESET");
           expect(f.fake.bubbles).toEqual([]);
-          expect(yield* sql`SELECT replied_at FROM user WHERE handle = ${handle}`).toEqual([
-            { replied_at: null },
-          ]);
+          expect(
+            (yield* sql<{
+              repliedAt: number | null;
+            }>`SELECT replied_at AS repliedAt FROM user WHERE handle = ${handle}`)[0]?.repliedAt,
+          ).not.toBeNull();
+          expect(
+            yield* sql`SELECT id FROM discovery_registration WHERE handle = ${handle}`,
+          ).toHaveLength(2);
           yield* f.fake.redeliver(command);
           expect((yield* currentMemory(host, handle)).id).toBe(fresh.id);
           expect(yield* startTestHandle(host, f.fake.messages, handle)).toBe("unavailable");
@@ -53,7 +58,7 @@ test.each(["+821092836686", "+14155550100"])(
   },
 );
 
-test("redelivery completes interrupted retention once and leaves later operator review work intact", async () => {
+test("redelivery never reopens an ending with interrupted stopping and leaves later operator review work intact", async () => {
   const f = await resetFixture("reset-redelivery-");
   try {
     await f.run(
@@ -62,18 +67,17 @@ test("redelivery completes interrupted retention once and leaves later operator 
         const sql = yield* SqlClient.SqlClient;
         const old = yield* bindTestHandle(host, f.handle);
         const entered = yield* Deferred.make<void>();
-        const rename = vi
-          .spyOn(host.sessions, "rename")
+        const interrupt = vi
+          .spyOn(host.sessions, "interrupt")
           .mockImplementationOnce(() =>
             Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
           );
-        const resetting = yield* f.fake
-          .text(f.handle, "/reset", Date.now())
-          .pipe(Effect.forkScoped);
+        yield* f.fake.text(f.handle, "/reset", Date.now());
+        const resetting = yield* host.heartbeat.stopped.pipe(Effect.forkScoped);
         yield* Deferred.await(entered);
-        rename.mockRestore();
+        interrupt.mockRestore();
         yield* Fiber.interrupt(resetting);
-        expect(yield* startTestHandle(host, f.fake.messages, f.handle)).toBe("unavailable");
+        expect(yield* host.conversations.byHandle(f.handle)).toBeUndefined();
         const [command] = yield* f.fake.messages.after(0);
         yield* f.fake.redeliver(command!);
         expect(yield* sql`SELECT complete FROM reset`).toEqual([{ complete: 1 }]);

@@ -127,7 +127,8 @@ const synchronize = Effect.fn("synchronize")(function* (
     return yield* Effect.fail(new DeferredWork());
   });
   const frozen = (id: string) =>
-    sql`SELECT 1 FROM retained_session WHERE session_id = ${id} UNION SELECT 1 FROM removal WHERE session_id = ${id}`;
+    sql`SELECT 1 FROM retained_session WHERE session_id = ${id} UNION SELECT 1 FROM removal WHERE session_id = ${id}
+      UNION SELECT 1 FROM conversation WHERE session_id = ${id} AND ended_at IS NOT NULL`;
   const resolve = (id: string, personaID: string) =>
     Effect.gen(function* () {
       const missing = !personas.has(personaID);

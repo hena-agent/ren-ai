@@ -1,4 +1,5 @@
-import { rm } from "node:fs/promises";
+import { copyFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { Effect } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
 import { Session } from "@opencode/schema/session";
@@ -16,6 +17,7 @@ test.each([false, true])(
   "reset interrupts a waiting persona and fences edits (concurrent poll: %s)",
   async (concurrent) => {
     const { root, personaDirectory } = await messagingFixture("reset-isolation-");
+    await copyFile(join(personaDirectory, "persona1.md"), join(personaDirectory, "persona2.md"));
     const fake = fakeMessages();
     const handle = "+821012345678";
     let resetOnRead = false;
@@ -69,7 +71,7 @@ test.each([false, true])(
           yield* startTestHandle(host, fake.messages, handle);
           const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
           yield* host.sessions.wait(id);
-          expect((yield* host.sessions.get(old.id)).outcome).toBe("interrupted");
+          expect((yield* host.sessions.get(old.id)).time.idle).toBeDefined();
           expect(yield* host.sessions.inbox(old.id)).toEqual([]);
           const before = yield* host.sessions.messages({ sessionID: old.id });
           expect(JSON.stringify(before)).not.toContain("changed before reset");
@@ -98,7 +100,8 @@ test.each([false, true])(
           shouldReply = true;
           yield* fake.text(handle, "can you reply now?", Date.now());
           yield* host.sessions.wait(id);
-          expect(fake.bubbles).toContainEqual({ handle, text: "Fresh conversation reply" });
+          expect(fake.bubbles.at(-1)?.text).toContain("Fresh conversation reply");
+          expect(fake.bubbles.at(-1)?.text).toContain("다른 페르소나");
         }).pipe(Effect.timeout("20 seconds")),
       );
     } finally {

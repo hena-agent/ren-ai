@@ -39,7 +39,7 @@ export const dueContact = (handle: string, personaID: string) =>
     const sql = yield* SqlClient.SqlClient;
     const registration = randomUUID();
     yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at) VALUES (${registration}, ${handle}, 'ko', 'v1', 1)`;
-    yield* sql`INSERT INTO discovery_selection VALUES (${registration}, 1, 1)`;
+    yield* sql`INSERT INTO discovery_selection (request_id, requested, created_at) VALUES (${registration}, 1, 1)`;
     yield* sql`INSERT INTO persona_assignment VALUES (${personaID}, ${handle})`;
     yield* sql`INSERT INTO discovery_contact
       (registration_id, selection_id, persona_id, scheduled_at, state, request_id)

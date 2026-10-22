@@ -25,6 +25,7 @@ export const ContactEntry = Schema.Struct({
   handle: Schema.String,
   createdAt: Schema.Number,
   likedPersonas: Schema.Array(candidate),
+  assignablePersonas: Schema.optionalKey(Schema.Array(candidate)),
   state: ContactState,
   eligible: Schema.Boolean,
   reason: Schema.Literals([
@@ -66,6 +67,14 @@ export const SelectContacts = Schema.Struct({
       Schema.isMaxLength(100),
       Schema.isUnique(),
     ),
+  ),
+  assignments: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        registrationID: identifier,
+        personaID: Schema.String.check(Schema.isNonEmpty()),
+      }),
+    ).check(Schema.isMinLength(1), Schema.isMaxLength(100)),
   ),
 });
 export const StartContact = Schema.Struct({

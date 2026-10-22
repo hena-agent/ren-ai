@@ -37,7 +37,15 @@ test("an incoming message reaches Docker's persona plugin and replies through th
   const { root, personaDirectory } = await messagingFixture("distributed-messaging-");
   const local = fakeMessages();
   const gestures = fakeGestures();
-  const mac = messageGateway(local.messages, "secret", gestures.gestures, fakeNotifications());
+  const notices: string[] = [];
+  const mac = messageGateway(local.messages, "secret", gestures.gestures, {
+    ...fakeNotifications(),
+    sendText: (_handle, text) =>
+      Effect.sync(() => {
+        notices.push(text);
+        return { guid: "ending-notice-guid" };
+      }),
+  });
   try {
     await runMessagingTest(
       Effect.gen(function* () {
@@ -224,9 +232,10 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         yield* application.sessions.wait(session.id);
         expect(yield* application.conversations.byHandle("+821012345678")).toBeUndefined();
         yield* application.heartbeat.endings;
-        expect(local.bubbles).toHaveLength(3);
+        expect(local.bubbles).toHaveLength(2);
         expect(local.bubbles[1]?.text).toBe("이제 대화를 끝낼게요.");
-        expect(local.bubbles[2]?.text).toContain("#reselect=");
+        expect(notices).toHaveLength(1);
+        expect(notices[0]).toContain("#reselect=");
         disconnected = true;
         const otherDirectory = join(root, "other-project");
         yield* Effect.promise(() => mkdir(otherDirectory));

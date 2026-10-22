@@ -85,7 +85,8 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect(active).toContain("시작 관계: 친구");
   expect(active).toContain("대기 작업 2개");
   expect(active).toContain("현재 언어 실력 보기");
-  expect(active).toContain("현재 관계 종료");
+  expect(active).toContain('id="relationship-ending"');
+  expect(page).toContain('href="/conversations/1#relationship-ending">관계 정리');
   const ending = { action: "end", key: entry.key!, confirmEnding: "yes", requestId: randomUUID() };
   expect(
     (await admin(request("/conversations/1", { ...ending, confirmEnding: "no" }))).status,
@@ -132,7 +133,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   const stopped = await (await admin(request("/conversations/1?queued=1"))).text();
   expect(stopped).toContain("정지 확인");
   expect(stopped).toContain("운영자가 관계 종료");
-  expect(stopped).not.toContain("현재 관계 종료");
+  expect(stopped).not.toContain('id="relationship-ending"');
   expect(stopped).toContain("확정 실패");
   expect(stopped).toContain("결과 불확실");
   expect(stopped).toContain("이전 등록");
@@ -143,11 +144,12 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect(response.status).toBe(303);
   expect(client.recover).toHaveBeenCalledWith({ id: 1, action: "stop", requestId: key });
   client.detail = async () => ({
-    entry: { ...ended, farewell: "sent", notice: "sent" },
+    entry: { ...ended, endedBy: "user", farewell: "sent", notice: "sent" },
     history: [],
     registrations: [],
   });
   const delivered = await (await admin(request("/conversations/1"))).text();
+  expect(delivered).toContain("사용자가 관계 종료");
   expect(delivered).toMatch(/<button(?=[^>]*value="notice")(?![^>]*disabled)[^>]*>/);
   client.detail = async () => ({
     entry: { ...ended, stoppedAt: null, canNotify: false },
@@ -187,6 +189,13 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect((await admin(request("/conversations", { action: "stop", requestId: key }))).status).toBe(
     400,
   );
+  const legacy = { ...entry };
+  delete legacy.key;
+  client.detail = async () => ({ ...detail, entry: legacy });
+  const missingKey = await (await admin(request("/conversations/1"))).text();
+  expect(missingKey).toContain('id="relationship-ending"');
+  expect(missingKey).toContain("API에서 관계 식별 정보를 받지 못해 종료할 수 없습니다");
+  expect(missingKey).toMatch(/<button[^>]*value="end"[^>]*disabled/);
   client.detail = async () => {
     throw new Error("database unavailable");
   };

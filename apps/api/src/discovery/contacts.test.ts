@@ -74,6 +74,9 @@ test("a waiting test handle starts now with its chosen available Like, once per 
       expect(started!.entries[0]!.scheduledAt).toBeGreaterThanOrEqual(before);
       expect(started!.entries[0]!.scheduledAt).toBeLessThanOrEqual(Date.now());
       expect(yield* store.start(input, "retry")).toEqual(started);
+      expect(
+        yield* store.start({ ...input, personaID: "harin" }, "conflicting-retry").pipe(Effect.flip),
+      ).toEqual(new Error("Selection request conflict"));
       expect(yield* start(tester, "luna")).toBeNull();
       expect(yield* sql`SELECT persona_id FROM persona_assignment ORDER BY persona_id`).toEqual([
         { persona_id: "harin" },

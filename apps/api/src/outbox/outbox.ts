@@ -64,8 +64,7 @@ export const outbox = (
           AND rebuilding = 0 AND NOT EXISTS (SELECT 1 FROM blocked WHERE handle = ${conversation.handle})
           AND (ended_at IS NULL OR EXISTS (SELECT 1 FROM conversation_end e
             WHERE e.conversation_id = conversation.id AND e.consumed_at IS NULL
-            AND ((${callID} = e.call_id || ':farewell:' || e.farewell_attempt AND e.farewell_pending = 1 AND ${content} = e.farewell)
-              OR (${callID} = e.call_id || ':notice:' || e.notice_attempt AND e.notice_pending = 1 AND ${content} = e.notice))))
+             AND ${callID} = e.call_id || ':farewell:' || e.farewell_attempt AND e.farewell_pending = 1 AND ${content} = e.farewell))
         RETURNING id, recorded_at AS recordedAt, attempt_id AS attemptID`;
         return rows[0];
       });

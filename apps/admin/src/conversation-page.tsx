@@ -78,7 +78,11 @@ function Connections({ entries }: { entries: readonly (typeof ConversationEntry.
               </td>
               <td>
                 <strong>{entry.endedAt === null ? "활성" : "종료"}</strong>
+                {entry.endedAt === null && (
+                  <a href={`/conversations/${entry.id}#relationship-ending`}>관계 정리</a>
+                )}
                 {entry.endedBy === "operator" && <small>운영자가 관계 종료</small>}
+                {entry.endedBy === "user" && <small>사용자가 관계 종료</small>}
                 {entry.startingRelationship && (
                   <small>시작 관계: {startingRelationships[entry.startingRelationship]}</small>
                 )}
@@ -129,21 +133,33 @@ function Detail({ view }: { view: ConversationView }) {
         <output>관계가 종료되었습니다. 실행 정지와 Ren AI 재선택 안내는 별도로 처리됩니다.</output>
       )}
       <Connections entries={[detail.entry]} />
-      {detail.entry.endedAt === null && detail.entry.key && (
-        <section aria-labelledby="end-title">
-          <h2 id="end-title">현재 관계 종료</h2>
+      {detail.entry.endedAt === null && (
+        <section id="relationship-ending" aria-labelledby="end-title">
+          <h2 id="end-title">관계 정리</h2>
           <p>
             이 사용자와 {detail.entry.personaName}의 관계를 영구 종료합니다. 기록은 보존하고 다른
             페르소나를 선택할 수 있는 Ren AI 안내만 보냅니다.
           </p>
+          {!detail.entry.key && (
+            <p role="alert">
+              API에서 관계 식별 정보를 받지 못해 종료할 수 없습니다. 메시징 API 배포 상태를 확인한
+              뒤 새로고침해 주세요.
+            </p>
+          )}
           <form method="post" action={`/conversations/${detail.entry.id}`} className="form-actions">
             <input type="hidden" name="requestId" value={view.requestId} />
-            <input type="hidden" name="key" value={detail.entry.key} />
+            {detail.entry.key && <input type="hidden" name="key" value={detail.entry.key} />}
             <label>
-              <input type="checkbox" name="confirmEnding" value="yes" required />{" "}
+              <input
+                type="checkbox"
+                name="confirmEnding"
+                value="yes"
+                required
+                disabled={!detail.entry.key}
+              />{" "}
               {detail.entry.handle}와 {detail.entry.personaName}의 현재 관계를 종료함을 확인합니다.
             </label>
-            <button name="action" value="end" type="submit">
+            <button name="action" value="end" type="submit" disabled={!detail.entry.key}>
               관계 종료
             </button>
             <p className="hint">
