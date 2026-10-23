@@ -92,7 +92,7 @@ also work in the existing Discovery client.
 ## Korean Nemotron pilot
 
 Apply the seeding ledger migrations (`db:local`, or `db:remote` before deploying).
-Use the default Gemini models and configure `GEMINI_API_KEY`. Install DuckDB with
+Configure `GEMINI_API_KEY` for text and select an image provider below. Install DuckDB with
 its `httpfs` extension (`duckdb -c 'INSTALL httpfs;'`). Then select and upload:
 
 ```sh
@@ -119,7 +119,7 @@ to inspect the documents and images before selecting **Publish reviewed selectio
 A changed saved snapshot requires a refreshed review page. Partial image results
 remain available in the editor and cannot be bulk published without both styles.
 
-The approximately $0.35/persona estimate is not a bill or a budget reservation.
+The approximately $0.35/persona Gemini estimate is not a bill or a budget reservation.
 The default maximum is $3/persona because each dispatch conservatively reserves
 maximum input/output tokens. Failed, rejected and interrupted calls retain their
 reservation. Only explicit 429/RESOURCE_EXHAUSTED rejections
@@ -142,7 +142,49 @@ curl --user "admin:$ADMIN_PASSWORD" \
 
 The same manifest returns the same run. Source receipts survive deletion and
 nonpublication. Follow the [pilot sequence](../../docs/specs/nemotron-seeding.md):
-review 20 Korean personas before Japanese/US pilots or larger runs.
+review the Korean and English-speaking previews before larger runs.
+
+### Image provider switch
+
+Set `ADMIN_IMAGE_PROVIDER=gemini` (default) or `arena`. Text authoring and review
+always use Gemini. Remove `ADMIN_IMAGE_MODEL` overrides when switching: Gemini
+defaults to `gemini-3.1-flash-image`, Arena to `gpt-image-2.5-sunburst`.
+For Arena, set the server-only `ARENA_IMAGE_API_KEY` secret with
+`bunx wrangler secret put ARENA_IMAGE_API_KEY` from this directory.
+The Arena endpoint is `https://gpt-image.renai.im`; requests use bearer auth.
+For production change the provider in `wrangler.jsonc` and deploy through main CI;
+for local development use `.env`. Switch when the shared image queue and seeding
+runs are idle so confirmed work finishes with its selected provider.
+
+Both providers use the same prompts, image confirmation, private drafts, durable
+FIFO, storage and recovery. Arena sends one image request at a time: independent
+3:2 sheets via `/v1/images/generations`, and sheet-backed 4:5 photos via
+`/v1/images/edits` with inline reference images. Regeneration also includes the
+selected photo as its composition reference. Responses are base64 PNGs saved
+through the existing image store. Arena errors never auto-retry or switch to Gemini.
+
+The operator confirmed this Arena endpoint has **no incremental image charge**.
+Its seeding image reservation is $0; text calls retain their normal conservative
+Gemini reservations and the immutable run budget. This is not OpenAI's retail
+pricing. If the endpoint's charging arrangement changes, update the reservation
+before confirming new runs.
+
+### English-speaking US previews
+
+Admin accepts pinned `nvidia/Nemotron-Personas-USA` manifests as well as Korea.
+Use `selectSeeds` with that `dataset` and an operator-reviewed `locale` containing
+`native` language codes and an IANA `timeZone` derived from the record's actual
+language background and location. These values are stored on each private seed;
+US manifests without them are rejected. English is the selected primary language,
+not an assumed native language. Never infer native languages from English dataset
+prose. Conservative name extraction accepts unambiguous names starting the `persona`
+field before `is` or a comma; other records are skipped. The existing `seed:korea`
+CLI remains Korean-specific.
+
+US previews preserve source names/facts, create English public writing and speech
+samples, and keep private descriptions and fixed headings in Korean. Initial
+State/Memory, duplicate exclusions, four-image confirmation, budget and unpublished
+saves use the same workflow. Upload the reviewed manifest to `/seeding` as above.
 
 ## Deploy
 

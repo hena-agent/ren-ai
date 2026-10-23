@@ -1,19 +1,24 @@
 import { Schema } from "effect";
-import { PersonaError } from "@ren-ai/personas";
+import { PersonaError, LanguageCode } from "@ren-ai/personas";
 import { ageOn, BirthDate } from "@ren-ai/personas/birth-date";
 
 const validBirthDate = (value: string): boolean => Schema.is(BirthDate)(value);
 
 const sourceSchema = Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Number]));
+const Locale = Schema.Struct({
+  native: Schema.Array(LanguageCode).check(Schema.isMinLength(1), Schema.isUnique()),
+  timeZone: Schema.Literals(Intl.supportedValuesOf("timeZone")),
+});
 const Seed = Schema.Struct({
   uuid: Schema.String.check(Schema.isPattern(/^[a-f0-9]{32}$/)),
-  name: Schema.String.check(Schema.isPattern(/^[가-힣]{2,6}$/)),
+  name: Schema.String.check(Schema.isPattern(/\S/), Schema.isMaxLength(100)),
   age: Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 20, maximum: 39 })),
   birthDate: Schema.String,
   source: sourceSchema,
+  locale: Schema.optionalKey(Locale),
 });
 const Manifest = Schema.Struct({
-  dataset: Schema.Literal("nvidia/Nemotron-Personas-Korea"),
+  dataset: Schema.Literals(["nvidia/Nemotron-Personas-Korea", "nvidia/Nemotron-Personas-USA"]),
   revision: Schema.String.check(Schema.isPattern(/^[a-f0-9]{40}$/)),
   date: Schema.String,
   seeds: Schema.Array(Seed).check(Schema.isMinLength(1), Schema.isMaxLength(200)),
@@ -35,6 +40,10 @@ export const seedError = () =>
 export const validSeedCount = (count: number) =>
   Number.isInteger(count) && count >= 1 && count <= 200 && (count === 1 || count % 4 === 0);
 
+const eligibleSource = (source: typeof sourceSchema.Type, usa: boolean) =>
+  source["sex"] === (usa ? "Female" : "여자") &&
+  source["marital_status"] === (usa ? "never_married" : "미혼");
+
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: validate an uploaded dataset manifest before persistence or paid generation
 export function readSeedManifest(input: unknown): SeedManifest {
   let manifest: SeedManifest;
@@ -48,15 +57,16 @@ export function readSeedManifest(input: unknown): SeedManifest {
   const names = new Set<string>();
   const ids = new Set<string>();
   const bands = [0, 0, 0, 0];
+  const usa = manifest.dataset === "nvidia/Nemotron-Personas-USA";
   for (const seed of manifest.seeds) {
     const { source } = seed;
     if (
       source["uuid"] !== seed.uuid ||
-      source["sex"] !== "여자" ||
+      !eligibleSource(source, usa) ||
       source["age"] !== seed.age ||
-      source["marital_status"] !== "미혼" ||
-      source["country"] !== "대한민국" ||
-      nameOf(source) !== seed.name ||
+      source["country"] !== (usa ? "USA" : "대한민국") ||
+      Boolean(seed.locale) !== usa ||
+      nameOf(source, usa) !== seed.name ||
       !validBirthDate(seed.birthDate) ||
       ageOn(seed.birthDate, new Date(`${manifest.date}T00:00:00Z`)) !== seed.age ||
       JSON.stringify(source).length > 24000 ||
@@ -73,9 +83,12 @@ export function readSeedManifest(input: unknown): SeedManifest {
   return manifest;
 }
 
-const nameOf = (source: typeof sourceSchema.Type) =>
+const nameOf = (source: typeof sourceSchema.Type, usa: boolean) =>
   typeof source["persona"] === "string"
-    ? /^([가-힣]{2,6})\s*씨는\s/.exec(source["persona"])?.[1]
+    ? (usa
+        ? /^([\p{Lu}][\p{L}'’-]*(?: [\p{Lu}][\p{L}'’-]*){1,3})(?= is |,)/u
+        : /^([가-힣]{2,6})\s*씨는\s/
+      ).exec(source["persona"])?.[1]
     : undefined;
 
 /** Input rows are randomized within age bands by the local DuckDB scan. */
@@ -88,6 +101,8 @@ export function selectSeeds(
     date: string;
     names: readonly string[];
     records: readonly string[];
+    dataset?: SeedManifest["dataset"];
+    locale?: typeof Locale.Type;
   },
 ): SeedManifest {
   if (!validSeedCount(options.count)) throw seedError();
@@ -95,17 +110,17 @@ export function selectSeeds(
   const names = new Set(options.names.map(seedNameKey));
   const records = new Set(options.records);
   const bands: PersonaSeed[][] = [[], [], [], []];
+  const usa = options.dataset === "nvidia/Nemotron-Personas-USA";
   for (const source of rows) {
     const age = source["age"];
     const uuid = source["uuid"];
-    const name = nameOf(source);
+    const name = nameOf(source, usa);
     if (
       typeof age !== "number" ||
       !Number.isInteger(age) ||
       age < 20 ||
       age > 39 ||
-      source["sex"] !== "여자" ||
-      source["marital_status"] !== "미혼" ||
+      !eligibleSource(source, usa) ||
       !name ||
       typeof uuid !== "string" ||
       names.has(seedNameKey(name)) ||
@@ -117,7 +132,14 @@ export function selectSeeds(
     let birthDate = `${Number(options.date.slice(0, 4)) - age}${options.date.slice(4)}`;
     if (birthDate.endsWith("02-29") && !validBirthDate(birthDate))
       birthDate = `${birthDate.slice(0, 8)}28`;
-    band.push({ uuid, name, age, birthDate, source });
+    band.push({
+      uuid,
+      name,
+      age,
+      birthDate,
+      source,
+      ...(options.locale && { locale: options.locale }),
+    });
     names.add(seedNameKey(name));
     records.add(uuid);
     if (options.count === 1) break;
@@ -126,7 +148,7 @@ export function selectSeeds(
   if (seeds.length !== options.count)
     throw new PersonaError("invalid", "Not enough distinct eligible seeds in every age band");
   return readSeedManifest({
-    dataset: "nvidia/Nemotron-Personas-Korea",
+    dataset: options.dataset ?? "nvidia/Nemotron-Personas-Korea",
     revision: options.revision,
     date: options.date,
     seeds,

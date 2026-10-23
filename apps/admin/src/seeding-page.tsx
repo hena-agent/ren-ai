@@ -3,6 +3,7 @@ import type { SeedingRun } from "./seeding-store.ts";
 import type { ReviewedSeed } from "./seeding-review.ts";
 import type { SeedingModels } from "./seeding-budget.ts";
 import { html } from "./html-response.ts";
+import { arenaImageModel } from "./arena-image.ts";
 
 export function seedingPage(
   runs: readonly SeedingRun[],
@@ -39,13 +40,17 @@ export function seedingPage(
                   two photos per persona).
                 </p>
                 <p>
-                  2–4 text calls per persona. Estimated output/text cost: $
-                  {(detail.seeds.length * 0.35).toFixed(2)}; actual costs vary.
+                  2–4 text calls per persona.{" "}
+                  {models.image === arenaImageModel
+                    ? "Arena images have no incremental charge; text calls reserve the Gemini maximum."
+                    : `Estimated output/text cost: $${(detail.seeds.length * 0.35).toFixed(2)}; actual costs vary.`}
                 </p>
                 <p>
-                  {models.text} · {models.image} · 1K. Up to two retries per explicitly rejected 429
-                  request (5s and 10s): at most 12 text dispatches and 12 image dispatches per
-                  persona. All attempts reserve budget, including failures.
+                  {models.text} · {models.image}. Gemini explicitly rejected 429 requests may retry
+                  twice (5s and 10s); at most 12 text dispatches and 12 Gemini image dispatches per
+                  persona. Arena uses four image dispatches with no automatic retries. All attempts
+                  reserve their configured cost, including failures. Uncertain calls require
+                  individual confirmation.
                 </p>
                 <p>
                   Reserved maximum: ${(detail.run.reservedMicros / 1e6).toFixed(2)} / $
@@ -101,6 +106,12 @@ export function seedingPage(
                               <a href={`/personas/${seed.personaId}`}>{seed.source.name}</a>
                             ) : (
                               seed.source.name
+                            )}
+                            {seed.source.locale && (
+                              <p>
+                                English · Native: {seed.source.locale.native.join(", ")} ·{" "}
+                                {seed.source.locale.timeZone}
+                              </p>
                             )}
                           </td>
                           <td>

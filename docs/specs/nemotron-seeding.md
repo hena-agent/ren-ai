@@ -1,6 +1,6 @@
 # Nemotron seeding runs
 
-Status: agreed design; Korean pilot implementation first. See [ADR-0021](../adr/0021-nemotron-derived-personas-carry-attribution-and-private-provenance.md).
+Status: Korean seeding and English-speaking US previews supported. See [ADR-0021](../adr/0021-nemotron-derived-personas-carry-attribution-and-private-provenance.md).
 
 ## Scope and sequence
 
@@ -51,6 +51,30 @@ Verified Korea counts at revision `ada0f5b53a38bb5a30cce09358adde883c1ab63a`:
 to 32,756 before duplicate names and other exclusions.
 
 ## Execution and review
+
+### Image providers and US preview selection (2026-10-23)
+
+- `ADMIN_IMAGE_PROVIDER` selects `gemini` or `arena`; text stays on Gemini.
+  Arena uses the operator's `https://gpt-image.renai.im` API and server-only key,
+  canonical `gpt-image-2.5-sunburst`, one output per call, base64 PNG responses,
+  and inline same-style references for edits. Sheets are 1536×1024; photos are
+  1024×1280. The shared FIFO, prompts, confirmation and storage are unchanged.
+- The operator confirms no incremental Arena image charge: reserve $0 per image,
+  retaining bounded text reservations. Arena failures require individual retry
+  confirmation, including 429 and 5xx; no automatic cross-provider fallback.
+  Switch providers only with idle image/seeding work.
+- The approved next previews are two Korean and two English-speaking US women,
+  unmarried and aged 20–35, saved unpublished with two sheets and one photo per
+  style, empty optional prompts, and a $3/persona maximum. The planned 100+100
+  is a later run, not part of this preview authorization.
+- US seeds require individually reviewed native languages and IANA timezone
+  in private seed `locale`. English is the selected primary language; source
+  prose language never establishes native language. Preserve evidenced additional
+  native languages, source facts and original names. US name extraction rejects
+  ambiguous openings rather than inventing a name. Existing four-band balancing
+  remains for larger manifests; single-person previews can use any eligible band.
+
+### Confirmed execution
 
 The local command selects source data; Admin owns generation, queueing and saves.
 Upload alone never pays. Confirmation displays the exact seed/image counts,
