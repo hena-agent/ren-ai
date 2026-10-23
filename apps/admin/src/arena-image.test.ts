@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { createProfileGenerator } from "./generation.ts";
 import { character, png, portraitImage, photoPortrait } from "../test/fixtures.ts";
 import { withSeedingBudget } from "./seeding-budget.ts";
+import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
 
 afterEach(() => vi.restoreAllMocks());
 const reply = () => Response.json({ data: [{ b64_json: png.toString("base64") }] });
@@ -12,6 +13,46 @@ const client = (fetcher: typeof fetch, arenaKey = "arena-secret") =>
     arenaKey,
     fetcher,
   });
+
+test.each([200, 307])(
+  "Arena request options work in workerd and reject redirects (HTTP %i)",
+  async (status) => {
+    const { runtime } = await cloudflareFixture(
+      undefined,
+      `export default {
+    async fetch(input) {
+      const { url, init } = await input.json();
+      const request = new Request(url, init);
+      if (request.redirect !== "manual") return new Response("Redirects must not be followed", {status: 500});
+      return Response.json({data: [{b64_json: ${JSON.stringify(png.toString("base64"))}}]}, {status: ${status}});
+    }
+  }`,
+    );
+    const worker = await runtime.getWorker("assets");
+    const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+      const response = await worker.fetch("http://worker.test/", {
+        method: "POST",
+        body: JSON.stringify({
+          url,
+          init: {
+            method: init!.method,
+            headers: init!.headers,
+            body: init!.body,
+            redirect: init!.redirect,
+          },
+        }),
+      });
+      return new Response(await response.text(), { status: response.status });
+    });
+    const result = await Promise.allSettled([client(fetcher).sheet(character, "anime")]);
+    const expected =
+      status === 200
+        ? { status: "fulfilled", value: portraitImage }
+        : { status: "rejected", reason: { fields: { status: 307, code: "http_error" } } };
+    expect(result).toMatchObject([expected]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  },
+);
 
 test("Arena generates independent sheets and sends same-style identity and composition as data-URI references", async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => reply());
@@ -28,7 +69,7 @@ test("Arena generates independent sheets and sends same-style identity and compo
   for (const request of requests) {
     expect(request.headers.get("authorization")).toBe("Bearer arena-secret");
     expect(request.headers.has("x-goog-api-key")).toBe(false);
-    expect(request.redirect).toBe("error");
+    expect(request.redirect).toBe("manual");
   }
   expect(await requests[0]!.json()).toMatchObject({
     model: "gpt-image-2.5-sunburst",
