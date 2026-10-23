@@ -57,7 +57,7 @@ export async function arenaImage({
         {
           method: "POST",
           headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-          redirect: "error",
+          redirect: "manual",
           signal: AbortSignal.timeout(120_000),
           body: JSON.stringify({
             model,
