@@ -36,8 +36,8 @@ test("the authenticated CLI releases only the reviewed legacy call, preserves th
         const handler = operatorHandler(host.operator);
         yield* Effect.addFinalizer(() => Effect.promise(handler.dispose));
         const connection = yield* serveTestOperator(handler.handler);
-        const command = (handle: string, call = "old-call") =>
-          runOperatorCli(["release-send", handle, call], connection);
+        const command = (handle: string, call = "old-call", outcome = "failed") =>
+          runOperatorCli(["release-send", handle, call, outcome], connection);
         expect(yield* command("missing@example.test")).toBe("Send recovery: not_found");
         expect(yield* command(conversation.handle, "missing-call")).toBe(
           "Send recovery: not_found",
@@ -46,10 +46,27 @@ test("the authenticated CLI releases only the reviewed legacy call, preserves th
           fetch(`${connection.url}/operator/release-send`, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ handle: conversation.handle, callID: "old-call" }),
+            body: JSON.stringify({
+              handle: conversation.handle,
+              callID: "old-call",
+              outcome: "failed",
+            }),
           }),
         );
         expect(denied.status).toBe(401);
+        for (const outcome of [undefined, "sent"]) {
+          const invalid = yield* Effect.promise(() =>
+            fetch(`${connection.url}/operator/release-send`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${connection.token}`,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ handle: conversation.handle, callID: "old-call", outcome }),
+            }),
+          );
+          expect(invalid.status).toBe(400);
+        }
         expect(yield* command(conversation.handle)).toBe("Send recovery: released");
         expect(yield* command(conversation.handle)).toBe("Send recovery: settled");
         expect(yield* sql`SELECT tool_call_id AS call, state FROM send ORDER BY id`).toEqual([
@@ -71,7 +88,12 @@ test("the authenticated CLI releases only the reviewed legacy call, preserves th
         );
         // Late evidence is reconciled rather than overwritten by an operator release.
         yield* fake.outgoing(conversation.handle, "private other message", 1, "delivered");
-        const configured = runOperatorCli(["release-send", conversation.handle, "other-call"]).pipe(
+        const configured = runOperatorCli([
+          "release-send",
+          conversation.handle,
+          "other-call",
+          "failed",
+        ]).pipe(
           Effect.provide(
             ConfigProvider.layer(
               ConfigProvider.fromUnknown({
@@ -89,12 +111,46 @@ test("the authenticated CLI releases only the reviewed legacy call, preserves th
         expect(yield* sends.send(conversation, "next", "observed")).toContain("did go out");
         expect(yield* sends.send(conversation, "next", "next")).toBe("sent");
         expect(fake.bubbles.map((bubble) => bubble.text)).toEqual(["next"]);
+        expect(yield* sends.send(conversation, "fresh reply", "prior-observed")).toContain(
+          'your earlier message "next"',
+        );
+        yield* insert("received-call", "recipient confirmed this historical message");
+        yield* sql`UPDATE send SET state = 'uncertain' WHERE tool_call_id = 'received-call'`;
+        const confirmed = () =>
+          runOperatorCli(
+            ["release-send", conversation.handle, "received-call", "delivered"],
+            connection,
+          );
+        const confirmationLogs = captureDiagnostics();
+        try {
+          expect(yield* confirmed()).toBe("Send recovery: released");
+          expect(confirmationLogs.logs.join("\n")).toContain("send.release.delivered");
+          expect(confirmationLogs.logs.join("\n")).not.toContain(conversation.handle);
+          expect(confirmationLogs.logs.join("\n")).not.toContain("recipient confirmed");
+        } finally {
+          confirmationLogs.restore();
+        }
+        expect(yield* confirmed()).toBe("Send recovery: settled");
+        expect(
+          yield* sql`SELECT state, guid, late, notification_pending AS pending, updated_at AS at
+            FROM send WHERE tool_call_id = 'received-call'`,
+        ).toEqual([{ state: "delivered", guid: null, late: 1, pending: 1, at: 0 }]);
+        expect(yield* host.conversations.bySession(session.id)).toEqual(conversation);
+        expect(fake.bubbles.map((bubble) => bubble.text)).toEqual(["next"]);
+        expect(yield* sends.send(conversation, "fresh reply", "delivery-observed")).toContain(
+          'your earlier message "recipient confirmed this historical message"',
+        );
+        expect(yield* sends.send(conversation, "fresh reply", "fresh-call")).toBe("sent");
+        expect(fake.bubbles.map((bubble) => bubble.text)).toEqual(["next", "fresh reply"]);
         const attemptID = crypto.randomUUID().toUpperCase();
         yield* sql`INSERT INTO send
           (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at, attempt_id, guid)
           VALUES (${conversation.handle}, ${conversation.id}, 'text', 'pending', 'identified', 'uncertain', 0, 0, ${attemptID}, ${attemptID})`;
         yield* fake.outgoing(conversation.handle, "pending", 1, "unknown", attemptID);
         expect(yield* command(conversation.handle, "identified")).toBe("Send recovery: uncertain");
+        expect(yield* command(conversation.handle, "identified", "delivered")).toBe(
+          "Send recovery: uncertain",
+        );
         const captured = captureDiagnostics();
         const resolve = fake.messages.resolveSend.bind(fake.messages);
         try {
@@ -107,7 +163,11 @@ test("the authenticated CLI releases only the reviewed legacy call, preserves th
               new Request("https://app.test/release-send", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ handle: conversation.handle, callID: "identified" }),
+                body: JSON.stringify({
+                  handle: conversation.handle,
+                  callID: "identified",
+                  outcome: "failed",
+                }),
               }),
               handler.handler,
             ),
@@ -146,7 +206,7 @@ const request = (handle: string) =>
   new Request("https://app.test/release-send", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ handle, callID: "private-call" }),
+    body: JSON.stringify({ handle, callID: "private-call", outcome: "failed" }),
   });
 
 test("operator recovery failures retain cause/correlation and never log private inputs", async () => {

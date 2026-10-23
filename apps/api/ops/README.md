@@ -165,23 +165,27 @@ either reports its outcome or durably rejects the missing attempt. An admitted
 but unconfirmed attempt stays uncertain. Neither path automatically resends it.
 
 For a legacy attempt, inspect its exact OpenCode tool call and the old transport's
-history. Establish that the original executor/request can no longer send and
-verify non-delivery with the operator/recipient; absence from history alone is
-not proof. The following command is an explicit non-delivery attestation for
-that **one legacy call**, not a reset or a resend:
+history. Establish that the original executor/request can no longer send, then
+verify the outcome with the operator/recipient; absence from history alone is
+not proof of non-delivery. Choose an explicit outcome for that **one legacy call**:
 
 ```sh
-API_APP_URL=https://api.renai.im bun run operator release-send HANDLE CALL_ID
+API_APP_URL=https://api.renai.im bun run operator release-send HANDLE CALL_ID failed
+# Only after the recipient confirms the exact message, sender and timestamp:
+API_APP_URL=https://api.renai.im bun run operator release-send HANDLE CALL_ID delivered
 ```
 
-It rechecks transport evidence before changing anything. `released` records a
-legacy failure, `settled` means transport evidence or a prior recovery already
+It rechecks transport evidence before changing anything. `released` records the
+confirmed legacy outcome, `settled` means transport evidence or a prior recovery already
 settled it, `uncertain` means an identified native attempt still cannot be released,
 and `not_found` means the Handle/current Conversation does not own that call.
 Repeating the same command cannot release a different attempt. Completed sends,
-Conversation identity, State and Memory are preserved. The next model context
-reports the failed send honestly, and a fresh send can proceed after all earlier
-uncertainty is resolved. Recovery failures include a request ID for the logs.
+Conversation identity, State and Memory are preserved. Recipient confirmation
+records delivery without inventing a transport GUID or resending the message;
+the original attempt timestamp remains the historical send time. The next model
+context reports the resolved outcome, and a fresh send can proceed after all
+earlier uncertainty is resolved. Recovery events identify the confirmed outcome
+and request ID without logging handles or message content.
 
 The Dockerfile now builds only plugin-installation and explicit offline-export
 artifacts. `compose.yml` retains the plugin installer and original volume names,

@@ -132,7 +132,7 @@ test("an accepted send with a lost acknowledgement is observed by identity witho
       expect(yield* sends.send(conversation, "next", "next")).toContain(
         'earlier message "already sent" did go out',
       );
-      expect(yield* sends.release(conversation, "accepted")).toBe("settled");
+      expect(yield* sends.release(conversation, "accepted", "failed")).toBe("settled");
       expect(yield* sends.send(conversation, "next", "distinct-call")).toBe("sent");
     }),
   );
@@ -157,7 +157,7 @@ test("an admitted but unconfirmed send remains fenced through restart until a re
       expect(yield* sends.send(conversation, "next", "next-call")).toBe(
         "not sent: an earlier send is still in doubt",
       );
-      expect(yield* sends.release(conversation, "pending-call")).toBe("uncertain");
+      expect(yield* sends.release(conversation, "pending-call", "failed")).toBe("uncertain");
       yield* remote.sendText(conversation.handle, "pending", id);
       f.bridge.deliver({
         ...incoming(`mailto:${conversation.handle}`, "", Date.now()),
@@ -169,7 +169,7 @@ test("an admitted but unconfirmed send remains fenced through restart until a re
           expect(await Effect.runPromise(remote.resolveSend(id))).toBe("delivered"),
         ),
       );
-      expect(yield* sends.release(conversation, "pending-call")).toBe("settled");
+      expect(yield* sends.release(conversation, "pending-call", "failed")).toBe("settled");
       expect((yield* sends.results("restart"))[0]?.state).toBe("delivered");
     }),
   );
