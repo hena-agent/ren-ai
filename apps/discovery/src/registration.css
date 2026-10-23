@@ -1,3 +1,6 @@
+.swipe-stage:has(.contact-surface:not([hidden])) {
+  align-items: flex-start;
+}
 .join-panel,
 .receipt {
   padding: 28px;

@@ -56,6 +56,7 @@ button:disabled {
   outline-offset: 4px;
 }
 .discovery-shell {
+  position: relative;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -234,10 +235,8 @@ button:disabled {
 }
 .contact-surface {
   width: min(460px, 100%);
-  height: 100%;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
 }
 .contact-surface[hidden] {
   display: none;
