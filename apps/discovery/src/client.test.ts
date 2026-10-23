@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { discoveryNotice } from "@ren-ai/onboarding";
-import { discoveryClient, ReselectionError } from "./client.ts";
+import { discoveryNotice, discoveryNotices, DiscoveryFailure } from "@ren-ai/onboarding";
+import { discoveryClient, RegistrationError, loadDiscoveryNotices } from "./client.ts";
 import { readChoices, saveChoices } from "./choices.ts";
 
 afterEach(() => {
@@ -8,6 +8,65 @@ afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
   vi.unstubAllEnvs();
+});
+
+test("registration errors allowlist server codes, safe correlation IDs and bounded retry deadlines", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetcher);
+  const request = {
+    handle: "+821012345678",
+    locale: "ko",
+    privacyNoticeVersion: discoveryNotice.version,
+    likedPersonaIDs: ["nari"],
+    turnstileToken: "human",
+    name: "Visitor",
+  } as const;
+  const requestId = crypto.randomUUID();
+  for (const code of DiscoveryFailure.literals) {
+    fetcher.mockResolvedValueOnce(
+      Response.json(code, {
+        status: code === "try_later" ? 429 : 400,
+        headers: { "X-Request-ID": requestId, "Retry-After": "60" },
+      }),
+    );
+    const result = discoveryClient.join(request);
+    await expect(result).rejects.toBeInstanceOf(RegistrationError);
+    await expect(result).rejects.toMatchObject({ code, requestId });
+  }
+  vi.spyOn(Date, "now").mockReturnValue(1000);
+  fetcher.mockResolvedValueOnce(
+    Response.json("try_later", { status: 429, headers: { "Retry-After": "60" } }),
+  );
+  await expect(discoveryClient.join(request)).rejects.toMatchObject({ retryAt: 61_000 });
+  for (const retry of ["0", "-1", "1.5", "3601", "not-a-number"]) {
+    fetcher.mockResolvedValueOnce(
+      Response.json("try_later", {
+        status: 429,
+        headers: { "Retry-After": retry, "X-Request-ID": "private input" },
+      }),
+    );
+    await expect(discoveryClient.join(request)).rejects.toMatchObject({
+      code: "try_later",
+      requestId: undefined,
+      retryAt: undefined,
+    });
+  }
+  fetcher.mockResolvedValueOnce(new Response("private upstream input", { status: 502 }));
+  await expect(discoveryClient.join(request)).rejects.toMatchObject({
+    code: "registration",
+    message: "Registration unavailable",
+  });
+});
+
+test("the latest notices load without caching, and failed or malformed responses are rejected", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(discoveryNotices));
+  vi.stubGlobal("fetch", fetcher);
+  expect(await loadDiscoveryNotices()).toEqual(discoveryNotices);
+  expect(fetcher).toHaveBeenCalledWith("/discovery/notices", { cache: "no-store" });
+  fetcher.mockResolvedValueOnce(Response.json("storage", { status: 503 }));
+  await expect(loadDiscoveryNotices()).rejects.toMatchObject({ code: "storage" });
+  fetcher.mockResolvedValueOnce(Response.json({}));
+  await expect(loadDiscoveryNotices()).rejects.toThrow(/ko/);
 });
 
 test("the browser validates structured profiles, discards Markdown payloads and accepts the deployed older shape", async () => {
@@ -105,6 +164,7 @@ test("the browser client reads the catalog and validates the real registration a
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["nari"],
     turnstileToken: "verified",
+    name: "Visitor",
   } as const;
   fetcher.mockResolvedValueOnce(Response.json({ status: "waiting" }));
   expect(await discoveryClient.join(request)).toEqual({ status: "waiting" });
@@ -120,7 +180,7 @@ test("the browser client reads the catalog and validates the real registration a
   fetcher.mockResolvedValueOnce(new Response(null, { status: 400 }));
   await expect(discoveryClient.join(request)).rejects.toThrow("Registration unavailable");
   fetcher.mockResolvedValueOnce(Response.json("reselection", { status: 400 }));
-  await expect(discoveryClient.join(request)).rejects.toBeInstanceOf(ReselectionError);
+  await expect(discoveryClient.join(request)).rejects.toMatchObject({ code: "reselection" });
   fetcher.mockResolvedValueOnce(Response.json({ status: "sent" }));
   await expect(discoveryClient.join(request)).rejects.toThrow(/status/);
   fetcher.mockResolvedValueOnce(
@@ -223,6 +283,7 @@ test("profiles and registration use api-app while portraits retain their catalog
       privacyNoticeVersion: discoveryNotice.version,
       likedPersonaIDs: ["nari"],
       turnstileToken: "verified",
+      name: "Visitor",
     }),
   ).toEqual({ status: "waiting" });
   expect(fetcher.mock.calls[1]?.[0]).toBe("https://api.renai.im/discovery/waitlist");

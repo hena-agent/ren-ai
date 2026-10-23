@@ -75,6 +75,7 @@ test("composed HTTP, remote OpenCode, messaging API and authenticated operator c
                 locale: "ko",
                 privacyNoticeVersion: discoveryNotice.version,
                 turnstileToken: "human",
+                name: "Visitor",
               }),
             }),
           ),

@@ -126,6 +126,7 @@ test("public reads work without private secrets while management and registratio
         likedPersonaIDs: ["sora"],
         privacyNoticeVersion: discoveryNotice.version,
         turnstileToken: "human",
+        name: "Visitor",
       }),
     });
     expect(registration.status).toBe(400);
@@ -169,6 +170,7 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
         locale: "ko",
         privacyNoticeVersion: discoveryNotice.version,
         turnstileToken: "human",
+        name: "Visitor",
         likedPersonaIDs: ["sora"],
       }),
     });

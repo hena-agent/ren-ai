@@ -113,6 +113,7 @@ const register = (runtime: Miniflare, handle: string) =>
       locale: "ko",
       privacyNoticeVersion: discoveryNotice.version,
       turnstileToken: "human",
+      name: "Visitor",
       likedPersonaIDs: ["sora"],
     }),
   });

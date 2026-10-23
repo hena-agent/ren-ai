@@ -67,19 +67,19 @@
   font-size: 13px;
   font-weight: 600;
 }
-.optional-profile {
+.contact-profile {
   margin: 24px 0;
   padding: 0;
   border: 0;
   min-width: 0;
 }
-.optional-profile legend {
+.contact-profile legend {
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 600;
 }
 input:not([type="checkbox"]):not([type="radio"]),
-.optional-profile select {
+.contact-profile select {
   width: 100%;
   min-height: 52px;
   padding: 12px 14px;
@@ -210,6 +210,9 @@ input[type="checkbox"] {
 }
 .join-submit {
   margin-top: 12px;
+}
+.join-panel .form-error {
+  overflow-wrap: anywhere;
 }
 .receipt {
   padding: 48px 28px;

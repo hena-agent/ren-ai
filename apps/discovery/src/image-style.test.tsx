@@ -1,11 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { discoveryNotice } from "@ren-ai/onboarding";
 import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { readImageStyle, saveImageStyle } from "./image-style.ts";
 import { choose, selectImageStyle } from "../test/choose.ts";
-import { fakeVerification } from "../test/turnstile.ts";
+import { fakeVerification, submitVerifiedContact } from "../test/turnstile.ts";
 
 afterEach(() => {
   cleanup();
@@ -157,9 +156,7 @@ test("style changes and reloads preserve Like and Pass, contact input and candid
       .querySelector("img")
       ?.getAttribute("src"),
   ).toBe(people[0]!.portraits.anime);
-  fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
-  act(() => verify("human"));
-  fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
+  submitVerifiedContact(verify);
   await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
   expect(join.mock.calls[0]?.[0].likedPersonaIDs).toEqual(["persona0"]);
 });

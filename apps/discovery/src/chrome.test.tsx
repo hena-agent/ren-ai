@@ -1,10 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { discoveryNotice } from "@ren-ai/onboarding";
 import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { choose, endAnimation } from "../test/choose.ts";
-import { fakeVerification } from "../test/turnstile.ts";
+import { fakeVerification, submitVerifiedContact } from "../test/turnstile.ts";
 
 afterEach(() => {
   cleanup();
@@ -112,9 +111,7 @@ test("pending registration disables navigation until a recoverable failure compl
   expect(screen.getByRole("textbox", { name: "휴대전화 번호" })).toBe(phone);
   expect(phone.getAttribute("value")).toBe("010-1234-5678");
   expect(currentTabs()).toEqual([null, null, "page"]);
-  fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
-  act(() => verify("human"));
-  fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
+  submitVerifiedContact(verify);
   for (const button of within(navigation).getAllByRole("button"))
     expect(button.hasAttribute("disabled")).toBe(true);
   await act(async () => reject(new Error("offline")));

@@ -94,6 +94,7 @@ export const startTestHandle = (
             locale: "ko",
             privacyNoticeVersion: discoveryNotice.version,
             turnstileToken: "human",
+            name: "Visitor",
             likedPersonaIDs: [target],
             ...(reselectionToken && { reselectionToken }),
           }),

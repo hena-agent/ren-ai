@@ -24,6 +24,8 @@ export {
   DiscoveryRequest,
   ReselectionRequest,
   DiscoveryAnswer,
+  DiscoveryFailure,
+  DiscoveryNotices,
   discoveryNotice,
   discoveryNotices,
   DiscoveryLocale,

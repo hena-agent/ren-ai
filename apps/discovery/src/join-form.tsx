@@ -1,11 +1,17 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Schema } from "effect";
-import { DiscoveryRequest, discoveryNotices, MobileNumber } from "@ren-ai/onboarding";
-import { OptionalProfile } from "./optional-profile.tsx";
+import {
+  DiscoveryRequest,
+  discoveryNotices,
+  MobileNumber,
+  type DiscoveryNotices,
+} from "@ren-ai/onboarding";
+import { ContactProfile } from "./contact-profile.tsx";
 import { Turnstile } from "@ren-ai/onboarding/turnstile";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
-import { ReselectionError } from "./client.ts";
+import { RegistrationError, loadDiscoveryNotices } from "./client.ts";
+import { RegistrationFeedback } from "./registration-feedback.tsx";
 import { useCopy, useLocale } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
 import { PhoneField } from "./phone-field.tsx";
@@ -31,16 +37,19 @@ export function JoinForm({
   onBack,
   onSuccess,
   onBusyChange,
+  onRefresh,
 }: {
   liked: readonly PublicPersona[];
   client: DiscoveryClient;
   onBack: () => void;
   onSuccess: (status: "waiting" | "active") => void;
   onBusyChange?: (busy: boolean) => void;
+  onRefresh?: () => Promise<void>;
 }) {
   const copy = useCopy();
   const { locale } = useLocale();
-  const discoveryNotice = discoveryNotices[locale];
+  const [notices, setNotices] = useState<DiscoveryNotices>(discoveryNotices);
+  const discoveryNotice = notices[locale];
   const [conversationLanguage, setConversationLanguage] = useState<Locale>(locale);
   const [startingRelationship, setStartingRelationship] = useState<StartingRelationship>("dating");
   const [contact, setContact] = useState<{
@@ -50,7 +59,16 @@ export function JoinForm({
   }>({ phone: undefined, touched: false, consentLanguage: null });
   const [token, setToken] = useState<string | null>("");
   const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<false | "registration" | "reselection">(false);
+  const [failure, setFailure] = useState<RegistrationError>();
+  const retryBlocked = failure?.retryAt !== undefined;
+  useEffect(() => {
+    if (failure?.retryAt === undefined) return undefined;
+    const timer = setTimeout(
+      () => setFailure(new RegistrationError(failure.code, failure.requestId)),
+      Math.max(0, failure.retryAt - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [failure]);
   const reselecting = Boolean(reselection().reselectionToken);
   const submitting = useRef(false);
   const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
@@ -60,6 +78,7 @@ export function JoinForm({
     setContact((current) => ({ ...current, touched: true }));
     if (
       submitting.current ||
+      retryBlocked ||
       !handle ||
       contact.consentLanguage !== locale ||
       !token ||
@@ -75,11 +94,7 @@ export function JoinForm({
       Schema.Struct({ name: Schema.String, age: Schema.String, gender: Schema.String }),
     )(Object.fromEntries(new FormData(event.currentTarget)));
     const name = rawName.trim();
-    submitting.current = true;
-    setPending(true);
-    onBusyChange?.(true);
-    setFailure(false);
-    try {
+    await perform(async () => {
       const answer = await client.join(
         Schema.decodeUnknownSync(DiscoveryRequest)({
           handle,
@@ -89,21 +104,44 @@ export function JoinForm({
           privacyNoticeVersion: discoveryNotice.version,
           likedPersonaIDs: liked.map((persona) => persona.id),
           turnstileToken: token,
-          ...(name && { name }),
+          name,
           ...(age && { age: Number(age) }),
           ...(gender && { gender }),
           ...reselection(),
         }),
       );
       onSuccess(answer.status);
+    });
+  }
+  async function perform(action: () => Promise<void>) {
+    if (submitting.current) return;
+    submitting.current = true;
+    setPending(true);
+    onBusyChange?.(true);
+    setFailure(undefined);
+    try {
+      await action();
     } catch (cause) {
-      setFailure(cause instanceof ReselectionError ? "reselection" : "registration");
+      setFailure(
+        cause instanceof RegistrationError ? cause : new RegistrationError("registration"),
+      );
     } finally {
       submitting.current = false;
       setPending(false);
       onBusyChange?.(false);
       setToken("");
     }
+  }
+  function recover(notice: boolean) {
+    return perform(async () => {
+      if (notice) {
+        setNotices(await loadDiscoveryNotices());
+        setContact((current) => ({ ...current, consentLanguage: null }));
+      } else {
+        await onRefresh?.();
+        onBack();
+      }
+    });
   }
   return (
     <section className="join-panel" aria-labelledby="join-title">
@@ -147,7 +185,7 @@ export function JoinForm({
             )}
           </div>
         </div>
-        <OptionalProfile disabled={pending} />
+        <ContactProfile disabled={pending} />
         <RelationshipSelect
           value={startingRelationship}
           onChange={setStartingRelationship}
@@ -169,7 +207,7 @@ export function JoinForm({
           </p>
         </div>
         <p className="ai-notice">{discoveryNotice.aiNotice}</p>
-        <PrivacyDisclosure />
+        <PrivacyDisclosure notices={notices} />
         <label className="consent">
           <input
             type="checkbox"
@@ -187,15 +225,19 @@ export function JoinForm({
             {copy.verificationFailure}
           </p>
         )}
-        {failure && (
-          <p className="form-error" role="alert">
-            {failure === "reselection" ? copy.reselectionFailure : copy.joinFailure}
-          </p>
+        {failure && !pending && (
+          <RegistrationFeedback
+            failure={failure}
+            onReview={() => void recover(false)}
+            onReload={() => void recover(true)}
+          />
         )}
         <button
           className="primary-button join-submit"
           type="submit"
-          disabled={pending || contact.consentLanguage !== locale || !token || !liked.length}
+          disabled={
+            pending || retryBlocked || contact.consentLanguage !== locale || !token || !liked.length
+          }
         >
           {pending ? copy.pending : copy.submit}
         </button>

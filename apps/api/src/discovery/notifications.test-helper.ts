@@ -48,6 +48,7 @@ export const notificationFixture = Effect.gen(function* () {
             conversationLanguage: "ja",
             privacyNoticeVersion: discoveryNotice.version,
             turnstileToken: "human",
+            name: "Visitor",
             likedPersonaIDs: ["luna"],
             ...overrides,
           }),

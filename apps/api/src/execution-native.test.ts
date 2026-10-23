@@ -174,6 +174,7 @@ test.each(["sent", "uncertain"] as const)(
                 locale: "ko",
                 privacyNoticeVersion: discoveryNotice.version,
                 turnstileToken: "human",
+                name: "Visitor",
                 likedPersonaIDs: ["persona1"],
               };
               const registered = await send("/discovery/waitlist", registration);

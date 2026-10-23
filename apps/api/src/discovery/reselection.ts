@@ -39,7 +39,7 @@ export const reselect = (input: DiscoveryRequest) =>
     yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship)
     VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${now}, ${input.startingRelationship ?? "dating"})`;
     yield* sql`INSERT INTO discovery_profile (registration_id, name, age, gender)
-      VALUES (${id}, ${input.name ?? null}, ${input.age ?? null}, ${input.gender ?? null})`;
+      VALUES (${id}, ${input.name}, ${input.age ?? null}, ${input.gender ?? null})`;
     yield* sql`INSERT INTO discovery_language VALUES (${id}, ${input.conversationLanguage ?? input.locale})`;
     for (const personaID of input.likedPersonaIDs)
       yield* sql`INSERT INTO discovery_like VALUES (${id}, ${personaID})`;
@@ -47,13 +47,18 @@ export const reselect = (input: DiscoveryRequest) =>
     return undefined;
   });
 
-/** Only this handle's permanently ended relationships are excluded. */
-export const withoutEndedPersonas = (profiles: readonly PublicPersona[], handle: string) =>
+export const endedPersonaIDs = (handle: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const ended = yield* sql<{
       id: string;
     }>`SELECT persona_id AS id FROM persona_exclusion WHERE handle = ${handle}`;
-    const excluded = new Set(ended.map((row) => row.id));
+    return new Set(ended.map((row) => row.id));
+  });
+
+/** Only this handle's permanently ended relationships are excluded. */
+export const withoutEndedPersonas = (profiles: readonly PublicPersona[], handle: string) =>
+  Effect.gen(function* () {
+    const excluded = yield* endedPersonaIDs(handle);
     return profiles.filter((profile) => !excluded.has(profile.id));
   });

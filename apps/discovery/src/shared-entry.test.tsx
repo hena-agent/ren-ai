@@ -44,6 +44,7 @@ function mount(bootstrap = true) {
 }
 
 function consentAndVerify(token: string) {
+  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
   fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
     target: { value: "01012345678" },
   });

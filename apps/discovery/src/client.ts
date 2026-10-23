@@ -1,5 +1,10 @@
-import { Schema } from "effect";
-import { DiscoveryAnswer, PublicPersona } from "@ren-ai/onboarding";
+import { Option, Schema } from "effect";
+import {
+  DiscoveryAnswer,
+  DiscoveryFailure,
+  DiscoveryNotices,
+  PublicPersona,
+} from "@ren-ai/onboarding";
 import type { DiscoveryRequest } from "@ren-ai/onboarding";
 
 declare global {
@@ -15,7 +20,36 @@ export type DiscoveryClient = {
   profiles: (signal: AbortSignal, reselectionToken?: string) => Promise<readonly PublicPersona[]>;
   join: (request: DiscoveryRequest) => Promise<DiscoveryAnswer>;
 };
-export class ReselectionError extends Error {}
+export class RegistrationError extends Error {
+  constructor(
+    readonly code: DiscoveryFailure | "registration",
+    readonly requestId?: string,
+    readonly retryAt?: number,
+  ) {
+    super("Registration unavailable");
+  }
+}
+
+async function registrationError(response: Response) {
+  const code = Option.getOrElse(
+    Schema.decodeUnknownOption(Schema.fromJsonString(DiscoveryFailure))(await response.text()),
+    () => "registration" as const,
+  );
+  const id = response.headers.get("X-Request-ID") ?? "";
+  const requestId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id) ? id : undefined;
+  const seconds = Number(response.headers.get("Retry-After"));
+  const retryAt =
+    code === "try_later" && Number.isInteger(seconds) && seconds > 0 && seconds <= 3600
+      ? Date.now() + seconds * 1000
+      : undefined;
+  return new RegistrationError(code, requestId, retryAt);
+}
+
+export async function loadDiscoveryNotices() {
+  const response = await fetch(path("/discovery/notices"), { cache: "no-store" });
+  if (!response.ok) throw await registrationError(response);
+  return Schema.decodeUnknownSync(DiscoveryNotices)(await response.json());
+}
 
 export const discoveryClient: DiscoveryClient = {
   profiles: async (signal, reselectionToken) => {
@@ -38,10 +72,7 @@ export const discoveryClient: DiscoveryClient = {
       body: JSON.stringify(request),
     });
     if (!response.ok) {
-      const reselection = await response.text();
-      if (reselection.trim() === '"reselection"')
-        throw new ReselectionError("Reselection link unavailable");
-      throw new Error("Registration unavailable");
+      throw await registrationError(response);
     }
     return Schema.decodeUnknownSync(DiscoveryAnswer)(await response.json());
   },

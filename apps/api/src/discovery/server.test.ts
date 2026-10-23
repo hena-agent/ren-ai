@@ -166,6 +166,7 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
                 locale: "ko",
                 privacyNoticeVersion: discoveryNotice.version,
                 turnstileToken: "human",
+                name: "Visitor",
                 likedPersonaIDs: ["hayeon"],
               }),
             });

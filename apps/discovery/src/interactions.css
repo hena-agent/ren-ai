@@ -88,7 +88,7 @@ html {
 }
 .phone-field,
 input:not([type="checkbox"]),
-.optional-profile select {
+.contact-profile select {
   transition:
     border-color var(--motion-fast),
     box-shadow var(--motion-fast);

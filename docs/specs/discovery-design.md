@@ -129,6 +129,22 @@ and visible keyboard focus, and preserve the choice across locale changes and
 failed submissions. Friends is platonic and independent of gender. This selection
 does not invent user facts or shared history. See [Starting relationship](starting-relationship.md).
 
+Registration silently removes selected personas whose relationship with that handle
+has ended, then saves the remaining eligible Likes. If none remain, ask the visitor
+to choose someone else. Distinguish that case from a changed public Catalog, expired
+consent, failed human verification, an unusable reselection link and service failures.
+Keep contact/profile inputs, relationship and language choices mounted during recovery.
+Offer in-place Catalog and consent-notice refreshes; a new notice requires fresh consent.
+Rate limits return HTTP 429 with `Retry-After`, expose the request ID and retry header
+to Discovery, show the retry time and prevent repeat submission until it expires.
+The IP budgets are 30 verification attempts per minute and 30 successful registrations
+per rolling hour, including successful repeat requests. Rejected registrations spend
+no hourly credit. Successful partial exclusion has no additional notice.
+Name is required in both the contact form and the registration API; reject empty,
+whitespace-only, untrimmed API names and names longer than 100 characters. The form
+trims names before submission. Age and gender remain individually optional. All
+three display languages and the versioned privacy notices state these requirements.
+
 Keep the existing Discovery cards, swipe interactions, inline reading view and
 contact form. Show sharing only at the end of the expanded profile at
 `/personas/{id}`, after all profile content. Use a full-width, white, rounded

@@ -10,6 +10,17 @@ import { PublicLanguages } from "@ren-ai/personas/languages";
 export const discoveryNotice = disclosure;
 export const DiscoveryLocale = Schema.Literals(["ko", "en", "ja"]);
 export const discoveryNotices = { ko: disclosure, en: englishDisclosure, ja: japaneseDisclosure };
+const notice = Schema.Struct({
+  version: Schema.String,
+  title: Schema.String,
+  aiNotice: Schema.String,
+  sections: Schema.Array(
+    Schema.Struct({ title: Schema.String, paragraphs: Schema.Array(Schema.String) }),
+  ),
+  consent: Schema.String,
+});
+export const DiscoveryNotices = Schema.Struct({ ko: notice, en: notice, ja: notice });
+export type DiscoveryNotices = typeof DiscoveryNotices.Type;
 
 const text = Schema.String.check(Schema.isNonEmpty());
 const id = text.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/));
@@ -63,7 +74,7 @@ export const DiscoveryRequest = Schema.Struct({
   locale: DiscoveryLocale,
   conversationLanguage: Schema.optionalKey(DiscoveryLocale),
   startingRelationship: Schema.optionalKey(StartingRelationship),
-  name: Schema.optionalKey(text.check(Schema.isTrimmed(), Schema.isMaxLength(100))),
+  name: text.check(Schema.isTrimmed(), Schema.isMaxLength(100)),
   age: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0))),
   gender: Schema.optionalKey(Schema.Literals(["female", "male", "other"])),
   privacyNoticeVersion: text,
@@ -72,5 +83,16 @@ export const DiscoveryRequest = Schema.Struct({
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;
+export const DiscoveryFailure = Schema.Literals([
+  "consent",
+  "verification",
+  "personas",
+  "ended_personas",
+  "unavailable",
+  "try_later",
+  "reselection",
+  "storage",
+]);
+export type DiscoveryFailure = typeof DiscoveryFailure.Type;
 export const DiscoveryAnswer = Schema.Struct({ status: Schema.Literals(["waiting", "active"]) });
 export type DiscoveryAnswer = typeof DiscoveryAnswer.Type;
