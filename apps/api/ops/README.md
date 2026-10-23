@@ -402,10 +402,21 @@ A deadline does not prove that a mutation failed before submission. Timed-out se
 
 The Worker and application plugins must be released together: streaming `wait`, `status` and `sends` RPCs have been replaced by local waiting and a combined finite `context` response. The context request carries the actual model-visible message IDs. Terminal execution notifications use `observe`.
 
+`send` takes `messages: [{ text: "first bubble" }, { text: "next bubble", delaySeconds: 2 }]`,
+not a top-level `text` or an array of strings. The AI writes this array; each
+nonblank `text` is a separate iMessage, paced and recorded individually. Optional
+`delaySeconds` (0–30) sets a minimum pause before that bubble, including normal
+typing time rather than adding another wait. Omission uses normal typing.
+The persona chooses the boundaries and pauses; new input, an unavailable Conversation or an uncertain send stops
+the remaining bubbles. Replaying an already recorded call reports individual
+outcomes without resending or automatically continuing its remainder. Late
+confirmations identify their bubble in the model context. Release this contract
+with the matching Worker and plugins using the same planned pause below.
+
 1. Stage the tested Worker and fresh plugin bundles using the session-folder installation procedure above. Preserve the existing plugin volume and export state during the planned pause. api-msg's CI artifact contains its observer; its protected `APPLICATION_API_URL` defaults to `https://api.renai.im` and uses the existing `TOKEN_MANAGEMENT`. Set it explicitly for staging/local operation. Its private environment is not changed by the automatic updater.
 2. Put the application in `BOOTSTRAP_ONLY=true`, interrupt/drain active OpenCode execution, and record uncertain sends. Keep Messages receiving. Install the fresh plugin location and recreate OpenCode with that location; retain the writable persona/Sandbox volumes and current State/Memory.
 3. Deploy the matching Worker in bootstrap mode, then enable execution. Confirm the installed api-msg revision matches its artifact. Its wake requests may retry while the Worker is paused. Send one authenticated `POST /management/intake/wake` after enabling execution to initialize/catch up intake promptly; a new empty application must establish its initial bookmark before accepting live Conversations.
-4. With a marked test Handle, verify burst replies, an interrupted local wait, an edit across a Worker restart, incoming messages received during the pause, scheduled first contact/follow-up, and failed-turn recovery. Confirm an idle alarm is approximately five minutes away and Catalog reads/folder writes do not repeat on actor replacement. Mac outage alerts now use a five-minute safety interval.
+4. With a marked test Handle, verify multi-bubble replies, interruption between bubbles without repeating completed sends, burst replies, an interrupted local wait, an edit across a Worker restart, incoming messages received during the pause, scheduled first contact/follow-up, and failed-turn recovery. Confirm an idle alarm is approximately five minutes away and Catalog reads/folder writes do not repeat on actor replacement. Mac outage alerts now use a five-minute safety interval.
 5. Check public `/health` identity, exact artifact revision and readiness for api-app, api-msg and imsg. A published artifact or a degraded Worker-only smoke check is not an end-to-end rollout. For rollback, pause first and restore the matching Worker/plugin pair after reconciling send records.
 
 Cloudflare owns all application state. The Mac observer has no application database; on restart it fetches the authoritative bookmark/edit window and resumes observation. A 202 wake response means the wake was scheduled, not that a message was delivered or a persona replied.

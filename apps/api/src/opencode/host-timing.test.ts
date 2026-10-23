@@ -110,7 +110,7 @@ test.each([
               return step++ === 0
                 ? tool === "wait"
                   ? TestLLM.tool("waiting", "wait", { seconds: 600 })
-                  : TestLLM.tool("draft", "send", { text: "unsent draft" })
+                  : TestLLM.tool("draft", "send", { messages: [{ text: "unsent draft" }] })
                 : TestLLM.text("done", "answer");
             });
             const host = yield* startScriptedMessagingHost(

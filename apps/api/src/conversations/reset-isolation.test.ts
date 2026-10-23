@@ -30,7 +30,9 @@ test.each([false, true])(
           yield* llm.serve(() => {
             if (shouldReply) {
               shouldReply = false;
-              return TestLLM.tool("new-reply", "send", { text: "Fresh conversation reply" });
+              return TestLLM.tool("new-reply", "send", {
+                messages: [{ text: "Fresh conversation reply" }],
+              });
             }
             if (!pause) return TestLLM.text("done", "done");
             pause = false;

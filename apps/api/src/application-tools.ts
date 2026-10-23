@@ -13,6 +13,7 @@ import { scheduleWork } from "./scheduling.ts";
 import { promptID } from "./intake/message-id.ts";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 import type { NotificationTransport } from "./conversations/notifications.ts";
+import { bubbleSender } from "./outbox/bubbles.ts";
 
 export type ApplicationMessages = Messages & NotificationTransport;
 
@@ -34,6 +35,7 @@ export const prepareMessaging = (
     const directory = yield* conversations;
     const pace = yield* timing;
     const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
+    const sendBubbles = yield* bubbleSender(sends);
     const endings = yield* conversationEndings(directory, sends, messages, gestures, personas);
     const inConversation = (
       sessionID: string,
@@ -59,8 +61,8 @@ export const prepareMessaging = (
           Effect.map((conversation) => (conversation ? conversation.handle : undefined)),
           Effect.orDie,
         ),
-      send: (sessionID, text, callID) =>
-        inConversation(sessionID, (conversation) => sends.send(conversation, text, callID)),
+      send: (sessionID, bubbles, callID) =>
+        inConversation(sessionID, (conversation) => sendBubbles(conversation, bubbles, callID)),
       wait: (sessionID, seconds) =>
         inConversation(sessionID, (conversation) =>
           directory

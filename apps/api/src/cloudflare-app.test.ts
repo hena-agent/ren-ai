@@ -320,7 +320,11 @@ test("a failed heartbeat preserves an active send RPC and retries on the same in
           url: "https://app/rpc",
           token: "management-secret",
         });
-        return yield* client.send({ sessionID: "ses_active", text: "hello", callID: "send-once" });
+        return yield* client.send({
+          sessionID: "ses_active",
+          messages: [{ text: "hello" }],
+          callID: "send-once",
+        });
       }).pipe(
         Effect.scoped,
         Effect.provide(FetchHttpClient.layer),
@@ -338,7 +342,7 @@ test("a failed heartbeat preserves an active send RPC and retries on the same in
     await app.tick();
     expect(runtime.tick).toHaveBeenCalledTimes(2);
     expect(controls.runtime).toHaveBeenCalledOnce();
-    expect(send).toHaveBeenCalledExactlyOnceWith("ses_active", "hello", "send-once");
+    expect(send).toHaveBeenCalledExactlyOnceWith("ses_active", [{ text: "hello" }], "send-once");
   } finally {
     await app.close();
     await gateway.dispose();

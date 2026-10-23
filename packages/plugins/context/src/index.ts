@@ -65,13 +65,35 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
               for (const [index, entry] of event.messages.entries()) {
                 const content = entry.content.map((part) => {
                   if (part.type === "tool-result") {
-                    const send = sends.find((row) => row.toolCallID === part.id);
-                    if (send) {
-                      const at = new Intl.DateTimeFormat("en-GB", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: persona.timeZone,
-                      }).format(send.updatedAt);
+                    const confirmed = sends.filter(
+                      (row) =>
+                        row.toolCallID === part.id ||
+                        row.toolCallID?.startsWith(`${part.id}:bubble:`),
+                    );
+                    if (confirmed.length) {
+                      const original =
+                        typeof part.result.value === "string" &&
+                        part.result.value.startsWith("Bubble ")
+                          ? `${part.result.value}\nUpdated outcomes (override the corresponding earlier bubble results):\n`
+                          : "";
+                      const result = confirmed
+                        .map((send) => {
+                          const at = new Intl.DateTimeFormat("en-GB", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            timeZone: persona.timeZone,
+                          }).format(send.updatedAt);
+                          const bubble =
+                            send.toolCallID === part.id
+                              ? "1"
+                              : send.toolCallID!.slice(`${part.id}:bubble:`.length);
+                          const outcome =
+                            send.state === "failed"
+                              ? "not sent: earlier send did not go out"
+                              : `${send.state} ${at} (confirmed late)`;
+                          return part.name === "send" ? `Bubble ${bubble}: ${outcome}` : outcome;
+                        })
+                        .join("\n");
                       return ToolResultPart.make({
                         id: part.id,
                         name: part.name,
@@ -80,10 +102,7 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                         cache: part.cache,
                         metadata: part.metadata,
                         providerMetadata: part.providerMetadata,
-                        result:
-                          send.state === "failed"
-                            ? "not sent: earlier send did not go out"
-                            : `${send.state} ${at} (confirmed late)`,
+                        result: `${original}${result}\nOnly the listed outcomes are confirmed; do not repeat completed sends or assume the remaining bubbles went out.`,
                         resultType: "text",
                       });
                     }

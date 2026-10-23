@@ -4,6 +4,14 @@ import { StartingRelationship } from "@ren-ai/onboarding";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 
 const session = { sessionID: Schema.String };
+const messageBubble = Schema.Struct({
+  text: Schema.String.check(Schema.isPattern(/\S/)),
+  delaySeconds: Schema.optionalKey(
+    Schema.Number.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(30)),
+  ),
+});
+export type MessageBubble = typeof messageBubble.Type;
+export const messageBubbles = Schema.Array(messageBubble).check(Schema.isMinLength(1));
 export const persona = Schema.Struct({
   id: Schema.String,
   timeZone: Schema.String,
@@ -19,7 +27,7 @@ export const applicationApi = RpcGroup.make(
   Rpc.make("observe", { payload: session, error: Schema.String }),
   Rpc.make("catalog", { success: Schema.Array(persona), error: Schema.String }),
   Rpc.make("send", {
-    payload: { ...session, text: Schema.String, callID: Schema.String },
+    payload: { ...session, messages: messageBubbles, callID: Schema.String },
     success: Schema.String,
     error: Schema.String,
   }),

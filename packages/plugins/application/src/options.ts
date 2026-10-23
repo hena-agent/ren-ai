@@ -1,6 +1,6 @@
 import type { OutgoingStatus, Tapback } from "@ren-ai/imsg/protocol";
 import type { Effect } from "effect";
-import type { Persona } from "./protocol.ts";
+import type { MessageBubble, Persona } from "./protocol.ts";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 
 interface PluginConfig {
@@ -42,7 +42,7 @@ type HostTools =
   | {
       readonly send: (
         sessionID: string,
-        text: string,
+        messages: readonly MessageBubble[],
         callID: string,
       ) => Effect.Effect<string, Error>;
       readonly wait: (sessionID: string, seconds: number) => Effect.Effect<string, Error>;

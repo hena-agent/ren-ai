@@ -163,7 +163,7 @@ async function completion(request) {
     index < inputs.length
       ? { seconds: inputs[index] }
       : tool === "send"
-        ? { text: "isolated message" }
+        ? { messages: [{ text: "isolated message" }] }
         : tool === "react"
           ? { tapback: "love" }
           : {};

@@ -74,8 +74,8 @@ const remoteOptions = <E>(
     const options: PersonaPluginOptions = {
       personaDirectory: config.directory,
       personas: new Map(),
-      send: (sessionID, text, callID) =>
-        api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
+      send: (sessionID, messages, callID) =>
+        api.send({ sessionID, messages, callID }).pipe(Effect.mapError(failure)),
       endConversation: (sessionID, farewell, callID) =>
         api.endConversation({ sessionID, farewell, callID }).pipe(Effect.mapError(failure)),
       wait: waiting.wait,

@@ -42,7 +42,8 @@ export const toolsPlugin = (options: PersonaPluginOptions) =>
               ...messagingToolDefinitions.send,
               output: Schema.String,
               options: { codemode: false },
-              execute: ({ text }, context) => toolResult(send(context.sessionID, text, context.id)),
+              execute: ({ messages }, context) =>
+                toolResult(send(context.sessionID, messages, context.id)),
             });
             editor.add({
               name: "wait",

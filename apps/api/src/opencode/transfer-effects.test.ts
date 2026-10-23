@@ -33,7 +33,7 @@ test.each([false, true])(
                 type: "tool-call",
                 id: "completed-send",
                 name: "send",
-                input: { text: "one-time bubble" },
+                input: { messages: [{ text: "one-time bubble" }] },
               },
               { type: "tool-call", id: "blocked-wait", name: "wait", input: { seconds: 3300 } },
             ),
@@ -97,7 +97,7 @@ test.each([false, true])(
               tool: "send",
               state: {
                 status: "completed",
-                input: { text: "one-time bubble" },
+                input: { messages: [{ text: "one-time bubble" }] },
                 content: [{ type: "text", text: "sent" }],
               },
             },
@@ -135,7 +135,9 @@ test.each([false, true])(
               return TestLLM.text("already completed; do not resend", "answer");
             if (!repeated) {
               repeated = true;
-              return TestLLM.tool("new-recovery-call", "send", { text: "one-time bubble" });
+              return TestLLM.tool("new-recovery-call", "send", {
+                messages: [{ text: "one-time bubble" }],
+              });
             }
             return TestLLM.text("duplicated", "answer");
           });
