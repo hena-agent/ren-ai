@@ -35,27 +35,31 @@ capability from the separate Discovery rollout.
 Step 1 live acceptance passed on `e00db759e20c0cbfb095eec27b270a796b5a869f`;
 [the rollout record](https://github.com/hena-agent/ren-ai/pull/115#issuecomment-6259688946)
 includes sender separation, dropped replies/photos, Persona replies and restart
-persistence. Step 2 uses consent version `discovery-2026-10-19` in all locales.
+persistence. Step 2 originally used consent version `discovery-2026-10-19`.
 
-- Save a Notification atomically with each new Waitlist entry. New joins,
-  Reselection and test-handle joins after Reset qualify. Repeat submissions and
-  already-active handles do not send another message. Existing registrations are
-  not a backfill campaign.
+- Save a separate Notification atomically with every successful registration
+  submission, including repeats, Reselection and already-active handles (updated
+  2026-10-23). Existing registrations receive nothing without a new submission.
+  Each submission keeps its own outcome and GUID; it never overwrites an uncertain
+  earlier attempt. Active handles receive an already-registered acknowledgement
+  rather than a claim that they have joined the Waitlist. Preferences, Assignments
+  and Conversations stay unchanged on repeat submissions.
 - Joining succeeds before sending. Attempt on the next background tick, normally
   within seconds. This is informational, with no confirmation reply or number
   verification and no delivery result exposed on the public site.
-- Cap Waitlist Notifications at 30 per hour across the service. Excess joins still succeed;
+- Cap registration Notifications, including repeats and active handles, at 30 per
+  hour across the service. Excess submissions still succeed;
   their Notifications are skipped, not deferred into a later backlog.
   Admission to a send attempt uses a rolling hour of anonymous timestamps in
   SQLite, committed with the uncertain state before calling the Mac. Removing a
   registration or resetting a test handle cannot reset that budget.
-- One attempt only: no automatic retry or Admin resend button. Admin shows queued,
-  sent, failed, uncertain or skipped results on Waitlist entries. Delivery receipts
+- One attempt per submission: no automatic retry or Admin resend button. Admin shows
+  the latest submission's queued, sent, failed, uncertain or skipped result. Delivery receipts
   may update the transport record. Failure never changes eligibility, Selection or
   the person's contact state.
-- Use the display/consent `locale` saved with the join, not preferred Conversation
+- Use the display/consent `locale` saved with each submission, not preferred Conversation
   language. All three supported locales receive equivalent copy.
-- Delete application Notification records with their Waitlist entry. Existing Mac
+- Delete application Notification records with their Waitlist entry or owning User. Existing Mac
   message-history/backup retention remains a separate operational responsibility.
 - Update Discovery's receipt, localized consent version and the conflicting
   no-message-on-join statements in `persona-discovery-admin.md` together. A stale
@@ -91,16 +95,17 @@ hi@renai.im.
 **Korean:** 등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는
 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.
 
-Use equivalent Japanese. Do not claim a Notification was sent: repeated joins,
-limits and failed attempts can all produce the same successful Waitlist receipt.
+Use equivalent Japanese. Do not claim a Notification was sent: limits and failed
+attempts can produce the same successful Waitlist receipt.
 
 ### Consent changes
 
 Explain that the number is also used for a registration Notification; joining
 attempts one immediate iMessage from `noti@renai.im` without starting an AI
 Conversation; a selected Persona later texts from `hi@renai.im`. Delivery is not
-guaranteed. Replace “contact hi@renai.im” with “email hi@renai.im”. Update all three
-languages under a new consent version at the Step 2 release.
+guaranteed. Consent version `discovery-2026-10-23` explains repeat and active-number
+notifications and rate limits in all three languages. Support instructions say
+“email hi@renai.im”.
 
 ## Relationship ending Notifications
 

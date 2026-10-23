@@ -157,6 +157,7 @@ test.each(["persona", "operator"])(
           expect((yield* f.sql`SELECT id FROM discovery_registration`).length).toBe(2);
           expect(yield* f.sql`SELECT state FROM discovery_notification`).toEqual([
             { state: "queued" },
+            { state: "queued" },
           ]);
           expect(
             (yield* f.sql`SELECT registration_id FROM discovery_contact WHERE registration_id = ${oldRegistrationID}`)
@@ -233,6 +234,8 @@ test.each(["persona", "operator"])(
           const active = yield* submit({ reselectionToken: token });
           expect(yield* Effect.promise(() => active.json())).toEqual({ status: "active" });
           expect(yield* f.sql`SELECT state FROM discovery_notification`).toEqual([
+            { state: "queued" },
+            { state: "queued" },
             { state: "queued" },
           ]);
           yield* app.tools.endConversation(next.sessionID, "다음 인사", "end-new");

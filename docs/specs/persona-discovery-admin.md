@@ -56,7 +56,7 @@ Admin과 저장 API에는 비밀번호 인증과 동일 출처 폼 제출 검사
 - api-app은 `GET /discovery/personas`와 `POST /discovery/waitlist`를 제공한다. 공개 목록은 요청 시 Admin의 `GET /api/personas`를 호출하고, 브라우저에는 공개 필드만 반환하며, 제출 시 Like 후보가 현재 공개되어 있는지 다시 검증한다. Discovery에는 별도 목록 API Worker나 D1 binding을 두지 않는다.
 - SQLite의 `discovery_registration`과 `discovery_like`에 정규화된 Handle, Like 목록, 언어, 동의 버전, 등록 시각을 트랜잭션으로 보관한다. 등록 시각이 동의 시각이다. Handle의 UNIQUE 제약과 `INSERT OR IGNORE`로 동시 제출을 처리하며 재제출은 기존 Like를 덮어쓰지 않는다.
 - 차단·삭제 진행 중인 Handle은 거부한다. 이미 대화가 시작된 Handle은 `active`를 반환하고 새 등록을 만들지 않는다. 운영자 `remove`는 대기 등록과 Like도 삭제한다.
-- 응답은 `waiting` 또는 `active`다. 새 Waitlist 등록은 Notification을 함께 저장하고 다음 백그라운드 실행에서 `noti@renai.im`으로 한 번 발송을 시도한다. Conversation은 만들지 않으며 순서·연락 시점·안내 도착을 약속하지 않는다. 중복 등록과 이미 활성화된 Handle에는 다시 보내지 않는다. [Notification 명세](notifications.md)를 따른다.
+- 응답은 `waiting` 또는 `active`다. 성공한 등록 요청마다 별도의 Notification을 함께 저장하고 다음 백그라운드 실행에서 `noti@renai.im`으로 한 번 발송을 시도한다. 중복 등록과 이미 활성화된 Handle도 포함하며, 활성 Handle에는 기존 등록과 대화가 유지된다는 안내를 보낸다. Conversation은 만들거나 변경하지 않으며 순서·연락 시점·안내 도착을 약속하지 않는다. [Notification 명세](notifications.md)의 발송 한도를 따른다.
 - 기존 사이트의 `/onboard`·`/waitlist` 계약은 계속 지원한다. 공유 Turnstile은 브라우저 전용 subpath로 내보내며 기존 사이트도 같은 구현을 사용한다.
 
 로컬에서 Admin에 페르소나를 저장·공개한 다음 루트에서 실행한다:
@@ -364,7 +364,7 @@ Persona 검사·변환의 현재 계약은 [Persona 작성·상세 프로필](pe
 3. 한 명 이상 Like하면 언제든 **연락받기**로 진행할 수 있다.
 4. Like는 즉시 매칭이 아니다. 실제로 연락하는 페르소나는 Like한 후보 중 한 명이다.
 5. 사용자당 한 페르소나와만 관계를 시작한다. 다른 초대 링크나 중복 제출로 관계를 추가하지 않는다.
-6. AI 서비스 안내와 필요한 동의는 웹사이트에서 처리한다. 새 대기 등록에는 `noti@renai.im`에서 안내 iMessage 한 건을 시도한다. 서비스 전체 시간당 30건을 초과하면 생략하며 재시도하지 않는다. 안내 실패는 선정 자격에 영향을 주지 않는다. 페르소나의 첫 인사는 `hi@renai.im`에서 보낸다.
+6. AI 서비스 안내와 필요한 동의는 웹사이트에서 처리한다. 중복·활성 번호를 포함한 성공한 등록 요청마다 `noti@renai.im`에서 안내 iMessage 한 건을 시도한다. 서비스 전체 시간당 30건을 초과하면 생략하며 자동 재시도하지 않는다. 안내 실패는 선정 자격에 영향을 주지 않는다. 페르소나의 첫 인사는 `hi@renai.im`에서 보낸다.
 7. 첫 iMessage는 선택된 페르소나가 자신의 말투로 보내는 인사다.
 8. 초대 등록자는 등록 완료 후 5분~1시간 사이에 첫 연락을 시도하도록 예약한다.
 9. 일반 방문자는 대기 등록한다. 운영자가 **N명 선정하기**를 실행하면 대상과 페르소나를 무작위 선택한다.

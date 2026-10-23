@@ -136,7 +136,7 @@ export function PhoneField({
       countrySelectComponent={CountryPicker}
       onCountryChange={setCountry}
       placeholder={country && getExampleNumber(country, examples)!.formatNational()}
-      value={value}
+      value={value ?? ""}
       onChange={onChange}
       onBlur={onBlur}
       aria-invalid={invalid}
