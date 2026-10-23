@@ -12,7 +12,7 @@ const submitAndRestart = (f: Effect.Success<typeof notificationFixture>) =>
     expect(f.notify).toHaveBeenCalledTimes(1);
   });
 
-test("joining queues one Notification in the consent language without starting a Conversation", () =>
+test("each successful submission queues a Notification without duplicating the registration or starting a Conversation", () =>
   withContactDatabase(
     Effect.scoped(
       Effect.gen(function* () {
@@ -30,7 +30,8 @@ test("joining queues one Notification in the consent language without starting a
         expect(f.notify).not.toHaveBeenCalled();
         yield* f.tick;
         yield* f.tick;
-        expect(f.notify).toHaveBeenCalledExactlyOnceWith(
+        expect(f.notify).toHaveBeenCalledTimes(2);
+        expect(f.notify).toHaveBeenCalledWith(
           "+821012345678",
           "[Ren AI] This number has joined the Ren AI waitlist. There's no set order or date for contact. If you're selected, a persona you liked will text you from hi@renai.im. This address only sends notifications and doesn't read replies. To leave the waitlist, or if you didn't sign up, email hi@renai.im.",
         );
@@ -39,6 +40,8 @@ test("joining queues one Notification in the consent language without starting a
         });
         expect(yield* f.sql`SELECT id FROM conversation`).toEqual([]);
         expect(yield* f.sql`SELECT id FROM send`).toEqual([]);
+        expect(yield* f.sql`SELECT id FROM discovery_registration`).toHaveLength(1);
+        expect(yield* f.sql`SELECT * FROM discovery_like`).toHaveLength(1);
       }),
     ),
   ));
@@ -207,12 +210,14 @@ test("an atomic registration failure cannot leave a Notification or Likes behind
     ),
   ));
 
-test("a queued entry removed during another send is not submitted; old registrations are not backfilled", () =>
+test("a queued entry removed during another send is not submitted; old registrations need a new submission", () =>
   withContactDatabase(
     Effect.scoped(
       Effect.gen(function* () {
         const f = yield* notificationFixture;
         yield* f.register("+821011110000");
+        yield* f.tick;
+        expect(f.notify).not.toHaveBeenCalled();
         yield* f.join({ handle: "+821011110000" });
         yield* f.join();
         yield* f.join({ handle: "+821099990000" });

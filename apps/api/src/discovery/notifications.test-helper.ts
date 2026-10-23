@@ -74,5 +74,9 @@ export const notificationFixture = Effect.gen(function* () {
     availability,
     reopen,
     logs,
+    exhaustBudget: Effect.gen(function* () {
+      for (let index = 0; index < 30; index++)
+        yield* f.sql`INSERT INTO notification_attempt VALUES (${Date.now()})`;
+    }),
   };
 });

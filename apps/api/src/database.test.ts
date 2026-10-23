@@ -22,11 +22,13 @@ test("forward migration leaves exactly the PRD app tables", async () => {
       const rows = yield* sql<{ name: string }>`SELECT name FROM sqlite_master
         WHERE type = 'table' ORDER BY name`;
       const names = rows.map((row) => row.name);
-      expect(names.filter((name) => name.startsWith("sqlite_"))).toEqual([]);
+      expect(names.filter((name) => name.startsWith("sqlite_"))).toEqual(["sqlite_sequence"]);
       expect(names.filter((name) => name === "effect_sql_migrations")).toEqual([
         "effect_sql_migrations",
       ]);
-      const appTables = names.filter((name) => name !== "effect_sql_migrations");
+      const appTables = names.filter(
+        (name) => name !== "effect_sql_migrations" && !name.startsWith("sqlite_"),
+      );
       expect(appTables).toEqual([
         "application_checkpoint",
         "application_clock",

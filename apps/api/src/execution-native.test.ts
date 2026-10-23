@@ -169,13 +169,14 @@ test.each(["sent", "uncertain"] as const)(
                   },
                   body: JSON.stringify(body),
                 });
-              const registered = await send("/discovery/waitlist", {
+              const registration = {
                 handle: "+821012345678",
                 locale: "ko",
                 privacyNoticeVersion: discoveryNotice.version,
                 turnstileToken: "human",
                 likedPersonaIDs: ["persona1"],
-              });
+              };
+              const registered = await send("/discovery/waitlist", registration);
               expect(await registered.json()).toEqual({ status: "waiting" });
               expect(registered.status).toBe(200);
               // The automatic Notification alarm must finish its availability lookup
@@ -282,6 +283,10 @@ test.each(["sent", "uncertain"] as const)(
               expect((await executionState(runtime)).catalogReads).toBe(state.catalogReads + 1);
               expect(await readFile(agent, "utf8")).toContain("Updated character instructions.");
               expect(await files()).toEqual(initial);
+              expect((await send("/discovery/waitlist", registration)).status).toBe(200);
+              await expect
+                .poll(async () => (await executionState(runtime!)).notifications)
+                .toEqual([{ state: "uncertain" }, { state: "sent" }]);
               const replay = await (await send("/management/discovery/select", select)).json();
               await runtime.dispose();
               runtime = await executionWorker(persistence, listenerUrl(mac), personaDirectory);
@@ -291,6 +296,10 @@ test.each(["sent", "uncertain"] as const)(
               await executionState(runtime, "/__fixture/alarm");
               expect((await executionState(runtime)).conversations).toEqual(state.conversations);
               expect((await executionState(runtime)).sends).toEqual(state.sends);
+              expect((await executionState(runtime)).notifications).toEqual([
+                { state: "uncertain" },
+                { state: "sent" },
+              ]);
               expect((await executionState(runtime)).catalogReads).toBe(0);
               expect(creates).toHaveLength(1);
               expect(attempts).toBe(1);

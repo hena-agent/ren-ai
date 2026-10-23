@@ -151,8 +151,7 @@ test("lookup is performed even when the Notification cap is exhausted; removed r
     Effect.scoped(
       Effect.gen(function* () {
         const f = yield* notificationFixture;
-        for (let index = 0; index < 30; index++)
-          yield* f.sql`INSERT INTO notification_attempt VALUES (${Date.now()})`;
+        yield* f.exhaustBudget;
         yield* f.join();
         yield* f.tick;
         expect((yield* f.store.list).entries[0]).toMatchObject({

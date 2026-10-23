@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { Migrator, SqlClient } from "effect/unstable/sql";
 import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
 import { usageSchema } from "./usage/schema.ts";
-import { notificationSchema } from "./discovery/notifications.ts";
+import { notificationSchema, notificationSubmissionsSchema } from "./discovery/notifications.ts";
 import { sharedAssignmentsSchema } from "./discovery/schema.ts";
 
 export const migrate = Effect.gen(function* () {
@@ -301,6 +301,7 @@ export const migrate = Effect.gen(function* () {
           yield* sql`ALTER TABLE ${sql(table)} ADD COLUMN conversation_key TEXT`;
         }
       }),
+      "049_notification_submissions": notificationSubmissionsSchema,
     }),
   });
 });

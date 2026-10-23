@@ -3,7 +3,6 @@ import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { DiscoveryRequest, PublicPersona } from "@ren-ai/onboarding";
 import { reselectionHash } from "../conversations/ending-record.ts";
-import { queueWaitlistNotification } from "./notifications.ts";
 
 export const reselectionAuthorization = (token: string) =>
   Effect.gen(function* () {
@@ -45,7 +44,6 @@ export const reselect = (input: DiscoveryRequest) =>
     for (const personaID of input.likedPersonaIDs)
       yield* sql`INSERT INTO discovery_like VALUES (${id}, ${personaID})`;
     yield* sql`UPDATE conversation_end SET consumed_at = ${now}, registration_id = ${id}, farewell_pending = 0, notice_pending = 0 WHERE conversation_id = ${ending.id}`;
-    yield* queueWaitlistNotification(id, now);
     return undefined;
   });
 

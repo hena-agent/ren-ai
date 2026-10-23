@@ -47,10 +47,10 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
         OR NOT EXISTS(SELECT 1 FROM conversation c WHERE c.user_id = u.id AND c.ended_at IS NOT NULL)))
         OR EXISTS(SELECT 1 FROM persona_assignment WHERE handle = r.handle) AS occupied,
       EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle,
-       n.state AS notification, r.imessage_status AS imessageStatus,
+       (SELECT state FROM discovery_notification WHERE registration_id = r.id ORDER BY id DESC LIMIT 1) AS notification,
+       r.imessage_status AS imessageStatus,
        r.imessage_checked_at AS imessageCheckedAt
       FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id
-      LEFT JOIN discovery_notification n ON n.registration_id = r.id
       LEFT JOIN conversation v ON v.session_id = c.session_id LEFT JOIN conversation_end e ON e.conversation_id = v.id
       WHERE r.archived_at IS NULL ORDER BY r.created_at, r.id`;
         const likes = yield* sql<{
