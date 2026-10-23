@@ -281,8 +281,9 @@ test("health reports artifact identity and Catalog readiness independently of st
   );
 });
 
-test("home and explorer return searchable application HTML and branded previews without adding navigation", async () => {
+test("home and explorer return application HTML and branded previews without waiting for the Catalog", async () => {
   const f = await fixture();
+  f.fetcher.mockRejectedValue(new Error("Catalog unavailable"));
   const home = await f.send("/");
   const html = await home.text();
   expect(html).toContain("일상에,");
@@ -291,12 +292,30 @@ test("home and explorer return searchable application HTML and branded previews 
   expect(html).toContain('property="og:image" content="https://renai.im/social.png"');
   expect(html).not.toContain('id="public-personas"');
   expect(f.fetcher).not.toHaveBeenCalled();
-  const explore = await (await f.send("/explore")).text();
+  const response = await f.send("/explore");
+  expect(response.status).toBe(200);
+  const explore = await response.text();
   expect(explore).toContain('class="discovery-shell"');
-  expect(explore).toContain('class="profile-card"');
+  expect(explore).toContain("만날 사람들을 불러오고 있어요.");
+  expect(explore).not.toContain('class="profile-card"');
+  expect(explore).not.toContain('id="public-personas"');
+  expect(f.fetcher).not.toHaveBeenCalled();
   expect(explore).not.toContain('href="/personas"');
   expect(explore).toContain('name="robots" content="index,follow,max-image-preview:large"');
   expect(explore).toContain('<link rel="canonical" href="https://renai.im/explore"');
+});
+
+test("explorer GET and HEAD complete even when the Catalog would never respond", async () => {
+  const f = await fixture();
+  f.fetcher.mockReturnValue(new Promise<Response>(() => undefined));
+  const response = await f.send("/explore?style=photo");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.text()).toContain("만날 사람들을 불러오고 있어요.");
+  const head = await f.send("/explore", "HEAD");
+  expect(head.status).toBe(200);
+  expect(await head.text()).toBe("");
+  expect(f.fetcher).not.toHaveBeenCalled();
 });
 
 test("render failures keep the persona rendition URL and report a correlated retryable image failure instead of a brand substitution", async () => {

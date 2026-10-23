@@ -39,6 +39,7 @@ function DetailsGallery({
         <img
           className="details-photo"
           src={images[currentImage]}
+          fetchPriority="high"
           alt={`${persona.name} ${copy.profilePhoto}`}
         />
       ) : (

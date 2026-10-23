@@ -166,8 +166,12 @@ version when changing its layout/watermark. Deployment checks fetch the advertis
 images and validate real JPEG bytes, dimensions and the 5 MB output limit. Verify
 the photo and watermark pixels in a real Cloudflare preview. Keep search canonical
 URLs independent of style. Return profile content and unique metadata in the
-first HTML for all visitors, including non-JavaScript crawlers. Render home and
-explorer in the same way, keeping home independent of the live Catalog. Sitemap
+first HTML for all visitors, including non-JavaScript crawlers. Home renders its
+editorial content independently of the live Catalog. `/explore` returns its header
+and loading state without a Catalog request; the browser fetches the listing once
+using the existing Discovery client and offers inline retry on failure. Do not
+embed an empty public snapshot that would suppress that browser request. Public
+profile links keep their server-rendered content and public snapshot. Sitemap
 and image locations reflect publication changes without rebuilding. JSON-LD
 describes fictional creative works rather than claiming personas are real people.
 Shared URLs contain no private fragments, handles or browser choices. Missing

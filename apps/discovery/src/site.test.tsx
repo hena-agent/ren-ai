@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotices } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
@@ -201,3 +201,27 @@ test.each(["/explore", "/#reselect=private-token"])(
     expect(localStorage.getItem("ren-ai.discovery.choices")).toBe('{"saved":true}');
   },
 );
+
+test("explore displays its shell during a delayed API request and retries a failed listing once", async () => {
+  window.history.replaceState(null, "", "/explore");
+  let rejectListing: (cause: Error) => void = vi.fn<(cause: Error) => void>();
+  const listing = new Promise<Awaited<ReturnType<DiscoveryClient["profiles"]>>>((_, reject) => {
+    rejectListing = reject;
+  });
+  const profiles = vi
+    .fn<DiscoveryClient["profiles"]>()
+    .mockReturnValueOnce(listing)
+    .mockResolvedValueOnce([
+      { id: "jia", name: "백지아", bio: "반가워요.", imageUrl: "/photo.jpg" },
+    ]);
+  render(<Site client={{ profiles, join: vi.fn<DiscoveryClient["join"]>() }} />);
+  expect(screen.getByRole("link", { name: "Ren AI" })).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toBe("만날 사람들을 불러오고 있어요.");
+  expect(profiles).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal), undefined);
+  expect(document.querySelector(".profile-card")).toBeNull();
+  await act(async () => rejectListing(new Error("API unavailable")));
+  expect(screen.getByRole("heading", { name: "프로필을 불러오지 못했어요." })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "다시 불러오기" }));
+  expect(await screen.findByRole("heading", { name: "백지아" })).toBeTruthy();
+  expect(profiles).toHaveBeenCalledTimes(2);
+});

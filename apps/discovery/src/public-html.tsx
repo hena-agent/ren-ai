@@ -95,7 +95,12 @@ export function publicResponse(
         <Home />
       </LocaleProvider>
     ) : (
-      <App initialPeople={people} personaId={id} initialStyle={style} initialLocale="ko" />
+      <App
+        initialPeople={id ? people : undefined}
+        personaId={id}
+        initialStyle={style}
+        initialLocale="ko"
+      />
     ),
   );
   // The bootstrap contains only schema-validated public fields, never a private Catalog snapshot.
@@ -108,7 +113,7 @@ export function publicResponse(
     .replace(
       '<div id="root"></div>',
       () =>
-        `<div id="root">${markup}</div>${home ? "" : `<script id="public-personas" type="application/json">${bootstrap}</script>`}`,
+        `<div id="root">${markup}</div>${id ? `<script id="public-personas" type="application/json">${bootstrap}</script>` : ""}`,
     );
   return new Response(html, {
     status: missing ? 404 : 200,
