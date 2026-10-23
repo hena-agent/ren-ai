@@ -41,6 +41,7 @@ test("personas at capacity remain public and can be Liked while selection waits"
                 privacyNoticeVersion: discoveryNotice.version,
                 likedPersonaIDs: ["luna"],
                 turnstileToken: "human",
+                name: "Visitor",
               }),
             }),
             verified,
@@ -136,12 +137,12 @@ test("private listing authorizes body tokens, is uncacheable and rate limited, a
               verified,
             ),
           );
-        for (let attempt = 0; attempt < 6; attempt++) {
+        for (let attempt = 0; attempt < 31; attempt++) {
           const response = yield* listing("a".repeat(64), "limited");
-          expect(response.status).toBe(400);
+          expect(response.status).toBe(attempt === 30 ? 429 : 400);
           expect(response.headers.get("Cache-Control")).toBe("no-store");
           expect(yield* Effect.promise(() => response.json())).toBe(
-            attempt === 5 ? "try_later" : "reselection",
+            attempt === 30 ? "try_later" : "reselection",
           );
         }
         expect((yield* listing("malformed")).status).toBe(400);
@@ -168,6 +169,7 @@ test("private listing authorizes body tokens, is uncacheable and rate limited, a
                 privacyNoticeVersion: discoveryNotice.version,
                 likedPersonaIDs: ["luna"],
                 turnstileToken: "human",
+                name: "Visitor",
                 reselectionToken: token,
               }),
             }),

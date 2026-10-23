@@ -93,6 +93,7 @@ test.each(["persona", "operator"])(
                     privacyNoticeVersion: discoveryNotice.version,
                     likedPersonaIDs: ["harin"],
                     turnstileToken: "human",
+                    name: "Visitor",
                     ...changes,
                   }),
                 }),
@@ -116,6 +117,7 @@ test.each(["persona", "operator"])(
               privacyNoticeVersion: discoveryNotice.version,
               likedPersonaIDs: ["harin"],
               turnstileToken: "human",
+              name: "Visitor",
               reselectionToken: token,
             }).pipe(Effect.flip),
           ).toBe("reselection");
@@ -150,6 +152,7 @@ test.each(["persona", "operator"])(
               name: "새 이름",
               age: 29,
               gender: "female",
+              likedPersonaIDs: ["luna", "harin"],
             });
             expect(response.status).toBe(200);
             expect(yield* Effect.promise(() => response.json())).toEqual({ status: "waiting" });
@@ -301,6 +304,7 @@ test("a valid latest ending link permits reselection before the service can conf
                 privacyNoticeVersion: discoveryNotice.version,
                 likedPersonaIDs: ["harin"],
                 turnstileToken: "human",
+                name: "Visitor",
                 reselectionToken: token,
               }),
             }),

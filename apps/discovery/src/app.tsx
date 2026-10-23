@@ -137,17 +137,19 @@ function DiscoveryApp({
   reselectionToken,
 }: Entry & { client: DiscoveryClient }) {
   const copy = useCopy();
-  const { catalog, retry } = useCatalog(client, initialPeople, reselectionToken);
+  const { catalog, retry, refresh } = useCatalog(client, initialPeople, reselectionToken);
+  const [reviewingSelection, setReviewingSelection] = useState(false);
   const requested =
     catalog.phase === "ready" && catalog.people.find((person) => person.id === personaId);
-  const missing = catalog.phase === "ready" && Boolean(personaId) && !requested;
+  const missing =
+    catalog.phase === "ready" && Boolean(personaId) && !requested && !reviewingSelection;
   useEffect(() => {
     if (missing) document.title = `${copy.publicProfile.notFound} — Ren AI`;
   }, [missing, copy.publicProfile.notFound]);
   return (
     <div className="discovery-shell">
       {catalog.phase === "ready" ? (
-        personaId && !requested ? (
+        missing ? (
           <>
             <Header />
             <main className="onboarding-view" id="discovery-content">
@@ -172,6 +174,10 @@ function DiscoveryApp({
             client={client}
             personaId={personaId}
             initialStyle={initialStyle}
+            onRefresh={() => {
+              setReviewingSelection(true);
+              return refresh();
+            }}
           />
         )
       ) : (
@@ -216,16 +222,31 @@ function prioritizePersona(people: readonly PublicPersona[], personaId: string |
   ];
 }
 
+function useProfileDetails(personaId: string | undefined) {
+  const [details, setDetails] = useState<{ id: string; image: number } | undefined>(() =>
+    personaId ? { id: personaId, image: 0 } : undefined,
+  );
+  const openDetails = (persona: PublicPersona, image = 0) => setDetails({ id: persona.id, image });
+  const closeDetails = () => {
+    setDetails(undefined);
+    if (window.location.pathname.startsWith("/personas/"))
+      window.history.replaceState(window.history.state, "", `/explore${window.location.hash}`);
+  };
+  return { details, openDetails, closeDetails };
+}
+
 function Experience({
   people,
   client,
   personaId,
   initialStyle,
+  onRefresh,
 }: {
   people: readonly PublicPersona[];
   client: DiscoveryClient;
   personaId: string | undefined;
   initialStyle: ImageStyle | undefined;
+  onRefresh: () => Promise<void>;
 }) {
   const copy = useCopy();
   const [choices, setChoices] = useState(readChoices);
@@ -233,9 +254,7 @@ function Experience({
   const [storageFailure, setStorageFailure] = useState<true>();
   const { view, setView, contactOpened, navigate, back } = useBrowseView();
   const [busy, setBusy] = useState(false);
-  const [details, setDetails] = useState<{ id: string; image: number } | undefined>(() =>
-    personaId ? { id: personaId, image: 0 } : undefined,
-  );
+  const { details, openDetails, closeDetails } = useProfileDetails(personaId);
   const ordered = prioritizePersona(people, personaId);
   const displayed = ordered.map((persona) => withImageStyle(persona, style));
   const remaining = displayed.filter((persona) => !Object.hasOwn(choices, persona.id));
@@ -244,12 +263,6 @@ function Experience({
   const detail = displayed.find((persona) => persona.id === details?.id);
   const detailId = detail?.id;
   const title = detail ? personaTitle(detail) : `${copy.brand} — ${copy.explore}`;
-  const openDetails = (persona: PublicPersona, image = 0) => setDetails({ id: persona.id, image });
-  const closeDetails = () => {
-    setDetails(undefined);
-    if (window.location.pathname.startsWith("/personas/"))
-      window.history.replaceState(window.history.state, "", `/explore${window.location.hash}`);
-  };
   useEffect(() => {
     document.title = title;
     if (detailId) {
@@ -323,6 +336,10 @@ function Experience({
                 onBack={back}
                 onSuccess={setView}
                 onBusyChange={setBusy}
+                onRefresh={async () => {
+                  await onRefresh();
+                  closeDetails();
+                }}
               />
             </div>
           )}

@@ -103,7 +103,7 @@ attempts can produce the same successful Waitlist receipt.
 Explain that the number is also used for a registration Notification; joining
 attempts one immediate iMessage from `noti@renai.im` without starting an AI
 Conversation; a selected Persona later texts from `hi@renai.im`. Delivery is not
-guaranteed. Consent version `discovery-2026-10-23` explains repeat and active-number
+guaranteed. Consent version `discovery-2026-10-23-name-required` explains repeat and active-number
 notifications and rate limits in all three languages. Support instructions say
 “email hi@renai.im”.
 

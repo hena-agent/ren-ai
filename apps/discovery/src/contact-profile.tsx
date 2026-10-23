@@ -1,19 +1,27 @@
 import { useCopy } from "./locale.tsx";
 
-export function OptionalProfile({ disabled }: { disabled: boolean }) {
+export function ContactProfile({ disabled }: { disabled: boolean }) {
   const copy = useCopy();
   return (
     <fieldset
-      className="optional-profile contact-fields"
+      className="contact-profile contact-fields"
       disabled={disabled}
       aria-describedby="profile-hint"
     >
-      <legend>{copy.optionalProfile}</legend>
+      <legend>{copy.profileFields}</legend>
       <p id="profile-hint" className="field-hint">
-        {copy.optionalProfileHint}
+        {copy.profileHint}
       </p>
       <label htmlFor="profile-name">{copy.profileName}</label>
-      <input id="profile-name" name="name" autoComplete="name" maxLength={100} />
+      <input
+        id="profile-name"
+        name="name"
+        autoComplete="name"
+        maxLength={100}
+        required
+        pattern=".*\S.*"
+        title={copy.requiredName}
+      />
       <label htmlFor="profile-age">{copy.profileAge}</label>
       <input id="profile-age" name="age" type="number" inputMode="numeric" min={1} step={1} />
       <label htmlFor="profile-gender">{copy.profileGender}</label>

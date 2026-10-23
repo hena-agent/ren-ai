@@ -84,6 +84,7 @@ test("a discovery registration requires contact, consent, verification and uniqu
     privacyNoticeVersion: "v1",
     turnstileToken: "human",
     likedPersonaIDs: ["harin"],
+    name: "민수",
   };
   const decode = Schema.decodeUnknownSync(DiscoveryRequest);
   expect(decode(request)).toEqual(request);
@@ -116,6 +117,21 @@ test("a discovery registration requires contact, consent, verification and uniqu
     );
 });
 
+test("registration requires a nonblank, trimmed name of at most one hundred characters", () => {
+  const request = {
+    handle: "+821012345678",
+    locale: "ko",
+    privacyNoticeVersion: "v1",
+    turnstileToken: "human",
+    likedPersonaIDs: ["harin"],
+  };
+  const decode = Schema.decodeUnknownSync(DiscoveryRequest);
+  expect(() => decode(request)).toThrow(/name/);
+  for (const name of ["", "   ", "  민수  ", null, "a".repeat(101)])
+    expect(() => decode({ ...request, name })).toThrow(/name/);
+  expect(decode({ ...request, name: "민수" }).name).toBe("민수");
+});
+
 const registeredHandle = (handle: string) =>
   Schema.decodeUnknownSync(DiscoveryRequest)({
     handle,
@@ -123,6 +139,7 @@ const registeredHandle = (handle: string) =>
     privacyNoticeVersion: "v1",
     turnstileToken: "human",
     likedPersonaIDs: ["harin"],
+    name: "Visitor",
   }).handle;
 
 test("a discovery registration accepts any country's mobile number in canonical international form only", () => {

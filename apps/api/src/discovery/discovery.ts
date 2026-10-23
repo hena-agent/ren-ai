@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Clock, Effect, Layer, Schema } from "effect";
-import { HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
+import {
+  HttpEffect,
+  HttpRouter,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/unstable/http";
 import {
   HttpApi,
   HttpApiBuilder,
@@ -12,13 +18,20 @@ import { SqlClient } from "effect/unstable/sql";
 import {
   DiscoveryAnswer,
   DiscoveryRequest,
+  DiscoveryNotices,
   PublicPersona,
   ReselectionRequest,
   discoveryNotice,
+  discoveryNotices,
 } from "@ren-ai/onboarding";
 import { submissionLimit, verificationLimit } from "./rate-limit.ts";
 import { verifyTurnstile } from "./turnstile.ts";
-import { reselect, reselectionAuthorization, withoutEndedPersonas } from "./reselection.ts";
+import {
+  endedPersonaIDs,
+  reselect,
+  reselectionAuthorization,
+  withoutEndedPersonas,
+} from "./reselection.ts";
 import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
 import { queueRegistrationNotification } from "./notifications.ts";
 import { publicCatalog } from "../personas/public-catalog.ts";
@@ -27,16 +40,21 @@ const failure = Schema.Literals([
   "consent",
   "verification",
   "personas",
+  "ended_personas",
   "unavailable",
-  "try_later",
   "reselection",
 ]).pipe(HttpApiSchema.status(400));
-const failures = [failure, Schema.Literal("storage").pipe(HttpApiSchema.status(503))];
+const failures = [
+  failure,
+  Schema.Literal("storage").pipe(HttpApiSchema.status(503)),
+  Schema.Literal("try_later").pipe(HttpApiSchema.status(429)),
+];
 const namespace = "/discovery";
 const operationID = (parent: string | undefined) =>
   parent && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(parent) ? parent : randomUUID();
 const discoveryApi = HttpApi.make(namespace).add(
   HttpApiGroup.make("discovery")
+    .add(HttpApiEndpoint.get("notices", `${namespace}/notices`, { success: DiscoveryNotices }))
     .add(
       HttpApiEndpoint.get("personas", `${namespace}/personas`, {
         success: Schema.Array(PublicPersona),
@@ -74,24 +92,47 @@ export const makeDiscoveryWeb = ({
     const limit = yield* submissionLimit;
     const verification = yield* verificationLimit;
     const cached = yield* publicCatalog(catalog, log);
-    const checkedLimit = (check: Effect.Effect<boolean, Error>, requestId: string, stage: string) =>
-      check.pipe(
-        Effect.tapError((cause) =>
-          Effect.sync(() =>
-            log({
-              requestId,
-              operation: "discovery.registration",
-              stage,
-              code: "storage",
-              level: "error",
-              outcome: "failed",
-              durationMs: 0,
-              ...contactCause(cause),
+    const checkedLimit = (check: Effect.Effect<number, Error>, requestId: string, stage: string) =>
+      Effect.suspend(() => {
+        const started = performance.now();
+        return check.pipe(
+          Effect.tapError((cause) =>
+            Effect.sync(() =>
+              log({
+                requestId,
+                operation: "discovery.registration",
+                stage,
+                code: "storage",
+                level: "error",
+                outcome: "failed",
+                durationMs: performance.now() - started,
+                ...contactCause(cause),
+              }),
+            ),
+          ),
+          Effect.mapError(() => "storage" as const),
+          Effect.flatMap((seconds) =>
+            Effect.gen(function* () {
+              if (!seconds) return undefined;
+              yield* HttpEffect.appendPreResponseHandler((_request, response) =>
+                Effect.succeed(
+                  HttpServerResponse.setHeader(response, "Retry-After", String(seconds)),
+                ),
+              );
+              log({
+                requestId,
+                operation: "discovery.registration",
+                stage,
+                code: "try_later",
+                level: "warn",
+                outcome: "failed",
+                durationMs: performance.now() - started,
+              });
+              return yield* Effect.fail("try_later" as const);
             }),
           ),
-        ),
-        Effect.mapError(() => "storage" as const),
-      );
+        );
+      });
     const profiles = (requestId: string, fresh = false) =>
       Effect.gen(function* () {
         const started = performance.now();
@@ -103,7 +144,7 @@ export const makeDiscoveryWeb = ({
           : cached.read(requestId);
         return yield* source.pipe(
           Effect.tapError((cause) =>
-            Effect.sync(() =>
+            Effect.sync(() => {
               log({
                 requestId,
                 operation: "discovery.catalog",
@@ -113,8 +154,8 @@ export const makeDiscoveryWeb = ({
                 code: "storage",
                 durationMs: performance.now() - started,
                 ...contactCause(cause),
-              }),
-            ),
+              });
+            }),
           ),
           Effect.mapError(() => "storage" as const),
           Effect.provideService(SqlClient.SqlClient, sql),
@@ -124,37 +165,55 @@ export const makeDiscoveryWeb = ({
     const join = (input: DiscoveryRequest, requestId: string, ip: string | undefined) =>
       Effect.gen(function* () {
         const started = performance.now();
+        const reject = (
+          code: "consent" | "verification",
+          cause?: ReturnType<typeof contactCause>,
+        ) =>
+          Effect.gen(function* () {
+            log({
+              requestId,
+              operation: "discovery.registration",
+              stage: code,
+              code,
+              level: cause ? "error" : "warn",
+              outcome: "failed",
+              durationMs: performance.now() - started,
+              ...cause,
+            });
+            return yield* Effect.fail(code);
+          });
         if (
           discoveryNotice.version === "pending" ||
           input.privacyNoticeVersion !== discoveryNotice.version
         )
-          return yield* Effect.fail("consent" as const);
+          return yield* reject("consent");
+        let verificationCause: ReturnType<typeof contactCause> | undefined;
         if (
           !turnstileSecret ||
           !(yield* verifyTurnstile(input.turnstileToken, turnstileSecret).pipe(
-            Effect.catch(() => Effect.succeed(false)),
+            Effect.catch((cause) => {
+              verificationCause = contactCause(cause);
+              return Effect.succeed(false);
+            }),
           ))
         )
-          return yield* Effect.fail("verification" as const);
-        if (
+          return yield* reject("verification", verificationCause);
+        const publicProfiles = yield* profiles(requestId, true);
+        const available = new Set(publicProfiles.map((persona) => persona.id));
+        return yield* Effect.gen(function* () {
+          // Filter the submitted IDs, including personas that are no longer published.
+          const endedIDs = yield* endedPersonaIDs(input.handle).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
+          const likedPersonaIDs = input.likedPersonaIDs.filter((id) => !endedIDs.has(id));
+          if (!likedPersonaIDs.length) return yield* Effect.fail("ended_personas" as const);
+          if (!likedPersonaIDs.every((id) => available.has(id)))
+            return yield* Effect.fail("personas" as const);
           yield* checkedLimit(
             limit(ip, yield* Clock.currentTimeMillis),
             requestId,
             "registration.limit",
-          )
-        )
-          return yield* Effect.fail("try_later" as const);
-        const publicProfiles = yield* profiles(requestId, true);
-        const available = new Set(publicProfiles.map((persona) => persona.id));
-        if (!input.likedPersonaIDs.every((id) => available.has(id)))
-          return yield* Effect.fail("personas" as const);
-        return yield* Effect.gen(function* () {
-          const eligible = yield* withoutEndedPersonas(publicProfiles, input.handle).pipe(
-            Effect.provideService(SqlClient.SqlClient, sql),
           );
-          const eligibleIDs = new Set(eligible.map((persona) => persona.id));
-          if (!input.likedPersonaIDs.every((id) => eligibleIDs.has(id)))
-            return yield* Effect.fail("personas" as const);
           const blocked = yield* sql`SELECT handle FROM blocked WHERE handle = ${input.handle}
         UNION SELECT handle FROM removal WHERE handle = ${input.handle}`;
           if (blocked.length) return yield* Effect.fail("unavailable" as const);
@@ -165,7 +224,9 @@ export const makeDiscoveryWeb = ({
           if (active.length) return { status: "active" as const };
           const existing = yield* sql`SELECT id FROM user WHERE handle = ${input.handle}`;
           if (existing.length) {
-            yield* reselect(input).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+            yield* reselect({ ...input, likedPersonaIDs }).pipe(
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
             return { status: "waiting" as const };
           }
           if (input.reselectionToken) return yield* Effect.fail("reselection" as const);
@@ -176,10 +237,10 @@ export const makeDiscoveryWeb = ({
         VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${created}, ${input.startingRelationship ?? "dating"}) RETURNING id`;
           if (inserted.length) {
             yield* sql`INSERT INTO discovery_profile (registration_id, name, age, gender)
-              VALUES (${id}, ${input.name ?? null}, ${input.age ?? null}, ${input.gender ?? null})`;
+              VALUES (${id}, ${input.name}, ${input.age ?? null}, ${input.gender ?? null})`;
             yield* sql`INSERT INTO discovery_language (registration_id, conversation_language)
               VALUES (${id}, ${input.conversationLanguage ?? input.locale})`;
-            for (const personaID of input.likedPersonaIDs)
+            for (const personaID of likedPersonaIDs)
               yield* sql`INSERT INTO discovery_like (registration_id, persona_id) VALUES (${id}, ${personaID})`;
           }
           return { status: "waiting" as const };
@@ -191,18 +252,24 @@ export const makeDiscoveryWeb = ({
           ),
           sql.withTransaction,
           Effect.tapError((error) =>
-            Effect.sync(() =>
-              contactLog({
+            Effect.sync(() => {
+              if (error === "try_later" || error === "storage") return;
+              log({
                 requestId,
                 operation: "discovery.registration",
-                stage: "registration.commit",
+                stage:
+                  error === "personas"
+                    ? "catalog.selection"
+                    : error === "ended_personas"
+                      ? "selection.ended"
+                      : "registration.commit",
                 code: typeof error === "string" ? error : "storage",
                 level: typeof error === "string" ? "warn" : "error",
                 outcome: "failed",
                 durationMs: performance.now() - started,
                 ...(typeof error !== "string" && contactCause(error)),
-              }),
-            ),
+              });
+            }),
           ),
           Effect.mapError((error) => (typeof error === "string" ? error : ("storage" as const))),
         );
@@ -211,18 +278,16 @@ export const makeDiscoveryWeb = ({
       const request = yield* HttpServerRequest.HttpServerRequest;
       const now = yield* Clock.currentTimeMillis;
       const requestId = operationID(request.headers["x-operation-id"]);
-      if (
-        yield* checkedLimit(
-          limit(request.headers["cf-connecting-ip"], now),
-          requestId,
-          "registration.limit",
-        )
-      )
-        return yield* Effect.fail("try_later" as const);
-      return requestId;
+      yield* checkedLimit(
+        verification(request.headers["cf-connecting-ip"], now),
+        requestId,
+        "verification.limit",
+      );
+      return { requestId, ip: request.headers["cf-connecting-ip"] };
     });
     const handlers = HttpApiBuilder.group(discoveryApi, "discovery", (group) =>
       group
+        .handle("notices", () => Effect.succeed(discoveryNotices))
         .handle("personas", () =>
           Effect.gen(function* () {
             const request = yield* HttpServerRequest.HttpServerRequest;
@@ -231,7 +296,7 @@ export const makeDiscoveryWeb = ({
         )
         .handle("reselectionPersonas", ({ payload }) =>
           Effect.gen(function* () {
-            const requestId = yield* authorizeAttempt;
+            const { requestId } = yield* authorizeAttempt;
             return yield* Effect.gen(function* () {
               const ending = yield* reselectionAuthorization(payload.reselectionToken);
               if (ending.consumedAt !== null) return yield* Effect.fail("reselection" as const);
@@ -262,18 +327,8 @@ export const makeDiscoveryWeb = ({
         )
         .handle("join", ({ payload }) =>
           Effect.gen(function* () {
-            const request = yield* HttpServerRequest.HttpServerRequest;
-            const now = yield* Clock.currentTimeMillis;
-            const requestId = operationID(request.headers["x-operation-id"]);
-            if (
-              yield* checkedLimit(
-                verification(request.headers["cf-connecting-ip"], now),
-                requestId,
-                "verification.limit",
-              )
-            )
-              return yield* Effect.fail("try_later" as const);
-            return yield* join(payload, requestId, request.headers["cf-connecting-ip"]);
+            const { requestId, ip } = yield* authorizeAttempt;
+            return yield* join(payload, requestId, ip);
           }),
         ),
     );
@@ -285,6 +340,7 @@ export const makeDiscoveryWeb = ({
         Layer.provide(
           HttpRouter.cors({
             allowedOrigins: ["https://renai.im"],
+            exposedHeaders: ["X-Request-ID", "Retry-After"],
           }),
         ),
       ),

@@ -1,9 +1,9 @@
-import { discoveryNotices } from "@ren-ai/onboarding";
+import { discoveryNotices, type DiscoveryNotices } from "@ren-ai/onboarding";
 import { useCopy, useLocale } from "./locale.tsx";
 
-export function PrivacyDisclosure() {
+export function PrivacyDisclosure({ notices = discoveryNotices }: { notices?: DiscoveryNotices }) {
   const copy = useCopy();
-  const notice = discoveryNotices[useLocale().locale];
+  const notice = notices[useLocale().locale];
   return (
     <details className="privacy-disclosure" id="privacy">
       <summary>{copy.privacy}</summary>

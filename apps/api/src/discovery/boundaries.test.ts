@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Context, Effect } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/unstable/http";
@@ -20,6 +21,7 @@ const input = {
   locale: "ko",
   privacyNoticeVersion: discoveryNotice.version,
   turnstileToken: "human",
+  name: "민수",
   likedPersonaIDs: ["luna"],
 };
 const verified = HttpClient.make((request) =>
@@ -46,6 +48,30 @@ const post = (web: Web, payload: object, ip = "visitor", client = verified) =>
     Context.make(HttpClient.HttpClient, client),
   );
 
+test("ended selections are silently removed, and rejected selections spend no registration credit", async () => {
+  await run(
+    Effect.gen(function* () {
+      const { web, sql } = yield* setup();
+      yield* sql`INSERT INTO persona_exclusion VALUES (${input.handle}, 'ended')`;
+      yield* Effect.promise(async () => {
+        try {
+          const empty = await post(web, { ...input, likedPersonaIDs: ["ended"] });
+          expect(await empty.json()).toBe("ended_personas");
+          const stale = await post(web, { ...input, likedPersonaIDs: ["missing"] });
+          expect(await stale.json()).toBe("personas");
+          const accepted = await post(web, { ...input, likedPersonaIDs: ["ended", "luna"] });
+          expect(accepted.status).toBe(200);
+          expect(await accepted.json()).toEqual({ status: "waiting" });
+        } finally {
+          await web.dispose();
+        }
+      });
+      expect(yield* sql`SELECT persona_id FROM discovery_like`).toEqual([{ persona_id: "luna" }]);
+      expect(yield* sql`SELECT COUNT(*) AS n FROM discovery_attempt`).toEqual([{ n: 1 }]);
+    }),
+  );
+});
+
 test("request schemas reject missing, empty, duplicate, uncanonical and unsafe selections", async () => {
   await run(
     Effect.gen(function* () {
@@ -63,6 +89,9 @@ test("request schemas reject missing, empty, duplicate, uncanonical and unsafe s
             { locale: "de" },
             { turnstileToken: "" },
             { name: " " },
+            { name: undefined },
+            { name: "" },
+            { name: null },
             { name: "a".repeat(101) },
             { age: 0 },
             { age: -1 },
@@ -179,7 +208,7 @@ test("the public API allows the Discovery origin and rejects unrelated origins",
 const answering = (answer: () => Response) =>
   HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, answer())));
 
-test("failed human checks leave the five verified attempts available, while a separate gate bounds verification calls", async () => {
+test("failed human checks spend no registration credit, while a separate gate bounds verification calls", async () => {
   await run(
     Effect.gen(function* () {
       const { web, sql } = yield* setup();
@@ -194,17 +223,18 @@ test("failed human checks leave the five verified attempts available, while a se
             expect(await (await post(web, input, "shared-ip", rejected)).json()).toBe(
               "verification",
             );
-          for (let i = 0; i < 5; i++)
-            expect((await post(web, input, "shared-ip")).status).toBe(200);
-          expect(await (await post(web, input, "shared-ip")).json()).toBe("try_later");
+          expect((await post(web, input, "shared-ip")).status).toBe(200);
           for (let i = 0; i < 30; i++) await post(web, input, "abusive-ip", rejected);
-          expect(await (await post(web, input, "abusive-ip", rejected)).json()).toBe("try_later");
+          const limited = await post(web, input, "abusive-ip", rejected);
+          expect(limited.status).toBe(429);
+          expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+          expect(await limited.json()).toBe("try_later");
           expect(calls).toBe(38);
         } finally {
           await web.dispose();
         }
       });
-      expect(yield* sql`SELECT COUNT(*) AS n FROM discovery_attempt`).toEqual([{ n: 5 }]);
+      expect(yield* sql`SELECT COUNT(*) AS n FROM discovery_attempt`).toEqual([{ n: 1 }]);
     }),
   );
 });
@@ -277,6 +307,7 @@ test("blocked and removing handles stay unavailable, while existing conversation
       });
       expect(yield* sql`SELECT id FROM discovery_registration`).toEqual([]);
       expect(yield* sql`SELECT id FROM user`).toHaveLength(1);
+      expect(yield* sql`SELECT COUNT(*) AS n FROM discovery_attempt`).toEqual([{ n: 1 }]);
     }),
   );
 });
@@ -315,19 +346,25 @@ test("catalog failures and partial database writes fail without a false waiting 
         }
       });
       expect(yield* sql`SELECT id FROM discovery_registration`).toEqual([]);
+      expect(yield* sql`SELECT ip FROM discovery_attempt`).toEqual([]);
     }),
   );
 });
 
-test("one IP is limited after five attempts and other visitors can still register", async () => {
+test("one IP is limited after thirty successful requests and other visitors can still register", async () => {
   await run(
     Effect.gen(function* () {
       const { web, sql } = yield* setup();
+      const ip = createHash("sha256").update("visitor").digest("hex");
+      const now = Date.now();
+      yield* sql`WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i < 30)
+        INSERT INTO discovery_attempt (ip, at) SELECT ${ip}, ${now} FROM n`;
       yield* Effect.tryPromise(async () => {
         try {
-          for (let index = 0; index < 5; index++) expect((await post(web, input)).status).toBe(200);
           const limited = await post(web, input);
-          expect(limited.status).toBe(400);
+          expect(limited.status).toBe(429);
+          expect(Number(limited.headers.get("retry-after"))).toBeGreaterThanOrEqual(3599);
+          expect(Number(limited.headers.get("retry-after"))).toBeLessThanOrEqual(3600);
           expect(await limited.json()).toBe("try_later");
           expect((await post(web, { ...input, handle: "+821087654321" }, "other")).status).toBe(
             200,

@@ -31,10 +31,11 @@ export function useCatalog(
     [client, reselectionToken],
   );
   useEffect(() => {
-    if (initialPeople) return undefined;
-    const controller = new AbortController();
-    activeRequest.current = controller;
-    load(controller);
+    if (!initialPeople) {
+      const controller = new AbortController();
+      activeRequest.current = controller;
+      load(controller);
+    }
     return () => activeRequest.current.abort();
   }, [load, initialPeople]);
   function retry() {
@@ -44,5 +45,12 @@ export function useCatalog(
     setCatalog({ phase: "loading" });
     load(controller);
   }
-  return { catalog, retry };
+  async function refresh() {
+    activeRequest.current.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const people = await client.profiles(controller.signal, reselectionToken);
+    if (!controller.signal.aborted) setCatalog({ phase: "ready", people });
+  }
+  return { catalog, retry, refresh };
 }

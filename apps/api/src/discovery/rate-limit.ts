@@ -30,7 +30,8 @@ export const verificationLimit = Effect.gen(function* () {
         at: number;
         attempts: number;
       }>`SELECT at, attempts FROM discovery_verification WHERE ip = ${key}`;
-      if (visitor && visitor.at + 60_000 > now && visitor.attempts >= 30) return true;
+      if (visitor && visitor.at + 60_000 > now && visitor.attempts >= 30)
+        return Math.ceil((visitor.at + 60_000 - now) / 1000);
       if (!visitor) {
         const [total] = yield* sql<{
           count: number;
@@ -40,10 +41,11 @@ export const verificationLimit = Effect.gen(function* () {
       yield* sql`INSERT INTO discovery_verification(ip, at, attempts) VALUES (${key}, ${now}, 1)
       ON CONFLICT(ip) DO UPDATE SET attempts = CASE WHEN at <= ${now - 60_000} THEN 1 ELSE attempts + 1 END,
         at = CASE WHEN at <= ${now - 60_000} THEN excluded.at ELSE at END`;
-      return false;
+      return 0;
     }).pipe(sql.withTransaction);
 });
 
+/** Called inside the registration transaction: a rejected registration rolls back its credit. */
 export const submissionLimit = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   return (ip: string | undefined, now: number) =>
@@ -52,8 +54,9 @@ export const submissionLimit = Effect.gen(function* () {
       yield* expireSubmissionLimits(now).pipe(Effect.provideService(SqlClient.SqlClient, sql));
       const [visitor] = yield* sql<{
         count: number;
-      }>`SELECT COUNT(*) AS count FROM discovery_attempt WHERE ip = ${key} AND at > ${now - 3_600_000}`;
-      if (visitor!.count >= 5) return true;
+        oldest: number | null;
+      }>`SELECT COUNT(*) AS count, MIN(at) AS oldest FROM discovery_attempt WHERE ip = ${key} AND at > ${now - 3_600_000}`;
+      if (visitor!.count >= 30) return Math.ceil((visitor!.oldest! + 3_600_000 - now) / 1000);
       if (visitor!.count === 0) {
         const [total] = yield* sql<{
           count: number;
@@ -61,6 +64,6 @@ export const submissionLimit = Effect.gen(function* () {
         if (total!.count >= 10_000) yield* evictOldest(sql, "discovery_attempt");
       }
       yield* sql`INSERT INTO discovery_attempt (ip, at) VALUES (${key}, ${now})`;
-      return false;
-    }).pipe(sql.withTransaction);
+      return 0;
+    });
 });

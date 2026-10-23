@@ -1,5 +1,5 @@
 {
-  "version": "discovery-2026-10-23",
+  "version": "discovery-2026-10-23-name-required",
   "title": "Before you wait to hear from someone",
   "aiNotice": "The personas you meet here are AI. One of the personas you like may contact you first on iMessage later.",
   "sections": [
@@ -7,7 +7,7 @@
       "title": "What do we store?",
       "paragraphs": [
         "We store the mobile number you enter, the personas you Like, your language settings and the registration time. We save the number in international format with its country code and use it for a registration notification, to select people to contact on iMessage later and to handle duplicate registrations.",
-        "Name, age in years and gender are individually optional; you can register without them. If provided, we store them with your registration and pass them through OpenCode and model providers for use in conversation and memories from the first greeting. They are deleted with your registration.",
+        "Your name is required; age in years and gender are optional. We store your name and any age or gender you provide with your registration and pass them through OpenCode and model providers for use in conversation and memories from the first greeting. They are deleted with your registration.",
         "We also record the version, language and time of your consent. The operator can review waitlist registrations. Contact details and registration data are not included in the public profile API."
       ]
     },

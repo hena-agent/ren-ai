@@ -105,7 +105,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
     target: { value: "01012345678" },
   });
-  fireEvent.change(screen.getByLabelText("이름 (선택)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
   fireEvent.change(screen.getByLabelText("만 나이 (선택)"), { target: { value: "28" } });
   fireEvent.change(screen.getByLabelText("성별 (선택)"), { target: { value: "male" } });
   fireEvent.click(screen.getByRole("checkbox"));
@@ -118,7 +118,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Mobile number" }).value).toBe(
     "010-1234-5678",
   );
-  expect(screen.getByLabelText<HTMLInputElement>("Name (optional)").value).toBe("민수");
+  expect(screen.getByLabelText<HTMLInputElement>("Name (required)").value).toBe("민수");
   expect(screen.getByLabelText<HTMLInputElement>("Age in years (optional)").value).toBe("28");
   expect(screen.getByLabelText<HTMLSelectElement>("Gender (optional)").value).toBe("male");
   const country = screen.getByRole<HTMLSelectElement>("combobox", { name: "Country code" });
