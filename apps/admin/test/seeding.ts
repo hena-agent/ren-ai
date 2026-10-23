@@ -11,9 +11,14 @@ export const seedCharacter = (seed: PersonaSeed, memory = "# 현재 생활\n\n�
         ...sheet,
         name: seed.name,
         birthDate: seed.birthDate,
-        languageBackground: { primary: "ko", native: ["ko"] },
+        languageBackground: {
+          primary: seed.locale ? "en" : "ko",
+          native: seed.locale?.native ?? ["ko"],
+        },
       },
-      publicProfile: "천천히 알아가요.",
+      publicProfile: seed.locale
+        ? "Coffee, quiet walks, and a sketchbook. That's my kind of weekend."
+        : "천천히 알아가요.",
       state: {
         mood: 55,
         energy: 60,
@@ -21,7 +26,12 @@ export const seedCharacter = (seed: PersonaSeed, memory = "# 현재 생활\n\n�
         connection: 55,
         solitude: 60,
         affection: 18,
-        languageProficiency: { ko: "fluent" },
+        languageProficiency: Object.fromEntries(
+          [...(seed.locale?.native ?? ["ko"]), seed.locale ? "en" : "ko"].map((language) => [
+            language,
+            "fluent",
+          ]),
+        ),
       },
       memory,
     }),
@@ -47,3 +57,30 @@ export const uploadSeeds = (count = 4) =>
     headers: { authorization, origin: "http://localhost:3729", "content-type": "application/json" },
     body: JSON.stringify({ ...seedManifest(), seeds: seedManifest().seeds.slice(0, count) }),
   });
+
+export const usSeedManifest = () =>
+  selectSeeds(
+    [
+      {
+        uuid: "d".repeat(32),
+        sex: "Female",
+        age: 25,
+        marital_status: "never_married",
+        country: "USA",
+        persona: "Elena Rivera is a designer who enjoys quiet weekends.",
+        cultural_background:
+          "She grew up speaking Spanish at home and English at school in New York.",
+        city: "New York",
+        state: "NY",
+      },
+    ],
+    {
+      count: 1,
+      dataset: "nvidia/Nemotron-Personas-USA",
+      revision: "b".repeat(40),
+      date: "2026-10-23",
+      names: [],
+      records: [],
+      locale: { native: ["es", "en"], timeZone: "America/New_York" },
+    },
+  );

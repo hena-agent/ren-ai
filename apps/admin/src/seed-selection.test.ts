@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { selectSeeds } from "./seed-selection.ts";
-import { seedManifest } from "../test/seeding.ts";
+import { selectSeeds, readSeedManifest } from "./seed-selection.ts";
+import { seedManifest, usSeedManifest } from "../test/seeding.ts";
 
 test.each([0, 1, 2, 3])(
   "a single-person preview can select age band %i without adding siblings",
@@ -101,4 +101,34 @@ test("selection assigns valid age-consistent birthdays on leap days and rejects 
       options,
     ),
   ).toThrow("Invalid or conflicting seeding manifest");
+});
+
+test("US seeds require reviewed native languages and timezone, exact source names and unmarried female eligibility", () => {
+  const manifest = usSeedManifest();
+  expect(readSeedManifest(manifest)).toEqual(manifest);
+  const seed = manifest.seeds[0]!;
+  for (const change of [
+    { locale: undefined },
+    { locale: { native: [], timeZone: "America/New_York" } },
+    { locale: { native: ["en"], timeZone: "invalid" } },
+    { name: "Invented Name" },
+    ...[
+      { sex: "Male" },
+      { marital_status: "married_present" },
+      { country: "대한민국" },
+      { persona: "Ambiguous identity" },
+    ].map((source) => ({ source: { ...seed.source, ...source } })),
+  ])
+    expect(() => readSeedManifest({ ...manifest, seeds: [{ ...seed, ...change }] })).toThrow(
+      "Invalid or conflicting",
+    );
+  expect(() =>
+    readSeedManifest({
+      ...seedManifest(),
+      seeds: seedManifest().seeds.map((korean) => ({
+        ...korean,
+        locale: manifest.seeds[0]!.locale,
+      })),
+    }),
+  ).toThrow("Invalid or conflicting");
 });

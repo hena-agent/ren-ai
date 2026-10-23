@@ -9,6 +9,8 @@ import { profileWriting } from "./profile-writing.ts";
 import sheetPolicy from "./identity-sheet-policy.json";
 import { reserveGeneration, seedingBudgetActive } from "./seeding-budget.ts";
 import { setTimeout } from "node:timers/promises";
+import { networkError } from "./generation-network.ts";
+import { arenaImage, arenaImageModel } from "./arena-image.ts";
 
 type Character = {
   readonly name: string;
@@ -126,39 +128,29 @@ async function readReply(response: Response, model: string, secrets: readonly st
   return { parts: candidate.content.parts.filter((part) => !part.thought), fields: reasons };
 }
 
-// oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow fetch failures, including their underlying transport cause
-function networkError(cause: unknown, model: string, secrets: readonly string[]) {
-  const error = cause instanceof Error ? cause : new Error("Generation network failure");
-  const root = error.cause instanceof Error ? error.cause : error;
-  const diagnostic = new GenerationError(safeText(root.message, secrets), {
-    model,
-    code:
-      error.name === "TimeoutError"
-        ? "timeout"
-        : error.name === "AbortError"
-          ? "aborted"
-          : "network_error",
-    causeName: safeText(root.name, secrets),
-    ...("code" in root &&
-      typeof root.code === "string" && { causeCode: safeText(root.code, secrets) }),
-  });
-  if (root.stack) diagnostic.stack = root.stack;
-  return diagnostic;
-}
-
 export function createProfileGenerator({
   key,
   endpoint = "https://generativelanguage.googleapis.com/v1beta",
   textModel = "gemini-3.8-flash",
-  imageModel = "gemini-3.1-flash-image",
+  imageProvider = "gemini",
+  imageModel = imageProvider === "arena" ? arenaImageModel : "gemini-3.1-flash-image",
+  arenaKey = "",
   fetcher = fetch,
 }: {
   key: string;
   endpoint?: string;
   textModel?: string;
   imageModel?: string;
+  imageProvider?: string;
+  arenaKey?: string;
   fetcher?: typeof fetch;
 }): ProfileGenerator {
+  if (imageProvider !== "gemini" && imageProvider !== "arena")
+    throw new Error("ADMIN_IMAGE_PROVIDER must be gemini or arena");
+  if ((imageProvider === "arena") !== (imageModel === arenaImageModel))
+    throw new Error(
+      "Arena requires its canonical model; remove ADMIN_IMAGE_MODEL when switching providers",
+    );
   const thinkingConfig = { thinkingLevel: "LOW" };
   const configurations = {
     sheet: {
@@ -261,6 +253,16 @@ export function createProfileGenerator({
     references: readonly Portrait[],
     format: "image" | "sheet",
   ) => {
+    if (imageProvider === "arena")
+      return arenaImage({
+        key: arenaKey,
+        model: imageModel,
+        prompt: `${prompt}\n\n${input}`,
+        references,
+        format,
+        style,
+        fetcher,
+      });
     const { parts, fields } = await request(imageModel, prompt, input, format, style, references);
     const image = parts.find((part) => part.inlineData)?.inlineData;
     if (!image) throw new GenerationError("No generated portrait", { ...fields, code: "no_image" });

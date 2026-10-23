@@ -24,8 +24,10 @@ export const seedingBudgetActive = () => Boolean(allowance.getStore());
 export async function reserveGeneration(model: string, input: string, references: number) {
   const reserve = allowance.getStore();
   if (!reserve) return;
+  // This operator-owned endpoint has no incremental image charge. Still check the run budget.
+  if (model === "gpt-image-2.5-sunburst") return reserve(0);
   if (!["gemini-3.8-flash", "gemini-3.1-flash-image"].includes(model))
-    throw new PersonaError("invalid", "Seeding requires priced default Gemini models");
+    throw new PersonaError("invalid", "Seeding requires supported priced models");
   const text = model === "gemini-3.8-flash";
   const tokens = new TextEncoder().encode(input).byteLength + references * 16384 + 4096;
   // USD micro-units: use the higher announced 2027 Flash text prices, not the 2026 promotion.
