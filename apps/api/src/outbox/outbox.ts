@@ -192,8 +192,8 @@ export const outbox = (
           if (row?.state === "recorded" || row?.state === "uncertain")
             yield* check(conversation, row);
         }),
-      /** An explicit operator attestation for legacy attempts; identified sends require transport proof. */
-      release: (conversation: Conversation, callID: string) =>
+      /** An explicit operator-confirmed outcome for legacy attempts; identified sends require transport proof. */
+      release: (conversation: Conversation, callID: string, outcome: "failed" | "delivered") =>
         PartitionedSemaphore.withPermit(
           locks,
           conversation.id,
@@ -206,10 +206,12 @@ export const outbox = (
             if (observed.state !== "recorded" && observed.state !== "uncertain")
               return "settled" as const;
             if (row.attemptID) return "uncertain" as const;
+            const at = outcome === "delivered" ? row.recordedAt : yield* Clock.currentTimeMillis;
             const released =
-              yield* sql`UPDATE send SET state = 'failed', late = 1, notification_pending = 1,
-            updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${row.id}
+              yield* sql`UPDATE send SET state = ${outcome}, late = 1, notification_pending = 1,
+            updated_at = ${at} WHERE id = ${row.id}
             AND state IN ('recorded', 'uncertain') RETURNING id`;
+            if (released.length && outcome === "delivered") yield* notifySent(conversation);
             return released.length ? ("released" as const) : ("settled" as const);
           }),
         ),

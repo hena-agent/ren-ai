@@ -27,6 +27,7 @@ export const operatorApi = HttpApi.make("operator").add(
         payload: Schema.Struct({
           handle: Schema.String,
           callID: Schema.String.check(Schema.isMinLength(1)),
+          outcome: Schema.Literals(["failed", "delivered"]),
         }),
         success: Schema.Struct({
           result: Schema.Literals(["released", "settled", "uncertain", "not_found"]),
@@ -68,6 +69,7 @@ type Operations = {
   readonly releaseSend: (
     handle: string,
     callID: string,
+    outcome: "failed" | "delivered",
   ) => Effect.Effect<"released" | "settled" | "uncertain" | "not_found", Error>;
   readonly testHandle: (handle: string, enabled: boolean) => Effect.Effect<void, Error>;
   readonly block: (handle: string) => Effect.Effect<void, Error>;
@@ -83,9 +85,15 @@ export const operatorHandler = (operations: Operations) => {
           const request = yield* HttpServerRequest.HttpServerRequest;
           const requestId = request.headers["x-operation-id"] ?? crypto.randomUUID();
           const started = performance.now();
-          const fields = { requestId, operation: "send.release", stage: "outbox.reconcile" };
+          const fields = {
+            requestId,
+            operation: `send.release.${payload.outcome}`,
+            stage: "outbox.reconcile",
+          };
           return yield* normalized(payload.handle).pipe(
-            Effect.flatMap((handle) => operations.releaseSend(handle, payload.callID)),
+            Effect.flatMap((handle) =>
+              operations.releaseSend(handle, payload.callID, payload.outcome),
+            ),
             Effect.tap((result) =>
               Effect.sync(() =>
                 contactLog({

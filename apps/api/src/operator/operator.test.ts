@@ -286,10 +286,16 @@ test("HTTP API and typed CLI run over authenticated port-zero HTTP", async () =>
           ["other", input.handle],
           ["block", ""],
           ["remove", input.handle, "extra"],
+          ["release-send", input.handle, "call"],
+          ["release-send", input.handle, "call", "sent"],
+          ["release-send"],
+          ["release-send", input.handle],
+          ["release-send", input.handle, "", "delivered"],
+          ["release-send", input.handle, "call", "delivered", "extra"],
         ]) {
           expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
             new Error(
-              "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID",
+              "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID failed|delivered",
             ),
           );
         }

@@ -3,10 +3,18 @@ import { operatorClient, operatorConnection, type OperatorConnection } from "./c
 
 export const runOperatorCli = (args: readonly string[], connection?: OperatorConnection) =>
   Effect.gen(function* () {
-    const [command, handle, callID] = args;
-    if (command === "release-send" && handle && callID && args.length === 3) {
+    const [command, handle, callID, outcome] = args;
+    if (
+      command === "release-send" &&
+      handle &&
+      callID &&
+      args.length === 4 &&
+      (outcome === "failed" || outcome === "delivered")
+    ) {
       const client = yield* operatorClient(connection ?? (yield* operatorConnection));
-      const { result } = yield* client.operator.releaseSend({ payload: { handle, callID } });
+      const { result } = yield* client.operator.releaseSend({
+        payload: { handle, callID, outcome },
+      });
       return `Send recovery: ${result}`;
     }
     if (
@@ -16,7 +24,7 @@ export const runOperatorCli = (args: readonly string[], connection?: OperatorCon
     ) {
       return yield* Effect.fail(
         new Error(
-          "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID",
+          "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID failed|delivered",
         ),
       );
     }

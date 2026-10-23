@@ -94,12 +94,12 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       intake: incoming,
       operator: {
         ...operator,
-        releaseSend: (handle: string, callID: string) =>
+        releaseSend: (handle: string, callID: string, outcome: "failed" | "delivered") =>
           directory.withHandle(handle)(
             Effect.gen(function* () {
               const conversation = yield* directory.byHandle(handle);
               return conversation
-                ? yield* sends.release(conversation, callID)
+                ? yield* sends.release(conversation, callID, outcome)
                 : ("not_found" as const);
             }),
           ),
