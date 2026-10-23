@@ -101,7 +101,7 @@ export function discoveryServer(
       const routed = routeResponse(request, url);
       if (routed) return finish(routed);
       let people: readonly PublicPersona[] = [];
-      if (url.pathname !== "/") {
+      if (url.pathname !== "/" && url.pathname !== "/explore") {
         stage = "catalog.read";
         const upstream = await fetcher(new URL("/discovery/personas", env.DISCOVERY_API_URL), {
           cache: "no-store",

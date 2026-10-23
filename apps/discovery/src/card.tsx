@@ -18,6 +18,7 @@ function PortraitImage({ persona }: { persona: PublicPersona }) {
     <img
       className="profile-photo"
       src={persona.imageUrl}
+      fetchPriority="high"
       alt={`${persona.name} ${copy.profilePhoto}`}
       draggable={false}
       onError={() => setFailed(true)}
@@ -156,7 +157,13 @@ export function Card({
       <div className="card-media">
         {next?.imageUrl && (
           <div className="card-back" aria-hidden="true">
-            <img src={next.imageUrl} alt="" draggable={false} />
+            <img
+              src={next.imageUrl}
+              alt=""
+              draggable={false}
+              fetchPriority="low"
+              decoding="async"
+            />
           </div>
         )}
         <article

@@ -117,7 +117,7 @@ export function JoinForm({
       <ul className="liked-list" aria-label={copy.selected}>
         {liked.map((persona) => (
           <li key={persona.id}>
-            {persona.imageUrl && <img src={persona.imageUrl} alt="" />}
+            {persona.imageUrl && <img src={persona.imageUrl} decoding="async" alt="" />}
             <span>{persona.name}</span>
           </li>
         ))}

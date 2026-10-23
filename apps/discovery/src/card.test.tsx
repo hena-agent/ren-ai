@@ -84,6 +84,10 @@ test("a swipe commits exactly one choice and only the up-arrow opens details", (
   expect(article.getAttribute("aria-busy")).toBe("false");
   expect(document.querySelector(".card-back img")?.getAttribute("src")).toBe(profile.imageUrl);
   expect(document.querySelector(".card-back img")?.getAttribute("draggable")).toBe("false");
+  expect(document.querySelector(".card-back img")?.getAttribute("fetchpriority")).toBe("low");
+  expect(screen.getByRole("img").getAttribute("src")).toBe(profile.imageUrl);
+  expect(screen.getByRole("img").getAttribute("srcset")).toBeNull();
+  expect(screen.getByRole("img").getAttribute("fetchpriority")).toBe("high");
   expect(screen.getByRole("img").getAttribute("draggable")).toBe("false");
   fireEvent.click(surface, { detail: 1 });
   expect(open).not.toHaveBeenCalled();
