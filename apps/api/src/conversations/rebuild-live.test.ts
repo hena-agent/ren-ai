@@ -184,7 +184,9 @@ test("unread live input waits through stalled and superseded replay, then change
           if (index >= 2)
             return JSON.stringify(request.messages).includes("history-send")
               ? TestLLM.text("history done", "history-done")
-              : TestLLM.tool("history-send", "send", { text: "Do not send historical effects" });
+              : TestLLM.tool("history-send", "send", {
+                  messages: [{ text: "Do not send historical effects" }],
+                });
           return Stream.unwrap(
             Deferred.succeed(starts[index]!, undefined).pipe(
               Effect.andThen(Deferred.await(gates[index]!)),

@@ -60,7 +60,8 @@ test("an incoming message reaches Docker's persona plugin and replies through th
             Effect.runSync(Deferred.succeed(waiting, undefined));
             return TestLLM.tool("pause", "wait", { seconds: 60 });
           }
-          if (step === 4) return TestLLM.tool("reply", "send", { text: "hello from Docker" });
+          if (step === 4)
+            return TestLLM.tool("reply", "send", { messages: [{ text: "hello from Docker" }] });
           return TestLLM.text("done", "answer");
         });
         const native = yield* standaloneTestHost(root, personaDirectory, llm);
@@ -201,7 +202,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         yield* llm.serve((request) => {
           if (request.tools.some((tool) => tool.name === "send") && !orphanAttempt) {
             orphanAttempt = true;
-            return TestLLM.tool("orphan", "send", { text: "must not escape" });
+            return TestLLM.tool("orphan", "send", { messages: [{ text: "must not escape" }] });
           }
           return TestLLM.text("stopped", "answer");
         });

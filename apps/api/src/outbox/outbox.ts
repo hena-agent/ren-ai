@@ -266,7 +266,7 @@ export const outbox = (
             return `reacted ${tapback}`;
           }),
         ),
-      send: (conversation: Conversation, body: string, callID: string) =>
+      send: (conversation: Conversation, body: string, callID: string, delaySeconds = 0) =>
         PartitionedSemaphore.withPermit(
           locks,
           conversation.id,
@@ -282,7 +282,7 @@ export const outbox = (
             const type = Effect.gen(function* () {
               if (pace) yield* pace.quiet(conversation.sessionID);
               const typingStarted = yield* Clock.currentTimeMillis;
-              return yield* gestures.typing(conversation.handle, text, duration).pipe(
+              const typed = yield* gestures.typing(conversation.handle, text, duration).pipe(
                 Effect.catch(() =>
                   Effect.gen(function* () {
                     const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
@@ -291,9 +291,14 @@ export const outbox = (
                   }),
                 ),
               );
+              if (typed) {
+                const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
+                yield* Effect.sleep(Math.max(0, delaySeconds * 1000 - elapsed));
+              }
+              return typed;
             });
             const ready = !typing
-              ? true
+              ? yield* Effect.sleep(delaySeconds * 1000).pipe(Effect.as(true))
               : pace
                 ? yield* pace.during(conversation.sessionID, type)
                 : yield* type;

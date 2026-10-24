@@ -215,7 +215,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
             step++;
             if (step <= 2)
               return TestLLM.tool(`call-${step}`, "send", {
-                text: `bubble ${step}`,
+                messages: [{ text: `bubble ${step}` }],
               });
             if (step === 3) return TestLLM.tool("pause", "wait", { seconds: 0.06 });
             return TestLLM.text("done", "answer");
@@ -309,9 +309,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
           expect(JSON.stringify(yield* llm.requests())).toContain(
             '<message at=\\"2026-09-25 Fri 01:52\\">안녕</message>',
           );
-          expect(toolDescription).toBe(
-            "Send one iMessage bubble to this Conversation's User. Before replying to newly received messages, you must first call read and wait for its result. Call read and send sequentially, never in parallel.",
-          );
+          expect(toolDescription).toContain("each item's text is a separate bubble");
           expect(
             (yield* llm.requests()).map((request) => request.tools.map((tool) => tool.name)),
           ).toEqual(
@@ -326,7 +324,7 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               ]).toSorted(),
             ),
           );
-          expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"text"');
+          expect(JSON.stringify((yield* llm.requests())[0]?.tools)).toContain('"messages"');
           const initialRequests = yield* llm.requests();
           expect(initialRequests[0]?.tools.find((tool) => tool.name === "read")).toMatchObject({
             inputSchema: { type: "object", additionalProperties: false },

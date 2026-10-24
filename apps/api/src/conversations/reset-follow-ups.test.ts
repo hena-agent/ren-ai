@@ -24,7 +24,7 @@ test("sending the reset Greeting does not schedule a follow-up until the User re
         yield* llm.serve(() => {
           if (!greet) return TestLLM.text("quiet", "answer");
           greet = false;
-          return TestLLM.tool("greeting", "send", { text: "Hello stranger" });
+          return TestLLM.tool("greeting", "send", { messages: [{ text: "Hello stranger" }] });
         });
         const host = yield* startTestHost(root, personaDirectory, llm, fake.messages);
         const old = yield* bindTestHandle(host, handle);

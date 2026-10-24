@@ -78,7 +78,11 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
           expect((yield* client.catalog()).map((persona) => persona.id)).toEqual(["persona1"]);
           expect(
             yield* client
-              .send({ sessionID: "existing", text: "must not send", callID: "migration" })
+              .send({
+                sessionID: "existing",
+                messages: [{ text: "must not send" }],
+                callID: "migration",
+              })
               .pipe(Effect.flip),
           ).toBe("Error: Application is in migration mode");
           expect(yield* client.read({ sessionID: "existing" }).pipe(Effect.flip)).toBe(

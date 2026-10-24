@@ -44,11 +44,11 @@ test("composed HTTP, remote OpenCode, messaging API and authenticated operator c
           if (JSON.stringify(request.messages).includes("안녕?")) {
             if (!replied) {
               replied = true;
-              return TestLLM.tool("call-2", "send", { text: "반가워!" });
+              return TestLLM.tool("call-2", "send", { messages: [{ text: "반가워!" }] });
             }
           } else if (!greeted) {
             greeted = true;
-            return TestLLM.tool("call-1", "send", { text: "안녕 🙂" });
+            return TestLLM.tool("call-1", "send", { messages: [{ text: "안녕 🙂" }] });
           }
           return TestLLM.text("done", "done");
         });
