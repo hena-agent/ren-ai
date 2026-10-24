@@ -82,7 +82,7 @@ test("typing interruption, UI failure, uncertain send, and repeated call cannot 
       const fake = fakeMessages(events);
       const sends = yield* outbox(fake.messages, ui.gestures, personas, directory.active);
       ui.interrupt();
-      expect(yield* sends.send(conversation, "interrupted", "call-1")).toBe(
+      expect(yield* sends.send(conversation, "interrupted", "call-1")).toContain(
         "not sent: a new message arrived",
       );
       expect((yield* sql`SELECT id FROM send`).length).toBe(0);
@@ -350,11 +350,14 @@ test("new arrivals cancel stale drafts and the replacement waits for quiet befor
         yield* pace.onNew(`${conversation.sessionID}-other`, "other-message");
         expect(interrupted.pollUnsafe()).toBeUndefined();
         yield* pace.onNew(conversation.sessionID, "message");
-        expect(yield* Fiber.join(interrupted)).toBe("not sent: a new message arrived");
+        const cancelled = yield* Fiber.join(interrupted);
+        expect(cancelled).toContain("not sent: a new message arrived");
+        expect(cancelled).toContain("Discard this unsent draft");
+        expect(cancelled).toContain("the User never received it");
         expect(fake.bubbles).toEqual([]);
         const sql = yield* SqlClient.SqlClient;
         expect(yield* sql`SELECT id FROM send`).toEqual([]);
-        expect(yield* sends.send(conversation, "stale follow-up", "stale")).toBe(
+        expect(yield* sends.send(conversation, "stale follow-up", "stale")).toContain(
           "not sent: a new message arrived",
         );
         expect(typings).toBe(1);

@@ -1,6 +1,7 @@
 import { rm } from "node:fs/promises";
 import { TestLLM } from "@opencode/ai/testing";
 import { Deferred, Effect, Fiber, Stream } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import { expect, test, vi } from "vitest";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
 import { scriptedPersona } from "../../test/messaging-host.test-helper.ts";
@@ -56,6 +57,12 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
             }
             if (!replied && context.includes("Message C")) {
               replied = true;
+              expect(context).toContain("Discard this unsent draft");
+              expect(context).toContain("the User never received it");
+              expect(context).toContain("Do not resume, paraphrase, or explain it later");
+              expect(JSON.stringify(request.system)).toContain(
+                "취소된 초안과 그 답변에 이어 보내려던 내용은 미뤄 두지 말고 폐기해",
+              );
               for (const text of ["Message A", "Message B", "Message C"])
                 expect(context).toContain(text);
               return TestLLM.tool("combined", "send", {
@@ -138,6 +145,10 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
           yield* Deferred.succeed(finish, undefined);
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("10 seconds"));
           expect(fake.bubbles).toEqual([{ handle, text: "Reply to A, B and C" }]);
+          const sql = yield* SqlClient.SqlClient;
+          expect(yield* sql`SELECT tool_call_id AS callID FROM send ORDER BY id`).toEqual([
+            { callID: "combined" },
+          ]);
         }),
       );
     } finally {

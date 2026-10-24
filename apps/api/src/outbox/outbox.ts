@@ -297,7 +297,10 @@ export const outbox = (
               : pace
                 ? yield* pace.during(conversation.sessionID, type)
                 : yield* type;
-            if (ready !== true) return notSent("a new message arrived");
+            if (ready !== true)
+              return notSent(
+                "a new message arrived. Discard this unsent draft and its unsent continuation; the User never received it. Do not resume, paraphrase, or explain it later, or save it to Memory as a conversation, promise, or pending message. Read the new messages and respond to the current conversation. Revisit that topic only if the User explicitly brings it back. Do not repeat successful sends.",
+              );
             const recorded = yield* recordAttempt(conversation, "text", text, callID);
             if (!recorded) return notSent("this Conversation is unavailable");
             const { id } = recorded;
