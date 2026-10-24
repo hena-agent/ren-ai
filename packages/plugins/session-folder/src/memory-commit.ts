@@ -4,7 +4,7 @@ import { Schema } from "effect";
 
 const memoryPath = Schema.String.check(
   Schema.isPattern(
-    /^(?:conversations\/[a-zA-Z0-9_-]{1,200}\/)?(?:STATE\.md|MEMORY\.md|\.memory\/(?:receipts|observations)\.json|long-term\/[a-zA-Z0-9_-]{1,100}\.md)$/,
+    /^(?:ADJUSTMENTS\.md|\.memory\/adjustments\.json|(?:conversations\/[a-zA-Z0-9_-]{1,200}\/)?(?:STATE\.md|MEMORY\.md|\.memory\/(?:receipts|observations)\.json|long-term\/[a-zA-Z0-9_-]{1,100}\.md))$/,
   ),
 );
 const changes = Schema.Array(

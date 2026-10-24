@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { Schema } from "effect";
 import { personaMemory, memoryTools, memoryToolNames } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
+import { personaAdjustments, adjustmentTool } from "@ren-ai/plugin-session-folder/adjustments";
 import {
   configuredPlugin,
   getPersona,
@@ -19,6 +20,24 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
         const folder = managedFolder(options.personaDirectory, ctx.location.directory);
         if (!folder) return;
         yield* ctx.tool.transform((editor) => {
+          editor.add({
+            name: "review_adjustments",
+            description: adjustmentTool.description,
+            input: {
+              "~standard": Schema.toStandardJSONSchemaV1(
+                Schema.toStandardSchemaV1(adjustmentTool.input),
+              )["~standard"],
+            },
+            output: Schema.String,
+            options: { codemode: false },
+            execute: (input, context) =>
+              conversationTool("review_adjustments", context.sessionID, context.id, () =>
+                personaAdjustments(ctx.location.directory, context.sessionID).run(
+                  input,
+                  context.id,
+                ),
+              ).pipe(Effect.annotateLogs({ stage: "review" })),
+          });
           for (const name of memoryToolNames)
             editor.add({
               name,
@@ -50,6 +69,12 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
               event.sessionID,
               () => personaMemory(ctx.location.directory, event.sessionID).context(false),
             );
+            const adjustments = yield* conversationOperation(
+              "adjustments.compaction.context",
+              event.sessionID,
+              () => personaAdjustments(ctx.location.directory, event.sessionID).context(),
+            );
+            event.system.push({ type: "text", text: adjustments });
             // Let OpenCode execute and account for compaction instead of an unmetered session.generate.
             // Its validator requires a native heading; the content remains first-person Persona Memory.
             event.system.push({
