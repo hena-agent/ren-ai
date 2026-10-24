@@ -38,6 +38,7 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
               event,
               phone(now, persona.timeZone, state),
               new Set([
+                "websearch",
                 ...(["send", "read", "react", "wait"] as const).filter(
                   (name) => options[name] && isMessagingTool(name, event.tools[name]),
                 ),

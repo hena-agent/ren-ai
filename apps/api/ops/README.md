@@ -373,6 +373,8 @@ source automatically.
 
    Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. OpenCode triggers compaction at `(limit.input || limit.context) - buffer`: reducing this buffer to 40k would delay compaction to 960k on a 1M window. The embedded test host's 40k buffer belongs to its separate 100k model / 60k budget; it is not the production config's expected value. Re-evaluate the buffer against the resolved model limits when changing the production model.
 
+   Persona folders enable native `websearch` with `websearch.provider: "random"`, matching OpenCode V2's normal search selection without its interactive first-use prompt. OpenCode owns provider availability, credentials and rate-limit rotation. Catalog sync refreshes existing persona folders and reconciles each managed session's persisted tool permissions.
+
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.
 
    ```sh
