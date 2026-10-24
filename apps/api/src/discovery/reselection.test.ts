@@ -227,16 +227,10 @@ test.each(["persona", "operator"])(
           );
           expect(prompts[0]).not.toMatch(/ses_old|여기서 끝낼게요/);
           expect(
-            yield* app.tools.send(
-              next.sessionID,
-              [{ text: "안녕하세요, 하린이에요." }],
-              "greet-new",
-            ),
+            yield* app.tools.send(next.sessionID, "안녕하세요, 하린이에요.", "greet-new"),
           ).toBe("sent");
           expect(fake.bubbles.at(-1)?.text).toContain("다른 페르소나와의 새로운 대화");
-          expect(yield* app.tools.send(next.sessionID, [{ text: "반가워요." }], "second-new")).toBe(
-            "sent",
-          );
+          expect(yield* app.tools.send(next.sessionID, "반가워요.", "second-new")).toBe("sent");
           expect(fake.bubbles.at(-1)?.text).toBe("반가워요.");
           expect((yield* f.sql`SELECT id FROM conversation`).length).toBe(2);
           expect((yield* f.sql`SELECT id FROM user`).length).toBe(1);

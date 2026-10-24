@@ -19,18 +19,10 @@ export const expectLateResults = (messages: ReadonlyArray<Message>) => {
   const parts = messages.flatMap((entry) => entry.content);
   const results = parts.filter((part) => part.type === "tool-result");
   expect(results.filter((part) => part.id === "call-1").map((part) => part.result)).toEqual([
-    {
-      type: "text",
-      value:
-        "Bubble 1: delivered 01:48 (confirmed late)\nOnly the listed outcomes are confirmed; do not repeat completed sends or assume the remaining bubbles went out.",
-    },
+    { type: "text", value: "delivered 01:48 (confirmed late)" },
   ]);
   expect(results.filter((part) => part.id === "call-2").map((part) => part.result)).toEqual([
-    {
-      type: "text",
-      value:
-        "Bubble 1: not sent: earlier send did not go out\nOnly the listed outcomes are confirmed; do not repeat completed sends or assume the remaining bubbles went out.",
-    },
+    { type: "text", value: "not sent: earlier send did not go out" },
   ]);
   expect(parts.filter((part) => part.type === "tool-call").map((part) => part.id)).toEqual([
     "call-1",

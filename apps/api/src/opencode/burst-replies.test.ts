@@ -39,11 +39,7 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
             if (step++ === 0)
               return Stream.unwrap(
                 (stage !== "context" ? held : Effect.void).pipe(
-                  Effect.as(
-                    Stream.fromIterable(
-                      TestLLM.tool("stale", "send", { messages: [{ text: "Just A" }] }),
-                    ),
-                  ),
+                  Effect.as(Stream.fromIterable(TestLLM.tool("stale", "send", { text: "Just A" }))),
                 ),
               );
             const context = JSON.stringify(request.messages);
@@ -55,7 +51,7 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
             ) {
               partial = true;
               return TestLLM.tool("partial", "send", {
-                messages: [{ text: "Reply to A and B only" }],
+                text: "Reply to A and B only",
               });
             }
             if (!replied && context.includes("Message C")) {
@@ -63,7 +59,7 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
               for (const text of ["Message A", "Message B", "Message C"])
                 expect(context).toContain(text);
               return TestLLM.tool("combined", "send", {
-                messages: [{ text: "Reply to A, B and C" }],
+                text: "Reply to A, B and C",
               });
             }
             return TestLLM.text("done", "answer");

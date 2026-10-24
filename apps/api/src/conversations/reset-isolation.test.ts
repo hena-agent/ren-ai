@@ -31,7 +31,7 @@ test.each([false, true])(
             if (shouldReply) {
               shouldReply = false;
               return TestLLM.tool("new-reply", "send", {
-                messages: [{ text: "Fresh conversation reply" }],
+                text: "Fresh conversation reply",
               });
             }
             if (!pause) return TestLLM.text("done", "done");

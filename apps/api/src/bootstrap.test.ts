@@ -80,7 +80,7 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
             yield* client
               .send({
                 sessionID: "existing",
-                messages: [{ text: "must not send" }],
+                text: "must not send",
                 callID: "migration",
               })
               .pipe(Effect.flip),

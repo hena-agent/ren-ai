@@ -33,7 +33,7 @@ test("submission and resolution failures preserve correlation, uncertainty and p
           f.client.send({
             sessionID: f.conversation.sessionID,
             callID,
-            messages: [{ text: "private text" }],
+            text: "private text",
           });
         expect(yield* send("private-first")).toBe("not sent: send in doubt");
         expect(String(yield* send("private-second").pipe(Effect.flip))).toContain(requestId);
@@ -100,7 +100,7 @@ test("a timed-out Mac submission stays uncertain, logs its cause once and never 
           .send({
             sessionID: f.conversation.sessionID,
             callID: "private-timeout",
-            messages: [{ text: "private timeout text" }],
+            text: "private timeout text",
           })
           .pipe(Effect.forkScoped);
         yield* Deferred.await(entered);
@@ -110,7 +110,7 @@ test("a timed-out Mac submission stays uncertain, logs its cause once and never 
           yield* f.client.send({
             sessionID: f.conversation.sessionID,
             callID: "private-next",
-            messages: [{ text: "private next text" }],
+            text: "private next text",
           }),
         ).toBe("not sent: an earlier send is still in doubt");
         const sql = yield* SqlClient.SqlClient;

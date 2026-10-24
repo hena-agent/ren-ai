@@ -11,7 +11,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { expect, test } from "vitest";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 
-test("an interrupted second bubble is shown with its own real outcome without sending the remaining bubble", async () => {
+test("an interrupted send is shown to her with its real outcome after Messages settles it", async () => {
   const { root, personaDirectory } = await messagingFixture("interrupted-send-");
   try {
     await runMessagingTest(
@@ -24,14 +24,11 @@ test("an interrupted second bubble is shown with its own real outcome without se
         yield* llm.serve((request) =>
           request.messages.some((message) => JSON.stringify(message).includes("check outcome"))
             ? TestLLM.text("understood", "answer")
-            : TestLLM.tool("interrupted-call", "send", {
-                messages: [{ text: "first" }, { text: "hello" }, { text: "unsent" }],
-              }),
+            : TestLLM.tool("interrupted-call", "send", { text: "hello" }),
         );
         const host = yield* startTestHost(root, personaDirectory, llm, {
           ...fake.messages,
           sendText: (handle, text, attemptID) => {
-            if (text === "first") return fake.messages.sendText(handle, text, attemptID);
             guid = attemptID!;
             return fake
               .outgoing(handle, text, Date.now(), "unknown", guid)
@@ -50,9 +47,9 @@ test("an interrupted second bubble is shown with its own real outcome without se
         yield* host.sessions.interrupt(session.id);
         yield* host.sessions.wait(session.id);
         const sql = yield* SqlClient.SqlClient;
-        expect(
-          yield* sql`SELECT state FROM send WHERE tool_call_id = 'interrupted-call:bubble:2'`,
-        ).toEqual([{ state: "recorded" }]);
+        expect(yield* sql`SELECT state FROM send WHERE tool_call_id = 'interrupted-call'`).toEqual([
+          { state: "recorded" },
+        ]);
         expect(JSON.stringify(yield* host.sessions.messages({ sessionID: session.id }))).toContain(
           "Tool execution interrupted",
         );
@@ -63,12 +60,7 @@ test("an interrupted second bubble is shown with its own real outcome without se
         const request = JSON.stringify((yield* llm.requests()).at(-1)?.messages);
         expect(request).toContain("delivered");
         expect(request).toContain("confirmed late");
-        expect(request).toContain("Bubble 2:");
         expect(request).not.toContain("Tool execution interrupted");
-        expect((yield* fake.messages.recent(handle, 0)).map((row) => row.text)).toEqual([
-          "first",
-          "hello",
-        ]);
       }),
     );
   } finally {

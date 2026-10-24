@@ -56,7 +56,7 @@ test("a persona can end only her own relationship, stop all normal actions and d
       );
       expect(admitted).toBe(false);
       for (const action of [
-        f.app.tools.send(f.conversation.sessionID, [{ text: "안녕?" }], "after-end"),
+        f.app.tools.send(f.conversation.sessionID, "안녕?", "after-end"),
         f.app.tools.wait(f.conversation.sessionID, 1),
         f.app.tools.read(f.conversation.sessionID),
       ])
@@ -175,7 +175,7 @@ test("service notices and new relationship introductions respect the User's Engl
         yield* f.sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
         SELECT id, 'harin', 'ses_new', 200 FROM user`;
         f.personas.set("harin", fromPartial<Persona>({ id: "harin", timeZone: "Asia/Seoul" }));
-        yield* f.app.tools.send("ses_new", [{ text: "hello" }], "hello-new");
+        yield* f.app.tools.send("ses_new", "hello", "hello-new");
         expect(f.fake.bubbles.at(-1)?.text).toContain(
           locale === "ja" ? "別のペルソナ" : "different persona",
         );
