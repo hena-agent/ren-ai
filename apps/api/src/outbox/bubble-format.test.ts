@@ -21,6 +21,7 @@ test.each(["", " \t\r\n", "가".repeat(121), "😀".repeat(121), "one\n\ntwo", "
         expect(result).toContain("1–120 Unicode characters and no blank lines");
         expect(result).toContain("Nothing was sent");
         expect(result).toContain("call send({ text }) sequentially");
+        expect(result).not.toContain("Discard this unsent draft");
         expect(f.messages.bubbles).toEqual([]);
         expect(f.gestures.typing).toEqual([]);
         const sql = yield* SqlClient.SqlClient;
