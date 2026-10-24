@@ -23,7 +23,8 @@ export const conversationOperation = <A>(
         "code" in root && typeof root.code === "string" && /^[A-Z0-9_-]{1,80}$/.test(root.code)
           ? root.code
           : "conversation_operation_failed";
-      return Effect.logError("Conversation operation failed").pipe(
+      const log = code === "ADJUSTMENT_REVIEW_CONFLICT" ? Effect.logWarning : Effect.logError;
+      return log("Conversation operation failed").pipe(
         Effect.annotateLogs({
           operation,
           sessionID,

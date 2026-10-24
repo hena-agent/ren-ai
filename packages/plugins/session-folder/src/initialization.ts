@@ -5,6 +5,8 @@ import { Schema } from "effect";
 import { parseDocument } from "yaml";
 import type { folderSnapshot } from "./protocol.ts";
 import { readMemoryDocuments, writeRuntime } from "./memory-files.ts";
+import { writeAdjustments } from "./adjustments.ts";
+import { emptyAdjustments } from "./adjustment-model.ts";
 
 type Snapshot = typeof folderSnapshot.Type;
 const stateDocument = (snapshot: Snapshot) => {
@@ -29,6 +31,7 @@ export async function initializeDirectory(target: string, run: (stage: string) =
 }
 
 export async function initializeLife(target: string, snapshot: Snapshot) {
+  await writeAdjustments(target, snapshot.adjustments ?? emptyAdjustments());
   if (snapshot.runtime)
     return writeRuntime(target, snapshot.runtime, await readMemoryDocuments(target));
   const document = stateDocument(snapshot);

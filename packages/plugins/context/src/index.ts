@@ -1,4 +1,4 @@
-import { ToolResultPart } from "@opencode/ai";
+import { ToolResultPart, type Message } from "@opencode/ai";
 import { Plugin } from "@opencode/plugin/effect";
 import { Clock, Effect } from "effect";
 import {
@@ -14,6 +14,17 @@ import { isDiceTool } from "@ren-ai/plugin-dice";
 import { cleanContext } from "./clean.ts";
 import { personaMemory, memoryToolNames, isMemoryTool } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
+import { personaAdjustments, isAdjustmentTool } from "@ren-ai/plugin-session-folder/adjustments";
+
+const latestInput = (messages: ReadonlyArray<Message>) =>
+  messages.findLast(
+    (message) =>
+      message.role === "user" &&
+      message.id !== undefined &&
+      !message.content.some(
+        (part) => part.type === "text" && /<checked-phone(?:\s|>)/.test(part.text),
+      ),
+  )?.id;
 
 export const contextPlugin = (options: PersonaPluginOptions) =>
   Plugin.define({
@@ -46,6 +57,9 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                   ? ["end_conversation"]
                   : []),
                 ...(isDiceTool(event.tools["dice"]) ? ["dice"] : []),
+                ...(isAdjustmentTool(event.tools["review_adjustments"])
+                  ? ["review_adjustments"]
+                  : []),
                 ...memoryToolNames.filter((name) => isMemoryTool(name, event.tools[name])),
               ]),
             );
@@ -54,6 +68,17 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                 personaMemory(ctx.location.directory, event.sessionID).context(),
               );
               event.system.push({ type: "text", text: memory });
+              const latestMessageID = latestInput(event.messages);
+              const adjustments = yield* conversationOperation(
+                "adjustments.context",
+                event.sessionID,
+                () =>
+                  personaAdjustments(ctx.location.directory, event.sessionID).context(
+                    latestMessageID,
+                    now,
+                  ),
+              );
+              event.system.push({ type: "text", text: adjustments });
             }
             if (snapshot) {
               if (snapshot.startingRelationship)
