@@ -95,6 +95,20 @@ test("targeted history uses indexed GUID and Handle cursors before loading a bou
       10000,
     ]);
     expect(history.recent("chosen", 10001, { limit: 1 })).toEqual([]);
+    expect(
+      history
+        .recent("chosen", 0, { before: 100, until: 90, reverse: true, limit: 2 })
+        .map((row) => row.id),
+    ).toEqual([88, 86]);
+    const olderPlan = JSON.stringify(
+      db
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT * FROM message WHERE handle = ? AND created_at >= ? AND id < ? AND created_at < ? ORDER BY id DESC LIMIT ?",
+        )
+        .all("chosen", 0, 100, 90, 51),
+    );
+    expect(olderPlan).toContain("message_handle");
+    expect(olderPlan).not.toContain("SCAN message");
     const guidPlan = JSON.stringify(
       db
         .prepare(

@@ -24,6 +24,26 @@ back navigation and sharing. Results include a filtered count and previous/next
 navigation. Out-of-range pages show the last available page. D1 applies filtering,
 ordering and pagination before loading documents and the selected personas' photos.
 
+## Conversation history
+
+Open **대화 상태** (`/conversations`), then a user's conversation detail to read
+the actual incoming and outgoing messages. The chat shows message bodies, KST
+timestamps, delivery/read/failure status, attachment indicators, replies and
+reactions. Each page contains up to 50 messages in chronological order; use
+**이전 대화 보기** for an older page or **최신 내역 새로고침** for the latest page.
+
+Admin reads the Mac messaging ledger through the authenticated API-App
+`GET /operator/messages?id=<conversation-id>&before=<message-row-id>` endpoint.
+The read does not start a persona, synchronize the Catalog or prompt OpenCode.
+Conversation boundaries and application-owned send identities exclude other
+relationships' messages. Attachment paths are not exposed to the browser.
+Attachments are indicated, not downloaded or displayed inline. The ledger reflects
+the current text after edits or unsends, not an immutable revision audit trail.
+
+Deploy the Mac gateway's `history` RPC together with API-App and Admin. A Mac
+without that RPC produces a visible load error and retry link rather than an
+empty conversation. Both the operator HTTP response and Admin page are uncached.
+
 ## Local development
 
 `GET /health` reports service `admin`, the full source revision embedded in the

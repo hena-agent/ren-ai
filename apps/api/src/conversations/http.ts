@@ -7,6 +7,29 @@ import type { SqlClient } from "effect/unstable/sql";
 import { operatorEnding } from "./operator-ending.ts";
 import { RecoveryConflict } from "./recover.ts";
 import type { usageQueries } from "../usage/query.ts";
+import { conversationMessages } from "./messages.ts";
+
+export const conversationMessagesRequest = (
+  request: Request,
+  messages: Parameters<typeof conversationMessages>[0],
+  run: <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => Promise<A>,
+) =>
+  conversationRequest(request, async () => {
+    if (request.method !== "GET") return new Response(null, { status: 405 });
+    const url = new URL(request.url);
+    const id = Number(url.searchParams.get("id"));
+    const before = url.searchParams.has("before")
+      ? Number(url.searchParams.get("before"))
+      : undefined;
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0 ||
+      (before !== undefined && (!Number.isSafeInteger(before) || before <= 0))
+    )
+      return Response.json({ error: "invalid_query" }, { status: 400 });
+    const result = await run(conversationMessages(messages, id, before));
+    return Response.json(result ?? { error: "not_found" }, { status: result ? 200 : 404 });
+  });
 
 /** Shared diagnostic boundary for DB-only and executor-backed operator actions. */
 export async function conversationRequest(

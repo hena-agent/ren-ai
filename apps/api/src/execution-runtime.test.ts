@@ -139,6 +139,22 @@ test("operator conversation status authenticates before boot and reads actual ex
   }
 });
 
+test("operator message history authenticates and reads without booting a persona", async () => {
+  const runtime = await open();
+  const url = "https://app/operator/messages?id=999";
+  try {
+    expect((await runtime.fetch(new Request(url))).status).toBe(401);
+    const response = await runtime.fetch(
+      new Request(url, { headers: { authorization: "Bearer management-secret" } }),
+    );
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(control.events).toEqual([]);
+  } finally {
+    await runtime.close();
+  }
+});
+
 const operatorConversationRequest = () =>
   new Request("https://app/operator/conversations?id=1", {
     headers: { authorization: "Bearer management-secret" },

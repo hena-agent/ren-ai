@@ -56,6 +56,19 @@ test("the public messaging API authorizes a send before touching Messages", asyn
           expect(yield* remote.recent("+821012345678", 0, { reverse: true, limit: 1 })).toEqual([
             incoming,
           ]);
+          const history = yield* remote.history({ handle: incoming.handle, since: 0, until: null });
+          expect(history.map((row) => [row.text, row.status?.state ?? null])).toEqual([
+            ["reply", null],
+            ["hello", "sent"],
+          ]);
+          expect(
+            yield* remote.history({
+              handle: incoming.handle,
+              since: 0,
+              until: 101,
+              before: incoming.id,
+            }),
+          ).toHaveLength(0);
           expect(yield* remote.gestures.typing("+821012345678", "next", 1000)).toBe(true);
           yield* remote.gestures.read("+821012345678");
           yield* remote.gestures.react("+821012345678", "love");

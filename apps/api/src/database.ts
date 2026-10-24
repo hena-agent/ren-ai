@@ -4,12 +4,13 @@ import { relationshipSchema, registrationHistorySchema } from "./conversations/s
 import { usageSchema } from "./usage/schema.ts";
 import { notificationSchema, notificationSubmissionsSchema } from "./discovery/notifications.ts";
 import { sharedAssignmentsSchema } from "./discovery/schema.ts";
+import { migrateBatches } from "./migrations.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`PRAGMA foreign_keys = ON`;
-  yield* Migrator.make({})({
-    loader: Migrator.fromRecord({
+  yield* migrateBatches(
+    Migrator.fromRecord({
       "001_conversations": Effect.gen(function* () {
         yield* sql`CREATE TABLE user (
           id INTEGER PRIMARY KEY,
@@ -302,6 +303,8 @@ export const migrate = Effect.gen(function* () {
         }
       }),
       "049_notification_submissions": notificationSubmissionsSchema,
+      "050_message_history_sends": sql`CREATE INDEX send_guid ON send(guid)`,
+      "051_message_history_conversations": sql`CREATE INDEX conversation_user_history ON conversation(user_id, id, started_at)`,
     }),
-  });
+  );
 });

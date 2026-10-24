@@ -1,6 +1,6 @@
 import { Effect, Schema, Scope, Stream } from "effect";
 import { rpcClient } from "@ren-ai/transport/client";
-import { messagingApi, tapback as tapbackSchema } from "./protocol.ts";
+import { messagingApi, historyQuery, tapback as tapbackSchema } from "./protocol.ts";
 import type { IncomingMessage, Messages } from "../messages/messages.ts";
 import { selectRecent } from "../messages/messages.ts";
 
@@ -26,6 +26,13 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
     const probe = () => request(client.probe());
     return {
       probe,
+      history: (query: typeof historyQuery.Type) =>
+        request(
+          client.history(query).pipe(
+            unavailable("Message history"),
+            Effect.map((result) => result.entries),
+          ),
+        ),
       availability: (handle: string) =>
         request(client.availability({ handle }).pipe(unavailable("Availability"))),
       notify: (handle: string, text: string) =>
