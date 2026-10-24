@@ -207,9 +207,9 @@ test.each(["sent", "uncertain"] as const)(
               const offline = await executionState(runtime, "/__fixture/alarm");
               // Messaging gets its own 20-second recheck while startup backs off.
               expect(offline.alarm).toBeGreaterThan(Date.now() + 15_000);
-              expect((await runtime.dispatchFetch("https://app/discovery/personas")).status).toBe(
-                200,
-              );
+              expect(
+                (await runtime.dispatchFetch("https://app/discovery/personas?locale=ko")).status,
+              ).toBe(200);
               available = true;
               await executionState(runtime, "/__fixture/due");
               await executionState(runtime, "/__fixture/alarm");

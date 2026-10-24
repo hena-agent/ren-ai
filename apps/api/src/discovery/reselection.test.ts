@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { Context, Effect } from "effect";
+import { Context, Effect, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { expect, test, vi } from "vitest";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { discoveryNotice, type DiscoveryRequest } from "@ren-ai/onboarding";
+import { BrowsePage, discoveryNotice, type DiscoveryRequest } from "@ren-ai/onboarding";
 import type { Persona } from "@ren-ai/personas";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
 import { prepareMessaging } from "../application-tools.ts";
@@ -247,9 +247,13 @@ test.each(["persona", "operator"])(
             (yield* submit({ reselectionToken: token, likedPersonaIDs: ["jiwoo"] })).status,
           ).toBe(400);
           const catalog = yield* Effect.promise(() =>
-            web.handler(new Request("https://api.test/discovery/personas"), verified),
+            web.handler(new Request("https://api.test/discovery/personas?locale=ko"), verified),
           );
-          expect(yield* Effect.promise(() => catalog.json())).toEqual(f.profiles);
+          const page = yield* Effect.promise(async () =>
+            Schema.decodeUnknownSync(BrowsePage)(await catalog.json()),
+          );
+          expect(page.people).toEqual(expect.arrayContaining(f.profiles));
+          expect(page.nextCursor).toBeNull();
           const latestToken = new URL(fake.bubbles.at(-1)!.text.split("\n").at(-1)!).hash.slice(
             "#reselect=".length,
           );
@@ -258,14 +262,17 @@ test.each(["persona", "operator"])(
               new Request("https://api.test/discovery/reselection/personas", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reselectionToken: latestToken }),
+                body: JSON.stringify({ locale: "ko", reselectionToken: latestToken }),
               }),
               verified,
             ),
           );
           expect(privateCatalog.status).toBe(200);
           expect(privateCatalog.headers.get("Cache-Control")).toBe("no-store");
-          expect(yield* Effect.promise(() => privateCatalog.json())).toEqual([f.profiles[2]]);
+          expect(yield* Effect.promise(() => privateCatalog.json())).toEqual({
+            people: [f.profiles[2]],
+            nextCursor: null,
+          });
           expect(
             (yield* submit({ reselectionToken: latestToken, likedPersonaIDs: ["jiwoo"] })).status,
           ).toBe(200);
