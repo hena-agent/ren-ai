@@ -400,18 +400,20 @@ A deadline does not prove that a mutation failed before submission. Timed-out se
 
 ## Event-driven execution release (ADR-0019)
 
-The Worker and application plugins must be released together: streaming `wait`, `status` and `sends` RPCs have been replaced by local waiting and a combined finite `context` response. The context request carries the actual model-visible message IDs. Terminal execution notifications use `observe`.
+When changing the Worker/plugin RPC contract, release matching Worker and application plugins together: streaming `wait`, `status` and `sends` RPCs were replaced by local waiting and a combined finite `context` response. The context request carries the actual model-visible message IDs. Terminal execution notifications use `observe`.
 
-`send` takes `messages: [{ text: "first bubble" }, { text: "next bubble", delaySeconds: 2 }]`,
-not a top-level `text` or an array of strings. The AI writes this array; each
-nonblank `text` is a separate iMessage, paced and recorded individually. Optional
-`delaySeconds` (0–30) sets a minimum pause before that bubble, including normal
-typing time rather than adding another wait. Omission uses normal typing.
-The persona chooses the boundaries and pauses; new input, an unavailable Conversation or an uncertain send stops
-the remaining bubbles. Replaying an already recorded call reports individual
-outcomes without resending or automatically continuing its remainder. Late
-confirmations identify their bubble in the model context. Release this contract
-with the matching Worker and plugins using the same planned pause below.
+`send` keeps the installed plugin's `text` input: one call sends one iMessage
+bubble. The Worker rejects empty text, more than 120 Unicode code points, or blank
+lines before typing or recording a send. It returns a corrective tool result so
+the persona rewrites only the rejected text into separate, sequential `send`
+calls. Ordinary typing paces each bubble; the persona can use the existing `wait`
+tool for additional pauses. No array payload or per-bubble delay field is used.
+The server-side bubble policy can be deployed with the existing text-based
+plugins, without replacing their bundle or restarting OpenCode. This also
+restores the API contract used by plugins installed before PR #149. Ground rules
+are refreshed through the existing Catalog synchronization path. Verify two
+separate sends, a rejected long message and a corrected retry with a test Handle;
+do not resend any earlier successful or uncertain messages.
 
 1. Stage the tested Worker and fresh plugin bundles using the session-folder installation procedure above. Preserve the existing plugin volume and export state during the planned pause. api-msg's CI artifact contains its observer; its protected `APPLICATION_API_URL` defaults to `https://api.renai.im` and uses the existing `TOKEN_MANAGEMENT`. Set it explicitly for staging/local operation. Its private environment is not changed by the automatic updater.
 2. Put the application in `BOOTSTRAP_ONLY=true`, interrupt/drain active OpenCode execution, and record uncertain sends. Keep Messages receiving. Install the fresh plugin location and recreate OpenCode with that location; retain the writable persona/Sandbox volumes and current State/Memory.

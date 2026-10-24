@@ -9,29 +9,10 @@ import { SqlClient } from "effect/unstable/sql";
 
 test.each([
   ["send", { sessionID: "session", callID: "send-call" }],
-  ["send", { sessionID: 1, messages: [{ text: "text" }], callID: "send-call" }],
-  ["send", { sessionID: "session", messages: [{ text: "text" }], callID: 1 }],
-  ["send", { sessionID: "session", messages: [], callID: "send-call" }],
-  ["send", { sessionID: "session", messages: [{ text: " " }], callID: "send-call" }],
-  ["send", { sessionID: "session", messages: [{ text: "valid" }, 1], callID: "send-call" }],
-  ["send", { sessionID: "session", messages: ["obsolete string"], callID: "send-call" }],
-  [
-    "send",
-    {
-      sessionID: "session",
-      messages: [{ text: "valid" }, { text: "second", delaySeconds: -1 }],
-      callID: "send-call",
-    },
-  ],
-  [
-    "send",
-    { sessionID: "session", messages: [{ text: "valid", delaySeconds: 31 }], callID: "send-call" },
-  ],
-  [
-    "send",
-    { sessionID: "session", messages: [{ text: "valid", delaySeconds: "1" }], callID: "send-call" },
-  ],
-  ["send", { sessionID: "session", text: "obsolete input", callID: "send-call" }],
+  ["send", { sessionID: 1, text: "text", callID: "send-call" }],
+  ["send", { sessionID: "session", text: "text", callID: 1 }],
+  ["send", { sessionID: "session", text: 1, callID: "send-call" }],
+  ["send", { sessionID: "session", messages: [{ text: "obsolete array" }], callID: "send-call" }],
   ["context", { sessionID: 1 }],
   ["observe", { sessionID: 1 }],
   ["react", { sessionID: "session", tapback: "like" }],

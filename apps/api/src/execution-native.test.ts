@@ -63,7 +63,7 @@ test.each(["sent", "uncertain"] as const)(
               if (!greeted) {
                 greeted = true;
                 return TestLLM.tool("native-greeting", "send", {
-                  messages: [{ text: "안녕, 실제 네이티브 인사야 🙂" }],
+                  text: "안녕, 실제 네이티브 인사야 🙂",
                 });
               }
               return TestLLM.text("done", "answer");

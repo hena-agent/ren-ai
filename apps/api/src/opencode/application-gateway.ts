@@ -46,8 +46,8 @@ export const applicationGateway = (
         Effect.mapError(String),
       ),
     catalog: () => Effect.succeed([...tools.personas.values()]),
-    send: ({ sessionID, messages, callID }) =>
-      tools.send(sessionID, messages, callID).pipe(action, Effect.mapError(String)),
+    send: ({ sessionID, text, callID }) =>
+      tools.send(sessionID, text, callID).pipe(action, Effect.mapError(String)),
     endConversation: ({ sessionID, farewell, callID }) =>
       tools.endConversation(sessionID, farewell, callID).pipe(action, Effect.mapError(String)),
     read: ({ sessionID }) => tools.read(sessionID).pipe(action, Effect.mapError(String)),
