@@ -188,6 +188,7 @@
       "name": "@ren-ai/onboarding",
       "version": "0.0.0",
       "dependencies": {
+        "@ren-ai/imsg": "workspace:*",
         "@ren-ai/personas": "workspace:*",
         "effect": "4.0.0-rc.112",
         "libphonenumber-js": "1.13.15",

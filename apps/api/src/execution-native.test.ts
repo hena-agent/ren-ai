@@ -5,7 +5,12 @@ import { NodeServices } from "@effect/platform-node";
 import { TestLLM } from "@opencode/ai/testing";
 import { Effect, Schema } from "effect";
 import { expect, test } from "vitest";
-import { discoveryNotice, ContactSelection } from "@ren-ai/onboarding";
+import {
+  discoveryNotice,
+  ContactSelection,
+  ConversationList,
+  ConversationMessages,
+} from "@ren-ai/onboarding";
 import {
   fakeGestures,
   fakeMessages,
@@ -228,6 +233,27 @@ test.each(["sent", "uncertain"] as const)(
               const state = await executionState(runtime);
               expect(creates).toEqual([state.conversations[0]!.session_id]);
               expect(state.sends).toEqual([{ state: outcome, tool_call_id: "native-greeting" }]);
+              const headers = { authorization: "Bearer management-secret" };
+              const conversations = Schema.decodeUnknownSync(ConversationList)(
+                await (
+                  await runtime.dispatchFetch("https://app/management/conversations", { headers })
+                ).json(),
+              );
+              const historyUrl = `https://app/operator/messages?id=${conversations.entries[0]!.id}`;
+              expect((await runtime.dispatchFetch(historyUrl)).status).toBe(401);
+              const historyResponse = await runtime.dispatchFetch(historyUrl, { headers });
+              expect(historyResponse.status).toBe(200);
+              const history = Schema.decodeUnknownSync(ConversationMessages)(
+                await historyResponse.json(),
+              );
+              expect(history.entries).toMatchObject([
+                {
+                  text: "안녕, 실제 네이티브 인사야 🙂",
+                  fromMe: true,
+                  status: { state: outcome === "sent" ? "sent" : "pending" },
+                },
+              ]);
+              expect(history.nextBefore).toBeNull();
               // The real Cloudflare SQLite limit is 100 bindings, unlike Node SQLite.
               for (const count of [0, 99, 100, 205]) {
                 const context = await Effect.runPromise(

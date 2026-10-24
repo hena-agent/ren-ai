@@ -18,6 +18,7 @@ import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 import { conversationLanguages } from "./discovery/conversation-languages.ts";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { runtimeStatus, runtimeStatusRequest } from "./conversations/runtime-status.ts";
+import { conversationMessagesRequest } from "./conversations/http.ts";
 import { prepareMessaging } from "./application-tools.ts";
 import type { Persona } from "@ren-ai/personas";
 import { cachedCatalog } from "./personas/cached-catalog.ts";
@@ -275,6 +276,8 @@ export async function createExecutionRuntime(
       )
         return new Response("Unauthorized", { status: 401 });
       if (url.pathname === "/operator/conversations") return (await inspect())(request);
+      if (url.pathname === "/operator/messages")
+        return conversationMessagesRequest(request, messages, run);
       if (url.pathname === "/management/catalog/refresh") {
         if (request.method !== "POST")
           return new Response(null, { status: 405, headers: { Allow: "POST" } });
