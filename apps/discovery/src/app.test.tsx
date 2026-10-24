@@ -5,6 +5,8 @@ import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { RegistrationError } from "./client.ts";
 import { choose } from "../test/choose.ts";
+import { testClient } from "../test/client.ts";
+import { fakeVerification } from "../test/turnstile.ts";
 beforeEach(() => localStorage.setItem("ren-ai.discovery.image-style", "photo"));
 
 afterEach(() => {
@@ -45,7 +47,7 @@ test.each([undefined, "harin"])(
     const profiles = vi
       .fn<DiscoveryClient["profiles"]>()
       .mockResolvedValueOnce(people)
-      .mockResolvedValueOnce(people.slice(1));
+      .mockResolvedValue(people.slice(1));
     let verified: (token: string) => void = vi.fn<(token: string) => void>();
     window.turnstile = {
       render: (_container, options) => {
@@ -55,7 +57,7 @@ test.each([undefined, "harin"])(
       remove: () => {},
     };
     window.history.replaceState(null, "", personaId ? `/personas/${personaId}` : "/explore");
-    render(<App client={{ profiles, join }} {...(personaId && { personaId })} />);
+    render(<App client={testClient({ profiles, join })} {...(personaId && { personaId })} />);
     await openContact();
     fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
       target: { value: "01012345678" },
@@ -70,7 +72,7 @@ test.each([undefined, "harin"])(
     await act(async () =>
       fireEvent.click(screen.getByRole("button", { name: "최신 목록에서 다시 선택" })),
     );
-    expect(profiles).toHaveBeenCalledTimes(2);
+    expect(profiles).toHaveBeenCalledTimes(personaId ? 3 : 2);
     expect(window.location.pathname).toBe("/explore");
     expect(screen.getByRole("heading", { name: "지우" })).toBeTruthy();
     choose(true);
@@ -92,15 +94,8 @@ test.each([undefined, "harin"])(
 
 test("a visitor likes a profile, enters a handle and consent, and really joins the waitlist", async () => {
   const join = vi.fn<DiscoveryClient["join"]>().mockResolvedValue({ status: "waiting" });
-  const client: DiscoveryClient = { profiles: async () => people, join };
-  let verified: (token: string) => void = vi.fn<(token: string) => void>();
-  window.turnstile = {
-    render: (_, options) => {
-      verified = options.callback;
-      return "verified";
-    },
-    remove: () => {},
-  };
+  const client = testClient({ profiles: async () => people, join });
+  const verified = fakeVerification();
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
   expect(screen.getByRole("button", { name: /연락받기/ }).hasAttribute("disabled")).toBe(true);
@@ -134,18 +129,11 @@ test("a visitor likes a profile, enters a handle and consent, and really joins t
 });
 
 test("an existing user is directed to the assigned conversation instead of a new waiting promise", async () => {
-  const client: DiscoveryClient = {
+  const client = testClient({
     profiles: async () => people,
     join: async () => ({ status: "active" }),
-  };
-  let verified: (token: string) => void = vi.fn<(token: string) => void>();
-  window.turnstile = {
-    render: (_, options) => {
-      verified = options.callback;
-      return "active-widget";
-    },
-    remove: () => {},
-  };
+  });
+  const verified = fakeVerification();
   render(<App client={client} />);
   await openContact();
   fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {

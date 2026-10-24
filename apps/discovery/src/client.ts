@@ -4,8 +4,9 @@ import {
   DiscoveryFailure,
   DiscoveryNotices,
   PublicPersona,
+  BrowsePage,
 } from "@ren-ai/onboarding";
-import type { DiscoveryRequest } from "@ren-ai/onboarding";
+import type { BrowseQuery, DiscoveryRequest } from "@ren-ai/onboarding";
 
 declare global {
   interface ImportMetaEnv {
@@ -17,7 +18,16 @@ function path(route: string) {
 }
 
 export type DiscoveryClient = {
-  profiles: (signal: AbortSignal, reselectionToken?: string) => Promise<readonly PublicPersona[]>;
+  profiles: (
+    signal: AbortSignal,
+    reselectionToken: string | undefined,
+    ids: readonly string[],
+  ) => Promise<readonly PublicPersona[]>;
+  browse: (
+    query: BrowseQuery,
+    signal: AbortSignal,
+    reselectionToken?: string,
+  ) => Promise<BrowsePage>;
   join: (request: DiscoveryRequest) => Promise<DiscoveryAnswer>;
 };
 export class RegistrationError extends Error {
@@ -29,6 +39,7 @@ export class RegistrationError extends Error {
     super("Registration unavailable");
   }
 }
+export class BrowseExpiredError extends Error {}
 
 async function registrationError(response: Response) {
   const code = Option.getOrElse(
@@ -52,18 +63,44 @@ export async function loadDiscoveryNotices() {
 }
 
 export const discoveryClient: DiscoveryClient = {
-  profiles: async (signal, reselectionToken) => {
+  browse: async (query, signal, reselectionToken) => {
     const response = await (reselectionToken === undefined
-      ? fetch(path("/discovery/personas"), { signal })
+      ? fetch(path(`/discovery/personas?${new URLSearchParams(query)}`), {
+          signal,
+          cache: "no-store",
+        })
       : fetch(path("/discovery/reselection/personas"), {
           method: "POST",
           headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-          body: JSON.stringify({ reselectionToken }),
+          body: JSON.stringify({ ...query, reselectionToken }),
           signal,
           cache: "no-store",
         }));
-    if (!response.ok) throw new Error("Profiles unavailable");
-    return Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await response.json());
+    if (!response.ok) {
+      const error = await registrationError(response);
+      if (response.status === 400 && query.cursor && error.code === "personas")
+        throw new BrowseExpiredError("Browse expired");
+      throw new Error("Profiles unavailable");
+    }
+    return Schema.decodeUnknownSync(BrowsePage)(await response.json());
+  },
+  profiles: async (signal, reselectionToken, ids) => {
+    const people: PublicPersona[] = [];
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const response = await fetch(path("/discovery/profiles"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: ids.slice(offset, offset + 100),
+          ...(reselectionToken !== undefined && { reselectionToken }),
+        }),
+        signal,
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Profiles unavailable");
+      people.push(...Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await response.json()));
+    }
+    return people;
   },
   join: async (request) => {
     const response = await fetch(path("/discovery/waitlist"), {

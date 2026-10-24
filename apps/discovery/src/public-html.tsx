@@ -1,6 +1,5 @@
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
-import type { PublicPersona } from "@ren-ai/onboarding";
-import { withImageStyle } from "./image-style.ts";
+import type { PublicPersona, PersonaLink } from "@ren-ai/onboarding";
 import { LocaleProvider } from "./locale.tsx";
 import { App } from "./app.tsx";
 import { Home } from "./home.tsx";
@@ -124,14 +123,13 @@ export function publicResponse(
   });
 }
 
-export function sitemap(people: readonly PublicPersona[]) {
+export function sitemap(people: readonly (typeof PersonaLink.Type)[]) {
   const entries = people.map((persona) => {
-    const image = withImageStyle(persona, "anime").imageUrl;
+    const image = persona.imageUrl;
     return `<url><loc>${publicOrigin}${personaPath(persona.id)}</loc>${image ? `<image:image><image:loc>${escapeXml(new URL(image, "https://api.renai.im").href)}</image:loc></image:image>` : ""}</url>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"><url><loc>${publicOrigin}/</loc></url><url><loc>${publicOrigin}/explore</loc></url>${entries.join("")}</urlset>`;
 }
-
 function escapeXml(value: string) {
   return value
     .replaceAll("&", "&amp;")

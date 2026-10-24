@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { PublicPersona } from "@ren-ai/onboarding";
+import { PublicPersona, PersonaLink } from "@ren-ai/onboarding";
 import { healthResponse } from "@ren-ai/transport/health";
 import { publicResponse, sitemap } from "./public-html.tsx";
 import { publicOrigin, publicRoute, previewRoute } from "./public-routing.ts";
@@ -11,6 +11,23 @@ import type { PreviewCache, PreviewEnv } from "./preview-image.ts";
 
 export interface DiscoveryEnv extends PreviewEnv {
   DISCOVERY_API_URL: string;
+}
+function catalogRequest(
+  pathname: string,
+  id: string | undefined,
+  base: string,
+  requestId: string,
+): [URL, RequestInit] {
+  const links = pathname === "/sitemap.xml";
+  return [
+    new URL(links ? "/discovery/persona-links" : "/discovery/profiles", base),
+    {
+      ...(!links && { method: "POST", body: JSON.stringify({ ids: id ? [id] : [] }) }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+      headers: { "X-Request-ID": requestId, "Content-Type": "application/json" },
+    },
+  ];
 }
 
 const failureCodes: Readonly<Record<string, string>> = {
@@ -103,15 +120,21 @@ export function discoveryServer(
       let people: readonly PublicPersona[] = [];
       if (url.pathname !== "/" && url.pathname !== "/explore") {
         stage = "catalog.read";
-        const upstream = await fetcher(new URL("/discovery/personas", env.DISCOVERY_API_URL), {
-          cache: "no-store",
-          signal: AbortSignal.timeout(8_000),
-          headers: { "X-Request-ID": requestId },
-        });
+        const upstream = await fetcher(
+          ...catalogRequest(url.pathname, route.id, env.DISCOVERY_API_URL, requestId),
+        );
         upstreamStatus = upstream.status;
         if (!upstream.ok) throw new Error("Public Catalog request failed");
         stage = "catalog.decode";
         // Decoding strips private or future fields before HTML, bootstrap or metadata can see them.
+        if (url.pathname === "/sitemap.xml") {
+          const links = Schema.decodeUnknownSync(Schema.Array(PersonaLink))(await upstream.json());
+          return finish(
+            new Response(sitemap(links), {
+              headers: { "Content-Type": "application/xml; charset=utf-8" },
+            }),
+          );
+        }
         people = Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await upstream.json());
         catalogReady = true;
       }
@@ -124,12 +147,6 @@ export function discoveryServer(
           }),
         );
       }
-      if (url.pathname === "/sitemap.xml")
-        return finish(
-          new Response(sitemap(people), {
-            headers: { "Content-Type": "application/xml; charset=utf-8" },
-          }),
-        );
       const persona = people.find((person) => person.id === route.id);
       if (imageRoute) {
         stage = "image.render";

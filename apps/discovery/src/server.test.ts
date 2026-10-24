@@ -58,9 +58,16 @@ async function fixture() {
   const photo = await readFile(new URL("../public/landing/dohee-anime.webp", import.meta.url));
   const mark = await readFile(new URL("../public/og-watermark-v2.png", import.meta.url));
   const preview = previewFixture(photo);
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async () => Response.json(publicPersonas));
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) =>
+    Response.json(
+      new URL(input instanceof Request ? input.url : input).pathname === "/discovery/persona-links"
+        ? publicPersonas.map((persona) => ({
+            id: persona.id,
+            imageUrl: persona.portraits?.anime ?? persona.imageUrl,
+          }))
+        : publicPersonas,
+    ),
+  );
   const assets = vi
     .fn<(request: Request) => Promise<Response>>()
     .mockImplementation(async (request) =>
@@ -133,10 +140,13 @@ test("a direct profile request includes readable public HTML, canonical SEO, sty
   expect(bootstrap).not.toContain("<");
   expect(readPublicPeople(bootstrap)).toEqual([{ ...publicPersonas[0], name }, publicPersonas[1]]);
   expect(f.fetcher).toHaveBeenCalledWith(
-    new URL("https://api.example/discovery/personas"),
+    new URL("https://api.example/discovery/profiles"),
     expect.objectContaining({
       cache: "no-store",
-      headers: { "X-Request-ID": response.headers.get("x-request-id") },
+      headers: {
+        "X-Request-ID": response.headers.get("x-request-id"),
+        "Content-Type": "application/json",
+      },
     }),
   );
   expect(f.log).toHaveBeenCalledWith(
@@ -356,7 +366,7 @@ test("owned local sources still advertise same-origin HTTPS renditions, and imag
   const html = await (await f.send("/personas/jia")).text();
   expect(html).toContain(`property="og:image:secure_url" content="${animePreview}"`);
   f.fetcher.mockResolvedValueOnce(
-    Response.json([{ ...persona, portraits: { anime: `${persona.portraits.anime}?x=1&y=2` } }]),
+    Response.json([{ id: persona.id, imageUrl: `${persona.portraits.anime}?x=1&y=2` }]),
   );
   expect(await (await f.send("/sitemap.xml")).text()).toContain("?x=1&amp;y=2");
 });

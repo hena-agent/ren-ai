@@ -20,7 +20,10 @@ const people = [2, 4].map((count, index) => ({
     photo: `https://example.net/${index}-${scene}-photo.jpg`,
   })),
 }));
-const client = { profiles: async () => people, join: async () => ({ status: "waiting" as const }) };
+const client = testClient({
+  profiles: async () => people,
+  join: async () => ({ status: "waiting" as const }),
+});
 
 test("persona-sized photo navigation preserves the image index on style changes and does not create Likes", async () => {
   localStorage.setItem("ren-ai.discovery.image-style", "anime");
@@ -144,3 +147,4 @@ test("inline details clamp changed collections and leave Tab to native navigatio
   expect(within(dialog).getByRole("img").getAttribute("src")).toBe(persona.imageUrls![1]);
   expect(close.hasAttribute("disabled")).toBe(true);
 });
+import { testClient } from "../test/client.ts";
