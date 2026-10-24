@@ -51,7 +51,7 @@ test("Discovery maps an invalid Catalog profile to storage and logs correlated s
   );
   try {
     const response = await web.handler(
-      new Request("http://localhost/discovery/personas", {
+      new Request("http://localhost/discovery/personas?locale=ko", {
         headers: { "X-Operation-ID": requestId },
       }),
       Context.make(

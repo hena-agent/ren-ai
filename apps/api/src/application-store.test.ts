@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoveryNotice } from "@ren-ai/onboarding";
+import { BrowsePage, discoveryNotice } from "@ren-ai/onboarding";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
 import { expect, test } from "vitest";
@@ -141,9 +141,9 @@ test("registry persists state on the Durable Object across recreation", async ()
       ],
       violations: [],
     });
-    const profiles = await call(runtime, "/discovery/personas");
+    const profiles = await call(runtime, "/discovery/personas?locale=ko");
     expect(profiles.status).toBe(200);
-    expect(await profiles.json()).toHaveLength(2);
+    expect(Schema.decodeUnknownSync(BrowsePage)(await profiles.json()).people).toHaveLength(2);
     expect((await register(runtime, "+821012345678")).status).toBe(200);
     expect((await register(runtime, "+821012345678")).status).toBe(200);
     expect((await register(runtime, "+821087654321")).status).toBe(200);

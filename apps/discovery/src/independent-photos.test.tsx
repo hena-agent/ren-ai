@@ -27,7 +27,12 @@ const person = {
 test("style-specific independent photos display only that style's remaining main and secondary images", async () => {
   localStorage.setItem("ren-ai.discovery.image-style", "photo");
   render(
-    <App client={{ profiles: async () => [person], join: async () => ({ status: "waiting" }) }} />,
+    <App
+      client={testClient({
+        profiles: async () => [person],
+        join: async () => ({ status: "waiting" }),
+      })}
+    />,
   );
   await screen.findByRole("heading", { name: person.name });
   expect(screen.getByRole("button", { name: "사진 3 / 3" })).toBeTruthy();
@@ -58,7 +63,10 @@ test("a style with no photos displays a clear placeholder rather than reintroduc
   localStorage.setItem("ren-ai.discovery.image-style", "photo");
   render(
     <App
-      client={{ profiles: async () => [remaining], join: async () => ({ status: "waiting" }) }}
+      client={testClient({
+        profiles: async () => [remaining],
+        join: async () => ({ status: "waiting" }),
+      })}
     />,
   );
   await screen.findByRole("heading", { name: person.name });
@@ -85,3 +93,4 @@ test("independent secondary photos still work when an older optional main field 
     person.secondaryPortraits[1]!.imageUrl,
   ]);
 });
+import { testClient } from "../test/client.ts";

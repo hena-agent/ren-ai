@@ -4,6 +4,7 @@ import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { choose, endAnimation } from "../test/choose.ts";
+import { testClient } from "../test/client.ts";
 
 beforeEach(() => {
   localStorage.setItem("ren-ai.discovery.image-style", "photo");
@@ -31,7 +32,7 @@ const profiles: readonly PublicPersona[] = [
   },
 ];
 const join = vi.fn<DiscoveryClient["join"]>();
-const client: DiscoveryClient = { profiles: async () => profiles, join };
+const client = testClient({ profiles: async () => profiles, join });
 
 async function passAllProfiles() {
   render(<App client={client} />);
@@ -82,7 +83,7 @@ test("catalog failures can be retried and an empty catalog has a clear state", a
     .fn<DiscoveryClient["profiles"]>()
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValueOnce([]);
-  render(<App client={{ profiles: load, join }} />);
+  render(<App client={testClient({ profiles: load, join })} />);
   expect(screen.getByText("만날 사람들을 불러오고 있어요.")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "프로필을 불러오지 못했어요." })).toBeNull();
   await screen.findByRole("heading", { name: "프로필을 불러오지 못했어요." });
@@ -99,7 +100,9 @@ test("catalog failures can be retried and an empty catalog has a clear state", a
 test("the real client is used by default and inherited property names are valid persona IDs", async () => {
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockResolvedValue(Response.json([{ ...profiles[0]!, id: "constructor" }]));
+    .mockResolvedValue(
+      Response.json({ people: [{ ...profiles[0]!, id: "constructor" }], nextCursor: null }),
+    );
   vi.stubGlobal("fetch", fetcher);
   render(<App />);
   await screen.findByRole("heading", { name: "미카" });
@@ -107,7 +110,7 @@ test("the real client is used by default and inherited property names are valid 
   await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
   expect(screen.queryByRole("button", { name: "다시 둘러보기" })).toBeNull();
   expect(screen.getByRole("button", { name: "연락받기" }).hasAttribute("disabled")).toBe(false);
-  expect(fetcher.mock.calls[0]?.[0]).toBe("/discovery/personas");
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/discovery/personas?locale=ko");
   expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
 });
 
@@ -152,7 +155,7 @@ test("stale catalog results and failures cannot replace a newer catalog or reviv
     vi.fn<(people: readonly PublicPersona[]) => void>();
   let reject: (reason: Error) => void = vi.fn<(reason: Error) => void>();
   let oldSignal: AbortSignal | undefined;
-  const slow: DiscoveryClient = {
+  const slow = testClient({
     profiles: (signal) => {
       oldSignal = signal;
       return new Promise((ready) => {
@@ -160,14 +163,15 @@ test("stale catalog results and failures cannot replace a newer catalog or reviv
       });
     },
     join,
-  };
+  });
   const view = render(<App client={slow} />);
+  await act(async () => {});
   view.rerender(<App client={client} />);
   await screen.findByRole("heading", { name: "미카" });
   expect(oldSignal?.aborted).toBe(true);
   await act(async () => resolve([]));
   expect(screen.getByRole("heading", { name: "미카" })).toBeTruthy();
-  const failing: DiscoveryClient = {
+  const failing = testClient({
     profiles: (signal) => {
       oldSignal = signal;
       return new Promise((_, fail) => {
@@ -175,8 +179,9 @@ test("stale catalog results and failures cannot replace a newer catalog or reviv
       });
     },
     join,
-  };
+  });
   view.rerender(<App client={failing} />);
+  await act(async () => {});
   view.rerender(<App client={client} />);
   await act(async () => reject(new Error("stale")));
   expect(screen.queryByRole("heading", { name: "프로필을 불러오지 못했어요." })).toBeNull();

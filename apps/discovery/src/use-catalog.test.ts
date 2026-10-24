@@ -7,14 +7,20 @@ import type { DiscoveryClient } from "./client.ts";
 afterEach(cleanup);
 const original = [{ id: "original", name: "Original", bio: "A public profile", imageUrl: "" }];
 const latest = [{ ...original[0]!, id: "latest" }];
+const browsingClient = (profiles: DiscoveryClient["profiles"]): DiscoveryClient => ({
+  profiles,
+  browse: async () => ({ people: original, nextCursor: null }),
+  join: async () => ({ status: "waiting" }),
+});
 
 test("refresh retains the ready catalog on failure and forwards the private listing token", async () => {
   const profiles = vi
     .fn<DiscoveryClient["profiles"]>()
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValueOnce(latest);
-  const client: DiscoveryClient = { profiles, join: async () => ({ status: "waiting" }) };
+  const client = browsingClient(profiles);
   const view = renderHook(() => useCatalog(client, original, "private-token"));
+  await act(async () => {});
   await act(async () => {
     await expect(view.result.current.refresh()).rejects.toThrow("offline");
   });
@@ -39,8 +45,9 @@ test("overlapping refreshes cannot overwrite the latest catalog with an aborted 
         }),
     )
     .mockResolvedValueOnce(latest);
-  const client: DiscoveryClient = { profiles, join: async () => ({ status: "waiting" }) };
+  const client = browsingClient(profiles);
   const { result } = renderHook(() => useCatalog(client, original));
+  await act(async () => {});
   let first: Promise<void>;
   await act(async () => {
     first = result.current.refresh();

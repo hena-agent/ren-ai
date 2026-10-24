@@ -2,13 +2,9 @@ import { Clock, Effect, Result, Schema, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { PublicPersona } from "@ren-ai/onboarding";
 import { contactCause, contactLog, type ContactLog } from "../discovery/diagnostics.ts";
+import { saveBrowseSnapshot } from "./browse-snapshot.ts";
 
-const Profiles = Schema.fromJsonString(Schema.Array(PublicPersona));
-const decode = (payload: string) =>
-  Effect.try({
-    try: () => Schema.decodeUnknownSync(Profiles)(payload),
-    catch: (cause) => new Error("Invalid public Catalog snapshot", { cause }),
-  });
+const Profiles = Schema.Array(PublicPersona);
 
 /** Only browsing can use stale public data. Registration and Selection load the source afresh. */
 export const publicCatalog = (
@@ -18,25 +14,26 @@ export const publicCatalog = (
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const lock = yield* Semaphore.make(1);
-    const read = (requestId: string) =>
+    const ensure = (requestId: string) =>
       lock.withPermit(
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const [snapshot] = yield* sql<{
-            payload: string | null;
+            present: number;
+            revision: string | null;
             loaded_at: number;
             retry_at: number;
             generation: number;
-          }>`SELECT payload, loaded_at, retry_at, generation FROM public_catalog WHERE id = 1`;
-          if (snapshot!.payload && (now < snapshot!.loaded_at + 60_000 || now < snapshot!.retry_at))
-            return yield* decode(snapshot!.payload);
+          }>`SELECT payload IS NOT NULL AS present, revision, loaded_at, retry_at, generation FROM public_catalog WHERE id = 1`;
+          if (snapshot!.present && (now < snapshot!.loaded_at + 60_000 || now < snapshot!.retry_at))
+            return snapshot!.revision!;
           const result = yield* Effect.tryPromise({
             try: load,
             catch: (cause) => new Error("Public Catalog unavailable", { cause }),
           }).pipe(
             Effect.flatMap((profiles) =>
               Effect.try({
-                try: () => Schema.encodeSync(Profiles)(profiles),
+                try: () => Schema.decodeUnknownSync(Profiles)(profiles),
                 catch: (cause) => new Error("Invalid public Catalog response", { cause }),
               }),
             ),
@@ -44,15 +41,19 @@ export const publicCatalog = (
           );
           if (Result.isSuccess(result)) {
             const loaded = yield* Clock.currentTimeMillis;
-            const saved =
-              yield* sql`UPDATE public_catalog SET payload = ${result.success}, loaded_at = ${loaded}, retry_at = 0
-        WHERE id = 1 AND generation = ${snapshot!.generation} RETURNING id`;
-            if (!saved.length)
-              return yield* Effect.fail(new Error("Public Catalog changed during refresh"));
-            return yield* decode(result.success);
+            return yield* Effect.gen(function* () {
+              const [current] = yield* sql<{
+                generation: number;
+              }>`SELECT generation FROM public_catalog WHERE id = 1`;
+              if (current!.generation !== snapshot!.generation)
+                return yield* Effect.fail(new Error("Public Catalog changed during refresh"));
+              const revision = yield* saveBrowseSnapshot(result.success, loaded);
+              yield* sql`UPDATE public_catalog SET payload = ${JSON.stringify(result.success)}, revision = ${revision}, loaded_at = ${loaded}, retry_at = 0 WHERE id = 1`;
+              return revision;
+            }).pipe(sql.withTransaction);
           }
           const checked = yield* Clock.currentTimeMillis;
-          if (!snapshot!.payload || checked >= snapshot!.loaded_at + 360_000)
+          if (!snapshot!.present || checked >= snapshot!.loaded_at + 360_000)
             return yield* Effect.fail(result.failure);
           const unchanged =
             yield* sql`UPDATE public_catalog SET retry_at = ${Math.min(checked + 10_000, snapshot!.loaded_at + 360_000)}
@@ -67,10 +68,10 @@ export const publicCatalog = (
             durationMs: checked - now,
             ...contactCause(result.failure),
           });
-          return yield* decode(snapshot!.payload);
+          return snapshot!.revision!;
         }),
       );
-    return { read };
+    return { ensure };
   });
 
 /** Fence in-flight reads as well as persisted stale data when Admin commits a change. */

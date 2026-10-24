@@ -14,7 +14,10 @@ const people = ["하린", "지우"].map((name, index) => ({
     { style: "photo" as const, imageUrl: `https://example.net/${index}-extra.jpg` },
   ],
 }));
-const client = { profiles: async () => people, join: async () => ({ status: "waiting" as const }) };
+const client = testClient({
+  profiles: async () => people,
+  join: async () => ({ status: "waiting" as const }),
+});
 const likedButton = (name: string) =>
   within(screen.getByRole("list", { name: "좋아한 사람" })).getByRole("button", {
     name: `${name} 프로필 보기`,
@@ -141,3 +144,4 @@ test("reading a liked profile during contact entry preserves the mounted form an
   expect(screen.getByLabelText("이름 (필수)")).toBe(name);
   expect(name.value).toBe("민수");
 });
+import { testClient } from "../test/client.ts";
