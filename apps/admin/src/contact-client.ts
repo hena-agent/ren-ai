@@ -3,7 +3,12 @@ import { ContactSnapshot, ContactSelection, ConversationLanguages } from "@ren-a
 import type { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
-import { ConversationList, ConversationDetail, ConversationRuntime } from "@ren-ai/onboarding";
+import {
+  ConversationList,
+  ConversationDetail,
+  ConversationRuntime,
+  ConversationMessages,
+} from "@ren-ai/onboarding";
 import type {
   ConversationQuery,
   ConversationRecovery,
@@ -14,6 +19,7 @@ export interface ConversationClient {
   list: (input: typeof ConversationQuery.Type) => Promise<typeof ConversationList.Type>;
   detail: (id: number, registrationsBefore?: string) => Promise<typeof ConversationDetail.Type>;
   runtime: (id: number) => Promise<typeof ConversationRuntime.Type>;
+  messages: (id: number, before?: number) => Promise<typeof ConversationMessages.Type>;
   recover: (input: typeof ConversationRecovery.Type) => Promise<void>;
   end: (input: typeof ConversationEnding.Type) => Promise<void>;
 }
@@ -113,6 +119,13 @@ export function managementClient(
   };
   return {
     conversations: {
+      messages: async (id, before) =>
+        conversationResponse(
+          ConversationMessages,
+          await request(
+            `/operator/messages?id=${id}${before === undefined ? "" : `&before=${before}`}`,
+          ),
+        ),
       list: async (input) => {
         const params = new URLSearchParams({ filter: input.filter, search: input.search });
         if (input.before !== undefined) params.set("before", String(input.before));

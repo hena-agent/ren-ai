@@ -5,6 +5,8 @@ import type {
   ConversationRuntime,
 } from "@ren-ai/onboarding";
 import type { ConversationEntry } from "@ren-ai/onboarding";
+import type { ConversationMessages } from "@ren-ai/onboarding";
+import { MessageHistory } from "./conversation-messages.tsx";
 
 export interface ConversationView {
   query: typeof ConversationQuery.Type;
@@ -15,6 +17,9 @@ export interface ConversationView {
   queued?: boolean;
   ended?: boolean;
   registrationsBefore?: string;
+  messages?: typeof ConversationMessages.Type;
+  messagesBefore?: number;
+  messagesError?: string;
 }
 const time = (value: number | null) =>
   value === null ? "—" : new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
@@ -133,6 +138,7 @@ function Detail({ view }: { view: ConversationView }) {
         <output>관계가 종료되었습니다. 실행 정지와 Ren AI 재선택 안내는 별도로 처리됩니다.</output>
       )}
       <Connections entries={[detail.entry]} />
+      <MessageHistory view={view} />
       {detail.entry.endedAt === null && (
         <section id="relationship-ending" aria-labelledby="end-title">
           <h2 id="end-title">관계 정리</h2>

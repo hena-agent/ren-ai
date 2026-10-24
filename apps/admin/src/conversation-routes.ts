@@ -75,6 +75,14 @@ async function loadDetail(client: ConversationClient, id: number, view: Conversa
   view.detail = await operation("conversation.detail", {}, () =>
     client.detail(id, view.registrationsBefore),
   );
+  try {
+    view.messages = await operation("conversation.messages", {}, () =>
+      client.messages(id, view.messagesBefore),
+    );
+  } catch (cause) {
+    reportFailure(cause, { stage: "conversation.messages" });
+    view.messagesError = `송수신 내역을 불러오지 못했습니다. 다시 시도해 주세요. 요청 ID: ${requestId()}`;
+  }
 }
 
 function registrationCursor(url: URL) {
@@ -85,6 +93,15 @@ function registrationCursor(url: URL) {
   } catch {
     throw new PersonaError("invalid", "등록 이력 검색 위치를 확인해 주세요.");
   }
+}
+
+function messageCursor(url: URL) {
+  const value = url.searchParams.get("messagesBefore");
+  if (value === null) return undefined;
+  const before = Number(value);
+  if (!Number.isSafeInteger(before) || before <= 0)
+    throw new PersonaError("invalid", "메시지 검색 위치를 확인해 주세요.");
+  return before;
 }
 
 export async function conversationRoutes(request: Request, client?: ConversationClient) {
@@ -106,6 +123,8 @@ export async function conversationRoutes(request: Request, client?: Conversation
       const id = Number(match[1]);
       const cursor = registrationCursor(url);
       if (cursor) view.registrationsBefore = cursor;
+      const before = messageCursor(url);
+      if (before !== undefined) view.messagesBefore = before;
       await loadDetail(client, id, view);
       view.queued = url.searchParams.has("queued");
       view.ended = url.searchParams.has("ended");
