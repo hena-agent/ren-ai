@@ -25,7 +25,6 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
           Effect.gen(function* () {
             const persona = yield* getPersona(options, event.agent, ctx.location.directory);
             if (!persona) return;
-            const now = yield* Clock.currentTimeMillis;
             const snapshot = yield* (
               options.context?.(
                 event.sessionID,
@@ -34,6 +33,7 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
             );
             const status = snapshot?.status;
             const state = status?.readAt ?? (status?.delivered ? "delivered" : "sent");
+            const now = yield* Clock.currentTimeMillis;
             const removed = cleanContext(
               event,
               phone(now, persona.timeZone, state),
