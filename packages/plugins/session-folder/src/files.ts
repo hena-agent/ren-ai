@@ -24,13 +24,20 @@ import { initializeDirectory, initializeLife, initializeRelationship } from "./i
 
 export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
-  ...["send", "read", "react", "wait", "end_conversation", "dice", ...memoryToolNames].map(
-    (action) => ({
-      action,
-      resource: "*",
-      effect: "allow" as const,
-    }),
-  ),
+  ...[
+    "send",
+    "read",
+    "react",
+    "wait",
+    "end_conversation",
+    "dice",
+    "websearch",
+    ...memoryToolNames,
+  ].map((action) => ({
+    action,
+    resource: "*",
+    effect: "allow" as const,
+  })),
 ];
 
 export const loadGroundRules = () =>
@@ -158,6 +165,7 @@ const writeAt = async (target: string, snapshot: typeof folderSnapshot.Type) => 
       "opencode.json",
       JSON.stringify({
         default_agent: snapshot.persona.id,
+        websearch: { provider: "random" },
         agents: Object.fromEntries(
           ["build", "plan", "general", "explore"].map((id) => [id, { disabled: true }]),
         ),
