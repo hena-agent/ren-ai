@@ -34,6 +34,10 @@ test("bounded history works with the new Mac and remains readable from the deplo
         expect(yield* remote.after(0)).toEqual([first, second]);
         f.transport.fetch = oldServer.handler;
         expect(yield* remote.after(0, 1)).toEqual([first, second]);
+        const failure = yield* remote
+          .history({ handle: first.handle, since: 0, until: null })
+          .pipe(Effect.flip);
+        expect(failure.message).toContain("Message history RPC unavailable");
       }),
     );
   } finally {

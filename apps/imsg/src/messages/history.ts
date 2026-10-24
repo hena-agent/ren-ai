@@ -206,6 +206,14 @@ export const openHistory = (path: string, serviceHandle: string) => {
         predicates.push("id > ?");
         values.push(query.after);
       }
+      if (query.before !== undefined) {
+        predicates.push("id < ?");
+        values.push(query.before);
+      }
+      if (query.until !== undefined) {
+        predicates.push("created_at < ?");
+        values.push(query.until);
+      }
       values.push(query.limit ?? -1);
       return all(
         `SELECT * FROM message WHERE ${predicates.join(" AND ")} ORDER BY id ${query.reverse ? "DESC" : "ASC"} LIMIT ?`,

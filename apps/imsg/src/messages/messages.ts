@@ -99,7 +99,9 @@ export const selectRecent = (
         row.handle === handle &&
         row.createdAt >= since &&
         (query.guid === undefined || row.guid === query.guid) &&
-        (query.after === undefined || row.id > query.after),
+        (query.after === undefined || row.id > query.after) &&
+        (query.before === undefined || row.id < query.before) &&
+        (query.until === undefined || row.createdAt < query.until),
     )
     .toSorted((a, b) => (query.reverse ? b.id - a.id : a.id - b.id))
     .slice(0, query.limit ?? rows.length);

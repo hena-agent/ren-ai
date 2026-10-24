@@ -16,6 +16,27 @@ export const messageGateway = (
   notifications: Notifications,
 ) => {
   const handlers = messagingApi.toLayer({
+    history: ({ handle, since, until, before }) =>
+      messageRequest("messages.history", () =>
+        messages
+          .recent(handle, since, {
+            ...(until !== null && { until }),
+            ...(before !== undefined && { before }),
+            reverse: true,
+            limit: 51,
+          })
+          .pipe(
+            Effect.flatMap((rows) =>
+              Effect.forEach(rows, (row) =>
+                Effect.map(
+                  row.fromMe ? messages.status(row.guid) : Effect.succeed(null),
+                  (status) => ({ ...transportRow(row), status }),
+                ),
+              ),
+            ),
+            Effect.map((entries) => ({ entries })),
+          ),
+      ),
     availability: ({ handle }) =>
       messageRequest("recipient.availability", (requestId) =>
         messages.availability(handle, requestId),

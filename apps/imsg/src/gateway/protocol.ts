@@ -20,6 +20,8 @@ const cursor = {
 export const recentQuery = Schema.Struct({
   guid: Schema.optionalKey(Schema.String),
   after: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
+  before: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0))),
+  until: Schema.optionalKey(Schema.Number),
   limit: Schema.optionalKey(
     Schema.Number.check(
       Schema.isInt(),
@@ -67,6 +69,16 @@ const messageStatus = Schema.Struct({
   dateRead: Schema.NullOr(Schema.Number),
 });
 
+export const historyQuery = Schema.Struct({
+  ...since,
+  until: Schema.NullOr(Schema.Number),
+  before: recentQuery.fields.before,
+});
+export const historyMessage = Schema.Struct({
+  ...incomingMessage.fields,
+  status: Schema.NullOr(messageStatus),
+});
+
 export const sendTextRpc = Rpc.make("sendText", {
   payload: { handle: Schema.String, text: Schema.String },
   success: Schema.Struct({ guid: Schema.NullOr(Schema.String) }),
@@ -74,6 +86,11 @@ export const sendTextRpc = Rpc.make("sendText", {
 });
 
 export const messagingApi = RpcGroup.make(
+  Rpc.make("history", {
+    payload: historyQuery,
+    success: Schema.Struct({ entries: Schema.Array(historyMessage), requestId: Schema.String }),
+    error: Schema.String,
+  }),
   Rpc.make("availability", {
     payload: handle,
     success: Schema.Struct({ available: Schema.Boolean, requestId: Schema.String }),
