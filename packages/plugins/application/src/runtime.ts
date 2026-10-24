@@ -10,6 +10,7 @@ import { rpcClient } from "@ren-ai/transport/client";
 import type { PersonaPluginOptions } from "./options.ts";
 import { localWait } from "./wait.ts";
 import { observationFailure, observeTurns } from "./observe.ts";
+import { resilientContext } from "./context.ts";
 
 export const inPersonaLocation = (directory: string, root: string) => {
   return (
@@ -84,7 +85,7 @@ const remoteOptions = <E>(
         api.react({ sessionID, tapback, callID }).pipe(Effect.mapError(failure)),
       handleForSession: (sessionID) => api.handle({ sessionID }).pipe(Effect.mapError(failure)),
       context: (sessionID, messageIDs) =>
-        api.context({ sessionID, messageIDs }).pipe(Effect.mapError(failure)),
+        resilientContext(api.context({ sessionID, messageIDs }), sessionID),
       health: {
         raise: (name, detail) => api.alert({ name, detail }).pipe(Effect.catch(() => Effect.void)),
       },

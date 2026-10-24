@@ -68,11 +68,21 @@ test("an incoming message reaches Docker's persona plugin and replies through th
         const alerts: string[] = [];
         let alertRequests = 0;
         let observations = 0;
+        let contextFailed = false;
         let disconnected = false;
         let applicationWeb = unavailable;
         const network: typeof fetch = async (input, init) => {
           const request = new Request(input, init);
           const hostname = new URL(request.url).hostname;
+          if (
+            hostname === "app.test" &&
+            step === 3 &&
+            !contextFailed &&
+            (await request.clone().text()).includes('"tag":"context"')
+          ) {
+            contextFailed = true;
+            return new Response("", { status: 503 });
+          }
           if (hostname === "app.test" && (await request.clone().text()).includes('"tag":"observe"'))
             observations++;
           if (hostname === "app.test" && disconnected)
@@ -180,6 +190,7 @@ test("an incoming message reaches Docker's persona plugin and replies through th
           ),
         ).toBe(true);
         expect(local.bubbles).toEqual([{ handle: "+821012345678", text: "hello from Docker" }]);
+        expect(contextFailed).toBe(true);
         expect(gestures.reads).toEqual(["+821012345678"]);
         expect(gestures.reactions).toEqual([{ handle: "+821012345678", tapback: "love" }]);
         expect(alerts[0]).toMatch(/^unexpected-tool: OpenCode offered disallowed tool:/);

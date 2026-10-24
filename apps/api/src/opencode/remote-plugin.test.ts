@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
+import { phone } from "@ren-ai/plugin-application/phone";
 import { afterEach, expect, test, vi } from "vitest";
 import { messagingFixture, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import {
@@ -27,9 +28,12 @@ const installedPlugin = installedPlugins[0]!;
 afterEach(() => vi.unstubAllEnvs());
 
 test.each([false, true])(
-  "the plugins wait locally without Cloudflare calls or catalog loading (default entries: %s)",
+  "local waits resume through an empty context response without replaying the tool (default entries: %s)",
   async (installed) => {
     const { root, personaDirectory } = await messagingFixture("plugin-wait-result-");
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+    const now = vi.spyOn(Date, "now");
     try {
       await runMessagingTest(
         Effect.gen(function* () {
@@ -47,12 +51,18 @@ test.each([false, true])(
           const fixture = yield* applicationRpcFixture;
           let catalogs = 0;
           let waitAttempts = 0;
+          let contextFailed = false;
           fixture.transport.fetch = async (request) => {
             const payload = Schema.decodeUnknownSync(
               Schema.fromJsonString(Schema.Struct({ id: Schema.Number, tag: Schema.String })),
             )(await request.clone().text());
             if (payload.tag === "catalog" && ++catalogs)
               return new Response("Starting", { status: 503 });
+            if (payload.tag === "context" && attempted && !contextFailed) {
+              contextFailed = true;
+              now.mockReturnValue(Date.now() + 120_000);
+              return new Response("");
+            }
             if (payload.tag !== "wait") return fixture.web.handler(request);
             waitAttempts++;
             throw new Error("Wait must stay local");
@@ -84,6 +94,24 @@ test.each([false, true])(
             .map((part) => part.result);
           expect(results).toHaveLength(1);
           expect(results[0]).toEqual({ type: "text", value: "paused 1s" });
+          expect(contextFailed).toBe(true);
+          const resumed = (yield* llm.requests()).at(-1)!;
+          expect(
+            resumed.messages
+              .flatMap((message) => message.content)
+              .filter((part) => part.type === "text")
+              .map((part) => part.text),
+          ).toContain(phone(Date.now(), fixture.persona.timeZone, "sent"));
+          const errors = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
+          const summaries = stdout.mock.calls.map(([chunk]) => String(chunk)).join("");
+          const requestId = errors.match(/"requestId":"([0-9a-f-]{36})"/)?.[1];
+          expect(requestId).toBeDefined();
+          expect(errors).toContain('"causeName":"RpcClientDefect"');
+          expect(errors).toContain('"stage":"context.prepare"');
+          expect(errors).not.toContain("application-secret");
+          expect(errors).not.toContain("wait, then inspect the result");
+          expect(summaries).toContain(`"requestId":"${requestId}"`);
+          expect(summaries).toContain('"outcome":"succeeded"');
           expect(waitAttempts).toBe(0);
           expect(catalogs).toBe(0);
           const beforeMismatch = (yield* llm.requests()).length;
@@ -106,6 +134,9 @@ test.each([false, true])(
         }),
       );
     } finally {
+      stderr.mockRestore();
+      stdout.mockRestore();
+      now.mockRestore();
       await rm(root, { recursive: true, force: true });
     }
   },
