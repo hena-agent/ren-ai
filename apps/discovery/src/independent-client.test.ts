@@ -25,7 +25,7 @@ test("service-owned independent main and additional photos are resolved individu
       ]),
     ),
   );
-  const people = await discoveryClient.profiles(new AbortController().signal);
+  const people = await discoveryClient.profiles(new AbortController().signal, undefined, ["nari"]);
   expect(people[0]?.portraits).toEqual({ photo: main });
   expect(people[0]?.secondaryPortraits).toEqual([{ style: "photo", imageUrl: extra }]);
   expect(people[0]).not.toHaveProperty("privatePrompt");
@@ -47,8 +47,8 @@ test("partial main styles are allowed but unsafe, missing and invalid-style inde
     Array.from({ length: 11 }, () => ({ style: "photo", imageUrl: profile.imageUrl })),
   ]) {
     fetcher.mockResolvedValueOnce(Response.json([{ ...profile, secondaryPortraits }]));
-    await expect(discoveryClient.profiles(new AbortController().signal)).rejects.toThrow(
-      /secondaryPortraits/,
-    );
+    await expect(
+      discoveryClient.profiles(new AbortController().signal, undefined, ["nari"]),
+    ).rejects.toThrow(/secondaryPortraits/);
   }
 });

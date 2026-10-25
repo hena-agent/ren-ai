@@ -13,7 +13,8 @@ async function fixture() {
   const response = (url: URL) => {
     if (url.pathname === "/health")
       return Response.json({ service: "discovery", revision, status: "ready" });
-    if (url.pathname === "/discovery/personas") return Response.json(publicPersonas);
+    if (url.pathname === "/discovery/personas")
+      return Response.json({ people: publicPersonas, nextCursor: null });
     if (url.pathname.endsWith(".jpg"))
       return new Response(jpeg, { headers: { "Content-Type": "image/jpeg" } });
     const style = url.searchParams.get("style") === "photo" ? "photo" : "anime";
@@ -48,7 +49,7 @@ test("empty public Catalogs are reported explicitly and unavailable styles do no
   f.fetcher.mockImplementation(async (input) => {
     const url = new URL(input instanceof Request ? input.url : input);
     return url.pathname === "/discovery/personas"
-      ? Response.json([publicPersonas[1]])
+      ? Response.json({ people: [publicPersonas[1]], nextCursor: null })
       : f.response(url);
   });
   expect(await verifyPreview("https://renai.im", revision, f.fetcher)).toEqual({
@@ -57,13 +58,16 @@ test("empty public Catalogs are reported explicitly and unavailable styles do no
   f.fetcher.mockImplementation(async (input) => {
     const url = new URL(input instanceof Request ? input.url : input);
     return url.pathname === "/discovery/personas"
-      ? Response.json([
-          {
-            ...publicPersonas[0],
-            portraits: { photo: publicPersonas[0]!.portraits!.photo },
-            secondaryPortraits: [],
-          },
-        ])
+      ? Response.json({
+          nextCursor: null,
+          people: [
+            {
+              ...publicPersonas[0],
+              portraits: { photo: publicPersonas[0]!.portraits!.photo },
+              secondaryPortraits: [],
+            },
+          ],
+        })
       : f.response(url);
   });
   expect(await verifyPreview("https://renai.im", revision, f.fetcher)).toEqual({

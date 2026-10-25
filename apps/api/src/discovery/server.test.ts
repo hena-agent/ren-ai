@@ -55,21 +55,21 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
           );
           yield* Effect.tryPromise(async () => {
             const base = `http://127.0.0.1:${address.port}`;
-            const response = await fetch(`${base}/discovery/personas`);
+            const response = await fetch(`${base}/discovery/personas?locale=ko`);
             expect(response.status).toBe(200);
-            expect(response.headers.get("cache-control")).toBe(
-              "public, max-age=60, stale-while-revalidate=300",
-            );
-            expect(Number(response.headers.get("age"))).toBeGreaterThanOrEqual(0);
-            expect(await response.json()).toEqual([
-              {
-                id: "hayeon",
-                name: "하연",
-                bio: "함께 요리해요.",
-                imageUrl: "https://example.net/hayeon.png",
-                profile: { introduction: "함께 요리해요.", sections: [] },
-              },
-            ]);
+            expect(response.headers.get("cache-control")).toBe("no-store");
+            expect(await response.json()).toEqual({
+              nextCursor: null,
+              people: [
+                {
+                  id: "hayeon",
+                  name: "하연",
+                  bio: "함께 요리해요.",
+                  imageUrl: "https://example.net/hayeon.png",
+                  profile: { introduction: "함께 요리해요.", sections: [] },
+                },
+              ],
+            });
             const imageUrl = (
               await store.saveImage({
                 bytes: Buffer.from("89504e470d0a1a0a", "hex"),
@@ -107,12 +107,15 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               },
               profile: { introduction: "함께 요리해요.", sections: [] },
             };
-            expect(await (await fetch(`${base}/discovery/personas`)).json()).toMatchObject([
-              { imageUrl: "https://example.net/hayeon.png" },
-            ]);
+            expect(
+              await (await fetch(`${base}/discovery/personas?locale=ko`)).json(),
+            ).toMatchObject({ people: [{ imageUrl: "https://example.net/hayeon.png" }] });
             await Effect.runPromise(invalidate);
-            const catalog = await fetch(`${base}/discovery/personas`);
-            expect(await catalog.json()).toEqual([publicProfileEntry]);
+            const catalog = await fetch(`${base}/discovery/personas?locale=ko`);
+            expect(await catalog.json()).toEqual({
+              people: [publicProfileEntry],
+              nextCursor: null,
+            });
             const extraUrl = (
               await store.saveImage({
                 bytes: Buffer.from("89504e470d0a1a0a", "hex"),
@@ -122,15 +125,18 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
             const portraitGallery = [portraits, { anime: extraUrl, photo: extraUrl }];
             await store.update({ ...(await store.get("hayeon")), portraitGallery });
             await Effect.runPromise(invalidate);
-            expect(await (await fetch(`${base}/discovery/personas`)).json()).toEqual([
-              {
-                ...publicProfileEntry,
-                secondaryPortraits: [
-                  { style: "anime", imageUrl: extraUrl },
-                  { style: "photo", imageUrl: extraUrl },
-                ],
-              },
-            ]);
+            expect(await (await fetch(`${base}/discovery/personas?locale=ko`)).json()).toEqual({
+              nextCursor: null,
+              people: [
+                {
+                  ...publicProfileEntry,
+                  secondaryPortraits: [
+                    { style: "anime", imageUrl: extraUrl },
+                    { style: "photo", imageUrl: extraUrl },
+                  ],
+                },
+              ],
+            });
             const publicProfile = "함께 요리해요.\n\n### 같이 하고 싶은 일\n- 베이킹\n- 산책";
             await store.update({
               ...(await store.get("hayeon")),
@@ -138,17 +144,19 @@ test("the discovery HTTP adapter accepts real HTTP and operator removal deletes 
               description: withPublicProfile("Private character source", publicProfile),
             });
             await Effect.runPromise(invalidate);
-            const enriched = await (await fetch(`${base}/discovery/personas`)).text();
-            expect(JSON.parse(enriched)).toMatchObject([
-              {
-                profile: {
-                  introduction: "함께 요리해요.",
-                  sections: [
-                    { type: "text", title: "같이 하고 싶은 일", body: "• 베이킹\n• 산책" },
-                  ],
+            const enriched = await (await fetch(`${base}/discovery/personas?locale=ko`)).text();
+            expect(JSON.parse(enriched)).toMatchObject({
+              people: [
+                {
+                  profile: {
+                    introduction: "함께 요리해요.",
+                    sections: [
+                      { type: "text", title: "같이 하고 싶은 일", body: "• 베이킹\n• 산책" },
+                    ],
+                  },
                 },
-              },
-            ]);
+              ],
+            });
             for (const field of [
               "descriptionVersion",
               "Private character source",

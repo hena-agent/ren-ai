@@ -62,7 +62,9 @@ test("retains the SQL context for effects, routes registry requests and closes s
   const store = await createApplicationStore(storage, config);
   expect(await store.run(Effect.succeed("same client"))).toBe("same client");
   expect(
-    await (await store.handler(new Request("https://api.test/discovery/personas"))).text(),
+    await (
+      await store.handler(new Request("https://api.test/discovery/personas?locale=ko"))
+    ).text(),
   ).toBe("discovery");
   expect(
     await (await store.handler(new Request("https://api.test/management/discovery"))).text(),

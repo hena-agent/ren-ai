@@ -5,6 +5,7 @@ import { JoinForm } from "./join-form.tsx";
 import { RegistrationError, type DiscoveryClient } from "./client.ts";
 import { LocaleProvider } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
+import { testClient } from "../test/client.ts";
 
 afterEach(() => {
   cleanup();
@@ -33,7 +34,7 @@ function setup(error: Error, locale: Locale = "ko", refresh?: () => Promise<void
     <LocaleProvider initialLocale={locale}>
       <JoinForm
         liked={[profile]}
-        client={{ join, profiles: async () => [profile] }}
+        client={testClient({ join, profiles: async () => [profile] })}
         onBack={onBack}
         onSuccess={onSuccess}
         {...(refresh && { onRefresh: refresh })}

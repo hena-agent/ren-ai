@@ -193,11 +193,15 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
   );
   expect(unrecognizedWrite.status).toBe(503);
   expect(
-    await (await app.fetch(new Request("https://api-app.example/discovery/personas"))).text(),
+    await (
+      await app.fetch(new Request("https://api-app.example/discovery/personas?locale=ko"))
+    ).text(),
   ).toBe("registry");
   expect(
     await (
-      await app.fetch(new Request("https://api-app.example/discovery/personas", { method: "HEAD" }))
+      await app.fetch(
+        new Request("https://api-app.example/discovery/personas?locale=ko", { method: "HEAD" }),
+      )
     ).text(),
   ).toBe("registry");
   expect(
@@ -252,7 +256,9 @@ test("a ready executor cannot conceal an unavailable application database", asyn
 
 test("registry remains usable with execution down; the next alarm retries execution, not SQLite", async () => {
   const app = await createCloudflareApplication(storage, executionBindings, "rules", fetcher);
-  expect((await app.fetch(new Request("https://app/discovery/personas"))).status).toBe(200);
+  expect((await app.fetch(new Request("https://app/discovery/personas?locale=ko"))).status).toBe(
+    200,
+  );
   expect(controls.runtime).not.toHaveBeenCalled();
   controls.runtime.mockImplementationOnce(() => {
     throw new Error("scope allocation failed");
@@ -385,7 +391,8 @@ test.each([200, 401])(
       );
       expect(JSON.stringify(stderr.mock.calls)).not.toContain("private-marker");
       expect(
-        (await app.fetch(new Request("https://api-app.example/discovery/personas"))).status,
+        (await app.fetch(new Request("https://api-app.example/discovery/personas?locale=ko")))
+          .status,
       ).toBe(200);
       expect(controls.runtime).not.toHaveBeenCalled();
     } finally {

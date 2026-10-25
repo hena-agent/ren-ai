@@ -107,9 +107,9 @@ test("public reads work without private secrets while management and registratio
       database: "ready",
       executor: { status: "unconfigured" },
     });
-    const profiles = await send(runtime, "/discovery/personas");
+    const profiles = await send(runtime, "/discovery/personas?locale=ko");
     expect(profiles.status).toBe(200);
-    expect(await profiles.json()).toMatchObject([{ id: "sora" }]);
+    expect(await profiles.json()).toMatchObject({ people: [{ id: "sora" }], nextCursor: null });
     expect(
       (
         await send(runtime, "/management/discovery", {
@@ -143,7 +143,7 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
     let runtime = await openWorker(persistence, true);
     const health = await send(runtime, "/health");
     expect(await health.json()).toEqual(readyApplicationHealth);
-    expect((await send(runtime, "/discovery/personas")).status).toBe(200);
+    expect((await send(runtime, "/discovery/personas?locale=ko")).status).toBe(200);
     expect(
       (
         await send(runtime, "/discovery/waitlist", {

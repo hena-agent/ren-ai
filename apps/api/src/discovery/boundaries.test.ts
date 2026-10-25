@@ -169,7 +169,9 @@ test("the public API allows the Discovery origin and rejects unrelated origins",
         try {
           for (const origin of ["https://renai.im"]) {
             const allowed = await web.handler(
-              new Request("http://localhost/discovery/personas", { headers: { Origin: origin } }),
+              new Request("http://localhost/discovery/personas?locale=ko", {
+                headers: { Origin: origin },
+              }),
               Context.make(HttpClient.HttpClient, verified),
             );
             expect(allowed.headers.get("access-control-allow-origin")).toBe(origin);
@@ -189,7 +191,7 @@ test("the public API allows the Discovery origin and rejects unrelated origins",
             expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
           }
           const denied = await web.handler(
-            new Request("http://localhost/discovery/personas", {
+            new Request("http://localhost/discovery/personas?locale=ko", {
               headers: { Origin: "https://unrelated.example" },
             }),
             Context.make(HttpClient.HttpClient, verified),
@@ -321,7 +323,7 @@ test("catalog failures and partial database writes fail without a false waiting 
       yield* Effect.tryPromise(async () => {
         try {
           const profiles = await web.handler(
-            new Request("http://localhost/discovery/personas"),
+            new Request("http://localhost/discovery/personas?locale=ko"),
             Context.make(HttpClient.HttpClient, verified),
           );
           expect(profiles.status).toBe(503);

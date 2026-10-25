@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { PublicPersona } from "@ren-ai/onboarding";
+import { BrowsePage } from "@ren-ai/onboarding";
 import { verifyHealth } from "@ren-ai/transport/health";
 import { imageSize } from "image-size";
 import { socialImage, brandSocialImage } from "./social-image.ts";
@@ -7,7 +7,7 @@ import { shareUrl } from "./public-routing.ts";
 
 async function publicProfiles(response: Response) {
   try {
-    return Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await response.json());
+    return Schema.decodeUnknownSync(BrowsePage)(await response.json()).people;
   } catch {
     throw new Error("Public Catalog preview data is invalid");
   }
@@ -21,7 +21,7 @@ export async function verifyPreview(base: string, revision: string, fetcher: typ
       headers: { "User-Agent": "Ren-AI-Preview-Check/1.0" },
     });
   await verifyHealth(await get(new URL("/health", base)), "discovery", revision);
-  const catalog = await get("https://api.renai.im/discovery/personas");
+  const catalog = await get("https://api.renai.im/discovery/personas?locale=ko");
   if (!catalog.ok) throw new Error("Public Catalog preview probe failed");
   const people = await publicProfiles(catalog);
   const verified = [];
