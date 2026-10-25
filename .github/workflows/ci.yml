@@ -255,4 +255,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - run: bun run --cwd apps/api check:health https://api.renai.im api-app "$GITHUB_SHA"
-      - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://api.renai.im/discovery/personas
+      - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null 'https://api.renai.im/discovery/personas?locale=ko'

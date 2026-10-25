@@ -5,6 +5,7 @@ import { folderFiles, personaPermissions } from "./files.ts";
 import { folderSnapshot } from "./protocol.ts";
 import { managedFolder } from "./paths.ts";
 import { readSessionBinding } from "./bindings.ts";
+import { isDeepStrictEqual } from "node:util";
 
 export const io = <A>(operation: () => Promise<A>) =>
   Effect.tryPromise({ try: operation, catch: (error) => new Error(String(error)) }).pipe(
@@ -66,8 +67,16 @@ export const folderLifecycle = (ctx: Plugin.Context, root: string) => {
   const resume = (session: Session.Info, id: string) =>
     Effect.gen(function* () {
       const binding = yield* io(() => files.locate(id));
-      if (!binding.sandbox || session.location.directory === binding.directory)
-        return yield* bound(session, id, session.agent ?? "");
+      if (!binding.sandbox || session.location.directory === binding.directory) {
+        const target = yield* bound(session, id, session.agent ?? "");
+        // Root reconciliation owns persisted policy; prompt admission preserves session overrides.
+        if (
+          ctx.location.directory === root &&
+          !isDeepStrictEqual(session.permissions, personaPermissions)
+        )
+          yield* ctx.session.update({ sessionID: session.id, permissions: personaPermissions });
+        return target;
+      }
       const sourceSnapshot = yield* io(() => files.readAt(session.location.directory));
       yield* io(() => readSessionBinding(binding.directory, id));
       if (

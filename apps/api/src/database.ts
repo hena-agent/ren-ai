@@ -5,6 +5,7 @@ import { usageSchema } from "./usage/schema.ts";
 import { notificationSchema, notificationSubmissionsSchema } from "./discovery/notifications.ts";
 import { sharedAssignmentsSchema } from "./discovery/schema.ts";
 import { migrateBatches } from "./migrations.ts";
+import { browseSchema } from "./personas/browse-schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -305,6 +306,7 @@ export const migrate = Effect.gen(function* () {
       "049_notification_submissions": notificationSubmissionsSchema,
       "050_message_history_sends": sql`CREATE INDEX send_guid ON send(guid)`,
       "051_message_history_conversations": sql`CREATE INDEX conversation_user_history ON conversation(user_id, id, started_at)`,
+      "052_discovery_browsing": browseSchema,
     }),
   );
 });

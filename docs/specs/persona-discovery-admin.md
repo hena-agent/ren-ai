@@ -22,7 +22,7 @@
 - `apps/admin`에서 목록 → 생성/수정 → 저장 → 공개/비공개 흐름과 저장된 카드 미리보기를 제공한다.
 - 인물 모델은 **OpenCode 기준**이다. 사용자 결정에 따라 Persona Engine 대신 프롬프트·언어·시간대·첫 인사 지침·기억 지침을 관리한다.
 - `packages/personas`가 OpenCode Markdown 로더, 검증, 파일 저장, 공개 프로필 조회를 공유한다. 공개 프로필도 같은 Markdown의 YAML frontmatter에 저장하며 별도 메타데이터 DB를 두지 않는다.
-- Admin Catalog 공개 projection은 Admin의 `GET /api/personas`가 제공한다. 브라우저용 Discovery는 이 응답을 직접 호출하지 않고, 매 요청마다 api-app의 `GET /discovery/personas`를 호출한다. api-app은 현재 Admin 공개 Catalog를 읽어 이미지 URL을 Admin origin으로 해석해 반환한다.
+- Admin Catalog 공개 projection은 Admin의 `GET /api/personas`가 제공한다. Discovery는 api-app의 `GET /discovery/personas?locale=…&cursor=…`에서 최대 10명의 후보를 받는다. UI 언어가 주 언어인 후보, 해당 언어에 능숙한 후보, 나머지 순서로 각 그룹을 무작위 시작점에서 탐색하며 cursor로 중복 없이 이어간다. 기존 Like 및 공유 링크는 `POST /discovery/profiles`로 해당 ID만 조회한다. 상세 계약은 `apps/discovery/README.md`의 Sampling and continuation을 따른다.
 - 이미지는 첫 버전에서 HTTPS URL을 입력한다. 기존 파일에 공개 프로필 필드가 없으면 ID를 이름으로 표시하고 비공개 상태로 연다.
 - 기존 iMessage API도 공용 로더를 사용한다. 같은 디렉터리를 지정하면 저장한 OpenCode 설정을 읽으며, 실행 중인 API에는 **재시작 후** 반영된다. 공개/비공개는 카드 노출 상태이며 기존 Conversation을 삭제하지 않는다.
 - Admin은 어두운 중립색·고밀도 편집 화면으로 구성하고 네이티브 HTML 폼으로 저장한다. 브라우저 JavaScript와 별도 프런트엔드 빌드 없이 서버에서 HTML을 렌더링한다.
@@ -53,7 +53,7 @@ Admin과 저장 API에는 비밀번호 인증과 동일 출처 폼 제출 검사
 
 - `apps/discovery`는 공개 프로필 카드, 터치 스와이프·Like / Pass 버튼·방향키, Like 개수, 연락받기 화면을 제공한다. 공개 목록 조회와 등록은 api-app을 사용한다. 목록은 조회마다 최신 Admin 공개 Catalog에서 가져와 배포된 브라우저 번들을 다시 만들지 않아도 공개된 새 인물을 반영한다. 선택은 브라우저에 보관하고 새로고침 후 복원한다. 다시 탐색은 Pass만 되돌리고 Like를 유지한다.
 - 한 명만 Like해도 연락처 입력으로 진행한다. 전화번호와 Apple ID 이메일을 정규화·검증하고 AI 안내·개인정보 disclosure·동의·Turnstile을 웹에서 처리한다. 현재는 휴대전화 번호만 받는다([Discovery 연락처](#discovery-연락처-iphone-휴대전화-번호만)).
-- api-app은 `GET /discovery/personas`와 `POST /discovery/waitlist`를 제공한다. 공개 목록은 요청 시 Admin의 `GET /api/personas`를 호출하고, 브라우저에는 공개 필드만 반환하며, 제출 시 Like 후보가 현재 공개되어 있는지 다시 검증한다. Discovery에는 별도 목록 API Worker나 D1 binding을 두지 않는다.
+- api-app은 샘플링·프로필 ID 조회와 `POST /discovery/waitlist`를 제공한다. Admin 공개 Catalog를 갱신할 때 탐색용 인덱스를 조정하고, 일반 탐색 요청에서는 전체 프로필 JSON 대신 필요한 후보만 읽는다. 제출 시 Like 후보가 현재 공개되어 있는지 다시 검증한다. Discovery에는 별도 목록 API Worker나 D1 binding을 두지 않는다.
 - SQLite의 `discovery_registration`과 `discovery_like`에 정규화된 Handle, Like 목록, 언어, 동의 버전, 등록 시각을 트랜잭션으로 보관한다. 등록 시각이 동의 시각이다. Handle의 UNIQUE 제약과 `INSERT OR IGNORE`로 동시 제출을 처리하며 재제출은 기존 Like를 덮어쓰지 않는다.
 - 차단·삭제 진행 중인 Handle은 거부한다. 이미 대화가 시작된 Handle은 `active`를 반환하고 새 등록을 만들지 않는다. 운영자 `remove`는 대기 등록과 Like도 삭제한다.
 - 응답은 `waiting` 또는 `active`다. 성공한 등록 요청마다 별도의 Notification을 함께 저장하고 다음 백그라운드 실행에서 `noti@renai.im`으로 한 번 발송을 시도한다. 중복 등록과 이미 활성화된 Handle도 포함하며, 활성 Handle에는 기존 등록과 대화가 유지된다는 안내를 보낸다. Conversation은 만들거나 변경하지 않으며 순서·연락 시점·안내 도착을 약속하지 않는다. [Notification 명세](notifications.md)의 발송 한도를 따른다.

@@ -34,6 +34,7 @@ export const personaPermissions = [
     "end_conversation",
     "dice",
     "review_adjustments",
+    "websearch",
     ...memoryToolNames,
   ].map((action) => ({
     action,
@@ -169,6 +170,7 @@ const writeAt = async (target: string, snapshot: typeof folderSnapshot.Type) => 
       "opencode.json",
       JSON.stringify({
         default_agent: snapshot.persona.id,
+        websearch: { provider: "random" },
         agents: Object.fromEntries(
           ["build", "plan", "general", "explore"].map((id) => [id, { disabled: true }]),
         ),

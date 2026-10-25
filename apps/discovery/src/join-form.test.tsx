@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { JoinForm } from "./join-form.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { RegistrationError } from "./client.ts";
+import { testClient } from "../test/client.ts";
 
 const liked = [
   {
@@ -20,7 +21,7 @@ let key: string | undefined;
 const submit = vi.fn<DiscoveryClient["join"]>();
 const back = vi.fn<() => void>();
 const done = vi.fn<(state: "waiting" | "active") => void>();
-const client: DiscoveryClient = { profiles: async () => liked, join: submit };
+const client = testClient({ profiles: async () => liked, join: submit });
 
 beforeEach(() => {
   vi.clearAllMocks();

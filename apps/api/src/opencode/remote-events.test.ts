@@ -64,6 +64,7 @@ test("native permission requests enforce the persona session's scoped allowlist"
         "react",
         "wait",
         "dice",
+        "websearch",
         "update_state",
         "update_memory",
         "remember",

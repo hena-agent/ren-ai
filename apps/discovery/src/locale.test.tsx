@@ -94,7 +94,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
     },
     remove: () => {},
   };
-  const client: DiscoveryClient = { profiles: async () => [persona], join };
+  const client = testClient({ profiles: async () => [persona], join });
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
   expect(screen.getByText(persona.bio)).toBeTruthy();
@@ -212,7 +212,10 @@ test("conversation language choices are explicit and consent can be withdrawn", 
   render(
     <JoinForm
       liked={[persona]}
-      client={{ profiles: async () => [persona], join: async () => ({ status: "waiting" }) }}
+      client={testClient({
+        profiles: async () => [persona],
+        join: async () => ({ status: "waiting" }),
+      })}
       onBack={vi.fn<() => void>()}
       onSuccess={vi.fn<(status: "waiting" | "active") => void>()}
     />,
@@ -231,3 +234,4 @@ test("conversation language choices are explicit and consent can be withdrawn", 
   fireEvent.click(consent);
   expect(consent.checked).toBe(false);
 });
+import { testClient } from "../test/client.ts";

@@ -4,6 +4,7 @@ import { discoveryNotices } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { selectImageStyle, selectLanguage } from "../test/choose.ts";
+import { testClient } from "../test/client.ts";
 
 afterEach(() => {
   cleanup();
@@ -14,7 +15,7 @@ afterEach(() => {
 
 test("the home explains the service without loading profiles and offers real navigation to Discovery", () => {
   const profiles = vi.fn<DiscoveryClient["profiles"]>().mockRejectedValue(new Error("offline"));
-  render(<Site client={{ profiles, join: vi.fn<DiscoveryClient["join"]>() }} />);
+  render(<Site client={testClient({ profiles, join: vi.fn<DiscoveryClient["join"]>() })} />);
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
     "일상에,기다려지는 메시지 하나.",
   );
@@ -93,7 +94,7 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
 
 test("landing starts in anime and changes every image together while retaining the selected persona", async () => {
   const profiles = vi.fn<DiscoveryClient["profiles"]>();
-  const client = { profiles, join: vi.fn<DiscoveryClient["join"]>() };
+  const client = testClient({ profiles, join: vi.fn<DiscoveryClient["join"]>() });
   const first = render(<Site client={client} />);
   expect(document.querySelector(".conversation-photo img")?.getAttribute("src")).toBe(
     "/landing/dohee-daily-anime.webp",
@@ -134,7 +135,7 @@ test("landing starts in anime and changes every image together while retaining t
 
 test("portrait selection changes the featured scene without leaving the page or losing it on locale changes", () => {
   const profiles = vi.fn<DiscoveryClient["profiles"]>();
-  render(<Site client={{ profiles, join: vi.fn<DiscoveryClient["join"]>() }} />);
+  render(<Site client={testClient({ profiles, join: vi.fn<DiscoveryClient["join"]>() })} />);
   const selected = screen.getByRole("button", { name: "백지아 프로필" });
   const next = screen.getByRole("button", { name: "강하린 프로필" });
   expect(selected.getAttribute("aria-pressed")).toBe("true");
@@ -182,12 +183,12 @@ test.each(["/explore", "/#reselect=private-token"])(
     window.history.replaceState(null, "", url);
     localStorage.setItem("ren-ai.discovery.image-style", "photo");
     localStorage.setItem("ren-ai.discovery.choices", JSON.stringify({ saved: true }));
-    const client: DiscoveryClient = {
+    const client = testClient({
       profiles: async () => [
         { id: "saved", name: "소연", bio: "반가워요.", imageUrl: "/photo.jpg" },
       ],
       join: vi.fn<DiscoveryClient["join"]>(),
-    };
+    });
     render(<Site client={client} />);
     await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
     expect(screen.getByRole("list", { name: "좋아한 사람" }).textContent).toBe("소연");
@@ -214,10 +215,11 @@ test("explore displays its shell during a delayed API request and retries a fail
     .mockResolvedValueOnce([
       { id: "jia", name: "백지아", bio: "반가워요.", imageUrl: "/photo.jpg" },
     ]);
-  render(<Site client={{ profiles, join: vi.fn<DiscoveryClient["join"]>() }} />);
+  render(<Site client={testClient({ profiles, join: vi.fn<DiscoveryClient["join"]>() })} />);
   expect(screen.getByRole("link", { name: "Ren AI" })).toBeTruthy();
   expect(screen.getByRole("status").textContent).toBe("만날 사람들을 불러오고 있어요.");
-  expect(profiles).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal), undefined);
+  await act(async () => {});
+  expect(profiles).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal), undefined, []);
   expect(document.querySelector(".profile-card")).toBeNull();
   await act(async () => rejectListing(new Error("API unavailable")));
   expect(screen.getByRole("heading", { name: "프로필을 불러오지 못했어요." })).toBeTruthy();

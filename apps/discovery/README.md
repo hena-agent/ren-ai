@@ -7,8 +7,9 @@ FAQs and the same localized privacy notice used during registration. It does not
 request the Catalog. Its calls to action open `/explore`, which contains image
 style selection, profile browsing and waitlist registration. `/explore` returns its
 header and loading state without requesting or waiting for the Catalog. After the
-browser application starts, its existing client fetches `/discovery/personas` once
-and displays the cards. A failed listing offers an inline retry; an unavailable API
+browser application starts, its client fetches `/discovery/personas?locale=ko`
+(using the selected UI language) and displays ten candidates. With five unseen
+cards left it requests the next cursor page. A failed listing offers an inline retry; an unavailable API
 does not prevent the initial HTML response. No empty Catalog bootstrap is embedded.
 The Discovery logo returns home; native links support browser history, reloads
 and direct entry.
@@ -33,13 +34,13 @@ Opening a profile updates the address; collapsing it returns to `/explore` while
 preserving the deck, selected photo and private reselection fragment. Shared URLs
 never contain that fragment, handles or browser choices.
 
-For public profile requests, the Worker reads api-app's current
-`/discovery/personas` response before rendering the profile.
+For public profile requests, the Worker reads only that ID through api-app's
+`POST /discovery/profiles` before rendering the profile.
 Published personas remain listed at their five-assignment capacity, without a
 capacity badge. Selection enforces capacity; Discovery makes no exclusivity promise
 and has no exclusivity section or its images. The Worker validates and strips unknown
 fields, renders public content into the initial HTML, and embeds only that public snapshot
-for the browser so swiping can continue without another Catalog request. No private
+for the browser; the browser separately samples the following candidates. No private
 persona description, State, Memory, identity sheet or authoring prompt is used.
 HTML, sitemap and health responses use `Cache-Control: no-store`.
 
@@ -87,7 +88,8 @@ remain `no-store` so public CDN caching cannot bypass that validation.
 Browser listings, server-rendered public profiles and waiting registration use `api.renai.im`:
 
 ```text
-Discovery → api-app /discovery/personas → Admin public Catalog → D1
+Discovery → api-app /discovery/personas?locale=…&cursor=… → indexed public candidates
+Discovery → api-app /discovery/profiles → requested public IDs only
 Discovery → api-app /discovery/waitlist → application Durable Object
 ```
 
@@ -96,6 +98,35 @@ by Catalog changes. Server-rendered profiles request it with `cache: no-store`;
 explorer uses the existing browser client, so later visits see profiles without a
 frontend rebuild. The public snapshot retains the original R2 image URLs. Private persona
 descriptions, State and Memory never enter the public response.
+
+### Sampling and continuation
+
+`GET /discovery/personas` requires `locale` (`ko`, `en`, `ja`) and accepts an
+opaque `cursor`. It returns `{ people, nextCursor }`, with at most ten people;
+`nextCursor: null` means the candidate set is exhausted. Responses are `no-store`.
+The private `POST /discovery/reselection/personas` accepts the same fields plus
+the body-only reselection token and excludes ended relationships on every page.
+
+Candidates whose primary language matches the UI come first, followed by those
+whose initial public proficiency is proficient/fluent, then everyone else. Each
+tier uses a hash-ordered ring with a random starting key, persisted in the cursor.
+Keyset continuation wraps each tier once, avoiding duplicate IDs and full-table
+random sorts. This is randomized rotation, not a fresh independent shuffle on
+every page. Language changes start a new traversal and retain Like/Pass choices
+and the mounted contact form. Authored public writing is never translated.
+
+Membership and language ordering use a shared immutable metadata snapshot, not
+a per-visitor copy. Cursors expire after one hour; an expired cursor starts a new
+sample while preserving choices. New publications join the next traversal;
+withdrawn profiles disappear from existing traversals, and profile writing/photos
+come from the current publication. Catalog refresh reconciles live rows without
+rewriting unchanged profiles. Snapshot reclamation uses indexed, limited batches.
+
+`POST /discovery/profiles` accepts `{ ids, reselectionToken? }` (at most 100 IDs).
+Likes are restored by ID, even when absent from the sampled page. Pass/Like records
+filter the deck in the browser; loading a page containing previously chosen IDs
+continues to subsequent pages as needed. Retried pages are merged by ID.
+`GET /discovery/persona-links` supplies only IDs and image URLs for the sitemap.
 
 ## Browsing images
 

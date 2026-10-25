@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
+import { testClient } from "../test/client.ts";
 import { choose, endAnimation } from "../test/choose.ts";
 import { fakeVerification, submitVerifiedContact } from "../test/turnstile.ts";
 
@@ -16,10 +17,10 @@ const people = ["하린", "지우"].map((name, index) => ({
   bio: "첫째 줄의 소개입니다.\n둘째 줄도 모두 읽을 수 있어요.",
   imageUrl: `https://example.net/${index}.jpg`,
 }));
-const client: DiscoveryClient = {
+const client = testClient({
   profiles: async () => people,
   join: async () => ({ status: "waiting" }),
-};
+});
 const currentTabs = () =>
   within(screen.getByRole("navigation", { name: "페르소나 탐색 메뉴" }))
     .getAllByRole("button")

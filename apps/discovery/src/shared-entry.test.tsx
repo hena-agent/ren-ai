@@ -6,6 +6,7 @@ import type { DiscoveryClient } from "./client.ts";
 import { publicPersonas } from "../test/public-personas.ts";
 import { choose, selectImageStyle, selectLanguage } from "../test/choose.ts";
 import { readPublicPeople, publicRoute } from "./public-routing.ts";
+import { testClient } from "../test/client.ts";
 
 let verification: ((token: string) => void) | undefined;
 beforeEach(() => {
@@ -39,7 +40,7 @@ function mount(bootstrap = true) {
     script.textContent = JSON.stringify(publicPersonas.toReversed());
     document.body.append(script);
   }
-  render(<Site client={api} />);
+  render(<Site client={testClient(api)} />);
   return api;
 }
 
@@ -127,12 +128,12 @@ test("explore cards have no sharing action; opening details exposes footer shari
 test("local direct entry loads the Catalog, retains authored writing across locale changes, and handles missing profiles", async () => {
   const api = mount(false);
   await screen.findByRole("region", { name: /백지아/ });
-  expect(api.profiles).toHaveBeenCalledOnce();
+  expect(api.profiles).toHaveBeenCalledTimes(2);
   selectLanguage("화면 언어", "English");
   expect(screen.getByText("햇살 좋은 날엔 같이 걸어요.")).toBeTruthy();
   cleanup();
   window.history.replaceState(null, "", "/personas/missing");
-  render(<Site client={api} />);
+  render(<Site client={testClient(api)} />);
   await screen.findByRole("heading", { name: "This profile isn't public." });
   expect(screen.getByRole("link", { name: "Back to profiles" }).getAttribute("href")).toBe(
     "/explore",
@@ -151,7 +152,9 @@ test("reselection reloads its private Catalog before browsing and submits only e
   const fetcher = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(new Response(null, { status: 503 }))
-    .mockResolvedValueOnce(Response.json([publicPersonas[1]]))
+    .mockResolvedValueOnce(Response.json([]))
+    .mockResolvedValueOnce(Response.json({ people: [publicPersonas[1]], nextCursor: null }))
+    .mockResolvedValueOnce(Response.json([]))
     .mockResolvedValueOnce(Response.json({ status: "waiting" }));
   vi.stubGlobal("fetch", fetcher);
   render(<Site />);
@@ -162,13 +165,13 @@ test("reselection reloads its private Catalog before browsing and submits only e
   fireEvent.click(screen.getByRole("button", { name: "다시 불러오기" }));
   await screen.findByRole("heading", { name: "한수빈" });
   expect(screen.queryByText("백지아")).toBeNull();
-  expect(fetcher).toHaveBeenCalledTimes(2);
-  for (const [url, options] of fetcher.mock.calls) {
+  expect(fetcher).toHaveBeenCalledTimes(4);
+  for (const [url, options] of fetcher.mock.calls.filter((_, index) => index % 2 === 0)) {
     expect(url).toBe("/discovery/reselection/personas");
     expect(options).toMatchObject({
       method: "POST",
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-      body: JSON.stringify({ reselectionToken: token }),
+      body: JSON.stringify({ locale: "ko", reselectionToken: token }),
       cache: "no-store",
     });
   }
@@ -178,7 +181,7 @@ test("reselection reloads its private Catalog before browsing and submits only e
   consentAndVerify("reselection");
   fireEvent.submit(screen.getByRole("button", { name: "동의하고 대기 등록" }).closest("form")!);
   await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
-  const body = fetcher.mock.calls[2]![1]!.body;
+  const body = fetcher.mock.calls[4]![1]!.body;
   if (typeof body !== "string") throw new Error("Expected a JSON request body");
   expect(JSON.parse(body)).toMatchObject({
     likedPersonaIDs: ["subin"],
@@ -195,10 +198,10 @@ test("a reselection profile URL cannot reopen an ended persona and retains the t
   cleanup();
   window.history.replaceState(null, "", `/personas/jia#reselect=${token}`);
   api.profiles.mockResolvedValue([publicPersonas[1]!]);
-  render(<Site client={api} />);
+  render(<Site client={testClient(api)} />);
   expect(screen.queryByRole("region", { name: /백지아/ })).toBeNull();
   await screen.findByRole("heading", { name: "이 프로필은 공개되어 있지 않아요." });
-  expect(api.profiles).toHaveBeenCalledWith(expect.any(AbortSignal), token);
+  expect(api.profiles).toHaveBeenCalledWith(expect.any(AbortSignal), token, ["jia"]);
   expect(screen.queryByText("백지아")).toBeNull();
   expect(screen.getByRole("link", { name: "탐색으로 돌아가기" }).getAttribute("href")).toBe(
     `/explore#reselect=${token}`,
