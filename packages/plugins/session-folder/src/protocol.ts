@@ -1,6 +1,7 @@
 import { Rpc } from "@opencode/plugin/rpc";
 import { Schema } from "effect";
 import { runtimeSnapshot } from "./memory-model.ts";
+import { adjustmentSnapshot } from "./adjustment-model.ts";
 
 export const folderID = Schema.String.check(Schema.isPattern(/^ses[a-zA-Z0-9_-]{1,97}$/));
 export const personaID = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/));
@@ -24,6 +25,7 @@ export const folderSnapshot = Schema.Struct({
   }),
   agent: Schema.String,
   rules: Schema.String,
+  adjustments: Schema.optionalKey(adjustmentSnapshot),
   documents: Schema.optionalKey(Schema.Struct({ state: Schema.String, memory: Schema.String })),
   runtime: Schema.optionalKey(runtimeSnapshot),
   binding: Schema.optionalKey(sessionBinding),
