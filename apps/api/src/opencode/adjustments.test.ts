@@ -145,7 +145,50 @@ test("read-only replay and ended Conversations cannot schedule reviews or modify
     );
   }));
 
-test("invalid tools, inputs and partial files fail closed; interrupted adjustment commits recover atomically", () =>
+test("a deleted optional document stays absent through no-change reviews while history and scheduling survive", () =>
+  withPersona(async (root) => {
+    const { a, id } = await ready(root);
+    await expect(readFile(join(root, "ADJUSTMENTS.md"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await a.run(
+      { reviewID: id, markdown: "Share a little more.", reason: "Balance participation." },
+      "first-review",
+      start + day,
+    );
+    const history = (await readAdjustments(root))!.state.history;
+    await rm(join(root, "ADJUSTMENTS.md"));
+    expect(await a.context("message-19", start + day)).not.toContain("Share a little more.");
+    expect((await readAdjustments(root))!.state.history).toEqual(history);
+    for (let index = 0; index < 20; index++) await a.context(`later-${index}`, start + 2 * day);
+    const keep = reviewID(await a.context("later-19", start + 2 * day));
+    await a.run(
+      { reviewID: keep, markdown: null, reason: "No supported correction." },
+      "keep-missing",
+      start + 2 * day,
+    );
+    expect((await readAdjustments(root))!.state.history).toHaveLength(2);
+    await expect(readFile(join(root, "ADJUSTMENTS.md"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    for (let index = 0; index < 20; index++) await a.context(`fresh-${index}`, start + 3 * day);
+    const change = reviewID(await a.context("fresh-19", start + 3 * day));
+    await a.run(
+      {
+        reviewID: change,
+        markdown: "Follow the interesting detail.",
+        reason: "Keep exchanges concrete.",
+      },
+      "recreate",
+      start + 3 * day,
+    );
+    expect(await readFile(join(root, "ADJUSTMENTS.md"), "utf8")).toBe(
+      "Follow the interesting detail.",
+    );
+    expect((await readAdjustments(root))!.state.history).toHaveLength(3);
+  }));
+
+test("invalid tools, inputs and malformed state fail closed; optional documents and interrupted commits are recovered", () =>
   withPersona(async (root) => {
     const a = personaAdjustments(root, "sesa");
     await expect(
@@ -168,9 +211,15 @@ test("invalid tools, inputs and partial files fail closed; interrupted adjustmen
         ].jsonSchema.input({ target: "draft-2020-12" }),
       }),
     ).toBe(true);
-    await writeFile(join(root, "ADJUSTMENTS.md"), "partial");
-    await expect(readAdjustments(root)).rejects.toThrow("Invalid Persona adjustment files");
+    await writeFile(join(root, "ADJUSTMENTS.md"), "Operator-authored adjustment");
+    expect(await readAdjustments(root)).toEqual({
+      ...emptyAdjustments(),
+      markdown: "Operator-authored adjustment",
+    });
     await writeAdjustments(root, emptyAdjustments());
+    await expect(readFile(join(root, "ADJUSTMENTS.md"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     const changed = { ...emptyAdjustments(), markdown: "Recovered adjustment" };
     await writeFile(
       join(root, ".memory", "pending.json"),
@@ -181,5 +230,7 @@ test("invalid tools, inputs and partial files fail closed; interrupted adjustmen
     );
     expect(await readAdjustments(root)).toEqual(changed);
     await rm(join(root, "ADJUSTMENTS.md"));
+    expect(await readAdjustments(root)).toEqual(emptyAdjustments());
+    await writeFile(join(root, ".memory", "adjustments.json"), "invalid state");
     await expect(readAdjustments(root)).rejects.toThrow("Invalid Persona adjustment files");
   }));

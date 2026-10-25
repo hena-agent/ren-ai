@@ -27,19 +27,29 @@ export async function readAdjustments(directory: string) {
   if (markdown === undefined && state === undefined) return undefined;
   try {
     return Schema.decodeUnknownSync(adjustmentSnapshot)({
-      markdown,
-      state: Schema.decodeUnknownSync(Schema.fromJsonString(adjustmentState))(state),
+      markdown: markdown ?? "",
+      state:
+        state === undefined
+          ? emptyAdjustments().state
+          : Schema.decodeUnknownSync(Schema.fromJsonString(adjustmentState))(state),
     });
   } catch (cause) {
     throw new Error("Invalid Persona adjustment files", { cause });
   }
 }
 
-export const writeAdjustments = (directory: string, snapshot: typeof adjustmentSnapshot.Type) =>
-  commitMemory(directory, [
-    { name: "ADJUSTMENTS.md", text: snapshot.markdown },
+export const writeAdjustments = async (
+  directory: string,
+  snapshot: typeof adjustmentSnapshot.Type,
+) => {
+  const current = await readFile(join(directory, "ADJUSTMENTS.md"), "utf8").catch(absent);
+  await commitMemory(directory, [
+    ...(snapshot.markdown !== (current ?? "")
+      ? [{ name: "ADJUSTMENTS.md", text: snapshot.markdown || null }]
+      : []),
     { name: ".memory/adjustments.json", text: JSON.stringify(snapshot.state) },
   ]);
+};
 
 export const isAdjustmentTool = (
   tool: { description: string; input: JsonSchema.JsonSchema } | undefined,

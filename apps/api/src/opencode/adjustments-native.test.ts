@@ -1,4 +1,5 @@
-import { rm } from "node:fs/promises";
+import { rm, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { TestLLM } from "@opencode/ai/testing";
 import { Effect, Schema } from "effect";
 import { expect, test, vi } from "vitest";
@@ -96,6 +97,47 @@ test("real OC occasionally reviews adjustments and uses the new document on its 
       yield* restoreSessions(remote.client, archive, directory);
       expect(yield* Effect.promise(() => readAdjustments(first.location.directory))).toEqual(
         before,
+      );
+    }),
+  ));
+
+test("real OC continues with base guidance when the optional adjustment document is absent", () =>
+  withRemoteHost((remote, _directory, { llm }) =>
+    Effect.gen(function* () {
+      const session = yield* remote.createSession("persona1");
+      const document = join(session.location.directory, "ADJUSTMENTS.md");
+      yield* Effect.promise(() =>
+        expect(readFile(document, "utf8")).rejects.toMatchObject({ code: "ENOENT" }),
+      );
+      const history = [
+        { at: 1000, before: "", after: "Previous correction", reason: "Prior review" },
+      ];
+      yield* Effect.promise(() =>
+        writeAdjustments(session.location.directory, {
+          markdown: "Previous correction",
+          state: { ...emptyAdjustments().state, history },
+        }),
+      );
+      yield* Effect.promise(() => rm(document));
+      yield* llm.serve((request) => {
+        if (request.tools.some((tool) => tool.name === "review_adjustments")) {
+          const system = JSON.stringify(request.system);
+          expect(system).toContain("You are Persona1.");
+          expect(system).toContain("<persona-adjustments");
+          expect(system).not.toContain("Previous correction");
+          expect(system).not.toContain("Prior review");
+        }
+        return TestLLM.text("계속 이야기하자.", "answer");
+      });
+      yield* remote.sessions.prompt({ sessionID: session.id, text: "안녕" });
+      yield* remote.sessions.wait(session.id);
+      expect((yield* remote.sessions.get(session.id)).outcome).toBe("succeeded");
+      const saved = yield* Effect.promise(() => readAdjustments(session.location.directory));
+      expect(saved!.markdown).toBe("");
+      expect(saved!.state.history).toEqual(history);
+      expect(saved!.state.observed).toBe(1);
+      yield* Effect.promise(() =>
+        expect(readFile(document, "utf8")).rejects.toMatchObject({ code: "ENOENT" }),
       );
     }),
   ));
