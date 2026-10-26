@@ -183,9 +183,13 @@ test.each(["mismatched", "missing"])(
     expect(job.state).toBe("failed");
     expect(update.mock.calls.at(-1)?.[1]).toMatchObject({ base: original, preview: original });
     expect(logs.filter((entry) => entry.event === "operation.failed")).toHaveLength(1);
-    expect(logs.find((entry) => entry.event === "operation.failed")!.stage).toBe(
-      "image.queue.batch",
-    );
+    expect(logs.find((entry) => entry.event === "operation.failed")).toMatchObject({
+      stage: "persona.snapshot.read",
+      personaId: setup.original.id,
+      requestId: job.requestId,
+      jobId: job.id,
+      error: { message: "storage read unavailable" },
+    });
   },
 );
 

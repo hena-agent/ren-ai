@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import { personaImages } from "@ren-ai/personas";
 import type { PersonaRecord, IdentitySheets } from "@ren-ai/personas";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import copy from "./copy.json";
 import { PhotoAddPanel } from "./photo-add-panel.tsx";
 import { UploadControls } from "./upload-controls.tsx";
@@ -29,7 +30,7 @@ export function Preview({ persona }: { persona: PersonaRecord }) {
               <Fragment key={style}>
                 <div className={`portrait-pane portrait-${style}`}>
                   <img
-                    src={portraits[style]}
+                    src={thumbnailUrl(portraits[style]!)}
                     alt={`${persona.name} ${copy.styles[style]}`}
                     width={800}
                     height={1000}
@@ -44,7 +45,7 @@ export function Preview({ persona }: { persona: PersonaRecord }) {
         </div>
       ) : persona.imageUrl ? (
         <img
-          src={persona.imageUrl}
+          src={thumbnailUrl(persona.imageUrl)}
           alt={`${persona.name} 프로필`}
           width={800}
           height={1000}
@@ -107,7 +108,7 @@ export function Comparison({
                     aria-label={`${copy.portraitLabels[style]} 사진 ${index + 1} 크게 보기`}
                   >
                     <img
-                      src={imageUrl}
+                      src={thumbnailUrl(imageUrl)}
                       alt={`${persona.name} ${copy.styles[style]} · 사진 ${index + 1}`}
                       width={800}
                       height={1000}

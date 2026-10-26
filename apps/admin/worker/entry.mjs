@@ -50,15 +50,6 @@ export default {
         ),
       );
     if (path === "/api/catalog" || path === "/api/personas") return catalogHandler(request, env);
-    return adminRequest(request, async () => {
-      if (path === "/brand.svg") {
-        const asset = await env.ASSETS.fetch(request.url);
-        return new Response(await asset.text(), {
-          status: asset.ok ? 200 : 404,
-          headers: { "Content-Type": "image/svg+xml", "Cache-Control": "no-cache" },
-        });
-      }
-      return editor(env).fetch(request);
-    });
+    return adminRequest(request, () => editor(env).fetch(request));
   },
 };

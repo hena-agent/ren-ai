@@ -143,7 +143,7 @@ test("biography-only recovery never consumes images and malformed saved hints ar
   expect(draftTokens("test-password").decode(tokenOf(rewritten))).not.toHaveProperty(
     "recommendation",
   );
-  const restart = createAdmin(store, "test-password", "", {
+  const restart = createAdmin(store, "test-password", {
     generator: subGenerator,
     log: () => {},
   });

@@ -11,7 +11,7 @@ test("private draft and batch rows are restored independently and changed task s
   const persistence = editingStorage(storage);
   const empty = await persistence.load();
   expect(empty).toEqual({ drafts: [], queue: { jobs: [], keys: [], pending: [] } });
-  const admin = createAdmin(store, "test-password", "", {
+  const admin = createAdmin(store, "test-password", {
     generator,
     log: () => {},
     persistence: { saved: empty, checkpoint: persistence.save, wake: async () => {} },

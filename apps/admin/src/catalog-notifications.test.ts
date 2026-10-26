@@ -29,7 +29,6 @@ async function setup() {
         TOKEN_CATALOG: "catalog-private",
         APPLICATION_API_URL: "https://messaging.test",
         TOKEN_MANAGEMENT: "management-private",
-        ASSETS: { fetch: async () => new Response("asset") },
       },
       storage,
     );

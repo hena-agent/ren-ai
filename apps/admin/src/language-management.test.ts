@@ -34,7 +34,7 @@ test("authenticated operator pages read current Conversation language levels and
           eligibleCount: 0,
         }),
   );
-  const admin = createAdmin(store, "test-password", "styles", {
+  const admin = createAdmin(store, "test-password", {
     management: managementClient("https://api.test", "secret", fetcher),
     log: (event) => logs.push(event),
   });

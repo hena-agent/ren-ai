@@ -132,7 +132,7 @@ test("new personas start with two independently prompted sheets, auto-adopt them
     expect(publicData).not.toContain(url);
   }
   expect(JSON.stringify(logs)).not.toContain("private anime identity");
-  const restarted = createAdmin(store, "test-password", "", { generator, log: () => {} });
+  const restarted = createAdmin(store, "test-password", { generator, log: () => {} });
   const reopened = await (await restarted(request(`/personas/${record.id}`))).text();
   expect(sheetsOf(reopened)).toEqual(sheets);
 });

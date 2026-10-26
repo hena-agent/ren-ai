@@ -50,16 +50,18 @@ export function databaseStore(
     if (!row) throw new PersonaError("not_found", "페르소나를 찾을 수 없습니다.");
     return row;
   };
-  const get = async (id: string) =>
-    recordOf(
-      await rowOf(id),
-      await db
+  const get = async (id: string) => {
+    const [[row], photos] = await db.batch([
+      currentPersonaRows(db).where(eq(personas.id, id)).limit(1),
+      db
         .select()
         .from(personaImages)
         .where(eq(personaImages.personaId, id))
         .orderBy(asc(personaImages.position)),
-      imageBase,
-    );
+    ]);
+    if (!row) throw new PersonaError("not_found", "페르소나를 찾을 수 없습니다.");
+    return recordOf(row, photos, imageBase);
+  };
   const readCatalog = () =>
     databaseOperation(() =>
       db.batch([

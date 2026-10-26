@@ -1,12 +1,20 @@
+import { thumbnailKey } from "@ren-ai/personas/image-url";
 import { expect, test } from "vitest";
 import { durableSeedingFixture } from "../test/seeding-durable.ts";
 import { seedManifest, uploadSeeds } from "../test/seeding.ts";
 import { portraitReply, request, tokenOf } from "../test/fixtures.ts";
 
 test("a complete seeding run pays for each output once across Durable Object replacement", async () => {
-  const { store, db, call, location, step, expectCalls } = await durableSeedingFixture();
+  const { store, db, bucket, call, location, step, expectCalls } = await durableSeedingFixture();
   expect(await store.list()).toHaveLength(4);
   await expectCalls(24);
+  // Generated in workerd, each sheet and photo is stored with its display thumbnail.
+  const keys = (await bucket.list()).objects.map((object) => object.key);
+  const originals = keys.filter((key) => !key.startsWith("thumbnails/"));
+  expect(originals).toHaveLength(16);
+  expect(keys.filter((key) => key.startsWith("thumbnails/")).toSorted()).toEqual(
+    originals.map(thumbnailKey).toSorted(),
+  );
   const { results } = await db
     .prepare(
       "EXPLAIN QUERY PLAN SELECT personaId FROM seeding_seeds WHERE pending = 1 ORDER BY runId, ordinal LIMIT 1",

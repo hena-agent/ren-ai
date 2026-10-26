@@ -32,37 +32,46 @@ export async function databaseListing(
     query.language ? eq(personas.language, query.language) : undefined,
     query.style === "all" ? undefined : query.style === "none" ? notExists(photos) : exists(photos),
   );
-  const [totals, languages] = await db.batch([
-    db.select({ total: count() }).from(personas).where(where),
-    db
-      .selectDistinct({ language: personas.language })
-      .from(personas)
-      .orderBy(asc(personas.language)),
-  ]);
-  const page = personaPage(totals[0]!.total, query.page);
   const order =
     query.sort === "updated"
       ? desc(personas.updatedAt)
       : query.sort === "oldest"
         ? asc(personas.createdAt)
         : desc(personas.createdAt);
-  const rows = await currentPersonaRows(db)
-    .where(where)
-    .orderBy(order, desc(personas.id))
-    .limit(personaPageSize)
-    .offset((page.page - 1) * personaPageSize);
-  const images = rows.length
-    ? await db
+  const pageOf = (number: number) => {
+    const offset = (number - 1) * personaPageSize;
+    const ids = db
+      .select({ id: personas.id })
+      .from(personas)
+      .where(where)
+      .orderBy(order, desc(personas.id))
+      .limit(personaPageSize)
+      .offset(offset);
+    return [
+      currentPersonaRows(db)
+        .where(where)
+        .orderBy(order, desc(personas.id))
+        .limit(personaPageSize)
+        .offset(offset),
+      db
         .select()
         .from(personaImages)
-        .where(
-          inArray(
-            personaImages.personaId,
-            rows.map((row) => row.id),
-          ),
-        )
-        .orderBy(asc(personaImages.position))
-    : [];
+        .where(inArray(personaImages.personaId, ids))
+        .orderBy(asc(personaImages.position)),
+    ] as const;
+  };
+  // One round trip reads the requested page; only an out-of-range page needs a second.
+  const [totals, languages, requestedRows, requestedImages] = await db.batch([
+    db.select({ total: count() }).from(personas).where(where),
+    db
+      .selectDistinct({ language: personas.language })
+      .from(personas)
+      .orderBy(asc(personas.language)),
+    ...pageOf(query.page),
+  ]);
+  const page = personaPage(totals[0]!.total, query.page);
+  const [rows, images] =
+    page.page === query.page ? [requestedRows, requestedImages] : await db.batch(pageOf(page.page));
   return {
     ...page,
     languages: languages.map(({ language }) => language),

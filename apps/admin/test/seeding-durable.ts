@@ -1,7 +1,8 @@
 import { build } from "esbuild";
+import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { cloudflareFixture } from "./cloudflare-fixture.ts";
+import { cloudflareFixture, type WorkerBundle } from "./cloudflare-fixture.ts";
 import { seedCharacter, seedManifest, uploadSeeds } from "./seeding.ts";
 import { acceptedReview } from "./character.ts";
 import { portraitReply, request } from "./fixtures.ts";
@@ -13,20 +14,30 @@ const unavailable: Reply = {
   status: 503,
 };
 
-let worker: Promise<string> | undefined;
+let worker: Promise<WorkerBundle> | undefined;
 
 const workerSource = () =>
   (worker ??= build({
     entryPoints: [fileURLToPath(new URL("../worker/test-seeding.ts", import.meta.url))],
     bundle: true,
     write: false,
+    outdir: fileURLToPath(new URL("../dist/test-seeding", import.meta.url)),
     format: "esm",
     platform: "neutral",
     conditions: ["workerd", "worker"],
     mainFields: ["module", "main"],
     target: "es2023",
     external: ["node:*", "cloudflare:workers"],
-  }).then(({ outputFiles }) => outputFiles[0]!.text));
+    loader: { ".wasm": "copy" },
+    define: { ADMIN_ASSETS: JSON.stringify({ script: "/assets/test.js", stylesheet: "" }) },
+  }).then(({ outputFiles }) => ({
+    source: outputFiles.find((file) => file.path.endsWith(".js"))!.text,
+    wasm: Object.fromEntries(
+      outputFiles
+        .filter((file) => file.path.endsWith(".wasm"))
+        .map((file) => [basename(file.path), new Uint8Array(file.contents)]),
+    ),
+  })));
 
 const scriptedReply = async (response: Response): Promise<Reply> => ({
   body: await response.text(),
@@ -45,7 +56,7 @@ const providerScript = async (failedImage: number | undefined) => {
 };
 
 export async function durableSeedingFixture(options: { failedImage?: number } = {}) {
-  const { runtime, store, db } = await cloudflareFixture(await workerSource());
+  const { runtime, store, db, bucket } = await cloudflareFixture(await workerSource());
   const call = async (input: Request) => {
     const response = await runtime.dispatchFetch(input.url, {
       method: input.method,
@@ -78,5 +89,5 @@ export async function durableSeedingFixture(options: { failedImage?: number } = 
     await step();
     await evict();
   }
-  return { store, db, call, location, evict, step, expectCalls };
+  return { store, db, bucket, call, location, evict, step, expectCalls };
 }

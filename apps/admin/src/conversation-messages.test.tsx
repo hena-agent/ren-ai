@@ -139,7 +139,7 @@ test("Admin fetches history through authenticated client, pages and keeps failur
       return Response.json({ state: "idle", pending: 0, nextWakeAt: null });
     return Response.json(detail);
   });
-  const admin = createAdmin(f.store, "test-password", "styles", { management });
+  const admin = createAdmin(f.store, "test-password", { management });
   const first = await (await admin(request("/conversations/1"))).text();
   expect(first).toContain("message 1");
   await admin(request("/conversations/1?messagesBefore=2"));

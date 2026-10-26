@@ -161,7 +161,7 @@ test("failed profile regeneration retains the extra instructions and completed p
   expect(logs.find((entry) => entry.event === "operation.failed")?.error?.message).toBe(
     "generation failed: <REDACTED>",
   );
-  const unconfigured = createAdmin(store, "test-password", "", {
+  const unconfigured = createAdmin(store, "test-password", {
     log: (entry) => logs.push(entry),
   });
   const missing = await unconfigured(
@@ -307,7 +307,7 @@ test("incomplete legacy profiles regenerate their introduction even when the cha
   expect(introductionModel).not.toHaveBeenCalled();
   await store.update({ ...legacy, imageUrl: "" });
   introductionModel.mockClear();
-  const restarted = createAdmin(store, "test-password", "", {
+  const restarted = createAdmin(store, "test-password", {
     generator: { ...generator, introduction: introductionModel },
     log: () => {},
   });

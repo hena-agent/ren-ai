@@ -17,15 +17,8 @@ import copy from "./copy.json";
 
 test("authentication and same-origin submission protect all management and draft image routes", async () => {
   const { admin, store } = await fixture();
-  expect(() => createAdmin(store, " ", "")).toThrow("ADMIN_PASSWORD is required");
-  for (const path of [
-    "/",
-    "/new",
-    "/style.css",
-    "/pending.js",
-    "/images/file.png",
-    "/personas/legacy",
-  ]) {
+  expect(() => createAdmin(store, " ")).toThrow("ADMIN_PASSWORD is required");
+  for (const path of ["/", "/new", "/images/file.png", "/personas/legacy"]) {
     const denied = await admin(new Request(`http://localhost:3729${path}`));
     expect(denied.status).toBe(401);
     expect(denied.headers.get("www-authenticate")).toBe(
@@ -253,7 +246,7 @@ test("simultaneous generation and stale editors cannot duplicate or overwrite a 
 test("storage outages and missing generation credentials preserve the author's work without exposing private details", async () => {
   const { store, root, admin } = await fixture();
   const draft = await newToken(admin);
-  const unconfigured = createAdmin(store, "test-password", "");
+  const unconfigured = createAdmin(store, "test-password");
   const generationFailure = await unconfigured(
     request("/personas", { ...character, draft, intent: "generate" }),
   );

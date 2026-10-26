@@ -6,6 +6,7 @@ import { useBrowser } from "../test/browser.ts";
 import { femaleCharacter, fixture, legacy, request } from "../test/fixtures.ts";
 import { basePreview } from "../test/sub-portraits.ts";
 import copy from "./copy.json";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 
 useBrowser();
 
@@ -123,9 +124,10 @@ test("a saved partial style exposes only its remaining main image, and addition 
   }
   expect(document.querySelector('[value="introduction"]')).toBeNull();
   const image = document.querySelector<HTMLImageElement>("#portrait-gallery-anime img")!;
-  const originalUrl = image.getAttribute("src")!;
-  const expectedTarget = `/personas?image=${encodeURIComponent(originalUrl)}&style=anime`;
   const figure = image.closest("figure")!;
+  const originalUrl = figure.querySelector("a")!.getAttribute("href")!;
+  expect(image.getAttribute("src")).toBe(thumbnailUrl(originalUrl));
+  const expectedTarget = `/personas?image=${encodeURIComponent(originalUrl)}&style=anime`;
   expect(figure.querySelector('[value="regenerate"]')?.getAttribute("formaction")).toBe(
     expectedTarget,
   );

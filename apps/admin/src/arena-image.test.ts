@@ -1,8 +1,8 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { Miniflare } from "miniflare";
+import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 import { createProfileGenerator } from "./generation.ts";
 import { character, png, portraitImage, photoPortrait } from "../test/fixtures.ts";
 import { withSeedingBudget } from "./seeding-budget.ts";
-import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
 
 afterEach(() => vi.restoreAllMocks());
 const reply = () => Response.json({ data: [{ b64_json: png.toString("base64") }] });
@@ -17,20 +17,31 @@ const client = (fetcher: typeof fetch, arenaKey = "arena-secret") =>
 test.each([200, 307])(
   "Arena request options work in workerd and reject redirects (HTTP %i)",
   async (status) => {
-    const { runtime } = await cloudflareFixture(
-      undefined,
-      `export default {
+    const contents = `export default {
     async fetch(input) {
       const { url, init } = await input.json();
       const request = new Request(url, init);
       if (request.redirect !== "manual") return new Response("Redirects must not be followed", {status: 500});
       return Response.json({data: [{b64_json: ${JSON.stringify(png.toString("base64"))}}]}, {status: ${status}});
     }
-  }`,
-    );
-    const worker = await runtime.getWorker("assets");
+  }`;
+    const runtime = new Miniflare({
+      workers: [
+        {
+          config: {
+            name: "arena",
+            compatibilityDate: "2026-10-11",
+            manifest: {
+              mainModule: "index.js",
+              modules: { "index.js": { type: "esm", contents } },
+            },
+          },
+        },
+      ],
+    });
+    onTestFinished(() => runtime.dispose());
     const fetcher = vi.fn<typeof fetch>(async (url, init) => {
-      const response = await worker.fetch("http://worker.test/", {
+      const response = await runtime.dispatchFetch("http://worker.test/", {
         method: "POST",
         body: JSON.stringify({
           url,

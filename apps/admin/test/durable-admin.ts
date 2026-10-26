@@ -13,7 +13,7 @@ export async function durableFixture(model: ProfileGenerator = generator) {
   };
   const logs: LogEntry[] = [];
   const open = () => {
-    const admin = createAdmin(store, "test-password", "", {
+    const admin = createAdmin(store, "test-password", {
       generator: model,
       log: (entry) => logs.push(entry),
       persistence: {

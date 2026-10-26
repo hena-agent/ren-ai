@@ -124,19 +124,19 @@ test("text-only edits keep the latest unsaved images on reload and configuration
     request(route, { ...character, draft: tokenOf(latest), intent: "introduction" }),
   );
   expect(response.status).toBe(200);
-  expect(
-    logs.find(
-      (entry) =>
-        entry.requestId === response.headers.get("x-request-id") &&
-        entry.event === "operation.completed",
-    )?.stage,
-  ).toBe("introduction.generate");
+  expect(logs).toContainEqual(
+    expect.objectContaining({
+      requestId: response.headers.get("x-request-id"),
+      event: "operation.completed",
+      stage: "introduction.generate",
+    }),
+  );
   expect(await (await admin(request(route))).text()).toContain(
     "Changed introduction for recovery.",
   );
   const missing = await fixture();
   const { createAdmin } = await import("./admin.ts");
-  const unavailable = createAdmin(missing.store, "test-password", "", { log: () => {} });
+  const unavailable = createAdmin(missing.store, "test-password", { log: () => {} });
   const failed = await unavailable(
     queuedRequest(
       "/personas",

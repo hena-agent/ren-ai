@@ -10,7 +10,6 @@ const fixture = async () => {
   const env: AdminEnv = {
     DB: resources.db,
     IMAGES: resources.bucket,
-    ASSETS: { fetch: async () => new Response("") },
     ADMIN_PASSWORD: "password",
     TOKEN_CATALOG: "catalog-secret",
     GEMINI_API_KEY: "",

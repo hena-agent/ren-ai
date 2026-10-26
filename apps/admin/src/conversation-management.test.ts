@@ -62,7 +62,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
     recover: vi.fn<ConversationClient["recover"]>(async () => {}),
     end: vi.fn<ConversationClient["end"]>(async () => {}),
   };
-  const admin = createAdmin(f.store, "test-password", "styles", {
+  const admin = createAdmin(f.store, "test-password", {
     management: fromPartial<ManagementClient>({ conversations: client }),
   });
   expect((await admin(new Request("http://localhost:3729/conversations"))).status).toBe(401);
@@ -214,7 +214,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   expect(
     (await admin(request("/conversations/1", { action: "stop", requestId: key }))).status,
   ).toBe(409);
-  const unconfigured = createAdmin(f.store, "test-password", "styles");
+  const unconfigured = createAdmin(f.store, "test-password");
   expect((await unconfigured(request("/conversations"))).status).toBe(503);
 });
 
