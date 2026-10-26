@@ -33,6 +33,7 @@ function setup(error: Error, locale: Locale = "ko", refresh?: () => Promise<void
   render(
     <LocaleProvider initialLocale={locale}>
       <JoinForm
+        imageStyle="anime"
         liked={[profile]}
         client={testClient({ join, profiles: async () => [profile] })}
         onBack={onBack}

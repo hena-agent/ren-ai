@@ -307,6 +307,12 @@ export const migrate = Effect.gen(function* () {
       "050_message_history_sends": sql`CREATE INDEX send_guid ON send(guid)`,
       "051_message_history_conversations": sql`CREATE INDEX conversation_user_history ON conversation(user_id, id, started_at)`,
       "052_discovery_browsing": browseSchema,
+      "053_conversation_image_style": Effect.all([
+        sql`ALTER TABLE discovery_registration ADD COLUMN image_style TEXT NOT NULL DEFAULT 'anime'
+          CHECK(image_style IN ('anime', 'photo'))`,
+        sql`ALTER TABLE conversation ADD COLUMN image_style TEXT NOT NULL DEFAULT 'anime'
+          CHECK(image_style IN ('anime', 'photo'))`,
+      ]),
     }),
   );
 });

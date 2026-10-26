@@ -74,6 +74,7 @@ export const DiscoveryRequest = Schema.Struct({
   locale: DiscoveryLocale,
   conversationLanguage: Schema.optionalKey(DiscoveryLocale),
   startingRelationship: Schema.optionalKey(StartingRelationship),
+  imageStyle: Schema.optionalKey(Schema.Literals(["anime", "photo"])),
   name: text.check(Schema.isTrimmed(), Schema.isMaxLength(100)),
   age: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0))),
   gender: Schema.optionalKey(Schema.Literals(["female", "male", "other"])),

@@ -33,6 +33,7 @@
         "@codemirror/state": "6.7.6",
         "@codemirror/view": "6.43.14",
         "@lezer/highlight": "1.2.5",
+        "@ren-ai/image-generation": "workspace:*",
         "@ren-ai/onboarding": "workspace:*",
         "@ren-ai/personas": "workspace:*",
         "@ren-ai/transport": "workspace:*",
@@ -181,6 +182,18 @@
         "tailwindcss": "4.1.13",
         "typescript": "7.0.2",
         "vite": "7.3.1",
+        "vitest": "5.0.1",
+      },
+    },
+    "packages/image-generation": {
+      "name": "@ren-ai/image-generation",
+      "version": "0.0.0",
+      "dependencies": {
+        "effect": "4.0.0-rc.112",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.2",
+        "typescript": "7.0.2",
         "vitest": "5.0.1",
       },
     },
@@ -1126,6 +1139,8 @@
     "@ren-ai/api-msg": ["@ren-ai/api-msg@workspace:apps/api-msg"],
 
     "@ren-ai/discovery": ["@ren-ai/discovery@workspace:apps/discovery"],
+
+    "@ren-ai/image-generation": ["@ren-ai/image-generation@workspace:packages/image-generation"],
 
     "@ren-ai/imsg": ["@ren-ai/imsg@workspace:apps/imsg"],
 

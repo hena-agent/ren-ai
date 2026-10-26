@@ -158,20 +158,29 @@ export const openHistory = (path: string, serviceHandle: string) => {
       );
       return undefined;
     },
-    /** Records an outgoing text before it is submitted, so a crash leaves it in doubt, not lost. */
-    outgoing: (guid: string, handle: string, text: string, createdAt: number) => {
+    /** Records an outgoing message before submission, so a crash leaves it in doubt, not lost. */
+    outgoing: (
+      guid: string,
+      handle: string,
+      text: string,
+      createdAt: number,
+      storedDetail: Detail = {},
+    ) => {
       const admitted = db
         .prepare(`INSERT INTO message
-        (guid, handle, created_at, text, from_me, state)
-        SELECT ?, ?, ?, ?, 1, 'pending' WHERE NOT EXISTS
+        (guid, handle, created_at, text, from_me, state, detail)
+        SELECT ?, ?, ?, ?, 1, 'pending', ? WHERE NOT EXISTS
         (SELECT 1 FROM send_fence WHERE guid = ?)
         ON CONFLICT (guid) DO NOTHING RETURNING *`)
-        .get(guid, handle, createdAt, text, guid);
+        .get(guid, handle, createdAt, text, JSON.stringify(storedDetail), guid);
       if (admitted) return message(decodeRow(admitted));
       const existing = one(`SELECT * FROM message WHERE guid = ?`, guid);
       if (
         existing &&
-        (existing.handle !== handle || existing.text !== text || existing.from_me !== 1)
+        (existing.handle !== handle ||
+          existing.text !== text ||
+          existing.from_me !== 1 ||
+          JSON.stringify(existing.detail) !== JSON.stringify(storedDetail))
       )
         throw new Error("Send identity conflict");
       return undefined;

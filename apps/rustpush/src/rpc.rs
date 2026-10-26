@@ -17,6 +17,8 @@ use tokio::{
 
 #[path = "rpc_availability.rs"]
 mod availability;
+#[path = "rpc_image.rs"]
+mod image;
 
 /// The Apple session behind the bridge. An `Err` from `send` means the outcome is uncertain.
 pub trait Native: Send + Sync + 'static {
@@ -37,6 +39,7 @@ pub trait Native: Send + Sync + 'static {
         file: &mut File,
     ) -> impl Future<Output = Result<(), Failure>> + Send;
     fn send(&self, message: MessageInst) -> impl Future<Output = Result<Delivery, Failure>> + Send;
+    fn upload(&self, jpeg: &[u8]) -> impl Future<Output = Result<Attachment, Failure>> + Send;
 }
 
 pub struct Timing {
@@ -166,6 +169,7 @@ async fn call<N: Native>(
     let message = match method {
         "handles" => return Ok(json!({"handles": native.handles().await?})),
         "availability" => return availability::call(native, from, input).await,
+        "send_image" => return image::call(native, input).await,
         "send" => {
             let p: Text = params(input)?;
             guid(&p.guid)?;
@@ -435,7 +439,7 @@ pub async fn serve<N: Native>(
             let request_id = request.request_id.to_string();
             let started = Instant::now();
             let operation = match request.method.as_str() {
-                "handles" | "availability" | "send" | "typing" | "read" | "react" => request.method.as_str(),
+                "handles" | "availability" | "send" | "send_image" | "typing" | "read" | "react" => request.method.as_str(),
                 _ => "unknown",
             };
             let result = tokio::time::timeout(
@@ -459,8 +463,9 @@ pub async fn serve<N: Native>(
             let rejected = result.as_ref().is_ok_and(|value| value["status"] == "failed");
             if let Ok(value) = &result {
                 if rejected {
-                    report("warn", operation, &request_id, &Failure {
-                        stage: "send", cause: json!({"code": value["code"], "providerCodes": value["providerCodes"]}),
+                    report(if value["code"] == "attachment_upload_failed" { "error" } else { "warn" }, operation, &request_id, &Failure {
+                        stage: if value["code"] == "attachment_upload_failed" { "attachment_upload" } else { "send" },
+                        cause: json!({"code": value["code"], "providerCodes": value["providerCodes"], "upstream": value["cause"]}),
                     });
                 }
             }

@@ -60,8 +60,8 @@ export const reselect = (input: DiscoveryRequest) =>
     const id = randomUUID();
     const now = yield* Clock.currentTimeMillis;
     yield* sql`UPDATE discovery_registration SET archived_at = ${now} WHERE handle = ${input.handle} AND archived_at IS NULL`;
-    yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship)
-    VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${now}, ${input.startingRelationship ?? "dating"})`;
+    yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship, image_style)
+    VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${now}, ${input.startingRelationship ?? "dating"}, ${input.imageStyle ?? "anime"})`;
     yield* sql`INSERT INTO discovery_profile (registration_id, name, age, gender)
       VALUES (${id}, ${input.name}, ${input.age ?? null}, ${input.gender ?? null})`;
     yield* sql`INSERT INTO discovery_language VALUES (${id}, ${input.conversationLanguage ?? input.locale})`;

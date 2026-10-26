@@ -23,7 +23,7 @@ import { withSeedingBudget, pricedSeedingModels } from "./seeding-budget.ts";
 import type { SeedingModels } from "./seeding-budget.ts";
 import { seedingReview } from "./seeding-review.ts";
 import { seedSecrets } from "./seed-selection.ts";
-import { arenaImageModel } from "./arena-image.ts";
+import { codexImageModel } from "@ren-ai/image-generation";
 
 function requireEligible(birthDate: string) {
   const age = ageOn(birthDate);
@@ -181,7 +181,7 @@ export function seedingEngine({
     confirm: async (id: string, budget: number) => {
       if (
         models.text !== pricedSeedingModels.text ||
-        ![pricedSeedingModels.image, arenaImageModel].includes(models.image)
+        ![pricedSeedingModels.image, codexImageModel].includes(models.image)
       )
         throw new PersonaError(
           "invalid",

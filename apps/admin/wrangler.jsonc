@@ -7,7 +7,7 @@
   "vars": {
     "APPLICATION_API_URL": "https://api.renai.im",
     "ADMIN_JURISDICTION": "us",
-    "ADMIN_IMAGE_PROVIDER": "arena",
+    "ADMIN_IMAGE_PROVIDER": "codex",
   },
   "placement": { "mode": "smart" },
   "main": "dist/worker/entry.js",

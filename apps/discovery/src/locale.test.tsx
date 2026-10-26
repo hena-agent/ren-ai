@@ -142,6 +142,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
     locale: "ja",
     conversationLanguage: "ja",
     startingRelationship: "friends",
+    imageStyle: "photo",
     name: "민수",
     age: 28,
     gender: "male",
@@ -211,6 +212,7 @@ test("a disabled language control cannot open or change its value, and selection
 test("conversation language choices are explicit and consent can be withdrawn", () => {
   render(
     <JoinForm
+      imageStyle="anime"
       liked={[persona]}
       client={testClient({
         profiles: async () => [persona],

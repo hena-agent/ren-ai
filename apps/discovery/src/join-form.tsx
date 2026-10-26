@@ -19,6 +19,7 @@ import { LanguageSelect } from "./language-select.tsx";
 import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
 import { RelationshipSelect } from "./relationship-select.tsx";
 import type { StartingRelationship } from "@ren-ai/onboarding";
+import type { ImageStyle } from "./image-style.ts";
 
 const isMobileNumber = Schema.is(MobileNumber);
 
@@ -33,6 +34,7 @@ declare global {
 
 export function JoinForm({
   liked,
+  imageStyle,
   client,
   onBack,
   onSuccess,
@@ -40,6 +42,7 @@ export function JoinForm({
   onRefresh,
 }: {
   liked: readonly PublicPersona[];
+  imageStyle: ImageStyle;
   client: DiscoveryClient;
   onBack: () => void;
   onSuccess: (status: "waiting" | "active") => void;
@@ -101,6 +104,7 @@ export function JoinForm({
           locale,
           conversationLanguage,
           startingRelationship,
+          imageStyle,
           privacyNoticeVersion: discoveryNotice.version,
           likedPersonaIDs: liked.map((persona) => persona.id),
           turnstileToken: token,

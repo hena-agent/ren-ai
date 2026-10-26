@@ -1,7 +1,7 @@
 # Rustpush messaging bridge
 
 Native macOS IDS/APNs transport for `apps/imsg`. One long-running JSON-lines bridge
-serves the gateway's texts, read receipts, typing and tapbacks, and emits durable
+serves the gateway's texts, photos, read receipts, typing and tapbacks, and emits durable
 incoming notifications. Every Persona uses `hi@renai.im`. Installation and recovery
 are documented in the [gateway runbook](../imsg/ops/README.md).
 
@@ -79,7 +79,7 @@ The gateway owns bridge stdin/stdout. Requests have `{id, requestId, method, par
 `requestId` is a gateway-generated UUID shared by gateway/native diagnostics and
 returned on errors. Replies
 have the same `id` and either `result` or a sanitized `error`. Methods are `handles`,
-`availability`, `send`, `typing`, `read`, `react` and `ack`. An `availability` request
+`availability`, `send`, `send_image`, `typing`, `read`, `react` and `ack`. An `availability` request
 takes `{to}` (`tel:+…` or `mailto:…`) and returns `{available}` by querying iMessage
 IDS keys without sending a message. This is registration reachability, not proof
 of delivery; upstream caches negative results for one hour. Lookup errors remain
@@ -89,6 +89,17 @@ is `mailto:hi@renai.im`; it must be registered and is the only sender for gestur
 `mailto:noti@renai.im`, and must be registered at request time. Other account
 aliases are rejected. A missing Notification handle does not prevent startup.
 The gateway and bridge ship together, so their internal send shape changes together.
+Image `send_image` requests take `{from, guid, to, path}` with the same sender rules.
+`path` must be an absolute, private regular file (no group/world permissions or
+symlinks), containing a decodable JPEG of at most 10 MB (10,000,000 bytes), with a
+64 MiB decoded-buffer ceiling. The bridge snapshots those bytes, uploads once through
+Apple MMCS, then sends one attachment-only iMessage under the supplied GUID, named
+`photo.jpg` with MIME `image/jpeg` and UTI `public.jpeg`. It neither fetches URLs nor
+falls back to text or SMS. Input/file failures use error stage `input` and mean
+definitively unsent. Preparation/upload failures (including its 90-second deadline)
+return `{guid, status:"failed", code:"attachment_upload_failed", cause}`; `cause`
+contains only sanitized diagnostic metadata. Successful submission returns
+`{guid, status:"sent"}`; actual send uncertainty retains the text-send error semantics.
 Incoming events are emitted as
 `{event:"message", spool, message}` and repeated until acknowledged by spool ID.
 Only the gateway acknowledges after its history commit. Do not acknowledge manually.

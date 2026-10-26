@@ -245,6 +245,7 @@ test("compiled SQLite DO imports linked private state atomically and recognizes 
       last_received_at: 4,
       reset_guid: null,
       usage_key: "a".repeat(32),
+      image_style: "photo",
     };
     const snapshot = {
       ...empty,
@@ -295,6 +296,7 @@ test("compiled SQLite DO imports linked private state atomically and recognizes 
     expect(detail.entry.endedBy).toBe("operator");
     expect(detail.entry.endedAt).not.toBeNull();
     expect(detail.entry.sessionID).toBe("ses_preserved");
+    expect(detail.entry.imageStyle).toBe("photo");
     expect(detail.entry.farewell).toBe("cancelled");
   } finally {
     await stopRuntimes();

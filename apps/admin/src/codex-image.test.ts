@@ -6,16 +6,16 @@ import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
 
 afterEach(() => vi.restoreAllMocks());
 const reply = () => Response.json({ data: [{ b64_json: png.toString("base64") }] });
-const client = (fetcher: typeof fetch, arenaKey = "arena-secret") =>
+const client = (fetcher: typeof fetch, codexKey = "codex-secret") =>
   createProfileGenerator({
     key: "gemini-secret",
-    imageProvider: "arena",
-    arenaKey,
+    imageProvider: "codex",
+    codexKey,
     fetcher,
   });
 
 test.each([200, 307])(
-  "Arena request options work in workerd and reject redirects (HTTP %i)",
+  "Codex request options work in workerd and reject redirects (HTTP %i)",
   async (status) => {
     const { runtime } = await cloudflareFixture(
       undefined,
@@ -54,7 +54,7 @@ test.each([200, 307])(
   },
 );
 
-test("Arena generates independent sheets and sends same-style identity and composition as data-URI references", async () => {
+test("Codex generates independent sheets and sends same-style identity and composition as data-URI references", async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => reply());
   const generator = client(fetcher);
   expect(await generator.sheet(character, "anime")).toEqual(portraitImage);
@@ -62,17 +62,17 @@ test("Arena generates independent sheets and sends same-style identity and compo
   await generator.portrait(character, "photo", "photo direction", portraitImage, photoPortrait);
   const requests = fetcher.mock.calls.map((args) => new Request(...args));
   expect(requests.map((request) => request.url)).toEqual([
-    "https://gpt-image.renai.im/v1/images/generations",
-    "https://gpt-image.renai.im/v1/images/edits",
-    "https://gpt-image.renai.im/v1/images/edits",
+    "https://codex-image.renai.im/v1/images/generations",
+    "https://codex-image.renai.im/v1/images/edits",
+    "https://codex-image.renai.im/v1/images/edits",
   ]);
   for (const request of requests) {
-    expect(request.headers.get("authorization")).toBe("Bearer arena-secret");
+    expect(request.headers.get("authorization")).toBe("Bearer codex-secret");
     expect(request.headers.has("x-goog-api-key")).toBe(false);
     expect(request.redirect).toBe("manual");
   }
   expect(await requests[0]!.json()).toMatchObject({
-    model: "gpt-image-2.5-sunburst",
+    model: "gpt-image-2.5",
     n: 1,
     size: "1536x1024",
     response_format: "b64_json",
@@ -80,11 +80,13 @@ test("Arena generates independent sheets and sends same-style identity and compo
   });
   expect(await requests[1]!.clone().text()).toContain("sheet direction");
   expect(await requests[1]!.json()).toMatchObject({
+    model: "gpt-image-2.5",
     image: [`data:image/jpeg;base64,${photoPortrait.bytes.toString("base64")}`],
     input_fidelity: "high",
   });
   expect(await requests[2]!.clone().text()).toContain("photo direction");
   expect(await requests[2]!.json()).toMatchObject({
+    model: "gpt-image-2.5",
     size: "1024x1280",
     image: [
       `data:image/png;base64,${png.toString("base64")}`,
@@ -95,25 +97,26 @@ test("Arena generates independent sheets and sends same-style identity and compo
 
 test("configuration, missing credentials, prompt limits and budget rejection fail before image dispatch", async () => {
   const fetcher = vi.fn<typeof fetch>();
-  expect(() => createProfileGenerator({ key: "", imageProvider: "typo" })).toThrow(
-    "ADMIN_IMAGE_PROVIDER",
-  );
+  for (const imageProvider of ["typo", "arena"])
+    expect(() => createProfileGenerator({ key: "", imageProvider })).toThrow(
+      "ADMIN_IMAGE_PROVIDER",
+    );
   expect(() =>
     createProfileGenerator({
       key: "",
-      imageProvider: "arena",
+      imageProvider: "codex",
       imageModel: "gemini-3.1-flash-image",
     }),
-  ).toThrow("canonical model");
-  expect(() => createProfileGenerator({ key: "", imageModel: "gpt-image-2.5-sunburst" })).toThrow(
-    "canonical model",
+  ).toThrow("requires gpt-image-2.5");
+  expect(() => createProfileGenerator({ key: "", imageModel: "gpt-image-2.5" })).toThrow(
+    "requires gpt-image-2.5",
   );
   await expect(client(fetcher, " ").sheet(character, "photo")).rejects.toThrow(
-    "ARENA_IMAGE_API_KEY",
+    "CODEX_IMAGE_API_KEY",
   );
   await expect(
-    createProfileGenerator({ key: "", imageProvider: "arena", fetcher }).sheet(character, "photo"),
-  ).rejects.toThrow("ARENA_IMAGE_API_KEY");
+    createProfileGenerator({ key: "", imageProvider: "codex", fetcher }).sheet(character, "photo"),
+  ).rejects.toThrow("CODEX_IMAGE_API_KEY");
   await expect(client(fetcher).sheet(character, "photo", "x".repeat(32001))).rejects.toThrow(
     "provider limit",
   );
@@ -143,13 +146,13 @@ test("invalid responses, missing images and oversized or corrupt encodings never
 });
 
 test.each([429, 502, 503, 504])(
-  "Arena HTTP %i never automatically repeats an uncertain image request",
+  "Codex HTTP %i never automatically repeats an uncertain image request",
   async (status) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json(
         {
           error: {
-            message: "failure arena-secret",
+            message: "failure codex-secret",
             code: "upstream_error",
             type: "provider_error",
           },
@@ -179,7 +182,7 @@ test("non-JSON failures and transport errors retain safe diagnostics", async () 
     });
   await expect(
     client(async () => {
-      throw new Error("disconnected arena-secret");
+      throw new Error("disconnected codex-secret");
     }).sheet(character, "photo"),
   ).rejects.toMatchObject({
     message: "disconnected <REDACTED>",

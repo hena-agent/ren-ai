@@ -52,15 +52,16 @@ to 32,756 before duplicate names and other exclusions.
 
 ## Execution and review
 
-### Image providers and US preview selection (2026-10-23)
+### Image providers and US preview selection (updated 2026-10-25)
 
-- `ADMIN_IMAGE_PROVIDER` selects `gemini` or `arena`; text stays on Gemini.
-  Arena uses the operator's `https://gpt-image.renai.im` API and server-only key,
-  canonical `gpt-image-2.5-sunburst`, one output per call, base64 PNG responses,
+- `ADMIN_IMAGE_PROVIDER` selects `gemini` or `codex`; text stays on Gemini.
+  Codex uses the operator's `https://codex-image.renai.im` API and server-only
+  `CODEX_IMAGE_API_KEY`, model `gpt-image-2.5` (the API's Sunburst alias),
+  one output per call, base64 PNG responses,
   and inline same-style references for edits. Sheets are 1536×1024; photos are
   1024×1280. The shared FIFO, prompts, confirmation and storage are unchanged.
-- The operator confirms no incremental Arena image charge: reserve $0 per image,
-  retaining bounded text reservations. Arena failures require individual retry
+- The operator confirms no incremental Codex OAuth image charge: reserve $0 per image,
+  retaining bounded text reservations. Codex failures require individual retry
   confirmation, including 429 and 5xx; no automatic cross-provider fallback.
   Switch providers only with idle image/seeding work.
 - The approved next previews are two Korean and two English-speaking US women,

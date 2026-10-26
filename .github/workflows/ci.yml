@@ -203,7 +203,7 @@ jobs:
 
   deploy-discovery:
     name: Deploy renai.im
-    needs: gates
+    needs: [gates, deploy-api-app]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
