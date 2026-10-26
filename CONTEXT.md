@@ -23,23 +23,31 @@ What a persona is drafted from: an operator's short idea or one record of a thir
 _Avoid_: Nemotron persona, source persona, template
 
 **Seeding run**:
-One operator-confirmed run that drafts many personas from a set of Persona seeds, creates their identity sheets and photos, and saves them unpublished.
+One operator-confirmed run that drafts many personas from a set of Persona seeds, creates their identity sheets and gallery photos, and saves them unpublished.
 _Avoid_: import, batch, bulk generation
 
 **Public profile**:
-The name, image and introduction shown to people choosing personas. It is distinct from the private persona description.
+The name, gallery photos and introduction shown to people choosing personas. It is distinct from the private persona description.
 _Avoid_: persona definition, prompt
 
 **Image style**:
-One of the two renderings of every persona image: anime or photo. Each style has its own identity sheet and photos, and a Discovery visitor browses in one style at a time.
+One of the two renderings of every persona image: anime or photo. Each style has its own identity sheet and gallery photos, and a Discovery visitor browses in one style at a time.
 _Avoid_: live-action, photorealistic, realistic, portrait type
 
 **Identity sheet**:
-A neutral multi-view reference image of one persona in one image style. Every photo of her in that style is generated from it; it never appears in her public profile.
+A neutral multi-view reference image of one persona in one image style. Every gallery photo and Conversation photo showing her in that style is generated from it; it never appears in her public profile.
 _Avoid_: main photo, representative photo, reference portrait
 
+**Gallery photo**:
+A photo of a persona in one image style, shown in her public profile.
+_Avoid_: portrait, profile picture, main photo, secondary photo
+
+**Conversation photo**:
+A photo a persona takes for one Conversation, in the image style that Conversation's user chose in Discovery; she may send it to that user or let it go. It never appears in her public profile or another Conversation.
+_Avoid_: selfie, shared photo, snapshot, attachment
+
 **Persona version**:
-An immutable saved edition of one persona's identity document, including its private description and public profile. It excludes photos, initial State and Memory, and her evolving State and Memory.
+An immutable saved edition of one persona's identity document, including its private description and public profile. It excludes gallery photos, initial State and Memory, and her evolving State and Memory.
 _Avoid_: description format version, conversation snapshot
 
 **Persona restoration**:
