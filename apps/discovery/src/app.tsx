@@ -341,6 +341,7 @@ function Experience({
             <div className="contact-surface" hidden={view !== "contact" || Boolean(detail)}>
               <JoinForm
                 liked={liked}
+                imageStyle={style}
                 client={client}
                 onBack={back}
                 onSuccess={setView}

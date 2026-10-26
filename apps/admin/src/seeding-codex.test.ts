@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 test.each(["ko", "en"])(
-  "%s Arena seeding preserves language, initial documents, references and unpublished saves across replacement",
+  "%s Codex seeding preserves language, initial documents, references and unpublished saves across replacement",
   async (language) => {
     const { db, bucket, store } = await cloudflareFixture();
     const { storage } = memoryStorage();
@@ -37,8 +37,8 @@ test.each(["ko", "en"])(
     const env = {
       ...adminBindings(db, bucket),
       GEMINI_API_KEY: "text-secret",
-      ADMIN_IMAGE_PROVIDER: "arena",
-      ARENA_IMAGE_API_KEY: "image-secret",
+      ADMIN_IMAGE_PROVIDER: "codex",
+      CODEX_IMAGE_API_KEY: "image-secret",
     };
     let admin = await cloudflareAdmin(env, storage);
     const location = (
@@ -75,6 +75,9 @@ test.each(["ko", "en"])(
     expect(provider).toHaveBeenCalledTimes(6);
     const calls = provider.mock.calls.map((args) => new Request(...args));
     expect(calls.slice(0, 2).every((call) => call.url.includes("gemini-3.8-flash"))).toBe(true);
+    expect(
+      calls.slice(2).every((call) => new URL(call.url).origin === "https://codex-image.renai.im"),
+    ).toBe(true);
     expect(calls.slice(2).map((call) => new URL(call.url).pathname)).toEqual([
       "/v1/images/generations",
       "/v1/images/generations",
@@ -83,6 +86,7 @@ test.each(["ko", "en"])(
     ]);
     for (const call of calls.slice(4))
       expect(await call.json()).toMatchObject({
+        model: "gpt-image-2.5",
         image: [`data:image/png;base64,${png.toString("base64")}`],
       });
     expect(await (await admin.fetch(request(location))).text()).toContain("no incremental charge");
@@ -96,60 +100,72 @@ test.each(["ko", "en"])(
   30_000,
 );
 
-test("Arena failure is correlated and redacted at the durable task boundary, retaining completed siblings", async () => {
-  const { db, bucket, store } = await cloudflareFixture();
-  const { storage } = memoryStorage();
-  const logs = captureWorkerLogs();
-  const provider = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(seedCharacter(seedManifest().seeds[0]!))
-    .mockResolvedValueOnce(acceptedReview());
-  provider.mockImplementationOnce(async (url, init) => {
-    const body = Schema.decodeUnknownSync(Schema.Struct({ prompt: Schema.String }))(
-      await new Request(url, init).json(),
-    );
-    return Response.json(
-      {
-        error: {
-          message: `image-secret ${body.prompt}`,
-          code: "session_expired",
-          type: "upstream_error",
+test.each([false, true])(
+  "Codex failure after sheets=%s is correlated and redacted at the durable task boundary, retaining completed siblings",
+  async (afterSheets) => {
+    const { db, bucket, store } = await cloudflareFixture();
+    const { storage } = memoryStorage();
+    const logs = captureWorkerLogs();
+    const provider = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(seedCharacter(seedManifest().seeds[0]!))
+      .mockResolvedValueOnce(acceptedReview());
+    if (afterSheets)
+      for (let i = 0; i < 2; i++)
+        provider.mockImplementationOnce(async () =>
+          Response.json({ data: [{ b64_json: png.toString("base64") }] }),
+        );
+    provider.mockImplementationOnce(async (url, init) => {
+      const body = Schema.decodeUnknownSync(
+        Schema.Struct({
+          prompt: Schema.String,
+          image: Schema.optionalKey(Schema.Array(Schema.String)),
+        }),
+      )(await new Request(url, init).json());
+      return Response.json(
+        {
+          error: {
+            message: `image-secret ${body.prompt} ${JSON.stringify(body.image)}`,
+            code: "session_expired",
+            type: "upstream_error",
+          },
         },
+        { status: 503 },
+      );
+    });
+    for (let i = 0; i < (afterSheets ? 1 : 2); i++)
+      provider.mockImplementationOnce(async () =>
+        Response.json({ data: [{ b64_json: png.toString("base64") }] }),
+      );
+    vi.stubGlobal("fetch", provider);
+    const admin = await cloudflareAdmin(
+      {
+        ...adminBindings(db, bucket),
+        GEMINI_API_KEY: "text-secret",
+        ADMIN_IMAGE_PROVIDER: "codex",
+        CODEX_IMAGE_API_KEY: "image-secret",
       },
-      { status: 503 },
+      storage,
     );
-  });
-  for (let i = 0; i < 2; i++)
-    provider.mockImplementationOnce(async () =>
-      Response.json({ data: [{ b64_json: png.toString("base64") }] }),
-    );
-  vi.stubGlobal("fetch", provider);
-  const admin = await cloudflareAdmin(
-    {
-      ...adminBindings(db, bucket),
-      GEMINI_API_KEY: "text-secret",
-      ADMIN_IMAGE_PROVIDER: "arena",
-      ARENA_IMAGE_API_KEY: "image-secret",
-    },
-    storage,
-  );
-  const location = (await admin.fetch(uploadSeeds(1))).headers.get("location")!;
-  const confirmation = await admin.fetch(request(location, { intent: "confirm", budget: "3" }));
-  for (let i = 0; i < 15; i++) await admin.alarm();
-  expect(provider).toHaveBeenCalledTimes(5);
-  const [person] = await store.list();
-  expect(person!.portraits?.photo).toBeTruthy();
-  expect(person!.portraits?.anime).toBeUndefined();
-  const diagnostics = logs.stderr.mock.calls.join(" ");
-  for (const value of [
-    confirmation.headers.get("x-request-id")!,
-    "generation.api",
-    "session_expired",
-    '"status":503',
-    "gpt-image-2.5-sunburst",
-  ])
-    expect(diagnostics).toContain(value);
-  for (const value of ["image-secret", "text-secret", "취업을 준비", png.toString("base64")])
-    expect(diagnostics).not.toContain(value);
-  expect(await (await admin.fetch(request(location))).text()).toContain("partial");
-}, 30_000);
+    const location = (await admin.fetch(uploadSeeds(1))).headers.get("location")!;
+    const confirmation = await admin.fetch(request(location, { intent: "confirm", budget: "3" }));
+    for (let i = 0; i < 15; i++) await admin.alarm();
+    expect(provider).toHaveBeenCalledTimes(afterSheets ? 6 : 5);
+    const [person] = await store.list();
+    expect(person!.portraits?.photo).toBeTruthy();
+    expect(person!.portraits?.anime).toBeUndefined();
+    const diagnostics = logs.stderr.mock.calls.join(" ");
+    for (const value of [
+      confirmation.headers.get("x-request-id")!,
+      "generation.api",
+      "session_expired",
+      '"status":503',
+      "gpt-image-2.5",
+    ])
+      expect(diagnostics).toContain(value);
+    for (const value of ["image-secret", "text-secret", "취업을 준비", png.toString("base64")])
+      expect(diagnostics).not.toContain(value);
+    expect(await (await admin.fetch(request(location))).text()).toContain("partial");
+  },
+  30_000,
+);

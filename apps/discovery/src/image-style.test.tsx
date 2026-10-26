@@ -160,6 +160,26 @@ test("style changes and reloads preserve Like and Pass, contact input and candid
   submitVerifiedContact(verify);
   await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
   expect(join.mock.calls[0]?.[0].likedPersonaIDs).toEqual(["persona0"]);
+  expect(join.mock.calls[0]?.[0]).toHaveProperty("imageStyle", "anime");
+});
+
+test("contact submits the current photo style even when browser storage is blocked", async () => {
+  const join = vi.fn<DiscoveryClient["join"]>().mockResolvedValue({ status: "waiting" });
+  const verify = fakeVerification();
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("blocked");
+  });
+  render(<App client={{ ...client, join }} />);
+  await screen.findByRole("heading", { name: "하린" });
+  choose(true);
+  fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
+  await selectImageStyle("실사");
+  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+    target: { value: "01012345678" },
+  });
+  submitVerifiedContact(verify);
+  await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
+  expect(join.mock.calls[0]?.[0]).toHaveProperty("imageStyle", "photo");
 });
 
 test("blocked storage permits an active style choice and reports persistence failure", async () => {

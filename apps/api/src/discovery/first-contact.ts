@@ -12,7 +12,7 @@ import type { conversations } from "../conversations/conversations.ts";
 import { contactCause, contactLog } from "./diagnostics.ts";
 import type { ContactLog } from "./diagnostics.ts";
 import { claimWork, workBatchSize } from "../work-budget.ts";
-import type { StartingRelationship } from "@ren-ai/onboarding";
+import type { DiscoveryRequest, StartingRelationship } from "@ren-ai/onboarding";
 
 interface Contact {
   id: string;
@@ -25,6 +25,7 @@ interface Contact {
   locale: string;
   conversationLanguage: string | null;
   startingRelationship: StartingRelationship | null;
+  imageStyle: NonNullable<DiscoveryRequest["imageStyle"]>;
   name: string | null;
   age: number | null;
   gender: string | null;
@@ -95,8 +96,8 @@ export const firstContacts = (
           VALUES (${row.handle}, ${row.locale}, ${row.consentVersion}, ${row.locale}, ${row.consentAt}, ${row.personaID}, ${now})
           ON CONFLICT(handle) DO UPDATE SET locale = excluded.locale,
             persona_id = excluded.persona_id, joined_at = COALESCE(user.joined_at, excluded.joined_at)`;
-            yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, usage_key, started_at, registration_id, starting_relationship)
-          VALUES ((SELECT id FROM user WHERE handle = ${row.handle}), ${row.personaID}, ${session.id}, ${sessionID}, ${now}, ${row.id}, ${row.startingRelationship})`;
+            yield* sql`INSERT INTO conversation (user_id, persona_id, session_id, usage_key, started_at, registration_id, starting_relationship, image_style)
+          VALUES ((SELECT id FROM user WHERE handle = ${row.handle}), ${row.personaID}, ${session.id}, ${sessionID}, ${now}, ${row.id}, ${row.startingRelationship}, ${row.imageStyle})`;
             yield* bindUsageSessions(sql);
             yield* sql`UPDATE discovery_contact SET session_id = ${session.id}, started_at = ${now}, state = 'greeting' WHERE registration_id = ${row.id}`;
             return true;
@@ -200,7 +201,7 @@ export const firstContacts = (
         yield* sql<Contact>`SELECT r.id, r.handle, r.locale, l.conversation_language AS conversationLanguage, r.consent_version AS consentVersion,
       r.created_at AS consentAt, c.persona_id AS personaID, c.session_id AS sessionID, c.state,
         c.started_at AS startedAt, c.request_id AS requestId, p.name, p.age, p.gender,
-        r.starting_relationship AS startingRelationship
+        r.starting_relationship AS startingRelationship, r.image_style AS imageStyle
        FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
         LEFT JOIN discovery_language l ON l.registration_id = r.id
         LEFT JOIN discovery_profile p ON p.registration_id = r.id

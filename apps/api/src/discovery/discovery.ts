@@ -262,8 +262,8 @@ export const makeDiscoveryWeb = ({
           const id = randomUUID();
           const created = yield* Clock.currentTimeMillis;
           const inserted =
-            yield* sql`INSERT OR IGNORE INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship)
-        VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${created}, ${input.startingRelationship ?? "dating"}) RETURNING id`;
+            yield* sql`INSERT OR IGNORE INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship, image_style)
+        VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${created}, ${input.startingRelationship ?? "dating"}, ${input.imageStyle ?? "anime"}) RETURNING id`;
           if (inserted.length) {
             yield* sql`INSERT INTO discovery_profile (registration_id, name, age, gender)
               VALUES (${id}, ${input.name}, ${input.age ?? null}, ${input.gender ?? null})`;

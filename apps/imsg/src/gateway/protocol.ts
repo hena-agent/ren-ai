@@ -101,6 +101,15 @@ export const messagingApi = RpcGroup.make(
     success: Schema.Struct({ guid: Schema.NullOr(Schema.String), requestId: Schema.String }),
     error: Schema.String,
   }),
+  Rpc.make("submitPhoto", {
+    payload: {
+      ...handle,
+      base64: Schema.String,
+      attemptID: Schema.String.check(Schema.isUUID()),
+    },
+    success: Schema.Struct({ guid: Schema.NullOr(Schema.String), requestId: Schema.String }),
+    error: Schema.String,
+  }),
   Rpc.make("resolveSend", {
     payload: { attemptID: Schema.String.check(Schema.isUUID()) },
     success: Schema.Struct({

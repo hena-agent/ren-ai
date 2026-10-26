@@ -11,7 +11,7 @@ import { recoverEditing, downloadEditingRecovery } from "./editing-recovery.ts";
 import { restoreImageBatch } from "./image-batch.ts";
 import { seedingStore } from "./seeding-store.ts";
 import { pricedSeedingModels } from "./seeding-budget.ts";
-import { arenaImageModel } from "./arena-image.ts";
+import { codexImageModel } from "@ren-ai/image-generation";
 
 export interface AdminEnv {
   ADMIN_JURISDICTION?: "us" | "local";
@@ -25,7 +25,7 @@ export interface AdminEnv {
   ADMIN_TEXT_MODEL?: string;
   ADMIN_IMAGE_MODEL?: string;
   ADMIN_IMAGE_PROVIDER?: string;
-  ARENA_IMAGE_API_KEY?: string;
+  CODEX_IMAGE_API_KEY?: string;
   APPLICATION_API_URL?: string;
   TOKEN_MANAGEMENT?: string;
 }
@@ -54,7 +54,7 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
     ...(env.ADMIN_TEXT_MODEL && { textModel: env.ADMIN_TEXT_MODEL }),
     ...(env.ADMIN_IMAGE_MODEL && { imageModel: env.ADMIN_IMAGE_MODEL }),
     ...(env.ADMIN_IMAGE_PROVIDER && { imageProvider: env.ADMIN_IMAGE_PROVIDER }),
-    ...(env.ARENA_IMAGE_API_KEY && { arenaKey: env.ARENA_IMAGE_API_KEY }),
+    ...(env.CODEX_IMAGE_API_KEY && { codexKey: env.CODEX_IMAGE_API_KEY }),
   });
   const saved = await loggedJob(
     crypto.randomUUID(),
@@ -89,7 +89,7 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
           text: env.ADMIN_TEXT_MODEL ?? pricedSeedingModels.text,
           image:
             env.ADMIN_IMAGE_MODEL ??
-            (env.ADMIN_IMAGE_PROVIDER === "arena" ? arenaImageModel : pricedSeedingModels.image),
+            (env.ADMIN_IMAGE_PROVIDER === "codex" ? codexImageModel : pricedSeedingModels.image),
         },
       },
     },

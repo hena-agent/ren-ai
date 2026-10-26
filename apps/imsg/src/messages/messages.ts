@@ -16,6 +16,13 @@ export interface Messages {
     attemptID?: string,
     requestId?: string,
   ): Effect.Effect<{ readonly guid: string | null }, Error>;
+  /** One identified JPEG send; retrying the identity never resubmits it to Apple. */
+  sendPhoto(
+    handle: string,
+    base64: string,
+    attemptID: string,
+    requestId?: string,
+  ): Effect.Effect<{ readonly guid: string | null }, Error>;
   /** Atomically reject a missing application-owned attempt; never retry an admitted send. */
   resolveSend(attemptID: string): Effect.Effect<"sent" | "delivered" | "failed" | "unknown", Error>;
   /** Status of her most recent outgoing row, using its date_read and delivery fields. */

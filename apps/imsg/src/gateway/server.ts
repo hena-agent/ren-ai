@@ -52,6 +52,10 @@ export const messageGateway = (
       messageRequest("send.submit", (requestId) =>
         messages.sendText(handle, text, attemptID, requestId),
       ),
+    submitPhoto: ({ handle, base64, attemptID }) =>
+      messageRequest("photo.submit", (requestId) =>
+        messages.sendPhoto(handle, base64, attemptID, requestId),
+      ),
     resolveSend: ({ attemptID }) =>
       messageRequest("send.resolve", () =>
         messages.resolveSend(attemptID).pipe(Effect.map((state) => ({ state }))),

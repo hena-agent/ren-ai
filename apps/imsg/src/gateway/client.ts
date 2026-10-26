@@ -54,6 +54,8 @@ export const remoteMessages = (config: { readonly url: string; readonly token: s
             Effect.map((result) => result.state),
           ),
         ),
+      sendPhoto: (handle: string, base64: string, attemptID: string) =>
+        request(client.submitPhoto({ handle, base64, attemptID }).pipe(unavailable("Photo send"))),
       after: (rowID: number, limit?: number) =>
         request(client.after({ rowID, ...(limit === undefined ? {} : { limit }) })),
       follow: (rowID: number, receive: (row: IncomingMessage) => Effect.Effect<void, Error>) => {

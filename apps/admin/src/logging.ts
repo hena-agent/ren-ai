@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { PersonaError } from "@ren-ai/personas";
+import { redactDiagnostic } from "@ren-ai/image-generation";
 import { characterValidationFields } from "./generation-failure.ts";
 
 export interface LogFields {
@@ -96,13 +97,7 @@ export function requestFields(fields: LogFields) {
 }
 
 export function safeText(text: string, secrets: readonly string[] = []) {
-  const protectedValues = [...secrets, ...(scope.getStore()?.secrets ?? [])];
-  for (const secret of protectedValues
-    .flatMap((value) => [value, ...value.split("\n")])
-    .filter(Boolean)
-    .toSorted((a, b) => b.length - a.length))
-    text = text.split(secret).join("<REDACTED>");
-  return text.slice(0, 1000);
+  return redactDiagnostic(text, [...secrets, ...(scope.getStore()?.secrets ?? [])]);
 }
 
 function emit(entry: Omit<LogEntry, "time" | "service">) {

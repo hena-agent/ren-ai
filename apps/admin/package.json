@@ -25,6 +25,7 @@
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.14",
     "@lezer/highlight": "1.2.5",
+    "@ren-ai/image-generation": "workspace:*",
     "@ren-ai/onboarding": "workspace:*",
     "@ren-ai/personas": "workspace:*",
     "@ren-ai/transport": "workspace:*",

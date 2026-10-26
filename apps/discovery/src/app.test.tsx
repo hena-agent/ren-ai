@@ -115,6 +115,7 @@ test("a visitor likes a profile, enters a handle and consent, and really joins t
     locale: "ko",
     conversationLanguage: "ko",
     startingRelationship: "dating",
+    imageStyle: "photo",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["harin"],
     turnstileToken: "human",

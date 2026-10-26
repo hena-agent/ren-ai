@@ -17,6 +17,7 @@ import { Session } from "@opencode/schema/session";
 import { SessionInbox } from "@opencode/schema/session-inbox";
 import { relationshipFixture } from "../../test/relationship.test-helper.ts";
 import { operatorEnding } from "../conversations/operator-ending.ts";
+import { conversationStatus } from "../conversations/status.ts";
 
 const verified = Context.make(
   HttpClient.HttpClient,
@@ -145,10 +146,11 @@ test.each(["persona", "operator"])(
             /private mutation payload|821099999999|reselect=|여기서 끝낼게요/,
           );
           yield* f.sql`DROP TRIGGER fail_reselection`;
-          for (let attempt = 0; attempt < 2; attempt++) {
+          for (const imageStyle of ["photo", "anime"] as const) {
             const response = yield* submit({
               reselectionToken: token,
               startingRelationship: "friends",
+              imageStyle,
               name: "새 이름",
               age: 29,
               gender: "female",
@@ -207,6 +209,9 @@ test.each(["persona", "operator"])(
           const next = (yield* app.directory.byHandle(previous.handle))!;
           expect(next.personaID).toBe("harin");
           expect(next.sessionID).toBe("ses_new");
+          const status = yield* conversationStatus(async () => f.profiles);
+          expect((yield* status.detail(next.id))?.entry).toHaveProperty("imageStyle", "photo");
+          expect((yield* status.detail(previous.id))?.entry).toHaveProperty("imageStyle", "anime");
           expect(yield* f.sql`SELECT joined_at, replied_at, consent_version FROM user`).toEqual([
             { joined_at: 10, replied_at: 20, consent_version: "v1" },
           ]);
