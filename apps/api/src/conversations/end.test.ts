@@ -161,8 +161,8 @@ test("an ending waits for observed delivery after a lost acknowledgement and nev
   );
 });
 
-test("service notices and new relationship introductions respect the User's English or Japanese locale", async () => {
-  for (const locale of ["en", "ja"]) {
+test("service notices respect the User's locale and new relationship introductions precede greetings in separate bubbles", async () => {
+  for (const locale of ["ko", "en", "ja"]) {
     await withContactDatabase(
       Effect.gen(function* () {
         const f = yield* fixture;
@@ -170,15 +170,34 @@ test("service notices and new relationship introductions respect the User's Engl
         yield* f.ending.end(f.conversation.sessionID, "bye", "localized");
         yield* f.ending.tick;
         expect(f.fake.bubbles[1]?.text).toContain(
-          locale === "ja" ? "関係は終了" : "relationship has ended",
+          locale === "ko"
+            ? "관계가 종료"
+            : locale === "ja"
+              ? "関係は終了"
+              : "relationship has ended",
         );
         yield* f.sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
         SELECT id, 'harin', 'ses_new', 200 FROM user`;
         f.personas.set("harin", fromPartial<Persona>({ id: "harin", timeZone: "Asia/Seoul" }));
-        yield* f.app.tools.send("ses_new", "hello", "hello-new");
-        expect(f.fake.bubbles.at(-1)?.text).toContain(
-          locale === "ja" ? "別のペルソナ" : "different persona",
+        expect(yield* f.app.tools.send("ses_new", "hello", "hello-new")).toBe("sent");
+        expect(f.fake.bubbles.at(-2)?.text).toContain(
+          locale === "ko"
+            ? "지금부터 다른 페르소나"
+            : locale === "ja"
+              ? "別のペルソナ"
+              : "different persona",
         );
+        expect(f.fake.bubbles.at(-2)?.text).not.toContain("hello");
+        expect(f.fake.bubbles.at(-1)?.text).toBe("hello");
+        expect(f.fake.bubbles).toHaveLength(4);
+        expect(f.fake.notifications).toHaveLength(1);
+        const restarted = yield* prepareMessaging(f.personas, f.fake.messages, f.ui.gestures);
+        expect(yield* restarted.tools.send("ses_new", "hello", "hello-new")).toContain(
+          "already recorded",
+        );
+        expect(yield* restarted.tools.send("ses_new", "next", "next-new")).toBe("sent");
+        expect(f.fake.bubbles).toHaveLength(5);
+        expect(f.fake.bubbles.at(-1)?.text).toBe("next");
       }),
     );
   }

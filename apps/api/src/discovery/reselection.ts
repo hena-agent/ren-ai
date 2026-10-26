@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import type { DiscoveryRequest, PublicPersona } from "@ren-ai/onboarding";
+import type { DiscoveryRequest } from "@ren-ai/onboarding";
 import { reselectionHash } from "../conversations/ending-record.ts";
+import { contactCause, type ContactLog } from "./diagnostics.ts";
 
-export const reselectionAuthorization = (token: string) =>
+const reselectionAuthorization = (token: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const [ending] = yield* sql<{
@@ -25,6 +26,29 @@ export const reselectionAuthorization = (token: string) =>
     return ending;
   });
 
+export const browsingHandle = (token: string, requestId: string, log: ContactLog) =>
+  Effect.gen(function* () {
+    const ending = yield* reselectionAuthorization(token);
+    if (ending.consumedAt !== null) return yield* Effect.fail("reselection" as const);
+    return ending.handle;
+  }).pipe(
+    Effect.tapError((cause) =>
+      Effect.sync(() =>
+        log({
+          requestId,
+          operation: "discovery.reselection",
+          stage: "catalog.authorize",
+          code: typeof cause === "string" ? cause : "storage",
+          level: typeof cause === "string" ? "warn" : "error",
+          outcome: "failed",
+          durationMs: 0,
+          ...(typeof cause !== "string" && contactCause(cause)),
+        }),
+      ),
+    ),
+    Effect.mapError((cause) => (typeof cause === "string" ? cause : ("storage" as const))),
+  );
+
 /** Called inside registration's transaction, after consent, Turnstile and catalog validation. */
 export const reselect = (input: DiscoveryRequest) =>
   Effect.gen(function* () {
@@ -36,8 +60,8 @@ export const reselect = (input: DiscoveryRequest) =>
     const id = randomUUID();
     const now = yield* Clock.currentTimeMillis;
     yield* sql`UPDATE discovery_registration SET archived_at = ${now} WHERE handle = ${input.handle} AND archived_at IS NULL`;
-    yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship)
-    VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${now}, ${input.startingRelationship ?? "dating"})`;
+    yield* sql`INSERT INTO discovery_registration (id, handle, locale, consent_version, created_at, starting_relationship, image_style)
+    VALUES (${id}, ${input.handle}, ${input.locale}, ${input.privacyNoticeVersion}, ${now}, ${input.startingRelationship ?? "dating"}, ${input.imageStyle ?? "anime"})`;
     yield* sql`INSERT INTO discovery_profile (registration_id, name, age, gender)
       VALUES (${id}, ${input.name}, ${input.age ?? null}, ${input.gender ?? null})`;
     yield* sql`INSERT INTO discovery_language VALUES (${id}, ${input.conversationLanguage ?? input.locale})`;
@@ -54,11 +78,4 @@ export const endedPersonaIDs = (handle: string) =>
       id: string;
     }>`SELECT persona_id AS id FROM persona_exclusion WHERE handle = ${handle}`;
     return new Set(ended.map((row) => row.id));
-  });
-
-/** Only this handle's permanently ended relationships are excluded. */
-export const withoutEndedPersonas = (profiles: readonly PublicPersona[], handle: string) =>
-  Effect.gen(function* () {
-    const excluded = yield* endedPersonaIDs(handle);
-    return profiles.filter((profile) => !excluded.has(profile.id));
   });

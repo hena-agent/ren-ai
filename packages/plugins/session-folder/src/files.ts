@@ -21,16 +21,28 @@ import {
 } from "./bindings.ts";
 import { isDeepStrictEqual } from "node:util";
 import { initializeDirectory, initializeLife, initializeRelationship } from "./initialization.ts";
+import { readAdjustments } from "./adjustments.ts";
+import { emptyAdjustments } from "./adjustment-model.ts";
 
 export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
-  ...["send", "read", "react", "wait", "end_conversation", "dice", ...memoryToolNames].map(
-    (action) => ({
-      action,
-      resource: "*",
-      effect: "allow" as const,
-    }),
-  ),
+  ...[
+    "send",
+    "take_photo",
+    "send_photo",
+    "read",
+    "react",
+    "wait",
+    "end_conversation",
+    "dice",
+    "review_adjustments",
+    "websearch",
+    ...memoryToolNames,
+  ].map((action) => ({
+    action,
+    resource: "*",
+    effect: "allow" as const,
+  })),
 ];
 
 export const loadGroundRules = () =>
@@ -132,12 +144,14 @@ const readAt = async (target: string) => {
     JSON.parse(await readFile(join(target, "persona.json"), "utf8")),
   );
   const documents = runtime ? runtimeDocuments(runtime) : await readDocuments(target);
+  const adjustments = await readAdjustments(target);
   return {
     persona,
     agent: await readFile(join(target, ".opencode", "agents", `${persona.id}.md`), "utf8"),
     rules: await readFile(join(target, "AGENTS.md"), "utf8"),
     ...(documents && { documents }),
     ...(runtime && { runtime }),
+    ...(adjustments && { adjustments }),
   };
 };
 const writeAt = async (target: string, snapshot: typeof folderSnapshot.Type) => {
@@ -158,6 +172,7 @@ const writeAt = async (target: string, snapshot: typeof folderSnapshot.Type) => 
       "opencode.json",
       JSON.stringify({
         default_agent: snapshot.persona.id,
+        websearch: { provider: "random" },
         agents: Object.fromEntries(
           ["build", "plan", "general", "explore"].map((id) => [id, { disabled: true }]),
         ),
@@ -319,6 +334,7 @@ export const folderFiles = (root: string) => {
         if (exists) {
           const existing = await readAt(target);
           const expected = {
+            adjustments: emptyAdjustments(),
             ...archive.snapshot,
             ...(archive.snapshot.runtime && {
               documents: runtimeDocuments(archive.snapshot.runtime),

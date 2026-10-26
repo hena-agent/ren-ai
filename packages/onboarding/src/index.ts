@@ -3,6 +3,13 @@ export { MobileNumber } from "./shapes.ts";
 export { StartingRelationship } from "./relationship.ts";
 export { ConversationMessages } from "./conversation-messages.ts";
 export {
+  BrowseQuery,
+  BrowsePage,
+  BrowseReselection,
+  ProfileLookup,
+  PersonaLink,
+} from "./browsing.ts";
+export {
   ConversationQuery,
   ConversationRecovery,
   ConversationEnding,

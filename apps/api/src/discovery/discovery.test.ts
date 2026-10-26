@@ -55,18 +55,21 @@ test("a visitor registers liked personas durably and repeats cannot change an ex
         yield* Effect.tryPromise(async () => {
           try {
             const profiles = await web.handler(
-              new Request("http://localhost/discovery/personas"),
+              new Request("http://localhost/discovery/personas?locale=ko"),
               Context.make(HttpClient.HttpClient, http),
             );
-            expect(await profiles.json()).toEqual([
-              {
-                id: "sora",
-                name: "소라",
-                bio: "밤에는 음악을 만들어요.",
-                imageUrl: "https://example.org/sora.jpg",
-                profile: { introduction: "밤에는 음악을 만들어요.", sections: [] },
-              },
-            ]);
+            expect(await profiles.json()).toEqual({
+              nextCursor: null,
+              people: [
+                {
+                  id: "sora",
+                  name: "소라",
+                  bio: "밤에는 음악을 만들어요.",
+                  imageUrl: "https://example.org/sora.jpg",
+                  profile: { introduction: "밤에는 음악을 만들어요.", sections: [] },
+                },
+              ],
+            });
             const submit = (
               likedPersonaIDs = ["sora"],
               name = "민수",

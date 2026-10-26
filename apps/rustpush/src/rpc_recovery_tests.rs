@@ -240,7 +240,7 @@ async fn an_unwritable_attachment_stays_unpublished_after_bounded_retries() {
     h.finish().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn failed_image_downloads_keep_the_notification_until_the_image_is_saved() {
     let fake = Fake::default();
     *fake.download_failures.lock().unwrap() = 3;
@@ -255,6 +255,7 @@ async fn failed_image_downloads_keep_the_notification_until_the_image_is_saved()
         ]),
     );
     let mut h = Harness::start(fake, RESCAN, |store| spool(store, "inbox-1.plist", "image")).await;
+    // Let retry timers finish before the rescan, independently of wall-clock load.
     tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(*h.fake.downloads.lock().unwrap(), 3);
     assert!(h.fake.certified.lock().unwrap().is_empty());

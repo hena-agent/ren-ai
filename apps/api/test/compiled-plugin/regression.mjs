@@ -18,6 +18,7 @@ import { Schema } from "effect";
 import { Session } from "@opencode/schema";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { folderSnapshot, personaFolderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
+import { assertPhotoRequests } from "./photos.mjs";
 /** @param {string} text */
 const sessionData = (text) =>
   Schema.decodeUnknownSync(
@@ -32,7 +33,6 @@ const sessionData = (text) =>
     ),
   )(text).data;
 
-// Run with Bun against the built artifact and compiled CLI; no live services or credentials.
 const root = mkdtempSync(join(tmpdir(), "compiled-persona-plugin-"));
 const name = `ren-ai-plugin-regression-${randomUUID()}`;
 const artifact = `${name}-artifact`;
@@ -231,6 +231,8 @@ try {
     "send",
     "read",
     "react",
+    "take_photo",
+    "send_photo",
   ].entries()) {
     const id = Session.ID.create();
     const snapshot = renderSnapshot(persona, "Isolated native ground rules. Read her phone.");
@@ -277,7 +279,8 @@ try {
     );
     const history = request(`api/session/${session}/message`, undefined);
     assert(!history.includes("Cannot convert a symbol to a number"), history);
-    if (index > 6) assert(history.includes(`isolated ${seconds} completed`), history);
+    if (seconds === "take_photo") assert(history.includes("compiled-photo"), history);
+    else if (index > 6) assert(history.includes(`isolated ${seconds} completed`), history);
     else if (seconds === 3300) assert(history.includes("cut short by something new"), history);
     else if (typeof seconds === "number" && seconds > 0 && seconds <= 3300)
       assert(history.includes(`paused ${seconds}s`), history);
@@ -301,7 +304,7 @@ try {
     Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.String)))(
       request("actions", undefined, 4710),
     ),
-    ["send", "read", "react"],
+    ["send", "read", "react", "takePhoto", "sendPhoto"],
   );
   const modelRequests = Schema.decodeUnknownSync(
     Schema.fromJsonString(
@@ -320,10 +323,8 @@ try {
       JSON.stringify(body).includes("compiled-case:") &&
       !JSON.stringify(body).includes("Write her Memory"),
   );
-  assert(
-    modelRequests.length >= 10,
-    "Primary model requests must be observed for every compiled case",
-  );
+  assert(modelRequests.length >= 12, "Primary requests must cover every compiled case");
+  assertPhotoRequests(modelRequests);
   assert(modelRequests.every((body) => JSON.stringify(body).includes("Isolated test persona.")));
   assert(
     modelRequests.some((body) => JSON.stringify(body).includes("image_url")),

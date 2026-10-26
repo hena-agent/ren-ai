@@ -1,4 +1,4 @@
-import { ToolResultPart } from "@opencode/ai";
+import { ToolResultPart, type Message } from "@opencode/ai";
 import { Plugin } from "@opencode/plugin/effect";
 import { Clock, Effect } from "effect";
 import {
@@ -14,6 +14,33 @@ import { isDiceTool } from "@ren-ai/plugin-dice";
 import { cleanContext } from "./clean.ts";
 import { personaMemory, memoryToolNames, isMemoryTool } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
+import { personaAdjustments, isAdjustmentTool } from "@ren-ai/plugin-session-folder/adjustments";
+
+const latestInput = (messages: ReadonlyArray<Message>) =>
+  messages.findLast(
+    (message) =>
+      message.role === "user" &&
+      message.id !== undefined &&
+      !message.content.some(
+        (part) => part.type === "text" && /<checked-phone(?:\s|>)/.test(part.text),
+      ),
+  )?.id;
+
+const messagingTools = (
+  options: PersonaPluginOptions,
+  tools: Readonly<Record<string, Parameters<typeof isMessagingTool>[1]>>,
+) =>
+  (
+    [
+      ["send", options.send],
+      ["read", options.read],
+      ["react", options.react],
+      ["wait", options.wait],
+      ["take_photo", options.takePhoto],
+      ["send_photo", options.sendPhoto],
+      ["end_conversation", options.endConversation],
+    ] as const
+  ).flatMap(([name, action]) => (action && isMessagingTool(name, tools[name]) ? [name] : []));
 
 export const contextPlugin = (options: PersonaPluginOptions) =>
   Plugin.define({
@@ -38,14 +65,12 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
               event,
               phone(now, persona.timeZone, state),
               new Set([
-                ...(["send", "read", "react", "wait"] as const).filter(
-                  (name) => options[name] && isMessagingTool(name, event.tools[name]),
-                ),
-                ...(options.endConversation &&
-                isMessagingTool("end_conversation", event.tools["end_conversation"])
-                  ? ["end_conversation"]
-                  : []),
+                "websearch",
+                ...messagingTools(options, event.tools),
                 ...(isDiceTool(event.tools["dice"]) ? ["dice"] : []),
+                ...(isAdjustmentTool(event.tools["review_adjustments"])
+                  ? ["review_adjustments"]
+                  : []),
                 ...memoryToolNames.filter((name) => isMemoryTool(name, event.tools[name])),
               ]),
             );
@@ -54,6 +79,17 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                 personaMemory(ctx.location.directory, event.sessionID).context(),
               );
               event.system.push({ type: "text", text: memory });
+              const latestMessageID = latestInput(event.messages);
+              const adjustments = yield* conversationOperation(
+                "adjustments.context",
+                event.sessionID,
+                () =>
+                  personaAdjustments(ctx.location.directory, event.sessionID).context(
+                    latestMessageID,
+                    now,
+                  ),
+              );
+              event.system.push({ type: "text", text: adjustments });
             }
             if (snapshot) {
               if (snapshot.startingRelationship)

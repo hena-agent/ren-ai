@@ -53,6 +53,11 @@ test("an older Mac rejects notify rather than sending from the Persona handle", 
           "Availability RPC unavailable",
         );
         const attemptID = crypto.randomUUID();
+        expect(
+          (yield* remote
+            .sendPhoto("user@example.test", "private-photo", attemptID)
+            .pipe(Effect.flip)).message,
+        ).toContain("Photo send RPC unavailable");
         for (const effect of [
           remote.sendText("user@example.test", "private", attemptID).pipe(Effect.asVoid),
           remote.resolveSend(attemptID).pipe(Effect.asVoid),
@@ -84,11 +89,15 @@ test("Notification RPC failures return safe correlated errors and diagnose persi
         f.notifications.sendText = persistenceFailure;
         f.notifications.status = persistenceFailure;
         f.local.messages.sendText = persistenceFailure;
+        f.local.messages.sendPhoto = persistenceFailure;
         f.local.messages.resolveSend = persistenceFailure;
         for (const call of [
           remote.notify("+821012345678", "private-text").pipe(Effect.asVoid),
           remote.notificationStatus(guid).pipe(Effect.asVoid),
           remote.sendText("+821012345678", "private-text", crypto.randomUUID()).pipe(Effect.asVoid),
+          remote
+            .sendPhoto("+821012345678", "private-photo", crypto.randomUUID())
+            .pipe(Effect.asVoid),
           remote.resolveSend(crypto.randomUUID()).pipe(Effect.asVoid),
         ]) {
           const error = yield* call.pipe(Effect.flip);
@@ -101,7 +110,7 @@ test("Notification RPC failures return safe correlated errors and diagnose persi
         }
       }),
     );
-    for (const secret of ["private-sql-path", "private-text", "+821012345678"])
+    for (const secret of ["private-sql-path", "private-text", "private-photo", "+821012345678"])
       expect(logs.join("\n")).not.toContain(secret);
   } finally {
     restore();

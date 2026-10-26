@@ -17,6 +17,7 @@ import type { BrowseView } from "./chrome.tsx";
 import { Receipt } from "./receipt.tsx";
 import { useCatalog } from "./use-catalog.ts";
 import { shareUrl, personaTitle } from "./public-routing.ts";
+import { BrowseLoading, type Paging } from "./browse-loading.tsx";
 
 type Entry = {
   personaId?: string | undefined;
@@ -137,7 +138,12 @@ function DiscoveryApp({
   reselectionToken,
 }: Entry & { client: DiscoveryClient }) {
   const copy = useCopy();
-  const { catalog, retry, refresh } = useCatalog(client, initialPeople, reselectionToken);
+  const { catalog, retry, refresh, ...paging } = useCatalog(
+    client,
+    initialPeople,
+    reselectionToken,
+    personaId,
+  );
   const [reviewingSelection, setReviewingSelection] = useState(false);
   const requested =
     catalog.phase === "ready" && catalog.people.find((person) => person.id === personaId);
@@ -174,6 +180,7 @@ function DiscoveryApp({
             client={client}
             personaId={personaId}
             initialStyle={initialStyle}
+            paging={paging}
             onRefresh={() => {
               setReviewingSelection(true);
               return refresh();
@@ -241,12 +248,14 @@ function Experience({
   personaId,
   initialStyle,
   onRefresh,
+  paging,
 }: {
   people: readonly PublicPersona[];
   client: DiscoveryClient;
   personaId: string | undefined;
   initialStyle: ImageStyle | undefined;
   onRefresh: () => Promise<void>;
+  paging: Paging;
 }) {
   const copy = useCopy();
   const [choices, setChoices] = useState(readChoices);
@@ -332,6 +341,7 @@ function Experience({
             <div className="contact-surface" hidden={view !== "contact" || Boolean(detail)}>
               <JoinForm
                 liked={liked}
+                imageStyle={style}
                 client={client}
                 onBack={back}
                 onSuccess={setView}
@@ -344,20 +354,22 @@ function Experience({
             </div>
           )}
           <div className="browse-panel" hidden={view === "contact" && !detail}>
-            <Deck
-              people={displayed}
-              current={current}
-              next={remaining[1]}
-              likedCount={liked.length}
-              hasPassed={people.some((persona) => choices[persona.id] === false)}
-              choose={choose}
-              restart={restart}
-              onNavigate={navigate}
-              onOpen={openDetails}
-              onBusyChange={setBusy}
-              details={detail && { persona: detail, image: details!.image }}
-              onCollapse={closeDetails}
-            />
+            <BrowseLoading remaining={remaining.length} expanded={Boolean(detail)} paging={paging}>
+              <Deck
+                people={displayed}
+                current={current}
+                next={remaining[1]}
+                likedCount={liked.length}
+                hasPassed={people.some((persona) => choices[persona.id] === false)}
+                choose={choose}
+                restart={restart}
+                onNavigate={navigate}
+                onOpen={openDetails}
+                onBusyChange={setBusy}
+                details={detail && { persona: detail, image: details!.image }}
+                onCollapse={closeDetails}
+              />
+            </BrowseLoading>
             <p id="swipe-help" className="sr-only">
               {copy.instructions}
             </p>

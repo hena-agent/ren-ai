@@ -35,8 +35,8 @@ test("sending the reset Greeting does not schedule a follow-up until the User re
         yield* startTestHandle(host, fake.messages, handle);
         const id = Session.ID.make((yield* host.conversations.byHandle(handle))!.sessionID);
         yield* host.sessions.wait(id);
-        expect(fake.bubbles.at(-1)?.text).toContain("Hello stranger");
-        expect(fake.bubbles.at(-1)?.text).toContain("다른 페르소나");
+        expect(fake.bubbles.at(-1)?.text).toBe("Hello stranger");
+        expect(fake.bubbles.at(-2)?.text).toContain("다른 페르소나");
         offset += 8 * 86_400_000;
         yield* host.heartbeat.followUps;
         yield* host.sessions.wait(id);

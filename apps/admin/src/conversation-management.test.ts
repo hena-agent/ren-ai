@@ -44,6 +44,7 @@ test("Admin lists bindings, searches, pages and opens real runtime status with r
   const f = await fixture();
   const registrationNextBefore = randomUUID();
   const client: ConversationClient = {
+    image: vi.fn<ConversationClient["image"]>(async () => new Response(null, { status: 404 })),
     messages: vi.fn<ConversationClient["messages"]>(async () => ({
       entries: [],
       nextBefore: null,

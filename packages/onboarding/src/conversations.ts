@@ -30,6 +30,7 @@ export const ConversationEntry = Schema.Struct({
   id,
   key: Schema.optionalKey(conversationKey),
   startingRelationship: Schema.optionalKey(StartingRelationship),
+  imageStyle: Schema.optionalKey(Schema.Literals(["anime", "photo"])),
   handle: Schema.String,
   personaID: Schema.String,
   personaName: Schema.String,

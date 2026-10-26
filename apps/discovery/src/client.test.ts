@@ -1,6 +1,11 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotice, discoveryNotices, DiscoveryFailure } from "@ren-ai/onboarding";
-import { discoveryClient, RegistrationError, loadDiscoveryNotices } from "./client.ts";
+import {
+  discoveryClient,
+  BrowseExpiredError,
+  RegistrationError,
+  loadDiscoveryNotices,
+} from "./client.ts";
 import { readChoices, saveChoices } from "./choices.ts";
 
 afterEach(() => {
@@ -8,6 +13,52 @@ afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
   vi.unstubAllEnvs();
+});
+
+test("only explicit expired-cursor errors restart browsing; authorization and other failures remain failures", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetcher);
+  const signal = new AbortController().signal;
+  for (const [status, code, cursor] of [
+    [400, "personas", "old"],
+    [400, "reselection", "old"],
+    [400, "personas", undefined],
+    [503, "personas", "old"],
+  ] as const) {
+    fetcher.mockResolvedValueOnce(Response.json(code, { status }));
+    const result = discoveryClient.browse(
+      { locale: "ko", ...(cursor && { cursor }) },
+      signal,
+      "a".repeat(64),
+    );
+    await expect(result).rejects.toThrow(
+      cursor && status === 400 && code === "personas" ? BrowseExpiredError : "Profiles unavailable",
+    );
+  }
+  fetcher.mockResolvedValueOnce(Response.json({ people: [], nextCursor: null }));
+  expect(await discoveryClient.browse({ locale: "en", cursor: "next" }, signal)).toEqual({
+    people: [],
+    nextCursor: null,
+  });
+  expect(fetcher.mock.lastCall?.[0]).toBe("/discovery/personas?locale=en&cursor=next");
+});
+
+test("restoring many Likes uses bounded ID requests and preserves the private reselection scope", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json([]));
+  vi.stubGlobal("fetch", fetcher);
+  const signal = new AbortController().signal;
+  expect(await discoveryClient.profiles(signal, undefined, [])).toEqual([]);
+  expect(fetcher).not.toHaveBeenCalled();
+  const ids = Array.from({ length: 201 }, (_, i) => `p${i}`);
+  const reselectionToken = "b".repeat(64);
+  expect(await discoveryClient.profiles(signal, reselectionToken, ids)).toEqual([]);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  for (let index = 0; index < 3; index++) {
+    expect(fetcher.mock.calls[index]![0]).toBe("/discovery/profiles");
+    expect(fetcher.mock.calls[index]![1]?.body).toBe(
+      JSON.stringify({ ids: ids.slice(index * 100, (index + 1) * 100), reselectionToken }),
+    );
+  }
 });
 
 test("registration errors allowlist server codes, safe correlation IDs and bounded retry deadlines", async () => {
@@ -81,11 +132,13 @@ test("the browser validates structured profiles, discards Markdown payloads and 
   fetcher.mockResolvedValueOnce(
     Response.json([{ ...persona, profile, publicProfile: "obsolete Markdown", prompt: "private" }]),
   );
-  expect(await discoveryClient.profiles(signal)).toEqual([{ ...persona, profile }]);
+  expect(await discoveryClient.profiles(signal, undefined, [persona.id])).toEqual([
+    { ...persona, profile },
+  ]);
   fetcher.mockResolvedValueOnce(
     Response.json([{ ...persona, publicProfile: "old public Markdown" }]),
   );
-  expect(await discoveryClient.profiles(signal)).toEqual([persona]);
+  expect(await discoveryClient.profiles(signal, undefined, [persona.id])).toEqual([persona]);
   for (const sections of [
     [{ type: "interests", title: "관심사", items: "재즈" }],
     [{ type: "prompt", question: "질문", answer: "" }],
@@ -94,7 +147,9 @@ test("the browser validates structured profiles, discards Markdown payloads and 
     fetcher.mockResolvedValueOnce(
       Response.json([{ ...persona, profile: { ...profile, sections } }]),
     );
-    await expect(discoveryClient.profiles(signal)).rejects.toThrow(/profile/);
+    await expect(discoveryClient.profiles(signal, undefined, [persona.id])).rejects.toThrow(
+      /profile/,
+    );
   }
 });
 
@@ -107,10 +162,18 @@ test("a later profile read requests api-app again and includes newly published p
     .mockResolvedValueOnce(Response.json([profile, added]));
   vi.stubGlobal("fetch", fetcher);
   const signal = new AbortController().signal;
-  expect(await discoveryClient.profiles(signal)).toEqual([profile]);
-  expect(await discoveryClient.profiles(signal)).toEqual([profile, added]);
+  expect(await discoveryClient.profiles(signal, undefined, [profile.id, added.id])).toEqual([
+    profile,
+  ]);
+  expect(await discoveryClient.profiles(signal, undefined, [profile.id, added.id])).toEqual([
+    profile,
+    added,
+  ]);
   expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(fetcher).toHaveBeenLastCalledWith("/discovery/personas", { signal });
+  expect(fetcher).toHaveBeenLastCalledWith(
+    "/discovery/profiles",
+    expect.objectContaining({ signal, body: JSON.stringify({ ids: [profile.id, added.id] }) }),
+  );
 });
 
 test.each(["", "invalid", "a".repeat(64)])(
@@ -121,13 +184,13 @@ test.each(["", "invalid", "a".repeat(64)])(
       .mockResolvedValueOnce(new Response("private upstream details", { status: 400 }));
     vi.stubGlobal("fetch", fetcher);
     const signal = new AbortController().signal;
-    await expect(discoveryClient.profiles(signal, reselectionToken)).rejects.toThrow(
-      "Profiles unavailable",
-    );
+    await expect(
+      discoveryClient.browse({ locale: "ko" }, signal, reselectionToken),
+    ).rejects.toThrow("Profiles unavailable");
     expect(fetcher).toHaveBeenCalledExactlyOnceWith("/discovery/reselection/personas", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-      body: JSON.stringify({ reselectionToken }),
+      body: JSON.stringify({ locale: "ko", reselectionToken }),
       signal,
       cache: "no-store",
     });
@@ -149,7 +212,7 @@ test("the browser client reads the catalog and validates the real registration a
       },
     ]),
   );
-  expect(await discoveryClient.profiles(signal)).toEqual([
+  expect(await discoveryClient.profiles(signal, undefined, ["nari"])).toEqual([
     {
       id: "nari",
       name: "나리",
@@ -157,7 +220,7 @@ test("the browser client reads the catalog and validates the real registration a
       imageUrl: "https://example.net/nari.jpg",
     },
   ]);
-  expect(fetcher).toHaveBeenCalledWith("/discovery/personas", { signal });
+  expect(fetcher).toHaveBeenCalledWith("/discovery/profiles", expect.objectContaining({ signal }));
   const request = {
     handle: "+821012345678",
     locale: "ko",
@@ -176,7 +239,9 @@ test("the browser client reads the catalog and validates the real registration a
   fetcher.mockResolvedValueOnce(Response.json({ status: "active" }));
   expect(await discoveryClient.join(request)).toEqual({ status: "active" });
   fetcher.mockResolvedValueOnce(new Response(null, { status: 503 }));
-  await expect(discoveryClient.profiles(signal)).rejects.toThrow("Profiles unavailable");
+  await expect(discoveryClient.profiles(signal, undefined, ["nari"])).rejects.toThrow(
+    "Profiles unavailable",
+  );
   fetcher.mockResolvedValueOnce(new Response(null, { status: 400 }));
   await expect(discoveryClient.join(request)).rejects.toThrow("Registration unavailable");
   fetcher.mockResolvedValueOnce(Response.json("reselection", { status: 400 }));
@@ -186,18 +251,20 @@ test("the browser client reads the catalog and validates the real registration a
   fetcher.mockResolvedValueOnce(
     Response.json([{ id: "bad", name: "잘못된 이미지", bio: "", imageUrl: "javascript:alert(1)" }]),
   );
-  await expect(discoveryClient.profiles(signal)).rejects.toThrow(/bio|imageUrl/);
+  await expect(discoveryClient.profiles(signal, undefined, ["bad"])).rejects.toThrow(
+    /bio|imageUrl/,
+  );
   for (const imageUrl of ["http://example.net/photo.jpg", "not-a-url", "javascript:alert(1)"]) {
     fetcher.mockResolvedValueOnce(
       Response.json([{ id: "valid", name: "이름", bio: "소개", imageUrl }]),
     );
-    await expect(discoveryClient.profiles(signal)).rejects.toThrow(/imageUrl/);
+    await expect(discoveryClient.profiles(signal, undefined, ["bad"])).rejects.toThrow(/imageUrl/);
   }
   for (const id of ["../escape", "ends/", "a".repeat(65)]) {
     fetcher.mockResolvedValueOnce(
       Response.json([{ id, name: "이름", bio: "소개", imageUrl: "https://example.net/photo.jpg" }]),
     );
-    await expect(discoveryClient.profiles(signal)).rejects.toThrow(/id/);
+    await expect(discoveryClient.profiles(signal, undefined, ["bad"])).rejects.toThrow(/id/);
   }
 });
 
@@ -256,7 +323,11 @@ test("profiles and registration use api-app while portraits retain their catalog
     ]),
   );
   vi.stubGlobal("fetch", fetcher);
-  const profiles = await deployed.profiles(new AbortController().signal);
+  const profiles = await deployed.profiles(new AbortController().signal, undefined, [
+    "nari",
+    "legacy",
+    "mixed",
+  ]);
   expect(profiles[0]?.imageUrl).toBe(imageUrl);
   expect(profiles[0]?.portraits).toEqual({
     anime: imageUrl,
@@ -274,7 +345,7 @@ test("profiles and registration use api-app while portraits retain their catalog
     anime: "https://photos.example.net/mixed/",
     photo: imageUrl,
   });
-  expect(fetcher.mock.calls[0]?.[0]).toBe("https://api.renai.im/discovery/personas");
+  expect(fetcher.mock.calls[0]?.[0]).toBe("https://api.renai.im/discovery/profiles");
   fetcher.mockResolvedValueOnce(Response.json({ status: "waiting" }));
   expect(
     await deployed.join({
@@ -307,7 +378,7 @@ test("service-owned portraits use the local proxy while unsafe image paths stay 
     ]),
   );
   vi.stubGlobal("fetch", fetcher);
-  const localProfiles = await local.profiles(new AbortController().signal);
+  const localProfiles = await local.profiles(new AbortController().signal, undefined, ["nari"]);
   expect(localProfiles[0]?.imageUrl).toBe(imageUrl);
   expect(localProfiles[0]?.portraits).toEqual({
     anime: "https://photos.example.net/nari.jpg",
@@ -325,7 +396,9 @@ test("service-owned portraits use the local proxy while unsafe image paths stay 
     fetcher.mockResolvedValueOnce(
       Response.json([{ id: "nari", name: "나리", bio: "공개 소개", imageUrl: unsafe }]),
     );
-    await expect(local.profiles(new AbortController().signal)).rejects.toThrow(/imageUrl/);
+    await expect(local.profiles(new AbortController().signal, undefined, ["nari"])).rejects.toThrow(
+      /imageUrl/,
+    );
   }
 });
 
@@ -348,8 +421,8 @@ test("a malformed image pair cannot enter the browser catalog", async () => {
         },
       ]),
     );
-    await expect(discoveryClient.profiles(new AbortController().signal)).rejects.toThrow(
-      /portraits/,
-    );
+    await expect(
+      discoveryClient.profiles(new AbortController().signal, undefined, ["nari"]),
+    ).rejects.toThrow(/portraits/);
   }
 });

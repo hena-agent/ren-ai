@@ -28,6 +28,7 @@
     "@effect/sql-sqlite-do": "4.0.0-rc.112",
     "@opencode/client": "2.0.19",
     "@opencode/schema": "2.0.19",
+    "@ren-ai/image-generation": "workspace:*",
     "@ren-ai/imsg": "workspace:*",
     "@ren-ai/onboarding": "workspace:*",
     "@ren-ai/personas": "workspace:*",

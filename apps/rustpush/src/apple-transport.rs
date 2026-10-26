@@ -3,7 +3,7 @@ use crate::{
     diagnostics::Failure,
     rpc::Native,
 };
-use rustpush::{APSConnection, APSMessage, Attachment, IMClient, MessageInst};
+use rustpush::{APSConnection, APSMessage, Attachment, IMClient, MMCSFile, MessageInst};
 use std::{fs::File, time::Duration};
 
 /// The live Apple session: the only code that talks to Apple's servers.
@@ -80,5 +80,22 @@ impl Native for Apple {
             completion,
         )
         .await
+    }
+
+    async fn upload(&self, jpeg: &[u8]) -> Result<Attachment, Failure> {
+        let prepared = MMCSFile::prepare_put(jpeg)
+            .await
+            .map_err(|error| Failure::push("attachment_prepare", error))?;
+        Attachment::new_mmcs(
+            &self.connection,
+            &prepared,
+            jpeg,
+            "image/jpeg",
+            "public.jpeg",
+            "photo.jpg",
+            |_, _| {},
+        )
+        .await
+        .map_err(|error| Failure::push("attachment_upload", error))
     }
 }

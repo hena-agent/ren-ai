@@ -5,6 +5,9 @@ export default defineConfig({
   assetsInclude: ["**/*.md"],
   resolve: {
     alias: {
+      "@ren-ai/personas/image-url": fileURLToPath(
+        new URL("../../packages/personas/src/image-url.ts", import.meta.url),
+      ),
       "@ren-ai/personas/languages": fileURLToPath(
         new URL("../../packages/personas/src/languages.ts", import.meta.url),
       ),

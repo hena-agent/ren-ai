@@ -174,3 +174,50 @@ test("Admin fetches history through authenticated client, pages and keeps failur
     () => {},
   );
 });
+
+test("only confirmed outgoing photos render authenticated previews and Admin proxies with its service token", async () => {
+  const entries = (["sent", "delivered", "pending", "failed"] as const).map((state, index) =>
+    message(index + 1, {
+      fromMe: true,
+      status: { state, error: 0, dateRead: null },
+      attachments: [{ mimeType: "image/png", missing: false }],
+    }),
+  );
+  entries.push(message(5, { attachments: [{ mimeType: "image/png", missing: false }] }));
+  entries.push(
+    message(6, {
+      fromMe: true,
+      status: { state: "sent", error: 0, dateRead: null },
+      attachments: [{ mimeType: "image/png", missing: true }],
+    }),
+  );
+  const markup = renderToStaticMarkup(
+    <MessageHistory view={view({ entries, nextBefore: null })} />,
+  );
+  expect(markup).toContain("/conversations/1/images/1/0?guid=guid-1");
+  expect(markup).toContain("/conversations/1/images/2/0?guid=guid-2");
+  for (const id of [3, 4, 5, 6]) expect(markup).not.toContain(`/images/${id}/`);
+  const f = await fixture();
+  const fetcher = vi.fn<typeof fetch>(
+    async () => new Response(new Uint8Array([1, 2]), { headers: { "content-type": "image/png" } }),
+  );
+  const management = managementClient("https://api.test", "secret-token", fetcher);
+  const admin = createAdmin(f.store, "test-password", { management });
+  const path = "/conversations/1/images/1/0?guid=guid-1";
+  expect((await admin(new Request(`https://admin.test${path}`))).status).toBe(401);
+  expect(fetcher).not.toHaveBeenCalled();
+  const response = await admin(request(path));
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("content-type")).toBe("image/png");
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
+  const [url, init] = fetcher.mock.calls[0]!;
+  expect(new Request(url).url).toBe(
+    "https://api.test/operator/message-image?id=1&message=1&guid=guid-1&attachment=0",
+  );
+  expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret-token");
+  fetcher.mockResolvedValueOnce(new Response(null));
+  const missing = await admin(request("/conversations/1/images/1/0"));
+  expect(missing.headers.get("content-type")).toBe("application/octet-stream");
+  fetcher.mockResolvedValueOnce(new Response(null, { status: 404 }));
+  expect((await admin(request(path))).status).toBe(404);
+});

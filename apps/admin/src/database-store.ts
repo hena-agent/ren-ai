@@ -9,8 +9,14 @@ import {
   nextPersonaVersion,
   requireVersion,
 } from "@ren-ai/personas";
-import type { PersonaStore } from "@ren-ai/personas";
-import { personas, personaImages, personaVersions, seedingSeeds } from "./database-schema.ts";
+import type { PersonaStore, IdentitySheets } from "@ren-ai/personas";
+import {
+  personas,
+  personaImages,
+  personaVersions,
+  seedingSeeds,
+  identitySheets,
+} from "./database-schema.ts";
 import { r2Images } from "./r2-images.ts";
 import type { ImageBucket } from "./r2-images.ts";
 import { recordOf, currentPersonaRows } from "./database-record.ts";
@@ -40,7 +46,13 @@ export function databaseStore(
 ): PersonaStore & {
   catalog: () => Promise<{
     revision: string;
-    personas: readonly { id: string; source: string; state: string; memory: string }[];
+    personas: readonly {
+      id: string;
+      source: string;
+      state: string;
+      memory: string;
+      sheets: IdentitySheets;
+    }[];
   }>;
 } {
   const db = drizzle(binding);
@@ -67,6 +79,10 @@ export function databaseStore(
       db.batch([
         currentPersonaRows(db).orderBy(asc(personas.id)),
         db.select().from(personaImages).orderBy(asc(personaImages.position)),
+        db
+          .select()
+          .from(identitySheets)
+          .orderBy(asc(identitySheets.personaId), asc(identitySheets.style)),
       ]),
     );
   const list = async () => {
@@ -83,9 +99,12 @@ export function databaseStore(
   return {
     ...databaseSheets(binding, imageBase),
     catalog: async () => {
-      const [rows, photos] = await readCatalog();
+      const [rows, photos, sheets] = await readCatalog();
       return {
-        revision: JSON.stringify(rows.map(({ id, revision }) => ({ id, revision }))),
+        revision: JSON.stringify({
+          personas: rows.map(({ id, revision }) => ({ id, revision })),
+          sheets,
+        }),
         personas: rows.map((row) => ({
           id: row.id,
           source: serializePersona(
@@ -97,6 +116,11 @@ export function databaseStore(
           ),
           state: row.state,
           memory: row.memory,
+          sheets: Object.fromEntries(
+            sheets
+              .filter((sheet) => sheet.personaId === row.id)
+              .map((sheet) => [sheet.style, sheet.objectKey]),
+          ),
         })),
       };
     },

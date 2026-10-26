@@ -93,6 +93,24 @@ days of logs.
 - Keep the whole home private. Export includes Apple credentials, messages and
   attachment bytes. Encrypt backups and copy them off-host.
 
+## Identified photo sends
+
+`submitPhoto({ handle, base64, attemptID })` accepts one base64 JPEG (at most
+10,000,000 decoded bytes). The authenticated gateway stages bytes privately and
+uses the same durable attempt ledger and `resolveSend` fencing as identified text
+sends. A photo is a separate attachment-only iMessage from `hi@renai.im`; there is
+no text or SMS fallback. Deploy the combined native/gateway artifact before an
+application starts calling this RPC. Older Macs reject it explicitly.
+
+The ledger binds each attempt to its recipient and exact photo bytes. Duplicate
+submissions do not upload or send again, including after a restart. Missing
+attempts resolved first remain fenced. Preparation/upload rejection is failed;
+an interrupted Apple submission stays unknown until a receipt reconciles it.
+Private `outgoing-photos/` files remain with Mac message history and are included
+in whole-home backups. History returns opaque attachment references, not local
+paths. The application's Outbox owns photo admission and uncertainty; personas take
+and inspect a Conversation photo before choosing to send it.
+
 ## Automatic deployment
 
 CI checks native code on a GitHub-hosted Mac. Once all gates pass, it packages the

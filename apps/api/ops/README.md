@@ -156,6 +156,40 @@ API_APP_URL=https://api.renai.im bun run operator remove HANDLE
 The commands are `remove`, `block`, `rebuild`, `test-handle` and `untest-handle`,
 each taking one handle.
 
+### Conversation photos
+
+The application owns the private `ren-ai-conversation-photos` R2 bucket, bound as
+`CONVERSATION_PHOTOS`, and the `CODEX_IMAGE_API_KEY` Worker secret. Do not enable a
+public bucket domain. The same Codex provider serves Admin and Conversations;
+provider contention privately declines a take without retrying it.
+
+Photo-taking defaults to enabled. Change its persisted global setting without a deploy:
+
+```sh
+API_APP_URL=https://api.renai.im bun run operator photos off
+API_APP_URL=https://api.renai.im bun run operator photos on
+```
+
+The switch stops new takes; already-taken photos retain their one-hour send window.
+Three successful takes per rolling 24 hours count separately for each Conversation,
+including test handles and unsent images. Reusing a tool call cannot generate again.
+Expiry and removal queue durable R2 deletion. Uncertain sends retain their bytes
+until transport evidence settles the attempt; never resend to resolve uncertainty.
+
+Admin's authenticated history proxies `GET /operator/message-image` for sent
+images. It accepts a Conversation ID, transport message ID/GUID and attachment
+index, validates ownership and delivery, and returns `Cache-Control: no-store`.
+Unsent images have no preview endpoint. Identity sheets come from Admin's private
+Catalog endpoint with `TOKEN_CATALOG`; no provider or bucket credentials reach tools.
+
+Deploy the photo-capable Mac first and verify its exact revision locally and through
+the tunnel. Deploy the application next, then install the matching `ren-ai.tools`
+and context/session-folder bundles using the coordinated plugin procedure below.
+Catalog synchronization updates existing session permissions and ground rules.
+Verify a real model `take_photo` result contains image content before its subsequent
+`send_photo`, then check transport delivery and authenticated history. See the
+[full verification contract](../../../docs/specs/conversation-photos.md#verification).
+
 ### Recover a blocked send
 
 Deploy the matching imsg gateway first and verify its exact revision and readiness
@@ -372,6 +406,8 @@ source automatically.
 4. Validate `docker compose -f ops/compose.yml config --quiet`, then run `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume and creates persona and Sandbox mountpoints. The Worker bundles ground rules as text; Node adapters use `loadGroundRules`.
 
    Compaction remains `buffer:400000`, `keep.tokens:12000` (1M context / 600k budget), and the app-selected model remains `opencode-go/deepseek-v4.1-flash`. OpenCode triggers compaction at `(limit.input || limit.context) - buffer`: reducing this buffer to 40k would delay compaction to 960k on a 1M window. The embedded test host's 40k buffer belongs to its separate 100k model / 60k budget; it is not the production config's expected value. Re-evaluate the buffer against the resolved model limits when changing the production model.
+
+   Persona folders enable native `websearch` with `websearch.provider: "random"`, matching OpenCode V2's normal search selection without its interactive first-use prompt. OpenCode owns provider availability, credentials and rate-limit rotation. Catalog sync refreshes existing persona folders and reconciles each managed session's persisted tool permissions.
 
 5. Review the merged external deployment **without starting it** (absolute paths are important; the first Compose file keeps its existing project/env/build context). Full `config` output includes credentials: review privately, never paste it into logs or tickets; use `config --quiet` for ordinary validation.
 

@@ -6,6 +6,7 @@ import {
   inPersonaLocation,
   messagingToolDefinitions,
   type PersonaPluginOptions,
+  type PhotoResult,
 } from "@ren-ai/plugin-application";
 
 const toolResult = (action: Effect.Effect<string, Error>) =>
@@ -14,12 +15,72 @@ const toolResult = (action: Effect.Effect<string, Error>) =>
     Effect.mapError((error) => new Tool.Error({ message: error.message })),
   );
 
+const photoContent = (result: PhotoResult): Tool.Result<typeof Schema.String> => {
+  if (result.status === "declined") return { output: "declined", content: "declined" };
+  const output = JSON.stringify({
+    status: result.status,
+    photo: result.photo,
+    expiresAt: result.expiresAt,
+  });
+  return {
+    output,
+    content: [
+      { type: "text", text: output },
+      { type: "file", uri: `data:image/jpeg;base64,${result.data}`, mime: "image/jpeg" },
+    ],
+  };
+};
+
 export const toolsPlugin = (options: PersonaPluginOptions) =>
   Plugin.define({
     id: "ren-ai.tools",
     effect: (ctx) =>
       Effect.gen(function* () {
         if (!inPersonaLocation(ctx.location.directory, options.personaDirectory)) return;
+        if (options.takePhoto) {
+          const take = options.takePhoto;
+          yield* ctx.tool.transform((editor) =>
+            editor.add({
+              name: "take_photo",
+              ...messagingToolDefinitions.take_photo,
+              output: Schema.String,
+              options: { codemode: false },
+              execute: (input, context) =>
+                options.handleForSession(context.sessionID).pipe(
+                  Effect.flatMap((handle) =>
+                    handle === undefined
+                      ? Effect.succeed<PhotoResult>({ status: "declined" })
+                      : take(context.sessionID, input, context.id),
+                  ),
+                  Effect.map(photoContent),
+                  Effect.mapError((error) => new Tool.Error({ message: error.message })),
+                ),
+            }),
+          );
+        }
+        if (options.sendPhoto) {
+          const send = options.sendPhoto;
+          yield* ctx.tool.transform((editor) =>
+            editor.add({
+              name: "send_photo",
+              ...messagingToolDefinitions.send_photo,
+              output: Schema.String,
+              options: { codemode: false },
+              execute: ({ photo }, context) =>
+                toolResult(
+                  options
+                    .handleForSession(context.sessionID)
+                    .pipe(
+                      Effect.flatMap((handle) =>
+                        handle === undefined
+                          ? Effect.succeed("not sent: unavailable")
+                          : send(context.sessionID, photo, context.id),
+                      ),
+                    ),
+                ),
+            }),
+          );
+        }
         if (options.endConversation) {
           const end = options.endConversation;
           yield* ctx.tool.transform((editor) =>

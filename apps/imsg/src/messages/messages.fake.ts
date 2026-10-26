@@ -4,6 +4,18 @@ import { selectRecent } from "./messages.ts";
 import type { OutgoingStatus } from "../gateway/protocol.ts";
 import { imageData } from "./images.ts";
 import type { remoteMessages } from "../gateway/client.ts";
+import { outgoingPhoto } from "./outgoing-photo.ts";
+
+const photoReader =
+  (photos: Map<string, string>): Messages["image"] =>
+  (attachment) =>
+    photos.has(attachment.path)
+      ? Effect.succeed({ uri: `data:image/jpeg;base64,${photos.get(attachment.path)!}` })
+      : imageData(attachment);
+
+const notificationStatus =
+  (statuses: Map<string, "pending" | "sent" | "delivered" | "failed">) => (guid: string) =>
+    Effect.sync(() => ({ state: statuses.get(guid) ?? "pending", error: 0, dateRead: null }));
 
 export const fakeMessages = (events: string[] = []) => {
   const bubbles: { handle: string; text: string }[] = [];
@@ -15,6 +27,7 @@ export const fakeMessages = (events: string[] = []) => {
   const watchers = new Set<(row: IncomingMessage) => Effect.Effect<void, Error>>();
   const statuses = new Map<string, "sent" | "no_imessage" | "unknown">();
   const notifications: { handle: string; text: string; guid: string }[] = [];
+  const photos = new Map<string, string>();
   const notificationStatuses = new Map<string, "pending" | "sent" | "delivered" | "failed">();
   const messages: Messages &
     Pick<Effect.Success<ReturnType<typeof remoteMessages>>, "notify" | "notificationStatus"> = {
@@ -26,14 +39,33 @@ export const fakeMessages = (events: string[] = []) => {
         notificationStatuses.set(guid, "sent");
         return { guid, requestId: crypto.randomUUID() };
       }),
-    notificationStatus: (guid) =>
-      Effect.sync(() => ({
-        state: notificationStatuses.get(guid) ?? "pending",
-        error: 0,
-        dateRead: null,
-      })),
+    notificationStatus: notificationStatus(notificationStatuses),
     availability: () => Effect.succeed({ available: true }),
-    image: imageData,
+    image: photoReader(photos),
+    sendPhoto: (handle, base64, attemptID) =>
+      Effect.gen(function* () {
+        const photo = yield* Effect.try(() => outgoingPhoto("/fake/photos", base64, attemptID));
+        if (sendStatuses.has(attemptID)) {
+          const existing = rows.find((row) => row.guid === attemptID);
+          if (
+            existing &&
+            (existing.handle !== handle ||
+              JSON.stringify(existing.attachments) !== JSON.stringify(photo.detail.attachments))
+          )
+            return yield* Effect.fail(new Error("Send identity conflict"));
+          return { guid: attemptID };
+        }
+        photos.set(photo.path, base64);
+        const row = yield* outgoing(
+          handle,
+          "",
+          yield* Clock.currentTimeMillis,
+          "sent",
+          attemptID,
+          photo.detail,
+        );
+        return { guid: row.guid };
+      }),
     sendText: (handle, text, attemptID) =>
       Effect.gen(function* () {
         if (attemptID && sendStatuses.has(attemptID)) return { guid: attemptID };
@@ -111,6 +143,7 @@ export const fakeMessages = (events: string[] = []) => {
     createdAt: number,
     status: "sent" | "delivered" | "failed" | "unknown" = "sent",
     guid = `outgoing-${crypto.randomUUID()}`,
+    extra: Pick<IncomingMessage, "attachments"> = {},
   ) =>
     Effect.gen(function* () {
       const row: IncomingMessage = {
@@ -120,6 +153,7 @@ export const fakeMessages = (events: string[] = []) => {
         createdAt,
         text: content,
         fromMe: true,
+        ...extra,
       };
       rows.push(row);
       sendStatuses.set(guid, status);

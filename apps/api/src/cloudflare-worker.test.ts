@@ -107,9 +107,9 @@ test("public reads work without private secrets while management and registratio
       database: "ready",
       executor: { status: "unconfigured" },
     });
-    const profiles = await send(runtime, "/discovery/personas");
+    const profiles = await send(runtime, "/discovery/personas?locale=ko");
     expect(profiles.status).toBe(200);
-    expect(await profiles.json()).toMatchObject([{ id: "sora" }]);
+    expect(await profiles.json()).toMatchObject({ people: [{ id: "sora" }], nextCursor: null });
     expect(
       (
         await send(runtime, "/management/discovery", {
@@ -143,7 +143,7 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
     let runtime = await openWorker(persistence, true);
     const health = await send(runtime, "/health");
     expect(await health.json()).toEqual(readyApplicationHealth);
-    expect((await send(runtime, "/discovery/personas")).status).toBe(200);
+    expect((await send(runtime, "/discovery/personas?locale=ko")).status).toBe(200);
     expect(
       (
         await send(runtime, "/discovery/waitlist", {
@@ -245,6 +245,7 @@ test("compiled SQLite DO imports linked private state atomically and recognizes 
       last_received_at: 4,
       reset_guid: null,
       usage_key: "a".repeat(32),
+      image_style: "photo",
     };
     const snapshot = {
       ...empty,
@@ -295,6 +296,7 @@ test("compiled SQLite DO imports linked private state atomically and recognizes 
     expect(detail.entry.endedBy).toBe("operator");
     expect(detail.entry.endedAt).not.toBeNull();
     expect(detail.entry.sessionID).toBe("ses_preserved");
+    expect(detail.entry.imageStyle).toBe("photo");
     expect(detail.entry.farewell).toBe("cancelled");
   } finally {
     await stopRuntimes();

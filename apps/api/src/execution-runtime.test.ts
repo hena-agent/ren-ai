@@ -6,7 +6,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { migrate } from "./database.ts";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ApplicationStore } from "./application-store.ts";
-import { cloudflareConfiguration } from "./cloudflare-config.ts";
+import { cloudflareConfiguration, type CloudflareBindings } from "./cloudflare-config.ts";
 import { createExecutionRuntime } from "./execution-runtime.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
@@ -67,17 +67,40 @@ test("actor replacement reuses its applied Catalog and fails safely on a corrupt
 });
 afterEach(() => Effect.runPromise(Scope.close(scope, Exit.void)));
 
-const open = () =>
+const open = (bindings: CloudflareBindings = executionBindings) =>
   createExecutionRuntime(
     fromPartial<ApplicationStore>({ context: database }),
-    cloudflareConfiguration(executionBindings),
-    executionBindings,
+    cloudflareConfiguration(bindings),
+    bindings,
     "ground rules",
     async (input) => {
       control.requests.push(input instanceof Request ? input.url : input.toString());
       return new Response(null);
     },
   );
+
+test("the production photo binding drains persisted private-object cleanup after actor replacement", async () => {
+  const deleted: string[] = [];
+  const bindings: CloudflareBindings = {
+    ...executionBindings,
+    CONVERSATION_PHOTOS: fromPartial({
+      delete: async (key: string) => {
+        deleted.push(key);
+      },
+    }),
+  };
+  await execSql("INSERT INTO photo_object VALUES ('expired', 0)");
+  let runtime = await open(bindings);
+  await runtime.tick();
+  await runtime.close();
+  expect(deleted).toHaveLength(1);
+  await execSql("INSERT INTO photo_object VALUES ('removed', 0)");
+  runtime = await open({ ...bindings, CODEX_IMAGE_API_KEY: "private-key" });
+  await runtime.tick();
+  await runtime.close();
+  expect(deleted).toHaveLength(2);
+  expect(await execSql("SELECT * FROM photo_object")).toEqual([]);
+});
 
 test("execution requires the existing management and Catalog credentials", async () => {
   for (const field of ["TOKEN_MANAGEMENT", "TOKEN_CATALOG"] as const) {
@@ -139,21 +162,24 @@ test("operator conversation status authenticates before boot and reads actual ex
   }
 });
 
-test("operator message history authenticates and reads without booting a persona", async () => {
-  const runtime = await open();
-  const url = "https://app/operator/messages?id=999";
-  try {
-    expect((await runtime.fetch(new Request(url))).status).toBe(401);
-    const response = await runtime.fetch(
-      new Request(url, { headers: { authorization: "Bearer management-secret" } }),
-    );
-    expect(response.status).toBe(404);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(control.events).toEqual([]);
-  } finally {
-    await runtime.close();
-  }
-});
+test.each(["messages?id=999", "message-image?id=999&message=1&guid=private&attachment=0"])(
+  "operator %s authenticates and reads without booting a persona",
+  async (path) => {
+    const runtime = await open();
+    const url = `https://app/operator/${path}`;
+    try {
+      expect((await runtime.fetch(new Request(url))).status).toBe(401);
+      const response = await runtime.fetch(
+        new Request(url, { headers: { authorization: "Bearer management-secret" } }),
+      );
+      expect(response.status).toBe(404);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(control.events).toEqual([]);
+    } finally {
+      await runtime.close();
+    }
+  },
+);
 
 const operatorConversationRequest = () =>
   new Request("https://app/operator/conversations?id=1", {

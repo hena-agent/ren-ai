@@ -23,6 +23,7 @@ log = "0.4"
 libc = "0.2"
 rpassword = "7"
 sha2 = "0.10"
+jpeg-decoder = { version = "0.3", default-features = false }
 
 [patch.crates-io]
 quinn = { path = "../../node_modules/.cache/ren-rustpush/rustpush/third_party/quinn/quinn" }

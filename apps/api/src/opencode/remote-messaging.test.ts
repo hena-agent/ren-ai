@@ -205,6 +205,8 @@ test("an incoming message reaches Docker's persona plugin and replies through th
             "react",
             "read",
             "send",
+            "take_photo",
+            "send_photo",
             "wait",
           ]).toSorted(),
         );

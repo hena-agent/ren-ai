@@ -29,6 +29,9 @@ struct Fake {
     hang_sends: std::sync::atomic::AtomicBool,
     offline: std::sync::atomic::AtomicBool,
     extra_handles: Mutex<Vec<String>>,
+    uploads: Mutex<Vec<Vec<u8>>>,
+    upload_failure: Mutex<Option<Failure>>,
+    hang_upload: std::sync::atomic::AtomicBool,
 }
 
 impl Native for Fake {
@@ -102,6 +105,10 @@ impl Native for Fake {
             .unwrap()
             .pop_front()
             .unwrap_or(Ok(Delivery::Sent))
+    }
+
+    async fn upload(&self, jpeg: &[u8]) -> Result<Attachment, Failure> {
+        images::upload(self, jpeg).await
     }
 }
 
@@ -471,3 +478,6 @@ mod recovery;
 
 #[path = "rpc_sender_tests.rs"]
 mod sender;
+
+#[path = "rpc_image_tests.rs"]
+mod images;

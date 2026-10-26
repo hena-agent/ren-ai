@@ -6,7 +6,7 @@ export const notSent = (reason: string) => `not sent: ${reason}`;
 export const notReacted = (reason: string) => `not reacted: ${reason}`;
 
 const tags =
-  /<(?=\/?(?:message|gap|photo|tapback|edited|unsent|notice|sent-by-you|phone|checked-phone|conversation-started|voice-memo|video|file|location|app)\b)/gi;
+  /<(?=\/?(?:message|gap|photo|photo-by-you|tapback|edited|unsent|notice|sent-by-you|phone|checked-phone|conversation-started|voice-memo|video|file|location|app)\b)/gi;
 
 const words = (text: string) => text.replace(tags, "‹");
 const attribute = (text: string) => words(text).replaceAll('"', "”");
@@ -28,6 +28,9 @@ export const gap = (date: number, previous: number | null, timeZone: string) => 
 
 export const photo = (date: number, timeZone: string) =>
   `<photo at="${timestamp(date, timeZone)}"/>`;
+
+export const photoByYou = (date: number, timeZone: string) =>
+  `<photo-by-you at="${timestamp(date, timeZone)}"/>`;
 
 export const placeholder = (
   kind: "voice-memo" | "video" | "file" | "location" | "app",

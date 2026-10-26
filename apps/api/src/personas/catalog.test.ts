@@ -160,3 +160,51 @@ test("Catalog rejects insecure origins, upstream failures, malformed profiles an
   fetcher.mockResolvedValueOnce(Response.json([{ id: "bad", bio: "private payload" }]));
   await expect(client.publicList()).rejects.toThrow("Invalid public Catalog response");
 });
+
+test("private identity sheets are authenticated, bounded and validated independently from public profiles", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  const client = catalogClient({ url: "https://admin.test", token: "private-token" }, fetcher);
+  const key = "00000000-0000-0000-0000-000000000000.png";
+  const record = {
+    id: fixturePersona.id,
+    source: serializePersona(fixturePersona),
+    state: "",
+    memory: "",
+    sheets: { anime: key },
+  };
+  fetcher.mockResolvedValueOnce(Response.json({ revision: "sheet", personas: [record] }));
+  expect((await client.load()).personas.get(record.id)?.sheets).toEqual({ anime: key });
+  fetcher.mockResolvedValueOnce(
+    Response.json({
+      revision: "bad",
+      personas: [{ ...record, sheets: { anime: "https://external.test/private.png" } }],
+    }),
+  );
+  await expect(client.load()).rejects.toThrow("Invalid private Catalog response");
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  fetcher.mockResolvedValueOnce(new Response(bytes, { headers: { "content-type": "image/png" } }));
+  expect(await client.sheet("harin", "anime")).toEqual({ bytes, mimeType: "image/png" });
+  const [url, init] = fetcher.mock.calls.at(-1)!;
+  expect(new Request(url).url).toBe("https://admin.test/api/catalog/sheet?id=harin&style=anime");
+  expect(new Headers(init?.headers).get("authorization")).toBe("Bearer private-token");
+  for (const [mimeType, signature] of [
+    ["image/jpeg", "ffd8ff"],
+    ["image/webp", "524946460000000057454250"],
+  ] as const) {
+    const image = Buffer.from(signature, "hex");
+    fetcher.mockResolvedValueOnce(new Response(image, { headers: { "content-type": mimeType } }));
+    expect((await client.sheet("harin", "photo"))?.mimeType).toBe(mimeType);
+  }
+  fetcher.mockResolvedValueOnce(new Response(null, { status: 404 }));
+  expect(await client.sheet("other", "photo")).toBeUndefined();
+  fetcher.mockResolvedValueOnce(new Response(null, { status: 401 }));
+  await expect(client.sheet("harin", "photo")).rejects.toThrow("Catalog request failed");
+  fetcher.mockResolvedValueOnce(new Response("private"));
+  await expect(client.sheet("harin", "photo")).rejects.toThrow("Invalid identity sheet type");
+  for (const invalid of [new Uint8Array(), new Uint8Array(20_000_001)]) {
+    fetcher.mockResolvedValueOnce(
+      new Response(invalid, { headers: { "content-type": "image/jpeg" } }),
+    );
+    await expect(client.sheet("harin", "photo")).rejects.toThrow("PNG");
+  }
+});

@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { databaseStore } from "./database-store.ts";
 import type { AdminEnv } from "./cloudflare-admin.ts";
+import { catalogSheet } from "./catalog-sheet.ts";
 import {
   loggedRequest,
   operation,
@@ -36,6 +37,8 @@ export function catalogHandler(request: Request, env: AdminEnv) {
           )
         )
           return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
+        if (pathname === "/api/catalog/sheet") return await catalogSheet(request, store);
+        if (pathname !== "/api/catalog") return new Response(null, { status: 404 });
         return await operation("catalog.read", {}, async () => {
           const snapshot = await store.catalog();
           const revision = snapshot.revision;

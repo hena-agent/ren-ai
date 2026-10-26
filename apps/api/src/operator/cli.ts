@@ -1,9 +1,23 @@
 import { Effect } from "effect";
 import { operatorClient, operatorConnection, type OperatorConnection } from "./clientHttp.ts";
 
+const usage =
+  "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID failed|delivered | photos on|off";
+
+const photosCommand = (args: readonly string[], connection?: OperatorConnection) =>
+  Effect.gen(function* () {
+    const setting = args[1];
+    if (args.length !== 2 || (setting !== "on" && setting !== "off"))
+      return yield* Effect.fail(new Error(usage));
+    const client = yield* operatorClient(connection ?? (yield* operatorConnection));
+    yield* client.operator.photoTaking({ payload: { enabled: setting === "on" } });
+    return `Photo-taking ${setting}`;
+  });
+
 export const runOperatorCli = (args: readonly string[], connection?: OperatorConnection) =>
   Effect.gen(function* () {
     const [command, handle, callID, outcome] = args;
+    if (command === "photos") return yield* photosCommand(args, connection);
     if (
       command === "release-send" &&
       handle &&
@@ -22,11 +36,7 @@ export const runOperatorCli = (args: readonly string[], connection?: OperatorCon
       !["remove", "block", "rebuild", "test-handle", "untest-handle"].includes(command!) ||
       args.length !== 2
     ) {
-      return yield* Effect.fail(
-        new Error(
-          "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID failed|delivered",
-        ),
-      );
+      return yield* Effect.fail(new Error(usage));
     }
     const client = yield* operatorClient(connection ?? (yield* operatorConnection));
     if (command === "test-handle" || command === "untest-handle") {

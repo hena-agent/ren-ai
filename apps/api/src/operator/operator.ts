@@ -18,10 +18,13 @@ export const makeOperator = (
     Effect.succeed("not_found"),
   retainSession: (sessionID: string, handle: string) => Effect.Effect<void, Error> = () =>
     Effect.fail(new Error("Session retention unavailable")),
+  photoTaking: (enabled: boolean) => Effect.Effect<void, Error> = () =>
+    Effect.fail(new Error("Conversation photos unavailable")),
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     return {
+      photoTaking,
       block: directory.block,
       testHandle: (handle: string, enabled: boolean) =>
         (enabled

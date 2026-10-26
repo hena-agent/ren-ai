@@ -45,6 +45,17 @@ function Bubble({ message, view }: { message: Message; view: ConversationView })
         {message.text && <p className="message-text">{message.text}</p>}
         {message.attachments.map((attachment, index) => (
           <p key={index} className="message-attachment">
+            {message.fromMe &&
+              (message.status?.state === "sent" || message.status?.state === "delivered") &&
+              !attachment.missing &&
+              attachment.mimeType?.startsWith("image/") && (
+                <img
+                  src={`/conversations/${entry.id}/images/${message.id}/${index}?guid=${encodeURIComponent(message.guid)}`}
+                  alt="보낸 사진"
+                  loading="lazy"
+                  style={{ maxWidth: "100%", maxHeight: "24rem" }}
+                />
+              )}
             {attachment.mimeType?.startsWith("image/") ? "사진" : "첨부파일"}
             {attachment.missing ? " · 파일 없음" : " · 첨부됨"}
           </p>

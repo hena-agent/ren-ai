@@ -22,7 +22,7 @@
 - `apps/admin`에서 목록 → 생성/수정 → 저장 → 공개/비공개 흐름과 저장된 카드 미리보기를 제공한다.
 - 인물 모델은 **OpenCode 기준**이다. 사용자 결정에 따라 Persona Engine 대신 프롬프트·언어·시간대·첫 인사 지침·기억 지침을 관리한다.
 - `packages/personas`가 OpenCode Markdown 로더, 검증, 파일 저장, 공개 프로필 조회를 공유한다. 공개 프로필도 같은 Markdown의 YAML frontmatter에 저장하며 별도 메타데이터 DB를 두지 않는다.
-- Admin Catalog 공개 projection은 Admin의 `GET /api/personas`가 제공한다. 브라우저용 Discovery는 이 응답을 직접 호출하지 않고, 매 요청마다 api-app의 `GET /discovery/personas`를 호출한다. api-app은 현재 Admin 공개 Catalog를 읽어 이미지 URL을 Admin origin으로 해석해 반환한다.
+- Admin Catalog 공개 projection은 Admin의 `GET /api/personas`가 제공한다. Discovery는 api-app의 `GET /discovery/personas?locale=…&cursor=…`에서 최대 10명의 후보를 받는다. UI 언어가 주 언어인 후보, 해당 언어에 능숙한 후보, 나머지 순서로 각 그룹을 무작위 시작점에서 탐색하며 cursor로 중복 없이 이어간다. 기존 Like 및 공유 링크는 `POST /discovery/profiles`로 해당 ID만 조회한다. 상세 계약은 `apps/discovery/README.md`의 Sampling and continuation을 따른다.
 - 이미지는 첫 버전에서 HTTPS URL을 입력한다. 기존 파일에 공개 프로필 필드가 없으면 ID를 이름으로 표시하고 비공개 상태로 연다.
 - 기존 iMessage API도 공용 로더를 사용한다. 같은 디렉터리를 지정하면 저장한 OpenCode 설정을 읽으며, 실행 중인 API에는 **재시작 후** 반영된다. 공개/비공개는 카드 노출 상태이며 기존 Conversation을 삭제하지 않는다.
 - Admin은 어두운 중립색·고밀도 편집 화면으로 구성하고 네이티브 HTML 폼으로 저장한다. 브라우저 JavaScript와 별도 프런트엔드 빌드 없이 서버에서 HTML을 렌더링한다.
@@ -53,7 +53,7 @@ Admin과 저장 API에는 비밀번호 인증과 동일 출처 폼 제출 검사
 
 - `apps/discovery`는 공개 프로필 카드, 터치 스와이프·Like / Pass 버튼·방향키, Like 개수, 연락받기 화면을 제공한다. 공개 목록 조회와 등록은 api-app을 사용한다. 목록은 조회마다 최신 Admin 공개 Catalog에서 가져와 배포된 브라우저 번들을 다시 만들지 않아도 공개된 새 인물을 반영한다. 선택은 브라우저에 보관하고 새로고침 후 복원한다. 다시 탐색은 Pass만 되돌리고 Like를 유지한다.
 - 한 명만 Like해도 연락처 입력으로 진행한다. 전화번호와 Apple ID 이메일을 정규화·검증하고 AI 안내·개인정보 disclosure·동의·Turnstile을 웹에서 처리한다. 현재는 휴대전화 번호만 받는다([Discovery 연락처](#discovery-연락처-iphone-휴대전화-번호만)).
-- api-app은 `GET /discovery/personas`와 `POST /discovery/waitlist`를 제공한다. 공개 목록은 요청 시 Admin의 `GET /api/personas`를 호출하고, 브라우저에는 공개 필드만 반환하며, 제출 시 Like 후보가 현재 공개되어 있는지 다시 검증한다. Discovery에는 별도 목록 API Worker나 D1 binding을 두지 않는다.
+- api-app은 샘플링·프로필 ID 조회와 `POST /discovery/waitlist`를 제공한다. Admin 공개 Catalog를 갱신할 때 탐색용 인덱스를 조정하고, 일반 탐색 요청에서는 전체 프로필 JSON 대신 필요한 후보만 읽는다. 제출 시 Like 후보가 현재 공개되어 있는지 다시 검증한다. Discovery에는 별도 목록 API Worker나 D1 binding을 두지 않는다.
 - SQLite의 `discovery_registration`과 `discovery_like`에 정규화된 Handle, Like 목록, 언어, 동의 버전, 등록 시각을 트랜잭션으로 보관한다. 등록 시각이 동의 시각이다. Handle의 UNIQUE 제약과 `INSERT OR IGNORE`로 동시 제출을 처리하며 재제출은 기존 Like를 덮어쓰지 않는다.
 - 차단·삭제 진행 중인 Handle은 거부한다. 이미 대화가 시작된 Handle은 `active`를 반환하고 새 등록을 만들지 않는다. 운영자 `remove`는 대기 등록과 Like도 삭제한다.
 - 응답은 `waiting` 또는 `active`다. 성공한 등록 요청마다 별도의 Notification을 함께 저장하고 다음 백그라운드 실행에서 `noti@renai.im`으로 한 번 발송을 시도한다. 중복 등록과 이미 활성화된 Handle도 포함하며, 활성 Handle에는 기존 등록과 대화가 유지된다는 안내를 보낸다. Conversation은 만들거나 변경하지 않으며 순서·연락 시점·안내 도착을 약속하지 않는다. [Notification 명세](notifications.md)의 발송 한도를 따른다.
@@ -211,7 +211,7 @@ bun dev
 - 시트와 갤러리 사진 생성은 공개 프로필의 유효성이나 자기소개 유무를 전제로 하지 않는다. 기존 공개 나이 항목 등 문서의 보완 과제가 있어도 이미지 작업을 할 수 있으며, 이 과정에서 Persona 원문을 검증·자동 보완·재작성하지 않는다. 공개 저장의 문서·초기값 검증은 그대로 유지한다.
 - 갤러리 사진은 모두 동등하다. 대표·추가 구분, 대표 지정·승격, 첫 사진 전용 생성, 전체 사진 재생성 동작은 없다. 첫 사진부터 스타일별 **사진 추가**에서 기본 1장, 최대 남은 용량까지 선택하고 사진별 프롬프트를 확인한다. 스타일별 최대 6장을 완료 사진과 예약량을 합쳐 검증한다. 기존 사진은 재생성하지 않고 현재 순서를 유지하며 Discovery는 목록의 첫 사진부터 보여 준다. D1은 기존 스타일·순서 행을 사용하고 저장·공개 계약의 첫 사진 필드는 갤러리 순서에서만 투영한다. 작성 경계의 사진에는 `main` 플래그가 없다.
 - 모든 AI 사진의 추가·재생성은 같은 스타일의 읽을 수 있는 인물 시트를 필수 정체성 참조로 사용한다. 시트가 없거나 읽히지 않으면 UI를 비활성화하고 서버의 등록·실행·행 재시도에서도 유료 호출 전에 중단한다. 대표 사진이나 설명으로 참조를 대체하지 않는다. 모든 사진의 개별 재생성은 시트와 선택한 사진의 장면·구도를 함께 참조하고 선택한 URL만 교체한다. 삭제는 선택한 사진만 제외하고 나머지 순서와 시트를 유지한다. **설명에서 시트 다시 만들기**는 기존 시트나 사진을 참조하지 않고 현재 편집 중인 설명·선택 스타일·추가 프롬프트로 외모를 새로 구성한다. **이 사진으로 시트 만들기**는 명시적으로 선택한 같은 스타일의 보유 사진만 참조한다. 교체 성공은 이후 생성에만 적용하고 실패하면 이전 시트를 유지한다. 이미 완성된 사진은 보존한다.
-- 시트 연결은 Persona Markdown·Persona 버전·공개 API·Conversation Catalog에서 분리한다. 운영 D1의 `persona_identity_sheets`는 Persona ID·스타일로 조회하고 objectKey CAS로 교체한다. 최초 Persona 저장 전에도 시트가 영속되며 서버 교체 후 재사용된다. 파일 저장소는 별도의 `identity-sheets/`에 연결을 보관한다. 이미지 원본은 기존 R2 이미지 저장 경계를 사용하며 직접 URL의 접근 정책도 기존 사진과 같다. 시트는 공개 프로필에 나열하지 않고 스타일별 여섯 사진 한도에도 포함하지 않는다.
+- 시트 연결은 Persona Markdown·Persona 버전·공개 API에서 분리한다. [Conversation 사진](conversation-photos.md)을 위해 비공개 런타임 Catalog에 스타일별 시트 참조를 포함하며, 애플리케이션은 인증된 Catalog 경계에서 원본을 읽는다. 운영 D1의 `persona_identity_sheets`는 Persona ID·스타일로 조회하고 objectKey CAS로 교체한다. 최초 Persona 저장 전에도 시트가 영속되며 서버 교체 후 재사용된다. 파일 저장소는 별도의 `identity-sheets/`에 연결을 보관한다. 이미지 원본은 기존 R2 이미지 저장 경계를 사용하며 직접 URL의 접근 정책도 기존 사진과 같다. 시트는 공개 프로필에 나열하지 않고 스타일별 여섯 사진 한도에도 포함하지 않는다.
 - 시트도 같은 Durable Object FIFO에서 한 장씩 처리한다. 두 스타일 생성은 실제 시트마다 선택 프롬프트 1개씩, 개별 생성·교체는 1개를 제공하고 유료 호출 전 대상·장수를 확인한다. 완료 즉시 미리보기와 생성 기준을 갱신하고 재제출은 같은 작업 영수증으로 복구한다. 생성 중 같은 Persona의 다른 작업·저장·원문 변경을 잠그고, 다른 Persona의 작업은 FIFO에 추가할 수 있다. 중단된 유료 호출은 자동 반복하지 않으며 실패한 행의 명시적 재시도만 실행한다. 사진 작업은 제출한 시트 기준과 영속된 현재 기준의 일치를 확인해 오래된 참조의 유료 호출을 막는다.
 - 시트 연결과 마지막 완료 작업 식별자는 같은 저장 쓰기로 확정한다. 시트 저장 후 Durable Object 초안 checkpoint 전에 중단되면 해당 식별자로 완성 결과를 복구하고, 확인한 행 재시도는 provider를 다시 호출하지 않는다. 작업 식별자가 없는 이전 실행 기록은 복구 파일로 보존하고 자동 실행하지 않는다. AI 캐릭터 초안으로 인물 전체를 교체하면 이전 시트와 생성 사진 초안을 초기화하고 새 설명에서 시트부터 다시 만든다. 이름·원문을 일반 편집하는 경우는 기존 시트를 유지한다.
 - Admin은 원문 오른쪽에서 기준 시트와 프로필 사진을 구분한다. 시트 영역은 스타일별 미리보기·생성·다시 만들기를 제공하고 기존 사진마다 시트 원본 선택 동작을 제공한다. 폴링 중에도 열린 옵션과 입력값을 보존하며 완성된 시트를 즉시 표시한다. 배포는 새 D1 테이블을 먼저 적용한 뒤 Admin을 배포한다. 기존 인물의 시트를 일괄 자동 생성하지 않는다.

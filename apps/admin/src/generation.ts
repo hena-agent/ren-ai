@@ -10,7 +10,8 @@ import sheetPolicy from "./identity-sheet-policy.json";
 import { reserveGeneration, seedingBudgetActive } from "./seeding-budget.ts";
 import { setTimeout } from "node:timers/promises";
 import { networkError } from "./generation-network.ts";
-import { arenaImage, arenaImageModel } from "./arena-image.ts";
+import { codexImageModel } from "@ren-ai/image-generation";
+import { codexImage } from "./codex-image.ts";
 
 type Character = {
   readonly name: string;
@@ -133,8 +134,8 @@ export function createProfileGenerator({
   endpoint = "https://generativelanguage.googleapis.com/v1beta",
   textModel = "gemini-3.8-flash",
   imageProvider = "gemini",
-  imageModel = imageProvider === "arena" ? arenaImageModel : "gemini-3.1-flash-image",
-  arenaKey = "",
+  imageModel = imageProvider === "codex" ? codexImageModel : "gemini-3.1-flash-image",
+  codexKey = "",
   fetcher = fetch,
 }: {
   key: string;
@@ -142,14 +143,14 @@ export function createProfileGenerator({
   textModel?: string;
   imageModel?: string;
   imageProvider?: string;
-  arenaKey?: string;
+  codexKey?: string;
   fetcher?: typeof fetch;
 }): ProfileGenerator {
-  if (imageProvider !== "gemini" && imageProvider !== "arena")
-    throw new Error("ADMIN_IMAGE_PROVIDER must be gemini or arena");
-  if ((imageProvider === "arena") !== (imageModel === arenaImageModel))
+  if (imageProvider !== "gemini" && imageProvider !== "codex")
+    throw new Error("ADMIN_IMAGE_PROVIDER must be gemini or codex");
+  if ((imageProvider === "codex") !== (imageModel === codexImageModel))
     throw new Error(
-      "Arena requires its canonical model; remove ADMIN_IMAGE_MODEL when switching providers",
+      "Codex requires gpt-image-2.5; remove ADMIN_IMAGE_MODEL when switching providers",
     );
   const thinkingConfig = { thinkingLevel: "LOW" };
   const configurations = {
@@ -253,10 +254,9 @@ export function createProfileGenerator({
     references: readonly Portrait[],
     format: "image" | "sheet",
   ) => {
-    if (imageProvider === "arena")
-      return arenaImage({
-        key: arenaKey,
-        model: imageModel,
+    if (imageProvider === "codex")
+      return codexImage({
+        key: codexKey,
         prompt: `${prompt}\n\n${input}`,
         references,
         format,

@@ -93,6 +93,16 @@ Discovery. All landing portraits, the scroll scene and its avatar share the
 selected style. Browsing keeps its current card, photo index, Likes and contact
 input when switching. Remove the blocking first-visit style comparison.
 
+Submitting contact saves the current in-memory image style with the registration,
+even when browser storage is unavailable. Duplicate submissions preserve the original
+choice. First contact copies it into its Conversation; Reselection may choose another
+style for a new registration and Conversation without changing the ended relationship.
+Existing registrations and Conversations, and submissions without a style, use anime.
+`DiscoveryRequest.imageStyle` and `ConversationEntry.imageStyle` stay optional for
+independent deployments. Deploy API acceptance and persistence before Discovery sends
+the field; clients continue accepting older API responses without it. This step records
+the choice only; it adds no photo-generation tools or model prompts.
+
 Decode the target images before committing the style. Reveal the updated root
 snapshot from the viewport's top-left corner with a 550ms expanding circle, using
 native View Transitions. Keep scroll position and parallax progress fixed. Reduced

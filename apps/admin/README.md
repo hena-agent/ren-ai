@@ -178,24 +178,29 @@ review the Korean and English-speaking previews before larger runs.
 
 ### Image provider switch
 
-Set `ADMIN_IMAGE_PROVIDER=gemini` (default) or `arena`. Text authoring and review
+Set `ADMIN_IMAGE_PROVIDER=gemini` (default) or `codex`. Text authoring and review
 always use Gemini. Remove `ADMIN_IMAGE_MODEL` overrides when switching: Gemini
-defaults to `gemini-3.1-flash-image`, Arena to `gpt-image-2.5-sunburst`.
-For Arena, set the server-only `ARENA_IMAGE_API_KEY` secret with
-`bunx wrangler secret put ARENA_IMAGE_API_KEY` from this directory.
-The Arena endpoint is `https://gpt-image.renai.im`; requests use bearer auth.
+defaults to `gemini-3.1-flash-image`, Codex to `gpt-image-2.5` (the API's Sunburst alias).
+For Codex, set the server-only `CODEX_IMAGE_API_KEY` secret with
+`bunx wrangler secret put CODEX_IMAGE_API_KEY` from this directory.
+The Codex Image endpoint is `https://codex-image.renai.im`; requests use bearer auth.
+See its [API contract](https://codex-image.renai.im/docs).
 For production change the provider in `wrangler.jsonc` and deploy through main CI;
 for local development use `.env`. Switch when the shared image queue and seeding
 runs are idle so confirmed work finishes with its selected provider.
 
 Both providers use the same prompts, image confirmation, private drafts, durable
-FIFO, storage and recovery. Arena sends one image request at a time: independent
+FIFO, storage and recovery. Codex sends one image request at a time: independent
 3:2 sheets via `/v1/images/generations`, and sheet-backed 4:5 photos via
 `/v1/images/edits` with inline reference images. Regeneration also includes the
 selected photo as its composition reference. Responses are base64 PNGs saved
-through the existing image store. Arena errors never auto-retry or switch to Gemini.
+through the existing image store. Codex errors never auto-retry or switch to Gemini.
 
-The operator confirmed this Arena endpoint has **no incremental image charge**.
+`@ren-ai/image-generation` owns the Codex HTTP contract and redacted diagnostics.
+Admin owns prompts, operation logging and seeding-budget reservations. The shared
+client also accepts JPEG output and caller-selected dimensions.
+
+The operator confirmed this Codex OAuth endpoint has **no incremental image charge**.
 Its seeding image reservation is $0; text calls retain their normal conservative
 Gemini reservations and the immutable run budget. This is not OpenAI's retail
 pricing. If the endpoint's charging arrangement changes, update the reservation

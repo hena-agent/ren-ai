@@ -16,6 +16,7 @@ import { setupRebuilding } from "./conversations/rebuild.ts";
 import { retainedSessions } from "./conversations/retained.ts";
 import { stoppedConversations } from "./conversations/stop.ts";
 import { SqlClient } from "effect/unstable/sql";
+import type { ConversationPhotos } from "./photos/photos.ts";
 
 export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
   personas: ReadonlyMap<string, Persona>,
@@ -24,12 +25,14 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
   gestures: Gestures,
   alerts: FailureAlerts,
   eager = true,
+  photos?: ConversationPhotos,
 ) =>
   Effect.gen(function* () {
-    const { tools, directory, pace, sends, endings } = yield* prepareMessaging(
+    const { tools, directory, pace, sends, endings, photoTaking } = yield* prepareMessaging(
       personas,
       messages,
       gestures,
+      photos,
     );
     let fenceEnding: (sessionID: string) => Effect.Effect<void, Error>;
     const host = yield* connect({
@@ -87,6 +90,7 @@ export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(
       (handle) => recovery.rebuild(handle, true),
       (sessionID, handle) =>
         retained.retainRemoved(sessionID, handle).pipe(Effect.tap(() => failed.forget(sessionID))),
+      photoTaking,
     );
     return {
       ...host,

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { Context, Effect } from "effect";
+import { Context, Effect, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { expect, test } from "vitest";
-import { discoveryNotice } from "@ren-ai/onboarding";
+import { BrowsePage, discoveryNotice } from "@ren-ai/onboarding";
 import { relationshipFixture } from "../../test/relationship.test-helper.ts";
 import { contactFixture, withContactDatabase } from "./contact.test-helper.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";
+import { invalidatePublicCatalog } from "../personas/public-catalog.ts";
 
 const verified = Context.make(
   HttpClient.HttpClient,
@@ -27,9 +28,13 @@ test("personas at capacity remain public and can be Liked while selection waits"
         });
         yield* Effect.addFinalizer(() => Effect.promise(web.dispose));
         const publicList = yield* Effect.promise(() =>
-          web.handler(new Request("https://api.test/discovery/personas"), verified),
+          web.handler(new Request("https://api.test/discovery/personas?locale=ko"), verified),
         );
-        expect(yield* Effect.promise(() => publicList.json())).toEqual(f.profiles);
+        const page = yield* Effect.promise(async () =>
+          Schema.decodeUnknownSync(BrowsePage)(await publicList.json()),
+        );
+        expect(page.people).toEqual(expect.arrayContaining(f.profiles));
+        expect(page.nextCursor).toBeNull();
         const joined = yield* Effect.promise(() =>
           web.handler(
             new Request("https://api.test/discovery/waitlist", {
@@ -132,7 +137,7 @@ test("private listing authorizes body tokens, is uncacheable and rate limited, a
                   "CF-Connecting-IP": ip,
                   "X-Operation-ID": requestId,
                 },
-                body: JSON.stringify({ reselectionToken }),
+                body: JSON.stringify({ locale: "ko", reselectionToken }),
               }),
               verified,
             ),
@@ -148,8 +153,13 @@ test("private listing authorizes body tokens, is uncacheable and rate limited, a
         expect((yield* listing("malformed")).status).toBe(400);
         const response = yield* listing(token);
         expect(response.status).toBe(200);
-        expect(yield* Effect.promise(() => response.json())).toEqual(f.profiles);
+        const page = yield* Effect.promise(async () =>
+          Schema.decodeUnknownSync(BrowsePage)(await response.json()),
+        );
+        expect(page.people).toEqual(expect.arrayContaining(f.profiles));
+        expect(page.nextCursor).toBeNull();
         catalogOffline = true;
+        yield* invalidatePublicCatalog;
         const before = logs.length;
         const offline = yield* listing(token);
         expect(offline.status).toBe(503);
@@ -189,7 +199,7 @@ test("private listing authorizes body tokens, is uncacheable and rate limited, a
         expect(unavailable.status).toBe(503);
         expect(yield* Effect.promise(() => unavailable.json())).toBe("storage");
         expect(logs.at(-1)).toMatchObject({
-          stage: "catalog.authorize",
+          stage: "catalog.read",
           code: "storage",
           level: "error",
           causeName: "UnknownError",

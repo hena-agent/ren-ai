@@ -104,9 +104,25 @@ const rpcRequest = Schema.fromJsonString(
       "send",
       "read",
       "react",
+      "takePhoto",
+      "sendPhoto",
     ]),
     payload: Schema.optional(
-      Schema.NullOr(Schema.Struct({ seconds: Schema.optional(Schema.Number) })),
+      Schema.NullOr(
+        Schema.Struct({
+          seconds: Schema.optional(Schema.Number),
+          sessionID: Schema.optional(Schema.String),
+          callID: Schema.optional(Schema.String),
+          photo: Schema.optional(Schema.String),
+          input: Schema.optional(
+            Schema.Struct({
+              scene: Schema.String,
+              includesMe: Schema.Boolean,
+              orientation: Schema.Literals(["portrait", "landscape"]),
+            }),
+          ),
+        }),
+      ),
     ),
   }),
 );
@@ -158,15 +174,16 @@ async function completion(request) {
   const match = /compiled-case:([0-9]+)/.exec(text);
   const index = Number(match?.[1] ?? -1);
   const inputs = [12000, 3600, 5.5, 3300, 0, -1, "120"];
-  const tool = ["send", "read", "react"][index - inputs.length] ?? "wait";
-  const input =
-    index < inputs.length
-      ? { seconds: inputs[index] }
-      : tool === "send"
-        ? { text: "isolated message" }
-        : tool === "react"
-          ? { tapback: "love" }
-          : {};
+  const { name: tool, input } = [
+    { name: "send", input: { text: "isolated message" } },
+    { name: "read", input: {} },
+    { name: "react", input: { tapback: "love" } },
+    {
+      name: "take_photo",
+      input: { scene: "My coffee", includesMe: false, orientation: "landscape" },
+    },
+    { name: "send_photo", input: { photo: "compiled-photo" } },
+  ][index - inputs.length] ?? { name: "wait", input: { seconds: inputs[index] } };
   const waiting =
     index >= 0 && body.tools?.some((entry) => entry.function.name === tool) && !seen.has(index);
   if (waiting) seen.add(index);
@@ -218,6 +235,30 @@ async function nativeHttp(request) {
   return Response.json({ status: response.status, body: await response.text() });
 }
 
+/** @param {Schema.Schema.Type<typeof rpcRequest>} message */
+function validatePhotoCall(message) {
+  if (message.tag === "takePhoto")
+    Schema.decodeUnknownSync(
+      Schema.Struct({
+        sessionID: Schema.String.check(Schema.isMinLength(1)),
+        callID: Schema.Literal("wait-case-10"),
+        input: Schema.Struct({
+          scene: Schema.Literal("My coffee"),
+          includesMe: Schema.Literal(false),
+          orientation: Schema.Literal("landscape"),
+        }),
+      }),
+    )(message.payload);
+  if (message.tag === "sendPhoto")
+    Schema.decodeUnknownSync(
+      Schema.Struct({
+        sessionID: Schema.String.check(Schema.isMinLength(1)),
+        callID: Schema.Literal("wait-case-11"),
+        photo: Schema.Literal("compiled-photo"),
+      }),
+    )(message.payload);
+}
+
 processState[fixtureKey] ??= Bun.serve({
   hostname: "127.0.0.1",
   port: 4710,
@@ -262,9 +303,18 @@ processState[fixtureKey] ??= Bun.serve({
         send: "isolated send completed",
         read: "isolated read completed",
         react: "isolated react completed",
+        takePhoto: {
+          status: "taken",
+          photo: "compiled-photo",
+          expiresAt: 123456,
+          data: "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
+        },
+        sendPhoto: "isolated send_photo completed",
       };
       if (!(message.tag in values)) throw new Error(`Forbidden isolated action: ${message.tag}`);
-      if (["send", "read", "react"].includes(message.tag)) actions.push(message.tag);
+      if (["send", "read", "react", "takePhoto", "sendPhoto"].includes(message.tag))
+        actions.push(message.tag);
+      validatePhotoCall(message);
       frames.push({
         _tag: "Exit",
         requestId: message.id,

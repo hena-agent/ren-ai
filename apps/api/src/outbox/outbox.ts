@@ -13,7 +13,7 @@ export type { Tapback } from "@ren-ai/imsg/protocol";
 
 interface SendRow {
   readonly id: number;
-  readonly kind: "text" | "tapback";
+  readonly kind: "text" | "tapback" | "photo";
   readonly state: "recorded" | "uncertain" | "sent" | "delivered" | "failed" | "not_sent";
   readonly content: string;
   readonly guid: string | null;
@@ -25,7 +25,10 @@ interface SendRow {
   readonly notificationPending: number;
 }
 
-/** Owns every text attempt, including one left recorded by a crashed process. */
+const photoCancelled =
+  "a new message arrived. Keep this photo and read the new messages. You may send it within its expiry if it still fits the conversation; do not explain the delay. Do not repeat successful sends.";
+
+/** Owns every send attempt, including one left recorded by a crashed process. */
 export const outbox = (
   messages: Messages,
   gestures: Gestures,
@@ -44,14 +47,14 @@ export const outbox = (
       Effect.forEach(sentListeners, (listener) => listener(conversation)).pipe(Effect.asVoid);
     const recordAttempt = (
       conversation: Conversation,
-      kind: "text" | "tapback",
+      kind: SendRow["kind"],
       content: string,
       callID: string,
       targetGUID: string | null = null,
     ) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        const attemptID = kind === "text" ? crypto.randomUUID().toUpperCase() : null;
+        const attemptID = kind === "tapback" ? null : crypto.randomUUID().toUpperCase();
         // Fence the send in the same statement that records it: reset may race typing.
         const rows = yield* sql<{
           id: number;
@@ -65,6 +68,11 @@ export const outbox = (
           AND (ended_at IS NULL OR EXISTS (SELECT 1 FROM conversation_end e
             WHERE e.conversation_id = conversation.id AND e.consumed_at IS NULL
              AND ${callID} = e.call_id || ':farewell:' || e.farewell_attempt AND e.farewell_pending = 1 AND ${content} = e.farewell))
+          AND (${kind} != 'photo' OR (
+            EXISTS (SELECT 1 FROM conversation_photo p WHERE p.id = ${content}
+              AND p.conversation_id = conversation.id AND p.state = 'taken' AND p.expires_at > ${now})
+            AND NOT EXISTS (SELECT 1 FROM send s WHERE s.conversation_id = conversation.id
+              AND s.kind = 'photo' AND s.content = ${content} AND s.state != 'not_sent')))
         RETURNING id, recorded_at AS recordedAt, attempt_id AS attemptID`;
         return rows[0];
       });
@@ -96,8 +104,8 @@ export const outbox = (
         const matches =
           yield* sql<SendRow>`SELECT id, state, content, guid, attempt_id AS attemptID, late,
           notification_pending AS notificationPending, recorded_at AS recordedAt, updated_at AS updatedAt, tool_call_id AS toolCallID
-           FROM send WHERE conversation_id = ${conversation.id} AND kind IN ('text', 'tapback')
-          AND (guid = ${row.guid} OR (guid IS NULL AND content = ${row.text}
+           FROM send WHERE conversation_id = ${conversation.id} AND kind IN ('text', 'tapback', 'photo')
+          AND (guid = ${row.guid} OR (kind != 'photo' AND guid IS NULL AND content = ${row.text}
             AND recorded_at <= ${row.createdAt} AND state IN ('recorded', 'uncertain')))
           ORDER BY CASE WHEN guid = ${row.guid} THEN 0 ELSE 1 END, id LIMIT 1`;
         const match = matches[0];
@@ -143,7 +151,7 @@ export const outbox = (
       });
     const before = (
       conversation: Conversation,
-      kind: "text" | "tapback",
+      kind: SendRow["kind"],
       content: string,
       callID: string,
     ) =>
@@ -172,7 +180,7 @@ export const outbox = (
           yield* sql`INSERT INTO send (handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
           VALUES (${conversation.handle}, ${conversation.id}, ${kind}, ${content}, ${callID}, 'not_sent', ${now}, ${now})`;
           return prefix(
-            `your earlier ${settled.kind === "tapback" ? "tapback" : "message"} "${settled.content}" did go out at ${at}`,
+            `your earlier ${settled.kind === "photo" ? "photo" : settled.kind === "tapback" ? "tapback" : "message"} "${settled.content}" did go out at ${at}`,
           );
         }
       });
@@ -183,6 +191,118 @@ export const outbox = (
         updated_at AS updatedAt, tool_call_id AS toolCallID FROM send
         WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`,
         (rows) => rows[0],
+      );
+    const sendText = (
+      conversation: Conversation,
+      text: string,
+      callID: string,
+      cancelled?: string,
+    ) =>
+      Effect.gen(function* () {
+        const stopped = yield* before(conversation, "text", text, callID);
+        if (stopped) return stopped;
+        const extra = yield* Random.nextBetween(1000, 2000);
+        const duration = Math.min(15000, text.length * 250 + extra);
+        const type = Effect.gen(function* () {
+          if (pace) yield* pace.quiet(conversation.sessionID);
+          const typingStarted = yield* Clock.currentTimeMillis;
+          return yield* gestures.typing(conversation.handle, text, duration).pipe(
+            Effect.catch(() =>
+              Effect.gen(function* () {
+                const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
+                yield* Effect.sleep(Math.max(0, duration - elapsed));
+                return true;
+              }),
+            ),
+          );
+        });
+        const ready = !typing
+          ? true
+          : pace
+            ? yield* pace.during(conversation.sessionID, type)
+            : yield* type;
+        if (ready !== true)
+          return notSent(
+            cancelled ??
+              "a new message arrived. Discard this unsent draft and its unsent continuation; the User never received it. Do not resume, paraphrase, or explain it later, or save it to Memory as a conversation, promise, or pending message. Read the new messages and respond to the current conversation. Revisit that topic only if the User explicitly brings it back. Do not repeat successful sends.",
+          );
+        return yield* submit(conversation, "text", text, callID, text);
+      });
+    const submit = (
+      conversation: Conversation,
+      kind: "text" | "photo",
+      content: string,
+      callID: string,
+      payload: string,
+    ) =>
+      Effect.gen(function* () {
+        const recorded = yield* recordAttempt(conversation, kind, content, callID);
+        if (!recorded) return notSent("this Conversation is unavailable");
+        const { id } = recorded;
+        inFlight.add(id);
+        return yield* Effect.gen(function* () {
+          const outcome = yield* Effect.result(
+            observeSend(
+              "transport.submit",
+              recorded.attemptID!,
+              kind === "photo"
+                ? messages.sendPhoto(conversation.handle, payload, recorded.attemptID!)
+                : messages.sendText(conversation.handle, payload, recorded.attemptID!),
+            ),
+          );
+          if (Result.isFailure(outcome)) {
+            yield* sql`UPDATE send SET state = 'uncertain', late = 1, notification_pending = 1,
+            updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`;
+            return notSent("send in doubt");
+          }
+          yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${yield* Clock.currentTimeMillis}
+          WHERE id = ${id} AND state = 'recorded'`;
+          let row =
+            (yield* sql<SendRow>`SELECT id, state, content, guid, attempt_id AS attemptID, late,
+           notification_pending AS notificationPending, recorded_at AS recordedAt,
+            updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+          row = yield* check(conversation, row);
+          for (let attempt = 0; attempt < 15 && row.state === "uncertain"; attempt++) {
+            // imsg can accept a send before Messages exposes its row.
+            yield* Effect.sleep("200 millis");
+            row = yield* check(conversation, row);
+          }
+          if (row.state === "sent" || row.state === "delivered") return sent();
+          yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`;
+          // The RPC accepted the send; the Messages row is the authority.
+          return notSent("send in doubt");
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              inFlight.delete(id);
+            }),
+          ),
+        );
+      });
+    const withIntroduction = (
+      conversation: Conversation,
+      action: Effect.Effect<string, Error>,
+      cancelled?: string,
+    ) =>
+      PartitionedSemaphore.withPermit(
+        locks,
+        conversation.id,
+      )(
+        Effect.gen(function* () {
+          const introduction = yield* introduceRelationship(conversation).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
+          if (introduction) {
+            const result = yield* sendText(
+              conversation,
+              introduction,
+              "relationship-introduction",
+              cancelled,
+            );
+            if (result !== sent()) return result;
+          }
+          return yield* action;
+        }),
       );
     return {
       reconcile,
@@ -229,7 +349,7 @@ export const outbox = (
         sentListeners.add(listener);
       },
       results: (sessionID: string) =>
-        sql<SendRow>`SELECT send.id, send.state, send.content, send.guid,
+        sql<SendRow>`SELECT send.id, send.kind, send.state, send.content, send.guid,
           send.recorded_at AS recordedAt, send.updated_at AS updatedAt, send.late,
           send.notification_pending AS notificationPending,
           send.tool_call_id AS toolCallID FROM send
@@ -267,81 +387,33 @@ export const outbox = (
           }),
         ),
       send: (conversation: Conversation, body: string, callID: string) =>
-        PartitionedSemaphore.withPermit(
-          locks,
-          conversation.id,
-        )(
+        withIntroduction(conversation, sendText(conversation, body, callID)),
+      sendPhoto: (
+        conversation: Conversation,
+        photoID: string,
+        callID: string,
+        load: () => Effect.Effect<string | undefined, Error>,
+      ) =>
+        withIntroduction(
+          conversation,
           Effect.gen(function* () {
-            const text = yield* introduceRelationship(conversation, body).pipe(
-              Effect.provideService(SqlClient.SqlClient, sql),
-            );
-            const stopped = yield* before(conversation, "text", text, callID);
+            const stopped = yield* before(conversation, "photo", photoID, callID);
             if (stopped) return stopped;
-            const extra = yield* Random.nextBetween(1000, 2000);
-            const duration = Math.min(15000, text.length * 250 + extra);
-            const type = Effect.gen(function* () {
+            const prepare = Effect.gen(function* () {
               if (pace) yield* pace.quiet(conversation.sessionID);
-              const typingStarted = yield* Clock.currentTimeMillis;
-              return yield* gestures.typing(conversation.handle, text, duration).pipe(
-                Effect.catch(() =>
-                  Effect.gen(function* () {
-                    const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
-                    yield* Effect.sleep(Math.max(0, duration - elapsed));
-                    return true;
-                  }),
-                ),
-              );
+              // Pacing races successes: carry loader failures out rather than waiting for an arrival.
+              return yield* Effect.result(load());
             });
-            const ready = !typing
-              ? true
-              : pace
-                ? yield* pace.during(conversation.sessionID, type)
-                : yield* type;
-            if (ready !== true)
-              return notSent(
-                "a new message arrived. Discard this unsent draft and its unsent continuation; the User never received it. Do not resume, paraphrase, or explain it later, or save it to Memory as a conversation, promise, or pending message. Read the new messages and respond to the current conversation. Revisit that topic only if the User explicitly brings it back. Do not repeat successful sends.",
-              );
-            const recorded = yield* recordAttempt(conversation, "text", text, callID);
-            if (!recorded) return notSent("this Conversation is unavailable");
-            const { id } = recorded;
-            inFlight.add(id);
-            return yield* Effect.gen(function* () {
-              const outcome = yield* Effect.result(
-                observeSend(
-                  "transport.submit",
-                  recorded.attemptID!,
-                  messages.sendText(conversation.handle, text, recorded.attemptID!),
-                ),
-              );
-              if (Result.isFailure(outcome)) {
-                yield* sql`UPDATE send SET state = 'uncertain', late = 1, notification_pending = 1,
-                updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`;
-                return notSent("send in doubt");
-              }
-              yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${yield* Clock.currentTimeMillis}
-              WHERE id = ${id} AND state = 'recorded'`;
-              let row =
-                (yield* sql<SendRow>`SELECT id, state, content, guid, attempt_id AS attemptID, late,
-               notification_pending AS notificationPending, recorded_at AS recordedAt,
-                updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
-              row = yield* check(conversation, row);
-              for (let attempt = 0; attempt < 15 && row.state === "uncertain"; attempt++) {
-                // imsg can accept a send before Messages exposes its row.
-                yield* Effect.sleep("200 millis");
-                row = yield* check(conversation, row);
-              }
-              if (row.state === "sent" || row.state === "delivered") return sent();
-              yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`;
-              // The RPC accepted the send; the Messages row is the authority.
-              return notSent("send in doubt");
-            }).pipe(
-              Effect.ensuring(
-                Effect.sync(() => {
-                  inFlight.delete(id);
-                }),
-              ),
-            );
+            const ready = pace
+              ? yield* pace.during(conversation.sessionID, prepare)
+              : yield* prepare;
+            if (ready === "new") return notSent(photoCancelled);
+            if (Result.isFailure(ready)) return yield* Effect.fail(ready.failure);
+            if (ready.success === undefined)
+              return notSent("this photo is unavailable, expired, or already attempted");
+            return yield* submit(conversation, "photo", photoID, callID, ready.success);
           }),
+          photoCancelled,
         ),
     };
   });

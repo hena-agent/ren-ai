@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { Schema, type JsonSchema } from "effect";
 import { tapbacks } from "@ren-ai/imsg/protocol";
+import { takePhotoInput } from "./protocol.ts";
 
 const definition = <A>(description: string, schema: Schema.Codec<A>) => {
   // Every input is portable across the compiled CLI's separate Effect instance.
@@ -9,6 +10,14 @@ const definition = <A>(description: string, schema: Schema.Codec<A>) => {
 };
 
 export const messagingToolDefinitions = {
+  take_photo: definition(
+    "Take a private everyday photo for this Conversation. Describe only your own moment, never the User or their personal details. Inspect the returned image before deciding whether to send it. A decline is private: continue in text without mentioning it.",
+    takePhotoInput,
+  ),
+  send_photo: definition(
+    "Send a photo you took in this Conversation, once, within one hour. Call read and wait for its result before replying to new messages; never in parallel. A cancelled photo stays available: read the new messages and send it only if it still fits, without explaining the delay.",
+    Schema.Struct({ photo: Schema.String }),
+  ),
   end_conversation: definition(
     "Permanently end only this Conversation when you no longer want a relationship. Records the ending and sends your farewell plus Ren AI's reselection notice. The User can choose another persona. Do not send the farewell separately or use this for a temporary break or a declined suggestion.",
     Schema.Struct({

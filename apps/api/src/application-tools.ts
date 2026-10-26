@@ -14,6 +14,7 @@ import { promptID } from "./intake/message-id.ts";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 import type { NotificationTransport } from "./conversations/notifications.ts";
 import { bubbleRejection } from "./outbox/bubble-format.ts";
+import type { ConversationPhotos } from "./photos/photos.ts";
 
 export type ApplicationMessages = Messages & NotificationTransport;
 
@@ -28,6 +29,7 @@ export const prepareMessaging = (
   personas: ReadonlyMap<string, Persona>,
   messages: ApplicationMessages,
   gestures: Gestures,
+  photos?: ConversationPhotos,
 ) =>
   Effect.gen(function* () {
     yield* migrate;
@@ -54,6 +56,22 @@ export const prepareMessaging = (
           Effect.provideService(SqlClient.SqlClient, sql),
         ),
       personas,
+      takePhoto: (sessionID, input, callID) =>
+        Effect.gen(function* () {
+          const conversation = yield* directory.bySession(sessionID);
+          return conversation && photos
+            ? yield* photos.take(conversation, input, callID)
+            : { status: "declined" as const };
+        }),
+      sendPhoto: (sessionID, photo, callID) =>
+        Effect.gen(function* () {
+          const conversation = yield* directory.bySession(sessionID);
+          return conversation && photos
+            ? yield* sends.sendPhoto(conversation, photo, callID, () =>
+                photos.sendable(conversation, photo),
+              )
+            : "not sent: photo unavailable";
+        }),
       endConversation: endings.end,
       handleForSession: (sessionID) =>
         directory.bySession(sessionID).pipe(
@@ -127,5 +145,5 @@ export const prepareMessaging = (
           return yield* sends.react(conversation, tapback, callID, seen?.guid ?? undefined);
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
     };
-    return { tools, directory, pace, sends, endings };
+    return { tools, directory, pace, sends, endings, photoTaking: photos?.setEnabled };
   });

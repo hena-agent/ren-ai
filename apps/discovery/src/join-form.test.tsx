@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { JoinForm } from "./join-form.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { RegistrationError } from "./client.ts";
+import { testClient } from "../test/client.ts";
 
 const liked = [
   {
@@ -20,7 +21,7 @@ let key: string | undefined;
 const submit = vi.fn<DiscoveryClient["join"]>();
 const back = vi.fn<() => void>();
 const done = vi.fn<(state: "waiting" | "active") => void>();
-const client: DiscoveryClient = { profiles: async () => liked, join: submit };
+const client = testClient({ profiles: async () => liked, join: submit });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -70,7 +71,9 @@ test("reselection identifies the new relationship flow and explains an invalid o
 });
 
 function mount(selected = liked) {
-  return render(<JoinForm liked={selected} client={client} onBack={back} onSuccess={done} />);
+  return render(
+    <JoinForm liked={selected} imageStyle="anime" client={client} onBack={back} onSuccess={done} />,
+  );
 }
 const number = () => screen.getByRole<HTMLInputElement>("textbox", { name: "휴대전화 번호" });
 const country = () => screen.getByRole<HTMLSelectElement>("combobox", { name: "국가 번호" });
@@ -180,6 +183,7 @@ test("a pending registration cannot repeat, and failure retains the form for a f
     locale: "ko",
     conversationLanguage: "ko",
     startingRelationship: "friends",
+    imageStyle: "anime",
     privacyNoticeVersion: discoveryNotice.version,
     likedPersonaIDs: ["ena"],
     turnstileToken: "fresh",

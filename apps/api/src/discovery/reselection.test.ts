@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { Context, Effect } from "effect";
+import { Context, Effect, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { expect, test, vi } from "vitest";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { discoveryNotice, type DiscoveryRequest } from "@ren-ai/onboarding";
+import { BrowsePage, discoveryNotice, type DiscoveryRequest } from "@ren-ai/onboarding";
 import type { Persona } from "@ren-ai/personas";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
 import { prepareMessaging } from "../application-tools.ts";
@@ -17,6 +17,7 @@ import { Session } from "@opencode/schema/session";
 import { SessionInbox } from "@opencode/schema/session-inbox";
 import { relationshipFixture } from "../../test/relationship.test-helper.ts";
 import { operatorEnding } from "../conversations/operator-ending.ts";
+import { conversationStatus } from "../conversations/status.ts";
 
 const verified = Context.make(
   HttpClient.HttpClient,
@@ -145,10 +146,11 @@ test.each(["persona", "operator"])(
             /private mutation payload|821099999999|reselect=|여기서 끝낼게요/,
           );
           yield* f.sql`DROP TRIGGER fail_reselection`;
-          for (let attempt = 0; attempt < 2; attempt++) {
+          for (const imageStyle of ["photo", "anime"] as const) {
             const response = yield* submit({
               reselectionToken: token,
               startingRelationship: "friends",
+              imageStyle,
               name: "새 이름",
               age: 29,
               gender: "female",
@@ -207,6 +209,9 @@ test.each(["persona", "operator"])(
           const next = (yield* app.directory.byHandle(previous.handle))!;
           expect(next.personaID).toBe("harin");
           expect(next.sessionID).toBe("ses_new");
+          const status = yield* conversationStatus(async () => f.profiles);
+          expect((yield* status.detail(next.id))?.entry).toHaveProperty("imageStyle", "photo");
+          expect((yield* status.detail(previous.id))?.entry).toHaveProperty("imageStyle", "anime");
           expect(yield* f.sql`SELECT joined_at, replied_at, consent_version FROM user`).toEqual([
             { joined_at: 10, replied_at: 20, consent_version: "v1" },
           ]);
@@ -229,7 +234,8 @@ test.each(["persona", "operator"])(
           expect(
             yield* app.tools.send(next.sessionID, "안녕하세요, 하린이에요.", "greet-new"),
           ).toBe("sent");
-          expect(fake.bubbles.at(-1)?.text).toContain("다른 페르소나와의 새로운 대화");
+          expect(fake.bubbles.at(-2)?.text).toContain("다른 페르소나와의 새로운 대화");
+          expect(fake.bubbles.at(-1)?.text).toBe("안녕하세요, 하린이에요.");
           expect(yield* app.tools.send(next.sessionID, "반가워요.", "second-new")).toBe("sent");
           expect(fake.bubbles.at(-1)?.text).toBe("반가워요.");
           expect((yield* f.sql`SELECT id FROM conversation`).length).toBe(2);
@@ -247,9 +253,13 @@ test.each(["persona", "operator"])(
             (yield* submit({ reselectionToken: token, likedPersonaIDs: ["jiwoo"] })).status,
           ).toBe(400);
           const catalog = yield* Effect.promise(() =>
-            web.handler(new Request("https://api.test/discovery/personas"), verified),
+            web.handler(new Request("https://api.test/discovery/personas?locale=ko"), verified),
           );
-          expect(yield* Effect.promise(() => catalog.json())).toEqual(f.profiles);
+          const page = yield* Effect.promise(async () =>
+            Schema.decodeUnknownSync(BrowsePage)(await catalog.json()),
+          );
+          expect(page.people).toEqual(expect.arrayContaining(f.profiles));
+          expect(page.nextCursor).toBeNull();
           const latestToken = new URL(fake.bubbles.at(-1)!.text.split("\n").at(-1)!).hash.slice(
             "#reselect=".length,
           );
@@ -258,14 +268,17 @@ test.each(["persona", "operator"])(
               new Request("https://api.test/discovery/reselection/personas", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reselectionToken: latestToken }),
+                body: JSON.stringify({ locale: "ko", reselectionToken: latestToken }),
               }),
               verified,
             ),
           );
           expect(privateCatalog.status).toBe(200);
           expect(privateCatalog.headers.get("Cache-Control")).toBe("no-store");
-          expect(yield* Effect.promise(() => privateCatalog.json())).toEqual([f.profiles[2]]);
+          expect(yield* Effect.promise(() => privateCatalog.json())).toEqual({
+            people: [f.profiles[2]],
+            nextCursor: null,
+          });
           expect(
             (yield* submit({ reselectionToken: latestToken, likedPersonaIDs: ["jiwoo"] })).status,
           ).toBe(200);

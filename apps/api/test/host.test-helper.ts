@@ -47,6 +47,8 @@ A Korean university student.
 
 export const conversationTools = (actions: string[]) => [
   ...actions,
+  "review_adjustments",
+  "websearch",
   "update_state",
   "update_memory",
   "remember",
@@ -78,8 +80,10 @@ const expectNativePersonaAgent = (agent: {
     system: "You are Persona1. Speak Korean.\n\n## 공개 프로필\n\nA Korean university student.",
     description: "번호 받았으니까 먼저 연락해 봐",
   });
-  expectScopedPermissions(agent.permissions.slice(-11), [
+  expectScopedPermissions(agent.permissions.slice(-15), [
     "send",
+    "take_photo",
+    "send_photo",
     "read",
     "react",
     "wait",

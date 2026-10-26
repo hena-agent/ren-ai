@@ -14,6 +14,7 @@ import {
 import { noIMessage, openHistory, uriOf } from "./history.ts";
 import { imageData } from "./images.ts";
 import { observe } from "../diagnostics.ts";
+import { outgoingPhoto } from "./outgoing-photo.ts";
 
 export interface RustpushOptions {
   /** The native bridge executable. */
@@ -158,19 +159,37 @@ export const makeRustpushMessages = (options: RustpushOptions, alerts: Alerts) =
       text: string,
       requestId: string = randomUUID(),
       guid: string = randomUUID().toUpperCase(),
+      photo?: ReturnType<typeof outgoingPhoto>,
     ) =>
       Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
-          const admitted = yield* query(() => record.outgoing(guid, handle, text, now));
+          const admitted = yield* query(() =>
+            record.outgoing(guid, handle, text, now, photo?.detail),
+          );
           if (!admitted) return { guid };
+          if (photo)
+            yield* query(() => photo.save()).pipe(
+              Effect.tapError(() => query(() => record.settle(guid, "failed", 1))),
+            );
           yield* changed;
           const submit = observe(
             "rustpush.send",
-            bridge.call("send", { from, guid, to: uriOf(handle), text }, requestId).pipe(
-              Effect.match({ onSuccess: (result) => result, onFailure: (error) => error }),
-              Effect.flatMap((outcome) => settle(record, guid, outcome)),
-            ),
+            bridge
+              .call(
+                photo ? "send_image" : "send",
+                {
+                  from,
+                  guid,
+                  to: uriOf(handle),
+                  ...(photo ? { path: photo.path } : { text }),
+                },
+                requestId,
+              )
+              .pipe(
+                Effect.match({ onSuccess: (result) => result, onFailure: (error) => error }),
+                Effect.flatMap((outcome) => settle(record, guid, outcome)),
+              ),
             () => ({}),
             requestId,
           );
@@ -196,6 +215,14 @@ export const makeRustpushMessages = (options: RustpushOptions, alerts: Alerts) =
       image: imageData,
       sendText: (handle, text, attemptID, requestId) =>
         send(history, service, handle, text, requestId, attemptID?.toUpperCase()),
+      sendPhoto: (handle, base64, attemptID, requestId) =>
+        query(() =>
+          outgoingPhoto(join(dirname(options.history), "outgoing-photos"), base64, attemptID),
+        ).pipe(
+          Effect.flatMap((photo) =>
+            send(history, service, handle, "", requestId, attemptID.toUpperCase(), photo),
+          ),
+        ),
       follow: (rowID, receive) =>
         Effect.gen(function* () {
           const signal = yield* Queue.sliding<void>(1);

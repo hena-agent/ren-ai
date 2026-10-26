@@ -5,7 +5,7 @@ import type { remoteMessages } from "@ren-ai/imsg/client";
 type History = Pick<Effect.Success<ReturnType<typeof remoteMessages>>, "history">;
 
 /** Read the transport ledger without starting a persona or replaying model work. */
-export const conversationMessages = (messages: History, id: number, before?: number) =>
+export const conversationHistory = (messages: History, id: number, before?: number) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const [scope] = yield* sql<{
@@ -30,15 +30,26 @@ export const conversationMessages = (messages: History, id: number, before?: num
       WHERE guid IN ${sql.in(page.map((row) => row.guid))}`
       : [];
     const owners = new Map(sends.map((send) => [send.guid, send.conversationID]));
-    const entries = page
-      .filter((row) => {
-        if (row.fromMe && owners.has(row.guid)) return owners.get(row.guid) === id;
-        return scope.endedAt === null || row.createdAt <= scope.endedAt;
-      })
-      .toReversed()
-      .map(({ handle: _handle, attachments, ...row }) => ({
-        ...row,
-        attachments: (attachments ?? []).map(({ mimeType, missing }) => ({ mimeType, missing })),
-      }));
+    const entries = page.filter((row) => {
+      if (row.fromMe && owners.has(row.guid)) return owners.get(row.guid) === id;
+      return scope.endedAt === null || row.createdAt <= scope.endedAt;
+    });
     return { entries, nextBefore: rows.length > 50 ? page[49]!.id : null };
   });
+
+export const conversationMessages = (messages: History, id: number, before?: number) =>
+  conversationHistory(messages, id, before).pipe(
+    Effect.map(
+      (history) =>
+        history && {
+          ...history,
+          entries: history.entries.toReversed().map(({ handle: _handle, attachments, ...row }) => ({
+            ...row,
+            attachments: (attachments ?? []).map(({ mimeType, missing }) => ({
+              mimeType,
+              missing,
+            })),
+          })),
+        },
+    ),
+  );

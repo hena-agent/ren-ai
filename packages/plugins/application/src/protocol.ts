@@ -4,6 +4,22 @@ import { StartingRelationship } from "@ren-ai/onboarding";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 
 const session = { sessionID: Schema.String };
+export const takePhotoInput = Schema.Struct({
+  scene: Schema.String.check(Schema.isMinLength(1)),
+  includesMe: Schema.Boolean,
+  orientation: Schema.Literals(["portrait", "landscape"]),
+});
+export type TakePhotoInput = typeof takePhotoInput.Type;
+export const photoResult = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("declined") }),
+  Schema.Struct({
+    status: Schema.Literal("taken"),
+    photo: Schema.String,
+    expiresAt: Schema.Number,
+    data: Schema.String,
+  }),
+]);
+export type PhotoResult = typeof photoResult.Type;
 export const persona = Schema.Struct({
   id: Schema.String,
   timeZone: Schema.String,
@@ -20,6 +36,16 @@ export const applicationApi = RpcGroup.make(
   Rpc.make("catalog", { success: Schema.Array(persona), error: Schema.String }),
   Rpc.make("send", {
     payload: { ...session, text: Schema.String, callID: Schema.String },
+    success: Schema.String,
+    error: Schema.String,
+  }),
+  Rpc.make("takePhoto", {
+    payload: { ...session, input: takePhotoInput, callID: Schema.String },
+    success: photoResult,
+    error: Schema.String,
+  }),
+  Rpc.make("sendPhoto", {
+    payload: { ...session, photo: Schema.String, callID: Schema.String },
     success: Schema.String,
     error: Schema.String,
   }),

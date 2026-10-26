@@ -32,7 +32,7 @@ export const conversationStatus = (catalog: () => Promise<readonly PublicPersona
         const rows =
           yield* sql<Row>`SELECT c.id, c.usage_key AS key, u.handle, c.persona_id AS personaID, c.session_id AS sessionID,
       c.started_at AS startedAt, c.ended_at AS endedAt, e.stopped_at AS stoppedAt,
-       c.starting_relationship AS startingRelationship, e.initiator AS endedBy,
+       c.starting_relationship AS startingRelationship, c.image_style AS imageStyle, e.initiator AS endedBy,
       (c.ended_at IS NOT NULL AND e.consumed_at IS NULL
         AND NOT EXISTS(SELECT 1 FROM blocked WHERE handle = u.handle)
         AND NOT EXISTS(SELECT 1 FROM conversation newer WHERE newer.user_id = u.id AND newer.id > c.id)) AS canNotify,
