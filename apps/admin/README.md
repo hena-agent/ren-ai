@@ -469,6 +469,8 @@ bun run --cwd apps/admin thumbnails -- --remote # production persona-images
 ```
 
 `--remote` connects only the R2 binding through your Wrangler login. Run it
+with Node 24 activated (`nvm use`); the command uses Node because Bun stalls
+Wrangler's remote-binding connection. Run the backfill
 before deploying the thumbnail release and once more right after, covering images
 generated in between. Until then the editor shows missing thumbnails as broken
 images and treats an identity sheet whose thumbnail fails to load as unreadable.

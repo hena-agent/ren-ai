@@ -12,7 +12,7 @@
     "db:local": "wrangler d1 migrations apply DB --local",
     "db:remote": "wrangler d1 migrations apply DB --remote",
     "import:local": "bun scripts/import-local.mjs",
-    "thumbnails": "bun scripts/thumbnails.mjs",
+    "thumbnails": "node --experimental-transform-types scripts/thumbnails.mjs",
     "seed:korea": "bun scripts/seed.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p worker/tsconfig.json"
   },
