@@ -154,9 +154,21 @@ test("forward migration defaults existing Conversations and waiting registration
     Effect.gen(function* () {
       const f = yield* contactFixture;
       // Recreate the persisted schema immediately before the image-style migration.
+      for (const table of ["conversation_photo", "photo_object", "photo_setting"])
+        yield* f.sql`DROP TABLE ${f.sql(table)}`;
+      const [send] = yield* f.sql<{
+        sql: string;
+      }>`SELECT sql FROM sqlite_master WHERE name = 'send'`;
+      const indexes = yield* f.sql<{ sql: string }>`SELECT sql FROM sqlite_master
+        WHERE type = 'index' AND tbl_name = 'send' AND sql IS NOT NULL AND name NOT LIKE 'send_photo%'`;
+      yield* f.sql`DROP TABLE send`;
+      yield* f.sql.unsafe(
+        send!.sql.replace('CREATE TABLE "send"', "CREATE TABLE send").replace(", 'photo'", ""),
+      );
+      for (const index of indexes) yield* f.sql.unsafe(index.sql);
       yield* f.sql`ALTER TABLE discovery_registration DROP COLUMN image_style`;
       yield* f.sql`ALTER TABLE conversation DROP COLUMN image_style`;
-      yield* f.sql`DELETE FROM effect_sql_migrations WHERE migration_id = 53`;
+      yield* f.sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 53`;
       yield* f.register("+821012345678");
       const directory = yield* conversations;
       yield* directory.create({

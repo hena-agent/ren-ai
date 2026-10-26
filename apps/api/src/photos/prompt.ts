@@ -1,10 +1,6 @@
-export interface PhotoInput {
-  scene: string;
-  includesMe: boolean;
-  orientation: "portrait" | "landscape";
-}
+import type { TakePhotoInput } from "@ren-ai/plugin-application";
 
-export function photoPrompt(description: string, style: "anime" | "photo", input: PhotoInput) {
+export function photoPrompt(description: string, style: "anime" | "photo", input: TakePhotoInput) {
   return `Make one casual, unposed everyday phone photo shared privately in a conversation, not a dating-profile photo.
 The fictional persona is the only identifiable person; other people may appear only indistinctly in the background.
 Never depict the user, real or famous people, sexual or suggestive content, nudity, underwear, sexualized poses, gore or self-harm.

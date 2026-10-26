@@ -1,9 +1,8 @@
 import { Effect } from "effect";
-import type { SqlClient } from "effect/unstable/sql";
 import type { remoteMessages } from "@ren-ai/imsg/client";
 import { validatePortrait } from "@ren-ai/personas";
 import { conversationHistory } from "./messages.ts";
-import { conversationRequest } from "./http.ts";
+import { conversationReadRequest, type ConversationRun } from "./http.ts";
 
 type Messages = Pick<Effect.Success<ReturnType<typeof remoteMessages>>, "history" | "image">;
 
@@ -32,10 +31,9 @@ function imageQuery(url: string) {
 export const conversationImageRequest = (
   request: Request,
   messages: Messages,
-  run: <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => Promise<A>,
+  run: ConversationRun,
 ) =>
-  conversationRequest(request, async () => {
-    if (request.method !== "GET") return new Response(null, { status: 405 });
+  conversationReadRequest(request, async () => {
     const query = imageQuery(request.url);
     if (!query) return new Response(null, { status: 400 });
     const { id, messageID, index, guid } = query;

@@ -3,8 +3,7 @@ import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { conversationPhotos } from "./photos.ts";
-import { bytes, fixture, input } from "./photos.test-helper.ts";
-import { hour } from "./store.ts";
+import { bytes, fixture, input, hour } from "./photos.test-helper.ts";
 
 test("takes are durable, isolated, deduplicated and limited across concurrent actors and rolling windows", () =>
   runMessagingTest(

@@ -10,10 +10,12 @@ import { gatewayFixture } from "../../../imsg/test/gateway.test-helper.ts";
 import { conversations, type Conversation } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { outbox } from "./outbox.ts";
+import { photo, takenPhoto } from "./photo.test-helper.ts";
 
 afterEach(cleanup);
 const personas = new Map([["persona", { timeZone: "UTC" }]]);
 const blockedPhoto = () => Effect.die("a fenced send must not load image bytes");
+const loadPhoto = () => Effect.succeed(photo);
 const box = (messages: Messages) =>
   outbox(messages, fakeGestures().gestures, personas, undefined, undefined, { typing: false });
 const fixture = () => {
@@ -179,17 +181,17 @@ test("an admitted but unconfirmed send remains fenced through restart until a re
 
 test("photo attempts survive interrupted submission and restart with the same transport fences", async () => {
   const f = fixture();
-  const photo = Buffer.from([255, 216, 255, 224, 1, 255, 217]).toString("base64");
-  const load = () => Effect.succeed(photo);
   const interruptedID = await f.run((remote, conversation) =>
     Effect.gen(function* () {
+      for (const id of ["interrupted-photo", "uncertain-photo", "next-photo"])
+        yield* takenPhoto(conversation, id);
       const entered = yield* Deferred.make<void>();
       const interrupted = yield* box({
         ...remote,
         sendPhoto: () => Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
       });
       const fiber = yield* interrupted
-        .sendPhoto(conversation, "interrupted-photo", "interrupted", load)
+        .sendPhoto(conversation, "interrupted-photo", "interrupted", loadPhoto)
         .pipe(Effect.forkScoped);
       yield* Deferred.await(entered);
       yield* Fiber.interrupt(fiber);
@@ -208,9 +210,9 @@ test("photo attempts survive interrupted submission and restart with the same tr
     Effect.gen(function* () {
       const sends = yield* box(remote);
       // Recovery fences the interrupted attempt before admitting this next photo.
-      expect(yield* sends.sendPhoto(conversation, "uncertain-photo", "uncertain", load)).toContain(
-        "send in doubt",
-      );
+      expect(
+        yield* sends.sendPhoto(conversation, "uncertain-photo", "uncertain", loadPhoto),
+      ).toContain("send in doubt");
       yield* remote.sendPhoto(conversation.handle, photo, interruptedID);
       expect(yield* remote.resolveSend(interruptedID)).toBe("failed");
       const [row] = yield* remote.recent(conversation.handle, 0);

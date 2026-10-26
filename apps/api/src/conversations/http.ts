@@ -9,13 +9,21 @@ import { RecoveryConflict } from "./recover.ts";
 import type { usageQueries } from "../usage/query.ts";
 import { conversationMessages } from "./messages.ts";
 
+export type ConversationRun = <A, E>(
+  effect: Effect.Effect<A, E, SqlClient.SqlClient>,
+) => Promise<A>;
+
+export const conversationReadRequest = (request: Request, read: () => Promise<Response>) =>
+  conversationRequest(request, () =>
+    request.method === "GET" ? read() : Promise.resolve(new Response(null, { status: 405 })),
+  );
+
 export const conversationMessagesRequest = (
   request: Request,
   messages: Parameters<typeof conversationMessages>[0],
-  run: <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => Promise<A>,
+  run: ConversationRun,
 ) =>
-  conversationRequest(request, async () => {
-    if (request.method !== "GET") return new Response(null, { status: 405 });
+  conversationReadRequest(request, async () => {
     const url = new URL(request.url);
     const id = Number(url.searchParams.get("id"));
     const before = url.searchParams.has("before")

@@ -13,6 +13,8 @@ import { memoryStorage } from "../test/memory-storage.ts";
 import { captureWorkerLogs } from "../test/worker-logs.ts";
 import { catalogDelivery } from "./catalog-delivery.ts";
 import { loggedRequest } from "./logging.ts";
+import { draftTokens } from "./draft.ts";
+import { characterResponse, acceptedReview } from "../test/character.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -170,6 +172,39 @@ test("a failed delivery preserves the saved edit, shows pending, and retries aft
     expect(fetcher).toHaveBeenCalledTimes(2);
   } finally {
     clock.mockRestore();
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
+});
+
+test("replacing a character draft notifies only after its old identity sheets are cleared", async () => {
+  const { stdout, stderr } = captureWorkerLogs();
+  try {
+    const { open, store, fetcher } = await setup(true);
+    const admin = await open();
+    const draft = tokenOf(await (await admin.fetch(request("/new"))).text());
+    const id = draftTokens("test-password").decode(draft).id;
+    await store.saveSheet(id, "anime", await store.saveImage(portraitImage));
+    let notifications = 0;
+    fetcher.mockResolvedValueOnce(characterResponse()).mockResolvedValueOnce(acceptedReview());
+    fetcher.mockImplementation(async () => {
+      expect(await store.sheets(id)).toEqual({});
+      notifications++;
+      return new Response(null, { status: 204 });
+    });
+    const response = await admin.fetch(
+      request("/personas", {
+        draft,
+        intent: "character",
+        seed: "A different fictional person",
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(notifications).toBe(1);
+    expect(await store.sheets(id)).toEqual({});
+    await (await open()).alarm();
+    expect(notifications).toBe(1);
+  } finally {
     stdout.mockRestore();
     stderr.mockRestore();
   }

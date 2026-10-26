@@ -1,10 +1,9 @@
 import { Deferred, Effect, Fiber } from "effect";
+import { bytes, fixture, input, hour, takenFixture } from "./photos.test-helper.ts";
 import { TestClock } from "effect/testing";
 import { expect, test, vi } from "vitest";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { conversationPhotos } from "./photos.ts";
-import { bytes, fixture, input } from "./photos.test-helper.ts";
-import { hour } from "./store.ts";
 
 test("production fetch and JSON diagnostics exclude payloads and reject unsafe provider codes", async () => {
   const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
@@ -60,9 +59,7 @@ test("production fetch and JSON diagnostics exclude payloads and reject unsafe p
 test("an active-session change while loading bytes prevents exposing a sendable photo", () =>
   runMessagingTest(
     Effect.gen(function* () {
-      const f = yield* fixture;
-      const result = yield* f.photos.take(f.conversation, input, "taken");
-      if (result.status !== "taken") throw new Error("Expected photo");
+      const { f, photo: result } = yield* takenFixture("taken");
       const active = vi
         .fn<typeof f.options.active>()
         .mockReturnValueOnce(Effect.succeed(true))
@@ -77,9 +74,7 @@ test.each(["send-expiry", "send-admission", "take-expiry", "take-inactive"] as c
   (mode) =>
     runMessagingTest(
       Effect.gen(function* () {
-        const f = yield* fixture;
-        const result = yield* f.photos.take(f.conversation, input, "taken");
-        if (result.status !== "taken") throw new Error("Expected photo");
+        const { f, photo: result } = yield* takenFixture("taken");
         if (mode.endsWith("expiry")) yield* TestClock.adjust(hour - 1000);
         const entered = Deferred.makeUnsafe<void>();
         const release = Deferred.makeUnsafe<void>();

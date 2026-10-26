@@ -8,9 +8,9 @@ import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { timing } from "../timing/timing.ts";
 import { outbox } from "./outbox.ts";
+import { photo, takenPhoto } from "./photo.test-helper.ts";
 
 const personas = new Map([["persona1", { timeZone: "UTC" }]]);
-const photo = Buffer.from([255, 216, 255, 224, 1, 255, 217]).toString("base64");
 type LoadPhoto = () => Effect.Effect<string | undefined, Error>;
 const fixture = Effect.gen(function* () {
   yield* migrate;
@@ -28,6 +28,7 @@ test("photos wait for seen arrivals and four quiet seconds without typing, keepi
   await runMessagingTest(
     Effect.gen(function* () {
       const { conversation, fake, ui, pace, sends, sql } = yield* fixture;
+      yield* takenPhoto(conversation, "photo-id");
       const load = vi.fn<LoadPhoto>(() => Effect.succeed(photo));
       yield* pace.onNew(conversation.sessionID, "first");
       expect(yield* sends.sendPhoto(conversation, "photo-id", "unseen", load)).toContain(
@@ -72,6 +73,7 @@ test("photo loading is inside the conversation lock, after pacing, and repeated 
   await runMessagingTest(
     Effect.gen(function* () {
       const { conversation, fake, sends, sql } = yield* fixture;
+      yield* takenPhoto(conversation, "one");
       const entered = yield* Deferred.make<void>();
       const finish = yield* Deferred.make<void>();
       const load = vi.fn<LoadPhoto>(() =>
@@ -112,6 +114,8 @@ test("expiry is checked after quiet and arrivals during image loading cancel bef
     Effect.gen(function* () {
       const { conversation, sends, pace, sql } = yield* fixture;
       const expires = (yield* Clock.currentTimeMillis) + 3000;
+      yield* takenPhoto(conversation, "expired", expires);
+      yield* takenPhoto(conversation, "available");
       const load = () =>
         Effect.map(Clock.currentTimeMillis, (now) => (now < expires ? photo : undefined));
       yield* pace.onNew(conversation.sessionID, "arrival");
@@ -139,6 +143,7 @@ test("loader errors and inactive conversations do not admit a photo", async () =
   await runMessagingTest(
     Effect.gen(function* () {
       const { conversation, sends, sql } = yield* fixture;
+      yield* takenPhoto(conversation, "one");
       const failure = new Error("private image unavailable");
       expect(
         yield* sends
@@ -174,6 +179,7 @@ test("a relationship introduction precedes a photo and its cancellation preserve
       }>`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
         SELECT user_id, 'persona2', 'next', 2 FROM conversation WHERE id = ${old.id} RETURNING id`;
       const conversation = { ...old, id: created!.id, sessionID: "next", personaID: "persona2" };
+      yield* takenPhoto(conversation, "first-photo");
       const sends = yield* outbox(
         fake.messages,
         ui.gestures,
@@ -204,6 +210,8 @@ test("photo reconciliation matches only the identified GUID, never photo IDs or 
   await runMessagingTest(
     Effect.gen(function* () {
       const { conversation, fake, sends, sql } = yield* fixture;
+      yield* takenPhoto(conversation, "photo-id");
+      yield* takenPhoto(conversation, "next");
       yield* sql`INSERT INTO send(handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
         VALUES (${conversation.handle}, ${conversation.id}, 'photo', '', 'empty', 'uncertain', 0, 0)`;
       expect(
@@ -236,6 +244,7 @@ test("an old Mac photo rejection resolves as failed without a fallback or blind 
   await runMessagingTest(
     Effect.gen(function* () {
       const { conversation, fake, ui, sql } = yield* fixture;
+      yield* takenPhoto(conversation, "unsupported");
       const submit = vi.fn<() => Effect.Effect<never, Error>>(() =>
         Effect.fail(new Error("Photo send RPC unavailable")),
       );
@@ -257,6 +266,104 @@ test("an old Mac photo rejection resolves as failed without a fallback or blind 
       yield* fake.messages.sendPhoto(conversation.handle, photo, row!.id);
       expect(yield* fake.messages.recent(conversation.handle, 0)).toEqual([]);
       expect(yield* restarted.send(conversation, "text continues", "next")).toBe("sent");
+    }),
+  );
+});
+
+test("photo admission checks expiry again after the loader and pacing have returned", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      const { conversation, fake, ui, directory, pace, sql } = yield* fixture;
+      const expires = (yield* Clock.currentTimeMillis) + 1;
+      yield* takenPhoto(conversation, "boundary", expires);
+      const load = vi.fn<LoadPhoto>(() =>
+        Effect.gen(function* () {
+          expect(yield* Clock.currentTimeMillis).toBeLessThan(expires);
+          return photo;
+        }),
+      );
+      const sends = yield* outbox(fake.messages, ui.gestures, personas, directory.active, {
+        ...pace,
+        during: (sessionID, action) =>
+          pace.during(sessionID, action).pipe(Effect.tap(() => TestClock.adjust("1 millis"))),
+      });
+      expect(
+        yield* sends.sendPhoto(conversation, "boundary", "expired-at-admission", load),
+      ).toContain("unavailable");
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(yield* Clock.currentTimeMillis).toBe(expires);
+      expect(yield* sql`SELECT id FROM send`).toEqual([]);
+      expect(yield* fake.messages.recent(conversation.handle, 0)).toEqual([]);
+      expect(yield* sql`SELECT state FROM conversation_photo WHERE id = 'boundary'`).toEqual([
+        { state: "taken" },
+      ]);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+});
+
+test("atomic photo admission requires an owned taken receipt and ignores unadmitted sends", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      const { conversation, directory, sends, fake, sql } = yield* fixture;
+      const other = yield* directory.create(registration("other@example.test", "other"));
+      yield* takenPhoto(other, "foreign");
+      yield* takenPhoto(conversation, "pending");
+      yield* sql`UPDATE conversation_photo SET state = 'pending' WHERE id = 'pending'`;
+      for (const id of ["missing", "foreign", "pending"])
+        expect(yield* sends.sendPhoto(conversation, id, id, () => Effect.succeed(photo))).toContain(
+          "unavailable",
+        );
+      expect(yield* sql`SELECT id FROM send`).toEqual([]);
+      yield* takenPhoto(conversation, "unadmitted");
+      yield* sql`INSERT INTO send(handle, conversation_id, kind, content, tool_call_id, state, recorded_at, updated_at)
+        VALUES (${conversation.handle}, ${conversation.id}, 'photo', 'unadmitted', 'stopped', 'not_sent', 0, 0)`;
+      expect(
+        yield* sends.sendPhoto(conversation, "unadmitted", "new", () => Effect.succeed(photo)),
+      ).toBe("sent");
+      expect(yield* fake.messages.recent(conversation.handle, 0)).toHaveLength(1);
+    }),
+  );
+});
+
+test("independent Outbox instances cannot admit the same photo after both loaders validate it", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      const { conversation, sends, fake, ui, directory, sql } = yield* fixture;
+      yield* takenPhoto(conversation, "shared");
+      const other = yield* outbox(fake.messages, ui.gestures, personas, directory.active);
+      const bothLoaded = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      let loads = 0;
+      const load = () =>
+        Effect.gen(function* () {
+          expect(yield* sql`SELECT id FROM send`).toEqual([]);
+          loads++;
+          if (loads === 2) yield* Deferred.succeed(bothLoaded, undefined);
+          yield* Deferred.await(release);
+          return photo;
+        });
+      const first = yield* sends
+        .sendPhoto(conversation, "shared", "first", load)
+        .pipe(Effect.forkScoped);
+      const second = yield* other
+        .sendPhoto(conversation, "shared", "second", load)
+        .pipe(Effect.forkScoped);
+      yield* Deferred.await(bothLoaded);
+      yield* Deferred.succeed(release, undefined);
+      const results = [yield* Fiber.join(first), yield* Fiber.join(second)];
+      expect(results.filter((result) => result === "sent")).toHaveLength(1);
+      expect(results.filter((result) => result.includes("unavailable"))).toHaveLength(1);
+      expect(yield* sql`SELECT kind, content FROM send`).toEqual([
+        { kind: "photo", content: "shared" },
+      ]);
+      expect(yield* fake.messages.recent(conversation.handle, 0)).toHaveLength(1);
+      yield* sql`UPDATE send SET state = 'failed'`;
+      expect(
+        yield* other.sendPhoto(conversation, "shared", "after-failure", () =>
+          Effect.succeed(photo),
+        ),
+      ).toContain("unavailable");
+      expect(yield* sql`SELECT id FROM send`).toHaveLength(1);
     }),
   );
 });

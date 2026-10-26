@@ -3,7 +3,7 @@ import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import { photoData, photoKey, type PhotoBucket } from "./storage.ts";
 
-export const hour = 3_600_000;
+const hour = 3_600_000;
 export const generationTimeout = 120_000;
 
 export const photoStore = (bucket: PhotoBucket) =>
@@ -111,16 +111,19 @@ export const photoStore = (bucket: PhotoBucket) =>
           const rows = yield* sql<{ photo_id: string }>`SELECT photo_id FROM photo_object
         WHERE due IS NOT NULL AND due <= ${now} ORDER BY due, photo_id LIMIT 50`;
           for (const row of rows) {
-            const [photo] = yield* sql<{
-              conversation_id: number;
-            }>`SELECT conversation_id FROM conversation_photo WHERE id = ${row.photo_id}`;
-            if (photo && (yield* sent(photo.conversation_id, row.photo_id)).length) {
-              // Pending admission retains bytes; check again if it later resolves as not sent.
-              const [final] =
-                yield* sql`SELECT 1 FROM send WHERE conversation_id = ${photo.conversation_id}
-            AND kind = 'photo' AND content = ${row.photo_id} AND state IN ('sent','delivered') LIMIT 1`;
-              yield* sql`UPDATE photo_object SET due = ${final ? null : now + 60_000} WHERE photo_id = ${row.photo_id}`;
-            } else {
+            // Ownership and admission must still exist at the write: removal's due=0
+            // tombstone must never be replaced by an obsolete retention decision.
+            const retained = yield* sql`UPDATE photo_object SET due = CASE WHEN EXISTS (
+              SELECT 1 FROM conversation_photo p JOIN send s ON s.conversation_id = p.conversation_id
+                AND s.content = p.id AND s.kind = 'photo'
+              WHERE p.id = ${row.photo_id} AND s.state IN ('sent','delivered'))
+              THEN NULL ELSE ${now + 60_000} END
+              WHERE photo_id = ${row.photo_id} AND EXISTS (
+                SELECT 1 FROM conversation_photo p JOIN send s ON s.conversation_id = p.conversation_id
+                  AND s.content = p.id AND s.kind = 'photo'
+                WHERE p.id = ${row.photo_id} AND s.state IN ('recorded','uncertain','sent','delivered'))
+              RETURNING photo_id`;
+            if (!retained.length) {
               yield* Effect.tryPromise(() => bucket.delete(photoKey(row.photo_id)));
               yield* sql`DELETE FROM photo_object WHERE photo_id = ${row.photo_id}`;
             }

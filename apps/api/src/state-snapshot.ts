@@ -117,6 +117,8 @@ export const importApplicationState = (snapshot: StateSnapshot) =>
         target.some((table) => !optionalTables.has(table.name) && !names.has(table.name))
       )
         return yield* Effect.fail(new Error("Application state tables do not match"));
+      // Only the untouched migration seed is empty state; a changed operator setting blocks import.
+      yield* sql`DELETE FROM photo_setting WHERE id = 1 AND enabled = 1`;
       for (const table of target) {
         const [count] = yield* sql.unsafe<{ count: number }>(
           `SELECT COUNT(*) AS count FROM ${identifier(table.name)}`,

@@ -3,18 +3,13 @@ import { TestClock } from "effect/testing";
 import { expect, test, vi } from "vitest";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { conversationPhotos } from "./photos.ts";
-import { fixture, input } from "./photos.test-helper.ts";
-import { hour } from "./store.ts";
+import { fixture, input, hour, takenFixture } from "./photos.test-helper.ts";
 import { photoKey } from "./storage.ts";
 
 test("self continuity uses the most recently sent self in this Conversation within six hours", () =>
   runMessagingTest(
     Effect.gen(function* () {
-      const f = yield* fixture;
-      const first = yield* f.photos.take(f.conversation, input, "first");
-      if (first.status !== "taken") throw new Error("Expected photo");
-      yield* f.sql`INSERT INTO send(handle,conversation_id,kind,content,state,recorded_at,updated_at)
-    VALUES(${f.conversation.handle},${f.conversation.id},'photo',${first.photo},'sent',0,0)`;
+      const { f, photo: first } = yield* takenFixture("first", "sent");
       expect(yield* f.photos.sendable(f.conversation, first.photo)).toBeUndefined();
       yield* f.photos.take(f.conversation, input, "second");
       expect(
@@ -41,11 +36,7 @@ test("self continuity uses the most recently sent self in this Conversation with
 test("expiry preserves uncertain admission, cancelled sends keep the photo, and removal queues durable deletion", () =>
   runMessagingTest(
     Effect.gen(function* () {
-      const f = yield* fixture;
-      const first = yield* f.photos.take(f.conversation, input, "first");
-      if (first.status !== "taken") throw new Error("Expected photo");
-      yield* f.sql`INSERT INTO send(handle,conversation_id,kind,content,state,recorded_at,updated_at)
-    VALUES(${f.conversation.handle},${f.conversation.id},'photo',${first.photo},'not_sent',0,0)`;
+      const { f, photo: first } = yield* takenFixture("first", "not_sent");
       expect(yield* f.photos.sendable(f.conversation, first.photo)).toBe(first.data);
       yield* f.sql`UPDATE send SET state = 'uncertain'`;
       expect(yield* f.photos.sendable(f.conversation, first.photo)).toBeUndefined();

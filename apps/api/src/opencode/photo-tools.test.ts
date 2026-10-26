@@ -127,7 +127,9 @@ test.each(["taken", "declined", "failed", "send-failed", "sandbox"] as const)(
             expect(content).toContain("image/jpeg");
           } else {
             expect(content).not.toContain('"type":"file"');
-            expect(content).toContain(mode === "failed" ? "Unavailable" : "declined");
+            expect(content).toContain(
+              mode === "failed" ? "Application callback unavailable; request" : "declined",
+            );
           }
           expect(takes).toEqual(
             mode === "sandbox" ? [] : [{ sessionID: session.id, input, callID: "take-call" }],
@@ -141,7 +143,7 @@ test.each(["taken", "declined", "failed", "send-failed", "sandbox"] as const)(
             mode === "sandbox"
               ? "not sent: unavailable"
               : mode === "send-failed"
-                ? "Send unavailable"
+                ? "Application callback unavailable; request"
                 : "sent",
           );
         }),

@@ -68,6 +68,11 @@ export const outbox = (
           AND (ended_at IS NULL OR EXISTS (SELECT 1 FROM conversation_end e
             WHERE e.conversation_id = conversation.id AND e.consumed_at IS NULL
              AND ${callID} = e.call_id || ':farewell:' || e.farewell_attempt AND e.farewell_pending = 1 AND ${content} = e.farewell))
+          AND (${kind} != 'photo' OR (
+            EXISTS (SELECT 1 FROM conversation_photo p WHERE p.id = ${content}
+              AND p.conversation_id = conversation.id AND p.state = 'taken' AND p.expires_at > ${now})
+            AND NOT EXISTS (SELECT 1 FROM send s WHERE s.conversation_id = conversation.id
+              AND s.kind = 'photo' AND s.content = ${content} AND s.state != 'not_sent')))
         RETURNING id, recorded_at AS recordedAt, attempt_id AS attemptID`;
         return rows[0];
       });

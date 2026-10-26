@@ -3,15 +3,13 @@ import { Cause, Clock, Effect, Option } from "effect";
 import { HttpServerRequest } from "effect/unstable/http";
 import { codexImage, codexImageModel, ImageGenerationError } from "@ren-ai/image-generation";
 import { validatePortrait, type Persona, type Portrait } from "@ren-ai/personas";
+import type { PhotoResult, TakePhotoInput } from "@ren-ai/plugin-application";
 import type { Conversation } from "../conversations/conversations.ts";
 import { contactCause, contactLog, type ContactDiagnostic } from "../discovery/diagnostics.ts";
-import { photoPrompt, type PhotoInput } from "./prompt.ts";
+import { photoPrompt } from "./prompt.ts";
 import { jpeg, photoData, photoKey, type PhotoBucket } from "./storage.ts";
 import { generationTimeout, photoStore } from "./store.ts";
 
-export type PhotoResult =
-  | { status: "declined" }
-  | { status: "taken"; photo: string; expiresAt: number; data: string };
 export interface PhotoOptions {
   personas: ReadonlyMap<string, Persona>;
   sheet: (personaID: string, style: "anime" | "photo") => Promise<Portrait | undefined>;
@@ -46,7 +44,7 @@ export const conversationPhotos = (options: PhotoOptions) =>
       });
     const take = (
       conversation: Conversation,
-      input: PhotoInput,
+      input: TakePhotoInput,
       callID: string,
     ): Effect.Effect<PhotoResult, Error> =>
       Effect.gen(function* () {
@@ -147,6 +145,14 @@ export const conversationPhotos = (options: PhotoOptions) =>
                 ...contactCause(error),
                 ...(error instanceof ImageGenerationError && {
                   upstreamStatus: error.fields.status,
+                  ...(error.fields.causeName &&
+                    /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(error.fields.causeName) && {
+                      causeName: error.fields.causeName,
+                    }),
+                  ...(error.fields.causeCode &&
+                    /^[A-Z0-9_-]{1,80}$/.test(error.fields.causeCode) && {
+                      causeCode: error.fields.causeCode,
+                    }),
                   code:
                     error.fields.code && /^[a-z0-9_-]{1,80}$/.test(error.fields.code)
                       ? error.fields.code

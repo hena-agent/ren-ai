@@ -3,8 +3,8 @@ import { TestClock } from "effect/testing";
 import { expect, test, vi } from "vitest";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { conversationPhotos } from "./photos.ts";
-import { bytes, fixture, input } from "./photos.test-helper.ts";
-import { generationTimeout, hour, photoStore } from "./store.ts";
+import { bytes, fixture, input, hour } from "./photos.test-helper.ts";
+import { generationTimeout, photoStore } from "./store.ts";
 import { photoKey } from "./storage.ts";
 
 test("a two-minute timeout aborts the request, releases capacity and retains the failed call receipt", () =>

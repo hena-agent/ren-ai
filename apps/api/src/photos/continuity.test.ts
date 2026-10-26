@@ -2,8 +2,8 @@ import { Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
-import { bytes, fixture, input } from "./photos.test-helper.ts";
-import { hour, photoStore } from "./store.ts";
+import { bytes, fixture, input, hour } from "./photos.test-helper.ts";
+import { photoStore } from "./store.ts";
 import { photoKey } from "./storage.ts";
 
 test("late status reconciliation cannot renew or reorder the six-hour self-photo reference", () =>

@@ -1,15 +1,17 @@
 import { Effect } from "effect";
+import assert from "node:assert/strict";
 import { SqlClient } from "effect/unstable/sql";
 import { vi } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
 import { conversationPhotos, type PhotoOptions } from "./photos.ts";
-import type { PhotoInput } from "./prompt.ts";
+import type { TakePhotoInput } from "@ren-ai/plugin-application";
 import type { PhotoBucket } from "./storage.ts";
 import { registration } from "../../test/messaging.test-helper.ts";
 
 export const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xfe, 0, 2, 0xff, 0xd9]);
-export const input: PhotoInput = {
+export const hour = 3_600_000;
+export const input: TakePhotoInput = {
   scene: "private scene",
   includesMe: true,
   orientation: "portrait",
@@ -64,3 +66,14 @@ export const fixture = Effect.gen(function* () {
   const photos = yield* conversationPhotos(options);
   return { sql, conv, conversation, other, objects, bucket, options, photos, fetcher, log };
 });
+
+export const takenFixture = (callID: string, state?: "sent" | "not_sent") =>
+  Effect.gen(function* () {
+    const f = yield* fixture;
+    const photo = yield* f.photos.take(f.conversation, input, callID);
+    assert(photo.status === "taken", "Expected fixture photo");
+    if (state)
+      yield* f.sql`INSERT INTO send(handle,conversation_id,kind,content,state,recorded_at,updated_at)
+    VALUES(${f.conversation.handle},${f.conversation.id},'photo',${photo.photo},${state},0,0)`;
+    return { f, photo };
+  });

@@ -57,15 +57,15 @@ test("the authenticated operator command controls photo-taking and reports persi
             ),
           ).toBe("Photo-taking on");
           expect(changes).toEqual([false, true]);
-          for (const args of [["photos"], ["photos", "maybe"], ["photos", "on", "extra"]])
-            expect(yield* runOperatorCli(args, connection).pipe(Effect.flip)).toEqual(
-              expect.objectContaining({ message: expect.stringContaining("Usage:") }),
-            );
+          for (const args of [["photos"], ["photos", "maybe"], ["photos", "on", "extra"]]) {
+            const failure = yield* runOperatorCli(args, connection).pipe(Effect.flip);
+            if (!(failure instanceof Error)) throw new Error("Expected a usage error");
+            expect(failure.message).toContain("Usage:");
+          }
           failing = true;
           const failure = yield* runOperatorCli(["photos", "off"], connection).pipe(Effect.flip);
-          expect(failure).toEqual({
-            reason: expect.stringMatching(/Photo setting failed \(request [\da-f-]+\)/),
-          });
+          expect(failure).toHaveProperty("reason");
+          expect(JSON.stringify(failure)).toMatch(/Photo setting failed \(request [\da-f-]+\)/);
           expect(logs.join("\n")).toContain("SQLITE_BUSY");
           expect(logs.join("\n")).toContain("setting.persist");
           expect(logs.join("\n")).not.toContain("private-prompt");
