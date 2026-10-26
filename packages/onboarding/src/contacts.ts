@@ -20,6 +20,7 @@ export const ContactState = Schema.Literals([
   "unreachable",
 ]);
 const candidate = Schema.Struct({ id: Schema.String, name: Schema.String });
+export const InvitationSettings = Schema.Struct({ enabled: Schema.Boolean });
 export const ContactEntry = Schema.Struct({
   id: identifier,
   handle: Schema.String,
@@ -41,6 +42,14 @@ export const ContactEntry = Schema.Struct({
   scheduledAt: Schema.NullOr(Schema.Number),
   requestId: Schema.NullOr(Schema.String),
   testHandle: Schema.optionalKey(Schema.Boolean),
+  invitations: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        token: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+        redeemedAt: Schema.NullOr(Schema.Number),
+      }),
+    ),
+  ),
   imessage: Schema.optionalKey(
     Schema.Struct({
       status: Schema.Literals(["available", "unavailable", "failed"]),
@@ -57,6 +66,7 @@ export const ContactEntry = Schema.Struct({
 export const ContactSnapshot = Schema.Struct({
   entries: Schema.Array(ContactEntry),
   eligibleCount: Schema.Number,
+  invitationSettings: Schema.optionalKey(InvitationSettings),
 });
 export const SelectContacts = Schema.Struct({
   requestId: identifier,

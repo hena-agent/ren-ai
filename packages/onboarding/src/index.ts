@@ -20,6 +20,7 @@ export {
 } from "./conversations.ts";
 export {
   ContactState,
+  InvitationSettings,
   ContactEntry,
   ContactSnapshot,
   SelectContacts,

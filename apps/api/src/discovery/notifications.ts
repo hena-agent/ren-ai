@@ -1,4 +1,5 @@
 import { Clock, Effect } from "effect";
+import { randomUUID } from "node:crypto";
 import { SqlClient } from "effect/unstable/sql";
 import type { remoteMessages } from "@ren-ai/imsg/client";
 import type { DiscoveryRequest } from "@ren-ai/onboarding";
@@ -9,9 +10,15 @@ import {
   type ContactLog,
   type ContactDiagnostic,
 } from "./diagnostics.ts";
-import { activeNotificationText, waitlistNotificationText } from "./notification-copy.ts";
+import {
+  activeNotificationText,
+  invitationSelectedText,
+  waitlistNotificationText,
+} from "./notification-copy.ts";
 import { checkAvailability } from "./availability.ts";
 import { claimWork, workBatchSize } from "../work-budget.ts";
+import type { PublicPersona } from "@ren-ai/onboarding";
+import { contacts } from "./contacts.ts";
 
 export const notificationSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -72,7 +79,11 @@ type Transport = Pick<
   "notify" | "notificationStatus" | "availability"
 >;
 
-export const waitlistNotifications = (transport: Transport, log: ContactLog = contactLog) =>
+export const waitlistNotifications = (
+  transport: Transport,
+  log: ContactLog = contactLog,
+  catalog?: () => Promise<readonly PublicPersona[]>,
+) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const claim = (id: number) =>
@@ -98,8 +109,9 @@ export const waitlistNotifications = (transport: Transport, log: ContactLog = co
         locale: keyof typeof waitlistNotificationText;
         kind: "waiting" | "active";
         requestId: string;
+        invitationText: string | null;
       }>`SELECT n.id, n.registration_id AS registrationID, COALESCE(r.handle, u.handle) AS handle,
-          n.locale, n.kind, n.request_id AS requestId FROM discovery_notification n
+          n.locale, n.kind, n.request_id AS requestId, n.invitation_text AS invitationText FROM discovery_notification n
         LEFT JOIN discovery_registration r ON r.id = n.registration_id
         LEFT JOIN user u ON u.id = n.user_id
          WHERE n.state = 'queued' ORDER BY n.created_at, n.id LIMIT ${limit}`;
@@ -123,15 +135,37 @@ export const waitlistNotifications = (transport: Transport, log: ContactLog = co
               WHERE id = ${row.id} AND state = 'queued'`;
             return;
           }
+          if (catalog && row.registrationID && availability === "available") {
+            stage = "invitation.selection";
+            const pending =
+              yield* sql`SELECT 1 FROM invitation_submission s JOIN invitation i ON i.token = s.token
+              WHERE s.registration_id = ${row.registrationID} AND i.redeemed_by IS NULL`;
+            if (pending.length) {
+              const store = yield* contacts(catalog);
+              yield* store.select(
+                { requestId: randomUUID(), count: 1, registrationIDs: [row.registrationID] },
+                row.requestId,
+                row.id,
+              );
+            }
+          }
+          const selected = yield* sql`SELECT 1 FROM invitation_submission s
+            JOIN discovery_registration r ON r.id = s.registration_id
+            JOIN invitation i ON i.token = s.token AND i.redeemed_by = r.handle
+            JOIN discovery_contact c ON c.registration_id = r.id
+            WHERE s.registration_id = ${row.registrationID} AND s.selected_notification_id = ${row.id}`;
           stage = "notification.claim";
           if (!(yield* claim(row.id))) return;
           stage = "transport.send";
           const result = yield* transport
             .notify(
               row.handle,
-              (row.kind === "active" ? activeNotificationText : waitlistNotificationText)[
-                row.locale
-              ],
+              row.invitationText ??
+                (selected.length > 0
+                  ? invitationSelectedText
+                  : row.kind === "active"
+                    ? activeNotificationText
+                    : waitlistNotificationText)[row.locale],
             )
             .pipe(Effect.timeout("30 seconds"));
           fields.operationId = result.requestId;

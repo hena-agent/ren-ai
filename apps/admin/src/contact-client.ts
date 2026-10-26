@@ -1,5 +1,10 @@
 import { Schema } from "effect";
-import { ContactSnapshot, ContactSelection, ConversationLanguages } from "@ren-ai/onboarding";
+import {
+  ContactSnapshot,
+  ContactSelection,
+  ConversationLanguages,
+  InvitationSettings,
+} from "@ren-ai/onboarding";
 import type { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
@@ -32,6 +37,7 @@ export interface ManagementClient {
   start: (input: typeof StartContact.Type) => Promise<typeof ContactSelection.Type>;
   refreshCatalog: () => Promise<void>;
   languages: (registrationID: string) => Promise<typeof ConversationLanguages.Type>;
+  configureInvitations: (input: typeof InvitationSettings.Type) => Promise<void>;
 }
 
 async function selection(response: Response) {
@@ -64,7 +70,8 @@ export function managementClient(
       | typeof SelectContacts.Type
       | typeof StartContact.Type
       | typeof ConversationRecovery.Type
-      | typeof ConversationEnding.Type,
+      | typeof ConversationEnding.Type
+      | typeof InvitationSettings.Type,
     method = input ? "POST" : "GET",
   ) => {
     protect(token);
@@ -201,6 +208,9 @@ export function managementClient(
     start: async (input) => selection(await request("/management/discovery/start", input)),
     refreshCatalog: async () => {
       await request("/management/catalog/refresh", undefined, "POST");
+    },
+    configureInvitations: async (input) => {
+      await request("/management/discovery/invitations", input);
     },
   };
 }

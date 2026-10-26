@@ -40,6 +40,9 @@ test("application state transfers identities, links, cursors, uncertainty and bl
         ${JSON.stringify({ id: 124, guid: "pending", handle: "private-marker@example.test", createdAt: 6, text: "queued", fromMe: false })})`;
       yield* sql`INSERT INTO application_checkpoint VALUES ('replay:ses_preserved', ${JSON.stringify({ cursor: 40, previous: 2, firstReply: 1, latestReply: 2, latestSend: 0 })})`;
       yield* sql`INSERT INTO catalog_plan VALUES ('ses_preserved', 'fingerprint', 'sora')`;
+      yield* sql`INSERT INTO invitation_settings VALUES (1, 1)`;
+      yield* sql`INSERT INTO invitation_grant VALUES ('private-marker@example.test', 2)`;
+      yield* sql`INSERT INTO invitation VALUES (${"a".repeat(64)}, 'private-marker@example.test', 'friend@example.test', 3)`;
       yield* sql`CREATE TABLE probe_blob (id INTEGER PRIMARY KEY, value BLOB, nullable TEXT)`;
       yield* sql`INSERT INTO probe_blob VALUES (1,${new Uint8Array([1, 2, 255])},NULL)`;
       return yield* exportApplicationState;
@@ -74,6 +77,10 @@ test("application state transfers identities, links, cursors, uncertainty and bl
       ]);
       expect(yield* sql`SELECT session_id FROM catalog_plan`).toEqual([
         { session_id: "ses_preserved" },
+      ]);
+      expect(yield* sql`SELECT * FROM invitation_settings`).toEqual([{ id: 1, enabled: 1 }]);
+      expect(yield* sql`SELECT redeemed_by, redeemed_at FROM invitation`).toEqual([
+        { redeemed_by: "friend@example.test", redeemed_at: 3 },
       ]);
       const [blob] = yield* sql<{
         value: Uint8Array;

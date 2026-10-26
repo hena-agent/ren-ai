@@ -58,6 +58,20 @@ test("reselection submits the private fragment token with the existing address a
   expect(done).toHaveBeenCalledWith("waiting");
 });
 
+test("invitations submit the private fragment with normal consent and explain invalid invitations", async () => {
+  const token = "c".repeat(64);
+  window.history.replaceState(null, "", `/explore#invite=${token}`);
+  submit.mockRejectedValueOnce(new RegistrationError("invitation"));
+  mount();
+  expect(screen.getByText(/친구의 초대장이 적용됩니다/)).toBeDefined();
+  fill();
+  await act(async () => join());
+  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ invitationToken: token }));
+  expect(screen.getByRole("alert").textContent).toContain(
+    "초대장이 올바르지 않거나 이미 사용됐어요",
+  );
+});
+
 test("reselection identifies the new relationship flow and explains an invalid or stale private link", async () => {
   window.history.replaceState(null, "", `/#reselect=${"b".repeat(64)}`);
   submit.mockRejectedValueOnce(new RegistrationError("reselection"));

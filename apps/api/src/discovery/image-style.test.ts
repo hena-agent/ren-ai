@@ -156,6 +156,11 @@ test("forward migration defaults existing Conversations and waiting registration
       // Recreate the persisted schema immediately before the image-style migration.
       for (const table of ["conversation_photo", "photo_object", "photo_setting"])
         yield* f.sql`DROP TABLE ${f.sql(table)}`;
+      yield* f.sql`DROP TABLE invitation_submission`;
+      yield* f.sql`DROP TABLE invitation`;
+      yield* f.sql`DROP TABLE invitation_grant`;
+      yield* f.sql`DROP TABLE invitation_settings`;
+      yield* f.sql`ALTER TABLE discovery_notification DROP COLUMN invitation_text`;
       const [send] = yield* f.sql<{
         sql: string;
       }>`SELECT sql FROM sqlite_master WHERE name = 'send'`;

@@ -20,6 +20,7 @@ import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
 import { RelationshipSelect } from "./relationship-select.tsx";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 import type { ImageStyle } from "./image-style.ts";
+import { invitationToken } from "./public-routing.ts";
 
 const isMobileNumber = Schema.is(MobileNumber);
 
@@ -73,6 +74,7 @@ export function JoinForm({
     return () => clearTimeout(timer);
   }, [failure]);
   const reselecting = Boolean(reselection().reselectionToken);
+  const invitation = invitationToken(window.location.hash);
   const submitting = useRef(false);
   const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
   const invalid = contact.touched && !handle;
@@ -112,6 +114,7 @@ export function JoinForm({
           ...(age && { age: Number(age) }),
           ...(gender && { gender }),
           ...reselection(),
+          ...(invitation && { invitationToken: invitation }),
         }),
       );
       onSuccess(answer.status);
@@ -156,6 +159,7 @@ export function JoinForm({
       <p className="form-step">{copy.joinStep}</p>
       <h1 id="join-title">{reselecting ? copy.reselectionTitle : copy.joinTitle}</h1>
       <p className="join-intro">{reselecting ? copy.reselectionIntro : copy.joinIntro}</p>
+      {invitation && <p className="field-hint">{copy.invitationIntro}</p>}
       <ul className="liked-list" aria-label={copy.selected}>
         {liked.map((persona) => (
           <li key={persona.id}>

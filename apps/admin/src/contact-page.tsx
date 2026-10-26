@@ -135,6 +135,17 @@ function Rows({
               <th scope="row">
                 <span className="contact-handle">{entry.handle}</span>
                 {entry.testHandle && <small>테스트 연락처</small>}
+                {entry.invitations?.map((invitation, index) => (
+                  <small key={invitation.token}>
+                    {invitation.redeemedAt === null ? (
+                      <a href={`https://renai.im/explore#invite=${invitation.token}`}>
+                        초대장 {index + 1} · 미사용
+                      </a>
+                    ) : (
+                      `초대장 ${index + 1} · 사용 완료`
+                    )}
+                  </small>
+                ))}
                 <small>{time(entry.createdAt)}</small>
                 {entry.notification && <small>{notificationLabels[entry.notification]}</small>}
                 {entry.state === "active" && !entry.relationshipEnd && (
@@ -249,6 +260,27 @@ function DirectSelection({ view }: { view: ContactView }) {
     </form>
   );
 }
+function InvitationControl({ view }: { view: ContactView }) {
+  const settings = view.snapshot?.invitationSettings;
+  if (view.tab !== "waitlist" || !settings) return null;
+  return (
+    <section aria-label="초대장 지급 설정">
+      <h2>초대장 지급 {settings.enabled ? "ON" : "OFF"}</h2>
+      <p className="hint">
+        켜면 이후 최초 선정되는 유저에게 초대장 2장을 지급합니다. 꺼도 기존 초대장은 계속 사용할 수
+        있습니다. 이전 선정자에게 소급 지급하지 않습니다.
+      </p>
+      <form action="/waitlist" method="post" className="contact-selection">
+        <input type="hidden" name="action" value="invitations" />
+        <input type="hidden" name="enabled" value={String(!settings.enabled)} />
+        <button type="submit" className="secondary">
+          초대장 지급 {settings.enabled ? "끄기" : "켜기"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 export function ContactPage({ view }: { view: ContactView }) {
   const entries = view.snapshot?.entries.filter(
     (row) => view.tab === "waitlist" || row.state !== "waiting",
@@ -278,6 +310,7 @@ export function ContactPage({ view }: { view: ContactView }) {
         )}
         <a href={view.tab === "waitlist" ? "/waitlist" : "/first-contacts"}>상태 새로고침</a>
       </div>
+      <InvitationControl view={view} />
       {view.tab === "waitlist" && (
         <div className="contact-actions">
           <form
