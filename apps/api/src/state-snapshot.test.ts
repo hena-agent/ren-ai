@@ -27,6 +27,13 @@ test("application state transfers identities, links, cursors, uncertainty and bl
       yield* sql`INSERT INTO user (id,handle,locale,consent_version,consent_language,consent_at,joined_at) VALUES (7,'private-marker@example.test','ko','v1','ko',1,2)`;
       yield* sql`INSERT INTO conversation (id,user_id,persona_id,session_id,started_at) VALUES (9,7,'sora','ses_preserved',3)`;
       yield* sql`INSERT INTO send (id,handle,conversation_id,kind,content,tool_call_id,state,recorded_at,updated_at) VALUES (33,'private-marker@example.test',9,'text','private greeting marker','call_preserved','uncertain',4,5)`;
+      yield* sql`INSERT INTO conversation_photo VALUES
+        ('taken',9,'ses_preserved','photo_taken','taken',10,11,100,1),
+        ('pending',9,'ses_preserved','photo_pending','pending',12,NULL,NULL,0),
+        ('declined',9,'ses_preserved','photo_declined','declined',13,NULL,NULL,1)`;
+      yield* sql`INSERT INTO photo_object VALUES ('taken',NULL),('pending',1234),('orphan',0)`;
+      yield* sql`UPDATE photo_setting SET enabled = 0 WHERE id = 1`;
+      yield* sql`INSERT INTO application_work (name,due) VALUES ('photo-cleanup',1234)`;
       yield* sql`INSERT INTO bookmark VALUES (1,123,456)`;
       yield* sql`INSERT INTO intake_seen VALUES ('ses_preserved','guid_preserved')`;
       yield* sql`INSERT INTO intake_pending(guid, handle, payload) VALUES ('pending', 'private-marker@example.test',
@@ -48,6 +55,7 @@ test("application state transfers identities, links, cursors, uncertainty and bl
       yield* sql`CREATE TABLE probe_blob (id INTEGER PRIMARY KEY, value BLOB, nullable TEXT)`;
       expect((yield* importApplicationState(decoded)).repeated).toBe(false);
       expect((yield* importApplicationState(decoded)).repeated).toBe(true);
+      expect(yield* exportApplicationState).toEqual(decoded);
       expect(yield* sql`SELECT id,session_id FROM conversation`).toEqual([
         { id: 9, session_id: "ses_preserved" },
       ]);
@@ -73,6 +81,13 @@ test("application state transfers identities, links, cursors, uncertainty and bl
       }>`SELECT value,nullable FROM probe_blob`;
       expect([...blob!.value]).toEqual([1, 2, 255]);
       expect(blob!.nullable).toBeNull();
+      yield* sql`DELETE FROM conversation WHERE id = 9`;
+      expect(yield* sql`SELECT * FROM conversation_photo`).toEqual([]);
+      expect(yield* sql`SELECT * FROM photo_object ORDER BY photo_id`).toEqual([
+        { photo_id: "orphan", due: 0 },
+        { photo_id: "pending", due: 1234 },
+        { photo_id: "taken", due: 0 },
+      ]);
       yield* importApplicationState({ ...decoded, tables: [] }).pipe(
         Effect.flip,
         Effect.map((error) => expect(String(error)).toContain("different")),
@@ -183,7 +198,25 @@ test("a restore constraint failure rolls back every table and supports a correct
       const sql = yield* SqlClient.SqlClient;
       yield* importApplicationState(invalid).pipe(Effect.flip);
       expect(yield* sql`SELECT * FROM blocked`).toEqual([]);
+      expect(yield* sql`SELECT * FROM photo_setting`).toEqual([{ id: 1, enabled: 1 }]);
       expect((yield* importApplicationState(empty)).repeated).toBe(false);
+    }),
+  );
+});
+
+test.each([
+  "UPDATE photo_setting SET enabled = 0 WHERE id = 1",
+  "INSERT INTO photo_object VALUES ('pending-cleanup',0)",
+])("restore refuses existing photo state: %s", async (statement) => {
+  const empty = await run(exportApplicationState);
+  await run(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql.unsafe(statement);
+      const before = yield* exportApplicationState;
+      const error = yield* importApplicationState(empty).pipe(Effect.flip);
+      expect(String(error)).toContain("empty database");
+      expect(yield* exportApplicationState).toEqual(before);
     }),
   );
 });

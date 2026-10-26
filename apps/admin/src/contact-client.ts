@@ -20,6 +20,7 @@ export interface ConversationClient {
   detail: (id: number, registrationsBefore?: string) => Promise<typeof ConversationDetail.Type>;
   runtime: (id: number) => Promise<typeof ConversationRuntime.Type>;
   messages: (id: number, before?: number) => Promise<typeof ConversationMessages.Type>;
+  image: (id: number, message: number, guid: string, attachment: number) => Promise<Response>;
   recover: (input: typeof ConversationRecovery.Type) => Promise<void>;
   end: (input: typeof ConversationEnding.Type) => Promise<void>;
 }
@@ -102,7 +103,10 @@ export function managementClient(
       );
     }
     if (response.status === 409) throw new PersonaError("conflict", conflictMessage(path));
-    if (response.status === 404 && path.startsWith("/management/conversations/"))
+    if (
+      response.status === 404 &&
+      (path.startsWith("/management/conversations/") || path.startsWith("/operator/message-image?"))
+    )
       throw new PersonaError("not_found", "대화를 찾을 수 없습니다.");
     if (!response.ok) {
       const upstream = response.headers.get("x-request-id");
@@ -119,6 +123,10 @@ export function managementClient(
   };
   return {
     conversations: {
+      image: (id, message, guid, attachment) =>
+        request(
+          `/operator/message-image?${new URLSearchParams({ id: String(id), message: String(message), guid, attachment: String(attachment) })}`,
+        ),
       messages: async (id, before) =>
         conversationResponse(
           ConversationMessages,

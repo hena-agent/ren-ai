@@ -9,7 +9,7 @@ test("an empty D1 Catalog accepts an atomic document save and rejects stale snap
   const { store } = await cloudflareFixture();
   expect(await store.list()).toEqual([]);
   expect(await store.publicList()).toEqual([]);
-  expect(await store.catalog()).toEqual({ revision: "[]", personas: [] });
+  expect(await store.catalog()).toEqual({ revision: '{"personas":[],"sheets":[]}', personas: [] });
   await expect(store.get("missing")).rejects.toMatchObject({ kind: "not_found" });
   await expect(store.importDraft("old")).rejects.toMatchObject({ kind: "not_found" });
   await store.save(databasePersona, initialDocuments, { persona: "" });

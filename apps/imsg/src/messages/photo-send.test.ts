@@ -1,7 +1,7 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import type { Messages } from "./messages.ts";
 import {
   bridgeFixture,
@@ -52,18 +52,32 @@ test("identified photos retain private bytes and history across restart without 
 
 test("uncertain photo attempts stay fenced across restart and reconcile a later delivery", async () => {
   const bridge = bridgeFixture();
-  const f = rustpushFixture(bridge, 1);
+  const f = rustpushFixture(bridge);
   bridge.answer("send_image", "hang");
-  expect(await f.run(({ messages }) => submit(messages))).toBe("unknown");
   await f.run(({ messages }) =>
     Effect.gen(function* () {
       expect(yield* submit(messages)).toBe("unknown");
-      bridge.deliver({
+      // A settle timeout does not guarantee dispatch; keep the adapter alive until it happens.
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(bridge.requests.filter((r) => r.method === "send_image")).toMatchObject([
+            { params: { guid: attempt.toUpperCase(), to: `tel:${handle}` } },
+          ]),
+        ),
+      );
+      expect(yield* messages.resolveSend(attempt)).toBe("unknown");
+    }),
+  );
+  await f.run(({ messages }) =>
+    Effect.gen(function* () {
+      expect(yield* messages.resolveSend(attempt)).toBe("unknown");
+      expect(yield* submit(messages)).toBe("unknown");
+      const receipt = bridge.deliver({
         ...incoming(`tel:${handle}`, "", 100),
         kind: "delivered",
         guid: attempt.toUpperCase(),
       });
-      yield* Effect.sleep(10);
+      yield* Effect.promise(() => vi.waitFor(() => expect(bridge.acknowledged).toContain(receipt)));
       expect(yield* messages.resolveSend(attempt)).toBe("delivered");
       const changed = Buffer.from([255, 216, 255, 224, 2, 255, 217]).toString("base64");
       for (const call of [

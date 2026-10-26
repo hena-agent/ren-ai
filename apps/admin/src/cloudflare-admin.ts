@@ -47,7 +47,13 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
   const management = managementClient(env.APPLICATION_API_URL ?? "", env.TOKEN_MANAGEMENT ?? "");
   const delivery = catalogDelivery(storage, management.refreshCatalog);
   const localImages = env.ADMIN_JURISDICTION === "local";
-  const store = databaseStore(env.DB, env.IMAGES, localImages ? "/images/" : undefined);
+  const database = databaseStore(env.DB, env.IMAGES, localImages ? "/images/" : undefined);
+  const store: typeof database = {
+    ...database,
+    save: (...args) => delivery.save(() => database.save(...args)),
+    saveSheet: (...args) => delivery.save(() => database.saveSheet(...args)),
+    clearSheets: (...args) => delivery.save(() => database.clearSheets(...args)),
+  };
   const generator = createProfileGenerator({
     key: env.GEMINI_API_KEY ?? "",
     ...(env.GEMINI_API_URL && { endpoint: env.GEMINI_API_URL }),
@@ -66,34 +72,29 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
     workerLog,
     "/startup",
   );
-  const handle = createAdmin(
-    { ...store, save: (...args) => delivery.save(() => store.save(...args)) },
-    env.ADMIN_PASSWORD,
-    `${css}\n${editorCss}`,
-    {
-      script,
-      localImages,
-      log: workerLog,
-      generator,
-      persistence: {
-        saved,
-        checkpoint: editing.save,
-        wake,
-        recovery: () => downloadEditingRecovery(storage),
-      },
-      management,
-      catalogPending: delivery.pending,
-      seeding: {
-        repository: seedingStore(env.DB),
-        models: {
-          text: env.ADMIN_TEXT_MODEL ?? pricedSeedingModels.text,
-          image:
-            env.ADMIN_IMAGE_MODEL ??
-            (env.ADMIN_IMAGE_PROVIDER === "codex" ? codexImageModel : pricedSeedingModels.image),
-        },
+  const handle = createAdmin(store, env.ADMIN_PASSWORD, `${css}\n${editorCss}`, {
+    script,
+    localImages,
+    log: workerLog,
+    generator,
+    persistence: {
+      saved,
+      checkpoint: editing.save,
+      wake,
+      recovery: () => downloadEditingRecovery(storage),
+    },
+    management,
+    catalogPending: delivery.pending,
+    seeding: {
+      repository: seedingStore(env.DB),
+      models: {
+        text: env.ADMIN_TEXT_MODEL ?? pricedSeedingModels.text,
+        image:
+          env.ADMIN_IMAGE_MODEL ??
+          (env.ADMIN_IMAGE_PROVIDER === "codex" ? codexImageModel : pricedSeedingModels.image),
       },
     },
-  );
+  });
   return {
     fetch: handle,
     alarm: async () => {

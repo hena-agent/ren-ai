@@ -23,6 +23,13 @@ const normalized = (handle: string) =>
 export const operatorApi = HttpApi.make("operator").add(
   HttpApiGroup.make("operator")
     .add(
+      HttpApiEndpoint.post("photoTaking", "/photo-taking", {
+        payload: Schema.Struct({ enabled: Schema.Boolean }),
+        success: Schema.Void,
+        error,
+      }),
+    )
+    .add(
       HttpApiEndpoint.post("releaseSend", "/release-send", {
         payload: Schema.Struct({
           handle: Schema.String,
@@ -66,6 +73,7 @@ export const operatorApi = HttpApi.make("operator").add(
 );
 
 type Operations = {
+  readonly photoTaking: (enabled: boolean) => Effect.Effect<void, Error>;
   readonly releaseSend: (
     handle: string,
     callID: string,
@@ -80,6 +88,29 @@ type Operations = {
 export const operatorHandler = (operations: Operations) => {
   const handlers = HttpApiBuilder.group(operatorApi, "operator", (group) =>
     group
+      .handle("photoTaking", ({ payload }) =>
+        Effect.gen(function* () {
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          const requestId = request.headers["x-operation-id"] ?? crypto.randomUUID();
+          const started = performance.now();
+          return yield* operations.photoTaking(payload.enabled).pipe(
+            Effect.tapError((cause) =>
+              Effect.sync(() =>
+                contactLog({
+                  requestId,
+                  operation: "photos.setting",
+                  stage: "setting.persist",
+                  outcome: "failed",
+                  level: "error",
+                  durationMs: performance.now() - started,
+                  ...contactCause(cause),
+                }),
+              ),
+            ),
+            Effect.mapError(() => ({ reason: `Photo setting failed (request ${requestId})` })),
+          );
+        }),
+      )
       .handle("releaseSend", ({ payload }) =>
         Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest;

@@ -108,7 +108,8 @@ attempts resolved first remain fenced. Preparation/upload rejection is failed;
 an interrupted Apple submission stays unknown until a receipt reconciles it.
 Private `outgoing-photos/` files remain with Mac message history and are included
 in whole-home backups. History returns opaque attachment references, not local
-paths. Application Outbox photo actions and persona tools are a later rollout step.
+paths. The application's Outbox owns photo admission and uncertainty; personas take
+and inspect a Conversation photo before choosing to send it.
 
 ## Automatic deployment
 

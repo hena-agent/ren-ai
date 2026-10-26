@@ -156,6 +156,40 @@ API_APP_URL=https://api.renai.im bun run operator remove HANDLE
 The commands are `remove`, `block`, `rebuild`, `test-handle` and `untest-handle`,
 each taking one handle.
 
+### Conversation photos
+
+The application owns the private `ren-ai-conversation-photos` R2 bucket, bound as
+`CONVERSATION_PHOTOS`, and the `CODEX_IMAGE_API_KEY` Worker secret. Do not enable a
+public bucket domain. The same Codex provider serves Admin and Conversations;
+provider contention privately declines a take without retrying it.
+
+Photo-taking defaults to enabled. Change its persisted global setting without a deploy:
+
+```sh
+API_APP_URL=https://api.renai.im bun run operator photos off
+API_APP_URL=https://api.renai.im bun run operator photos on
+```
+
+The switch stops new takes; already-taken photos retain their one-hour send window.
+Three successful takes per rolling 24 hours count separately for each Conversation,
+including test handles and unsent images. Reusing a tool call cannot generate again.
+Expiry and removal queue durable R2 deletion. Uncertain sends retain their bytes
+until transport evidence settles the attempt; never resend to resolve uncertainty.
+
+Admin's authenticated history proxies `GET /operator/message-image` for sent
+images. It accepts a Conversation ID, transport message ID/GUID and attachment
+index, validates ownership and delivery, and returns `Cache-Control: no-store`.
+Unsent images have no preview endpoint. Identity sheets come from Admin's private
+Catalog endpoint with `TOKEN_CATALOG`; no provider or bucket credentials reach tools.
+
+Deploy the photo-capable Mac first and verify its exact revision locally and through
+the tunnel. Deploy the application next, then install the matching `ren-ai.tools`
+and context/session-folder bundles using the coordinated plugin procedure below.
+Catalog synchronization updates existing session permissions and ground rules.
+Verify a real model `take_photo` result contains image content before its subsequent
+`send_photo`, then check transport delivery and authenticated history. See the
+[full verification contract](../../../docs/specs/conversation-photos.md#verification).
+
 ### Recover a blocked send
 
 Deploy the matching imsg gateway first and verify its exact revision and readiness

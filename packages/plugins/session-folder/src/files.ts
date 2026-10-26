@@ -28,6 +28,8 @@ export const personaPermissions = [
   { action: "*", resource: "*", effect: "deny" as const },
   ...[
     "send",
+    "take_photo",
+    "send_photo",
     "read",
     "react",
     "wait",

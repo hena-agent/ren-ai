@@ -143,3 +143,59 @@ test("Catalog HTTP separates public profiles from the authenticated atomic priva
   stdout.mockRestore();
   stderr.mockRestore();
 });
+
+test("private sheets use committed persona/style associations, change the snapshot and stay out of public profiles", async () => {
+  const { store, env, db, bucket } = await fixture();
+  const first = await store.saveImage(portraitImage);
+  const second = await store.saveImage(portraitImage);
+  await store.save(
+    { ...databasePersona, published: true, imageUrl: first, portraits: { photo: first } },
+    initialDocuments,
+    { persona: "" },
+  );
+  const before = await store.catalog();
+  await store.saveSheet("harin", "anime", second);
+  const after = await store.catalog();
+  expect(after.revision).not.toBe(before.revision);
+  expect(after.personas[0]!.sheets).toEqual({ anime: second.split("/").at(-1) });
+  expect(after.personas[0]!.source).not.toContain(second);
+  const read = (query: string, token = "catalog-secret") =>
+    catalogHandler(
+      new Request(`https://admin.test/api/catalog/sheet?${query}`, {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+  expect((await read("id=harin&style=anime", "wrong")).status).toBe(401);
+  for (const query of ["style=anime", "id=../harin&style=anime", "id=harin&style=other"])
+    expect((await read(query)).status).toBe(400);
+  for (const query of ["id=other&style=anime", "id=harin&style=photo"])
+    expect((await read(query)).status).toBe(404);
+  const image = await read("id=harin&style=anime");
+  expect(image.status).toBe(200);
+  expect(image.headers.get("cache-control")).toBe("no-store");
+  expect(image.headers.get("content-type")).toBe(portraitImage.mimeType);
+  expect(new Uint8Array(await image.arrayBuffer())).toEqual(new Uint8Array(portraitImage.bytes));
+  expect(
+    await (await catalogHandler(new Request("https://admin.test/api/personas"), env)).text(),
+  ).not.toContain(second.split("/").at(-1));
+  await bucket.put(second.split("/").at(-1)!, new Uint8Array(20_000_001), {
+    httpMetadata: { contentType: "image/png" },
+  });
+  expect((await read("id=harin&style=anime")).status).toBe(503);
+  await db
+    .prepare("UPDATE persona_identity_sheets SET objectKey = ? WHERE personaId = ?")
+    .bind("../foreign.png", "harin")
+    .run();
+  expect((await read("id=harin&style=anime")).status).toBe(503);
+  expect(
+    (
+      await catalogHandler(
+        new Request("https://admin.test/api/catalog/other", {
+          headers: { authorization: "Bearer catalog-secret" },
+        }),
+        env,
+      )
+    ).status,
+  ).toBe(404);
+});
