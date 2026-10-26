@@ -2,7 +2,6 @@ import { expect, test } from "vitest";
 import { workerFixture } from "../test/worker-fixture.ts";
 import { authorization, tokenOf } from "../test/fixtures.ts";
 import { readFile } from "node:fs/promises";
-import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
 
 test("the real Worker and Durable Object serve bundled assets and correlate generation failures", async () => {
   const { runtime } = await workerFixture();
@@ -20,9 +19,8 @@ test("the real Worker and Durable Object serve bundled assets and correlate gene
   const page = await runtime.dispatchFetch("http://localhost:3729/new", { headers });
   expect(page.status).toBe(200);
   const markup = await page.text();
-  expect(markup).toContain('type="module"');
   expect(markup).toContain('<link rel="icon" type="image/svg+xml" href="/brand.svg"/>');
-  const icon = await runtime.dispatchFetch("http://localhost:3729/brand.svg", { headers });
+  const icon = await runtime.dispatchFetch("http://localhost:3729/brand.svg");
   expect(icon.status).toBe(200);
   expect(icon.headers.get("content-type")).toBe("image/svg+xml");
   const discoveryIcon = await readFile(
@@ -30,13 +28,30 @@ test("the real Worker and Durable Object serve bundled assets and correlate gene
     "utf8",
   );
   expect(await icon.text()).toBe(discoveryIcon.replace("#c72c52", "#515151"));
-  expect((await runtime.dispatchFetch("http://localhost:3729/brand.svg")).status).toBe(200);
-  const script = await runtime.dispatchFetch("http://localhost:3729/pending.js", { headers });
-  expect((await script.arrayBuffer()).byteLength).toBeGreaterThan(100_000);
-  const styles = await runtime.dispatchFetch("http://localhost:3729/style.css", { headers });
-  const stylesheet = await styles.text();
-  expect(stylesheet).toContain(".document-tabs");
-  expect(stylesheet).toContain(".editor-back");
+  const script = /<script src="(\/assets\/admin-[a-z0-9]+\.js)" type="module">/.exec(markup)![1]!;
+  const stylesheet = /<link rel="stylesheet" href="(\/assets\/admin-[a-f0-9]{16}\.css)"/.exec(
+    markup,
+  )![1]!;
+  // Edge-served without the Worker, so pages never wait on the editor Durable Object for them.
+  const asset = async (path: string, type: string) => {
+    const response = await runtime.dispatchFetch(`http://localhost:3729${path}`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain(type);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect(response.headers.get("x-request-id")).toBeNull();
+    return response.text();
+  };
+  const bundle = await asset(script, "text/javascript");
+  expect(bundle.length).toBeGreaterThan(100_000);
+  expect(bundle).not.toContain("crypto-browserify");
+  const styles = await asset(stylesheet, "text/css");
+  expect(styles).toContain(".document-tabs");
+  expect(styles).toContain(".editor-back");
+  for (const path of ["/style.css", "/pending.js", "/_headers"]) {
+    const removed = await runtime.dispatchFetch(`http://localhost:3729${path}`);
+    expect(removed.status).toBe(401);
+    await removed.arrayBuffer();
+  }
   expect((await runtime.dispatchFetch("http://localhost:3729/api/personas")).status).toBe(200);
   expect((await runtime.dispatchFetch("http://localhost:3729/api/catalog")).status).toBe(401);
   const failed = await runtime.dispatchFetch("http://localhost:3729/personas", {
@@ -86,12 +101,7 @@ test("local Worker-edge images are public from R2 while editor routes remain aut
 });
 
 test("Worker health reports degraded when its real editor Durable Object cannot initialize", async () => {
-  await workerFixture();
-  const worker = await readFile(new URL("../dist/worker/entry.js", import.meta.url), "utf8");
-  const { runtime } = await cloudflareFixture(
-    worker,
-    "export default {fetch(){return new Response(null,{status:503})}}",
-  );
+  const { runtime } = await workerFixture({ ADMIN_PASSWORD: "" });
   const response = await runtime.dispatchFetch("http://localhost:3729/health");
   expect(response.status).toBe(503);
   expect(response.headers.get("cache-control")).toBe("no-store");

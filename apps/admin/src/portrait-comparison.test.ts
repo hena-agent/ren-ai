@@ -16,6 +16,7 @@ import {
 import copy from "./copy.json";
 import { renderPage } from "./page.tsx";
 import { ageOn } from "@ren-ai/personas/birth-date";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import { sheet } from "../test/character.ts";
 import { basePreview } from "../test/sub-portraits.ts";
 
@@ -45,10 +46,15 @@ test("both styles are saved together, survive restart and become public without 
   let images: string[];
   try {
     window.document.body.innerHTML = page;
-    images = [...window.document.querySelectorAll(".image-option img")].map((image) =>
-      image.getAttribute("src")!,
+    images = [...window.document.querySelectorAll(".image-option a")].map((link) =>
+      link.getAttribute("href")!,
     );
     expect(images).toHaveLength(2);
+    expect(
+      [...window.document.querySelectorAll(".image-option img")].map((image) =>
+        image.getAttribute("src"),
+      ),
+    ).toEqual(images.map(thumbnailUrl));
     const comparison = window.document.querySelector("section.image-options");
     expect(comparison?.getAttribute("aria-label")).toBe(copy.comparison);
     expect(comparison?.querySelectorAll(".portrait-style")).toHaveLength(2);
@@ -145,7 +151,7 @@ test("saved previews keep external portrait URLs intact and use authenticated ro
       ]),
     ).toEqual([
       [external, `${legacy.name} ${copy.styles.anime}`],
-      [owned, `${legacy.name} ${copy.styles.photo}`],
+      [thumbnailUrl(owned), `${legacy.name} ${copy.styles.photo}`],
     ]);
     expect(
       [...card!.querySelectorAll(".portrait-label")].map((label) => [
@@ -161,14 +167,14 @@ test("saved previews keep external portrait URLs intact and use authenticated ro
     expect(single?.querySelector(".portrait-split")).toBeNull();
     expect(single?.querySelectorAll("img")).toHaveLength(1);
     const thumbnail = single?.querySelector(".persona-card img");
-    expect(thumbnail?.getAttribute("src")).toBe(owned);
+    expect(thumbnail?.getAttribute("src")).toBe(thumbnailUrl(owned));
     expect(thumbnail?.getAttribute("alt")).toBe(`${legacy.name} 프로필`);
     window.document.body.innerHTML = await (await admin(request(`/personas/${legacy.id}`))).text();
     expect(
       [...window.document.querySelectorAll(".image-option img")].map((image) =>
         image.getAttribute("src"),
       ),
-    ).toEqual([owned, external]);
+    ).toEqual([thumbnailUrl(owned), external]);
   } finally {
     await window.happyDOM.close();
   }

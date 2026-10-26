@@ -1,22 +1,29 @@
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { cloudflareFixture } from "./cloudflare-fixture.ts";
+import { cloudflareFixture, type WorkerBundle } from "./cloudflare-fixture.ts";
 
-export async function workerFixture() {
+async function builtWorker(): Promise<WorkerBundle> {
   const root = fileURLToPath(new URL("..", import.meta.url));
   execFileSync("bun", [fileURLToPath(new URL("../scripts/build.mjs", import.meta.url))], {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
   });
-  const [worker, script, css, editorCss, icon] = await Promise.all([
-    readFile(new URL("../dist/worker/entry.js", import.meta.url), "utf8"),
-    readFile(new URL("../public/pending.js", import.meta.url), "utf8"),
-    readFile(new URL("../public/style.css", import.meta.url), "utf8"),
-    readFile(new URL("../public/editor.css", import.meta.url), "utf8"),
-    readFile(new URL("../public/brand.svg", import.meta.url), "utf8"),
-  ]);
-  const assets = `const assets=${JSON.stringify({ "/style.css": css, "/editor.css": editorCss, "/pending.js": script, "/brand.svg": icon })};export default {fetch(request){return new Response(assets[new URL(request.url).pathname] ?? '',{status:assets[new URL(request.url).pathname] ? 200 : 404})}}`;
-  return cloudflareFixture(worker, assets);
+  const output = new URL("../dist/worker/", import.meta.url);
+  const wasm = (await readdir(output)).filter((name) => name.endsWith(".wasm"));
+  return {
+    source: await readFile(new URL("entry.js", output), "utf8"),
+    wasm: Object.fromEntries(
+      await Promise.all(
+        wasm.map(
+          async (name) => [name, new Uint8Array(await readFile(new URL(name, output)))] as const,
+        ),
+      ),
+    ),
+  };
+}
+
+export async function workerFixture(text?: Record<string, string>) {
+  return cloudflareFixture(await builtWorker(), undefined, text);
 }

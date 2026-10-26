@@ -29,7 +29,7 @@ test("a failed portrait request preserves the editor and writes a correlated dia
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   vi.spyOn(process.stdout, "write").mockReturnValue(true);
   const { store } = await fixture();
-  const admin = createAdmin(store, "test-password", "", {
+  const admin = createAdmin(store, "test-password", {
     generator: {
       ...generator,
       portrait: async () => {
@@ -202,7 +202,7 @@ test("Gemini HTTP failures identify the model and style while removing echoed se
 test("storage failures expose the underlying filesystem code and missing generation configuration is logged", async () => {
   const { admin, store, logs, root } = await fixture();
   const missing: LogEntry[] = [];
-  const unconfigured = createAdmin(store, "test-password", "", {
+  const unconfigured = createAdmin(store, "test-password", {
     log: (entry) => missing.push(entry),
   });
   const draft = await newToken(admin);

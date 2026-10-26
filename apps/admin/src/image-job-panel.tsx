@@ -1,3 +1,4 @@
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import type { ImageJob } from "./image-queue.ts";
 import copy from "./copy.json";
 import { isSheetIntent } from "./image-slots.ts";
@@ -74,7 +75,7 @@ export function ImageJobPanel({
               <div className="queue-thumbnail">
                 {task.imageUrl ? (
                   <img
-                    src={task.imageUrl}
+                    src={thumbnailUrl(task.imageUrl)}
                     alt={`${copy.portraitLabels[task.style]} ${target(task.index)}`}
                     width={48}
                     height={60}

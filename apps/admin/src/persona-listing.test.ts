@@ -45,7 +45,7 @@ test("D1 listing paginates by creation time with deterministic ties, bounded pho
   expect((await store.browse(query())).personas[0]!.id).toBe("persona-22");
   expect((await store.browse(query("sort=updated"))).personas[0]!.id).toBe("persona-00");
 
-  const admin = createAdmin(store, "test-password", "", { log: () => {} });
+  const admin = createAdmin(store, "test-password", { log: () => {} });
   const browser = new Window();
   try {
     browser.document.write(await (await admin(request(personaPageUrl(options, 1)))).text());
@@ -126,7 +126,7 @@ test("D1 filters combine, use literal name/ID search and only count gallery phot
 test("listing failures retain request diagnostics and invalid query parameters are rejected", async () => {
   const { store, db } = await cloudflareFixture();
   const logs: LogEntry[] = [];
-  const admin = createAdmin(store, "test-password", "", { log: (entry) => logs.push(entry) });
+  const admin = createAdmin(store, "test-password", { log: (entry) => logs.push(entry) });
   for (const search of [
     "page=0",
     "page=1&page=2",

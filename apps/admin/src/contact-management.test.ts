@@ -27,7 +27,7 @@ const idle = {
 const setup = async (client?: ManagementClient) => {
   const f = await fixture();
   const logs: LogEntry[] = [];
-  const admin = createAdmin(f.store, "test-password", "styles", {
+  const admin = createAdmin(f.store, "test-password", {
     ...(client && { management: client }),
     log: (event) => logs.push(event),
   });

@@ -135,7 +135,7 @@ test("bulk review refuses missing or invalid initial documents at the real file-
   const { root, store } = await fixture();
   const { db } = await cloudflareFixture();
   const editing = editingStorage(memoryStorage().storage);
-  const admin = createAdmin(store, "test-password", "", {
+  const admin = createAdmin(store, "test-password", {
     generator,
     seeding: { repository: seedingStore(db), models: pricedSeedingModels },
     persistence: { checkpoint: editing.save, wake: async () => {} },

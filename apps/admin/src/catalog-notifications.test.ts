@@ -39,7 +39,6 @@ async function setup(generation = false) {
         APPLICATION_API_URL: "https://messaging.test",
         TOKEN_MANAGEMENT: "management-private",
         ...(generation && { GEMINI_API_KEY: "test-key" }),
-        ASSETS: { fetch: async () => new Response("asset") },
       },
       storage,
     );

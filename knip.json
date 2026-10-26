@@ -8,6 +8,7 @@
         "src/pending-entry.mjs",
         "scripts/build.mjs",
         "scripts/import-local.mjs",
+        "scripts/thumbnails.mjs",
         "scripts/seed.mjs",
         "worker/test-seeding.ts"
       ]

@@ -73,10 +73,13 @@ export const generator: ProfileGenerator = {
   portrait: async () => ({ bytes: png, mimeType: "image/png" }),
 };
 export const portraitImage = { bytes: png, mimeType: "image/png" as const };
-export const photoPortrait = {
-  bytes: Buffer.from("ffd8ffe0", "hex"),
-  mimeType: "image/jpeg" as const,
-};
+// Stored images must decode: every save also writes their display thumbnail.
+export const jpeg = Buffer.from(
+  "/9j/4AAQSkZJRgABAgAAAQABAAD/wAARCAABAAEDAREAAhEBAxEB/9sAQwAGBAUGBQQGBgUGBwcGCAoQCgoJCQoUDg8MEBcUGBgXFBYWGh0lHxobIxwWFiAsICMmJykqKRkfLTAtKDAlKCko/9sAQwEHBwcKCAoTCgoTKBoWGigoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgo/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDQr54+wP/Z",
+  "base64",
+);
+export const webp = Buffer.from("UklGRhwAAABXRUJQVlA4TBAAAAAvAAAAEM1VICICxStUxSMB", "base64");
+export const photoPortrait = { bytes: jpeg, mimeType: "image/jpeg" as const };
 export async function seedSheets(store: PersonaStore, id: string) {
   const sheets = {
     anime: await store.saveImage(portraitImage),
@@ -112,9 +115,8 @@ export async function fixture(model = generator) {
   roots.push(root);
   const store = await createPersonaStore(root);
   const logs: LogEntry[] = [];
-  const admin = createAdmin(store, "test-password", "test styles", {
+  const admin = createAdmin(store, "test-password", {
     generator: model,
-    script: "test script",
     log: (entry) => logs.push(entry),
   });
   fixtureStores.set(admin, store);

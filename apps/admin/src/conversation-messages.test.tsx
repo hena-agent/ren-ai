@@ -139,7 +139,7 @@ test("Admin fetches history through authenticated client, pages and keeps failur
       return Response.json({ state: "idle", pending: 0, nextWakeAt: null });
     return Response.json(detail);
   });
-  const admin = createAdmin(f.store, "test-password", "styles", { management });
+  const admin = createAdmin(f.store, "test-password", { management });
   const first = await (await admin(request("/conversations/1"))).text();
   expect(first).toContain("message 1");
   await admin(request("/conversations/1?messagesBefore=2"));
@@ -202,7 +202,7 @@ test("only confirmed outgoing photos render authenticated previews and Admin pro
     async () => new Response(new Uint8Array([1, 2]), { headers: { "content-type": "image/png" } }),
   );
   const management = managementClient("https://api.test", "secret-token", fetcher);
-  const admin = createAdmin(f.store, "test-password", "styles", { management });
+  const admin = createAdmin(f.store, "test-password", { management });
   const path = "/conversations/1/images/1/0?guid=guid-1";
   expect((await admin(new Request(`https://admin.test${path}`))).status).toBe(401);
   expect(fetcher).not.toHaveBeenCalled();

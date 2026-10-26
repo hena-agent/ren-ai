@@ -30,7 +30,7 @@ test("direct selection offers random or available Likes and preserves exact pers
   const f = await fixture();
   const calls: Request[] = [];
   let unavailable = true;
-  const admin = createAdmin(f.store, "test-password", "styles", {
+  const admin = createAdmin(f.store, "test-password", {
     management: managementClient("https://api.test", "test-token", async (input, init) => {
       const call = new Request(input, init);
       calls.push(call.clone());
@@ -87,7 +87,7 @@ test("random row choices use normal direct selection, while refused assignment p
     if (path.endsWith("select-assigned")) return new Response(null, { status: 409 });
     return Response.json({ requestId: randomUUID(), requested: 1, entries: [] });
   });
-  const admin = createAdmin(f.store, "test-password", "styles", {
+  const admin = createAdmin(f.store, "test-password", {
     management: managementClient("https://api.test", "test-token", fetcher),
     log: () => {},
   });

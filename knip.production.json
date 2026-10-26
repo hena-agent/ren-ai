@@ -42,6 +42,7 @@
         "scripts/build.mjs!",
         "scripts/import-local.mjs!",
         "scripts/seed.mjs!",
+        "scripts/thumbnails.mjs!",
         "worker/test-seeding.ts!"
       ]
     },

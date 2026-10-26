@@ -1,4 +1,5 @@
 import type { IdentitySheets } from "@ren-ai/personas";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import copy from "./copy.json";
 
 export function IdentitySheetPanel({
@@ -43,7 +44,7 @@ export function IdentitySheetPanel({
             <a href={sheets[style]} target="_blank" rel="noreferrer">
               <img
                 className="identity-sheet-image"
-                src={sheets[style]}
+                src={thumbnailUrl(sheets[style])}
                 alt={`${copy.portraitLabels[style]} 정면·반측면·측면 인물 시트`}
                 width={1200}
                 height={800}

@@ -206,7 +206,7 @@ test("legacy single image replacement preserves its format and works with a sign
   const next = await (await admin(request(`${path}?image=0&style=photo`, fields))).text();
   expect(preview(next).imageUrl).not.toBe(imageUrl);
   expect((await store.get(legacy.id)).imageUrl).toBe(imageUrl);
-  const fresh = createAdmin(store, "test-password", "", { generator, log: () => {} });
+  const fresh = createAdmin(store, "test-password", { generator, log: () => {} });
   expect(
     (await fresh(request(`${path}?image=0&style=photo`, { ...fields, draft: tokenOf(next) })))
       .status,

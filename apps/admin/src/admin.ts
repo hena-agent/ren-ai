@@ -58,13 +58,12 @@ import { seedingRoutes } from "./seeding-routes.ts";
 import { seedingEngine } from "./seeding-engine.ts";
 import { imageJobPages } from "./image-job-page.ts";
 import { personaQuery } from "./persona-query.ts";
+import { readEditor, type EditorRecord } from "./editor-record.ts";
 export function createAdmin(
   store: PersonaStore,
   password: string,
-  stylesheet: string,
   {
     generator,
-    script,
     log = writeLog,
     persistence,
     management,
@@ -83,8 +82,6 @@ export function createAdmin(
   const privateResource = createResources(
     store,
     tokens,
-    stylesheet,
-    script,
     localImages,
     (content) => html(renderPage(content)),
     persistence?.recovery,
@@ -342,24 +339,21 @@ export function createAdmin(
   };
 
   const editorPage = async (
-    record: PersonaRecord | undefined,
+    loaded: EditorRecord | undefined,
     editing: boolean,
     saved: boolean,
     tab: string | null,
     params: URLSearchParams,
   ) => {
+    const record = loaded?.record;
     if (record) {
       const active = queue.pending(record.id);
       if (active) return jobPage(queue.get(active), true);
     }
     let draft = record ? restoreDraft(record, editing, subDrafts.get(record.id)) : undefined;
-    if (draft)
-      draft = {
-        ...draft,
-        sheets: await operation("identity.sheets.read", {}, () => store.sheets(draft!.id)),
-      };
+    if (draft) draft = { ...draft, sheets: loaded!.sheets };
     if (draft && editing && !draft.initial) {
-      const initial = await store.initial(draft.id);
+      const initial = loaded!.initial;
       draft = { ...draft, initial: initial ? { base: initial, preview: initial } : {} };
     }
     if (draft) subDrafts.set(draft.id, draft);
@@ -446,16 +440,15 @@ export function createAdmin(
         );
       const match = /^\/personas\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
       if (request.method === "POST") return submit(request, url, match?.[1]);
-      let record: PersonaRecord | undefined;
-      if (match)
-        record = await operation("persona.get", { personaId: match[1]! }, () =>
-          store.get(match[1]!),
-        );
-      else if (url.pathname === "/new") record = { ...emptyPersona, id: randomUUID() };
+      let loaded: EditorRecord | undefined;
+      if (match) loaded = await readEditor(store, match[1]!);
+      // A fresh ID has no saved sheets or documents to read.
+      else if (url.pathname === "/new")
+        loaded = { record: { ...emptyPersona, id: randomUUID() }, sheets: {} };
       else if (url.pathname !== "/")
         return html(renderPage({ personas: [], error: copy.notFound }), 404);
       return await editorPage(
-        record,
+        loaded,
         Boolean(match),
         url.searchParams.get("saved") === "1",
         url.searchParams.get("tab"),
@@ -472,7 +465,8 @@ export function createAdmin(
         const response = await handle(request);
         try {
           if (durable) await operation("editing.checkpoint", {}, durable.checkpoint);
-          if (persistence && (queue.next() || (await seeds?.next())))
+          // Only submissions can start seeding work; reads skip its cross-region D1 lookup.
+          if (persistence && (queue.next() || (request.method !== "GET" && (await seeds?.next()))))
             await operation("image.queue.wake", {}, persistence.wake);
           return response;
         } catch (error) {

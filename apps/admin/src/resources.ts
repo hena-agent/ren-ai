@@ -26,8 +26,6 @@ async function downloadDocument(store: PersonaStore, id: string, kind: string) {
 export function createResources(
   store: PersonaStore,
   tokens: ReturnType<typeof draftTokens>,
-  stylesheet: string,
-  script: string | undefined,
   localImages: boolean,
   render: (content: Parameters<typeof renderPage>[0]) => Response,
   recovery?: () => Promise<Response>,
@@ -55,14 +53,6 @@ export function createResources(
         documents: initial,
       });
     }
-    if (pathname === "/style.css")
-      return new Response(stylesheet, {
-        headers: { "Content-Type": "text/css; charset=utf-8", "Cache-Control": "no-store" },
-      });
-    if (pathname === "/pending.js")
-      return new Response(script, {
-        headers: { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" },
-      });
     if (localImages && pathname.startsWith("/images/"))
       return operation("image.read", {}, () => store.image(pathname.slice("/images/".length)));
     return undefined;
