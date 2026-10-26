@@ -102,8 +102,8 @@ test.each([false, true])(
           shouldReply = true;
           yield* fake.text(handle, "can you reply now?", Date.now());
           yield* host.sessions.wait(id);
-          expect(fake.bubbles.at(-1)?.text).toContain("Fresh conversation reply");
-          expect(fake.bubbles.at(-1)?.text).toContain("다른 페르소나");
+          expect(fake.bubbles.at(-1)?.text).toBe("Fresh conversation reply");
+          expect(fake.bubbles.at(-2)?.text).toContain("다른 페르소나");
         }).pipe(Effect.timeout("20 seconds")),
       );
     } finally {

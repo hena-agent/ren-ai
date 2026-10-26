@@ -184,6 +184,75 @@ export const outbox = (
         WHERE conversation_id = ${conversation.id} AND tool_call_id = ${callID}`,
         (rows) => rows[0],
       );
+    const sendText = (conversation: Conversation, text: string, callID: string) =>
+      Effect.gen(function* () {
+        const stopped = yield* before(conversation, "text", text, callID);
+        if (stopped) return stopped;
+        const extra = yield* Random.nextBetween(1000, 2000);
+        const duration = Math.min(15000, text.length * 250 + extra);
+        const type = Effect.gen(function* () {
+          if (pace) yield* pace.quiet(conversation.sessionID);
+          const typingStarted = yield* Clock.currentTimeMillis;
+          return yield* gestures.typing(conversation.handle, text, duration).pipe(
+            Effect.catch(() =>
+              Effect.gen(function* () {
+                const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
+                yield* Effect.sleep(Math.max(0, duration - elapsed));
+                return true;
+              }),
+            ),
+          );
+        });
+        const ready = !typing
+          ? true
+          : pace
+            ? yield* pace.during(conversation.sessionID, type)
+            : yield* type;
+        if (ready !== true)
+          return notSent(
+            "a new message arrived. Discard this unsent draft and its unsent continuation; the User never received it. Do not resume, paraphrase, or explain it later, or save it to Memory as a conversation, promise, or pending message. Read the new messages and respond to the current conversation. Revisit that topic only if the User explicitly brings it back. Do not repeat successful sends.",
+          );
+        const recorded = yield* recordAttempt(conversation, "text", text, callID);
+        if (!recorded) return notSent("this Conversation is unavailable");
+        const { id } = recorded;
+        inFlight.add(id);
+        return yield* Effect.gen(function* () {
+          const outcome = yield* Effect.result(
+            observeSend(
+              "transport.submit",
+              recorded.attemptID!,
+              messages.sendText(conversation.handle, text, recorded.attemptID!),
+            ),
+          );
+          if (Result.isFailure(outcome)) {
+            yield* sql`UPDATE send SET state = 'uncertain', late = 1, notification_pending = 1,
+            updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`;
+            return notSent("send in doubt");
+          }
+          yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${yield* Clock.currentTimeMillis}
+          WHERE id = ${id} AND state = 'recorded'`;
+          let row =
+            (yield* sql<SendRow>`SELECT id, state, content, guid, attempt_id AS attemptID, late,
+           notification_pending AS notificationPending, recorded_at AS recordedAt,
+            updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
+          row = yield* check(conversation, row);
+          for (let attempt = 0; attempt < 15 && row.state === "uncertain"; attempt++) {
+            // imsg can accept a send before Messages exposes its row.
+            yield* Effect.sleep("200 millis");
+            row = yield* check(conversation, row);
+          }
+          if (row.state === "sent" || row.state === "delivered") return sent();
+          yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`;
+          // The RPC accepted the send; the Messages row is the authority.
+          return notSent("send in doubt");
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              inFlight.delete(id);
+            }),
+          ),
+        );
+      });
     return {
       reconcile,
       observe: (conversation: Conversation) =>
@@ -272,75 +341,18 @@ export const outbox = (
           conversation.id,
         )(
           Effect.gen(function* () {
-            const text = yield* introduceRelationship(conversation, body).pipe(
+            const introduction = yield* introduceRelationship(conversation).pipe(
               Effect.provideService(SqlClient.SqlClient, sql),
             );
-            const stopped = yield* before(conversation, "text", text, callID);
-            if (stopped) return stopped;
-            const extra = yield* Random.nextBetween(1000, 2000);
-            const duration = Math.min(15000, text.length * 250 + extra);
-            const type = Effect.gen(function* () {
-              if (pace) yield* pace.quiet(conversation.sessionID);
-              const typingStarted = yield* Clock.currentTimeMillis;
-              return yield* gestures.typing(conversation.handle, text, duration).pipe(
-                Effect.catch(() =>
-                  Effect.gen(function* () {
-                    const elapsed = (yield* Clock.currentTimeMillis) - typingStarted;
-                    yield* Effect.sleep(Math.max(0, duration - elapsed));
-                    return true;
-                  }),
-                ),
+            if (introduction) {
+              const result = yield* sendText(
+                conversation,
+                introduction,
+                "relationship-introduction",
               );
-            });
-            const ready = !typing
-              ? true
-              : pace
-                ? yield* pace.during(conversation.sessionID, type)
-                : yield* type;
-            if (ready !== true)
-              return notSent(
-                "a new message arrived. Discard this unsent draft and its unsent continuation; the User never received it. Do not resume, paraphrase, or explain it later, or save it to Memory as a conversation, promise, or pending message. Read the new messages and respond to the current conversation. Revisit that topic only if the User explicitly brings it back. Do not repeat successful sends.",
-              );
-            const recorded = yield* recordAttempt(conversation, "text", text, callID);
-            if (!recorded) return notSent("this Conversation is unavailable");
-            const { id } = recorded;
-            inFlight.add(id);
-            return yield* Effect.gen(function* () {
-              const outcome = yield* Effect.result(
-                observeSend(
-                  "transport.submit",
-                  recorded.attemptID!,
-                  messages.sendText(conversation.handle, text, recorded.attemptID!),
-                ),
-              );
-              if (Result.isFailure(outcome)) {
-                yield* sql`UPDATE send SET state = 'uncertain', late = 1, notification_pending = 1,
-                updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`;
-                return notSent("send in doubt");
-              }
-              yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${yield* Clock.currentTimeMillis}
-              WHERE id = ${id} AND state = 'recorded'`;
-              let row =
-                (yield* sql<SendRow>`SELECT id, state, content, guid, attempt_id AS attemptID, late,
-               notification_pending AS notificationPending, recorded_at AS recordedAt,
-                updated_at AS updatedAt, tool_call_id AS toolCallID FROM send WHERE id = ${id}`)[0]!;
-              row = yield* check(conversation, row);
-              for (let attempt = 0; attempt < 15 && row.state === "uncertain"; attempt++) {
-                // imsg can accept a send before Messages exposes its row.
-                yield* Effect.sleep("200 millis");
-                row = yield* check(conversation, row);
-              }
-              if (row.state === "sent" || row.state === "delivered") return sent();
-              yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`;
-              // The RPC accepted the send; the Messages row is the authority.
-              return notSent("send in doubt");
-            }).pipe(
-              Effect.ensuring(
-                Effect.sync(() => {
-                  inFlight.delete(id);
-                }),
-              ),
-            );
+              if (result !== sent()) return result;
+            }
+            return yield* sendText(conversation, body, callID);
           }),
         ),
     };
