@@ -1,5 +1,6 @@
 import { catalogClient } from "./personas/catalog.ts";
 import type { ApplicationStoreConfig } from "./application-store.ts";
+import type { R2Bucket } from "@cloudflare/workers-types";
 
 export interface CloudflareBindings {
   readonly PERSONA_CATALOG_URL: string;
@@ -11,6 +12,8 @@ export interface CloudflareBindings {
   readonly OPENCODE_DIRECTORY?: string;
   readonly BOOTSTRAP_ONLY?: string;
   readonly DISCORD_WEBHOOK_URL?: string;
+  readonly CODEX_IMAGE_API_KEY?: string;
+  readonly CONVERSATION_PHOTOS?: R2Bucket;
 }
 
 export interface CloudflareConfiguration {

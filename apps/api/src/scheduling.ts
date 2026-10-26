@@ -49,12 +49,14 @@ export const nextApplicationWake = Effect.gen(function* () {
     failures: number | null;
     edits: number | null;
     registrationExpiry: number | null;
+    photos: number | null;
   }>`SELECT
     (SELECT MIN(scheduled_at) FROM discovery_contact WHERE state = 'scheduled') AS contacts,
     (SELECT MIN(next_wake_at) FROM follow_up WHERE next_wake_at IS NOT NULL) AS followUps,
     (SELECT MIN(retry_at) FROM intake_handle) AS intake,
     (SELECT MIN(retry_at) FROM failed_turn WHERE review = 0) AS failures,
     (SELECT MIN(created_at) + 900001 FROM intake_edit) AS edits,
+    (SELECT MIN(due) FROM photo_object WHERE due IS NOT NULL) AS photos,
     MIN((SELECT COALESCE(MIN(at) + 3600000, 9007199254740991) FROM discovery_attempt),
         (SELECT COALESCE(MIN(at) + 60000, 9007199254740991) FROM discovery_verification)) AS registrationExpiry`;
   const [recovery] = yield* sql<{
@@ -85,6 +87,7 @@ export const nextApplicationWake = Effect.gen(function* () {
     delayed(row!.intake, laneFloor(lanes, "intake")),
     delayed(row!.failures, laneFloor(lanes, "turns")),
     delayed(row!.edits, laneFloor(lanes, "intake")),
+    delayed(row!.photos, laneFloor(lanes, "photos")),
     delayed(recovery!.rebuilds, laneFloor(lanes, "rebuilds")),
     delayed(recovery!.stopped, laneFloor(lanes, "stopped")),
     delayed(recovery!.endings, laneFloor(lanes, "endings")),

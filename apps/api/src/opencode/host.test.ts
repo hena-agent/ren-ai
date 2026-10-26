@@ -435,6 +435,8 @@ test("a scripted persona sends several ordered bubbles only to her Conversation"
               "react",
               "read",
               "send",
+              "take_photo",
+              "send_photo",
               "wait",
             ]).toSorted(),
           );

@@ -6,6 +6,7 @@ import { notificationSchema, notificationSubmissionsSchema } from "./discovery/n
 import { sharedAssignmentsSchema } from "./discovery/schema.ts";
 import { migrateBatches } from "./migrations.ts";
 import { browseSchema } from "./personas/browse-schema.ts";
+import { photoSchema } from "./photos/schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -313,6 +314,7 @@ export const migrate = Effect.gen(function* () {
         sql`ALTER TABLE conversation ADD COLUMN image_style TEXT NOT NULL DEFAULT 'anime'
           CHECK(image_style IN ('anime', 'photo'))`,
       ]),
+      "054_conversation_photos": photoSchema,
     }),
   );
 });

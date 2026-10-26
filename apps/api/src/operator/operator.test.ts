@@ -195,6 +195,7 @@ test("the operator HTTP API documents its typed request, result and error contra
 
 test("the rebuild route handles an unavailable operation", async () => {
   const api = operatorHandler({
+    photoTaking: () => Effect.void,
     releaseSend: () => Effect.succeed("not_found"),
     testHandle: () => Effect.void,
     block: () => Effect.void,
@@ -295,7 +296,7 @@ test("HTTP API and typed CLI run over authenticated port-zero HTTP", async () =>
         ]) {
           expect(yield* runOperatorCli(args, path).pipe(Effect.flip)).toEqual(
             new Error(
-              "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID failed|delivered",
+              "Usage: operator remove|block|rebuild|test-handle|untest-handle HANDLE | release-send HANDLE CALL_ID failed|delivered | photos on|off",
             ),
           );
         }
@@ -326,6 +327,7 @@ test("HTTP API and typed CLI run over authenticated port-zero HTTP", async () =>
         );
         let failedCalls = 0;
         const failed = operatorHandler({
+          photoTaking: () => Effect.void,
           releaseSend: () => Effect.fail(new Error("database offline")),
           testHandle: () => Effect.fail(new Error("database offline")),
           block: () => Effect.fail(new Error("database offline")),

@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { Effect, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { decodePersona, type PersonaRecord } from "@ren-ai/personas";
+import type { PersonaRecord } from "@ren-ai/personas";
+import { decodeRuntimePersona } from "./runtime-catalog.ts";
 
 type Snapshot = { revision: string; personas: Map<string, PersonaRecord> };
 const decode = (text: string) => {
@@ -11,7 +12,7 @@ const decode = (text: string) => {
     );
     return new Map(
       rows.map((row) => {
-        const persona = decodePersona(row);
+        const persona = decodeRuntimePersona(row);
         return [persona.id, persona];
       }),
     );

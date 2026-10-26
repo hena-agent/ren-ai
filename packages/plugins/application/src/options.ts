@@ -1,6 +1,6 @@
 import type { OutgoingStatus, Tapback } from "@ren-ai/imsg/protocol";
 import type { Effect } from "effect";
-import type { Persona } from "./protocol.ts";
+import type { Persona, PhotoResult, TakePhotoInput } from "./protocol.ts";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 
 interface PluginConfig {
@@ -8,6 +8,16 @@ interface PluginConfig {
   readonly personas: ReadonlyMap<string, Persona>;
   readonly handleForSession: (sessionID: string) => Effect.Effect<string | undefined, Error>;
   readonly read?: (sessionID: string) => Effect.Effect<string, Error>;
+  readonly takePhoto?: (
+    sessionID: string,
+    input: TakePhotoInput,
+    callID: string,
+  ) => Effect.Effect<PhotoResult, Error>;
+  readonly sendPhoto?: (
+    sessionID: string,
+    photo: string,
+    callID: string,
+  ) => Effect.Effect<string, Error>;
   readonly endConversation?: (
     sessionID: string,
     farewell: string,

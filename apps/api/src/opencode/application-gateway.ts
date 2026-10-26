@@ -48,6 +48,16 @@ export const applicationGateway = (
     catalog: () => Effect.succeed([...tools.personas.values()]),
     send: ({ sessionID, text, callID }) =>
       tools.send(sessionID, text, callID).pipe(action, Effect.mapError(String)),
+    takePhoto: ({ sessionID, input, callID }) =>
+      diagnosed("photo.take", "photo.take", tools.takePhoto(sessionID, input, callID)).pipe(
+        action,
+        Effect.mapError(String),
+      ),
+    sendPhoto: ({ sessionID, photo, callID }) =>
+      diagnosed("photo.send", "outbox.photo", tools.sendPhoto(sessionID, photo, callID)).pipe(
+        action,
+        Effect.mapError(String),
+      ),
     endConversation: ({ sessionID, farewell, callID }) =>
       tools.endConversation(sessionID, farewell, callID).pipe(action, Effect.mapError(String)),
     read: ({ sessionID }) => tools.read(sessionID).pipe(action, Effect.mapError(String)),

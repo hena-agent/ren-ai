@@ -26,6 +26,22 @@ const latestInput = (messages: ReadonlyArray<Message>) =>
       ),
   )?.id;
 
+const messagingTools = (
+  options: PersonaPluginOptions,
+  tools: Readonly<Record<string, Parameters<typeof isMessagingTool>[1]>>,
+) =>
+  (
+    [
+      ["send", options.send],
+      ["read", options.read],
+      ["react", options.react],
+      ["wait", options.wait],
+      ["take_photo", options.takePhoto],
+      ["send_photo", options.sendPhoto],
+      ["end_conversation", options.endConversation],
+    ] as const
+  ).flatMap(([name, action]) => (action && isMessagingTool(name, tools[name]) ? [name] : []));
+
 export const contextPlugin = (options: PersonaPluginOptions) =>
   Plugin.define({
     id: "ren-ai.context",
@@ -50,13 +66,7 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
               phone(now, persona.timeZone, state),
               new Set([
                 "websearch",
-                ...(["send", "read", "react", "wait"] as const).filter(
-                  (name) => options[name] && isMessagingTool(name, event.tools[name]),
-                ),
-                ...(options.endConversation &&
-                isMessagingTool("end_conversation", event.tools["end_conversation"])
-                  ? ["end_conversation"]
-                  : []),
+                ...messagingTools(options, event.tools),
                 ...(isDiceTool(event.tools["dice"]) ? ["dice"] : []),
                 ...(isAdjustmentTool(event.tools["review_adjustments"])
                   ? ["review_adjustments"]

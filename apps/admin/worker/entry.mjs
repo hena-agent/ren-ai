@@ -49,7 +49,8 @@ export default {
           ),
         ),
       );
-    if (path === "/api/catalog" || path === "/api/personas") return catalogHandler(request, env);
+    if (path === "/api/catalog" || path === "/api/catalog/sheet" || path === "/api/personas")
+      return catalogHandler(request, env);
     return adminRequest(request, async () => {
       if (path === "/brand.svg") {
         const asset = await env.ASSETS.fetch(request.url);

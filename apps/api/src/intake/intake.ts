@@ -6,6 +6,7 @@ import {
   gap,
   message,
   photo,
+  photoByYou,
   placeholder,
   reply,
   sentByYou,
@@ -54,6 +55,9 @@ type Prompt = (
   text: string,
   files?: ReadonlyArray<PromptImage>,
 ) => Effect.Effect<void, Error>;
+
+const attachmentKind = (mimeType: string | null | undefined) =>
+  mimeType?.startsWith("audio/") ? "voice-memo" : mimeType?.startsWith("video/") ? "video" : "file";
 
 const readBookmark = (messages: Messages) =>
   Effect.gen(function* () {
@@ -136,10 +140,12 @@ export const intake = (
               yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${conversation.sessionID} AND guid = ${row.guid}`;
             if (seen.length) return;
             yield* arriving(conversation.sessionID, promptID(conversation.sessionID, row.guid));
+            const rendered = yield* content(row, null, timeZone(conversation.personaID));
             yield* prompt(
               conversation.sessionID,
               promptID(conversation.sessionID, row.guid),
-              sentByYou(row.text, row.createdAt, timeZone(conversation.personaID)),
+              rendered.text,
+              rendered.files,
             );
             yield* markSeen(conversation.sessionID, row.guid);
             signal(conversation);
@@ -163,22 +169,19 @@ export const intake = (
         }
         const lines: string[] = [];
         const files: PromptImage[] = [];
-        if (row.replyToGuid)
+        if (row.fromMe) {
+          if (row.text) lines.push(sentByYou(row.text, row.createdAt, zone));
+        } else if (row.replyToGuid)
           lines.push(reply(row.text, yield* target(row, row.replyToGuid), row.createdAt, zone));
         else if (row.text) lines.push(message(row.text, row.createdAt, null, zone));
         for (const attachment of row.attachments ?? []) {
           const mime = imageMime(attachment);
           if (mime && !attachment.missing) {
             const image = yield* messages.image(attachment);
-            lines.push(photo(row.createdAt, zone));
+            lines.push((row.fromMe ? photoByYou : photo)(row.createdAt, zone));
             files.push(image);
           } else {
-            const kind = attachment.mimeType?.startsWith("audio/")
-              ? "voice-memo"
-              : attachment.mimeType?.startsWith("video/")
-                ? "video"
-                : "file";
-            lines.push(placeholder(kind, row.createdAt, zone));
+            lines.push(placeholder(attachmentKind(attachment.mimeType), row.createdAt, zone));
           }
         }
         if (row.payload) lines.push(placeholder(row.payload, row.createdAt, zone));
@@ -190,10 +193,12 @@ export const intake = (
         if (yield* fromPreviousRelationship(conversation, row)) return false;
         if ((yield* messages.sendStatus(row.guid)) === "failed") return false;
         if (seen) return true;
+        const rendered = yield* content(row, null, timeZone(conversation.personaID));
         yield* replayPrompt(
           conversation.sessionID,
           promptID(conversation.sessionID, row.guid),
-          sentByYou(row.text, row.createdAt, timeZone(conversation.personaID)),
+          rendered.text,
+          rendered.files,
         );
         return true;
       });

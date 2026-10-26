@@ -19,6 +19,7 @@ import { conversationLanguages } from "./discovery/conversation-languages.ts";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { runtimeStatus, runtimeStatusRequest } from "./conversations/runtime-status.ts";
 import { conversationMessagesRequest } from "./conversations/http.ts";
+import { conversationImageRequest } from "./conversations/preview.ts";
 import { prepareMessaging } from "./application-tools.ts";
 import type { Persona } from "@ren-ai/personas";
 import { cachedCatalog } from "./personas/cached-catalog.ts";
@@ -27,6 +28,8 @@ import { usageCollector } from "./usage/collect.ts";
 import { waitlistNotifications } from "./discovery/notifications.ts";
 import { runWorkLanes, maintenanceWork, withWorkBudget, workBatchSize } from "./work-budget.ts";
 import { invalidatePublicCatalog } from "./personas/public-catalog.ts";
+import { conversationPhotos } from "./photos/photos.ts";
+import { conversations } from "./conversations/conversations.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -102,6 +105,17 @@ export async function createExecutionRuntime(
     const saved = yield* cachedCatalog(catalog.load, groundRules);
     const snapshot = yield* saved.current;
     const { personas } = snapshot;
+    const directory = yield* conversations;
+    const photos = bindings.CONVERSATION_PHOTOS
+      ? yield* conversationPhotos({
+          personas,
+          sheet: catalog.sheet,
+          bucket: bindings.CONVERSATION_PHOTOS,
+          key: bindings.CODEX_IMAGE_API_KEY ?? "",
+          active: directory.active,
+          fetcher,
+        })
+      : undefined;
     const host = yield* startMessagingApplication(
       personas,
       (tools) =>
@@ -137,6 +151,7 @@ export async function createExecutionRuntime(
       messages.gestures,
       health,
       false,
+      photos,
     );
     operator = operatorHandler(host.operator);
     yield* Effect.addFinalizer(() => Effect.promise(operator!.dispose));
@@ -191,6 +206,7 @@ export async function createExecutionRuntime(
         { name: "usage", run: Effect.suspend(() => usage.tick) },
         { name: "stopped", run: host.heartbeat.stopped },
         { name: "endings", run: host.heartbeat.endings },
+        { name: "photos", run: photos ? photos.cleanup().pipe(Effect.asVoid) : Effect.void },
         {
           name: "catalog",
           run: maintenanceWork("catalog.recovery", catalogSync.reconcile(groundRules)),
@@ -278,6 +294,8 @@ export async function createExecutionRuntime(
       if (url.pathname === "/operator/conversations") return (await inspect())(request);
       if (url.pathname === "/operator/messages")
         return conversationMessagesRequest(request, messages, run);
+      if (url.pathname === "/operator/message-image")
+        return conversationImageRequest(request, messages, run);
       if (url.pathname === "/management/catalog/refresh") {
         if (request.method !== "POST")
           return new Response(null, { status: 405, headers: { Allow: "POST" } });

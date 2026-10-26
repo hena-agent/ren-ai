@@ -360,3 +360,24 @@ test("nested failure backoff belongs to its lane and cannot hold health or notif
     restore();
   }
 });
+
+test("private photo deadlines wake the actor through an indexed query and respect cleanup backoff", async () => {
+  await runMessagingTest(
+    Effect.gen(function* () {
+      yield* migrate;
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO photo_object VALUES ('expired', 10000), ('retained', NULL)`;
+      expect(yield* nextApplicationWake).toBe(10000);
+      yield* scheduleWork("lane:execution.cursor:photos", 30000);
+      expect(yield* nextApplicationWake).toBe(30000);
+      yield* sql`DELETE FROM photo_object WHERE photo_id = 'expired'`;
+      yield* sql`DELETE FROM application_work`;
+      expect(yield* nextApplicationWake).toBe(300000);
+      expect(
+        JSON.stringify(
+          yield* sql`EXPLAIN QUERY PLAN SELECT MIN(due) FROM photo_object WHERE due IS NOT NULL`,
+        ),
+      ).toContain("photo_cleanup");
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+});

@@ -20,6 +20,7 @@
   "durable_objects": {
     "bindings": [{ "name": "APPLICATION", "class_name": "ApiApplication" }],
   },
+  "r2_buckets": [{ "binding": "CONVERSATION_PHOTOS", "bucket_name": "ren-ai-conversation-photos" }],
   "exports": { "ApiApplication": { "type": "durable-object", "storage": "sqlite" } },
   "observability": { "enabled": true },
 }

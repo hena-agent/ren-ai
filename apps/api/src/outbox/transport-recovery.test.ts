@@ -13,6 +13,7 @@ import { outbox } from "./outbox.ts";
 
 afterEach(cleanup);
 const personas = new Map([["persona", { timeZone: "UTC" }]]);
+const blockedPhoto = () => Effect.die("a fenced send must not load image bytes");
 const box = (messages: Messages) =>
   outbox(messages, fakeGestures().gestures, personas, undefined, undefined, { typing: false });
 const fixture = () => {
@@ -174,4 +175,81 @@ test("an admitted but unconfirmed send remains fenced through restart until a re
     }),
   );
   expect(f.bridge.requests.filter((request) => request.method === "send")).toHaveLength(1);
+});
+
+test("photo attempts survive interrupted submission and restart with the same transport fences", async () => {
+  const f = fixture();
+  const photo = Buffer.from([255, 216, 255, 224, 1, 255, 217]).toString("base64");
+  const load = () => Effect.succeed(photo);
+  const interruptedID = await f.run((remote, conversation) =>
+    Effect.gen(function* () {
+      const entered = yield* Deferred.make<void>();
+      const interrupted = yield* box({
+        ...remote,
+        sendPhoto: () => Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
+      });
+      const fiber = yield* interrupted
+        .sendPhoto(conversation, "interrupted-photo", "interrupted", load)
+        .pipe(Effect.forkScoped);
+      yield* Deferred.await(entered);
+      yield* Fiber.interrupt(fiber);
+      const sql = yield* SqlClient.SqlClient;
+      const [row] = yield* sql<{
+        attemptID: string;
+        state: string;
+        content: string;
+      }>`SELECT attempt_id AS attemptID, state, content FROM send`;
+      expect(row).toMatchObject({ state: "recorded", content: "interrupted-photo" });
+      return row!.attemptID;
+    }),
+  );
+  f.bridge.answer("send_image", { stage: "send", cause: { code: "unconfirmed" } });
+  const uncertainID = await f.run((remote, conversation) =>
+    Effect.gen(function* () {
+      const sends = yield* box(remote);
+      // Recovery fences the interrupted attempt before admitting this next photo.
+      expect(yield* sends.sendPhoto(conversation, "uncertain-photo", "uncertain", load)).toContain(
+        "send in doubt",
+      );
+      yield* remote.sendPhoto(conversation.handle, photo, interruptedID);
+      expect(yield* remote.resolveSend(interruptedID)).toBe("failed");
+      const [row] = yield* remote.recent(conversation.handle, 0);
+      expect(row!.attachments).toHaveLength(1);
+      return row!.guid;
+    }),
+  );
+  await f.run((remote, conversation) =>
+    Effect.gen(function* () {
+      const sends = yield* box(remote);
+      expect(yield* sends.sendPhoto(conversation, "next-photo", "next", blockedPhoto)).toContain(
+        "earlier send is still in doubt",
+      );
+      expect(yield* sends.send(conversation, "text also waits", "text-next")).toContain(
+        "earlier send is still in doubt",
+      );
+      expect(yield* sends.release(conversation, "uncertain", "failed")).toBe("uncertain");
+      f.bridge.deliver({
+        ...incoming(`mailto:${conversation.handle}`, "", Date.now()),
+        kind: "delivered",
+        guid: uncertainID,
+      });
+      yield* Effect.promise(() =>
+        vi.waitFor(async () =>
+          expect(await Effect.runPromise(remote.resolveSend(uncertainID))).toBe("delivered"),
+        ),
+      );
+      expect(yield* sends.sendPhoto(conversation, "next-photo", "next", blockedPhoto)).toContain(
+        'earlier photo "uncertain-photo" did go out',
+      );
+      expect(
+        (yield* sends.results(conversation.sessionID)).map((row) => [row.content, row.state]),
+      ).toEqual([
+        ["interrupted-photo", "failed"],
+        ["uncertain-photo", "delivered"],
+      ]);
+      yield* remote.sendPhoto(conversation.handle, photo, uncertainID);
+      expect(yield* remote.recent(conversation.handle, 0)).toHaveLength(1);
+    }),
+  );
+  expect(f.bridge.requests.filter((request) => request.method === "send_image")).toHaveLength(1);
 });

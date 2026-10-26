@@ -104,6 +104,24 @@ function messageCursor(url: URL) {
   return before;
 }
 
+async function imageResponse(client: ConversationClient, url: URL, image: RegExpExecArray) {
+  const response = await operation("conversation.image", {}, () =>
+    client.image(
+      Number(image[1]),
+      Number(image[2]),
+      url.searchParams.get("guid") ?? "",
+      Number(image[3]),
+    ),
+  );
+  return new Response(response.body, {
+    headers: {
+      "Content-Type": response.headers.get("content-type") ?? "application/octet-stream",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 export async function conversationRoutes(request: Request, client?: ConversationClient) {
   const url = new URL(request.url);
   const view: ConversationView = {
@@ -119,6 +137,8 @@ export async function conversationRoutes(request: Request, client?: Conversation
       });
     const match = /^\/conversations\/(\d+)$/.exec(url.pathname);
     if (request.method === "POST") return await recoverRequest(request, url, match, client);
+    const image = /^\/conversations\/(\d+)\/images\/(\d+)\/(\d+)$/.exec(url.pathname);
+    if (image) return await imageResponse(client, url, image);
     if (match) {
       const id = Number(match[1]);
       const cursor = registrationCursor(url);

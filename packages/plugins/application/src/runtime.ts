@@ -77,6 +77,10 @@ const remoteOptions = <E>(
       personas: new Map(),
       send: (sessionID, text, callID) =>
         api.send({ sessionID, text, callID }).pipe(Effect.mapError(failure)),
+      takePhoto: (sessionID, input, callID) =>
+        api.takePhoto({ sessionID, input, callID }).pipe(Effect.mapError(failure)),
+      sendPhoto: (sessionID, photo, callID) =>
+        api.sendPhoto({ sessionID, photo, callID }).pipe(Effect.mapError(failure)),
       endConversation: (sessionID, farewell, callID) =>
         api.endConversation({ sessionID, farewell, callID }).pipe(Effect.mapError(failure)),
       wait: waiting.wait,

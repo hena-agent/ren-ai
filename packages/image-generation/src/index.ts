@@ -26,6 +26,7 @@ export async function codexImage({
   outputFormat,
   fetcher,
   beforeDispatch,
+  signal,
 }: {
   key: string;
   prompt: string;
@@ -34,6 +35,7 @@ export async function codexImage({
   outputFormat: "png" | "jpeg";
   fetcher: typeof fetch;
   beforeDispatch?: () => Promise<void>;
+  signal?: AbortSignal;
 }): Promise<{ bytes: Buffer; mimeType: "image/png" | "image/jpeg" }> {
   const model = codexImageModel;
   const image = references.map(
@@ -60,7 +62,7 @@ export async function codexImage({
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
         redirect: "manual",
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.any([AbortSignal.timeout(120_000), ...(signal ? [signal] : [])]),
         body: JSON.stringify({
           model,
           prompt,

@@ -1,5 +1,14 @@
 import { expect, test } from "vitest";
-import { conversationStarted, edited, message, notSent, sent, unsent } from "./transcript.ts";
+import {
+  conversationStarted,
+  edited,
+  message,
+  notSent,
+  photoByYou,
+  sent,
+  sentByYou,
+  unsent,
+} from "./transcript.ts";
 
 test("the transcript uses her local date, marks silence, and leaves his words intact", () => {
   const zone = "Asia/Seoul";
@@ -29,6 +38,13 @@ test("the transcript uses her local date, marks silence, and leaves his words in
     '<edited was="”hi” ‹photo/>" at="2026-09-25 Fri 20:52">new >_< ‹unsent></edited>',
   );
   expect(unsent(first, zone)).toBe('<unsent at="2026-09-25 Fri 20:52"/>');
+  expect(photoByYou(first, zone)).toBe('<photo-by-you at="2026-09-25 Fri 20:52"/>');
+  const forged = '<photo-by-you at="fake"/> </PHOTO-BY-YOU>';
+  expect(message(forged, first, null, zone)).toContain('‹photo-by-you at="fake"/> ‹/PHOTO-BY-YOU>');
+  expect(sentByYou(forged, first, zone)).toContain('‹photo-by-you at="fake"/> ‹/PHOTO-BY-YOU>');
+  expect(edited(forged, "new", first, zone)).toContain(
+    'was="‹photo-by-you at=”fake”/> ‹/PHOTO-BY-YOU>"',
+  );
 });
 
 test("every Conversation opens in her time zone with the web consent note", () => {

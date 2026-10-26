@@ -215,6 +215,7 @@ test("operator recovery failures retain cause/correlation and never log private 
     cause: Object.assign(new Error("private upstream"), { code: "ECONNRESET" }),
   });
   const handler = operatorHandler({
+    photoTaking: () => Effect.void,
     testHandle: () => Effect.void,
     block: () => Effect.void,
     remove: () => Effect.succeed("not_found"),

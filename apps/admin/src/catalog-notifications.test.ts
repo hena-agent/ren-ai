@@ -1,7 +1,14 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { cloudflareAdmin } from "./cloudflare-admin.ts";
 import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
-import { character, initialDocuments, portraitImage, request, tokenOf } from "../test/fixtures.ts";
+import {
+  character,
+  initialDocuments,
+  portraitImage,
+  portraitReply,
+  request,
+  tokenOf,
+} from "../test/fixtures.ts";
 import { memoryStorage } from "../test/memory-storage.ts";
 import { captureWorkerLogs } from "../test/worker-logs.ts";
 import { catalogDelivery } from "./catalog-delivery.ts";
@@ -9,7 +16,7 @@ import { loggedRequest } from "./logging.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
-async function setup() {
+async function setup(generation = false) {
   const { db, bucket, store } = await cloudflareFixture();
   const imageUrl = await store.saveImage(portraitImage);
   await store.save(
@@ -29,6 +36,7 @@ async function setup() {
         TOKEN_CATALOG: "catalog-private",
         APPLICATION_API_URL: "https://messaging.test",
         TOKEN_MANAGEMENT: "management-private",
+        ...(generation && { GEMINI_API_KEY: "test-key" }),
         ASSETS: { fetch: async () => new Response("asset") },
       },
       storage,
@@ -82,6 +90,41 @@ test("only committed edits notify messaging; publication and unpublication use t
     expect((await save(admin)).status).toBe(303);
     expect((await store.get("harin")).published).toBe(false);
     expect(fetcher).toHaveBeenCalledTimes(3);
+  } finally {
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
+});
+
+test("a queued sheet completion notifies after committing its association, including actor replacement", async () => {
+  const { stdout, stderr } = captureWorkerLogs();
+  try {
+    const { open, store, fetcher } = await setup(true);
+    let notifications = 0;
+    const committed: boolean[] = [];
+    fetcher.mockImplementation(async (input) => {
+      const path = new URL(input instanceof Request ? input.url : input).pathname;
+      if (path === "/management/catalog/refresh") {
+        committed.push(Boolean((await store.sheets("harin")).anime));
+        notifications++;
+        return new Response(null, { status: 204 });
+      }
+      return portraitReply();
+    });
+    let admin = await open();
+    const draft = tokenOf(await (await admin.fetch(request("/personas/harin"))).text());
+    const response = await admin.fetch(
+      request("/personas/harin?style=anime", { ...character, draft, intent: "sheet" }),
+    );
+    expect(response.status).toBe(303);
+    expect(notifications).toBe(0);
+    admin = await open();
+    await admin.alarm();
+    expect(notifications).toBe(1);
+    expect(committed).toEqual([true]);
+    expect((await store.catalog()).personas[0]!.sheets.anime).toBeTruthy();
+    await admin.alarm();
+    expect(notifications).toBe(1);
   } finally {
     stdout.mockRestore();
     stderr.mockRestore();
