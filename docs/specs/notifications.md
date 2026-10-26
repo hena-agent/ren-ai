@@ -129,8 +129,9 @@ notifications and rate limits in all three languages. Support instructions say
 
 ## Explicit exceptions and deferred work
 
-- The new-Conversation marker remains prefixed to the new Persona's first bubble,
-  so a change of Persona is visible in the shared `hi@` thread.
+- The new-Conversation marker is sent as its own bubble before the new Persona's
+  first greeting in the shared `hi@` thread. It uses the ordinary Outbox ledger
+  and recovery fences, so an uncertain attempt is not sent again.
 - No Selection Notification, keyword opt-out, reply inbox, number verification,
   retry UI or separate Apple Account is introduced here.
 - Apple client presentation, unknown-sender filtering and link treatment depend
