@@ -3,6 +3,7 @@ import { PublicProfileView } from "@ren-ai/personas/public-profile-view";
 import { projectPublicProfile } from "@ren-ai/personas/profile-projection";
 import { splitPersonaMarkdown } from "@ren-ai/personas/profile";
 import { ageOn, birthDateOf } from "@ren-ai/personas/birth-date";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import type { PersonaImage } from "@ren-ai/personas";
 
 export function PublicPersonaPreview({
@@ -55,7 +56,7 @@ export function PublicPersonaPreview({
       </div>
       {photos[selected] ? (
         <img
-          src={photos[selected].imageUrl}
+          src={thumbnailUrl(photos[selected].imageUrl)}
           alt={`${name} 프로필 사진 ${selected + 1}`}
           width={800}
           height={1000}

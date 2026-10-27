@@ -1,5 +1,14 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { character, fixture, generator, legacy, newToken, png, request } from "../test/fixtures.ts";
+import {
+  character,
+  fixture,
+  generator,
+  legacy,
+  newToken,
+  png,
+  request,
+  tokenOf,
+} from "../test/fixtures.ts";
 import { createAdmin } from "./admin.ts";
 import { createProfileGenerator } from "./generation.ts";
 import {
@@ -11,8 +20,48 @@ import {
   validationFailure,
 } from "./logging.ts";
 import type { LogEntry } from "./logging.ts";
+import { deferred } from "../test/queue.ts";
 
 afterEach(() => vi.restoreAllMocks());
+
+test.each(["GET", "POST"])(
+  "%s logs a delayed sibling read failure after the response",
+  async (method) => {
+    const { admin, store, logs } = await fixture();
+    await store.create(legacy);
+    const route = "/personas/legacy";
+    const draft = tokenOf(await (await admin(request(route))).text());
+    const delayed = deferred<void>();
+    vi.spyOn(store, "get").mockRejectedValue(new Error("record unavailable"));
+    vi.spyOn(store, "initial").mockImplementation(async () => {
+      await delayed.promise;
+      throw Object.assign(new Error("initial documents unavailable"), { code: "EINITIAL" });
+    });
+    const handle = createAdmin(store, "test-password", {
+      log: (entry) => logs.push(entry),
+    });
+    const response = await handle(
+      request(route, method === "POST" ? { ...character, draft, intent: "save" } : undefined),
+    );
+    expect(response.status).toBe(503);
+    delayed.resolve();
+    await vi.waitFor(() => expect(logs.some((entry) => entry.code === "EINITIAL")).toBe(true));
+    const failures = logs.filter(
+      (entry) =>
+        entry.requestId === response.headers.get("X-Request-ID") &&
+        entry.event === "operation.failed",
+    );
+    expect(failures).toHaveLength(2);
+    expect(failures[1]).toMatchObject({
+      stage: "persona.initial.read",
+      personaId: "legacy",
+      code: "EINITIAL",
+      level: "error",
+    });
+    expect(JSON.stringify(failures)).not.toContain(character.description);
+    expect(JSON.stringify(failures)).not.toContain(draft);
+  },
+);
 
 test("validation diagnostics preserve original causes and codes while replacing payload-bearing messages", async () => {
   const logs: LogEntry[] = [];
@@ -132,7 +181,7 @@ test("read and configuration diagnostics retain their operation and persona iden
   expect(logs).toContainEqual(
     expect.objectContaining({ stage: "image.read", event: "operation.completed" }),
   );
-  const unconfigured = createAdmin(store, "test-password", "", {
+  const unconfigured = createAdmin(store, "test-password", {
     log: (entry) => logs.push(entry),
   });
   await unconfigured(

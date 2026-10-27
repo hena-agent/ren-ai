@@ -24,6 +24,11 @@ back navigation and sharing. Results include a filtered count and previous/next
 navigation. Out-of-range pages show the last available page. D1 applies filtering,
 ordering and pagination before loading documents and the selected personas' photos.
 
+The Catalog's D1 primary runs in APAC while the editor Durable Object is
+US-restricted, so every sequential query from the editor crosses the Pacific
+(~300 ms). The list and editor pages read D1 in one round trip (a batch or
+concurrent reads), and reads skip the seeding-work lookup that submissions use.
+
 ## Conversation history
 
 Open **대화 상태** (`/conversations`), then a user's conversation detail to read
@@ -65,6 +70,13 @@ Open `http://127.0.0.1:3729` using Basic authentication (`admin` and
 `ADMIN_PASSWORD`). Wrangler persists local D1, R2 and Durable Object state under
 `.wrangler/`. Browser and edge SSR bundles are built before Wrangler starts.
 Worker builds use `workerd` export conditions, avoiding browser DOM helpers.
+
+The browser script and stylesheet are built into `public/assets/` with
+content-hashed names. Workers Static Assets serves them and `/brand.svg` before
+the Worker runs (`run_worker_first` excludes them), so they skip Smart Placement
+and the editor Durable Object. `public/_headers` caches `/assets/*` immutably.
+These files are public: they contain UI code and copy, never Persona data,
+prompts or credentials. Editor pages and private APIs still require authentication.
 
 The D1 `preview_database_id` is the stable local identifier used before remote
 provisioning. Keep it unchanged: local SQLite files are keyed by database ID,
@@ -386,6 +398,11 @@ they serve other authentication/provider purposes. Public
   profile listing; draft and unreferenced images are also accessible by URL.
   Unpublishing or removing a reference does not revoke an image URL. Originals remain.
   New UUID-keyed uploads use `Cache-Control: public, max-age=31536000, immutable`.
+- Saving an image first stores its 640px-wide JPEG thumbnail at
+  `thumbnails/<uuid>.jpg` (Photon WebAssembly in the Worker; no Cloudflare
+  Images). Admin `<img>` elements show thumbnails; links, identity-sheet
+  references and generation keep the original. An image that cannot be decoded
+  is rejected before anything is stored.
   Local development serves `/images/<key>` publicly from local R2 at the Worker
   edge, matching the production bucket's direct-public-image behavior for drafts,
   unpublished personas and unreferenced originals. This route exists only with
@@ -439,6 +456,28 @@ image requests no longer reach Admin/API. Existing objects may lack cache metada
 the checked production JPEG returned HTTP 200 with `CF-Cache-Status: DYNAMIC` and
 no `Cache-Control`. Configure a Cloudflare cache rule for this image domain if
 edge caching is desired for existing objects; new-upload metadata is not retroactive.
+
+### Thumbnail backfill
+
+Originals stored before thumbnails existed need theirs created once. The
+command lists every original in the bucket, including draft-only images, and
+writes only missing thumbnails; it never changes originals and is safe to rerun.
+
+```sh
+bun run --cwd apps/admin thumbnails             # local .wrangler R2
+bun run --cwd apps/admin thumbnails -- --remote # production persona-images
+```
+
+`--remote` connects only the R2 binding through your Wrangler login. Run it
+with Node 24 activated (`nvm use`); the command uses Node because Bun stalls
+Wrangler's remote-binding connection. Run the backfill
+before deploying the thumbnail release and once more right after, covering images
+generated in between. Until then the editor shows missing thumbnails as broken
+images and treats an identity sheet whose thumbnail fails to load as unreadable.
+The report lists `unreadable` originals that cannot be decoded.
+Structured diagnostics share a run ID and identify failed image operations. If
+storage fails, the command waits for in-flight work before closing its R2 connection;
+rerunning it skips thumbnails already saved.
 
 ### Unreadable editing records
 

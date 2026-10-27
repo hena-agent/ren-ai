@@ -114,7 +114,7 @@ test("blank photo-specific inputs use the default direction separately at one an
 
 test("text-only generation without a provider keeps its editing form and reports configuration diagnostics", async () => {
   const { store } = await fixture();
-  const admin = createAdmin(store, "test-password", "", { log: () => {} });
+  const admin = createAdmin(store, "test-password", { log: () => {} });
   const response = await admin(
     request("/personas", {
       draft: await newToken(admin),

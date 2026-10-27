@@ -126,7 +126,7 @@ test("a last-photo deletion becomes unpublished and restart-without-cache editin
   await store.create(legacy);
   const route = `/personas/${legacy.id}`;
   const page = await (await admin(request(route))).text();
-  const fresh = createAdmin(store, "test-password", "", { generator: subGenerator, log: () => {} });
+  const fresh = createAdmin(store, "test-password", { generator: subGenerator, log: () => {} });
   const deleted = await fresh(
     request(`${route}?style=photo&image=0`, {
       name: legacy.name,

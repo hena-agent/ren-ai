@@ -32,7 +32,7 @@ async function versionFixture() {
     { persona: "" },
   );
   const logs: LogEntry[] = [];
-  const admin = createAdmin(result.store, "test-password", "", {
+  const admin = createAdmin(result.store, "test-password", {
     log: (entry) => logs.push(entry),
   });
   return { ...result, first, admin, logs, path: `/personas/${first.id}` };
@@ -43,7 +43,7 @@ const expected = (persona: typeof databasePersona, initial = initialDocuments) =
 });
 
 test("the storage upgrade preserves existing Persona documents as v1 without changing initials, metadata or photo links", async () => {
-  const { db, store } = await cloudflareFixture(undefined, undefined, async (binding) => {
+  const { db, store } = await cloudflareFixture(undefined, async (binding) => {
     await binding
       .prepare(
         "INSERT INTO personas (id, name, gender, descriptionVersion, markdown, timeZone, language, openingLine, memoryInstruction, published, state, memory, revision, commitId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -432,7 +432,7 @@ test("version navigation is locked during work and unsaved completed image previ
   await seedSheets(store, first.id);
   const portrait = deferred<typeof portraitImage>();
   const model = { ...generator, portrait: () => portrait.promise };
-  const admin = createAdmin(store, "test-password", "", { generator: model, log: () => {} });
+  const admin = createAdmin(store, "test-password", { generator: model, log: () => {} });
   const editor = await (await admin(request(path))).text();
   const queued = await admin(
     queuedRequest(`${path}?style=photo`, {
@@ -450,7 +450,7 @@ test("version navigation is locked during work and unsaved completed image previ
   expect(await (await admin(request(path))).text()).toContain("저장 전 미리보기");
   const convert = deferred<Awaited<ReturnType<typeof generator.convert>>>();
   const entered = deferred<void>();
-  const freshAdmin = createAdmin(store, "test-password", "", {
+  const freshAdmin = createAdmin(store, "test-password", {
     generator: {
       ...generator,
       convert: () => {

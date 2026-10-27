@@ -17,7 +17,6 @@ export interface AdminEnv {
   ADMIN_JURISDICTION?: "us" | "local";
   DB: D1Database;
   IMAGES: ImageBucket;
-  ASSETS: { fetch: (url: string) => Promise<Pick<Response, "ok" | "text">> };
   ADMIN_PASSWORD: string;
   TOKEN_CATALOG: string;
   GEMINI_API_KEY?: string;
@@ -31,18 +30,8 @@ export interface AdminEnv {
 }
 
 export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStorage) {
-  const asset = async (name: string) => {
-    const response = await env.ASSETS.fetch(`https://assets/${name}`);
-    if (!response.ok) throw new Error("Admin static asset is unavailable");
-    return response.text();
-  };
   const editing = editingStorage(storage);
-  const [loaded, css, editorCss, script] = await Promise.all([
-    editing.load(),
-    asset("style.css"),
-    asset("editor.css"),
-    asset("pending.js"),
-  ]);
+  const loaded = await editing.load();
   const wake = () => wakeAlarm(storage, Date.now() + 1);
   const management = managementClient(env.APPLICATION_API_URL ?? "", env.TOKEN_MANAGEMENT ?? "");
   const delivery = catalogDelivery(storage, management.refreshCatalog);
@@ -72,8 +61,7 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
     workerLog,
     "/startup",
   );
-  const handle = createAdmin(store, env.ADMIN_PASSWORD, `${css}\n${editorCss}`, {
-    script,
+  const handle = createAdmin(store, env.ADMIN_PASSWORD, {
     localImages,
     log: workerLog,
     generator,

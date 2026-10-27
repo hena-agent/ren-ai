@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import journal from "../drizzle/meta/_journal.json" with { type: "json" };
 import { Miniflare } from "miniflare";
+import { Schema } from "effect";
 import { afterEach } from "vitest";
 import { decodePersona } from "@ren-ai/personas";
 import { databaseStore } from "../src/database-store.ts";
@@ -10,10 +12,21 @@ import type { AdminEnv } from "../src/cloudflare-admin.ts";
 export const adminBindings = (db: AdminEnv["DB"], bucket: AdminEnv["IMAGES"]): AdminEnv => ({
   DB: db,
   IMAGES: bucket,
-  ASSETS: { fetch: async () => new Response("asset") },
   ADMIN_PASSWORD: "test-password",
   TOKEN_CATALOG: "catalog",
 });
+
+/** The deployed static-asset routing, so Worker tests observe what the edge serves first. */
+async function deployedAssets() {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const config = await readFile(`${root}/wrangler.jsonc`, "utf8");
+  const routes = /"run_worker_first":\s*(\[[^\]]*\])/.exec(config)![1]!;
+  return {
+    directory: `${root}/public`,
+    hasUserWorker: true,
+    runWorkerFirst: [...Schema.decodeUnknownSync(Schema.Array(Schema.String))(JSON.parse(routes))],
+  };
+}
 
 const runtimes: Miniflare[] = [];
 afterEach(async () => {
@@ -28,11 +41,18 @@ export const databasePersona = decodePersona({
   imageUrl: "",
 });
 
+/** A built Worker: its entry source and the WebAssembly modules it imports by filename. */
+export interface WorkerBundle {
+  source: string;
+  wasm: Record<string, Uint8Array<ArrayBuffer>>;
+}
+
 export async function cloudflareFixture(
-  workerSource?: string,
-  assetsSource = "export default {fetch(){return new Response('asset')}}",
+  worker?: WorkerBundle,
   beforeVersions?: (db: Awaited<ReturnType<Miniflare["getD1Database"]>>) => Promise<void>,
+  text: Record<string, string> = {},
 ) {
+  const workerSource = worker?.source;
   const runtime = new Miniflare({
     workers: [
       {
@@ -44,6 +64,7 @@ export async function cloudflareFixture(
             exports: {
               PersonaAdmin: { type: "durable-object" as const, storage: "sqlite" as const },
             },
+            assets: await deployedAssets(),
           }),
           manifest: {
             mainModule: "index.js",
@@ -52,6 +73,12 @@ export async function cloudflareFixture(
                 type: "esm",
                 contents: workerSource ?? "export default {fetch(){return new Response('ok')}}",
               },
+              ...Object.fromEntries(
+                Object.entries(worker?.wasm ?? {}).map(([name, contents]) => [
+                  name,
+                  { type: "wasm" as const, contents },
+                ]),
+              ),
             },
           },
           env: {
@@ -63,22 +90,16 @@ export async function cloudflareFixture(
                 worker: "test",
                 exportName: "PersonaAdmin",
               },
-              ASSETS: { type: "worker" as const, worker: "assets" },
-              ADMIN_PASSWORD: { type: "text" as const, value: "test-password" },
-              ADMIN_JURISDICTION: { type: "text" as const, value: "local" },
-              TOKEN_CATALOG: { type: "text" as const, value: "catalog-test" },
-              GEMINI_API_KEY: { type: "text" as const, value: "" },
+              ...Object.fromEntries(
+                Object.entries({
+                  ADMIN_PASSWORD: "test-password",
+                  ADMIN_JURISDICTION: "local",
+                  TOKEN_CATALOG: "catalog-test",
+                  GEMINI_API_KEY: "",
+                  ...text,
+                }).map(([name, value]) => [name, { type: "text" as const, value }]),
+              ),
             }),
-          },
-        },
-      },
-      {
-        config: {
-          name: "assets",
-          compatibilityDate: "2026-10-11",
-          manifest: {
-            mainModule: "index.js",
-            modules: { "index.js": { type: "esm", contents: assetsSource } },
           },
         },
       },

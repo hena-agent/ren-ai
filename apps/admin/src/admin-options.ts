@@ -7,7 +7,6 @@ import type { SeedingModels } from "./seeding-budget.ts";
 
 export interface AdminOptions {
   generator?: ProfileGenerator;
-  script?: string;
   localImages?: boolean;
   log?: Log;
   persistence?: AdminPersistence;

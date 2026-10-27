@@ -3,6 +3,7 @@ import { character, generator, request, tokenOf } from "../test/fixtures.ts";
 import { savedPreview, subGenerator, preview } from "../test/sub-portraits.ts";
 import { queuedRequest, jobUrl, finishedJob } from "../test/queue.ts";
 import { personaImages } from "@ren-ai/personas";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 
 test("queued registration rejects stale snapshots and external sheet sources before returning a job URL", async () => {
   const portrait = vi.fn<typeof generator.portrait>().mockImplementation(subGenerator.portrait);
@@ -110,7 +111,7 @@ test("an older failed job view displays the newest approved editing photos and j
   const newest = await finishedJob(admin, jobUrl(second));
   const oldView = await (await admin(request(path))).text();
   for (const image of personaImages(preview(newest)))
-    expect(oldView).toContain(`src="${image.imageUrl}"`);
+    expect(oldView).toContain(`src="${thumbnailUrl(image.imageUrl)}"`);
   expect((await admin(request(`${path}/extra`))).status).toBe(404);
   expect((await admin(request(`/prefix${path}`))).status).toBe(404);
 });

@@ -13,10 +13,13 @@
   "main": "dist/worker/entry.js",
   "build": { "command": "bun run build" },
   "no_bundle": true,
+  // Uploads the image codec's WebAssembly module emitted next to the bundle.
+  "find_additional_modules": true,
   "compatibility_date": "2026-10-11",
   "compatibility_flags": ["nodejs_compat"],
   "dev": { "port": 3729 },
-  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  // Browser assets and the icon are public and served at the edge, bypassing Smart Placement.
+  "assets": { "directory": "./public", "run_worker_first": ["/*", "!/assets/*", "!/brand.svg"] },
   "d1_databases": [
     {
       "binding": "DB",

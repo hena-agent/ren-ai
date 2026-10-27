@@ -9,7 +9,7 @@ reports/mutation/
 .env*
 !.env.example
 .wrangler/
-apps/admin/public/pending.js
+apps/admin/public/assets/
 apps/persona-lab/data/
 apps/admin/data/
 apps/api/data/

@@ -14,6 +14,7 @@ import {
 } from "./adjustment-model.ts";
 
 export { adjustmentTool };
+export { appendAdjustmentInstructions } from "./adjustment-instructions.ts";
 const fingerprint = (text: string) => createHash("sha256").update(text).digest("hex");
 const day = 24 * 60 * 60 * 1000;
 
@@ -68,14 +69,13 @@ function reviewContext(
   allowReview: boolean,
 ) {
   const { review } = snapshot.state;
-  return [
-    `<persona-adjustments source="ADJUSTMENTS.md">\n${snapshot.markdown}\n</persona-adjustments>`,
-    ...(allowReview && review?.sessionID === sessionID
-      ? [
-          `<adjustment-review reviewID="${review.id}">\nOccasionally review the recent exchanges visible in THIS Conversation and your current adjustments. Learn both from successful exchanges and recurring difficulties. Preserve your personality, distinctive voice and values. Aim for natural reciprocity AND conversation people want to continue, not message volume or prolonging a goodbye. Silence alone proves nothing. Use review_adjustments once to replace only the concise persona-wide conversation-method adjustments, or markdown: null if no change is warranted. Keep all user details and relationship-specific preferences in Relationship memory, out of both adjustments and reason. Do this internally without sending a review or announcing it to the user; then continue the conversation normally.\n</adjustment-review>`,
-        ]
-      : []),
-  ].join("\n");
+  return {
+    markdown: snapshot.markdown,
+    review:
+      allowReview && review?.sessionID === sessionID
+        ? `<adjustment-review reviewID="${review.id}">\nOccasionally review the recent exchanges visible in THIS Conversation and your current adjustments. Learn both from successful exchanges and recurring difficulties. Preserve your personality, distinctive voice and values. Aim for natural reciprocity AND conversation people want to continue, not message volume or prolonging a goodbye. Silence alone proves nothing. Use review_adjustments once to replace only the concise persona-wide conversation-method adjustments, or markdown: null if no change is warranted. Keep all user details and relationship-specific preferences in Relationship memory, out of both adjustments and reason. Do this internally without sending a review or announcing it to the user; then continue the conversation normally.\n</adjustment-review>`
+        : "",
+  };
 }
 
 export const personaAdjustments = (directory: string, sessionID: string) => ({

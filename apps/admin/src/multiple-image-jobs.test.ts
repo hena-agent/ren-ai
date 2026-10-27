@@ -174,7 +174,7 @@ test("a valid signed editor from before an Admin restart can register and displa
   const { store, route, editing } = await savedPreview();
   const wait = deferred<typeof portraitImage>();
   const portrait = vi.fn<typeof generator.portrait>().mockReturnValueOnce(wait.promise);
-  const admin = createAdmin(store, "test-password", "", {
+  const admin = createAdmin(store, "test-password", {
     generator: { ...subGenerator, portrait },
     log: () => {},
   });

@@ -16,6 +16,9 @@ import type { VersionView } from "./version-page.tsx";
 import { ConversationPage, type ConversationView } from "./conversation-page.tsx";
 import { PortraitManager } from "./portrait-manager.tsx";
 
+/** Content-hashed browser asset paths, defined by `scripts/build.mjs` and Vitest. */
+declare const ADMIN_ASSETS: { script: string; stylesheet: string };
+
 interface EditorFields {
   sheets?: IdentitySheets | undefined;
   documents?: InitialDocuments | undefined;
@@ -356,8 +359,8 @@ export function renderPage({
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>{copy.title}</title>
           <link rel="icon" type="image/svg+xml" href="/brand.svg" />
-          <link rel="stylesheet" href="/style.css" />
-          <script src="/pending.js" type="module" />
+          <link rel="stylesheet" href={ADMIN_ASSETS.stylesheet} />
+          <script src={ADMIN_ASSETS.script} type="module" />
         </head>
         <body>
           <a className="skip-link" href="#main">

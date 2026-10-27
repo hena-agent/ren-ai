@@ -9,6 +9,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { adminRequest } from "./admin-request.ts";
 import { databaseStore } from "./database-store.ts";
 import { catalogHandler } from "./catalog-handler.ts";
+import { thumbnailKey, thumbnailUrl } from "@ren-ai/personas/image-url";
 
 test.each([false, true])(
   "image delivery is direct R2 in production and local R2 in development (local: %s)",
@@ -33,17 +34,20 @@ test.each([false, true])(
     const env: AdminEnv = {
       DB: db,
       IMAGES: bucket,
-      ASSETS: { fetch: async () => new Response("asset") },
       ADMIN_PASSWORD: "test-password",
       TOKEN_CATALOG: "catalog",
       ...(local && { ADMIN_JURISDICTION: "local" }),
     };
     const admin = await cloudflareAdmin(env, storage);
     const editor = await (await admin.fetch(request(`/personas/${databasePersona.id}`))).text();
-    expect(editor).toContain(`src="${imageUrl}"`);
+    expect(editor).toContain(`src="${thumbnailUrl(imageUrl)}"`);
     expect(editor).toContain(`href="${secondary}"`);
     const filename = imageUrl.split("/").at(-1)!;
     expect((await admin.fetch(request(`/images/${filename}`))).status).toBe(local ? 200 : 404);
+    const thumbnail = await admin.fetch(request(`/images/${thumbnailKey(filename)}`));
+    expect([thumbnail.status, thumbnail.headers.get("content-type")]).toEqual(
+      local ? [200, "image/jpeg"] : [404, "text/html; charset=utf-8"],
+    );
     expect((await admin.fetch(request(`/discovery/images/${filename}`))).status).toBe(404);
     const publicRequest = request("/api/personas");
     const publicUrl = local ? new URL(imageUrl, publicRequest.url).href : imageUrl;
@@ -80,7 +84,6 @@ test.each(["empty", "missing"] as const)(
       ADMIN_PASSWORD: "test-password",
       TOKEN_CATALOG: "catalog",
       ...(key === "empty" && { GEMINI_API_KEY: "" }),
-      ASSETS: { fetch: async () => new Response("asset") },
     });
     const admin = await cloudflareAdmin(env, storage);
     await admin.alarm();
@@ -107,12 +110,6 @@ test.each(["empty", "missing"] as const)(
       expect(errors + lifecycle).not.toContain(secret);
     stdout.mockRestore();
     stderr.mockRestore();
-    await expect(
-      cloudflareAdmin(
-        { ...env, ASSETS: { fetch: async () => new Response(null, { status: 404 }) } },
-        storage,
-      ),
-    ).rejects.toThrow("static asset");
   },
 );
 
@@ -166,7 +163,6 @@ test("the Worker connects authenticated management pages without exposing its se
       {
         DB: db,
         IMAGES: bucket,
-        ASSETS: { fetch: async () => new Response("asset") },
         ADMIN_PASSWORD: "test-password",
         TOKEN_CATALOG: "catalog",
         APPLICATION_API_URL: "https://api.renai.im",

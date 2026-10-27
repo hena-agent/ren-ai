@@ -20,6 +20,7 @@ import {
 import copy from "./copy.json";
 import { preview } from "../test/sub-portraits.ts";
 import { ageOn } from "@ren-ai/personas/birth-date";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import { sheet } from "../test/character.ts";
 
 test("the authoring form asks for name and a long description, with no internal configuration fields", async () => {
@@ -77,8 +78,13 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(window.document.querySelector<HTMLInputElement>("#published")?.checked).toBe(false);
     expect(window.document.querySelector('[value="portrait"]')).toBeNull();
     expect(window.document.querySelector("[data-pending]")).not.toBeNull();
-    expect(window.document.querySelector("script")?.getAttribute("src")).toBe("/pending.js");
+    expect(window.document.querySelector("script")?.getAttribute("src")).toBe(
+      "/assets/admin-test.js",
+    );
     expect(window.document.querySelector("script")?.getAttribute("type")).toBe("module");
+    expect(window.document.querySelector('link[rel="stylesheet"]')?.getAttribute("href")).toBe(
+      "/assets/admin-test.css",
+    );
     expect(window.document.querySelector("aside #preview-title")?.textContent).toBe("프로필 사진");
     expect(window.document.querySelector(".editor-name")?.textContent).toBe(copy.new);
     expect(
@@ -89,14 +95,8 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(window.document.querySelector('[role="alert"]')).toBeNull();
     expect(window.document.querySelector(".notice.success")).toBeNull();
     expect(tokenOf(page)).not.toBe("");
-    for (const [route, type, content] of [
-      ["/style.css", "text/css; charset=utf-8", "test styles"],
-      ["/pending.js", "text/javascript; charset=utf-8", "test script"],
-    ]) {
-      const resource = await admin(request(route!));
-      expect(resource.headers.get("content-type")).toBe(type);
-      expect(await resource.text()).toBe(content);
-    }
+    for (const route of ["/style.css", "/pending.js"])
+      expect((await admin(request(route))).status).toBe(404);
   } finally {
     await window.happyDOM.close();
   }
@@ -127,7 +127,7 @@ test("a draft gets an automatic stable ID and derives OpenCode settings from its
   expect(persisted.timeZone).toBe("Asia/Seoul");
   const loaded = await Effect.runPromise(loadPersonas(root));
   expect(loaded.get(id)?.prompt).toBe(persisted.prompt);
-  const reopened = createAdmin(await createPersonaStore(root), "test-password", "");
+  const reopened = createAdmin(await createPersonaStore(root), "test-password");
   const page = await (await reopened(request(`/personas/${id}?saved=1`))).text();
   expect(page).toContain(copy.saved);
   expect(page).toContain(`action="/personas/${id}"`);
@@ -197,7 +197,8 @@ test("generation is a private preview until saving; publishing exposes only the 
   expect(listPage).not.toContain(`${id} / EDIT`);
   const editPage = await (await admin(request(`/personas/${id}`))).text();
   expect(editPage).toContain(`alt="${character.name} ${copy.styles.photo} · 사진 1"`);
-  expect(editPage).toContain(`src="${image}"`);
+  expect(editPage).toContain(`src="${thumbnailUrl(image)}"`);
+  expect(editPage).toContain(`href="${image}"`);
   const editedWindow = new Window();
   try {
     editedWindow.document.body.innerHTML = editPage;

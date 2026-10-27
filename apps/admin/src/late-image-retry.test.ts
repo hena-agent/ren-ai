@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { Window } from "happy-dom";
 import { personaImages } from "@ren-ai/personas";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import { character, generator, request, tokenOf } from "../test/fixtures.ts";
 import { savedPreview, preview, subGenerator } from "../test/sub-portraits.ts";
 import { queuedRequest, jobUrl, finishedJob } from "../test/queue.ts";
@@ -191,7 +192,7 @@ test("a failed regeneration row retries one owned target and preserves the oppos
   try {
     window.document.body.innerHTML = completed;
     expect(window.document.querySelector(".queue-thumbnail img")?.getAttribute("src")).toBe(
-      preview(completed).portraits!.photo!,
+      thumbnailUrl(preview(completed).portraits!.photo!),
     );
   } finally {
     await window.happyDOM.close();
