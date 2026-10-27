@@ -53,6 +53,22 @@ mode remains enabled by default; production's `false` setting is in
 nightly database snapshots; OpenCode's session documents remain in the existing
 OpenCode storage and exports.
 
+Bootstrap permits Discovery reads, including `POST /discovery/profiles` and
+`POST /discovery/reselection/personas`; POST is not itself evidence of a mutation.
+Registration, Selection and other writes return `bootstrap_only` until explicit
+activation. Rejections log `BOOTSTRAP_ONLY` with the request ID and finish discarding
+the incoming body before responding so forwarded uploads cannot outlive the response.
+
+API schema migrations run automatically when the application Durable Object starts;
+`wrangler d1 migrations apply --local` only handles D1 and does not migrate this API.
+Keep the numbered registry in `src/database.ts` aligned with `origin/main` before
+reserving a new number. Startup rejects an applied number whose recorded name differs
+from that registry. Back up stopped local DO state before repairing a draft branch's
+conflicting history; do not reset the whole persistence directory or rewrite deployed
+migration receipts. Confirm both the schema and `/health`'s `database` and
+`applicationRuntime` fields after restarting. Executor and messaging readiness are
+reported independently and can keep the overall health degraded.
+
 Reuse api-app's existing private `TOKEN_MANAGEMENT` secret and
 `API_MSG_URL=https://api-msg.renai.im`. Provision the Mac executor once through
 the [Docker deployment procedure](../../api-msg/ops/README.md): create its Compose project, tunnel and
