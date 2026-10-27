@@ -176,28 +176,43 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
   expect(
     (await app.fetch(new Request("https://api-app.example/management/state/export"))).status,
   ).toBe(401);
-  expect(
-    (await app.fetch(new Request("https://api-app.example/discovery/waitlist", { method: "POST" })))
-      .status,
-  ).toBe(503);
-  expect(
-    (
-      await app.fetch(
-        new Request("https://api-app.example/management/discovery/select", { method: "POST" }),
-      )
-    ).status,
-  ).toBe(503);
-  expect(
-    (
-      await app.fetch(
-        new Request("https://api-app.example/management/discovery/start", { method: "POST" }),
-      )
-    ).status,
-  ).toBe(503);
-  const unrecognizedWrite = await app.fetch(
-    new Request("https://api-app.example/unknown", { method: "POST" }),
-  );
-  expect(unrecognizedWrite.status).toBe(503);
+  const completeBody = vi.fn<() => void>();
+  const rejectedBody = new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      controller.enqueue(new TextEncoder().encode("private registration"));
+      completeBody.mockImplementation(() => controller.close());
+    },
+  });
+  const diagnostics = captureDiagnostics();
+  let responseSent = false;
+  const pending = app
+    .fetch(
+      new Request("https://api-app.example/discovery/waitlist", {
+        method: "POST",
+        body: rejectedBody,
+        duplex: "half",
+      }),
+    )
+    .then((response) => {
+      responseSent = true;
+      return response;
+    })
+    .finally(diagnostics.restore);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(responseSent).toBe(false);
+  completeBody();
+  const rejected = await pending;
+  expect(rejected.status).toBe(503);
+  expect(await rejected.json()).toEqual({ error: "bootstrap_only" });
+  expect(diagnostics.logs.join("\n")).toContain('"code":"BOOTSTRAP_ONLY"');
+  expect(diagnostics.logs.join("\n")).toContain(rejected.headers.get("x-request-id"));
+  expect(diagnostics.logs.join("\n")).not.toContain("private registration");
+  for (const path of ["/management/discovery/select", "/management/discovery/start", "/unknown"]) {
+    const response = await app.fetch(
+      new Request(`https://api-app.example${path}`, { method: "POST" }),
+    );
+    expect(response.status).toBe(503);
+  }
   expect(
     await (
       await app.fetch(new Request("https://api-app.example/discovery/personas?locale=ko"))
@@ -217,7 +232,18 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
       )
     ).text(),
   ).toBe("registry");
-  expect(controls.storeHandler).toHaveBeenCalledTimes(3);
+  for (const path of ["/discovery/profiles", "/discovery/reselection/personas"])
+    expect(
+      (
+        await app.fetch(
+          new Request(`https://api-app.example${path}`, {
+            method: "POST",
+            body: "{}",
+          }),
+        )
+      ).status,
+    ).toBe(200);
+  expect(controls.storeHandler).toHaveBeenCalledTimes(5);
   expect((await app.fetch(new Request("https://api-app.example/rpc"))).status).toBe(503);
   expect((await app.fetch(new Request("https://api-app.example/operator/users"))).status).toBe(503);
   expect(

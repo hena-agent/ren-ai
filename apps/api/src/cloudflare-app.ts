@@ -23,8 +23,12 @@ export interface CloudflareApplication {
   readonly tick: (requestId?: string) => Promise<void>;
 }
 
-const isWriteRequest = (request: Request) =>
-  request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS";
+const isWriteRequest = (request: Request, path: string) =>
+  !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
+  !(
+    request.method === "POST" &&
+    ["/discovery/profiles", "/discovery/reselection/personas"].includes(path)
+  );
 
 const health = async (
   request: Request,
@@ -119,11 +123,25 @@ const health = async (
   );
 };
 
-const bootstrapResponse = () =>
-  Response.json(
+const bootstrapResponse = async (request: Request) => {
+  const started = performance.now();
+  // Finish the forwarded upload before responding; discard chunks without buffering private input.
+  await request.body?.pipeTo(new WritableStream());
+  contactLog({
+    requestId: request.headers.get("X-Operation-ID")!,
+    operation: "api-app.bootstrap",
+    stage: "request.guard",
+    outcome: "failed",
+    level: "warn",
+    code: "BOOTSTRAP_ONLY",
+    status: 503,
+    durationMs: performance.now() - started,
+  });
+  return Response.json(
     { error: "bootstrap_only" },
     { status: 503, headers: { "Cache-Control": "no-store" } },
   );
+};
 
 export const createCloudflareApplication = async (
   storage: DurableObjectStorage,
@@ -174,7 +192,8 @@ export const createCloudflareApplication = async (
               configuration.applicationStore.managementToken,
               configuration.bootstrapOnly,
             );
-          if (configuration.bootstrapOnly && isWriteRequest(request)) return bootstrapResponse();
+          if (configuration.bootstrapOnly && isWriteRequest(request, path))
+            return bootstrapResponse(request);
           if (path === "/management/intake/watch" || path === "/management/intake/wake")
             return intake(request);
           if (
@@ -182,7 +201,7 @@ export const createCloudflareApplication = async (
             path.startsWith("/operator/") ||
             path === "/management/catalog/refresh"
           ) {
-            if (configuration.bootstrapOnly) return bootstrapResponse();
+            if (configuration.bootstrapOnly) return bootstrapResponse(request);
             return (await execution()).fetch(request);
           }
           return store.handler(request);
