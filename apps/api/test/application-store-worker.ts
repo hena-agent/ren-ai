@@ -112,7 +112,15 @@ export class Registry extends DurableObject<Environment> {
       this.failActivity = params.get("activity") === "fail";
       const now = Date.now;
       Date.now = () => Number(params.get("at"));
+      let reportDue: number | undefined;
       try {
+        const [report] = await store.run(
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            return yield* sql<{ due: number }>`SELECT due FROM metrics_report WHERE id = 1`;
+          }),
+        );
+        reportDue = report!.due;
         if (params.has("alerts")) {
           await store.run(
             Effect.gen(function* () {
@@ -129,7 +137,10 @@ export class Registry extends DurableObject<Environment> {
         Date.now = now;
       }
       return Response.json(this.posts.splice(0), {
-        headers: { "X-Activity-Reads": String(this.activityReads) },
+        headers: {
+          "X-Activity-Reads": String(this.activityReads),
+          "X-Metrics-Report-Due": String(reportDue),
+        },
       });
     }
     if (path === "/__fixture/verify-imessage") {

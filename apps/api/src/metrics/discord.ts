@@ -17,7 +17,7 @@ export const discordSchema = Effect.gen(function* () {
   yield* sql`CREATE INDEX discord_due ON discord_outbox(due, id)`;
   yield* sql`CREATE INDEX discord_channel_due ON discord_outbox(channel, due, id)`;
   yield* sql`CREATE TABLE metrics_report (id INTEGER PRIMARY KEY CHECK(id=1), due INTEGER NOT NULL)`;
-  yield* sql`INSERT INTO metrics_report VALUES (1, CAST(unixepoch('now', '+9 hours', 'start of day') * 1000 AS INTEGER))`;
+  yield* sql`INSERT INTO metrics_report VALUES (1, CAST(unixepoch('now', '+9 hours', 'start of day', '-9 hours') * 1000 AS INTEGER))`;
   yield* sql`INSERT INTO application_work(name, due) SELECT 'metrics-report', due FROM metrics_report`;
 });
 
