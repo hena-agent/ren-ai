@@ -29,8 +29,9 @@ export const saveBrowseSnapshot = (profiles: readonly PublicPersona[], now: numb
       yield* sql`SELECT revision FROM browse_snapshot WHERE revision = ${revision} AND expires_at >= ${now}`;
     if (!existing) {
       yield* sql`INSERT OR REPLACE INTO browse_snapshot VALUES (${revision}, ${retainedUntil})`;
-      for (let offset = 0; offset < metadata.length; offset += 50) {
-        const rows = metadata.slice(offset, offset + 50).map((entry) => ({
+      // Six bindings per row: 16 rows stay within SQLite Durable Objects' 100-parameter limit.
+      for (let offset = 0; offset < metadata.length; offset += 16) {
+        const rows = metadata.slice(offset, offset + 16).map((entry) => ({
           ...entry,
           revision,
           random_key: hash(entry.id),
