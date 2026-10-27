@@ -87,8 +87,7 @@ html {
   box-shadow: 0 12px 40px #20242b06;
 }
 .phone-field,
-input:not([type="checkbox"]),
-.contact-profile select {
+input:not([type="checkbox"]) {
   transition:
     border-color var(--motion-fast),
     box-shadow var(--motion-fast);

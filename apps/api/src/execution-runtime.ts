@@ -56,12 +56,12 @@ export async function createExecutionRuntime(
   const messages = await run(
     remoteMessages({ url: execution.imsgRpcUrl, token: execution.managementToken }),
   );
-  const notifications = await run(waitlistNotifications(messages));
   const health = await run(createExecutionHealth(execution, fetcher, messages.probe()));
   const catalog = catalogClient(
     { url: bindings.PERSONA_CATALOG_URL, token: bindings.TOKEN_CATALOG },
     fetcher,
   );
+  const notifications = await run(waitlistNotifications(messages, contactLog, catalog.publicList));
   let callback: ReturnType<typeof applicationGateway> | undefined;
   let operator: ReturnType<typeof operatorHandler> | undefined;
   const remoteConfiguration = {

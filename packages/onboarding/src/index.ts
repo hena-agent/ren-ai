@@ -13,6 +13,8 @@ export {
 } from "./metrics.ts";
 export { MobileNumber } from "./shapes.ts";
 export { StartingRelationship } from "./relationship.ts";
+export { InvitationAccount, InvitationGrant, InvitationLookup } from "./invitations.ts";
+export { InvitationCode, InvitationCreate, InvitationTicket } from "./invitation-code.ts";
 export { ConversationMessages } from "./conversation-messages.ts";
 export {
   BrowseQuery,
@@ -32,6 +34,7 @@ export {
 } from "./conversations.ts";
 export {
   ContactState,
+  InvitationSettings,
   ContactEntry,
   ContactSnapshot,
   SelectContacts,

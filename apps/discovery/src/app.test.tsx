@@ -65,7 +65,7 @@ test.each([undefined, "harin"])(
     fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
       target: { value: "01012345678" },
     });
-    const name = screen.getByLabelText<HTMLInputElement>("이름 (필수)");
+    const name = screen.getByRole<HTMLInputElement>("textbox", { name: "이름" });
     fireEvent.change(name, { target: { value: "그대로 둘 이름" } });
     fireEvent.click(screen.getByRole("checkbox"));
     act(() => verified("verified"));
@@ -80,7 +80,7 @@ test.each([undefined, "harin"])(
     expect(screen.getByRole("heading", { name: "지우" })).toBeTruthy();
     choose(true);
     fireEvent.click(screen.getByRole("button", { name: "연락받기" }));
-    expect(screen.getByLabelText("이름 (필수)")).toBe(name);
+    expect(screen.getByRole("textbox", { name: "이름" })).toBe(name);
     expect(name.value).toBe("그대로 둘 이름");
     expect(screen.getByRole<HTMLInputElement>("textbox", { name: "휴대전화 번호" }).value).toBe(
       "010-1234-5678",
@@ -95,9 +95,14 @@ test.each([undefined, "harin"])(
   },
 );
 
-test.each(["counted", "excluded", "blocked"])(
-  "a visitor joins the waitlist with browser Metrics %s",
-  async (metrics) => {
+test.each(
+  ["counted", "excluded", "blocked"].flatMap((metrics) =>
+    [undefined, "c".repeat(64)].map((invitation) => ({ metrics, invitation })),
+  ),
+)(
+  "a visitor registers with browser Metrics $metrics and invitation $invitation",
+  async ({ metrics, invitation }) => {
+    if (invitation) window.history.replaceState(null, "", `/explore#invite=${invitation}`);
     if (metrics === "excluded") localStorage.setItem("ren-ai.metrics.off", "1");
     if (metrics === "blocked")
       vi.stubGlobal("sessionStorage", {
@@ -118,10 +123,12 @@ test.each(["counted", "excluded", "blocked"])(
       target: { value: "010-1234-5678" },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
-    fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
     act(() => verified("human"));
     fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
-    await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
+    await screen.findByRole("heading", {
+      name: invitation ? "초대 신청을 받았어요." : "대기 등록이 완료됐어요.",
+    });
     expect(join).toHaveBeenCalledWith({
       handle: "+821012345678",
       locale: "ko",
@@ -130,19 +137,32 @@ test.each(["counted", "excluded", "blocked"])(
       imageStyle: "photo",
       privacyNoticeVersion: discoveryNotice.version,
       ...(metrics === "counted" && {
-        source: { entry: "home", referrer: "", source: "", medium: "", campaign: "" },
+        source: {
+          entry: invitation ? "explore" : "home",
+          referrer: "",
+          source: "",
+          medium: "",
+          campaign: "",
+        },
         visitCountry: "KR",
       }),
       likedPersonaIDs: ["harin"],
       turnstileToken: "human",
       name: "민수",
+      ...(invitation && { invitationToken: invitation }),
     });
     expect(
-      screen.getByText("준비되는 대로, 좋아한 페르소나 중 한 명이 연락할 거예요."),
+      screen.getByText(
+        invitation
+          ? /선정되면 5분~1시간 뒤 첫 연락을 예약해요/
+          : "준비되는 대로, 좋아한 페르소나 중 한 명이 연락할 거예요.",
+      ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
+        invitation
+          ? /같은 초대 링크에서 다시 신청할 수 있어요/
+          : "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
       ),
     ).toBeTruthy();
   },
@@ -161,7 +181,7 @@ test("an existing user is directed to the assigned conversation instead of a new
   });
   fireEvent.click(screen.getByRole("checkbox"));
   act(() => verified("active"));
-  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
   fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
   await screen.findByRole("heading", { name: "이미 대화가 시작된 연락처예요." });
   expect(screen.getByText("iMessage에서 기존 페르소나와 대화를 이어가 주세요.")).toBeTruthy();

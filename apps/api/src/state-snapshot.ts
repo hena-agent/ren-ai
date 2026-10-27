@@ -120,7 +120,7 @@ export const importApplicationState = (snapshot: StateSnapshot) =>
       // Only the untouched migration seed is empty state; a changed operator setting blocks import.
       yield* sql`DELETE FROM photo_setting WHERE id = 1 AND enabled = 1`;
       yield* sql`DELETE FROM discord_delivery WHERE state IN ('unconfigured', 'accepting') AND pending = 0 AND cooldown = 0`;
-      yield* sql`DELETE FROM metrics_report WHERE id = 1 AND due = (SELECT CAST((at + 32400000) / 86400000 AS INTEGER) * 86400000 FROM metric_epoch) AND EXISTS (SELECT 1 FROM application_work WHERE name = 'metrics-report' AND generation = 0)`;
+      yield* sql`DELETE FROM metrics_report WHERE id = 1 AND due = (SELECT CAST((at + 32400000) / 86400000 AS INTEGER) * 86400000 - 32400000 FROM metric_epoch) AND EXISTS (SELECT 1 FROM application_work WHERE name = 'metrics-report' AND generation = 0)`;
       yield* sql`DELETE FROM application_work WHERE name = 'metrics-report' AND NOT EXISTS (SELECT 1 FROM metrics_report)`;
       yield* sql`DELETE FROM metric_epoch WHERE NOT EXISTS (SELECT 1 FROM metric_total) AND NOT EXISTS (SELECT 1 FROM usage_entry)`;
       for (const table of target) {

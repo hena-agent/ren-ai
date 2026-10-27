@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { PublicLanguages } from "@ren-ai/personas/languages";
+import { InvitationTicket } from "./invitation-code.ts";
 
 const identifier = Schema.String.check(
   Schema.isPattern(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/),
@@ -20,6 +21,7 @@ export const ContactState = Schema.Literals([
   "unreachable",
 ]);
 const candidate = Schema.Struct({ id: Schema.String, name: Schema.String });
+export const InvitationSettings = Schema.Struct({ enabled: Schema.Boolean });
 export const ContactEntry = Schema.Struct({
   id: identifier,
   handle: Schema.String,
@@ -41,6 +43,17 @@ export const ContactEntry = Schema.Struct({
   scheduledAt: Schema.NullOr(Schema.Number),
   requestId: Schema.NullOr(Schema.String),
   testHandle: Schema.optionalKey(Schema.Boolean),
+  invitations: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        token: InvitationTicket.fields.token,
+        redeemedAt: InvitationTicket.fields.redeemedAt,
+        maxUses: InvitationTicket.fields.maxUses,
+        grantCount: InvitationTicket.fields.grantCount,
+        usedCount: InvitationTicket.fields.usedCount,
+      }),
+    ),
+  ),
   imessage: Schema.optionalKey(
     Schema.Struct({
       status: Schema.Literals(["available", "unavailable", "failed"]),
@@ -57,6 +70,8 @@ export const ContactEntry = Schema.Struct({
 export const ContactSnapshot = Schema.Struct({
   entries: Schema.Array(ContactEntry),
   eligibleCount: Schema.Number,
+  invitationSettings: Schema.optionalKey(InvitationSettings),
+  invitationCodes: Schema.optionalKey(Schema.Array(InvitationTicket)),
 });
 export const SelectContacts = Schema.Struct({
   requestId: identifier,

@@ -1,12 +1,53 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { Effect, Result, Schema } from "effect";
-import { SelectContacts, StartContact } from "@ren-ai/onboarding";
+import {
+  InvitationSettings,
+  InvitationGrant,
+  InvitationLookup,
+  InvitationCreate,
+  SelectContacts,
+  StartContact,
+} from "@ren-ai/onboarding";
 import type { contacts } from "./contacts.ts";
 import { contactCause, contactLog } from "./diagnostics.ts";
 import type { ContactLog, ContactDiagnostic } from "./diagnostics.ts";
 import { SelectionConflict } from "./selection.ts";
 
 const digest = (text: string) => createHash("sha256").update(text).digest();
+const parentTrace = (request: Request) => {
+  const parent = request.headers.get("x-operation-id");
+  return parent && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(parent)
+    ? { operationId: parent }
+    : {};
+};
+type InvitationCommit = <I, A extends object, E extends Error>(
+  name: "invitations" | "invitation_grant" | "invitation_lookup" | "invitation_create",
+  schema: Schema.Decoder<I>,
+  run: (input: I) => Effect.Effect<A | null, E>,
+) => Promise<Response>;
+
+function invitationRequest(
+  path: string,
+  store: Effect.Success<ReturnType<typeof contacts>>,
+  requestId: string,
+  commit: InvitationCommit,
+) {
+  if (path === "/management/discovery/invitations")
+    return commit("invitations", InvitationSettings, (input) =>
+      store.configureInvitations(input.enabled).pipe(Effect.as(input)),
+    );
+  if (path === "/management/discovery/invitations/grant")
+    return commit("invitation_grant", InvitationGrant, (input) =>
+      store.grantInvitations(input, requestId),
+    );
+  if (path === "/management/discovery/invitations/lookup")
+    return commit("invitation_lookup", InvitationLookup, (input) =>
+      store.invitationAccount(input.handle),
+    );
+  if (path === "/management/discovery/invitations/create")
+    return commit("invitation_create", InvitationCreate, store.createInvitation);
+  return undefined;
+}
 export const contactManagement =
   (
     store: Effect.Success<ReturnType<typeof contacts>>,
@@ -17,11 +58,7 @@ export const contactManagement =
     const requestId = randomUUID();
     const started = performance.now();
     const operation = "discovery.management";
-    const parent = request.headers.get("x-operation-id");
-    const trace =
-      parent && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(parent)
-        ? { operationId: parent }
-        : {};
+    const trace = parentTrace(request);
     let stage = "authorization";
     const respond = (body: object, status: number) => {
       const event: ContactDiagnostic = {
@@ -57,7 +94,13 @@ export const contactManagement =
     };
     /** Selection and test starts commit the same way; a null result is a refused start. */
     const commit = async <I, A extends object, E extends Error>(
-      name: "selection" | "start",
+      name:
+        | "selection"
+        | "start"
+        | "invitations"
+        | "invitation_grant"
+        | "invitation_lookup"
+        | "invitation_create",
       schema: Schema.Decoder<I>,
       run: (input: I) => Effect.Effect<A | null, E>,
     ) => {
@@ -95,6 +138,8 @@ export const contactManagement =
         : respond(result.success, 200);
     }
     if (request.method !== "POST") return failure("not_found", 404);
+    const invitation = invitationRequest(path, store, requestId, commit);
+    if (invitation) return invitation;
     if (path === "/management/discovery/select")
       return commit("selection", SelectContacts, (input) => store.select(input, requestId));
     if (

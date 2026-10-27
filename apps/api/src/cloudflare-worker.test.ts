@@ -275,6 +275,23 @@ test("compiled Worker serves safely in bootstrap and activates persisted registr
     const health = await send(runtime, "/health");
     expect(await health.json()).toEqual(readyApplicationHealth);
     expect((await send(runtime, "/discovery/personas?locale=ko")).status).toBe(200);
+    const profiles = await send(runtime, "/discovery/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: ["sora"] }),
+    });
+    expect(profiles.status).toBe(200);
+    expect(await profiles.json()).toMatchObject([{ id: "sora", name: "Sora" }]);
+    const reselection = await send(runtime, "/discovery/reselection/personas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale: "ko", reselectionToken: "a".repeat(64) }),
+    });
+    expect(reselection.status).toBe(400);
+    expect(await reselection.json()).toBe("reselection");
+    expect((await send(runtime, "/discovery/profiles", { method: "PUT", body: "{}" })).status).toBe(
+      503,
+    );
     expect(
       (
         await send(runtime, "/discovery/waitlist", {

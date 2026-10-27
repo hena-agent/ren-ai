@@ -6,7 +6,7 @@ import {
   MobileNumber,
   type DiscoveryNotices,
 } from "@ren-ai/onboarding";
-import { ContactProfile } from "./contact-profile.tsx";
+import { ContactName, ContactProfile } from "./contact-profile.tsx";
 import { Turnstile } from "@ren-ai/onboarding/turnstile";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
@@ -20,6 +20,7 @@ import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
 import { RelationshipSelect } from "./relationship-select.tsx";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 import type { ImageStyle } from "./image-style.ts";
+import { invitationToken } from "./public-routing.ts";
 import { visitContext } from "./activity.ts";
 
 const isMobileNumber = Schema.is(MobileNumber);
@@ -74,6 +75,7 @@ export function JoinForm({
     return () => clearTimeout(timer);
   }, [failure]);
   const reselecting = Boolean(reselection().reselectionToken);
+  const [invitation, setInvitation] = useState(() => invitationToken(window.location.hash) ?? "");
   const submitting = useRef(false);
   const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
   const invalid = contact.touched && !handle;
@@ -114,7 +116,16 @@ export function JoinForm({
           ...(age && { age: Number(age) }),
           ...(gender && { gender }),
           ...reselection(),
+          ...(invitation && { invitationToken: invitation }),
         }),
+      );
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      if (invitation) fragment.set("invite", invitation);
+      else fragment.delete("invite");
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}${fragment.size ? `#${fragment}` : ""}`,
       );
       onSuccess(answer.status);
     });
@@ -158,6 +169,7 @@ export function JoinForm({
       <p className="form-step">{copy.joinStep}</p>
       <h1 id="join-title">{reselecting ? copy.reselectionTitle : copy.joinTitle}</h1>
       <p className="join-intro">{reselecting ? copy.reselectionIntro : copy.joinIntro}</p>
+      {invitation && <p className="field-hint">{copy.invitationIntro}</p>}
       <ul className="liked-list" aria-label={copy.selected}>
         {liked.map((persona) => (
           <li key={persona.id}>
@@ -167,8 +179,14 @@ export function JoinForm({
         ))}
       </ul>
       <form onSubmit={(event) => void submit(event)}>
+        <ContactName disabled={pending} />
         <div className="contact-fields">
-          <label htmlFor="handle">{copy.handle}</label>
+          <label htmlFor="handle">
+            <span className="field-requirement" aria-hidden="true">
+              *
+            </span>{" "}
+            {copy.handle}
+          </label>
           <PhoneField
             id="handle"
             describedBy={invalid ? "handle-error" : "handle-hint"}
@@ -210,6 +228,27 @@ export function JoinForm({
           />
           <p id="conversation-language-hint" className="field-hint">
             {copy.conversationLanguageHint}
+          </p>
+        </div>
+        <div className="contact-fields">
+          <label htmlFor="invitation-code">
+            {copy.invitationCode} <span className="field-requirement">{copy.profileOptional}</span>
+          </label>
+          <input
+            id="invitation-code"
+            name="invitationCode"
+            value={invitation}
+            onChange={(event) => setInvitation(event.target.value.trim())}
+            maxLength={64}
+            pattern="[A-Za-z0-9_\-]+"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-describedby="invitation-code-hint"
+            disabled={pending}
+          />
+          <p id="invitation-code-hint" className="field-hint">
+            {copy.invitationCodeHint}
           </p>
         </div>
         <p className="ai-notice">{discoveryNotice.aiNotice}</p>

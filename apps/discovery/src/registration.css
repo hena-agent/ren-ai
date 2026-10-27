@@ -67,19 +67,12 @@
   font-size: 13px;
   font-weight: 600;
 }
-.contact-profile {
-  margin: 24px 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
+.field-requirement {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
 }
-.contact-profile legend {
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 600;
-}
-input:not([type="checkbox"]):not([type="radio"]),
-.contact-profile select {
+input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
   min-height: 52px;
   padding: 12px 14px;

@@ -7,6 +7,7 @@ import type { ContactView } from "./contact-page.tsx";
 import { html } from "./html-response.ts";
 import { renderPage } from "./page.tsx";
 import { GenerationError, operation, reportFailure, requestId } from "./logging.ts";
+import { submitInvitations } from "./invitation-form.ts";
 
 const select = (form: FormData, view: ContactView, client: ManagementClient) => {
   let input: typeof SelectContacts.Type;
@@ -60,6 +61,27 @@ const start = (form: FormData, client: ManagementClient) => {
   return operation("management.start", {}, () => client.start(input));
 };
 
+async function submit(form: FormData, view: ContactView, client: ManagementClient) {
+  if (
+    form.get("action") === "invitation-lookup" ||
+    form.get("action") === "invitation-grant" ||
+    form.get("action") === "invitation-create"
+  )
+    return submitInvitations(form, view.invitation!, client);
+  if (form.get("action") === "invitations") {
+    const value = form.get("enabled");
+    if (value !== "true" && value !== "false")
+      throw new PersonaError("invalid", "초대장 지급 설정을 다시 선택해 주세요.");
+    await operation("management.invitations", {}, () =>
+      client.configureInvitations({ enabled: value === "true" }),
+    );
+    return;
+  }
+  view.selection = await (form.get("action") === "start"
+    ? start(form, client)
+    : select(form, view, client));
+}
+
 export async function contactRoutes(request: Request, client?: ManagementClient) {
   const url = new URL(request.url);
   const view: ContactView = {
@@ -70,6 +92,14 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
     registrationIDs: [],
     assignments: [],
     count: 1,
+    invitation: {
+      requestId: randomUUID(),
+      handle: "",
+      locale: "ko",
+      kind: "basic",
+      attempted: false,
+      creation: { requestId: randomUUID(), maxUses: 1, grantCount: 2, attempted: false },
+    },
   };
   const render = (error = "", status = 200) =>
     html(renderPage({ personas: [], contactView: view, error }), status);
@@ -81,10 +111,7 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
     if (request.method === "POST") {
       if (url.pathname !== "/waitlist" || request.headers.get("origin") !== url.origin)
         throw new PersonaError("invalid", "이 관리 화면에서 제출한 요청만 허용됩니다.");
-      const form = await request.formData();
-      view.selection = await (form.get("action") === "start"
-        ? start(form, client)
-        : select(form, view, client));
+      await submit(await request.formData(), view, client);
     }
     view.snapshot = await operation("management.list", {}, client.list);
     const registrationID = url.searchParams.get("languages");

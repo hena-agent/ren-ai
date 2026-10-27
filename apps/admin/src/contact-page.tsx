@@ -7,6 +7,8 @@ import type {
   SelectContacts,
 } from "@ren-ai/onboarding";
 import { LanguageReadout } from "./language-panel.tsx";
+import { InvitationPanel, type InvitationView } from "./invitation-panel.tsx";
+import { InvitationCodes, invitationAvailable } from "./invitation-codes.tsx";
 
 export interface ContactView {
   tab: "waitlist" | "first-contacts";
@@ -21,6 +23,7 @@ export interface ContactView {
   snapshot?: typeof ContactSnapshot.Type;
   selection?: typeof ContactSelection.Type;
   languages?: typeof ConversationLanguages.Type;
+  invitation?: InvitationView;
 }
 const labels: Record<typeof ContactState.Type, string> = {
   waiting: "대기 중",
@@ -135,6 +138,20 @@ function Rows({
               <th scope="row">
                 <span className="contact-handle">{entry.handle}</span>
                 {entry.testHandle && <small>테스트 연락처</small>}
+                {entry.invitations?.map((invitation, index) => (
+                  <small key={invitation.token}>
+                    {invitationAvailable(invitation) ? (
+                      <a href={`https://renai.im/explore#invite=${invitation.token}`}>
+                        초대장 {index + 1} ·{" "}
+                        {invitation.usedCount === undefined
+                          ? "미사용"
+                          : `${invitation.usedCount}/${invitation.maxUses}명 사용 · 선정자에게 ${invitation.grantCount}개 지급`}
+                      </a>
+                    ) : (
+                      `초대장 ${index + 1} · 사용 완료`
+                    )}
+                  </small>
+                ))}
                 <small>{time(entry.createdAt)}</small>
                 {entry.notification && <small>{notificationLabels[entry.notification]}</small>}
                 {entry.state === "active" && !entry.relationshipEnd && (
@@ -249,6 +266,34 @@ function DirectSelection({ view }: { view: ContactView }) {
     </form>
   );
 }
+function InvitationControl({ view }: { view: ContactView }) {
+  const settings = view.snapshot?.invitationSettings;
+  if (view.tab !== "waitlist") return null;
+  return (
+    <>
+      {settings && (
+        <section aria-label="초대장 지급 설정">
+          <h2>초대장 지급 {settings.enabled ? "ON" : "OFF"}</h2>
+          <p className="hint">
+            켜면 이후 최초 선정되는 유저에게 초대 코드의 지급 수만큼 새 코드를 지급하고 두 설정을
+            상속합니다. 코드 없는 선정은 기본 2장입니다. 꺼도 기존 코드는 사용할 수 있으며 수동
+            발급도 가능합니다. 이전 선정자에게 소급 지급하지 않습니다.
+          </p>
+          <form action="/waitlist" method="post" className="contact-selection">
+            <input type="hidden" name="action" value="invitations" />
+            <input type="hidden" name="enabled" value={String(!settings.enabled)} />
+            <button type="submit" className="secondary">
+              초대장 지급 {settings.enabled ? "끄기" : "켜기"}
+            </button>
+          </form>
+        </section>
+      )}
+      <InvitationCodes view={view.invitation} codes={view.snapshot?.invitationCodes} />
+      <InvitationPanel view={view.invitation} />
+    </>
+  );
+}
+
 export function ContactPage({ view }: { view: ContactView }) {
   const entries = view.snapshot?.entries.filter(
     (row) => view.tab === "waitlist" || row.state !== "waiting",
@@ -278,6 +323,7 @@ export function ContactPage({ view }: { view: ContactView }) {
         )}
         <a href={view.tab === "waitlist" ? "/waitlist" : "/first-contacts"}>상태 새로고침</a>
       </div>
+      <InvitationControl view={view} />
       {view.tab === "waitlist" && (
         <div className="contact-actions">
           <form

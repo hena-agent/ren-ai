@@ -7,7 +7,7 @@ import { LanguageSelect } from "./language-select.tsx";
 import type { Locale } from "./locale.tsx";
 import { ProfileLanguages } from "./profile-languages.tsx";
 import type { DiscoveryClient } from "./client.ts";
-import { choose, selectLanguage } from "../test/choose.ts";
+import { choose, selectDropdown } from "../test/choose.ts";
 import { JoinForm } from "./join-form.tsx";
 
 afterEach(() => {
@@ -105,22 +105,22 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
     target: { value: "01012345678" },
   });
-  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
-  fireEvent.change(screen.getByLabelText("만 나이 (선택)"), { target: { value: "28" } });
-  fireEvent.change(screen.getByLabelText("성별 (선택)"), { target: { value: "male" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
+  fireEvent.change(screen.getByLabelText("나이 (선택)"), { target: { value: "28" } });
+  selectDropdown("성별 (선택)", "남성");
   fireEvent.click(screen.getByRole("checkbox"));
-  selectLanguage("대화하고 싶은 언어", "日本語");
+  selectDropdown("대화하고 싶은 언어", "日本語");
   fireEvent.click(screen.getByRole("radio", { name: /^친구/ }));
-  selectLanguage("화면 언어", "English");
+  selectDropdown("화면 언어", "English");
   expect(document.documentElement.lang).toBe("en");
   expect(screen.getByRole<HTMLInputElement>("radio", { name: /^Friends/ }).checked).toBe(true);
   expect(localStorage.getItem("renai.locale")).toBe("en");
   expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Mobile number" }).value).toBe(
     "010-1234-5678",
   );
-  expect(screen.getByLabelText<HTMLInputElement>("Name (required)").value).toBe("민수");
-  expect(screen.getByLabelText<HTMLInputElement>("Age in years (optional)").value).toBe("28");
-  expect(screen.getByLabelText<HTMLSelectElement>("Gender (optional)").value).toBe("male");
+  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Name" }).value).toBe("민수");
+  expect(screen.getByLabelText<HTMLInputElement>("Age (optional)").value).toBe("28");
+  expect(screen.getByRole("combobox", { name: "Gender (optional)" }).textContent).toContain("Male");
   const country = screen.getByRole<HTMLSelectElement>("combobox", { name: "Country code" });
   expect(country.value).toBe("KR");
   expect(within(country).getByRole("option", { name: "🇰🇷 South Korea +82" })).toBeTruthy();
@@ -130,7 +130,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
   expect(screen.getByText(discoveryNotices.en.aiNotice)).toBeTruthy();
   fireEvent.click(screen.getByRole("checkbox"));
-  selectLanguage("Display language", "日本語");
+  selectDropdown("Display language", "日本語");
   expect(screen.getByText(discoveryNotices.ja.aiNotice)).toBeTruthy();
   expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
   fireEvent.click(screen.getByRole("checkbox"));
@@ -187,13 +187,13 @@ test("blocked storage retains the chosen display language", () => {
       <LocalePicker />
     </LocaleProvider>,
   );
-  selectLanguage("화면 언어", "English");
+  selectDropdown("화면 언어", "English");
   expect(document.documentElement.lang).toBe("en");
   expect(screen.getByRole("status").textContent).toContain("could not be saved");
   view.unmount();
   render(<LocalePicker />);
   expect(screen.getByRole("combobox", { name: "화면 언어" }).textContent).toContain("한국어");
-  selectLanguage("화면 언어", "日本語");
+  selectDropdown("화면 언어", "日本語");
   expect(screen.getByRole("combobox", { name: "화면 언어" }).textContent).toContain("한국어");
 });
 
@@ -206,7 +206,7 @@ test("a disabled language control cannot open or change its value, and selection
   expect(screen.queryByRole("listbox")).toBeNull();
   expect(changeLanguage).not.toHaveBeenCalled();
   view.rerender(<LanguageSelect value="ko" label="Language" onValueChange={changeLanguage} />);
-  selectLanguage("Language", "English");
+  selectDropdown("Language", "English");
   expect(changeLanguage).toHaveBeenCalledWith("en");
 });
 
@@ -223,11 +223,11 @@ test("conversation language choices are explicit and consent can be withdrawn", 
       onSuccess={vi.fn<(status: "waiting" | "active") => void>()}
     />,
   );
-  selectLanguage("대화하고 싶은 언어", "English");
+  selectDropdown("대화하고 싶은 언어", "English");
   expect(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }).textContent).toContain(
     "English",
   );
-  selectLanguage("대화하고 싶은 언어", "한국어");
+  selectDropdown("대화하고 싶은 언어", "한국어");
   expect(screen.getByRole("combobox", { name: "대화하고 싶은 언어" }).textContent).toContain(
     "한국어",
   );

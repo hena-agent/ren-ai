@@ -127,6 +127,7 @@ export function PhoneField({
   return (
     <PhoneInput
       id={id}
+      required
       className="phone-field"
       defaultCountry={detected}
       countryOptionsOrder={order}

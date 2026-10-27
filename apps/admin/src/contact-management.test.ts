@@ -20,6 +20,10 @@ const entry = (state: typeof ContactState.Type = "waiting"): typeof ContactEntry
   requestId: null,
 });
 const idle = {
+  createInvitation: vi.fn<ManagementClient["createInvitation"]>(),
+  grantInvitations: vi.fn<ManagementClient["grantInvitations"]>(),
+  invitationAccount: vi.fn<ManagementClient["invitationAccount"]>(),
+  configureInvitations: vi.fn<ManagementClient["configureInvitations"]>(),
   start: vi.fn<ManagementClient["start"]>(),
   refreshCatalog: vi.fn<ManagementClient["refreshCatalog"]>(),
   languages: vi.fn<ManagementClient["languages"]>(async () => ({})),

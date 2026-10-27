@@ -6,6 +6,7 @@ import englishDisclosure from "./discovery-notice.en.json" with { type: "json" }
 import japaneseDisclosure from "./discovery-notice.ja.json" with { type: "json" };
 import { StartingRelationship } from "./relationship.ts";
 import { PublicLanguages } from "@ren-ai/personas/languages";
+import { InvitationCode } from "./invitation-code.ts";
 import { VisitSource } from "./metrics.ts";
 
 export const discoveryNotice = disclosure;
@@ -84,6 +85,7 @@ export const DiscoveryRequest = Schema.Struct({
   privacyNoticeVersion: text,
   turnstileToken: text,
   reselectionToken: Schema.optionalKey(ReselectionRequest.fields.reselectionToken),
+  invitationToken: Schema.optionalKey(InvitationCode),
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;
@@ -96,6 +98,7 @@ export const DiscoveryFailure = Schema.Literals([
   "try_later",
   "reselection",
   "storage",
+  "invitation",
 ]);
 export type DiscoveryFailure = typeof DiscoveryFailure.Type;
 export const DiscoveryAnswer = Schema.Struct({ status: Schema.Literals(["waiting", "active"]) });

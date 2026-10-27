@@ -6,6 +6,7 @@ import type { PublicPersona } from "@ren-ai/onboarding";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { assignmentCapacity, claimPersona } from "./assignment.ts";
 import { SelectionConflict, selectionKey, selectionChoices, chooseContact } from "./selection.ts";
+import { consumeInvitation, invitations } from "./invitations.ts";
 import { lifecycleMetric } from "../metrics/lifecycle.ts";
 
 class StartUnavailable extends Data.TaggedError("StartUnavailable") {}
@@ -13,11 +14,12 @@ class StartUnavailable extends Data.TaggedError("StartUnavailable") {}
 export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const invites = yield* invitations;
     const loadProfiles = Effect.tryPromise({
       try: catalog,
       catch: () => new Error("Public Catalog unavailable"),
     });
-    const snapshot = (profiles: readonly PublicPersona[]) =>
+    const snapshot = (profiles: readonly PublicPersona[], registrationIDs?: readonly string[]) =>
       Effect.gen(function* () {
         const entries = yield* sql<{
           id: string;
@@ -53,12 +55,13 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
        r.imessage_checked_at AS imessageCheckedAt
       FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id
       LEFT JOIN conversation v ON v.session_id = c.session_id LEFT JOIN conversation_end e ON e.conversation_id = v.id
-      WHERE r.archived_at IS NULL ORDER BY r.created_at, r.id`;
+       WHERE r.archived_at IS NULL ${registrationIDs ? sql`AND ${sql.in("r.id", registrationIDs)}` : sql``} ORDER BY r.created_at, r.id`;
         const likes = yield* sql<{
           registrationID: string;
           personaID: string;
         }>`SELECT l.registration_id AS registrationID, l.persona_id AS personaID FROM discovery_like l
           JOIN discovery_registration r ON r.id = l.registration_id WHERE r.archived_at IS NULL
+          ${registrationIDs ? sql`AND ${sql.in("r.id", registrationIDs)}` : sql``}
           AND NOT EXISTS (SELECT 1 FROM persona_exclusion e WHERE e.handle = r.handle AND e.persona_id = l.persona_id)`;
         const assignments = yield* sql<{
           id: string;
@@ -125,10 +128,30 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           available,
         };
       });
-    const list = loadProfiles.pipe(
-      Effect.flatMap(snapshot),
-      Effect.map(({ entries, eligibleCount }) => ({ entries, eligibleCount })),
-    );
+    const list = Effect.gen(function* () {
+      const { entries, eligibleCount } = yield* Effect.flatMap(loadProfiles, snapshot);
+      const invitationSettings = yield* invites.settings;
+      const issued = yield* invites.list;
+      const byOwner = new Map<
+        string,
+        NonNullable<typeof ContactEntry.Type.invitations>[number][]
+      >();
+      for (const invitation of issued) {
+        const group = byOwner.get(invitation.owner) ?? [];
+        group.push(invitation);
+        byOwner.set(invitation.owner, group);
+      }
+      const enriched = entries.map((entry) => ({
+        ...entry,
+        invitations: byOwner.get(entry.handle) ?? [],
+      }));
+      return {
+        entries: enriched,
+        eligibleCount,
+        invitationSettings,
+        invitationCodes: yield* invites.codes,
+      };
+    });
     const recorded = (selectionID: string, key: string) =>
       Effect.gen(function* () {
         const [previous] = yield* sql<{
@@ -144,6 +167,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       at: number,
       selectionID: string,
       requestId: string,
+      notificationID?: number,
     ) =>
       Effect.gen(function* () {
         if (
@@ -155,6 +179,13 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
         yield* sql`INSERT INTO discovery_contact
           (registration_id, selection_id, persona_id, scheduled_at, state, request_id)
           VALUES (${row.id}, ${selectionID}, ${personaID}, ${at}, 'scheduled', ${requestId})`;
+        yield* consumeInvitation(row.id, row.handle).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
+        if (notificationID !== undefined)
+          yield* sql`UPDATE invitation_submission SET selected_notification_id = COALESCE(selected_notification_id, ${notificationID})
+            WHERE registration_id = ${row.id}`;
+        yield* invites.grant(row.handle, requestId);
         yield* lifecycleMetric(row.id, "selection", personaID).pipe(
           Effect.provideService(SqlClient.SqlClient, sql),
         );
@@ -165,7 +196,10 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
         const selected = yield* sql<{
           id: string;
         }>`SELECT registration_id AS id FROM discovery_contact WHERE selection_id = ${selectionID}`;
-        const { entries } = yield* snapshot(profiles);
+        const { entries } = yield* snapshot(
+          profiles,
+          selected.map((row) => row.id),
+        );
         const ids = new Set(selected.map((row) => row.id));
         return {
           requestId: selectionID,
@@ -173,7 +207,11 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           entries: entries.filter((row) => ids.has(row.id)),
         };
       });
-    const select = (input: typeof SelectContacts.Type, requestId: string) =>
+    const select = (
+      input: typeof SelectContacts.Type,
+      requestId: string,
+      notificationID?: number,
+    ) =>
       Effect.flatMap(loadProfiles, (profiles) =>
         Effect.gen(function* () {
           const decoded = Schema.decodeUnknownSync(SelectContacts)(input);
@@ -181,7 +219,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           const previous = yield* recorded(decoded.requestId, key);
           if (!previous) {
             const now = yield* Clock.currentTimeMillis;
-            const { entries, available } = yield* snapshot(profiles);
+            const { entries, available } = yield* snapshot(profiles, decoded.registrationIDs);
             const choices = yield* selectionChoices(decoded, entries, available);
             const waiting = entries.filter(
               (row) =>
@@ -195,7 +233,9 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
               if (!chosen) continue;
               const { row, persona } = chosen;
               const at = now + randomInt(300_000, 3_600_001);
-              if (!(yield* reserve(row, persona.id, at, decoded.requestId, requestId))) {
+              if (
+                !(yield* reserve(row, persona.id, at, decoded.requestId, requestId, notificationID))
+              ) {
                 if (choices.has(row.id))
                   return yield* Effect.fail(
                     new SelectionConflict("Chosen persona is no longer available"),
@@ -223,7 +263,7 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           const previous = yield* recorded(decoded.requestId, key);
           if (!previous) {
             const now = yield* Clock.currentTimeMillis;
-            const { entries, available } = yield* snapshot(profiles);
+            const { entries, available } = yield* snapshot(profiles, [decoded.registrationID]);
             const row = entries.find((entry) => entry.id === decoded.registrationID);
             if (
               !row?.testHandle ||
@@ -246,5 +286,13 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           ),
         ),
       );
-    return { list, select, start };
+    return {
+      list,
+      select,
+      start,
+      configureInvitations: invites.configure,
+      grantInvitations: invites.manual,
+      invitationAccount: invites.account,
+      createInvitation: invites.create,
+    };
   });

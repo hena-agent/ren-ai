@@ -1,6 +1,18 @@
 import { Schema } from "effect";
+import {
+  InvitationAccount,
+  InvitationGrant,
+  InvitationLookup,
+  InvitationCreate,
+  InvitationTicket,
+} from "@ren-ai/onboarding";
+import {
+  ContactSnapshot,
+  ContactSelection,
+  ConversationLanguages,
+  InvitationSettings,
+} from "@ren-ai/onboarding";
 import { Metrics, type MetricsQuery } from "@ren-ai/onboarding";
-import { ContactSnapshot, ContactSelection, ConversationLanguages } from "@ren-ai/onboarding";
 import type { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
@@ -34,6 +46,12 @@ export interface ManagementClient {
   start: (input: typeof StartContact.Type) => Promise<typeof ContactSelection.Type>;
   refreshCatalog: () => Promise<void>;
   languages: (registrationID: string) => Promise<typeof ConversationLanguages.Type>;
+  configureInvitations: (input: typeof InvitationSettings.Type) => Promise<void>;
+  grantInvitations: (input: typeof InvitationGrant.Type) => Promise<typeof InvitationAccount.Type>;
+  createInvitation: (input: typeof InvitationCreate.Type) => Promise<typeof InvitationTicket.Type>;
+  invitationAccount: (
+    input: typeof InvitationLookup.Type,
+  ) => Promise<typeof InvitationAccount.Type>;
 }
 
 async function selection(response: Response) {
@@ -49,11 +67,13 @@ async function selection(response: Response) {
 }
 
 const conflictMessage = (path: string) =>
-  path.includes("/conversations")
-    ? "종료·전송 상태가 변경되었거나 결과가 아직 불확실합니다. 상태를 다시 확인해 주세요."
-    : path.endsWith("/start")
-      ? "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 배정 한도 5명과 이 연락처의 관계 종료 이력·현재 상태를 확인해 주세요."
-      : "선정 요청이나 배정 후보가 변경되었습니다. 배정 한도 5명과 각 연락처의 관계 종료 이력·현재 상태, 배정할 수 없는 Like 후보가 있는지 확인해 주세요. 상태를 새로고침한 뒤 새 요청으로 제출해 주세요.";
+  path.includes("/invitations/")
+    ? "이미 기본 2장을 지급했거나 코드·지급 요청이 충돌했습니다. 코드 중복과 대상·설정을 확인해 주세요."
+    : path.includes("/conversations")
+      ? "종료·전송 상태가 변경되었거나 결과가 아직 불확실합니다. 상태를 다시 확인해 주세요."
+      : path.endsWith("/start")
+        ? "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 배정 한도 5명과 이 연락처의 관계 종료 이력·현재 상태를 확인해 주세요."
+        : "선정 요청이나 배정 후보가 변경되었습니다. 배정 한도 5명과 각 연락처의 관계 종료 이력·현재 상태, 배정할 수 없는 Like 후보가 있는지 확인해 주세요. 상태를 새로고침한 뒤 새 요청으로 제출해 주세요.";
 
 export function managementClient(
   url: string,
@@ -66,7 +86,11 @@ export function managementClient(
       | typeof SelectContacts.Type
       | typeof StartContact.Type
       | typeof ConversationRecovery.Type
-      | typeof ConversationEnding.Type,
+      | typeof ConversationEnding.Type
+      | typeof InvitationSettings.Type
+      | typeof InvitationGrant.Type
+      | typeof InvitationCreate.Type
+      | typeof InvitationLookup.Type,
     method = input ? "POST" : "GET",
   ) => {
     protect(token);
@@ -209,17 +233,38 @@ export function managementClient(
     refreshCatalog: async () => {
       await request("/management/catalog/refresh", undefined, "POST");
     },
+    configureInvitations: async (input) => {
+      await request("/management/discovery/invitations", input);
+    },
+    grantInvitations: async (input) =>
+      conversationResponse(
+        InvitationAccount,
+        await request("/management/discovery/invitations/grant", input),
+        "초대장 응답 형식이 올바르지 않습니다.",
+      ),
+    createInvitation: async (input) =>
+      conversationResponse(
+        InvitationTicket,
+        await request("/management/discovery/invitations/create", input),
+        "초대 코드 응답 형식이 올바르지 않습니다.",
+      ),
+    invitationAccount: async (input) =>
+      conversationResponse(
+        InvitationAccount,
+        await request("/management/discovery/invitations/lookup", input),
+        "초대장 응답 형식이 올바르지 않습니다.",
+      ),
   };
 }
 
-async function conversationResponse<A>(schema: Schema.Codec<A>, response: Response): Promise<A> {
+async function conversationResponse<A>(
+  schema: Schema.Codec<A>,
+  response: Response,
+  message = "대화 상태 응답 형식이 올바르지 않습니다.",
+): Promise<A> {
   try {
     return Schema.decodeUnknownSync(schema)(await response.json());
   } catch (cause) {
-    throw validationFailure(
-      "대화 상태 응답 형식이 올바르지 않습니다.",
-      { code: "management_schema" },
-      cause,
-    );
+    throw validationFailure(message, { code: "management_schema" }, cause);
   }
 }

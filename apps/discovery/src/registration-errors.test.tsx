@@ -121,7 +121,7 @@ test("a rate limit shows its deadline, blocks repeat submissions and unlocks whe
 test("selection recovery refreshes the catalog before returning and retains typed profile input", async () => {
   const refresh = vi.fn<() => Promise<void>>().mockRejectedValueOnce(new Error("offline"));
   const { form, onBack, verify } = setup(new RegistrationError("personas"), "ko", refresh);
-  const name = screen.getByLabelText<HTMLInputElement>("이름 (필수)");
+  const name = screen.getByRole<HTMLInputElement>("textbox", { name: "이름" });
   fireEvent.change(name, { target: { value: "입력한 이름" } });
   await reviewSelection(form);
   expect(refresh).toHaveBeenCalledOnce();
@@ -174,7 +174,7 @@ test("updated consent loads in place, preserves input and requires a fresh agree
   };
   vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json(updated)));
   const { form, join, verify } = setup(new RegistrationError("consent"));
-  const name = screen.getByLabelText<HTMLInputElement>("이름 (필수)");
+  const name = screen.getByRole<HTMLInputElement>("textbox", { name: "이름" });
   fireEvent.change(name, { target: { value: "보존할 이름" } });
   await act(async () => fireEvent.submit(form));
   await act(async () =>

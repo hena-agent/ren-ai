@@ -24,7 +24,7 @@ export function choose(like: boolean) {
   endAnimation(document.querySelector(".profile-card")!);
 }
 
-export function selectLanguage(label: string, next: string) {
+export function selectDropdown(label: string, next: string) {
   const trigger = screen.getByRole("combobox", { name: label });
   fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown" });
   const option = screen.getByRole("option", { name: next });

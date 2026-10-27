@@ -35,6 +35,7 @@ import { contactCause, contactLog, type ContactLog } from "./diagnostics.ts";
 import { queueRegistrationNotification } from "./notifications.ts";
 import { publicCatalog } from "../personas/public-catalog.ts";
 import { browsePage, lookupProfiles } from "../personas/browse.ts";
+import { attachInvitation } from "./invitations.ts";
 import { registrationMetric } from "../metrics/lifecycle.ts";
 import { failedJoin } from "../metrics/failures.ts";
 
@@ -45,6 +46,7 @@ const failure = Schema.Literals([
   "ended_personas",
   "unavailable",
   "reselection",
+  "invitation",
 ]).pipe(HttpApiSchema.status(400));
 const failures = [
   failure,
@@ -286,6 +288,17 @@ export const makeDiscoveryWeb = ({
               Effect.provideService(SqlClient.SqlClient, sql),
             );
           }
+          if (input.invitationToken) {
+            const [registration] = yield* sql<{
+              id: string;
+            }>`SELECT id FROM discovery_registration WHERE handle = ${input.handle} AND archived_at IS NULL`;
+            yield* attachInvitation(registration!.id, input.invitationToken, input.handle).pipe(
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
+          } else
+            yield* sql`DELETE FROM invitation_submission
+            WHERE registration_id = (SELECT id FROM discovery_registration WHERE handle = ${input.handle} AND archived_at IS NULL)
+              AND NOT EXISTS (SELECT 1 FROM discovery_contact WHERE registration_id = invitation_submission.registration_id)`;
           return { status: "waiting" as const };
         }).pipe(
           Effect.tap(({ status }) =>

@@ -132,13 +132,13 @@ test.each([false, true])(
     const posts = Schema.Array(Schema.Struct({ content: Schema.String, wait: Schema.String }));
     try {
       let runtime = await openRuntime(persistence);
-      const first = Schema.decodeUnknownSync(posts)(
-        await (
-          await call(
-            runtime,
-            `/__fixture/metrics-tick?at=${at}&status=429${global ? "&global" : ""}`,
-          )
-        ).json(),
+      const response = await call(
+        runtime,
+        `/__fixture/metrics-tick?at=${at}&status=429${global ? "&global" : ""}`,
+      );
+      const first = Schema.decodeUnknownSync(posts)(await response.json());
+      expect(Number(response.headers.get("X-Metrics-Report-Due"))).toBe(
+        Date.parse(`${day}T00:00:00+09:00`),
       );
       expect(first).toHaveLength(1);
       expect(first[0]!.wait).toBe("true");

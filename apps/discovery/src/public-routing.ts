@@ -4,6 +4,7 @@ import type { ImageStyle } from "./image-style.ts";
 
 export const publicOrigin = "https://renai.im";
 export const previewVersion = "v2";
+export const invitationToken = (hash: string) => new URLSearchParams(hash.slice(1)).get("invite");
 export const personaPath = (id: string) => `/personas/${encodeURIComponent(id)}`;
 export const personaTitle = (persona: PublicPersona) => `${persona.name} — Ren AI의 AI 페르소나`;
 

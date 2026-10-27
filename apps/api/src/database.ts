@@ -7,6 +7,7 @@ import { sharedAssignmentsSchema } from "./discovery/schema.ts";
 import { migrateBatches } from "./migrations.ts";
 import { browseSchema } from "./personas/browse-schema.ts";
 import { photoSchema } from "./photos/schema.ts";
+import { invitationSchema } from "./discovery/invitation-schema.ts";
 import { metricsSchema } from "./metrics/schema.ts";
 
 export const migrate = Effect.gen(function* () {
@@ -317,6 +318,7 @@ export const migrate = Effect.gen(function* () {
       ]),
       "054_conversation_photos": photoSchema,
       "055_metrics": metricsSchema,
+      "056_invitations": invitationSchema,
     }),
   );
 });

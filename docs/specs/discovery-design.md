@@ -155,6 +155,19 @@ whitespace-only, untrimmed API names and names longer than 100 characters. The f
 trims names before submission. Age and gender remain individually optional. All
 three display languages and the versioned privacy notices state these requirements.
 
+Keep contact registration in one continuous flow: required name first, phone number,
+optional age and gender, Starting relationship, preferred conversation language,
+optional invitation code, then disclosure and consent. Use the same label size, weight
+and ink color for name as the other fields, with a short naming placeholder. Prefix
+the required name and phone labels with a small, muted asterisk; expose requiredness
+through native input semantics. Give the optional age, gender and invitation-code
+markers that same small, muted, normal-weight treatment. Reserve error-colored emphasis for actual errors. Label
+age simply as age, without the age-in-years qualification. Remove the separate “A little about
+you” heading and explanatory block. Gender uses the same Radix dropdown component,
+selected treatment and keyboard focus as the existing language controls, including
+an explicit not-specified choice. Preserve profile inputs through failed submissions
+and display-language changes.
+
 Keep the existing Discovery cards, swipe interactions, inline reading view and
 contact form. Show sharing only at the end of the expanded profile at
 `/personas/{id}`, after all profile content. Use a full-width, white, rounded

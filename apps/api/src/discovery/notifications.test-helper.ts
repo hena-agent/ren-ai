@@ -30,9 +30,11 @@ export const notificationFixture = Effect.gen(function* () {
     Effect.succeed({ state: "delivered", error: 0, dateRead: null }),
   );
   const logs: ContactDiagnostic[] = [];
-  const reopen = () =>
-    waitlistNotifications({ notify, notificationStatus, availability }, (event) =>
-      logs.push(event),
+  const reopen = (automaticSelection = false) =>
+    waitlistNotifications(
+      { notify, notificationStatus, availability },
+      (event) => logs.push(event),
+      automaticSelection ? async () => f.profiles : undefined,
     );
   const worker = yield* reopen();
   const management = contactManagement(f.store, "management", () => {});
