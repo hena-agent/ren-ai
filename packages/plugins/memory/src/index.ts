@@ -3,7 +3,11 @@ import { Effect } from "effect";
 import { Schema } from "effect";
 import { personaMemory, memoryTools, memoryToolNames } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
-import { personaAdjustments, adjustmentTool } from "@ren-ai/plugin-session-folder/adjustments";
+import {
+  personaAdjustments,
+  adjustmentTool,
+  appendAdjustmentInstructions,
+} from "@ren-ai/plugin-session-folder/adjustments";
 import {
   configuredPlugin,
   getPersona,
@@ -74,7 +78,7 @@ export const memoryPlugin = (options: PersonaPluginOptions) =>
               event.sessionID,
               () => personaAdjustments(ctx.location.directory, event.sessionID).context(),
             );
-            event.system.push({ type: "text", text: adjustments });
+            appendAdjustmentInstructions(event.system, ctx.location.directory, adjustments);
             // Let OpenCode execute and account for compaction instead of an unmetered session.generate.
             // Its validator requires a native heading; the content remains first-person Persona Memory.
             event.system.push({

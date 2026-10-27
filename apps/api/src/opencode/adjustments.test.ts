@@ -15,7 +15,8 @@ import { withPersona } from "../../test/memory.test-helper.ts";
 
 const day = 86_400_000;
 const start = 1000;
-const reviewID = (context: string) => /<adjustment-review reviewID="([^"]+)"/.exec(context)![1]!;
+const reviewID = (context: { review: string }) =>
+  /<adjustment-review reviewID="([^"]+)"/.exec(context.review)![1]!;
 const ready = async (root: string) => {
   const a = personaAdjustments(root, "sesa");
   for (let index = 0; index < 20; index++) await a.context(`message-${index}`, start);
@@ -25,20 +26,20 @@ const ready = async (root: string) => {
 test("reviews require both elapsed time and fresh input; repeated model steps and idle reads are free of writes", () =>
   withPersona(async (root) => {
     const a = personaAdjustments(root, "sesa");
-    expect(await a.context()).not.toContain("<adjustment-review");
+    expect((await a.context()).review).toBe("");
     expect(await readAdjustments(root)).toBeUndefined();
     await a.context("first", start);
     const before = await readFile(join(root, ".memory", "adjustments.json"), "utf8");
     await a.context("first", start + day);
     expect(await readFile(join(root, ".memory", "adjustments.json"), "utf8")).toBe(before);
     for (let index = 0; index < 18; index++) await a.context(`new-${index}`, start + day);
-    expect(await a.context("new-17", start + day)).not.toContain("<adjustment-review");
+    expect((await a.context("new-17", start + day)).review).toBe("");
     const context = await a.context("twentieth", start + day);
-    expect(context).toContain("<adjustment-review");
-    expect(context).toContain("Silence alone proves nothing");
-    expect(context).toContain("Preserve your personality");
-    expect(context).toContain("THIS Conversation");
-    expect(await a.context()).not.toContain("<adjustment-review");
+    expect(context.review).toContain("<adjustment-review");
+    expect(context.review).toContain("Silence alone proves nothing");
+    expect(context.review).toContain("Preserve your personality");
+    expect(context.review).toContain("THIS Conversation");
+    expect((await a.context()).review).toBe("");
     const id = reviewID(context);
     const input = {
       reviewID: id,
@@ -56,16 +57,16 @@ test("reviews require both elapsed time and fresh input; repeated model steps an
     ]);
     expect(await readFile(join(root, "ADJUSTMENTS.md"), "utf8")).toBe(input.markdown);
     const b = personaAdjustments(root, "sesb");
-    expect(await b.context("other", start + day)).toContain(input.markdown);
-    expect(await b.context("other", start + day)).not.toContain(input.reason);
-    expect(await a.context("later", start + 2 * day)).not.toContain("<adjustment-review");
+    expect((await b.context("other", start + day)).markdown).toBe(input.markdown);
+    expect((await b.context("other", start + day)).markdown).not.toContain(input.reason);
+    expect((await a.context("later", start + 2 * day)).review).toBe("");
   }));
 
 test("one Persona review lease coordinates concurrent Conversations, survives replacement and preserves later inputs", () =>
   withPersona(async (root) => {
     const { a, id } = await ready(root);
     const b = personaAdjustments(root, "sesb");
-    expect(await b.context("other-input", start + day)).not.toContain("<adjustment-review");
+    expect((await b.context("other-input", start + day)).review).toBe("");
     await expect(
       b.run({ reviewID: id, markdown: "wrong writer", reason: "wrong" }, "other", start + day),
     ).rejects.toThrow("expired or changed");
@@ -82,7 +83,7 @@ test("one Persona review lease coordinates concurrent Conversations, survives re
     expect(saved.state.observed - saved.state.reviewed).toBe(1);
     expect(saved.state.history[0]!.before).toBe(saved.state.history[0]!.after);
     for (let index = 0; index < 19; index++) await b.context(`next-${index}`, start + day);
-    expect(await b.context("next-18", start + day)).not.toContain("<adjustment-review");
+    expect((await b.context("next-18", start + day)).review).toBe("");
     const next = reviewID(await b.context("next-18", start + 2 * day));
     expect(
       await b.run({ reviewID: next, markdown: "", reason: "유지" }, "same", start + 2 * day),
@@ -125,7 +126,7 @@ test("simultaneous eligible Conversations claim only one persisted review", () =
       personaAdjustments(root, "sesa").context("a", start + day),
       personaAdjustments(root, "sesb").context("b", start + day),
     ]);
-    expect(contexts.filter((context) => context.includes("<adjustment-review"))).toHaveLength(1);
+    expect(contexts.filter((context) => context.review)).toHaveLength(1);
     expect((await readAdjustments(root))!.state.observed).toBe(22);
   }));
 
@@ -138,7 +139,7 @@ test("read-only replay and ended Conversations cannot schedule reviews or modify
       writable: false,
     });
     const before = await readAdjustments(root);
-    expect(await a.context("replay", start + 2 * day)).not.toContain("<adjustment-review");
+    expect((await a.context("replay", start + 2 * day)).review).toBe("");
     expect(await readAdjustments(root)).toEqual(before);
     await expect(a.run({ reviewID: id, markdown: "no", reason: "no" }, "ended")).rejects.toThrow(
       "read-only",
@@ -158,7 +159,7 @@ test("a deleted optional document stays absent through no-change reviews while h
     );
     const history = (await readAdjustments(root))!.state.history;
     await rm(join(root, "ADJUSTMENTS.md"));
-    expect(await a.context("message-19", start + day)).not.toContain("Share a little more.");
+    expect((await a.context("message-19", start + day)).markdown).toBe("");
     expect((await readAdjustments(root))!.state.history).toEqual(history);
     for (let index = 0; index < 20; index++) await a.context(`later-${index}`, start + 2 * day);
     const keep = reviewID(await a.context("later-19", start + 2 * day));
