@@ -26,6 +26,17 @@ const fakeUpstreams: typeof fetch = async (input, init) => {
   }
   if (url.hostname === "admin.example" && url.pathname === "/api/personas")
     return Response.json(catalog);
+  if (url.hostname === "large-admin.example" && url.pathname === "/api/personas")
+    return Response.json(
+      Array.from({ length: 110 }, (_, index) => ({
+        ...catalog[0],
+        id: `persona-${index}`,
+        portraits: {
+          anime: `https://images.example/${index}-anime.png`,
+          photo: `https://images.example/${index}-photo.png`,
+        },
+      })),
+    );
   if (url.hostname === "admin.example" && url.pathname === "/api/catalog")
     return Response.json({
       ...executionSnapshot(),

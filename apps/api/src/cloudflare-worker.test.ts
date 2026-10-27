@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
-import { ConversationDetail, discoveryNotice } from "@ren-ai/onboarding";
+import { BrowsePage, ConversationDetail, discoveryNotice } from "@ren-ai/onboarding";
 import { Schema } from "effect";
 import { expect, test } from "vitest";
 import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
@@ -32,6 +32,7 @@ const openWorker = async (
   resourcePersistencePath: string,
   bootstrapOnly: boolean,
   secrets = true,
+  catalogUrl = "https://admin.example",
 ) => {
   const source = await workerSource();
   const runtime = new Miniflare({
@@ -53,7 +54,7 @@ const openWorker = async (
               worker: "api-app-worker-test",
               exportName: "ApiApplication",
             },
-            PERSONA_CATALOG_URL: textBinding("https://admin.example"),
+            PERSONA_CATALOG_URL: textBinding(catalogUrl),
             ...(secrets && {
               TOKEN_CATALOG: textBinding("catalog-secret"),
               TURNSTILE_SECRET: textBinding("turnstile-secret"),
@@ -131,6 +132,39 @@ test("public reads work without private secrets while management and registratio
     });
     expect(registration.status).toBe(400);
     expect(await registration.json()).toBe("verification");
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
+
+test("110 public personas fit SQLite DO parameter limits and remain browsable after actor replacement", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "api-app-large-catalog-"));
+  try {
+    let runtime = await openWorker(persistence, false, false, "https://large-admin.example");
+    const page = async (cursor?: string) => {
+      const params = new URLSearchParams({ locale: "ko", ...(cursor && { cursor }) });
+      const response = await send(runtime, `/discovery/personas?${params.toString()}`);
+      expect(response.status).toBe(200);
+      return Schema.decodeUnknownSync(BrowsePage)(await response.json());
+    };
+    let result = await page();
+    expect(result.people).toHaveLength(10);
+    expect(result.nextCursor).not.toBeNull();
+    const people = [...result.people];
+    await stopRuntimes();
+    runtime = await openWorker(persistence, false, false, "https://large-admin.example");
+    while (result.nextCursor) {
+      result = await page(result.nextCursor);
+      people.push(...result.people);
+      expect(people.length).toBeLessThanOrEqual(110);
+    }
+    expect(people).toHaveLength(110);
+    expect(new Set(people.map((person) => person.id)).size).toBe(110);
+    for (const person of people) {
+      expect(person.portraits?.anime).toBeTruthy();
+      expect(person.portraits?.photo).toBeTruthy();
+    }
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });
