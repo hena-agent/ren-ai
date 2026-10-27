@@ -45,7 +45,8 @@ test("migration bootstrap serves the persona catalog but cannot send or start AI
             secrets: {
               TURNSTILE_SECRET: "turnstile",
               APPLICATION_TOKEN: "application",
-              DISCORD_WEBHOOK_URL: "https://discord.invalid",
+              DISCORD_ALERT_WEBHOOK_URL: "https://discord.invalid",
+              DISCORD_REPORT_WEBHOOK_URL: "https://discord.invalid/reports",
             },
           });
           expect(server.mode).toBe("bootstrap");

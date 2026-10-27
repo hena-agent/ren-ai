@@ -63,6 +63,8 @@ test("the retained source entry runs the Worker with Durable Object SQLite, neve
         messaging: "unavailable",
         applicationRuntime: { revision: "development", status: "ready" },
         database: "ready",
+        discordAlerts: "unconfigured",
+        discordReports: "unconfigured",
         storage: "durable-object-sqlite",
         bootstrapOnly: true,
       });

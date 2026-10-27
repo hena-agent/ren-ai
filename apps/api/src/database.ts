@@ -7,6 +7,7 @@ import { sharedAssignmentsSchema } from "./discovery/schema.ts";
 import { migrateBatches } from "./migrations.ts";
 import { browseSchema } from "./personas/browse-schema.ts";
 import { photoSchema } from "./photos/schema.ts";
+import { metricsSchema } from "./metrics/schema.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -315,6 +316,7 @@ export const migrate = Effect.gen(function* () {
           CHECK(image_style IN ('anime', 'photo'))`,
       ]),
       "054_conversation_photos": photoSchema,
+      "055_metrics": metricsSchema,
     }),
   );
 });

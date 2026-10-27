@@ -66,7 +66,7 @@ test("a poison session backs off durably while healthy inspection advances; fres
         ).toEqual([{ due: 90_000, attempts: 2 }]);
         failing = false;
         yield* inspect.inspect(poison, 90_000);
-        expect(yield* sql`SELECT name FROM application_work`).toEqual([]);
+        expect(yield* sql`SELECT name FROM application_work`).toEqual([{ name: "metrics-report" }]);
         yield* scheduleWork("turn:ses_healthy", 0);
         const fresh = yield* turnWork(fromPartial<PersonaRuntime>({}), directory, () =>
           scheduleWork("turn:ses_healthy", 0).pipe(

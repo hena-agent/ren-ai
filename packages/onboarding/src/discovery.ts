@@ -6,6 +6,7 @@ import englishDisclosure from "./discovery-notice.en.json" with { type: "json" }
 import japaneseDisclosure from "./discovery-notice.ja.json" with { type: "json" };
 import { StartingRelationship } from "./relationship.ts";
 import { PublicLanguages } from "@ren-ai/personas/languages";
+import { VisitSource } from "./metrics.ts";
 
 export const discoveryNotice = disclosure;
 export const DiscoveryLocale = Schema.Literals(["ko", "en", "ja"]);
@@ -70,6 +71,8 @@ export const ReselectionRequest = Schema.Struct({
 });
 
 export const DiscoveryRequest = Schema.Struct({
+  source: Schema.optionalKey(VisitSource),
+  visitCountry: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Z]{2}$/))),
   handle: MobileNumber,
   locale: DiscoveryLocale,
   conversationLanguage: Schema.optionalKey(DiscoveryLocale),

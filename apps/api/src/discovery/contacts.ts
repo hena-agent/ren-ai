@@ -6,6 +6,7 @@ import type { PublicPersona } from "@ren-ai/onboarding";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { assignmentCapacity, claimPersona } from "./assignment.ts";
 import { SelectionConflict, selectionKey, selectionChoices, chooseContact } from "./selection.ts";
+import { lifecycleMetric } from "../metrics/lifecycle.ts";
 
 class StartUnavailable extends Data.TaggedError("StartUnavailable") {}
 
@@ -154,6 +155,9 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
         yield* sql`INSERT INTO discovery_contact
           (registration_id, selection_id, persona_id, scheduled_at, state, request_id)
           VALUES (${row.id}, ${selectionID}, ${personaID}, ${at}, 'scheduled', ${requestId})`;
+        yield* lifecycleMetric(row.id, "selection", personaID).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
         return true;
       });
     const outcome = (selectionID: string, requested: number, profiles: readonly PublicPersona[]) =>

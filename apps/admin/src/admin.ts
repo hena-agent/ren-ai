@@ -47,6 +47,7 @@ import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
 import type { AdminOptions } from "./admin-options.ts";
 import { contactRoutes } from "./contact-routes.ts";
+import { metricsRoutes } from "./metrics-routes.ts";
 import { conversationRoutes } from "./conversation-routes.ts";
 import { html } from "./html-response.ts";
 import { generationFailureMessage } from "./generation-failure.ts";
@@ -59,6 +60,14 @@ import { seedingEngine } from "./seeding-engine.ts";
 import { imageJobPages } from "./image-job-page.ts";
 import { personaQuery } from "./persona-query.ts";
 import { readEditor, type EditorRecord } from "./editor-record.ts";
+const authorized = (request: Request, expected: Buffer) =>
+  timingSafeEqual(
+    createHash("sha256")
+      .update(request.headers.get("authorization") ?? "")
+      .digest(),
+    expected,
+  );
+
 export function createAdmin(
   store: PersonaStore,
   password: string,
@@ -392,11 +401,7 @@ export function createAdmin(
         return Response.json(await operation("persona.publicList", {}, store.publicList), {
           headers: { "Cache-Control": "no-store" },
         });
-      const authorization = request.headers.get("authorization");
-      if (
-        !authorization ||
-        !timingSafeEqual(createHash("sha256").update(authorization).digest(), expected)
-      )
+      if (!authorized(request, expected))
         return new Response(null, {
           status: 401,
           headers: {
@@ -410,6 +415,7 @@ export function createAdmin(
       if (seeded) return seeded;
       if (["/waitlist", "/first-contacts"].includes(url.pathname))
         return contactRoutes(request, management);
+      if (url.pathname === "/metrics") return metricsRoutes(request, management);
       if (url.pathname.startsWith("/conversations"))
         return conversationRoutes(request, management?.conversations);
       if (url.pathname === "/upload-image")

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { Metrics, type MetricsQuery } from "@ren-ai/onboarding";
 import { ContactSnapshot, ContactSelection, ConversationLanguages } from "@ren-ai/onboarding";
 import type { SelectContacts, StartContact } from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
@@ -26,6 +27,7 @@ export interface ConversationClient {
 }
 
 export interface ManagementClient {
+  metrics?: (query: MetricsQuery) => Promise<Metrics>;
   conversations?: ConversationClient;
   list: () => Promise<typeof ContactSnapshot.Type>;
   select: (input: typeof SelectContacts.Type) => Promise<typeof ContactSelection.Type>;
@@ -122,6 +124,11 @@ export function managementClient(
     return response;
   };
   return {
+    metrics: async (query) =>
+      conversationResponse(
+        Metrics,
+        await request(`/management/metrics?${new URLSearchParams(query)}`),
+      ),
     conversations: {
       image: (id, message, guid, attachment) =>
         request(

@@ -7,7 +7,7 @@ import { Card } from "./card.tsx";
 import { JoinForm } from "./join-form.tsx";
 import { useCopy, LocaleProvider } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
-import { withImageStyle } from "./image-style.ts";
+import { withImageStyle, readImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
 import type { StyledPersona } from "./image-style.ts";
 import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
@@ -18,6 +18,7 @@ import { Receipt } from "./receipt.tsx";
 import { useCatalog } from "./use-catalog.ts";
 import { shareUrl, personaTitle } from "./public-routing.ts";
 import { BrowseLoading, type Paging } from "./browse-loading.tsx";
+import { useActivity, useBrowseActivity } from "./activity.ts";
 
 type Entry = {
   personaId?: string | undefined;
@@ -130,6 +131,17 @@ export function App({
   );
 }
 
+function LoadingActivity({
+  client,
+  initialStyle,
+}: {
+  client: DiscoveryClient;
+  initialStyle: ImageStyle | undefined;
+}) {
+  useActivity(client, initialStyle ?? readImageStyle(), true);
+  return null;
+}
+
 function DiscoveryApp({
   client,
   initialPeople,
@@ -154,6 +166,9 @@ function DiscoveryApp({
   }, [missing, copy.publicProfile.notFound]);
   return (
     <div className="discovery-shell">
+      {(catalog.phase !== "ready" || missing) && (
+        <LoadingActivity client={client} initialStyle={initialStyle} />
+      )}
       {catalog.phase === "ready" ? (
         missing ? (
           <>
@@ -271,6 +286,7 @@ function Experience({
   const liked = displayed.filter((persona) => choices[persona.id] === true);
   const detail = displayed.find((persona) => persona.id === details?.id);
   const detailId = detail?.id;
+  const report = useBrowseActivity(client, style, current?.id, detailId, view);
   const title = detail ? personaTitle(detail) : `${copy.brand} — ${copy.explore}`;
   useEffect(() => {
     document.title = title;
@@ -298,6 +314,7 @@ function Experience({
     void changeStyle(next, images);
   }
   function choose(persona: PublicPersona, like: boolean) {
+    report(like ? "like" : "pass", persona.id);
     const next = { ...choices, [persona.id]: like };
     setChoices(next);
     setStorageFailure(saveChoices(next) ? undefined : true);

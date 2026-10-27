@@ -13,6 +13,7 @@ import { contactCause, contactLog } from "./diagnostics.ts";
 import type { ContactLog } from "./diagnostics.ts";
 import { claimWork, workBatchSize } from "../work-budget.ts";
 import type { DiscoveryRequest, StartingRelationship } from "@ren-ai/onboarding";
+import { contactOutcome } from "../metrics/conversations.ts";
 
 interface Contact {
   id: string;
@@ -49,15 +50,26 @@ export const firstContacts = (
     UNION SELECT 1 FROM reset WHERE handle = ${handle} AND complete = 0`,
         (rows) => rows.length > 0,
       );
-    const update = (id: string, state: string) =>
-      sql`UPDATE discovery_contact SET state = ${state} WHERE registration_id = ${id} AND state != ${state}`;
+    const countOutcome =
+      (state: Parameters<typeof contactOutcome>[1]) => (rows: readonly { id: string }[]) =>
+        Effect.forEach(rows, (row) => contactOutcome(row.id, state)).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
+    const transition = (id: string, state: Parameters<typeof contactOutcome>[1]) =>
+      sql<{
+        id: string;
+      }>`UPDATE discovery_contact SET state = ${state} WHERE registration_id = ${id} AND state != ${state} RETURNING registration_id AS id`.pipe(
+        Effect.tap(countOutcome(state)),
+      );
+    const update = (...args: Parameters<typeof transition>) =>
+      transition(...args).pipe(sql.withTransaction);
     const start = (row: Contact) =>
       Effect.gen(function* () {
         const persona = host.personas.get(row.personaID);
         const sessionID = Session.ID.create();
         const claimed = yield* Effect.gen(function* () {
           if (!persona?.published || (yield* unavailable(row.handle))) {
-            yield* update(row.id, "blocked");
+            yield* transition(row.id, "blocked");
             return false;
           }
           const changed =
@@ -86,7 +98,7 @@ export const firstContacts = (
           stage = "conversation.commit";
           const bound = yield* Effect.gen(function* () {
             if (yield* unavailable(row.handle)) {
-              yield* update(row.id, "blocked");
+              yield* transition(row.id, "blocked");
               return false;
             }
             const current =
@@ -133,7 +145,12 @@ export const firstContacts = (
             durationMs: performance.now() - began,
             ...contactCause(outcome.failure),
           });
-          yield* sql`UPDATE discovery_contact SET state = 'review' WHERE registration_id = ${row.id} AND state IN ('preparing','greeting')`;
+          yield* sql<{
+            id: string;
+          }>`UPDATE discovery_contact SET state = 'review' WHERE registration_id = ${row.id} AND state IN ('preparing','greeting') RETURNING registration_id AS id`.pipe(
+            Effect.tap(countOutcome("review")),
+            sql.withTransaction,
+          );
         }
         if (Result.isFailure(outcome) && stage === "conversation.commit") {
           const id = createdID;
@@ -181,7 +198,8 @@ export const firstContacts = (
           at: number;
         }>`SELECT send.state, send.recorded_at AS at
       FROM send JOIN conversation ON conversation.id = send.conversation_id
-      WHERE conversation.session_id = ${row.sessionID} AND send.kind = 'text' AND send.state != 'not_sent' ORDER BY send.id LIMIT 1`;
+       WHERE conversation.session_id = ${row.sessionID} AND send.kind = 'text' AND send.state != 'not_sent'
+       ORDER BY CASE WHEN send.state IN ('sent', 'delivered') THEN 0 ELSE 1 END, send.id LIMIT 1`;
         if (send) {
           if (send.state === "sent" || send.state === "delivered") yield* update(row.id, "active");
           else if (send.state === "failed") {
@@ -215,8 +233,12 @@ export const firstContacts = (
           directory.withHandle(row.handle)(row.state === "scheduled" ? start(row) : observe(row)),
         );
         if (Result.isFailure(result)) {
-          const changed =
-            yield* sql`UPDATE discovery_contact SET state = 'review' WHERE registration_id = ${row.id} AND state != 'review' RETURNING registration_id`;
+          const changed = yield* sql<{
+            id: string;
+          }>`UPDATE discovery_contact SET state = 'review' WHERE registration_id = ${row.id} AND state != 'review' RETURNING registration_id AS id`.pipe(
+            Effect.tap(countOutcome("review")),
+            sql.withTransaction,
+          );
           if (changed.length)
             log({
               requestId: row.requestId,

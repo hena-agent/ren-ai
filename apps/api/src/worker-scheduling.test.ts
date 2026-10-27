@@ -36,6 +36,7 @@ afterEach(() => vi.restoreAllMocks());
 
 test("HTTP wakes survive actor replacement, concurrent hints survive an alarm, and failed alarms back off", async () => {
   const root = await mkdtemp(join(tmpdir(), "alarm-lifecycle-"));
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ id: "accepted" }));
   state.filename = join(root, "state.sqlite");
   let alarm: number | null = Date.now() + 600_000;
   const storage = fromPartial<DurableObjectState>({
@@ -48,7 +49,14 @@ test("HTTP wakes survive actor replacement, concurrent hints survive an alarm, a
   });
   class FixtureApplication extends ApiApplication {
     constructor() {
-      super(storage, { ...executionBindings, APPLICATION: fromPartial({}) });
+      super(storage, {
+        ...executionBindings,
+        APPLICATION: fromPartial({}),
+        ACTIVITY: {
+          idFromName: () => fromPartial({}),
+          get: () => ({ fetch: async () => Response.json([]) }),
+        },
+      });
     }
   }
   const open = () => new FixtureApplication();
@@ -76,6 +84,14 @@ test("HTTP wakes survive actor replacement, concurrent hints survive an alarm, a
         )
       ).status,
     ).toBe(200);
+    // The first wake includes the persisted overdue daily Report.
+    expect(alarm).toBeLessThan(before + 1000);
+    state.fail = true;
+    await app.alarm();
+    expect(alarm).toBeGreaterThan(Date.now() + 29_000);
+    state.fail = false;
+    alarm = null;
+    await app.alarm();
     expect(alarm).toBeGreaterThanOrEqual(before + 300_000);
     expect(
       (

@@ -179,6 +179,7 @@ test("a pending registration cannot repeat, and failure retains the form for a f
   await act(async () => {});
   expect(done).toHaveBeenCalledWith("active");
   expect(submit).toHaveBeenLastCalledWith({
+    source: { entry: "home", referrer: "", source: "", medium: "", campaign: "" },
     handle: "+821012345678",
     locale: "ko",
     conversationLanguage: "ko",

@@ -15,6 +15,30 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+test("activity uses keep-alive delivery, returns Visit country and rejects an unavailable endpoint", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetcher);
+  const report = {
+    step: "visit",
+    source: { entry: "home", referrer: "", source: "", medium: "", campaign: "" },
+    device: "phone",
+    locale: "ko",
+    imageStyle: "anime",
+  } as const;
+  fetcher.mockResolvedValueOnce(
+    new Response(null, { status: 204, headers: { "X-Visit-Country": "KR" } }),
+  );
+  expect(await discoveryClient.activity(report)).toBe("KR");
+  expect(fetcher).toHaveBeenLastCalledWith("/discovery/activity", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(report),
+    keepalive: true,
+  });
+  fetcher.mockResolvedValueOnce(new Response(null, { status: 404 }));
+  await expect(discoveryClient.activity(report)).rejects.toThrow("Activity unavailable");
+});
+
 test("only explicit expired-cursor errors restart browsing; authorization and other failures remain failures", async () => {
   const fetcher = vi.fn<typeof fetch>();
   vi.stubGlobal("fetch", fetcher);

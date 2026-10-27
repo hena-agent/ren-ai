@@ -13,6 +13,7 @@ import { healthResponse, probeHealth } from "@ren-ai/transport/health";
 import { contactCause, contactLog, contactOperationId } from "./discovery/diagnostics.ts";
 import { intakeRequests } from "./intake/http.ts";
 import { probeMessaging } from "./messaging-health.ts";
+import { discordState, type Webhooks } from "./metrics/discord.ts";
 
 export interface CloudflareApplication {
   readonly store: ApplicationStore;
@@ -30,15 +31,21 @@ const health = async (
   store: ApplicationStore,
   configuration: CloudflareConfiguration,
   fetcher: typeof fetch,
+  webhooks: Webhooks,
 ) => {
   const requestId = request.headers.get("X-Operation-ID")!;
   const databaseStarted = performance.now();
   let database: "ready" | "unavailable" = "ready";
+  let discord: { alerts: string; reports: string } = {
+    alerts: "unavailable",
+    reports: "unavailable",
+  };
   try {
-    await store.run(
+    discord = await store.run(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
         yield* sql`SELECT 1`;
+        return yield* discordState(webhooks);
       }),
     );
   } catch (cause) {
@@ -93,7 +100,11 @@ const health = async (
   }
   return healthResponse(
     "api-app",
-    database === "ready" && executor.status === "ready" && messaging === "ready"
+    database === "ready" &&
+      executor.status === "ready" &&
+      messaging === "ready" &&
+      discord.alerts === "accepting" &&
+      discord.reports === "accepting"
       ? "ready"
       : "degraded",
     {
@@ -102,6 +113,8 @@ const health = async (
       bootstrapOnly: configuration.bootstrapOnly,
       executor,
       messaging,
+      discordAlerts: discord.alerts,
+      discordReports: discord.reports,
     },
   );
 };
@@ -126,8 +139,18 @@ export const createCloudflareApplication = async (
       ),
     );
     const configuration = cloudflareConfiguration(bindings, fetcher);
+    const webhooks = {
+      alerts: bindings.DISCORD_ALERT_WEBHOOK_URL,
+      reports: bindings.DISCORD_REPORT_WEBHOOK_URL,
+    };
     const store = await createApplicationStore(storage, {
       ...configuration.applicationStore,
+      webhooks,
+      fetcher,
+      ...(bindings.ACTIVITY && {
+        activity: (request: Request) =>
+          bindings.ACTIVITY!.get(bindings.ACTIVITY!.idFromName("ren-ai-activity")).fetch(request),
+      }),
       httpClient: Context.get(services, HttpClient.HttpClient),
     });
     let runtime: ReturnType<typeof createExecutionRuntime> | undefined;
@@ -143,7 +166,7 @@ export const createCloudflareApplication = async (
         applicationRequest(incoming, async (request) => {
           const path = new URL(request.url).pathname;
           if (path === "/health" && request.method === "GET")
-            return health(request, store, configuration, fetcher);
+            return health(request, store, configuration, fetcher, webhooks);
           if (path.startsWith("/management/state/"))
             return stateTransfer(
               request,
@@ -166,9 +189,14 @@ export const createCloudflareApplication = async (
         }),
       tick: async (requestId?: string) => {
         if (configuration.bootstrapOnly) return;
+        const metrics = store.metricsTick(requestId ?? crypto.randomUUID());
         const current = execution();
         try {
-          await (await current).tick(requestId);
+          const results = await Promise.allSettled([
+            metrics,
+            current.then((executionRuntime) => executionRuntime.tick(requestId)),
+          ]);
+          for (const result of results) if (result.status === "rejected") throw result.reason;
         } catch (cause) {
           const initialized = await current.then(
             (value) => value.initialized,

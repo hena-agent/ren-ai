@@ -17,6 +17,7 @@ import { contacts } from "../src/discovery/contacts.ts";
 import { contactManagement } from "../src/discovery/management.ts";
 import { firstContacts } from "../src/discovery/first-contact.ts";
 import { migrate } from "../src/database.ts";
+import { metricsHandler } from "../src/metrics/query.ts";
 
 export interface ServerConfig {
   readonly catalog: CatalogConnection;
@@ -27,7 +28,13 @@ export interface ServerConfig {
   readonly messaging: { readonly url: string; readonly token: string };
   readonly opencode: RemoteConfig;
   readonly secrets: Readonly<
-    Record<"TURNSTILE_SECRET" | "APPLICATION_TOKEN" | "DISCORD_WEBHOOK_URL", string>
+    Record<
+      | "TURNSTILE_SECRET"
+      | "APPLICATION_TOKEN"
+      | "DISCORD_ALERT_WEBHOOK_URL"
+      | "DISCORD_REPORT_WEBHOOK_URL",
+      string
+    >
   >;
 }
 
@@ -52,8 +59,17 @@ export const composeServer = (config: ServerConfig) =>
     let callbackWeb: (request: Request) => Promise<Response> = starting;
     let managementWeb: (request: Request) => Promise<Response> = starting;
     let operatorWeb: (request: Request) => Promise<Response> = starting;
+    const metricsWeb = metricsHandler(
+      (effect) => Effect.runPromise(effect.pipe(Effect.provideService(SqlClient.SqlClient, sql))),
+      config.managementToken,
+      {
+        alerts: config.secrets.DISCORD_ALERT_WEBHOOK_URL,
+        reports: config.secrets.DISCORD_REPORT_WEBHOOK_URL,
+      },
+    );
     const publicWeb = (request: Request) => {
       const path = new URL(request.url).pathname;
+      if (path === "/management/metrics") return metricsWeb(request);
       if (path.startsWith("/rpc")) return callbackWeb(request);
       if (path.startsWith("/management/")) return managementWeb(request);
       if (path.startsWith("/operator/")) return operatorWeb(request);

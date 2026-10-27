@@ -10,6 +10,8 @@ import { landingImages } from "./landing-images.ts";
 import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
 import { HomeHighlights } from "./home-highlights.tsx";
 import { landingImage } from "./landing-images.ts";
+import { useActivity } from "./activity.ts";
+import { discoveryClient, type DiscoveryClient } from "./client.ts";
 
 function ExploreLink() {
   const copy = useCopy();
@@ -21,10 +23,11 @@ function ExploreLink() {
   );
 }
 
-export function Home() {
+export function Home({ client = discoveryClient }: { client?: DiscoveryClient }) {
   const copy = useCopy();
   const home = copy.home;
   const { style, changing, issue, choose } = useImageStyle();
+  useActivity(client, style);
   useEffect(() => {
     document.title = home.pageTitle;
   }, [home.pageTitle]);

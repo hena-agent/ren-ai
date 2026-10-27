@@ -15,6 +15,7 @@ import { VersionPage } from "./version-page.tsx";
 import type { VersionView } from "./version-page.tsx";
 import { ConversationPage, type ConversationView } from "./conversation-page.tsx";
 import { PortraitManager } from "./portrait-manager.tsx";
+import { MetricsPage } from "./metrics-page.tsx";
 
 /** Content-hashed browser asset paths, defined by `scripts/build.mjs` and Vitest. */
 declare const ADMIN_ASSETS: { script: string; stylesheet: string };
@@ -306,6 +307,7 @@ function Navigation({
       <a href="/conversations" aria-current={conversationView ? "page" : undefined}>
         대화 상태
       </a>
+      <a href="/metrics">지표</a>
     </nav>
   );
 }
@@ -340,6 +342,7 @@ export function renderPage({
   conversationView,
   recoveryAvailable,
   listing,
+  metricsView,
 }: PageContent & {
   error?: string;
   saved?: boolean;
@@ -349,6 +352,7 @@ export function renderPage({
   conversationView?: ConversationView;
   recoveryAvailable?: boolean;
   listing?: PersonaListing;
+  metricsView?: Parameters<typeof MetricsPage>[0];
 }) {
   return (
     "<!doctype html>" +
@@ -381,7 +385,7 @@ export function renderPage({
           <main id="main" className={record || versionView ? "persona-workbench" : undefined}>
             <div
               className="page-heading"
-              hidden={Boolean(record || versionView || conversationView)}
+              hidden={Boolean(record || versionView || conversationView || metricsView)}
             >
               <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
               <h1>{heading(contactView)}</h1>
@@ -398,7 +402,9 @@ export function renderPage({
               queuePosition={queuePosition}
               queueObservedAt={queueObservedAt}
             />
-            {conversationView ? (
+            {metricsView ? (
+              <MetricsPage {...metricsView} />
+            ) : conversationView ? (
               <ConversationPage view={conversationView} />
             ) : versionView ? (
               <VersionPage {...versionView} />

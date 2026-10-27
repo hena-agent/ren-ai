@@ -8,6 +8,7 @@ import { notReacted, notSent, sent } from "../transcript/transcript.ts";
 import type { timing } from "../timing/timing.ts";
 import { introduceRelationship } from "../conversations/introduction.ts";
 import { observeSend } from "./observe.ts";
+import { greetingMetric, resolveGreetingAlert } from "../metrics/conversations.ts";
 
 export type { Tapback } from "@ren-ai/imsg/protocol";
 
@@ -40,6 +41,8 @@ export const outbox = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const greeting = (id: number) =>
+      greetingMetric(id).pipe(Effect.provideService(SqlClient.SqlClient, sql));
     const locks = yield* PartitionedSemaphore.make<number>({ permits: 1 });
     const inFlight = new Set<number>();
     const sentListeners = new Set<(conversation: Conversation) => Effect.Effect<void, Error>>();
@@ -94,7 +97,10 @@ export const outbox = (
           const updated =
             yield* sql`UPDATE send SET state = ${status}, guid = ${guid}, updated_at = ${at},
             late = ${late}, notification_pending = CASE WHEN ${late} = 1 THEN 1 ELSE notification_pending END
-            WHERE id = ${match.id} AND state IN ('recorded', 'uncertain') RETURNING id`;
+             WHERE id = ${match.id} AND state IN ('recorded', 'uncertain') RETURNING id`.pipe(
+              Effect.tap(() => greeting(conversation.id)),
+              sql.withTransaction,
+            );
           if (updated.length && status !== "failed") yield* notifySent(conversation);
         }
       });
@@ -252,7 +258,10 @@ export const outbox = (
           );
           if (Result.isFailure(outcome)) {
             yield* sql`UPDATE send SET state = 'uncertain', late = 1, notification_pending = 1,
-            updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`;
+            updated_at = ${yield* Clock.currentTimeMillis} WHERE id = ${id} AND state = 'recorded'`.pipe(
+              Effect.tap(() => greeting(conversation.id)),
+              sql.withTransaction,
+            );
             return notSent("send in doubt");
           }
           yield* sql`UPDATE send SET state = 'uncertain', updated_at = ${yield* Clock.currentTimeMillis}
@@ -268,7 +277,10 @@ export const outbox = (
             row = yield* check(conversation, row);
           }
           if (row.state === "sent" || row.state === "delivered") return sent();
-          yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`;
+          yield* sql`UPDATE send SET late = 1, notification_pending = 1 WHERE id = ${id}`.pipe(
+            Effect.tap(() => greeting(conversation.id)),
+            sql.withTransaction,
+          );
           // The RPC accepted the send; the Messages row is the authority.
           return notSent("send in doubt");
         }).pipe(
@@ -330,10 +342,22 @@ export const outbox = (
             const released =
               yield* sql`UPDATE send SET state = ${outcome}, late = 1, notification_pending = 1,
             updated_at = ${at} WHERE id = ${row.id}
-            AND state IN ('recorded', 'uncertain') RETURNING id`;
+             AND state IN ('recorded', 'uncertain') RETURNING id`.pipe(
+                Effect.tap(() => greeting(conversation.id)),
+                sql.withTransaction,
+              );
             if (released.length && outcome === "delivered") yield* notifySent(conversation);
             return released.length ? ("released" as const) : ("settled" as const);
-          }),
+          }).pipe(
+            Effect.tap((result) =>
+              result === "released" || result === "settled"
+                ? resolveGreetingAlert(conversation.id, callID).pipe(
+                    sql.withTransaction,
+                    Effect.provideService(SqlClient.SqlClient, sql),
+                  )
+                : Effect.void,
+            ),
+          ),
         ),
       exclusive: <A, E>(conversation: Conversation, action: Effect.Effect<A, E>) =>
         PartitionedSemaphore.withPermit(locks, conversation.id)(action),

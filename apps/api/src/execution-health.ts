@@ -4,6 +4,7 @@ import type { CloudflareConfiguration } from "./cloudflare-config.ts";
 import { contactCause, contactLog, contactOperationId } from "./discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import { parseHealth } from "@ren-ai/transport/health";
+import { changeAlert } from "./metrics/discord.ts";
 
 const Facts = Schema.Struct({
   diskNearlyFull: Schema.Boolean,
@@ -29,55 +30,25 @@ const diagnose = (cause: unknown, stage: string, durationMs: number) => {
   });
 };
 
-const notify = (text: string, webhook: string | undefined, fetcher: typeof fetch) =>
-  Effect.gen(function* () {
-    const started = yield* Clock.currentTimeMillis;
-    yield* Effect.tryPromise(async (signal) => {
-      if (!webhook) return;
-      const response = await fetcher(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text }),
-        signal,
-      });
-      await response.body?.cancel();
-      if (!response.ok)
-        throw Object.assign(new Error("Alert delivery failed"), {
-          status: response.status,
-          code: "ALERT_HTTP",
-        });
-    }).pipe(
-      Effect.timeout("10 seconds"),
-      Effect.catch((cause) =>
-        Effect.map(Clock.currentTimeMillis, (now) =>
-          diagnose(cause, "alert.delivery", now - started),
-        ),
-      ),
-    );
-  });
-
 export const createExecutionHealth = (
   configuration: CloudflareConfiguration["execution"],
-  webhook: string | undefined,
   fetcher: typeof fetch,
   messagingProbe: Effect.Effect<void, Error>,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    yield* sql`CREATE TABLE IF NOT EXISTS application_alert (name TEXT PRIMARY KEY)`;
     const raise = (name: string, _detail?: string) =>
-      Effect.gen(function* () {
-        if (!/^[a-zA-Z0-9:_-]{1,160}$/.test(name)) return;
-        const changed =
-          yield* sql`INSERT OR IGNORE INTO application_alert (name) VALUES (${name}) RETURNING name`;
-        if (changed.length) yield* notify(`Alert: ${name}`, webhook, fetcher);
-      }).pipe(Effect.orDie);
+      changeAlert(name, true).pipe(
+        sql.withTransaction,
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.orDie,
+      );
     const clear = (name: string) =>
-      Effect.gen(function* () {
-        const changed =
-          yield* sql`DELETE FROM application_alert WHERE name = ${name} RETURNING name`;
-        if (changed.length) yield* notify(`Cleared: ${name}`, webhook, fetcher);
-      }).pipe(Effect.orDie);
+      changeAlert(name, false).pipe(
+        sql.withTransaction,
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.orDie,
+      );
     const executorTick = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const [last] = yield* sql<{

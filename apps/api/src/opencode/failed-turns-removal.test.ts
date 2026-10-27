@@ -74,9 +74,10 @@ test.each([true, false])(
           expect(yield* host.sessions.get(replacement.id).pipe(Effect.flip)).toBeInstanceOf(Error);
           expect((yield* host.sessions.get(sibling.id)).id).toBe(sibling.id);
           expect(yield* Effect.promise(() => readRuntime(siblingPath))).toEqual(siblingBefore);
-          expect(yield* sql`SELECT session_id FROM usage_session`).toEqual([
-            { session_id: sibling.id },
-          ]);
+          const retained = accounting ? [session.id, sibling.id, replacement.id] : [sibling.id];
+          expect(yield* sql`SELECT session_id FROM usage_session ORDER BY session_id`).toEqual(
+            retained.toSorted().map((session_id) => ({ session_id })),
+          );
           expect(yield* host.conversations.byHandle(relationship.handle)).toBeUndefined();
           expect(
             (yield* Effect.promise(() => readRuntime(session.location.directory)))?.shortTerm,
@@ -200,7 +201,9 @@ test("scope erasure retries across actor replacement before and after native ses
         );
         remove.mockRestore();
         const sql = yield* SqlClient.SqlClient;
-        expect(yield* sql`SELECT * FROM usage_session`).toEqual([]);
+        expect(yield* sql`SELECT session_id FROM usage_session`).toEqual([
+          { session_id: session.id },
+        ]);
         expect(yield* sql`SELECT persona_id, conversation_key FROM removal`).toEqual([
           { persona_id: "persona1", conversation_key: session.id },
         ]);
