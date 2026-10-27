@@ -3,6 +3,7 @@ import { SqlClient } from "effect/unstable/sql";
 import type { conversations } from "../conversations/conversations.ts";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { eraseIntake } from "./erase.ts";
+import { clearMetricAlerts, excludeMetrics, resumeMetrics } from "../metrics/lifecycle.ts";
 
 interface PendingRemoval {
   readonly sessionID: string;
@@ -30,7 +31,15 @@ export const makeOperator = (
         (enabled
           ? sql`INSERT OR IGNORE INTO test_handle (handle) VALUES (${handle})`
           : sql`DELETE FROM test_handle WHERE handle = ${handle}`
-        ).pipe(Effect.asVoid),
+        ).pipe(
+          Effect.tap(() =>
+            enabled
+              ? excludeMetrics(handle).pipe(Effect.provideService(SqlClient.SqlClient, sql))
+              : resumeMetrics(handle).pipe(Effect.provideService(SqlClient.SqlClient, sql)),
+          ),
+          sql.withTransaction,
+          Effect.asVoid,
+        ),
       rebuild: rebuildSession,
       remove: (handle: string) =>
         directory.withHandle(handle)(
@@ -56,7 +65,8 @@ export const makeOperator = (
                 yield* sql`INSERT OR IGNORE INTO removal (handle, session_id, persona_id, conversation_key)
                   SELECT r.handle, r.session_id, COALESCE(r.persona_id, s.persona_id), COALESCE(r.conversation_key, s.conversation_key)
                   FROM retained_session r LEFT JOIN usage_session s ON s.session_id = r.session_id WHERE r.handle = ${handle}`;
-              yield* eraseIntake(handle, keep).pipe(
+              yield* eraseIntake(handle).pipe(Effect.provideService(SqlClient.SqlClient, sql));
+              yield* clearMetricAlerts(handle).pipe(
                 Effect.provideService(SqlClient.SqlClient, sql),
               );
               yield* sql`DELETE FROM send WHERE handle = ${handle}`;

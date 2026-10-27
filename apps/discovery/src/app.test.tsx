@@ -11,7 +11,10 @@ beforeEach(() => localStorage.setItem("ren-ai.discovery.image-style", "photo"));
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
   delete window.turnstile;
   window.history.replaceState(null, "", "/");
 });
@@ -92,42 +95,58 @@ test.each([undefined, "harin"])(
   },
 );
 
-test("a visitor likes a profile, enters a handle and consent, and really joins the waitlist", async () => {
-  const join = vi.fn<DiscoveryClient["join"]>().mockResolvedValue({ status: "waiting" });
-  const client = testClient({ profiles: async () => people, join });
-  const verified = fakeVerification();
-  render(<App client={client} />);
-  await screen.findByRole("heading", { name: "하린" });
-  expect(screen.getByRole("button", { name: /연락받기/ }).hasAttribute("disabled")).toBe(true);
-  choose(true);
-  await screen.findByRole("heading", { name: "지우" });
-  fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
-  fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
-    target: { value: "010-1234-5678" },
-  });
-  fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
-  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
-  act(() => verified("human"));
-  fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
-  await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
-  expect(join).toHaveBeenCalledWith({
-    handle: "+821012345678",
-    locale: "ko",
-    conversationLanguage: "ko",
-    startingRelationship: "dating",
-    imageStyle: "photo",
-    privacyNoticeVersion: discoveryNotice.version,
-    likedPersonaIDs: ["harin"],
-    turnstileToken: "human",
-    name: "민수",
-  });
-  expect(screen.getByText("준비되는 대로, 좋아한 페르소나 중 한 명이 연락할 거예요.")).toBeTruthy();
-  expect(
-    screen.getByText(
-      "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
-    ),
-  ).toBeTruthy();
-});
+test.each(["counted", "excluded", "blocked"])(
+  "a visitor joins the waitlist with browser Metrics %s",
+  async (metrics) => {
+    if (metrics === "excluded") localStorage.setItem("ren-ai.metrics.off", "1");
+    if (metrics === "blocked")
+      vi.stubGlobal("sessionStorage", {
+        getItem() {
+          throw new Error("storage blocked");
+        },
+      });
+    const join = vi.fn<DiscoveryClient["join"]>().mockResolvedValue({ status: "waiting" });
+    const client = testClient({ profiles: async () => people, join, activity: async () => "KR" });
+    const verified = fakeVerification();
+    render(<App client={client} />);
+    await screen.findByRole("heading", { name: "하린" });
+    expect(screen.getByRole("button", { name: /연락받기/ }).hasAttribute("disabled")).toBe(true);
+    choose(true);
+    await screen.findByRole("heading", { name: "지우" });
+    fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
+      target: { value: "010-1234-5678" },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
+    fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+    act(() => verified("human"));
+    fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
+    await screen.findByRole("heading", { name: "대기 등록이 완료됐어요." });
+    expect(join).toHaveBeenCalledWith({
+      handle: "+821012345678",
+      locale: "ko",
+      conversationLanguage: "ko",
+      startingRelationship: "dating",
+      imageStyle: "photo",
+      privacyNoticeVersion: discoveryNotice.version,
+      ...(metrics === "counted" && {
+        source: { entry: "home", referrer: "", source: "", medium: "", campaign: "" },
+        visitCountry: "KR",
+      }),
+      likedPersonaIDs: ["harin"],
+      turnstileToken: "human",
+      name: "민수",
+    });
+    expect(
+      screen.getByText("준비되는 대로, 좋아한 페르소나 중 한 명이 연락할 거예요."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
+      ),
+    ).toBeTruthy();
+  },
+);
 
 test("an existing user is directed to the assigned conversation instead of a new waiting promise", async () => {
   const client = testClient({

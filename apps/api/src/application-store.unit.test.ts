@@ -19,6 +19,10 @@ vi.mock("./database.ts", () => ({
     return controls.failStartup ? Effect.fail(new Error("migration failure")) : Effect.void;
   },
 }));
+vi.mock("./metrics/discord.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./metrics/discord.ts")>()),
+  configureDiscord: () => Effect.void,
+}));
 vi.mock("./discovery/contacts.ts", () => ({
   contacts: () =>
     Effect.succeed({
@@ -103,6 +107,9 @@ test("conversation records fail closed when the application's management token i
     const response = await store.handler(new Request("https://api.test/management/conversations"));
     expect(response.status).toBe(401);
     expect(await response.text()).toBe("Unauthorized");
+    expect((await store.handler(new Request("https://api.test/management/metrics"))).status).toBe(
+      401,
+    );
   } finally {
     await store.close();
   }

@@ -7,6 +7,10 @@ import { SqliteClient } from "@effect/sql-sqlite-do";
 import { registrationSchemaProbe } from "./registration-schema.test-helper.ts";
 import { usageBudget } from "./usage-budget.test-helper.ts";
 import { outboxBudget } from "./outbox-budget.test-helper.ts";
+import { changeAlert } from "../src/metrics/discord.ts";
+import { metricsBudget } from "./metrics-budget.test-helper.ts";
+import { blockedContact } from "./blocked-contact.test-helper.ts";
+export { ActivityStore } from "./activity-store.test-helper.ts";
 
 interface RegistryNamespace {
   idFromName: (name: string) => string;
@@ -16,6 +20,7 @@ interface RegistryNamespace {
 interface Environment {
   readonly REGISTRY: RegistryNamespace;
   readonly TOKEN_MANAGEMENT: string;
+  readonly ACTIVITY_STORE: RegistryNamespace;
 }
 
 const catalog = async () => [
@@ -41,6 +46,11 @@ const httpClient = HttpClient.make((request) =>
 
 export class Registry extends DurableObject<Environment> {
   private store: Promise<ApplicationStore> | undefined;
+  private posts: { content: string; wait: string | null }[] = [];
+  private discordStatus = 200;
+  private discordGlobal = false;
+  private failActivity = false;
+  private activityReads = 0;
 
   private application() {
     this.store ??= createApplicationStore(this.ctx.storage, {
@@ -48,6 +58,31 @@ export class Registry extends DurableObject<Environment> {
       turnstileSecret: "test-secret",
       managementToken: this.env.TOKEN_MANAGEMENT,
       httpClient,
+      activity: async () => {
+        this.activityReads++;
+        return this.failActivity ? new Response(null, { status: 503 }) : Response.json([]);
+      },
+      webhooks: {
+        alerts: "https://discord.example/alerts",
+        reports: "https://discord.example/reports",
+      },
+      fetcher: async (input, init) => {
+        const request = new Request(input, init);
+        const body = Schema.decodeUnknownSync(
+          Schema.fromJsonString(Schema.Struct({ content: Schema.String })),
+        )(await request.text());
+        this.posts.push({
+          content: body.content,
+          wait: new URL(request.url).searchParams.get("wait"),
+        });
+        return Response.json(
+          { global: this.discordGlobal, retry_after: 120 },
+          {
+            status: this.discordStatus,
+            headers: { "Retry-After": "120" },
+          },
+        );
+      },
     });
     return this.store;
   }
@@ -64,6 +99,39 @@ export class Registry extends DurableObject<Environment> {
       );
     }
     const store = await this.application();
+    if (path === "/__fixture/blocked-contact")
+      return Response.json(
+        await store.run(blockedContact(new URL(request.url).searchParams.has("during"))),
+      );
+    if (path === "/__fixture/metrics-budget")
+      return Response.json(await metricsBudget(this.ctx.storage, store));
+    if (path === "/__fixture/metrics-tick") {
+      const params = new URL(request.url).searchParams;
+      this.discordStatus = Number(params.get("status") ?? "200");
+      this.discordGlobal = params.has("global");
+      this.failActivity = params.get("activity") === "fail";
+      const now = Date.now;
+      Date.now = () => Number(params.get("at"));
+      try {
+        if (params.has("alerts")) {
+          await store.run(
+            Effect.gen(function* () {
+              const sql = yield* SqlClient.SqlClient;
+              yield* changeAlert("screen-locked", true).pipe(
+                Effect.andThen(changeAlert("disk-nearly-full", true)),
+                sql.withTransaction,
+              );
+            }),
+          );
+        }
+        await store.metricsTick(crypto.randomUUID());
+      } finally {
+        Date.now = now;
+      }
+      return Response.json(this.posts.splice(0), {
+        headers: { "X-Activity-Reads": String(this.activityReads) },
+      });
+    }
     if (path === "/__fixture/verify-imessage") {
       this.ctx.storage.sql.exec(
         "UPDATE discovery_registration SET imessage_status = 'available', imessage_checked_at = ?",
@@ -123,6 +191,8 @@ export class Registry extends DurableObject<Environment> {
 
 export default {
   fetch(request: Request, env: Environment) {
+    if (new URL(request.url).pathname === "/__activity/")
+      return env.ACTIVITY_STORE.get(env.ACTIVITY_STORE.idFromName("activity")).fetch(request);
     const id = env.REGISTRY.idFromName(
       new URL(request.url).pathname === "/__fixture/legacy-registration" ? "legacy" : "application",
     );

@@ -2,6 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { Conversation } from "./conversations.ts";
+import { lifecycleMetric } from "../metrics/lifecycle.ts";
+import { changeAlert } from "../metrics/discord.ts";
 
 export const reselectionHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -62,4 +64,17 @@ export const recordEnding = (
     yield* sql`DELETE FROM application_checkpoint WHERE name = ${`replay:${conversation.sessionID}`}`;
     yield* sql`DELETE FROM persona_assignment WHERE handle = ${conversation.handle}`;
     yield* sql`UPDATE user SET persona_id = NULL WHERE handle = ${conversation.handle}`;
+    const [registration] = yield* sql<{
+      id: string;
+    }>`SELECT registration_id AS id FROM conversation WHERE id = ${conversation.id} AND registration_id IS NOT NULL`;
+    if (registration) {
+      yield* lifecycleMetric(
+        registration.id,
+        "ending",
+        conversation.personaID,
+        [["initiator", initiator]],
+        conversation.id,
+      );
+      yield* changeAlert(`greeting:${registration.id}`, false);
+    }
   });

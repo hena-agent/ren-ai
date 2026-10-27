@@ -9,6 +9,8 @@ export const readyApplicationHealth = {
   bootstrapOnly: true,
   executor: { service: "api-msg", revision: "development", status: "ready" },
   messaging: "ready",
+  discordAlerts: "accepting",
+  discordReports: "accepting",
   applicationRuntime: { revision: "development", status: "ready" },
 };
 
@@ -19,4 +21,6 @@ export const executionBindings: CloudflareBindings = {
   TOKEN_MANAGEMENT: "management-secret",
   API_MSG_URL: "https://api-msg.example",
   BOOTSTRAP_ONLY: "false",
+  DISCORD_ALERT_WEBHOOK_URL: "https://discord.example/alerts",
+  DISCORD_REPORT_WEBHOOK_URL: "https://discord.example/reports",
 };

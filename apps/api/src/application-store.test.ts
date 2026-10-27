@@ -1,7 +1,14 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BrowsePage, discoveryNotice } from "@ren-ai/onboarding";
+import {
+  BrowsePage,
+  ContactSnapshot,
+  discoveryNotice,
+  Metrics,
+  MetricTotal,
+  koreaDay,
+} from "@ren-ai/onboarding";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
 import { expect, test } from "vitest";
@@ -31,13 +38,21 @@ const openRuntime = async (resourcePersistencePath: string) => {
           name: "application-store-test",
           compatibilityDate: "2026-10-11",
           compatibilityFlags: ["nodejs_compat"],
-          exports: { Registry: { type: "durable-object", storage: "sqlite" } },
+          exports: {
+            Registry: { type: "durable-object", storage: "sqlite" },
+            ActivityStore: { type: "durable-object", storage: "sqlite" },
+          },
           manifest: {
             mainModule: "index.js",
             modules: { "index.js": { type: "esm", contents: source } },
           },
           env: {
             TOKEN_MANAGEMENT: { type: "text", value: "management-test" },
+            ACTIVITY_STORE: {
+              type: "durable-object",
+              worker: "application-store-test",
+              exportName: "ActivityStore",
+            },
             REGISTRY: {
               type: "durable-object",
               worker: "application-store-test",
@@ -54,10 +69,184 @@ const openRuntime = async (resourcePersistencePath: string) => {
 const call = (runtime: Miniflare, path: string, init?: Parameters<Miniflare["dispatchFetch"]>[1]) =>
   runtime.dispatchFetch(`http://application.test${path}`, init);
 
+test("activity cardinality is bounded without Visit reports and concurrent reports lose no totals", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "metrics-activity-budget-"));
+  const day = koreaDay(Date.now());
+  const path = `/__activity/?from=${day}&to=${day}`;
+  try {
+    const runtime = await openRuntime(persistence);
+    await call(runtime, path);
+    const report = (index: number) =>
+      call(runtime, "/__activity/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "CF-IPCountry": "KR" },
+        body: JSON.stringify({
+          step: "like",
+          source: {
+            entry: "home",
+            referrer: "",
+            source: `campaign-${index}`,
+            medium: "",
+            campaign: "",
+          },
+          persona: `persona-${index}`,
+          device: "phone",
+          locale: "ko",
+          imageStyle: "anime",
+        }),
+      });
+    for (let index = 0; index < 300; index++) {
+      const response = await report(index);
+      expect(response.status).toBe(204);
+      expect(Number(response.headers.get("X-Rows-Read"))).toBeLessThan(30);
+      expect(Number(response.headers.get("X-Rows-Written"))).toBeLessThan(30);
+    }
+    const concurrent = await Promise.all(Array.from({ length: 20 }, () => report(0)));
+    expect(concurrent.every((response) => response.status === 204)).toBe(true);
+    const totals = Schema.decodeUnknownSync(Schema.Array(MetricTotal))(
+      await (await call(runtime, path)).json(),
+    );
+    expect(totals).toEqual([{ day, step: "like", dimension: "total", value: "", count: 320 }]);
+    for (const breakdown of ["source", "persona"]) {
+      const rows = Schema.decodeUnknownSync(Schema.Array(MetricTotal))(
+        await (await call(runtime, `${path}&breakdown=${breakdown}`)).json(),
+      );
+      expect(rows).toHaveLength(257);
+      expect(rows.find((row) => row.value === "other")?.count).toBe(44);
+    }
+    const idle = await call(runtime, path);
+    expect(Number(idle.headers.get("X-Rows-Written"))).toBe(0);
+    expect(Number(idle.headers.get("X-Rows-Read"))).toBeLessThan(5);
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
+
+test.each([false, true])(
+  "a zero Report queues once per Korea-time day and cooldown global=%s survives replacement",
+  async (global) => {
+    const persistence = await mkdtemp(join(tmpdir(), "metrics-discord-"));
+    const at = Date.now();
+    const day = koreaDay(at);
+    const posts = Schema.Array(Schema.Struct({ content: Schema.String, wait: Schema.String }));
+    try {
+      let runtime = await openRuntime(persistence);
+      const first = Schema.decodeUnknownSync(posts)(
+        await (
+          await call(
+            runtime,
+            `/__fixture/metrics-tick?at=${at}&status=429${global ? "&global" : ""}`,
+          )
+        ).json(),
+      );
+      expect(first).toHaveLength(1);
+      expect(first[0]!.wait).toBe("true");
+      expect(first[0]!.content).toContain("방문: 0 / 0");
+      expect(first[0]!.content).toContain("https://admin.renai.im/metrics");
+      expect(first[0]!.content.length).toBeLessThanOrEqual(2000);
+      await stopRuntimes();
+      runtime = await openRuntime(persistence);
+      const state = await call(runtime, `/management/metrics?from=${day}&to=${day}`, {
+        headers: { Authorization: "Bearer management-test" },
+      });
+      expect(Schema.decodeUnknownSync(Metrics)(await state.json()).delivery).toMatchObject({
+        reports: "rejected",
+        pending: 1,
+      });
+      expect(
+        await (
+          await call(
+            runtime,
+            `/__fixture/metrics-tick?at=${at + 119_000}${global ? "&alerts=1" : ""}`,
+          )
+        ).json(),
+      ).toEqual([]);
+      const retried = Schema.decodeUnknownSync(posts)(
+        await (await call(runtime, `/__fixture/metrics-tick?at=${at + 120_000}`)).json(),
+      );
+      expect(retried).toHaveLength(global ? 3 : 1);
+      expect(retried).toEqual(expect.arrayContaining([...first]));
+      expect(
+        await (await call(runtime, `/__fixture/metrics-tick?at=${at + 121_000}`)).json(),
+      ).toEqual([]);
+      await stopRuntimes();
+      runtime = await openRuntime(persistence);
+      const late = Schema.decodeUnknownSync(posts)(
+        await (await call(runtime, `/__fixture/metrics-tick?at=${at + 86_400_000}`)).json(),
+      );
+      expect(late).toHaveLength(1);
+      expect(late[0]!.content).not.toBe(first[0]!.content);
+    } finally {
+      await stopRuntimes();
+      await rm(persistence, { recursive: true, force: true });
+    }
+  },
+);
+
+test("Report failures leave Alert delivery independent and webhook cooldown survives replacement", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "metrics-isolation-"));
+  const at = Date.now();
+  const posts = Schema.Array(Schema.Struct({ content: Schema.String, wait: Schema.String }));
+  try {
+    let runtime = await openRuntime(persistence);
+    const first = await call(
+      runtime,
+      `/__fixture/metrics-tick?at=${at}&status=429&alerts=1&activity=fail`,
+    );
+    expect(first.status).toBe(200);
+    expect(Schema.decodeUnknownSync(posts)(await first.json())).toHaveLength(1);
+    await stopRuntimes();
+    runtime = await openRuntime(persistence);
+    const backingOff = await call(runtime, `/__fixture/metrics-tick?at=${at + 500}&activity=fail`);
+    expect(await backingOff.json()).toEqual([]);
+    expect(backingOff.headers.get("X-Activity-Reads")).toBe("0");
+    expect(
+      await (
+        await call(runtime, `/__fixture/metrics-tick?at=${at + 119_000}&activity=fail`)
+      ).json(),
+    ).toEqual([]);
+    const delivered = Schema.decodeUnknownSync(posts)(
+      await (
+        await call(runtime, `/__fixture/metrics-tick?at=${at + 120_000}&activity=fail`)
+      ).json(),
+    );
+    expect(delivered).toHaveLength(2);
+    expect(delivered.every((post) => post.content.includes("https://admin.renai.im/"))).toBe(true);
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
+
 test("usage collection has a bounded SQL budget and unchanged history incurs no writes after replacement", async () => {
   const persistence = await mkdtemp(join(tmpdir(), "api-usage-budget-"));
   try {
     const runtime = await openRuntime(persistence);
+    const metrics = Schema.decodeUnknownSync(
+      Schema.Struct({
+        idle: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        small: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        large: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        smallQueue: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        largeQueue: Schema.Struct({ reads: Schema.Number, writes: Schema.Number }),
+        queuePlan: Schema.Array(Schema.Struct({ detail: Schema.String })),
+        statuses: Schema.Array(Schema.Number),
+        plan: Schema.Array(Schema.Struct({ detail: Schema.String })),
+      }),
+    )(await (await call(runtime, "/__fixture/metrics-budget")).json());
+    expect(metrics.statuses).toEqual([200, 200]);
+    expect(metrics.idle.writes).toBe(0);
+    expect(metrics.idle.reads).toBeLessThan(100);
+    expect(metrics.large.writes).toBe(0);
+    expect(metrics.large.reads).toBeLessThanOrEqual(metrics.small.reads + 5);
+    expect(metrics.plan.some(({ detail }) => detail.includes("metric_read"))).toBe(true);
+    expect(metrics.largeQueue.reads).toBeLessThanOrEqual(metrics.smallQueue.reads + 10);
+    expect(metrics.largeQueue.writes).toBeLessThan(50);
+    expect(metrics.queuePlan.some(({ detail }) => detail.includes("discord_channel_due"))).toBe(
+      true,
+    );
+    expect(metrics.queuePlan.every(({ detail }) => !detail.includes("TEMP B-TREE"))).toBe(true);
     const response = await call(runtime, "/__fixture/usage-budget");
     expect(response.status).toBe(200);
     const result = Schema.decodeUnknownSync(
@@ -117,6 +306,49 @@ const register = (runtime: Miniflare, handle: string) =>
       likedPersonaIDs: ["sora"],
     }),
   });
+
+test.each([false, true])(
+  "blocked admission during creation=%s commits without an uncertain Greeting",
+  async (during) => {
+    const persistence = await mkdtemp(join(tmpdir(), "metrics-blocked-"));
+    try {
+      const runtime = await openRuntime(persistence);
+      expect((await register(runtime, "+821012345678")).status).toBe(200);
+      await call(runtime, "/__fixture/verify-imessage");
+      const headers = {
+        Authorization: "Bearer management-test",
+        "Content-Type": "application/json",
+      };
+      expect(
+        (
+          await call(runtime, "/management/discovery/select", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ requestId: crypto.randomUUID(), count: 1 }),
+          })
+        ).status,
+      ).toBe(200);
+      const result = await call(runtime, `/__fixture/blocked-contact${during ? "?during" : ""}`);
+      expect(result.status).toBe(200);
+      expect(await result.json()).toEqual({ created: Number(during), removed: Number(during) });
+      const listing = await call(runtime, "/management/discovery", { headers });
+      expect(
+        Schema.decodeUnknownSync(ContactSnapshot)(await listing.json()).entries[0]!.state,
+      ).toBe("blocked");
+      const day = koreaDay(Date.now());
+      const metrics = Schema.decodeUnknownSync(Metrics)(
+        await (
+          await call(runtime, `/management/metrics?from=${day}&to=${day}`, { headers })
+        ).json(),
+      );
+      expect(metrics.alerts).toEqual([]);
+      expect(metrics.totals.some((row) => row.step === "greeting_uncertain")).toBe(false);
+    } finally {
+      await stopRuntimes();
+      await rm(persistence, { recursive: true, force: true });
+    }
+  },
+);
 
 test("registry persists state on the Durable Object across recreation", async () => {
   const persistence = await mkdtemp(join(tmpdir(), "api-app-store-"));

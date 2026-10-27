@@ -3,7 +3,8 @@ import { Clock, Deferred, Effect, Exit } from "effect";
 import { TestClock } from "effect/testing";
 import { SqlClient } from "effect/unstable/sql";
 import { expect, test, vi } from "vitest";
-import { createExecutionHealth } from "./execution-health.ts";
+import { createExecutionHealth as executionHealth } from "./execution-health.ts";
+import { deliverDiscord } from "./metrics/discord.ts";
 import { migrate } from "./database.ts";
 
 const configuration = {
@@ -14,6 +15,27 @@ const configuration = {
   model: "test",
   directory: "/srv/ren-ai",
 };
+const createExecutionHealth = (
+  config: typeof configuration,
+  webhook: string | undefined,
+  fetcher: typeof fetch,
+  probe: Effect.Effect<void, Error>,
+) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const health = yield* executionHealth(config, fetcher, probe);
+    const flush = webhook
+      ? deliverDiscord({ alerts: webhook, reports: undefined }, fetcher, crypto.randomUUID()).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        )
+      : Effect.void;
+    return {
+      raise: (name: string, detail?: string) =>
+        health.raise(name, detail).pipe(Effect.andThen(flush)),
+      clear: (name: string) => health.clear(name).pipe(Effect.andThen(flush)),
+      tick: health.tick.pipe(Effect.andThen(flush)),
+    };
+  });
 const run = <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =>
   Effect.runPromise(
     Effect.scoped(migrate.pipe(Effect.andThen(effect))).pipe(
@@ -48,10 +70,9 @@ test("alerts are durable, deduplicated and never forward private detail", async 
   );
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(fetcher.mock.calls)).not.toContain("private prompt");
-  expect(fetcher.mock.calls.map(([, init]) => init?.body)).toEqual([
-    JSON.stringify({ content: "Alert: provider-failing" }),
-    JSON.stringify({ content: "Cleared: provider-failing" }),
-  ]);
+  expect(fetcher.mock.calls[0]![1]?.body).toContain("알림: provider-failing");
+  expect(fetcher.mock.calls[1]![1]?.body).toContain("해제: provider-failing");
+  expect(fetcher.mock.calls[0]![1]?.body).toContain("https://admin.renai.im/conversations");
 });
 
 test("health checks are rate limited and keep native facts separate from credentials", async () => {
@@ -148,7 +169,7 @@ test.each([502, 503, 200])(
       );
       const logs = JSON.stringify(stderr.mock.calls);
       expect(logs).toContain("executor.health");
-      expect(logs).toContain("alert.delivery");
+      expect(logs).toContain("discord.delivery");
       expect(logs).toContain(`\\"status\\":${status}`);
       expect(logs).not.toContain("management-secret");
       expect(logs).not.toContain("private failure input");
@@ -194,7 +215,7 @@ test("stalled executor health and alert delivery abort without holding the maint
     );
     const logs = JSON.stringify(stderr.mock.calls);
     expect(logs).toContain("executor.health");
-    expect(logs).toContain("alert.delivery");
+    expect(logs).toContain("discord.delivery");
     expect(logs).toContain("TimeoutError");
     expect(logs).toContain("requestId");
     expect(logs).not.toContain("management-secret");
@@ -207,7 +228,7 @@ test("stalled executor health and alert delivery abort without holding the maint
 test("APNs failures survive actor replacement, alert after two probes, and clear on recovery", async () => {
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   const fetcher = vi.fn<typeof fetch>(async (input) =>
-    typeof input === "string" && input.includes("hook.example")
+    new Request(input).url.includes("hook.example")
       ? new Response(null)
       : Response.json({
           service: "api-msg",
@@ -259,9 +280,7 @@ test("APNs failures survive actor replacement, alert after two probes, and clear
         yield* TestClock.adjust("20 seconds");
         yield* health.tick;
         expect(
-          fetcher.mock.calls.filter(
-            ([input]) => typeof input === "string" && input.includes("hook.example"),
-          ),
+          fetcher.mock.calls.filter(([input]) => new Request(input).url.includes("hook.example")),
         ).toHaveLength(1);
         failing = false;
         yield* TestClock.adjust("20 seconds");
@@ -275,9 +294,7 @@ test("APNs failures survive actor replacement, alert after two probes, and clear
         }>`SELECT due FROM application_work WHERE name = 'messaging-health'`;
         expect(scheduled!.due).toBe((yield* Clock.currentTimeMillis) + 120_000);
         expect(
-          fetcher.mock.calls.filter(
-            ([input]) => typeof input === "string" && input.includes("hook.example"),
-          ),
+          fetcher.mock.calls.filter(([input]) => new Request(input).url.includes("hook.example")),
         ).toHaveLength(2);
       }).pipe(Effect.provide(TestClock.layer())),
     );

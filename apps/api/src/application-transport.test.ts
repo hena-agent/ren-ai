@@ -96,6 +96,8 @@ test.each([
             bootstrapOnly: false,
             executor: { service: "api-msg", status: "ready" },
             messaging: "ready",
+            discordAlerts: "accepting",
+            discordReports: status === "ready" ? "accepting" : "rejected",
           },
           { status: expectedStatus },
         ),
@@ -105,6 +107,8 @@ test.each([
       revision: "development",
       status,
       applicationRuntime: { revision: "development", status: "ready" },
+      discordAlerts: "accepting",
+      discordReports: status === "ready" ? "accepting" : "rejected",
     });
   },
 );

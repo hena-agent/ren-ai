@@ -123,7 +123,8 @@ export const composedTestServer = (
       secrets: {
         TURNSTILE_SECRET: "turnstile-test",
         APPLICATION_TOKEN: "application-secret",
-        DISCORD_WEBHOOK_URL: "https://discord.invalid/hook",
+        DISCORD_ALERT_WEBHOOK_URL: "https://discord.invalid/hook",
+        DISCORD_REPORT_WEBHOOK_URL: "https://discord.invalid/reports",
       },
     });
     if (server.mode !== "running") throw new Error("Expected running application");

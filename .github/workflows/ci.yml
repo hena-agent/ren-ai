@@ -175,7 +175,7 @@ jobs:
   # The Workers pin the Ambivalent Co. account in wrangler.jsonc; the token belongs to it.
   deploy-admin:
     name: Deploy admin.renai.im
-    needs: gates
+    needs: [gates, deploy-api-app]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10

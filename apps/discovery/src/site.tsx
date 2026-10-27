@@ -25,7 +25,7 @@ export function Site({ client = discoveryClient }: { client?: DiscoveryClient })
   }
   return (
     <LocaleProvider>
-      <Home />
+      <Home client={client} />
     </LocaleProvider>
   );
 }

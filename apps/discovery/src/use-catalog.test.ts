@@ -8,6 +8,7 @@ afterEach(cleanup);
 const original = [{ id: "original", name: "Original", bio: "A public profile", imageUrl: "" }];
 const latest = [{ ...original[0]!, id: "latest" }];
 const browsingClient = (profiles: DiscoveryClient["profiles"]): DiscoveryClient => ({
+  activity: async () => {},
   profiles,
   browse: async () => ({ people: original, nextCursor: null }),
   join: async () => ({ status: "waiting" }),

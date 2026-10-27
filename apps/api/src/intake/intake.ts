@@ -1,5 +1,6 @@
 import { Effect, Schema, Semaphore } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { incomingMetric } from "../metrics/conversations.ts";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { IncomingMessage, Messages } from "@ren-ai/imsg";
 import {
@@ -333,6 +334,10 @@ export const intake = (
                 if (!active.length) return;
                 yield* changes.remember(conversation, row);
                 yield* markSeen(conversation.sessionID, row.guid);
+                if (!row.tapback)
+                  yield* incomingMetric(conversation.id, row.createdAt).pipe(
+                    Effect.provideService(SqlClient.SqlClient, sql),
+                  );
                 yield* sql`UPDATE conversation SET last_received_at = ${row.createdAt}, first_received_at = COALESCE(first_received_at, ${row.createdAt}) WHERE id = ${conversation.id}`;
                 yield* sql`UPDATE user SET replied_at = COALESCE(replied_at, ${row.createdAt}) WHERE id =
                 (SELECT user_id FROM conversation WHERE id = ${conversation.id})`;

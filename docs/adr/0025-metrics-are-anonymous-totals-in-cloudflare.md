@@ -1,0 +1,11 @@
+# Metrics are anonymous totals in Cloudflare
+
+Ren AI keeps Metrics in its own Cloudflare account rather than adding an analytics vendor or a cross-Visit browser identity. Public Discovery activity reaches a separate Durable Object, while lifecycle totals commit in the application's existing transaction. Both retain only marginal totals by Korea-time day; history starts at rollout rather than being backfilled. See [issue #168](https://github.com/hena-agent/ren-ai/issues/168).
+
+Visit state and duplicate-step markers stay in tab storage; only the operator opt-out persists across Visits. Source contains a referring host, campaign tags and entry, never a full URL. The activity response returns Cloudflare's country so later activity and registration retain the Visit's country. Source and persona cardinality have a daily bound; excess values contribute to an `other` bucket without losing totals.
+
+Live registrations and Conversations own lifecycle markers. Their foreign-key-owned contribution receipts retain the exact day and marginal contributions needed to subtract all earlier activity when a handle is marked as a test handle, including Active-user days. This normalizes those markers instead of repeatedly rewriting an ever-growing JSON field on a Conversation. Removal cascades these private receipts and markers without decrementing anonymous totals. Usage stays after removal, with exclusion stamped per usage entry; unmarking affects subsequent work and never restores previously excluded cost.
+
+Existing registrations count future lifecycle events with unknown Visit attribution. Existing accepted Greetings do not become new cohorts, and existing test sessions remain excluded when new usage arrives after rollout. No historical totals are backfilled.
+
+Alerts and Reports use one durable Discord outbox with separate destinations, persisted delivery state and per-channel cooldowns. A persisted daily deadline advances transactionally with Report creation; delivery uses Discord's wait-for-confirmation option. An unconfirmed send can rarely duplicate, but a confirmed Report is not regenerated after replacement. Metrics failures are isolated from messaging execution, and Report generation failure does not block Alert delivery.

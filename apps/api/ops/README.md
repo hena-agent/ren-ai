@@ -64,6 +64,34 @@ imsg protocol.
 
 ## Discovery and Admin
 
+### Metrics rollout
+
+Before deploying Metrics, set the Worker secrets `DISCORD_ALERT_WEBHOOK_URL`
+(the existing operations channel) and `DISCORD_REPORT_WEBHOOK_URL` (the `#metrics`
+channel). Remove the obsolete `DISCORD_WEBHOOK_URL` secret. Keep webhook values
+out of command arguments, logs and Git. Deploy the API before Discovery and Admin;
+the new registration Source and Visit country fields are optional.
+
+The Worker migration adds the separate `DiscoveryActivity` Durable Object and its
+rate-limit binding. Public activity never routes through the Conversation object.
+Admin's authenticated `/metrics` page reads live Korea-time totals, comparisons,
+personas, cost and Discord delivery state. Its device opt-out link suppresses
+Discovery reporting persistently in that browser.
+
+Verify `/health` reports `discordAlerts` and `discordReports` as `accepting`, along
+with the expected service and full artifact revision. Missing webhook configuration
+or rejected delivery degrades health. Delivery state and pending messages survive
+actor replacement. A Report is due at 09:00 KST, including all-zero days; missed
+days are queued on later wakes. Delivery honours channel and global cooldowns,
+including `Retry-After` and Discord's JSON `retry_after`. Check the next Report in `#metrics`
+and correlate any failure with `metrics.task` or `discord.delivery` request IDs.
+
+History begins at deployment. Removing a person retains anonymous Metrics and
+usage; marking a live handle as a test handle subtracts its owned contributions.
+Unmarking restores nothing and counts only subsequent activity. Reads are bounded
+to 366 days. Each day retains at most 256 distinct Source and persona values plus
+an `other` bucket, with indexed lookups independent of older days.
+
 `GET /health` identifies `api-app` and the exact source revision embedded in the
 Worker. Database, authenticated `api-msg` and a direct no-send Messages/APNs probe
 are separate dependencies. An unavailable, unauthorized or wrong-service executor,

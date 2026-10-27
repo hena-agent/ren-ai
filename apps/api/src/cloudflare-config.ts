@@ -3,6 +3,12 @@ import type { ApplicationStoreConfig } from "./application-store.ts";
 import type { R2Bucket } from "@cloudflare/workers-types";
 
 export interface CloudflareBindings {
+  readonly ACTIVITY?: {
+    idFromName: (name: string) => import("@cloudflare/workers-types").DurableObjectId;
+    get: (id: import("@cloudflare/workers-types").DurableObjectId) => {
+      fetch: (request: Request) => Promise<Response>;
+    };
+  };
   readonly PERSONA_CATALOG_URL: string;
   readonly TOKEN_CATALOG?: string;
   readonly TURNSTILE_SECRET?: string;
@@ -11,7 +17,8 @@ export interface CloudflareBindings {
   readonly PERSONA_MODEL?: string;
   readonly OPENCODE_DIRECTORY?: string;
   readonly BOOTSTRAP_ONLY?: string;
-  readonly DISCORD_WEBHOOK_URL?: string;
+  readonly DISCORD_ALERT_WEBHOOK_URL?: string;
+  readonly DISCORD_REPORT_WEBHOOK_URL?: string;
   readonly CODEX_IMAGE_API_KEY?: string;
   readonly CONVERSATION_PHOTOS?: R2Bucket;
 }

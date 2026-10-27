@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
-import { BrowsePage, ConversationDetail, discoveryNotice } from "@ren-ai/onboarding";
+import { BrowsePage, ConversationDetail, discoveryNotice, Metrics } from "@ren-ai/onboarding";
 import { Schema } from "effect";
 import { expect, test } from "vitest";
 import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
@@ -43,12 +43,20 @@ const openWorker = async (
           name: "api-app-worker-test",
           compatibilityDate: "2026-10-13",
           compatibilityFlags: ["nodejs_compat", "global_fetch_strictly_public"],
-          exports: { ApiApplication: { type: "durable-object", storage: "sqlite" } },
+          exports: {
+            ApiApplication: { type: "durable-object", storage: "sqlite" },
+            DiscoveryActivity: { type: "durable-object", storage: "sqlite" },
+          },
           manifest: {
             mainModule: "index.js",
             modules: { "index.js": { type: "esm", contents: source } },
           },
           env: {
+            ACTIVITY: {
+              type: "durable-object",
+              worker: "api-app-worker-test",
+              exportName: "DiscoveryActivity",
+            },
             APPLICATION: {
               type: "durable-object",
               worker: "api-app-worker-test",
@@ -56,6 +64,8 @@ const openWorker = async (
             },
             PERSONA_CATALOG_URL: textBinding(catalogUrl),
             ...(secrets && {
+              DISCORD_ALERT_WEBHOOK_URL: textBinding("https://discord.example/alerts"),
+              DISCORD_REPORT_WEBHOOK_URL: textBinding("https://discord.example/reports"),
               TOKEN_CATALOG: textBinding("catalog-secret"),
               TURNSTILE_SECRET: textBinding("turnstile-secret"),
               TOKEN_MANAGEMENT: textBinding("management-secret"),
@@ -90,6 +100,65 @@ test("intake wake authenticates before scheduling and survives replacement witho
     expect(await watch.json()).toEqual({ rowID: 0, watched: [] });
     expect(watch.headers.get("Cache-Control")).toBe("no-store");
     expect((await send(runtime, "/management/intake/watch")).status).toBe(401);
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
+
+test("anonymous Visits and new joins survive actor replacement and repeat submissions count once", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "api-metrics-"));
+  try {
+    let runtime = await openWorker(persistence, false);
+    const source = {
+      entry: "home",
+      referrer: "example.org",
+      source: "friends",
+      medium: "social",
+      campaign: "launch",
+    };
+    const activity = { step: "visit", source, device: "phone", locale: "ko", imageStyle: "anime" };
+    const post = (path: string, body: object, extra = {}) =>
+      send(runtime, path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "CF-IPCountry": "KR", ...extra },
+        body: JSON.stringify(body),
+      });
+    expect((await post("/discovery/activity", activity)).status).toBe(204);
+    expect(
+      (await post("/discovery/activity", activity, { "User-Agent": "Googlebot" })).status,
+    ).toBe(204);
+    expect((await post("/discovery/activity", { ...activity, step: "message" })).status).toBe(400);
+    const input = {
+      handle: "+821012345678",
+      name: "Private name",
+      locale: "ko",
+      likedPersonaIDs: ["sora"],
+      privacyNoticeVersion: discoveryNotice.version,
+      turnstileToken: "human",
+      source,
+    };
+    expect((await post("/discovery/waitlist", input)).status).toBe(200);
+    expect((await post("/discovery/waitlist", input)).status).toBe(200);
+    await stopRuntimes();
+    runtime = await openWorker(persistence, false);
+    const day = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
+    const path = `/management/metrics?from=${day}&to=${day}`;
+    expect((await send(runtime, path)).status).toBe(401);
+    const response = await send(runtime, path, {
+      headers: { Authorization: "Bearer management-secret" },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const body = await response.text();
+    expect(body).not.toMatch(/Private name|821012345678|turnstile/);
+    const result = Schema.decodeUnknownSync(Schema.fromJsonString(Metrics))(body);
+    expect(result.totals).toEqual(
+      expect.arrayContaining([
+        { day, step: "visit", dimension: "total", value: "", count: 1 },
+        { day, step: "join", dimension: "total", value: "", count: 1 },
+      ]),
+    );
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });
@@ -132,6 +201,34 @@ test("public reads work without private secrets while management and registratio
     });
     expect(registration.status).toBe(400);
     expect(await registration.json()).toBe("verification");
+  } finally {
+    await stopRuntimes();
+    await rm(persistence, { recursive: true, force: true });
+  }
+});
+
+test("activity ingress errors preserve CORS and request correlation across limiter and storage failures", async () => {
+  const persistence = await mkdtemp(join(tmpdir(), "activity-ingress-"));
+  try {
+    const runtime = await openWorker(persistence, false);
+    for (const [method, mode, status] of [
+      ["GET", "", 405],
+      ["OPTIONS", "", 204],
+      ["POST", "limited", 429],
+      ["POST", "limiter-offline", 503],
+      ["POST", "storage-offline", 503],
+    ] as const) {
+      const response = await send(runtime, "/discovery/activity", {
+        method,
+        headers: { "X-Activity-Fixture": mode },
+      });
+      expect(response.status).toBe(status);
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://renai.im");
+      expect(response.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
+      const body = await response.text();
+      expect(body).not.toContain("private-");
+      expect(status !== 503 || body.includes(response.headers.get("X-Request-ID")!)).toBe(true);
+    }
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });
@@ -280,6 +377,7 @@ test("compiled SQLite DO imports linked private state atomically and recognizes 
       reset_guid: null,
       usage_key: "a".repeat(32),
       image_style: "photo",
+      metric_flags: 0,
     };
     const snapshot = {
       ...empty,

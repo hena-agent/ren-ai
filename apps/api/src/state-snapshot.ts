@@ -57,7 +57,7 @@ const snapshotContents = Effect.gen(function* () {
       tables: yield* Effect.forEach(tables, (table) =>
         Effect.gen(function* () {
           const rows = yield* sql.unsafe<Record<string, Cell>>(
-            `SELECT * FROM ${identifier(table.name)} ORDER BY rowid`,
+            `SELECT * FROM ${identifier(table.name)} ORDER BY ${table.columns.map(identifier).join(",")}`,
           );
           return {
             ...table,
@@ -119,6 +119,10 @@ export const importApplicationState = (snapshot: StateSnapshot) =>
         return yield* Effect.fail(new Error("Application state tables do not match"));
       // Only the untouched migration seed is empty state; a changed operator setting blocks import.
       yield* sql`DELETE FROM photo_setting WHERE id = 1 AND enabled = 1`;
+      yield* sql`DELETE FROM discord_delivery WHERE state IN ('unconfigured', 'accepting') AND pending = 0 AND cooldown = 0`;
+      yield* sql`DELETE FROM metrics_report WHERE id = 1 AND due = (SELECT CAST((at + 32400000) / 86400000 AS INTEGER) * 86400000 FROM metric_epoch) AND EXISTS (SELECT 1 FROM application_work WHERE name = 'metrics-report' AND generation = 0)`;
+      yield* sql`DELETE FROM application_work WHERE name = 'metrics-report' AND NOT EXISTS (SELECT 1 FROM metrics_report)`;
+      yield* sql`DELETE FROM metric_epoch WHERE NOT EXISTS (SELECT 1 FROM metric_total) AND NOT EXISTS (SELECT 1 FROM usage_entry)`;
       for (const table of target) {
         const [count] = yield* sql.unsafe<{ count: number }>(
           `SELECT COUNT(*) AS count FROM ${identifier(table.name)}`,
