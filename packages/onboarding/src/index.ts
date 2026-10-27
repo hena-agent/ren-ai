@@ -1,4 +1,16 @@
 export { normalizeHandle } from "./handle.ts";
+export {
+  Activity,
+  BrowserStep,
+  VisitSource,
+  MetricStep,
+  MetricDimension,
+  MetricTotal,
+  MetricsQuery,
+  Metrics,
+  WebhookState,
+  koreaDay,
+} from "./metrics.ts";
 export { MobileNumber } from "./shapes.ts";
 export { StartingRelationship } from "./relationship.ts";
 export { InvitationAccount, InvitationGrant, InvitationLookup } from "./invitations.ts";

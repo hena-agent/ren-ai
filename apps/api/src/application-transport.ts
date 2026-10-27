@@ -3,6 +3,7 @@ import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 import { healthResponse } from "@ren-ai/transport/health";
 import { buildRevision } from "@ren-ai/transport/health";
 import { Schema } from "effect";
+import { WebhookState } from "@ren-ai/onboarding";
 
 const ExecutorHealth = Schema.Struct({
   status: Schema.Literals([
@@ -25,6 +26,8 @@ const ApplicationHealth = Schema.Struct({
   bootstrapOnly: Schema.Boolean,
   executor: ExecutorHealth,
   messaging: Schema.optionalKey(Schema.Literals(["ready", "unavailable"])),
+  discordAlerts: Schema.optionalKey(WebhookState),
+  discordReports: Schema.optionalKey(WebhookState),
 });
 
 async function workerHealth(response: Response) {
@@ -40,6 +43,8 @@ async function workerHealth(response: Response) {
         bootstrapOnly: health.bootstrapOnly,
         executor: health.executor,
         messaging: health.messaging ?? "unavailable",
+        ...(health.discordAlerts && { discordAlerts: health.discordAlerts }),
+        ...(health.discordReports && { discordReports: health.discordReports }),
         applicationRuntime: { revision: health.revision, status: current ? "ready" : "outdated" },
       },
     );

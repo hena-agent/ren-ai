@@ -56,9 +56,7 @@ export async function createExecutionRuntime(
   const messages = await run(
     remoteMessages({ url: execution.imsgRpcUrl, token: execution.managementToken }),
   );
-  const health = await run(
-    createExecutionHealth(execution, bindings.DISCORD_WEBHOOK_URL, fetcher, messages.probe()),
-  );
+  const health = await run(createExecutionHealth(execution, fetcher, messages.probe()));
   const catalog = catalogClient(
     { url: bindings.PERSONA_CATALOG_URL, token: bindings.TOKEN_CATALOG },
     fetcher,

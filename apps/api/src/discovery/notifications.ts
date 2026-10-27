@@ -19,6 +19,7 @@ import { checkAvailability } from "./availability.ts";
 import { claimWork, workBatchSize } from "../work-budget.ts";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { contacts } from "./contacts.ts";
+import { changeAlert } from "../metrics/discord.ts";
 
 export const notificationSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -96,7 +97,16 @@ export const waitlistNotifications = (
         const state = count!.total >= 30 ? "skipped" : "uncertain";
         const claimed = yield* sql`UPDATE ${sql(table)} SET state = ${state}
         WHERE id = ${id} AND state = 'queued' RETURNING id`;
-        if (!claimed.length || state === "skipped") return false;
+        if (!claimed.length) return false;
+        if (state === "skipped") {
+          yield* changeAlert("notification-cap", true).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
+          yield* scheduleWork("metric-alerts", now + 3_600_000).pipe(
+            Effect.provideService(SqlClient.SqlClient, sql),
+          );
+          return false;
+        }
         yield* sql`INSERT INTO notification_attempt (at) VALUES (${now})`;
         return true;
       }).pipe(sql.withTransaction);

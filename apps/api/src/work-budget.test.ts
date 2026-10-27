@@ -43,6 +43,7 @@ test("alarm admission limits are scoped and persist one deferred wake without ca
       );
       expect(results.filter(Boolean)).toHaveLength(40);
       expect(yield* sql`SELECT name, generation FROM application_work`).toEqual([
+        { name: "metrics-report", generation: 0 },
         { name: "execution", generation: 0 },
       ]);
       expect(yield* claimWork).toBe(true);

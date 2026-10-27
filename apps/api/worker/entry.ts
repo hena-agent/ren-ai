@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { applicationRequest } from "../src/application-request.ts";
 import { createCloudflareApplication } from "../src/cloudflare-app.ts";
 import type { CloudflareBindings } from "../src/cloudflare-config.ts";
 import groundRules from "@ren-ai/plugin-session-folder/ground-rules";
@@ -8,6 +9,7 @@ import type { DurableObjectId } from "@cloudflare/workers-types";
 import { applicationTransport } from "../src/application-transport.ts";
 import { DeferredWork, WorkLaneFailure } from "../src/work-budget.ts";
 import { expireSubmissionLimits } from "../src/discovery/rate-limit.ts";
+import { activityHandler } from "../src/metrics/activity.ts";
 import {
   finishApplicationWork,
   nextApplicationWake,
@@ -23,6 +25,15 @@ interface ApplicationNamespace {
 
 interface Environment extends CloudflareBindings {
   readonly APPLICATION: ApplicationNamespace;
+  readonly ACTIVITY: ApplicationNamespace;
+  readonly ACTIVITY_LIMIT?: { limit: (input: { key: string }) => Promise<{ success: boolean }> };
+}
+
+export class DiscoveryActivity extends DurableObject<Environment> {
+  private handler = activityHandler(this.ctx.storage);
+  override fetch(request: Request) {
+    return this.handler(request);
+  }
 }
 
 export class ApiApplication extends DurableObject<Environment> {
@@ -116,7 +127,41 @@ export class ApiApplication extends DurableObject<Environment> {
 }
 
 export default {
-  fetch(request: Request, env: Environment) {
+  async fetch(request: Request, env: Environment) {
+    if (new URL(request.url).pathname === "/discovery/activity") {
+      const headers = {
+        "Access-Control-Allow-Origin": "https://renai.im",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Expose-Headers": "X-Visit-Country, X-Request-ID",
+        "Cache-Control": "no-store",
+      };
+      const response = await applicationRequest(request, async (incoming) => {
+        if (incoming.method === "OPTIONS") return new Response(null, { status: 204 });
+        if (incoming.method !== "POST") return new Response(null, { status: 405 });
+        if (
+          /bot|crawler|spider|preview|ren-ai-deploy|curl|wget/i.test(
+            incoming.headers.get("User-Agent") ?? "",
+          )
+        )
+          return new Response(null, { status: 204 });
+        if (
+          env.ACTIVITY_LIMIT &&
+          !(
+            await env.ACTIVITY_LIMIT.limit({
+              key: incoming.headers.get("CF-Connecting-IP") ?? "unknown",
+            })
+          ).success
+        )
+          return new Response(null, { status: 429 });
+        const upstream = await env.ACTIVITY.get(env.ACTIVITY.idFromName("ren-ai-activity")).fetch(
+          incoming,
+        );
+        return new Response(upstream.body, upstream);
+      });
+      for (const [key, value] of Object.entries(headers)) response.headers.set(key, value);
+      return response;
+    }
     return applicationTransport(request, () => {
       const id = env.APPLICATION.idFromName("ren-ai-application");
       return env.APPLICATION.get(id).fetch(request);

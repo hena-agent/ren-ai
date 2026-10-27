@@ -1,4 +1,4 @@
-import worker, { ApiApplication } from "../worker/entry.ts";
+import worker, { ApiApplication, DiscoveryActivity } from "../worker/entry.ts";
 import { executionSnapshot } from "./execution-catalog.ts";
 import { Schema } from "effect";
 
@@ -26,6 +26,17 @@ const fakeUpstreams: typeof fetch = async (input, init) => {
   }
   if (url.hostname === "admin.example" && url.pathname === "/api/personas")
     return Response.json(catalog);
+  if (url.hostname === "large-admin.example" && url.pathname === "/api/personas")
+    return Response.json(
+      Array.from({ length: 110 }, (_, index) => ({
+        ...catalog[0],
+        id: `persona-${index}`,
+        portraits: {
+          anime: `https://images.example/${index}-anime.png`,
+          photo: `https://images.example/${index}-photo.png`,
+        },
+      })),
+    );
   if (url.hostname === "admin.example" && url.pathname === "/api/catalog")
     return Response.json({
       ...executionSnapshot(),
@@ -39,5 +50,31 @@ const fakeUpstreams: typeof fetch = async (input, init) => {
 
 globalThis.fetch = fakeUpstreams;
 
-export { ApiApplication };
-export default worker;
+export { ApiApplication, DiscoveryActivity };
+export default {
+  fetch(request: Request, env: Parameters<typeof worker.fetch>[1]) {
+    const mode = request.headers.get("X-Activity-Fixture");
+    return worker.fetch(request, {
+      ...env,
+      ...(mode && {
+        ACTIVITY_LIMIT: {
+          limit: async () => {
+            if (mode === "limiter-offline")
+              throw Object.assign(new Error("private-upstream"), { code: "LIMITER_OFFLINE" });
+            return { success: mode !== "limited" };
+          },
+        },
+      }),
+      ...(mode === "storage-offline" && {
+        ACTIVITY: {
+          idFromName: (name: string) => env.ACTIVITY.idFromName(name),
+          get: () => ({
+            fetch: async () => {
+              throw new Error("private-storage");
+            },
+          }),
+        },
+      }),
+    });
+  },
+};

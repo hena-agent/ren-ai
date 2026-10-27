@@ -7,6 +7,7 @@ import { withLifecycle } from "../conversations/lifecycle.ts";
 import { assignmentCapacity, claimPersona } from "./assignment.ts";
 import { SelectionConflict, selectionKey, selectionChoices, chooseContact } from "./selection.ts";
 import { consumeInvitation, invitations } from "./invitations.ts";
+import { lifecycleMetric } from "../metrics/lifecycle.ts";
 
 class StartUnavailable extends Data.TaggedError("StartUnavailable") {}
 
@@ -185,6 +186,9 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           yield* sql`UPDATE invitation_submission SET selected_notification_id = COALESCE(selected_notification_id, ${notificationID})
             WHERE registration_id = ${row.id}`;
         yield* invites.grant(row.handle, requestId);
+        yield* lifecycleMetric(row.id, "selection", personaID).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+        );
         return true;
       });
     const outcome = (selectionID: string, requested: number, profiles: readonly PublicPersona[]) =>

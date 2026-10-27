@@ -4,6 +4,7 @@ import { SqlClient } from "effect/unstable/sql";
 import type { DiscoveryRequest } from "@ren-ai/onboarding";
 import { reselectionHash } from "../conversations/ending-record.ts";
 import { contactCause, type ContactLog } from "./diagnostics.ts";
+import { registrationMetric } from "../metrics/lifecycle.ts";
 
 const reselectionAuthorization = (token: string) =>
   Effect.gen(function* () {
@@ -50,7 +51,7 @@ export const browsingHandle = (token: string, requestId: string, log: ContactLog
   );
 
 /** Called inside registration's transaction, after consent, Turnstile and catalog validation. */
-export const reselect = (input: DiscoveryRequest) =>
+export const reselect = (input: DiscoveryRequest, country: string | null = null) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     if (!input.reselectionToken) return yield* Effect.fail("reselection" as const);
@@ -68,6 +69,7 @@ export const reselect = (input: DiscoveryRequest) =>
     for (const personaID of input.likedPersonaIDs)
       yield* sql`INSERT INTO discovery_like VALUES (${id}, ${personaID})`;
     yield* sql`UPDATE conversation_end SET consumed_at = ${now}, registration_id = ${id}, farewell_pending = 0, notice_pending = 0 WHERE conversation_id = ${ending.id}`;
+    yield* registrationMetric(id, input, country, "reselection");
     return undefined;
   });
 

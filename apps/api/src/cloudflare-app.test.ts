@@ -15,6 +15,7 @@ import { rpcClient } from "@ren-ai/transport/client";
 import type { MessagingTools } from "./application-tools.ts";
 import { captureGatewayLogs, gatewayFixture } from "../../imsg/test/gateway.test-helper.ts";
 import { captureDiagnostics } from "../test/diagnostics.test-helper.ts";
+import { migrate } from "./database.ts";
 
 type RuntimeDouble = {
   initialized: boolean;
@@ -50,10 +51,13 @@ vi.mock("./application-store.ts", () => ({
       run: async (effect: Effect.Effect<void, Error, SqlClient.SqlClient>) => {
         await controls.storeRun();
         return Effect.runPromise(
-          Effect.scoped(effect).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+          Effect.scoped(migrate.pipe(Effect.andThen(effect))).pipe(
+            Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
+          ),
         );
       },
       handler: controls.storeHandler,
+      metricsTick: async () => {},
       close: controls.closeStore,
     };
   },
@@ -159,12 +163,14 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
   expect(await health.json()).toEqual({
     service: "api-app",
     revision: "development",
-    status: "ready",
+    status: "degraded",
     database: "ready",
     storage: "durable-object-sqlite",
     bootstrapOnly: true,
     executor: { service: "api-msg", revision: "development", status: "ready" },
     messaging: "ready",
+    discordAlerts: "unconfigured",
+    discordReports: "unconfigured",
   });
   expect(health.headers.get("cache-control")).toBe("no-store");
   expect(
@@ -227,6 +233,33 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
   expect(controls.closeStore).toHaveBeenCalledTimes(1);
 });
 
+test.each([undefined, "https://discord.example/reports"])(
+  "Report webhook %s independently controls readiness",
+  async (reports) => {
+    const app = await createCloudflareApplication(
+      storage,
+      {
+        ...bindings,
+        DISCORD_ALERT_WEBHOOK_URL: "https://discord.example/alerts",
+        ...(reports && { DISCORD_REPORT_WEBHOOK_URL: reports }),
+      },
+      "rules",
+      fetcher,
+    );
+    try {
+      const response = await app.fetch(new Request("https://app/health"));
+      expect(response.status).toBe(reports ? 200 : 503);
+      expect(await response.json()).toMatchObject({
+        status: reports ? "ready" : "degraded",
+        discordAlerts: "accepting",
+        discordReports: reports ? "accepting" : "unconfigured",
+      });
+    } finally {
+      await app.close();
+    }
+  },
+);
+
 test("a ready executor cannot conceal an unavailable application database", async () => {
   controls.failDatabase = true;
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
@@ -243,6 +276,8 @@ test("a ready executor cannot conceal an unavailable application database", asyn
       bootstrapOnly: true,
       executor: { service: "api-msg", revision: "development", status: "ready" },
       messaging: "ready",
+      discordAlerts: "unavailable",
+      discordReports: "unavailable",
     });
     const logs = JSON.stringify(stderr.mock.calls);
     expect(logs).toContain(response.headers.get("x-request-id"));
@@ -384,6 +419,8 @@ test.each([200, 401])(
         bootstrapOnly: true,
         executor: { status: status === 401 ? "unauthorized" : "unexpected_response" },
         messaging: "unavailable",
+        discordAlerts: "unconfigured",
+        discordReports: "unconfigured",
       });
       expect(JSON.stringify(stderr.mock.calls)).toContain(response.headers.get("x-request-id"));
       expect(JSON.stringify(stderr.mock.calls)).toContain(

@@ -22,6 +22,7 @@ import { makeDiscoveryWeb } from "./discovery.ts";
 import { checkAvailability } from "./availability.ts";
 import { contacts } from "./contacts.ts";
 import { firstContacts } from "./first-contact.ts";
+import { rewindMetrics } from "../../test/rewind-metrics.test-helper.ts";
 
 const catalog = async () => [{ id: "luna", name: "Luna", bio: "public", imageUrl: "" }];
 
@@ -156,12 +157,6 @@ test("forward migration defaults existing Conversations and waiting registration
       // Recreate the persisted schema immediately before the image-style migration.
       for (const table of ["conversation_photo", "photo_object", "photo_setting"])
         yield* f.sql`DROP TABLE ${f.sql(table)}`;
-      yield* f.sql`DROP TABLE invitation_submission`;
-      yield* f.sql`DROP TABLE invitation_redemption`;
-      yield* f.sql`DROP TABLE invitation`;
-      yield* f.sql`DROP TABLE invitation_grant`;
-      yield* f.sql`DROP TABLE invitation_settings`;
-      yield* f.sql`DROP TABLE invitation_delivery`;
       const [send] = yield* f.sql<{
         sql: string;
       }>`SELECT sql FROM sqlite_master WHERE name = 'send'`;
@@ -174,6 +169,7 @@ test("forward migration defaults existing Conversations and waiting registration
       for (const index of indexes) yield* f.sql.unsafe(index.sql);
       yield* f.sql`ALTER TABLE discovery_registration DROP COLUMN image_style`;
       yield* f.sql`ALTER TABLE conversation DROP COLUMN image_style`;
+      yield* rewindMetrics;
       yield* f.sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 53`;
       yield* f.register("+821012345678");
       const directory = yield* conversations;

@@ -28,6 +28,7 @@ const people = Array.from({ length: 20 }, (_, i): PublicPersona => ({
 const profiles = async (_signal: AbortSignal, _token?: string, ids: readonly string[] = []) =>
   people.filter((p) => ids.includes(p.id));
 const join: DiscoveryClient["join"] = async () => ({ status: "waiting" });
+const activity: DiscoveryClient["activity"] = async () => {};
 
 test("ten-card pages prefetch at five, preserve the current card and deduplicate repeated candidate IDs", async () => {
   let complete: (page: BrowsePage) => void = vi.fn<(page: BrowsePage) => void>();
@@ -40,7 +41,7 @@ test("ten-card pages prefetch at five, preserve the current card and deduplicate
           complete = resolve;
         }),
     );
-  render(<App client={{ browse, profiles, join }} />);
+  render(<App client={{ browse, profiles, join, activity }} />);
   await screen.findByRole("heading", { name: "Person 0" });
   expect(browse).toHaveBeenCalledOnce();
   for (let i = 0; i < 5; i++) choose(false);
@@ -62,7 +63,7 @@ test("a failed continuation retains existing cards and offers retry rather than 
     .mockResolvedValueOnce({ people: people.slice(0, 10), nextCursor: "next" })
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValueOnce({ people: [people[10]!], nextCursor: null });
-  render(<App client={{ browse, profiles, join }} />);
+  render(<App client={{ browse, profiles, join, activity }} />);
   await screen.findByRole("heading", { name: "Person 0" });
   for (let i = 0; i < 5; i++) choose(false);
   await screen.findByRole("button", { name: "다시 불러오기" });
@@ -87,7 +88,7 @@ test("locale changes abort stale samples and restore only liked IDs even when ab
     )
     .mockResolvedValueOnce({ people: [people[1]!], nextCursor: null });
   const lookup = vi.fn<DiscoveryClient["profiles"]>(profiles);
-  const client = { browse, profiles: lookup, join };
+  const client = { browse, profiles: lookup, join, activity };
   const view = renderHook(() => ({ catalog: useCatalog(client), language: useLocale() }), {
     wrapper: LocaleProvider,
   });
@@ -112,7 +113,7 @@ test("expired cursors restart sampling and abandoned continuation failures canno
     .mockResolvedValueOnce({ people: people.slice(0, 10), nextCursor: "expired" })
     .mockRejectedValueOnce(new BrowseExpiredError())
     .mockResolvedValueOnce({ people: [people[10]!], nextCursor: "last" });
-  const client: DiscoveryClient = { browse, profiles, join };
+  const client: DiscoveryClient = { browse, profiles, join, activity };
   const view = renderHook(() => useCatalog(client));
   await waitFor(() => expect(view.result.current.hasMore).toBe(true));
   await act(async () => view.result.current.loadMore());
@@ -141,7 +142,7 @@ test("initial resampling failures retain a ready view and can be retried without
     .fn<DiscoveryClient["browse"]>()
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValueOnce({ people: [people[1]!], nextCursor: null });
-  const client = { browse, profiles, join };
+  const client = { browse, profiles, join, activity };
   const initial = [people[0]!];
   const view = renderHook(() => useCatalog(client, initial));
   await waitFor(() => expect(view.result.current.moreFailed).toBe(true));
@@ -154,7 +155,7 @@ test("refreshing before initial sampling finishes supersedes it, and redundant o
   const browse = vi
     .fn<DiscoveryClient["browse"]>()
     .mockResolvedValue({ people: people.slice(0, 10), nextCursor: "next" });
-  const client: DiscoveryClient = { browse, profiles, join };
+  const client: DiscoveryClient = { browse, profiles, join, activity };
   const view = renderHook(() => useCatalog(client));
   void view.result.current.loadMore();
   await act(async () => view.result.current.refresh());
@@ -188,7 +189,7 @@ test("selection refresh cannot race a continuation and discard candidates after 
     new Promise((resolve) => {
       complete = resolve;
     });
-  const client = { browse, profiles: lookup, join };
+  const client = { browse, profiles: lookup, join, activity };
   const view = renderHook(() => useCatalog(client));
   await waitFor(() => expect(view.result.current.hasMore).toBe(true));
   let refresh: Promise<void>;

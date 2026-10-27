@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
-import type { DiscoveryClient } from "./client.ts";
+import { discoveryClient, type DiscoveryClient } from "./client.ts";
 import { publicPersonas } from "../test/public-personas.ts";
 import { choose, selectImageStyle, selectLanguage } from "../test/choose.ts";
 import { readPublicPeople, publicRoute } from "./public-routing.ts";
@@ -157,7 +157,7 @@ test("reselection reloads its private Catalog before browsing and submits only e
     .mockResolvedValueOnce(Response.json([]))
     .mockResolvedValueOnce(Response.json({ status: "waiting" }));
   vi.stubGlobal("fetch", fetcher);
-  render(<Site />);
+  render(<Site client={{ ...discoveryClient, activity: async () => {} }} />);
   expect(screen.getByText("만날 사람들을 불러오고 있어요.")).toBeTruthy();
   expect(screen.queryByText("백지아")).toBeNull();
   await screen.findByRole("heading", { name: "프로필을 불러오지 못했어요." });

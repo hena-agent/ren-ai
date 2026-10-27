@@ -12,15 +12,22 @@ import { authorize } from "@ren-ai/transport/server";
 import { conversationStatus } from "./conversations/status.ts";
 import { conversationRecords, requestOperatorEnding } from "./conversations/http.ts";
 import { usageQueries } from "./usage/query.ts";
+import { loadMetrics, metricsHandler } from "./metrics/query.ts";
+import { configureDiscord, type Webhooks } from "./metrics/discord.ts";
+import { metricsTasks } from "./metrics/tasks.ts";
 
 export interface ApplicationStoreConfig {
   readonly catalog: () => Promise<readonly PublicPersona[]>;
   readonly turnstileSecret: string;
   readonly managementToken: string;
   readonly httpClient: HttpClient.HttpClient;
+  readonly activity?: (request: Request) => Promise<Response>;
+  readonly webhooks?: Webhooks;
+  readonly fetcher?: typeof fetch;
 }
 
 export interface ApplicationStore {
+  readonly metricsTick: (requestId: string) => Promise<void>;
   readonly context: Context.Context<SqlClient.SqlClient>;
   readonly run: <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => Promise<A>;
   readonly handler: (request: Request) => Promise<Response>;
@@ -51,6 +58,9 @@ export const createApplicationStore = async (
       }),
     );
     const management = contactManagement(contactsStore, config.managementToken);
+    const webhooks = config.webhooks ?? { alerts: undefined, reports: undefined };
+    await run(configureDiscord(webhooks));
+    const metrics = metricsHandler(run, config.managementToken, webhooks, config.activity);
     const statusStore = await run(conversationStatus(config.catalog));
     const usage = await run(usageQueries);
     const records = conversationRecords(statusStore, (effect) => Effect.runPromise(effect), usage);
@@ -65,8 +75,18 @@ export const createApplicationStore = async (
     return {
       context,
       run,
+      metricsTick: (requestId) =>
+        run(
+          metricsTasks(
+            (query) => loadMetrics(query, run, webhooks, config.activity),
+            webhooks,
+            config.fetcher ?? fetch,
+            requestId,
+          ),
+        ),
       handler: (request) => {
         const path = new URL(request.url).pathname;
+        if (path === "/management/metrics") return metrics(request);
         if (path.startsWith("/discovery/")) return discovery.handler(request, httpContext);
         if (path.startsWith("/management/conversations")) return privateRecords(request);
         if (path.startsWith("/management/")) return management(request);

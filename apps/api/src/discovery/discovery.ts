@@ -36,6 +36,8 @@ import { queueRegistrationNotification } from "./notifications.ts";
 import { publicCatalog } from "../personas/public-catalog.ts";
 import { browsePage, lookupProfiles } from "../personas/browse.ts";
 import { attachInvitation } from "./invitations.ts";
+import { registrationMetric } from "../metrics/lifecycle.ts";
+import { failedJoin } from "../metrics/failures.ts";
 
 const failure = Schema.Literals([
   "consent",
@@ -193,7 +195,13 @@ export const makeDiscoveryWeb = ({
         }),
         requestId,
       );
-    const join = (input: DiscoveryRequest, requestId: string, ip: string | undefined) =>
+    const join = (
+      input: DiscoveryRequest,
+      requestId: string,
+      ip: string | undefined,
+      country: string | null,
+      systemFailure: () => void,
+    ) =>
       Effect.gen(function* () {
         const started = performance.now();
         const reject = (
@@ -223,13 +231,16 @@ export const makeDiscoveryWeb = ({
           !turnstileSecret ||
           !(yield* verifyTurnstile(input.turnstileToken, turnstileSecret).pipe(
             Effect.catch((cause) => {
+              systemFailure();
               verificationCause = contactCause(cause);
               return Effect.succeed(false);
             }),
           ))
         )
           return yield* reject("verification", verificationCause);
-        const publicProfiles = yield* profiles(requestId);
+        const publicProfiles = yield* profiles(requestId).pipe(
+          Effect.tapError(() => Effect.sync(systemFailure)),
+        );
         const available = new Set(publicProfiles.map((persona) => persona.id));
         return yield* Effect.gen(function* () {
           // Filter the submitted IDs, including personas that are no longer published.
@@ -255,7 +266,7 @@ export const makeDiscoveryWeb = ({
           if (active.length) return { status: "active" as const };
           const existing = yield* sql`SELECT id FROM user WHERE handle = ${input.handle}`;
           if (existing.length) {
-            yield* reselect({ ...input, likedPersonaIDs }).pipe(
+            yield* reselect({ ...input, likedPersonaIDs }, country).pipe(
               Effect.provideService(SqlClient.SqlClient, sql),
             );
             return { status: "waiting" as const };
@@ -273,6 +284,9 @@ export const makeDiscoveryWeb = ({
               VALUES (${id}, ${input.conversationLanguage ?? input.locale})`;
             for (const personaID of likedPersonaIDs)
               yield* sql`INSERT INTO discovery_like (registration_id, persona_id) VALUES (${id}, ${personaID})`;
+            yield* registrationMetric(id, input, country, "first").pipe(
+              Effect.provideService(SqlClient.SqlClient, sql),
+            );
           }
           if (input.invitationToken) {
             const [registration] = yield* sql<{
@@ -381,8 +395,25 @@ export const makeDiscoveryWeb = ({
         )
         .handle("join", ({ payload }) =>
           Effect.gen(function* () {
-            const { requestId, ip } = yield* authorizeAttempt;
-            return yield* join(payload, requestId, ip);
+            const request = yield* HttpServerRequest.HttpServerRequest;
+            const country = payload.visitCountry ?? request.headers["cf-ipcountry"] ?? null;
+            let system = !turnstileSecret;
+            return yield* Effect.gen(function* () {
+              const { requestId, ip } = yield* authorizeAttempt;
+              return yield* join(payload, requestId, ip, country, () => {
+                system = true;
+              });
+            }).pipe(
+              Effect.tapError((reason) =>
+                failedJoin(
+                  payload,
+                  reason,
+                  country,
+                  system || reason === "storage",
+                  operationID(request.headers["x-operation-id"]),
+                ).pipe(Effect.provideService(SqlClient.SqlClient, sql)),
+              ),
+            );
           }),
         ),
     );

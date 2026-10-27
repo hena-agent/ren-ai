@@ -55,7 +55,10 @@ test.each(["ko", "en", "ja"])(
           consentVersion: "v1",
         });
         expect(yield* f.app.directory.active(newcomer)).toBe(true);
-        expect(yield* f.sql`SELECT name FROM application_work`).toEqual([{ name: "endings" }]);
+        expect(yield* f.sql`SELECT name FROM application_work`).toEqual([
+          { name: "metrics-report" },
+          { name: "endings" },
+        ]);
         expect(yield* f.app.directory.byHandle(f.conversation.handle)).toBeUndefined();
         expect((yield* status.detail(input.id))?.entry.endedBy).toBe("operator");
         expect(f.fake.bubbles).toEqual([]);

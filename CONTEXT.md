@@ -194,6 +194,40 @@ _Avoid_: test conversation, fork, copy
 The person who runs the service: watches conversations as they happen and fixes what breaks.
 _Avoid_: admin, moderator
 
+### Operations
+
+**Metrics**:
+Anonymous totals for Ren AI's traffic, onboarding, ongoing Conversations and AI cost. Test handles are excluded, and removing a person leaves historical totals intact.
+_Avoid_: analytics events, tracking history
+
+**Visit**:
+One browser tab's time in Discovery, ending when the tab closes or is idle for 30 minutes. No identity links one Visit to another.
+_Avoid_: visitor, browser identity, session
+
+**Source**:
+Where a Visit began: the referring site's host, campaign tags and entry through home, Explore, a shared profile or a Reselection link. Navigation within Discovery does not change it.
+_Avoid_: full referrer URL, attribution identity
+
+**First reply**:
+The first admitted message a User sends after the Greeting. A Tapback alone does not qualify.
+_Avoid_: reaction, first interaction
+
+**Active user**:
+A User who sent at least one admitted message in a Conversation on a Korea-time day. A Tapback alone does not qualify.
+_Avoid_: online user, unique visitor
+
+**Retention**:
+The share of a Greeting-day group whose Users sent a message at least 1, 7 or 30 days after the Greeting day. Each threshold counts once per Conversation.
+_Avoid_: exact-day activity, return Visit
+
+**Report**:
+The daily Korean summary of Metrics, compared with the preceding day and week, delivered to the Operator's Metrics channel.
+_Avoid_: Alert, Notification
+
+**Alert**:
+A raised operational condition needing the Operator's attention, with a safe detail and management link. It remains distinct from a Report and from Notifications sent to Users.
+_Avoid_: Notification, event, Report
+
 ### Enforcement
 
 **Gate**:

@@ -1,7 +1,10 @@
 import type { DiscoveryClient } from "../src/client.ts";
 
-export function testClient(client: Omit<DiscoveryClient, "browse">): DiscoveryClient {
+export function testClient(
+  client: Omit<DiscoveryClient, "browse" | "activity"> & Partial<Pick<DiscoveryClient, "activity">>,
+): DiscoveryClient {
   return {
+    activity: async () => {},
     ...client,
     browse: async (_query, signal, token) => ({
       people: await client.profiles(signal, token, []),

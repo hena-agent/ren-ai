@@ -21,6 +21,7 @@ import { RelationshipSelect } from "./relationship-select.tsx";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 import type { ImageStyle } from "./image-style.ts";
 import { invitationToken } from "./public-routing.ts";
+import { visitContext } from "./activity.ts";
 
 const isMobileNumber = Schema.is(MobileNumber);
 
@@ -103,6 +104,7 @@ export function JoinForm({
       const answer = await client.join(
         Schema.decodeUnknownSync(DiscoveryRequest)({
           handle,
+          ...visitContext(),
           locale,
           conversationLanguage,
           startingRelationship,

@@ -11,7 +11,10 @@ beforeEach(() => localStorage.setItem("ren-ai.discovery.image-style", "photo"));
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
   delete window.turnstile;
   window.history.replaceState(null, "", "/");
 });
@@ -92,12 +95,23 @@ test.each([undefined, "harin"])(
   },
 );
 
-test.each([undefined, "c".repeat(64)])(
-  "a visitor registers with consent and receives the appropriate receipt (invitation: %s)",
-  async (invitation) => {
+test.each(
+  ["counted", "excluded", "blocked"].flatMap((metrics) =>
+    [undefined, "c".repeat(64)].map((invitation) => ({ metrics, invitation })),
+  ),
+)(
+  "a visitor registers with browser Metrics $metrics and invitation $invitation",
+  async ({ metrics, invitation }) => {
     if (invitation) window.history.replaceState(null, "", `/explore#invite=${invitation}`);
+    if (metrics === "excluded") localStorage.setItem("ren-ai.metrics.off", "1");
+    if (metrics === "blocked")
+      vi.stubGlobal("sessionStorage", {
+        getItem() {
+          throw new Error("storage blocked");
+        },
+      });
     const join = vi.fn<DiscoveryClient["join"]>().mockResolvedValue({ status: "waiting" });
-    const client = testClient({ profiles: async () => people, join });
+    const client = testClient({ profiles: async () => people, join, activity: async () => "KR" });
     const verified = fakeVerification();
     render(<App client={client} />);
     await screen.findByRole("heading", { name: "하린" });
@@ -122,6 +136,16 @@ test.each([undefined, "c".repeat(64)])(
       startingRelationship: "dating",
       imageStyle: "photo",
       privacyNoticeVersion: discoveryNotice.version,
+      ...(metrics === "counted" && {
+        source: {
+          entry: invitation ? "explore" : "home",
+          referrer: "",
+          source: "",
+          medium: "",
+          campaign: "",
+        },
+        visitCountry: "KR",
+      }),
       likedPersonaIDs: ["harin"],
       turnstileToken: "human",
       name: "민수",

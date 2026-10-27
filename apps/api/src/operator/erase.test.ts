@@ -43,9 +43,6 @@ test("removal erases pending text, edits and recovery metadata before unavailabl
         "context_seen",
         "failed_turn",
         "catalog_plan",
-        "usage_session",
-        "usage_turn",
-        "usage_entry",
       ])
         expect(yield* sql`SELECT session_id FROM ${sql(table)}`).toEqual([
           { session_id: sibling.sessionID },
@@ -60,8 +57,18 @@ test("removal erases pending text, edits and recovery metadata before unavailabl
       expect(yield* sql`SELECT name FROM application_checkpoint`).toEqual([
         { name: `replay:${sibling.sessionID}` },
       ]);
-      expect(yield* sql`SELECT name FROM application_work`).toEqual([
+      expect(yield* sql`SELECT name FROM application_work WHERE name != 'metrics-report'`).toEqual([
         { name: `turn:${sibling.sessionID}` },
+      ]);
+      for (const table of ["usage_turn", "usage_entry"])
+        expect(yield* sql`SELECT session_id FROM ${sql(table)} ORDER BY session_id`).toEqual([
+          { session_id: own.sessionID },
+          { session_id: sibling.sessionID },
+        ]);
+      expect(yield* sql`SELECT session_id FROM usage_session ORDER BY session_id`).toEqual([
+        { session_id: own.sessionID },
+        { session_id: "ses_replaced" },
+        { session_id: sibling.sessionID },
       ]);
       const fake = fakeMessages();
       const late = yield* fake.text(own.handle, "late private text", 1);

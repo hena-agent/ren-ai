@@ -18,9 +18,18 @@
     "BOOTSTRAP_ONLY": "false",
   },
   "durable_objects": {
-    "bindings": [{ "name": "APPLICATION", "class_name": "ApiApplication" }],
+    "bindings": [
+      { "name": "APPLICATION", "class_name": "ApiApplication" },
+      { "name": "ACTIVITY", "class_name": "DiscoveryActivity" },
+    ],
   },
   "r2_buckets": [{ "binding": "CONVERSATION_PHOTOS", "bucket_name": "ren-ai-conversation-photos" }],
-  "exports": { "ApiApplication": { "type": "durable-object", "storage": "sqlite" } },
+  "exports": {
+    "ApiApplication": { "type": "durable-object", "storage": "sqlite" },
+    "DiscoveryActivity": { "type": "durable-object", "storage": "sqlite" },
+  },
+  "ratelimits": [
+    { "name": "ACTIVITY_LIMIT", "namespace_id": "168", "simple": { "limit": 120, "period": 60 } },
+  ],
   "observability": { "enabled": true },
 }

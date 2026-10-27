@@ -6,7 +6,7 @@ import {
   PublicPersona,
   BrowsePage,
 } from "@ren-ai/onboarding";
-import type { BrowseQuery, DiscoveryRequest } from "@ren-ai/onboarding";
+import type { BrowseQuery, DiscoveryRequest, Activity } from "@ren-ai/onboarding";
 
 declare global {
   interface ImportMetaEnv {
@@ -18,6 +18,7 @@ function path(route: string) {
 }
 
 export type DiscoveryClient = {
+  activity: (report: Activity) => Promise<string | void>;
   profiles: (
     signal: AbortSignal,
     reselectionToken: string | undefined,
@@ -63,6 +64,16 @@ export async function loadDiscoveryNotices() {
 }
 
 export const discoveryClient: DiscoveryClient = {
+  activity: async (report) => {
+    const response = await fetch(path("/discovery/activity"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(report),
+      keepalive: true,
+    });
+    if (!response.ok) throw new Error("Activity unavailable");
+    return response.headers.get("X-Visit-Country") ?? undefined;
+  },
   browse: async (query, signal, reselectionToken) => {
     const response = await (reselectionToken === undefined
       ? fetch(path(`/discovery/personas?${new URLSearchParams(query)}`), {
