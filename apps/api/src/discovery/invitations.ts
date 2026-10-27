@@ -1,38 +1,21 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import type { InvitationGrant, InvitationAccount, DiscoveryLocale } from "@ren-ai/onboarding";
 import { scheduleWork } from "../scheduling.ts";
 import { SelectionConflict } from "./selection.ts";
 
-export const invitationSchema = Effect.gen(function* () {
-  const sql = yield* SqlClient.SqlClient;
-  yield* sql`CREATE TABLE invitation_settings (id INTEGER PRIMARY KEY CHECK(id = 1), enabled INTEGER NOT NULL CHECK(enabled IN (0,1)))`;
-  // Keep the receipt independently of a registration or Conversation: reselection never grants again.
-  yield* sql`CREATE TABLE invitation_grant (handle TEXT PRIMARY KEY, created_at INTEGER NOT NULL)`;
-  yield* sql`INSERT INTO invitation_grant SELECT r.handle, MIN(s.created_at)
-    FROM discovery_contact c JOIN discovery_registration r ON r.id = c.registration_id
-    JOIN discovery_selection s ON s.request_id = c.selection_id GROUP BY r.handle`;
-  yield* sql`INSERT OR IGNORE INTO invitation_grant SELECT handle, joined_at FROM user WHERE joined_at IS NOT NULL`;
-  yield* sql`CREATE TABLE invitation (token TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES invitation_grant(handle),
-    redeemed_by TEXT UNIQUE, redeemed_at INTEGER, CHECK((redeemed_by IS NULL) = (redeemed_at IS NULL)))`;
-  yield* sql`CREATE INDEX invitation_owner ON invitation(owner)`;
-  yield* sql`CREATE TABLE invitation_submission (registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
-    token TEXT NOT NULL REFERENCES invitation(token), selected_notification_id INTEGER)`;
-  yield* sql`ALTER TABLE discovery_notification ADD COLUMN invitation_text TEXT`;
-});
-
 const announcement = {
-  ko: "Ren AI 초대장 2장이 도착했어요. 링크 하나로 친구 한 명을 초대할 수 있어요. 친구는 별도 선정 없이 연락 가능한 페르소나와 연결됩니다.",
-  en: "You have 2 Ren AI invitations. Share one link with each friend to connect them with an available persona without waiting for selection.",
-  ja: "Ren AIの招待状が2枚届きました。友だち1人につきリンクを1つ共有すると、選考を待たずに連絡可能なペルソナとつながれます。",
+  ko: "[Ren AI] 초대장이 도착했어요. 링크 하나로 한 명이 별도 선정 없이 연락 가능한 페르소나와 연결됩니다. 직접 사용하거나 친구에게 전달해 주세요. 이 주소는 안내 전용이라 답장을 확인하지 않습니다.",
+  en: "[Ren AI] Your invitations are here. Each link connects one person with an available persona without waiting for selection. Use it yourself or share it with a friend. This address only sends notifications and doesn't read replies.",
+  ja: "[Ren AI] 招待状が届きました。各リンクで1人が選考を待たずに連絡可能なペルソナとつながれます。自分で使うことも友だちに共有することもできます。このアドレスは通知専用で返信は確認していません。",
 };
 
 export const attachInvitation = (registrationID: string, token: string, handle: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const available =
-      yield* sql`SELECT token FROM invitation WHERE token = ${token} AND owner != ${handle}
-    AND (redeemed_by IS NULL OR redeemed_by = ${handle})`;
+    const available = yield* sql`SELECT token FROM invitation WHERE token = ${token}
+        AND (redeemed_by IS NULL OR redeemed_by = ${handle})`;
     if (!available.length) yield* Effect.fail("invitation" as const);
     yield* sql`INSERT INTO invitation_submission (registration_id, token) VALUES (${registrationID}, ${token})
       ON CONFLICT(registration_id) DO UPDATE SET token = excluded.token
@@ -53,7 +36,7 @@ export const consumeInvitation = (registrationID: string, handle: string) =>
     if (!pending) return;
     const now = yield* Clock.currentTimeMillis;
     const updated = yield* sql`UPDATE invitation SET redeemed_by = ${handle}, redeemed_at = ${now}
-    WHERE token = ${pending.token} AND redeemed_by IS NULL AND owner != ${handle} RETURNING token`;
+      WHERE token = ${pending.token} AND redeemed_by IS NULL RETURNING token`;
     if (!updated.length)
       yield* Effect.fail(new SelectionConflict("Invitation is no longer available"));
   });
@@ -69,36 +52,98 @@ export const invitations = Effect.gen(function* () {
   const configure = (enabled: boolean) =>
     sql`INSERT INTO invitation_settings VALUES (1, ${Number(enabled)})
       ON CONFLICT(id) DO UPDATE SET enabled = excluded.enabled`.pipe(Effect.asVoid);
+  const account = (handle: string) =>
+    Effect.gen(function* () {
+      const [row] = yield* sql<{
+        basic: number;
+        extraCount: number;
+      }>`SELECT basic_granted AS basic, extra_count AS extraCount FROM invitation_grant WHERE handle = ${handle}`;
+      const issued = yield* sql<
+        (typeof InvitationAccount.Type.invitations)[number]
+      >`SELECT i.token, i.created_at AS createdAt, i.redeemed_at AS redeemedAt, d.kind, d.state
+        FROM invitation i JOIN invitation_delivery d ON d.id = i.delivery_id
+        WHERE i.owner = ${handle} ORDER BY i.created_at DESC, i.token LIMIT 50`;
+      return {
+        handle,
+        basicGranted: row?.basic === 1,
+        extraCount: row?.extraCount ?? 0,
+        invitations: issued,
+      };
+    });
+  const issue = (
+    handle: string,
+    kind: "basic" | "extra",
+    locale: typeof DiscoveryLocale.Type,
+    id: string,
+    requestId: string,
+  ) =>
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      yield* sql`INSERT OR IGNORE INTO invitation_grant (handle, created_at) VALUES (${handle}, ${now})`;
+      if (kind === "basic") {
+        const claimed = yield* sql`UPDATE invitation_grant SET basic_granted = 1
+          WHERE handle = ${handle} AND basic_granted = 0 RETURNING handle`;
+        if (!claimed.length) return false;
+      } else
+        yield* sql`UPDATE invitation_grant SET extra_count = extra_count + 1 WHERE handle = ${handle}`;
+      const tokens = Array.from({ length: kind === "basic" ? 2 : 1 }, () =>
+        randomBytes(32).toString("hex"),
+      );
+      const body = `${announcement[locale]}\n\n${tokens.map((token) => `https://renai.im/explore#invite=${token}`).join("\n\n")}`;
+      yield* sql`INSERT INTO invitation_delivery (id, handle, kind, locale, created_at, request_id, body, state)
+        VALUES (${id}, ${handle}, ${kind}, ${locale}, ${now}, ${requestId}, ${body}, 'queued')`;
+      for (const token of tokens)
+        yield* sql`INSERT INTO invitation (token, owner, delivery_id, created_at) VALUES (${token}, ${handle}, ${id}, ${now})`;
+      yield* scheduleWork("notifications", now).pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+      );
+      return true;
+    });
   const grant = (handle: string, requestId: string) =>
     Effect.gen(function* () {
       const { enabled } = yield* settings;
       const now = yield* Clock.currentTimeMillis;
-      const inserted =
-        yield* sql`INSERT OR IGNORE INTO invitation_grant VALUES (${handle}, ${now}) RETURNING handle`;
-      if (!inserted.length || !enabled) return;
-      const links: string[] = [];
-      for (let i = 0; i < 2; i++) {
-        const token = randomBytes(32).toString("hex");
-        yield* sql`INSERT INTO invitation (token, owner) VALUES (${token}, ${handle})`;
-        links.push(`https://renai.im/explore#invite=${token}`);
-      }
+      const first = yield* sql`INSERT INTO invitation_grant (handle, created_at, automatic_seen)
+        VALUES (${handle}, ${now}, 1) ON CONFLICT(handle) DO UPDATE SET automatic_seen = 1
+        WHERE automatic_seen = 0 RETURNING handle`;
+      if (!first.length || !enabled) return;
       const [registration] = yield* sql<{
-        id: string;
-        locale: keyof typeof announcement;
-        consentVersion: string;
-      }>`SELECT id, locale, consent_version AS consentVersion FROM discovery_registration WHERE handle = ${handle} AND archived_at IS NULL`;
-      const text = `${announcement[registration!.locale]}\n\n${links.join("\n\n")}`;
-      yield* sql`INSERT INTO discovery_notification (registration_id, created_at, locale, consent_version, request_id, kind, state, invitation_text)
-      VALUES (${registration!.id}, ${now}, ${registration!.locale}, ${registration!.consentVersion}, ${requestId}, 'active', 'queued', ${text})`;
-      yield* scheduleWork("notifications", now).pipe(
-        Effect.provideService(SqlClient.SqlClient, sql),
-      );
+        locale: typeof DiscoveryLocale.Type;
+      }>`SELECT locale FROM discovery_registration WHERE handle = ${handle} AND archived_at IS NULL`;
+      yield* issue(handle, "basic", registration!.locale, randomUUID(), requestId);
     });
+  const manual = (input: typeof InvitationGrant.Type, requestId: string) =>
+    Effect.gen(function* () {
+      const [previous] = yield* sql<{
+        handle: string;
+        kind: string;
+        locale: string;
+      }>`SELECT handle, kind, locale FROM invitation_delivery WHERE id = ${input.requestId}`;
+      if (previous) {
+        if (
+          previous.handle !== input.handle ||
+          previous.kind !== input.kind ||
+          previous.locale !== input.locale
+        )
+          return yield* Effect.fail(new SelectionConflict("Invitation request conflict"));
+      } else {
+        const blocked = yield* sql`SELECT 1 FROM blocked WHERE handle = ${input.handle}
+          UNION SELECT 1 FROM removal WHERE handle = ${input.handle}`;
+        if (blocked.length)
+          return yield* Effect.fail(new SelectionConflict("Invitation recipient unavailable"));
+        if (!(yield* issue(input.handle, input.kind, input.locale, input.requestId, requestId)))
+          return yield* Effect.fail(new SelectionConflict("Basic invitations already granted"));
+      }
+      return yield* account(input.handle);
+    }).pipe(sql.withTransaction);
   const list = sql<{
     owner: string;
     token: string;
     redeemedAt: number | null;
-  }>`SELECT i.owner, i.token, i.redeemed_at AS redeemedAt FROM invitation i
-    JOIN discovery_registration r ON r.handle = i.owner WHERE r.archived_at IS NULL ORDER BY i.token`;
-  return { settings, configure, grant, list };
+  }>`SELECT owner, token, redeemedAt FROM (
+    SELECT i.owner, i.token, i.redeemed_at AS redeemedAt,
+      ROW_NUMBER() OVER (PARTITION BY i.owner ORDER BY i.created_at DESC, i.token) AS position
+    FROM invitation i JOIN discovery_registration r ON r.handle = i.owner WHERE r.archived_at IS NULL
+  ) WHERE position <= 50 ORDER BY token`;
+  return { settings, configure, grant, manual, account, list };
 });

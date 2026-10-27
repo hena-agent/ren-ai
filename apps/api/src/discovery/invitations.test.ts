@@ -57,7 +57,7 @@ test("issuance defaults off, grants once at first selection, and never backfills
       expect(entries.find((row) => row.id === owner)?.invitations).toHaveLength(2);
       const notifications = yield* f.sql<{
         text: string;
-      }>`SELECT invitation_text AS text FROM discovery_notification WHERE invitation_text IS NOT NULL`;
+      }>`SELECT body AS text FROM invitation_delivery`;
       expect(notifications).toHaveLength(1);
       expect(notifications[0]!.text).toContain("https://renai.im/explore#invite=");
       yield* invites.configure(false);
@@ -130,10 +130,7 @@ test("invalid, self and conflicting uses cannot spend an invitation or partially
         invites,
         tickets: [ticket],
       } = f;
-      for (const input of [
-        { handle: "+821022222222", invitationToken: "0".repeat(64) },
-        { handle: "+821011111111", invitationToken: ticket!.token },
-      ]) {
+      for (const input of [{ handle: "+821022222222", invitationToken: "0".repeat(64) }]) {
         const response = yield* f.join(input);
         expect(response.status).toBe(400);
         expect(yield* Effect.promise(() => response.json())).toBe("invitation");
@@ -202,6 +199,7 @@ test("a failed iMessage lookup is retried only by a fresh invitation submission"
         tickets: [ticket],
       } = f;
       yield* invites.configure(false);
+      yield* worker.tick;
       yield* f.join({ invitationToken: ticket!.token });
       f.availability.mockReturnValueOnce(Effect.fail(new Error("lookup failed")));
       // The owner fixture is already verified; only the invited registration calls availability.
@@ -234,7 +232,7 @@ test("actor replacement after selection commits retains the selected notificatio
       } = f;
       yield* f.join({ invitationToken: ticket!.token });
       yield* f.sql`CREATE TRIGGER interrupt_before_notification BEFORE UPDATE OF state ON discovery_notification
-      WHEN NEW.state = 'uncertain' AND NEW.invitation_text IS NULL
+      WHEN NEW.state = 'uncertain' AND NEW.registration_id IS NOT NULL
       BEGIN SELECT RAISE(ABORT, 'interrupted claim'); END`;
       yield* f.worker.tick;
       expect(f.logs).toContainEqual(

@@ -11,7 +11,7 @@ export const activeNotificationText = {
 };
 
 export const invitationSelectedText = {
-  ko: "[Ren AI] 친구의 초대장으로 선정되었어요. 좋아요한 페르소나가 5분~1시간 뒤 hi@renai.im에서 첫 메시지를 보낼 예정이에요. 이 주소는 안내 전용이라 답장을 확인하지 않습니다.",
-  en: "[Ren AI] Your friend's invitation has been used and you have been selected. A persona you liked is scheduled to send a first message from hi@renai.im in 5–60 minutes. This address only sends notifications and doesn't read replies.",
-  ja: "[Ren AI] 友だちの招待状で選ばれました。いいねしたペルソナから5分〜1時間後にhi@renai.imを通じて最初のメッセージが届く予定です。このアドレスは通知専用で、返信は確認していません。",
+  ko: "[Ren AI] 초대장으로 선정되었어요. 좋아요한 페르소나가 5분~1시간 뒤 hi@renai.im에서 첫 메시지를 보낼 예정이에요. 이 주소는 안내 전용이라 답장을 확인하지 않습니다.",
+  en: "[Ren AI] Your invitation has been used and you have been selected. A persona you liked is scheduled to send a first message from hi@renai.im in 5–60 minutes. This address only sends notifications and doesn't read replies.",
+  ja: "[Ren AI] 招待状で選ばれました。いいねしたペルソナから5分〜1時間後にhi@renai.imを通じて最初のメッセージが届く予定です。このアドレスは通知専用で、返信は確認していません。",
 };

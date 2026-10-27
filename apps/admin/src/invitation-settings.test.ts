@@ -41,7 +41,7 @@ test("Admin displays and changes persisted invitation issuance with same-origin 
     });
   });
   const logs: LogEntry[] = [];
-  const admin = createAdmin(f.store, "test-password", "styles", {
+  const admin = createAdmin(f.store, "test-password", {
     management: managementClient("https://api.test", "private-secret", fetcher),
     log: (event) => logs.push(event),
   });

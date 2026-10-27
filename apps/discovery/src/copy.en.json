@@ -207,7 +207,7 @@
   "joinStep": "Your contact",
   "joinTitle": "Where can we reach you?",
   "joinIntro": "One of the personas you like may reach out on iMessage.",
-  "invitationIntro": "Your friend's invitation will be applied. After checking iMessage availability, we automatically select an available persona from your Likes. The invitation is used when you are selected.",
+  "invitationIntro": "Your invitation will be applied. After checking iMessage availability, we automatically select an available persona from your Likes. The invitation is used when you are selected.",
   "invitationTitle": "Your invitation request is in.",
   "invitationMessage": "After checking iMessage availability, we automatically select an available persona from your Likes. Their first message is then scheduled for 5–60 minutes later.",
   "invitationHint": "Your invitation is only used when you are selected. If you don't hear from us, you can submit again through the same invitation link. Ren AI notifications come from noti@renai.im and persona greetings from hi@renai.im.",

@@ -188,7 +188,7 @@
   "joinStep": "연락처 등록",
   "joinTitle": "어디로 연락하면 될까요?",
   "joinIntro": "좋아요한 페르소나 중 한 명에게 iMessage로 연락받을 수 있어요.",
-  "invitationIntro": "친구의 초대장이 적용됩니다. iMessage 사용 가능 여부를 확인한 뒤, 배정 여유가 있는 좋아요한 페르소나로 자동 선정해요. 초대장은 선정될 때 사용됩니다.",
+  "invitationIntro": "초대장이 적용됩니다. iMessage 사용 가능 여부를 확인한 뒤, 배정 여유가 있는 좋아요한 페르소나로 자동 선정해요. 초대장은 선정될 때 사용됩니다.",
   "invitationTitle": "초대 신청을 받았어요.",
   "invitationMessage": "iMessage 사용 가능 여부를 확인한 뒤, 배정 여유가 있는 좋아요한 페르소나로 자동 선정해요. 선정되면 5분~1시간 뒤 첫 연락을 예약해요.",
   "invitationHint": "초대장은 선정될 때만 사용돼요. 연락이 오지 않으면 같은 초대 링크에서 다시 신청할 수 있어요. Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",

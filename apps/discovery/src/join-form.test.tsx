@@ -63,7 +63,7 @@ test("invitations submit the private fragment with normal consent and explain in
   window.history.replaceState(null, "", `/explore#invite=${token}`);
   submit.mockRejectedValueOnce(new RegistrationError("invitation"));
   mount();
-  expect(screen.getByText(/친구의 초대장이 적용됩니다/)).toBeDefined();
+  expect(screen.getByText(/초대장이 적용됩니다/)).toBeDefined();
   fill();
   await act(async () => join());
   expect(submit).toHaveBeenCalledWith(expect.objectContaining({ invitationToken: token }));

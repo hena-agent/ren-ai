@@ -274,5 +274,12 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
           ),
         ),
       );
-    return { list, select, start, configureInvitations: invites.configure };
+    return {
+      list,
+      select,
+      start,
+      configureInvitations: invites.configure,
+      grantInvitations: invites.manual,
+      invitationAccount: invites.account,
+    };
   });

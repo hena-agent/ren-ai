@@ -7,6 +7,7 @@ import type {
   SelectContacts,
 } from "@ren-ai/onboarding";
 import { LanguageReadout } from "./language-panel.tsx";
+import { InvitationPanel, type InvitationView } from "./invitation-panel.tsx";
 
 export interface ContactView {
   tab: "waitlist" | "first-contacts";
@@ -21,6 +22,7 @@ export interface ContactView {
   snapshot?: typeof ContactSnapshot.Type;
   selection?: typeof ContactSelection.Type;
   languages?: typeof ConversationLanguages.Type;
+  invitation?: InvitationView;
 }
 const labels: Record<typeof ContactState.Type, string> = {
   waiting: "대기 중",
@@ -262,22 +264,27 @@ function DirectSelection({ view }: { view: ContactView }) {
 }
 function InvitationControl({ view }: { view: ContactView }) {
   const settings = view.snapshot?.invitationSettings;
-  if (view.tab !== "waitlist" || !settings) return null;
+  if (view.tab !== "waitlist") return null;
   return (
-    <section aria-label="초대장 지급 설정">
-      <h2>초대장 지급 {settings.enabled ? "ON" : "OFF"}</h2>
-      <p className="hint">
-        켜면 이후 최초 선정되는 유저에게 초대장 2장을 지급합니다. 꺼도 기존 초대장은 계속 사용할 수
-        있습니다. 이전 선정자에게 소급 지급하지 않습니다.
-      </p>
-      <form action="/waitlist" method="post" className="contact-selection">
-        <input type="hidden" name="action" value="invitations" />
-        <input type="hidden" name="enabled" value={String(!settings.enabled)} />
-        <button type="submit" className="secondary">
-          초대장 지급 {settings.enabled ? "끄기" : "켜기"}
-        </button>
-      </form>
-    </section>
+    <>
+      {settings && (
+        <section aria-label="초대장 지급 설정">
+          <h2>초대장 지급 {settings.enabled ? "ON" : "OFF"}</h2>
+          <p className="hint">
+            켜면 이후 최초 선정되는 유저에게 초대장 2장을 지급합니다. 꺼도 기존 초대장은 계속 사용할
+            수 있습니다. 이전 선정자에게 소급 지급하지 않습니다.
+          </p>
+          <form action="/waitlist" method="post" className="contact-selection">
+            <input type="hidden" name="action" value="invitations" />
+            <input type="hidden" name="enabled" value={String(!settings.enabled)} />
+            <button type="submit" className="secondary">
+              초대장 지급 {settings.enabled ? "끄기" : "켜기"}
+            </button>
+          </form>
+        </section>
+      )}
+      <InvitationPanel view={view.invitation} />
+    </>
   );
 }
 

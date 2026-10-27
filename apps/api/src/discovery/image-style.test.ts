@@ -160,7 +160,7 @@ test("forward migration defaults existing Conversations and waiting registration
       yield* f.sql`DROP TABLE invitation`;
       yield* f.sql`DROP TABLE invitation_grant`;
       yield* f.sql`DROP TABLE invitation_settings`;
-      yield* f.sql`ALTER TABLE discovery_notification DROP COLUMN invitation_text`;
+      yield* f.sql`DROP TABLE invitation_delivery`;
       const [send] = yield* f.sql<{
         sql: string;
       }>`SELECT sql FROM sqlite_master WHERE name = 'send'`;

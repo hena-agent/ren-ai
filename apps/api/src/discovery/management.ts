@@ -1,6 +1,12 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { Effect, Result, Schema } from "effect";
-import { InvitationSettings, SelectContacts, StartContact } from "@ren-ai/onboarding";
+import {
+  InvitationSettings,
+  InvitationGrant,
+  InvitationLookup,
+  SelectContacts,
+  StartContact,
+} from "@ren-ai/onboarding";
 import type { contacts } from "./contacts.ts";
 import { contactCause, contactLog } from "./diagnostics.ts";
 import type { ContactLog, ContactDiagnostic } from "./diagnostics.ts";
@@ -13,6 +19,32 @@ const parentTrace = (request: Request) => {
     ? { operationId: parent }
     : {};
 };
+type InvitationCommit = <I, A extends object, E extends Error>(
+  name: "invitations" | "invitation_grant" | "invitation_lookup",
+  schema: Schema.Decoder<I>,
+  run: (input: I) => Effect.Effect<A | null, E>,
+) => Promise<Response>;
+
+function invitationRequest(
+  path: string,
+  store: Effect.Success<ReturnType<typeof contacts>>,
+  requestId: string,
+  commit: InvitationCommit,
+) {
+  if (path === "/management/discovery/invitations")
+    return commit("invitations", InvitationSettings, (input) =>
+      store.configureInvitations(input.enabled).pipe(Effect.as(input)),
+    );
+  if (path === "/management/discovery/invitations/grant")
+    return commit("invitation_grant", InvitationGrant, (input) =>
+      store.grantInvitations(input, requestId),
+    );
+  if (path === "/management/discovery/invitations/lookup")
+    return commit("invitation_lookup", InvitationLookup, (input) =>
+      store.invitationAccount(input.handle),
+    );
+  return undefined;
+}
 export const contactManagement =
   (
     store: Effect.Success<ReturnType<typeof contacts>>,
@@ -59,7 +91,7 @@ export const contactManagement =
     };
     /** Selection and test starts commit the same way; a null result is a refused start. */
     const commit = async <I, A extends object, E extends Error>(
-      name: "selection" | "start" | "invitations",
+      name: "selection" | "start" | "invitations" | "invitation_grant" | "invitation_lookup",
       schema: Schema.Decoder<I>,
       run: (input: I) => Effect.Effect<A | null, E>,
     ) => {
@@ -97,10 +129,8 @@ export const contactManagement =
         : respond(result.success, 200);
     }
     if (request.method !== "POST") return failure("not_found", 404);
-    if (path === "/management/discovery/invitations")
-      return commit("invitations", InvitationSettings, (input) =>
-        store.configureInvitations(input.enabled).pipe(Effect.as(input)),
-      );
+    const invitation = invitationRequest(path, store, requestId, commit);
+    if (invitation) return invitation;
     if (path === "/management/discovery/select")
       return commit("selection", SelectContacts, (input) => store.select(input, requestId));
     if (

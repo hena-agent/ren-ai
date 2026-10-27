@@ -86,7 +86,7 @@ export const waitlistNotifications = (
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const claim = (id: number) =>
+    const claim = (id: number | string, table: "discovery_notification" | "invitation_delivery") =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         yield* sql`DELETE FROM notification_attempt WHERE at <= ${now - 3_600_000}`;
@@ -94,7 +94,7 @@ export const waitlistNotifications = (
           total: number;
         }>`SELECT COUNT(*) AS total FROM notification_attempt`;
         const state = count!.total >= 30 ? "skipped" : "uncertain";
-        const claimed = yield* sql`UPDATE discovery_notification SET state = ${state}
+        const claimed = yield* sql`UPDATE ${sql(table)} SET state = ${state}
         WHERE id = ${id} AND state = 'queued' RETURNING id`;
         if (!claimed.length || state === "skipped") return false;
         yield* sql`INSERT INTO notification_attempt (at) VALUES (${now})`;
@@ -103,18 +103,24 @@ export const waitlistNotifications = (
     const tick = Effect.gen(function* () {
       const limit = Math.min(30, yield* workBatchSize);
       const queued = yield* sql<{
-        id: number;
+        id: number | string;
+        source: "discovery_notification" | "invitation_delivery";
         registrationID: string | null;
         handle: string;
         locale: keyof typeof waitlistNotificationText;
         kind: "waiting" | "active";
         requestId: string;
         invitationText: string | null;
-      }>`SELECT n.id, n.registration_id AS registrationID, COALESCE(r.handle, u.handle) AS handle,
-          n.locale, n.kind, n.request_id AS requestId, n.invitation_text AS invitationText FROM discovery_notification n
+        createdAt: number;
+      }>`SELECT * FROM (SELECT n.id, 'discovery_notification' AS source, n.registration_id AS registrationID, COALESCE(r.handle, u.handle) AS handle,
+          n.locale, n.kind, n.request_id AS requestId, NULL AS invitationText, n.created_at AS createdAt FROM discovery_notification n
         LEFT JOIN discovery_registration r ON r.id = n.registration_id
         LEFT JOIN user u ON u.id = n.user_id
-         WHERE n.state = 'queued' ORDER BY n.created_at, n.id LIMIT ${limit}`;
+         WHERE n.state = 'queued' ORDER BY n.created_at, n.id LIMIT ${limit})
+         UNION ALL SELECT * FROM (SELECT id, 'invitation_delivery' AS source, NULL AS registrationID, handle,
+           locale, 'active' AS kind, request_id AS requestId, body AS invitationText, created_at AS createdAt
+           FROM invitation_delivery WHERE state = 'queued' ORDER BY created_at, id LIMIT ${limit})
+         ORDER BY createdAt, id LIMIT ${limit}`;
       for (const row of queued) {
         if (!(yield* claimWork)) break;
         const started = performance.now();
@@ -126,16 +132,39 @@ export const waitlistNotifications = (
         let failed = false;
         yield* Effect.gen(function* () {
           stage = "recipient.availability";
-          const availability =
-            row.registrationID === null
-              ? undefined
-              : yield* checkAvailability(row.registrationID, transport, log);
+          let availability: "available" | "unavailable" | "failed" | null | undefined;
+          if (row.source === "invitation_delivery") {
+            const result = yield* transport.availability(row.handle).pipe(
+              Effect.timeout("10 seconds"),
+              Effect.tapError(
+                () =>
+                  sql`UPDATE invitation_delivery SET state = 'failed' WHERE id = ${row.id} AND state = 'queued'`,
+              ),
+            );
+            fields.operationId = result.requestId;
+            availability = result.available ? "available" : "unavailable";
+          } else if (row.registrationID !== null)
+            availability = yield* checkAvailability(row.registrationID, transport, log);
           if (availability === "unavailable") {
-            yield* sql`UPDATE discovery_notification SET state = 'failed'
+            failed = true;
+            log({
+              ...fields,
+              stage,
+              code: "no_imessage",
+              outcome: "failed",
+              level: "warn",
+              durationMs: performance.now() - started,
+            });
+            yield* sql`UPDATE ${sql(row.source)} SET state = 'failed'
               WHERE id = ${row.id} AND state = 'queued'`;
             return;
           }
-          if (catalog && row.registrationID && availability === "available") {
+          if (
+            catalog &&
+            row.registrationID &&
+            availability === "available" &&
+            typeof row.id === "number"
+          ) {
             stage = "invitation.selection";
             const pending =
               yield* sql`SELECT 1 FROM invitation_submission s JOIN invitation i ON i.token = s.token
@@ -155,7 +184,7 @@ export const waitlistNotifications = (
             JOIN discovery_contact c ON c.registration_id = r.id
             WHERE s.registration_id = ${row.registrationID} AND s.selected_notification_id = ${row.id}`;
           stage = "notification.claim";
-          if (!(yield* claim(row.id))) return;
+          if (!(yield* claim(row.id, row.source))) return;
           stage = "transport.send";
           const result = yield* transport
             .notify(
@@ -170,7 +199,7 @@ export const waitlistNotifications = (
             .pipe(Effect.timeout("30 seconds"));
           fields.operationId = result.requestId;
           stage = "notification.commit";
-          yield* sql`UPDATE discovery_notification SET guid = ${result.guid} WHERE id = ${row.id}`;
+          yield* sql`UPDATE ${sql(row.source)} SET guid = ${result.guid} WHERE id = ${row.id}`;
           stage = "transport.status";
           const status = yield* transport
             .notificationStatus(result.guid)
@@ -183,7 +212,7 @@ export const waitlistNotifications = (
                 : "sent";
           failed = state === "failed";
           stage = "notification.commit";
-          yield* sql`UPDATE discovery_notification SET state = ${state} WHERE id = ${row.id}`;
+          yield* sql`UPDATE ${sql(row.source)} SET state = ${state} WHERE id = ${row.id}`;
           if (failed)
             log({
               ...fields,
@@ -216,8 +245,8 @@ export const waitlistNotifications = (
           durationMs: performance.now() - started,
         });
       }
-      const remaining =
-        yield* sql`SELECT registration_id FROM discovery_notification WHERE state = 'queued' LIMIT 1`;
+      const remaining = yield* sql`SELECT 1 FROM discovery_notification WHERE state = 'queued'
+          UNION ALL SELECT 1 FROM invitation_delivery WHERE state = 'queued' LIMIT 1`;
       if (remaining.length)
         yield* scheduleWork("notifications", (yield* Clock.currentTimeMillis) + 1_000);
     });

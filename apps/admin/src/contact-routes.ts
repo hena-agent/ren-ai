@@ -7,6 +7,7 @@ import type { ContactView } from "./contact-page.tsx";
 import { html } from "./html-response.ts";
 import { renderPage } from "./page.tsx";
 import { GenerationError, operation, reportFailure, requestId } from "./logging.ts";
+import { submitInvitations } from "./invitation-form.ts";
 
 const select = (form: FormData, view: ContactView, client: ManagementClient) => {
   let input: typeof SelectContacts.Type;
@@ -61,6 +62,8 @@ const start = (form: FormData, client: ManagementClient) => {
 };
 
 async function submit(form: FormData, view: ContactView, client: ManagementClient) {
+  if (form.get("action") === "invitation-lookup" || form.get("action") === "invitation-grant")
+    return submitInvitations(form, view.invitation!, client);
   if (form.get("action") === "invitations") {
     const value = form.get("enabled");
     if (value !== "true" && value !== "false")
@@ -85,6 +88,13 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
     registrationIDs: [],
     assignments: [],
     count: 1,
+    invitation: {
+      requestId: randomUUID(),
+      handle: "",
+      locale: "ko",
+      kind: "basic",
+      attempted: false,
+    },
   };
   const render = (error = "", status = 200) =>
     html(renderPage({ personas: [], contactView: view, error }), status);
