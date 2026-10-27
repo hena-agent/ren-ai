@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotices } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
 import type { DiscoveryClient } from "./client.ts";
-import { selectImageStyle, selectLanguage } from "../test/choose.ts";
+import { selectImageStyle, selectDropdown } from "../test/choose.ts";
 import { testClient } from "../test/client.ts";
 
 afterEach(() => {
@@ -44,7 +44,7 @@ test("the home explains the service without loading profiles and offers real nav
 
 test("home navigation, FAQs, title and the shared privacy notice follow the display language", () => {
   render(<Site />);
-  selectLanguage("화면 언어", "English");
+  selectDropdown("화면 언어", "English");
   expect(screen.getAllByRole("link", { name: "Meet the personas" })).toHaveLength(2);
   expect(screen.getByRole("navigation", { name: "About the service" })).toBeTruthy();
   const englishConversation = screen.getByRole("figure", {
@@ -70,7 +70,7 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(screen.getByRole("heading", { name: "A persona will reach out" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "A new person. Not another app." })).toBeTruthy();
   expect(screen.getByText("No new app. Just iMessage.", { selector: ".home-intro" })).toBeTruthy();
-  selectLanguage("Display language", "日本語");
+  selectDropdown("Display language", "日本語");
   expect(screen.getAllByRole("link", { name: "ペルソナに出会う" })).toHaveLength(2);
   expect(screen.getByText("実在する人と話すのですか？")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.ja.title)).toBeTruthy();
@@ -145,11 +145,11 @@ test("portrait selection changes the featured scene without leaving the page or 
   expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
     "/landing/seoyul-anime.webp",
   );
-  selectLanguage("화면 언어", "English");
+  selectDropdown("화면 언어", "English");
   expect(
     screen.getByRole("button", { name: "Harin profile photo" }).getAttribute("aria-pressed"),
   ).toBe("true");
-  selectLanguage("Display language", "日本語");
+  selectDropdown("Display language", "日本語");
   expect(
     screen.getByRole("button", { name: "ハリン プロフィール写真" }).getAttribute("aria-pressed"),
   ).toBe("true");

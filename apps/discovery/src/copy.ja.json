@@ -98,7 +98,7 @@
       },
       {
         "title": "どんな情報を登録しますか？",
-        "body": "iMessageを使うiPhoneの番号と、会話したい言語を登録します。名前・年齢・性別は任意です。個人情報の取り扱いを読み、同意したうえでウェイトリストへの登録を完了できます。"
+        "body": "名前とiMessageを使うiPhoneの番号、会話したい言語を登録します。年齢と性別は任意です。個人情報の取り扱いを読み、同意したうえでウェイトリストへの登録を完了できます。"
       }
     ],
     "closingTitle": "次のメッセージが、",
@@ -107,12 +107,12 @@
     "footer": "AIペルソナと分かち合う日常、Ren AI。",
     "pageTitle": "Ren AI — 日常に、待ち遠しいメッセージを"
   },
-  "profileFields": "あなたについて",
-  "profileHint": "名前は必須です。年齢と性別は空欄でも大丈夫です。最初の挨拶からペルソナが参考にします。",
-  "profileName": "名前（必須）",
+  "profileNamePlaceholder": "どのようにお呼びすればいいですか？",
+  "profileName": "名前",
+  "profileOptional": "（任意）",
   "requiredName": "名前を入力してください。",
-  "profileAge": "満年齢（任意）",
-  "profileGender": "性別（任意）",
+  "profileAge": "年齢",
+  "profileGender": "性別",
   "genderUnset": "選択しない",
   "genderFemale": "女性",
   "genderMale": "男性",
@@ -207,7 +207,7 @@
   "joinStep": "連絡先の登録",
   "joinTitle": "どこに連絡しましょうか？",
   "joinIntro": "いいねしたペルソナの1人から、iMessageで連絡が届くことがあります。",
-  "invitationCode": "招待コード（任意）",
+  "invitationCode": "招待コード",
   "invitationCodeHint": "受け取ったコードを入力してください。招待リンクからは自動入力されます。コードなしでも順番待ちに登録できます。",
   "invitationIntro": "招待状が適用されます。iMessageの利用可否を確認した後、いいねした中から空きのあるペルソナを自動で選定します。招待状は選定時に使用されます。",
   "invitationTitle": "招待の申し込みを受け付けました。",

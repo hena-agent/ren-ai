@@ -65,7 +65,7 @@ test.each([undefined, "harin"])(
     fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
       target: { value: "01012345678" },
     });
-    const name = screen.getByLabelText<HTMLInputElement>("이름 (필수)");
+    const name = screen.getByRole<HTMLInputElement>("textbox", { name: "이름" });
     fireEvent.change(name, { target: { value: "그대로 둘 이름" } });
     fireEvent.click(screen.getByRole("checkbox"));
     act(() => verified("verified"));
@@ -80,7 +80,7 @@ test.each([undefined, "harin"])(
     expect(screen.getByRole("heading", { name: "지우" })).toBeTruthy();
     choose(true);
     fireEvent.click(screen.getByRole("button", { name: "연락받기" }));
-    expect(screen.getByLabelText("이름 (필수)")).toBe(name);
+    expect(screen.getByRole("textbox", { name: "이름" })).toBe(name);
     expect(name.value).toBe("그대로 둘 이름");
     expect(screen.getByRole<HTMLInputElement>("textbox", { name: "휴대전화 번호" }).value).toBe(
       "010-1234-5678",
@@ -123,7 +123,7 @@ test.each(
       target: { value: "010-1234-5678" },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
-    fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
     act(() => verified("human"));
     fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
     await screen.findByRole("heading", {
@@ -181,7 +181,7 @@ test("an existing user is directed to the assigned conversation instead of a new
   });
   fireEvent.click(screen.getByRole("checkbox"));
   act(() => verified("active"));
-  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
   fireEvent.click(screen.getByRole("button", { name: "동의하고 대기 등록" }));
   await screen.findByRole("heading", { name: "이미 대화가 시작된 연락처예요." });
   expect(screen.getByText("iMessage에서 기존 페르소나와 대화를 이어가 주세요.")).toBeTruthy();

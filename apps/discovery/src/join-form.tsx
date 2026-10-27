@@ -6,7 +6,7 @@ import {
   MobileNumber,
   type DiscoveryNotices,
 } from "@ren-ai/onboarding";
-import { ContactProfile } from "./contact-profile.tsx";
+import { ContactName, ContactProfile } from "./contact-profile.tsx";
 import { Turnstile } from "@ren-ai/onboarding/turnstile";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
@@ -179,8 +179,14 @@ export function JoinForm({
         ))}
       </ul>
       <form onSubmit={(event) => void submit(event)}>
+        <ContactName disabled={pending} />
         <div className="contact-fields">
-          <label htmlFor="handle">{copy.handle}</label>
+          <label htmlFor="handle">
+            <span className="field-requirement" aria-hidden="true">
+              *
+            </span>{" "}
+            {copy.handle}
+          </label>
           <PhoneField
             id="handle"
             describedBy={invalid ? "handle-error" : "handle-hint"}
@@ -204,25 +210,6 @@ export function JoinForm({
           </div>
         </div>
         <ContactProfile disabled={pending} />
-        <div className="contact-fields">
-          <label htmlFor="invitation-code">{copy.invitationCode}</label>
-          <input
-            id="invitation-code"
-            name="invitationCode"
-            value={invitation}
-            onChange={(event) => setInvitation(event.target.value.trim())}
-            maxLength={64}
-            pattern="[A-Za-z0-9_\-]+"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            aria-describedby="invitation-code-hint"
-            disabled={pending}
-          />
-          <p id="invitation-code-hint" className="field-hint">
-            {copy.invitationCodeHint}
-          </p>
-        </div>
         <RelationshipSelect
           value={startingRelationship}
           onChange={setStartingRelationship}
@@ -241,6 +228,27 @@ export function JoinForm({
           />
           <p id="conversation-language-hint" className="field-hint">
             {copy.conversationLanguageHint}
+          </p>
+        </div>
+        <div className="contact-fields">
+          <label htmlFor="invitation-code">
+            {copy.invitationCode} <span className="field-requirement">{copy.profileOptional}</span>
+          </label>
+          <input
+            id="invitation-code"
+            name="invitationCode"
+            value={invitation}
+            onChange={(event) => setInvitation(event.target.value.trim())}
+            maxLength={64}
+            pattern="[A-Za-z0-9_\-]+"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-describedby="invitation-code-hint"
+            disabled={pending}
+          />
+          <p id="invitation-code-hint" className="field-hint">
+            {copy.invitationCodeHint}
           </p>
         </div>
         <p className="ai-notice">{discoveryNotice.aiNotice}</p>

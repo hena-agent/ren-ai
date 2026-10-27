@@ -6,6 +6,7 @@ import { JoinForm } from "./join-form.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { RegistrationError } from "./client.ts";
 import { testClient } from "../test/client.ts";
+import { selectDropdown } from "../test/choose.ts";
 
 const liked = [
   {
@@ -121,7 +122,7 @@ const number = () => screen.getByRole<HTMLInputElement>("textbox", { name: "휴�
 const country = () => screen.getByRole<HTMLSelectElement>("combobox", { name: "국가 번호" });
 function fill(typed = "01012345678") {
   fireEvent.change(number(), { target: { value: typed } });
-  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
   fireEvent.click(screen.getByRole("checkbox", { name: discoveryNotice.consent }));
   act(() => verification?.("passed"));
 }
@@ -193,9 +194,12 @@ test("a pending registration cannot repeat, and failure retains the form for a f
     screen.getByRole("group", { name: "어떤 사이로 시작할까요?" }).hasAttribute("disabled"),
   ).toBe(true);
   expect(screen.getByRole("checkbox").hasAttribute("disabled")).toBe(true);
-  expect(screen.getByRole("group", { name: "나에 대해 조금 더" }).hasAttribute("disabled")).toBe(
-    true,
-  );
+  for (const field of [
+    screen.getByRole("textbox", { name: "이름" }),
+    screen.getByLabelText("나이 (선택)"),
+    screen.getByLabelText("성별 (선택)"),
+  ])
+    expect(field.hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("button", { name: /탐색으로 돌아가기/ }).hasAttribute("disabled")).toBe(
     true,
   );
@@ -350,13 +354,13 @@ test("name is required while optional age and gender remain independent and fail
   submit.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "waiting" });
   mount();
   fill();
-  const name = screen.getByLabelText<HTMLInputElement>("이름 (필수)");
-  const age = screen.getByLabelText<HTMLInputElement>("만 나이 (선택)");
-  const gender = screen.getByLabelText<HTMLSelectElement>("성별 (선택)");
+  const name = screen.getByRole<HTMLInputElement>("textbox", { name: "이름" });
+  const age = screen.getByLabelText<HTMLInputElement>("나이 (선택)");
+  const gender = screen.getByRole("combobox", { name: "성별 (선택)" });
   const form = name.form!;
   expect(name.required).toBe(true);
-  expect(age.required || gender.required).toBe(false);
-  expect(gender.value).toBe("");
+  expect(age.required).toBe(false);
+  expect(gender.textContent).toContain("선택하지 않음");
   for (const value of ["0", "-1", "1.5"]) {
     fireEvent.change(age, { target: { value } });
     fireEvent.submit(form);
@@ -364,14 +368,14 @@ test("name is required while optional age and gender remain independent and fail
   expect(submit).not.toHaveBeenCalled();
   fireEvent.change(name, { target: { value: "  민수  " } });
   fireEvent.change(age, { target: { value: "28" } });
-  fireEvent.change(gender, { target: { value: "other" } });
+  selectDropdown("성별 (선택)", "기타");
   await act(async () => fireEvent.submit(form));
   expect(submit.mock.calls[0]?.[0]).toMatchObject({ name: "민수", age: 28, gender: "other" });
   expect(name.value).toBe("  민수  ");
   expect(age.value).toBe("28");
-  expect(gender.value).toBe("other");
+  expect(gender.textContent).toContain("기타");
   fireEvent.change(name, { target: { value: "  " } });
-  fireEvent.change(gender, { target: { value: "" } });
+  selectDropdown("성별 (선택)", "선택하지 않음");
   act(() => verification?.("fresh"));
   await act(async () => fireEvent.submit(form));
   expect(submit).toHaveBeenCalledTimes(1);
@@ -386,7 +390,7 @@ test("name is required while optional age and gender remain independent and fail
 test("missing and whitespace-only names cannot leave the browser even with consent and verification", async () => {
   mount();
   fill();
-  const name = screen.getByLabelText<HTMLInputElement>("이름 (필수)");
+  const name = screen.getByRole<HTMLInputElement>("textbox", { name: "이름" });
   expect(name.maxLength).toBe(100);
   expect(name.title).toBe("이름을 입력해 주세요.");
   for (const value of ["", " ", "\u3000"]) {
@@ -399,7 +403,7 @@ test("missing and whitespace-only names cannot leave the browser even with conse
 
 test("verification alone cannot enable an unconsented submission, joining explains an incomplete number, and native navigation is prevented", () => {
   mount();
-  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
   const button = screen.getByRole("button", { name: "동의하고 대기 등록" });
   const form = button.closest("form")!;
   act(() => verification?.("valid-token"));

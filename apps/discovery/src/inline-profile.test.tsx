@@ -132,7 +132,7 @@ test("reading a liked profile during contact entry preserves the mounted form an
   fireEvent.click(screen.getByRole("button", { name: /연락받기/ }));
   const input = screen.getByRole("textbox", { name: "휴대전화 번호" });
   fireEvent.change(input, { target: { value: "01012345678" } });
-  const name = screen.getByLabelText<HTMLInputElement>("이름 (필수)");
+  const name = screen.getByRole<HTMLInputElement>("textbox", { name: "이름" });
   fireEvent.change(name, { target: { value: "민수" } });
   fireEvent.click(likedButton("하린"));
   expect(screen.getByRole("region", { name: "하린" })).toBeTruthy();
@@ -141,7 +141,7 @@ test("reading a liked profile during contact entry preserves the mounted form an
   expect(screen.getByRole("textbox", { name: "휴대전화 번호" })).toBe(input);
   expect(screen.queryByRole("button", { name: "좋아요" })).toBeNull();
   expect(input.getAttribute("value")).toBe("010-1234-5678");
-  expect(screen.getByLabelText("이름 (필수)")).toBe(name);
+  expect(screen.getByRole("textbox", { name: "이름" })).toBe(name);
   expect(name.value).toBe("민수");
 });
 import { testClient } from "../test/client.ts";

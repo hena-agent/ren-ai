@@ -4,7 +4,7 @@ import { discoveryNotice } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
 import { discoveryClient, type DiscoveryClient } from "./client.ts";
 import { publicPersonas } from "../test/public-personas.ts";
-import { choose, selectImageStyle, selectLanguage } from "../test/choose.ts";
+import { choose, selectImageStyle, selectDropdown } from "../test/choose.ts";
 import { readPublicPeople, publicRoute } from "./public-routing.ts";
 import { testClient } from "../test/client.ts";
 
@@ -45,7 +45,7 @@ function mount(bootstrap = true) {
 }
 
 function consentAndVerify(token: string) {
-  fireEvent.change(screen.getByLabelText("이름 (필수)"), { target: { value: "민수" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "이름" }), { target: { value: "민수" } });
   fireEvent.change(screen.getByRole("textbox", { name: "휴대전화 번호" }), {
     target: { value: "01012345678" },
   });
@@ -129,7 +129,7 @@ test("local direct entry loads the Catalog, retains authored writing across loca
   const api = mount(false);
   await screen.findByRole("region", { name: /백지아/ });
   expect(api.profiles).toHaveBeenCalledTimes(2);
-  selectLanguage("화면 언어", "English");
+  selectDropdown("화면 언어", "English");
   expect(screen.getByText("햇살 좋은 날엔 같이 걸어요.")).toBeTruthy();
   cleanup();
   window.history.replaceState(null, "", "/personas/missing");

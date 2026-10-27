@@ -98,7 +98,7 @@
       },
       {
         "title": "What information do I register?",
-        "body": "Your iPhone number for iMessage and preferred conversation language. Name, age, and gender are optional. Read the privacy information and give consent to complete your waitlist registration."
+        "body": "Enter your name, iPhone number for iMessage and preferred conversation language. Age and gender are optional. Read the privacy information and give consent to complete your waitlist registration."
       }
     ],
     "closingTitle": "Someone you'll",
@@ -107,12 +107,12 @@
     "footer": "Everyday moments with AI personas. Ren AI.",
     "pageTitle": "Ren AI — A little more to look forward to"
   },
-  "profileFields": "A little about you",
-  "profileHint": "Your name is required. Age and gender are optional. Your persona can use these details from the first greeting.",
-  "profileName": "Name (required)",
+  "profileNamePlaceholder": "What should we call you?",
+  "profileName": "Name",
+  "profileOptional": "(optional)",
   "requiredName": "Please enter your name.",
-  "profileAge": "Age in years (optional)",
-  "profileGender": "Gender (optional)",
+  "profileAge": "Age",
+  "profileGender": "Gender",
   "genderUnset": "Not specified",
   "genderFemale": "Female",
   "genderMale": "Male",
@@ -207,7 +207,7 @@
   "joinStep": "Your contact",
   "joinTitle": "Where can we reach you?",
   "joinIntro": "One of the personas you like may reach out on iMessage.",
-  "invitationCode": "Invitation code (optional)",
+  "invitationCode": "Invitation code",
   "invitationCodeHint": "Enter a code you received. Invitation links fill it in automatically. You can join the waitlist without a code.",
   "invitationIntro": "Your invitation will be applied. After checking iMessage availability, we automatically select an available persona from your Likes. The invitation is used when you are selected.",
   "invitationTitle": "Your invitation request is in.",

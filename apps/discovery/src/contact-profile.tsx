@@ -1,18 +1,17 @@
 import { useCopy } from "./locale.tsx";
+import { useState } from "react";
+import { SelectField } from "./select-field.tsx";
 
-export function ContactProfile({ disabled }: { disabled: boolean }) {
+export function ContactName({ disabled }: { disabled: boolean }) {
   const copy = useCopy();
   return (
-    <fieldset
-      className="contact-profile contact-fields"
-      disabled={disabled}
-      aria-describedby="profile-hint"
-    >
-      <legend>{copy.profileFields}</legend>
-      <p id="profile-hint" className="field-hint">
-        {copy.profileHint}
-      </p>
-      <label htmlFor="profile-name">{copy.profileName}</label>
+    <div className="contact-fields">
+      <label htmlFor="profile-name">
+        <span className="field-requirement" aria-hidden="true">
+          *
+        </span>{" "}
+        {copy.profileName}
+      </label>
       <input
         id="profile-name"
         name="name"
@@ -21,16 +20,57 @@ export function ContactProfile({ disabled }: { disabled: boolean }) {
         required
         pattern=".*\S.*"
         title={copy.requiredName}
+        placeholder={copy.profileNamePlaceholder}
+        disabled={disabled}
       />
-      <label htmlFor="profile-age">{copy.profileAge}</label>
-      <input id="profile-age" name="age" type="number" inputMode="numeric" min={1} step={1} />
-      <label htmlFor="profile-gender">{copy.profileGender}</label>
-      <select id="profile-gender" name="gender" defaultValue="">
-        <option value="">{copy.genderUnset}</option>
-        <option value="female">{copy.genderFemale}</option>
-        <option value="male">{copy.genderMale}</option>
-        <option value="other">{copy.genderOther}</option>
-      </select>
-    </fieldset>
+    </div>
+  );
+}
+
+export function ContactProfile({ disabled }: { disabled: boolean }) {
+  const copy = useCopy();
+  const [gender, setGender] = useState("unset");
+  return (
+    <>
+      <div className="contact-fields">
+        <label htmlFor="profile-age">
+          {copy.profileAge} <span className="field-requirement">{copy.profileOptional}</span>
+        </label>
+        <input
+          id="profile-age"
+          name="age"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          disabled={disabled}
+        />
+      </div>
+      <div className="contact-fields">
+        <label htmlFor="profile-gender">
+          {copy.profileGender} <span className="field-requirement">{copy.profileOptional}</span>
+        </label>
+        <SelectField
+          id="profile-gender"
+          label={`${copy.profileGender} ${copy.profileOptional}`}
+          className="form-language-select"
+          value={gender}
+          onValueChange={setGender}
+          disabled={disabled}
+          options={[
+            { value: "unset", label: copy.genderUnset },
+            { value: "female", label: copy.genderFemale },
+            { value: "male", label: copy.genderMale },
+            { value: "other", label: copy.genderOther },
+          ]}
+        />
+        <input
+          type="hidden"
+          name="gender"
+          value={gender === "unset" ? "" : gender}
+          disabled={disabled}
+        />
+      </div>
+    </>
   );
 }
