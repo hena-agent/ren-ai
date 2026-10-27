@@ -14,12 +14,18 @@ export const invitationSchema = Effect.gen(function* () {
   yield* sql`CREATE TABLE invitation_delivery (id TEXT PRIMARY KEY, handle TEXT NOT NULL REFERENCES invitation_grant(handle),
     kind TEXT NOT NULL CHECK(kind IN ('basic','extra')), locale TEXT NOT NULL CHECK(locale IN ('ko','en','ja')),
     created_at INTEGER NOT NULL, request_id TEXT NOT NULL, body TEXT NOT NULL,
-    state TEXT NOT NULL CHECK(state IN ('queued','sent','failed','uncertain','skipped')), guid TEXT)`;
+    state TEXT NOT NULL CHECK(state IN ('queued','sent','failed','uncertain','skipped')), guid TEXT,
+    max_uses INTEGER NOT NULL DEFAULT 1, grant_count INTEGER NOT NULL DEFAULT 2)`;
   yield* sql`CREATE INDEX invitation_delivery_queue ON invitation_delivery(created_at, id) WHERE state = 'queued'`;
-  yield* sql`CREATE TABLE invitation (token TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES invitation_grant(handle),
-    delivery_id TEXT NOT NULL REFERENCES invitation_delivery(id), created_at INTEGER NOT NULL,
-    redeemed_by TEXT UNIQUE, redeemed_at INTEGER, CHECK((redeemed_by IS NULL) = (redeemed_at IS NULL)))`;
+  yield* sql`CREATE TABLE invitation (token TEXT PRIMARY KEY COLLATE NOCASE, owner TEXT REFERENCES invitation_grant(handle),
+    delivery_id TEXT REFERENCES invitation_delivery(id), created_at INTEGER NOT NULL, redeemed_at INTEGER,
+    max_uses INTEGER NOT NULL DEFAULT 1 CHECK(max_uses BETWEEN 1 AND 10000),
+    grant_count INTEGER NOT NULL DEFAULT 2 CHECK(grant_count BETWEEN 0 AND 100),
+    used_count INTEGER NOT NULL DEFAULT 0 CHECK(used_count BETWEEN 0 AND max_uses),
+    parent_token TEXT REFERENCES invitation(token), creation_id TEXT UNIQUE)`;
   yield* sql`CREATE INDEX invitation_owner ON invitation(owner, created_at DESC, token)`;
+  yield* sql`CREATE INDEX invitation_created ON invitation(created_at DESC, token) WHERE creation_id IS NOT NULL`;
+  yield* sql`CREATE TABLE invitation_redemption (handle TEXT PRIMARY KEY, token TEXT NOT NULL REFERENCES invitation(token), redeemed_at INTEGER NOT NULL)`;
   yield* sql`CREATE TABLE invitation_submission (registration_id TEXT PRIMARY KEY REFERENCES discovery_registration(id) ON DELETE CASCADE,
     token TEXT NOT NULL REFERENCES invitation(token), selected_notification_id INTEGER)`;
 });

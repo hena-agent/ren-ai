@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { PublicLanguages } from "@ren-ai/personas/languages";
+import { InvitationTicket } from "./invitation-code.ts";
 
 const identifier = Schema.String.check(
   Schema.isPattern(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/),
@@ -45,8 +46,11 @@ export const ContactEntry = Schema.Struct({
   invitations: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
-        token: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
-        redeemedAt: Schema.NullOr(Schema.Number),
+        token: InvitationTicket.fields.token,
+        redeemedAt: InvitationTicket.fields.redeemedAt,
+        maxUses: InvitationTicket.fields.maxUses,
+        grantCount: InvitationTicket.fields.grantCount,
+        usedCount: InvitationTicket.fields.usedCount,
       }),
     ),
   ),
@@ -67,6 +71,7 @@ export const ContactSnapshot = Schema.Struct({
   entries: Schema.Array(ContactEntry),
   eligibleCount: Schema.Number,
   invitationSettings: Schema.optionalKey(InvitationSettings),
+  invitationCodes: Schema.optionalKey(Schema.Array(InvitationTicket)),
 });
 export const SelectContacts = Schema.Struct({
   requestId: identifier,

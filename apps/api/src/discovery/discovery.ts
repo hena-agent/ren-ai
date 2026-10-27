@@ -281,7 +281,10 @@ export const makeDiscoveryWeb = ({
             yield* attachInvitation(registration!.id, input.invitationToken, input.handle).pipe(
               Effect.provideService(SqlClient.SqlClient, sql),
             );
-          }
+          } else
+            yield* sql`DELETE FROM invitation_submission
+            WHERE registration_id = (SELECT id FROM discovery_registration WHERE handle = ${input.handle} AND archived_at IS NULL)
+              AND NOT EXISTS (SELECT 1 FROM discovery_contact WHERE registration_id = invitation_submission.registration_id)`;
           return { status: "waiting" as const };
         }).pipe(
           Effect.tap(({ status }) =>

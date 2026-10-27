@@ -131,17 +131,25 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       const { entries, eligibleCount } = yield* Effect.flatMap(loadProfiles, snapshot);
       const invitationSettings = yield* invites.settings;
       const issued = yield* invites.list;
-      const byOwner = new Map<string, { token: string; redeemedAt: number | null }[]>();
+      const byOwner = new Map<
+        string,
+        NonNullable<typeof ContactEntry.Type.invitations>[number][]
+      >();
       for (const invitation of issued) {
         const group = byOwner.get(invitation.owner) ?? [];
-        group.push({ token: invitation.token, redeemedAt: invitation.redeemedAt });
+        group.push(invitation);
         byOwner.set(invitation.owner, group);
       }
       const enriched = entries.map((entry) => ({
         ...entry,
         invitations: byOwner.get(entry.handle) ?? [],
       }));
-      return { entries: enriched, eligibleCount, invitationSettings };
+      return {
+        entries: enriched,
+        eligibleCount,
+        invitationSettings,
+        invitationCodes: yield* invites.codes,
+      };
     });
     const recorded = (selectionID: string, key: string) =>
       Effect.gen(function* () {
@@ -281,5 +289,6 @@ export const contacts = (catalog: () => Promise<readonly PublicPersona[]>) =>
       configureInvitations: invites.configure,
       grantInvitations: invites.manual,
       invitationAccount: invites.account,
+      createInvitation: invites.create,
     };
   });

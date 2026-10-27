@@ -63,6 +63,7 @@ test("invitations submit the private fragment with normal consent and explain in
   window.history.replaceState(null, "", `/explore#invite=${token}`);
   submit.mockRejectedValueOnce(new RegistrationError("invitation"));
   mount();
+  expect(screen.getByLabelText<HTMLInputElement>("초대 코드 (선택)").value).toBe(token);
   expect(screen.getByText(/초대장이 적용됩니다/)).toBeDefined();
   fill();
   await act(async () => join());
@@ -70,6 +71,33 @@ test("invitations submit the private fragment with normal consent and explain in
   expect(screen.getByRole("alert").textContent).toContain(
     "초대장이 올바르지 않거나 이미 사용됐어요",
   );
+});
+
+test("a manually entered recruitment code survives errors and reaches the invitation receipt", async () => {
+  submit.mockRejectedValueOnce(new RegistrationError("invitation"));
+  submit.mockResolvedValueOnce({ status: "waiting" });
+  mount();
+  const field = screen.getByLabelText<HTMLInputElement>("초대 코드 (선택)");
+  fireEvent.change(field, { target: { value: " THREAD20 " } });
+  fill();
+  await act(async () => join());
+  expect(field.value).toBe("THREAD20");
+  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ invitationToken: "THREAD20" }));
+  act(() => verification?.("retry"));
+  await act(async () => join());
+  expect(window.location.hash).toBe("#invite=THREAD20");
+  expect(done).toHaveBeenCalledWith("waiting");
+});
+
+test("a prefilled invitation may be removed before submitting without one", async () => {
+  window.history.replaceState(null, "", "/explore#invite=THREAD20&imageStyle=anime");
+  submit.mockResolvedValueOnce({ status: "waiting" });
+  mount();
+  fireEvent.change(screen.getByLabelText("초대 코드 (선택)"), { target: { value: "" } });
+  fill();
+  await act(async () => join());
+  expect(submit.mock.calls[0]![0]).not.toHaveProperty("invitationToken");
+  expect(window.location.hash).toBe("#imageStyle=anime");
 });
 
 test("reselection identifies the new relationship flow and explains an invalid or stale private link", async () => {

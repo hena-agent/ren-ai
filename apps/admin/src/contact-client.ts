@@ -1,5 +1,11 @@
 import { Schema } from "effect";
-import { InvitationAccount, InvitationGrant, InvitationLookup } from "@ren-ai/onboarding";
+import {
+  InvitationAccount,
+  InvitationGrant,
+  InvitationLookup,
+  InvitationCreate,
+  InvitationTicket,
+} from "@ren-ai/onboarding";
 import {
   ContactSnapshot,
   ContactSelection,
@@ -40,6 +46,7 @@ export interface ManagementClient {
   languages: (registrationID: string) => Promise<typeof ConversationLanguages.Type>;
   configureInvitations: (input: typeof InvitationSettings.Type) => Promise<void>;
   grantInvitations: (input: typeof InvitationGrant.Type) => Promise<typeof InvitationAccount.Type>;
+  createInvitation: (input: typeof InvitationCreate.Type) => Promise<typeof InvitationTicket.Type>;
   invitationAccount: (
     input: typeof InvitationLookup.Type,
   ) => Promise<typeof InvitationAccount.Type>;
@@ -59,7 +66,7 @@ async function selection(response: Response) {
 
 const conflictMessage = (path: string) =>
   path.includes("/invitations/")
-    ? "이미 기본 2장을 지급했거나 지급 요청의 대상·종류가 변경되었습니다. 조회로 지급 이력을 확인해 주세요."
+    ? "이미 기본 2장을 지급했거나 코드·지급 요청이 충돌했습니다. 코드 중복과 대상·설정을 확인해 주세요."
     : path.includes("/conversations")
       ? "종료·전송 상태가 변경되었거나 결과가 아직 불확실합니다. 상태를 다시 확인해 주세요."
       : path.endsWith("/start")
@@ -80,6 +87,7 @@ export function managementClient(
       | typeof ConversationEnding.Type
       | typeof InvitationSettings.Type
       | typeof InvitationGrant.Type
+      | typeof InvitationCreate.Type
       | typeof InvitationLookup.Type,
     method = input ? "POST" : "GET",
   ) => {
@@ -226,6 +234,12 @@ export function managementClient(
         InvitationAccount,
         await request("/management/discovery/invitations/grant", input),
         "초대장 응답 형식이 올바르지 않습니다.",
+      ),
+    createInvitation: async (input) =>
+      conversationResponse(
+        InvitationTicket,
+        await request("/management/discovery/invitations/create", input),
+        "초대 코드 응답 형식이 올바르지 않습니다.",
       ),
     invitationAccount: async (input) =>
       conversationResponse(

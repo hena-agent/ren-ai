@@ -157,6 +157,7 @@ test("forward migration defaults existing Conversations and waiting registration
       for (const table of ["conversation_photo", "photo_object", "photo_setting"])
         yield* f.sql`DROP TABLE ${f.sql(table)}`;
       yield* f.sql`DROP TABLE invitation_submission`;
+      yield* f.sql`DROP TABLE invitation_redemption`;
       yield* f.sql`DROP TABLE invitation`;
       yield* f.sql`DROP TABLE invitation_grant`;
       yield* f.sql`DROP TABLE invitation_settings`;

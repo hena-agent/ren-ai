@@ -6,6 +6,7 @@ import englishDisclosure from "./discovery-notice.en.json" with { type: "json" }
 import japaneseDisclosure from "./discovery-notice.ja.json" with { type: "json" };
 import { StartingRelationship } from "./relationship.ts";
 import { PublicLanguages } from "@ren-ai/personas/languages";
+import { InvitationCode } from "./invitation-code.ts";
 
 export const discoveryNotice = disclosure;
 export const DiscoveryLocale = Schema.Literals(["ko", "en", "ja"]);
@@ -81,7 +82,7 @@ export const DiscoveryRequest = Schema.Struct({
   privacyNoticeVersion: text,
   turnstileToken: text,
   reselectionToken: Schema.optionalKey(ReselectionRequest.fields.reselectionToken),
-  invitationToken: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
+  invitationToken: Schema.optionalKey(InvitationCode),
   likedPersonaIDs: Schema.Array(id).check(Schema.isMinLength(1), Schema.isUnique()),
 });
 export type DiscoveryRequest = typeof DiscoveryRequest.Type;

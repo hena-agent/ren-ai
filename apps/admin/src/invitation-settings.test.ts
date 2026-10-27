@@ -33,6 +33,7 @@ test("Admin displays and changes persisted invitation issuance with same-origin 
           invitations: [
             { token: "a".repeat(64), redeemedAt: null },
             { token: "b".repeat(64), redeemedAt: 1 },
+            { token: "PARTIAL", redeemedAt: 1, usedCount: 1, maxUses: 20, grantCount: 2 },
           ],
         },
       ],
@@ -50,6 +51,8 @@ test("Admin displays and changes persisted invitation issuance with same-origin 
   expect(page).toContain("초대장 지급 OFF");
   expect(page).toContain(`https://renai.im/explore#invite=${"a".repeat(64)}`);
   expect(page).toContain("초대장 2 · 사용 완료");
+  expect(page).toContain("https://renai.im/explore#invite=PARTIAL");
+  expect(page).toContain("1/20명 사용 · 선정자에게 2개 지급");
   for (const next of [true, false]) {
     const response = await admin(
       request("/waitlist", { action: "invitations", enabled: String(next) }),

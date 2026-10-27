@@ -148,7 +148,7 @@ test("Admin normalizes a phone, grants fixed basics and individual extras with a
   );
   const page = await lookup.text();
   expect(page).toContain("미등록 번호도 가능");
-  expect(page).toContain("기본 2장: 미지급");
+  expect(page).toContain("기본 지급: 미지급");
   const id = formID(page);
   const fields = {
     action: "invitation-grant",
@@ -156,6 +156,8 @@ test("Admin normalizes a phone, grants fixed basics and individual extras with a
     requestId: id,
     kind: "basic",
     locale: "en",
+    maxUses: "20",
+    grantCount: "2",
   };
   f.interrupt();
   const failed = await f.admin(request("/waitlist", fields));
@@ -169,7 +171,7 @@ test("Admin normalizes a phone, grants fixed basics and individual extras with a
   expect(retried.status).toBe(200);
   const after = await retried.text();
   expect(after).toContain("iMessage 발송을 예약했습니다");
-  expect(after).toContain("기본 2장: 지급 완료");
+  expect(after).toContain("기본 지급: 지급 완료");
   expect(formID(after)).not.toBe(id);
   expect(f.account().invitations).toHaveLength(2);
   expect(f.submissions[0]).toEqual(f.submissions[1]);

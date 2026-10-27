@@ -207,6 +207,8 @@
   "joinStep": "Your contact",
   "joinTitle": "Where can we reach you?",
   "joinIntro": "One of the personas you like may reach out on iMessage.",
+  "invitationCode": "Invitation code (optional)",
+  "invitationCodeHint": "Enter a code you received. Invitation links fill it in automatically. You can join the waitlist without a code.",
   "invitationIntro": "Your invitation will be applied. After checking iMessage availability, we automatically select an available persona from your Likes. The invitation is used when you are selected.",
   "invitationTitle": "Your invitation request is in.",
   "invitationMessage": "After checking iMessage availability, we automatically select an available persona from your Likes. Their first message is then scheduled for 5–60 minutes later.",

@@ -4,6 +4,7 @@ import {
   InvitationSettings,
   InvitationGrant,
   InvitationLookup,
+  InvitationCreate,
   SelectContacts,
   StartContact,
 } from "@ren-ai/onboarding";
@@ -20,7 +21,7 @@ const parentTrace = (request: Request) => {
     : {};
 };
 type InvitationCommit = <I, A extends object, E extends Error>(
-  name: "invitations" | "invitation_grant" | "invitation_lookup",
+  name: "invitations" | "invitation_grant" | "invitation_lookup" | "invitation_create",
   schema: Schema.Decoder<I>,
   run: (input: I) => Effect.Effect<A | null, E>,
 ) => Promise<Response>;
@@ -43,6 +44,8 @@ function invitationRequest(
     return commit("invitation_lookup", InvitationLookup, (input) =>
       store.invitationAccount(input.handle),
     );
+  if (path === "/management/discovery/invitations/create")
+    return commit("invitation_create", InvitationCreate, store.createInvitation);
   return undefined;
 }
 export const contactManagement =
@@ -91,7 +94,13 @@ export const contactManagement =
     };
     /** Selection and test starts commit the same way; a null result is a refused start. */
     const commit = async <I, A extends object, E extends Error>(
-      name: "selection" | "start" | "invitations" | "invitation_grant" | "invitation_lookup",
+      name:
+        | "selection"
+        | "start"
+        | "invitations"
+        | "invitation_grant"
+        | "invitation_lookup"
+        | "invitation_create",
       schema: Schema.Decoder<I>,
       run: (input: I) => Effect.Effect<A | null, E>,
     ) => {

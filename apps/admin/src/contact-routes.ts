@@ -62,7 +62,11 @@ const start = (form: FormData, client: ManagementClient) => {
 };
 
 async function submit(form: FormData, view: ContactView, client: ManagementClient) {
-  if (form.get("action") === "invitation-lookup" || form.get("action") === "invitation-grant")
+  if (
+    form.get("action") === "invitation-lookup" ||
+    form.get("action") === "invitation-grant" ||
+    form.get("action") === "invitation-create"
+  )
     return submitInvitations(form, view.invitation!, client);
   if (form.get("action") === "invitations") {
     const value = form.get("enabled");
@@ -94,6 +98,7 @@ export async function contactRoutes(request: Request, client?: ManagementClient)
       locale: "ko",
       kind: "basic",
       attempted: false,
+      creation: { requestId: randomUUID(), maxUses: 1, grantCount: 2, attempted: false },
     },
   };
   const render = (error = "", status = 200) =>

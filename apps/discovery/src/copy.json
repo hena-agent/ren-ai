@@ -188,6 +188,8 @@
   "joinStep": "연락처 등록",
   "joinTitle": "어디로 연락하면 될까요?",
   "joinIntro": "좋아요한 페르소나 중 한 명에게 iMessage로 연락받을 수 있어요.",
+  "invitationCode": "초대 코드 (선택)",
+  "invitationCodeHint": "받은 코드를 입력해 주세요. 초대 링크로 왔다면 자동으로 입력돼요. 코드가 없어도 대기 등록할 수 있어요.",
   "invitationIntro": "초대장이 적용됩니다. iMessage 사용 가능 여부를 확인한 뒤, 배정 여유가 있는 좋아요한 페르소나로 자동 선정해요. 초대장은 선정될 때 사용됩니다.",
   "invitationTitle": "초대 신청을 받았어요.",
   "invitationMessage": "iMessage 사용 가능 여부를 확인한 뒤, 배정 여유가 있는 좋아요한 페르소나로 자동 선정해요. 선정되면 5분~1시간 뒤 첫 연락을 예약해요.",

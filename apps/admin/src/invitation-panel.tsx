@@ -1,4 +1,5 @@
-import type { InvitationAccount, InvitationGrant } from "@ren-ai/onboarding";
+import type { InvitationAccount, InvitationGrant, InvitationCreate } from "@ren-ai/onboarding";
+import { InvitationRuleFields, invitationAvailable } from "./invitation-codes.tsx";
 
 export interface InvitationView {
   requestId: string;
@@ -8,6 +9,9 @@ export interface InvitationView {
   attempted: boolean;
   queued?: boolean;
   account?: typeof InvitationAccount.Type;
+  creation?: typeof InvitationCreate.Type & { attempted: boolean };
+  maxUses?: number;
+  grantCount?: number;
 }
 const states = {
   queued: "발송 대기",
@@ -51,7 +55,7 @@ export function InvitationPanel({ view }: { view: InvitationView | undefined }) 
           <h3>{view.handle}</h3>
           {view.account && (
             <p>
-              기본 2장: {view.account.basicGranted ? "지급 완료" : "미지급"} · 추가 지급:{" "}
+              기본 지급: {view.account.basicGranted ? "지급 완료" : "미지급"} · 추가 지급:{" "}
               {view.account.extraCount}장
             </p>
           )}
@@ -59,6 +63,11 @@ export function InvitationPanel({ view }: { view: InvitationView | undefined }) 
             <input type="hidden" name="action" value="invitation-grant" />
             <input type="hidden" name="requestId" value={view.requestId} />
             <input type="hidden" name="handle" value={view.handle} />
+            <InvitationRuleFields
+              maxUses={view.maxUses ?? 1}
+              grantCount={view.grantCount ?? 2}
+              locked={view.attempted}
+            />
             {view.attempted ? (
               <>
                 <input type="hidden" name="locale" value={view.locale} />
@@ -100,10 +109,15 @@ export function InvitationPanel({ view }: { view: InvitationView | undefined }) 
               <li key={ticket.token}>
                 <span>
                   {ticket.kind === "basic" ? "기본" : "추가"} ·{" "}
-                  {ticket.redeemedAt === null ? "미사용" : "사용 완료"} · {states[ticket.state]} ·{" "}
+                  {ticket.usedCount === undefined
+                    ? ticket.redeemedAt === null
+                      ? "미사용"
+                      : "사용 완료"
+                    : `${ticket.usedCount}/${ticket.maxUses}명 사용 · 선정자에게 ${ticket.grantCount}개 지급`}{" "}
+                  · {states[ticket.state]} ·{" "}
                   {new Date(ticket.createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
                 </span>
-                {ticket.redeemedAt === null && (
+                {invitationAvailable(ticket) && (
                   <a href={`https://renai.im/explore#invite=${ticket.token}`}>초대 링크</a>
                 )}
               </li>

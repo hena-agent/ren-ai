@@ -74,7 +74,7 @@ export function JoinForm({
     return () => clearTimeout(timer);
   }, [failure]);
   const reselecting = Boolean(reselection().reselectionToken);
-  const invitation = invitationToken(window.location.hash);
+  const [invitation, setInvitation] = useState(() => invitationToken(window.location.hash) ?? "");
   const submitting = useRef(false);
   const handle = isMobileNumber(contact.phone) ? contact.phone : undefined;
   const invalid = contact.touched && !handle;
@@ -116,6 +116,14 @@ export function JoinForm({
           ...reselection(),
           ...(invitation && { invitationToken: invitation }),
         }),
+      );
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      if (invitation) fragment.set("invite", invitation);
+      else fragment.delete("invite");
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}${fragment.size ? `#${fragment}` : ""}`,
       );
       onSuccess(answer.status);
     });
@@ -194,6 +202,25 @@ export function JoinForm({
           </div>
         </div>
         <ContactProfile disabled={pending} />
+        <div className="contact-fields">
+          <label htmlFor="invitation-code">{copy.invitationCode}</label>
+          <input
+            id="invitation-code"
+            name="invitationCode"
+            value={invitation}
+            onChange={(event) => setInvitation(event.target.value.trim())}
+            maxLength={64}
+            pattern="[A-Za-z0-9_\-]+"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-describedby="invitation-code-hint"
+            disabled={pending}
+          />
+          <p id="invitation-code-hint" className="field-hint">
+            {copy.invitationCodeHint}
+          </p>
+        </div>
         <RelationshipSelect
           value={startingRelationship}
           onChange={setStartingRelationship}

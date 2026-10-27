@@ -168,7 +168,8 @@ export const waitlistNotifications = (
             stage = "invitation.selection";
             const pending =
               yield* sql`SELECT 1 FROM invitation_submission s JOIN invitation i ON i.token = s.token
-              WHERE s.registration_id = ${row.registrationID} AND i.redeemed_by IS NULL`;
+              WHERE s.registration_id = ${row.registrationID} AND i.used_count < i.max_uses
+                AND NOT EXISTS (SELECT 1 FROM discovery_contact WHERE registration_id = s.registration_id)`;
             if (pending.length) {
               const store = yield* contacts(catalog);
               yield* store.select(
@@ -180,7 +181,7 @@ export const waitlistNotifications = (
           }
           const selected = yield* sql`SELECT 1 FROM invitation_submission s
             JOIN discovery_registration r ON r.id = s.registration_id
-            JOIN invitation i ON i.token = s.token AND i.redeemed_by = r.handle
+            JOIN invitation_redemption i ON i.token = s.token AND i.handle = r.handle
             JOIN discovery_contact c ON c.registration_id = r.id
             WHERE s.registration_id = ${row.registrationID} AND s.selected_notification_id = ${row.id}`;
           stage = "notification.claim";

@@ -63,6 +63,7 @@ test("forward migration leaves exactly the PRD app tables", async () => {
         "invitation",
         "invitation_delivery",
         "invitation_grant",
+        "invitation_redemption",
         "invitation_settings",
         "invitation_submission",
         "notification_attempt",
