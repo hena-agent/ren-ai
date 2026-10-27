@@ -14,7 +14,11 @@ import { isDiceTool } from "@ren-ai/plugin-dice";
 import { cleanContext } from "./clean.ts";
 import { personaMemory, memoryToolNames, isMemoryTool } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
-import { personaAdjustments, isAdjustmentTool } from "@ren-ai/plugin-session-folder/adjustments";
+import {
+  personaAdjustments,
+  isAdjustmentTool,
+  appendAdjustmentInstructions,
+} from "@ren-ai/plugin-session-folder/adjustments";
 
 const latestInput = (messages: ReadonlyArray<Message>) =>
   messages.findLast(
@@ -75,10 +79,6 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
               ]),
             );
             if (managedFolder(options.personaDirectory, ctx.location.directory)) {
-              const memory = yield* conversationOperation("memory.context", event.sessionID, () =>
-                personaMemory(ctx.location.directory, event.sessionID).context(),
-              );
-              event.system.push({ type: "text", text: memory });
               const latestMessageID = latestInput(event.messages);
               const adjustments = yield* conversationOperation(
                 "adjustments.context",
@@ -89,7 +89,11 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
                     now,
                   ),
               );
-              event.system.push({ type: "text", text: adjustments });
+              appendAdjustmentInstructions(event.system, ctx.location.directory, adjustments);
+              const memory = yield* conversationOperation("memory.context", event.sessionID, () =>
+                personaMemory(ctx.location.directory, event.sessionID).context(),
+              );
+              event.system.push({ type: "text", text: memory });
             }
             if (snapshot) {
               if (snapshot.startingRelationship)

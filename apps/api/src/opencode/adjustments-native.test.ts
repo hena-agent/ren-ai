@@ -123,7 +123,8 @@ test("real OC continues with base guidance when the optional adjustment document
         if (request.tools.some((tool) => tool.name === "review_adjustments")) {
           const system = JSON.stringify(request.system);
           expect(system).toContain("You are Persona1.");
-          expect(system).toContain("<persona-adjustments");
+          expect(system).not.toContain("ADJUSTMENTS.md");
+          expect(system).not.toContain("<persona-adjustments");
           expect(system).not.toContain("Previous correction");
           expect(system).not.toContain("Prior review");
         }
