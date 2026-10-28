@@ -218,7 +218,7 @@ export function Card({
                 <PortraitImage key={shown.imageUrl} persona={shown} />
               </div>
               <GalleryControls
-                count={images.length}
+                images={images}
                 current={currentImage}
                 onChange={setImage}
                 disabled={exit !== undefined}

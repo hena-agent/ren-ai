@@ -49,7 +49,7 @@ function DetailsGallery({
         </div>
       )}
       <GalleryControls
-        count={images.length}
+        images={images}
         current={currentImage}
         onChange={onImageChange}
         disabled={disabled}
