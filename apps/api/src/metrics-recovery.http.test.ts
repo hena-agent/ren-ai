@@ -16,7 +16,7 @@ test("the default network delivers the persisted Report with confirmation", asyn
     await f.alarm();
     expect(f.fetcher).toHaveBeenCalledOnce();
     expect(new Request(...f.fetcher.mock.calls[0]!).url).toBe(
-      "https://discord.example/reports?wait=true",
+      "https://discord.example/reports?wait=true&with_components=true",
     );
     expect((await f.read()).delivery.pending).toBe(0);
   } finally {
@@ -34,7 +34,7 @@ test("a partially drained Discord batch keeps an immediate alarm even when its d
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
         for (let i = 0; i < 6; i++)
-          yield* sql`INSERT INTO discord_outbox(id, channel, content, due) VALUES (${String(i)}, 'alerts', 'safe alert', ${now})`;
+          yield* sql`INSERT INTO discord_outbox(id, channel, body, due) VALUES (${String(i)}, 'alerts', '{"content":"safe alert"}', ${now})`;
         yield* sql`UPDATE discord_delivery SET pending = 6 WHERE channel = 'alerts'`;
         yield* sql`INSERT INTO application_work(name, due) VALUES ('discord', ${now})`;
       }),
@@ -42,6 +42,32 @@ test("a partially drained Discord batch keeps an immediate alarm even when its d
     expect(await f.alarm()).toBe(now + 1);
     expect((await f.read()).delivery.pending).toBe(2);
     await f.alarm();
+    expect((await f.read()).delivery.pending).toBe(0);
+  } finally {
+    await f.close();
+  }
+});
+
+test("text queued before Discord cards is still delivered after the upgrade", async () => {
+  const f = await metricsFixture();
+  try {
+    await f.alarm();
+    await f.store.run(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // Recreate the deployed predecessor with one undelivered Alert.
+        yield* sql`ALTER TABLE discord_outbox RENAME COLUMN body TO content`;
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = 57`;
+        yield* sql`INSERT INTO discord_outbox(id, channel, content, due) VALUES ('queued', 'alerts', '알림: disk-nearly-full', 0)`;
+        yield* sql`UPDATE discord_delivery SET pending = 1 WHERE channel = 'alerts'`;
+      }),
+    );
+    await f.store.run(migrate);
+    await f.alarm();
+    expect(await new Request(...f.fetcher.mock.lastCall!).json()).toEqual({
+      content: "알림: disk-nearly-full",
+      allowed_mentions: { parse: [] },
+    });
     expect((await f.read()).delivery.pending).toBe(0);
   } finally {
     await f.close();

@@ -14,6 +14,9 @@ import { Miniflare } from "miniflare";
 import { expect, test } from "vitest";
 import { Schema } from "effect";
 import { contactEntries, stopRuntimes, trackRuntime } from "../test/cloudflare-test-fixture.ts";
+import { readCard } from "../test/discord.test-helper.ts";
+
+const posts = Schema.Array(Schema.Struct({ body: Schema.String, wait: Schema.String }));
 
 const workerSource = async () => {
   const buildResult = await build({
@@ -129,7 +132,6 @@ test.each([false, true])(
     const persistence = await mkdtemp(join(tmpdir(), "metrics-discord-"));
     const at = Date.now();
     const day = koreaDay(at);
-    const posts = Schema.Array(Schema.Struct({ content: Schema.String, wait: Schema.String }));
     try {
       let runtime = await openRuntime(persistence);
       const response = await call(
@@ -142,9 +144,11 @@ test.each([false, true])(
       );
       expect(first).toHaveLength(1);
       expect(first[0]!.wait).toBe("true");
-      expect(first[0]!.content).toContain("방문: 0 / 0");
-      expect(first[0]!.content).toContain("https://admin.renai.im/metrics");
-      expect(first[0]!.content.length).toBeLessThanOrEqual(2000);
+      const report = readCard(first[0]!.body);
+      expect(report.text).toContain("**방문** 0 · 7일 0");
+      expect(report.text).toContain("✅ 진행 중인 운영 알림 없음");
+      expect(report.links).toEqual([{ label: "지표", url: "https://admin.renai.im/metrics" }]);
+      expect(report.text.length).toBeLessThanOrEqual(4000);
       await stopRuntimes();
       runtime = await openRuntime(persistence);
       const state = await call(runtime, `/management/metrics?from=${day}&to=${day}`, {
@@ -176,7 +180,7 @@ test.each([false, true])(
         await (await call(runtime, `/__fixture/metrics-tick?at=${at + 86_400_000}`)).json(),
       );
       expect(late).toHaveLength(1);
-      expect(late[0]!.content).not.toBe(first[0]!.content);
+      expect(late[0]!.body).not.toBe(first[0]!.body);
     } finally {
       await stopRuntimes();
       await rm(persistence, { recursive: true, force: true });
@@ -187,7 +191,6 @@ test.each([false, true])(
 test("Report failures leave Alert delivery independent and webhook cooldown survives replacement", async () => {
   const persistence = await mkdtemp(join(tmpdir(), "metrics-isolation-"));
   const at = Date.now();
-  const posts = Schema.Array(Schema.Struct({ content: Schema.String, wait: Schema.String }));
   try {
     let runtime = await openRuntime(persistence);
     const first = await call(
@@ -212,7 +215,11 @@ test("Report failures leave Alert delivery independent and webhook cooldown surv
       ).json(),
     );
     expect(delivered).toHaveLength(2);
-    expect(delivered.every((post) => post.content.includes("https://admin.renai.im/"))).toBe(true);
+    expect(
+      delivered.every((post) =>
+        readCard(post.body).links[0]?.url.startsWith("https://admin.renai.im/"),
+      ),
+    ).toBe(true);
   } finally {
     await stopRuntimes();
     await rm(persistence, { recursive: true, force: true });

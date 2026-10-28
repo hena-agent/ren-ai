@@ -1,9 +1,9 @@
 import { Clock, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
-import { randomUUID } from "node:crypto";
 import { scheduleWork } from "../scheduling.ts";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import type { Metrics } from "@ren-ai/onboarding";
+import { requestBody, type DiscordMessage } from "./discord-message.ts";
 
 export const discordSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -21,59 +21,21 @@ export const discordSchema = Effect.gen(function* () {
   yield* sql`INSERT INTO application_work(name, due) SELECT 'metrics-report', due FROM metrics_report`;
 });
 
-export const queueDiscord = (id: string, channel: "alerts" | "reports", content: string) =>
+/** The outbox stores each complete webhook request body, so a retry posts exactly what was queued. */
+export const discordCardsSchema = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`ALTER TABLE discord_outbox RENAME COLUMN content TO body`;
+  // Text queued before cards remains deliverable as an ordinary message.
+  yield* sql`UPDATE discord_outbox SET body = json_object('content', body, 'allowed_mentions', json_object('parse', json_array()))`;
+});
+
+export const queueDiscord = (id: string, channel: keyof Webhooks, message: DiscordMessage) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const now = yield* Clock.currentTimeMillis;
-    yield* sql`INSERT INTO discord_outbox(id, channel, content, due) VALUES (${id}, ${channel}, ${content}, ${now})`;
+    yield* sql`INSERT INTO discord_outbox(id, channel, body, due) VALUES (${id}, ${channel}, ${requestBody(channel, message)}, ${now})`;
     yield* sql`UPDATE discord_delivery SET pending = pending + 1 WHERE channel = ${channel}`;
     yield* scheduleWork("discord", now);
-  });
-
-const alertDescription = (name: string) => {
-  if (name.startsWith("greeting:"))
-    return {
-      detail: "첫 인사에 실패했거나 전송 결과가 불확실합니다.",
-      url: "https://admin.renai.im/first-contacts",
-    };
-  if (name === "joins-failing")
-    return {
-      detail: "최근 한 시간 동안 시스템 원인으로 등록이 3회 이상 실패했습니다.",
-      url: "https://admin.renai.im/waitlist",
-    };
-  if (name === "notification-cap")
-    return {
-      detail: "시간당 30건 한도로 등록 안내를 생략했습니다.",
-      url: "https://admin.renai.im/waitlist",
-    };
-  const details: Record<string, string> = {
-    "disk-nearly-full": "실행 서버의 디스크 여유 공간이 부족합니다.",
-    "screen-locked": "메시징 화면이 잠겨 있습니다.",
-    "executor-unavailable": "대화 실행 서버에 연결할 수 없습니다.",
-    "messaging-unavailable": "iMessage 연결 상태를 확인해 주세요.",
-  };
-  return {
-    detail: details[name] ?? "대화 실행에 문제가 발생했습니다. 관리 화면에서 확인해 주세요.",
-    url: "https://admin.renai.im/conversations",
-  };
-};
-
-/** The caller owns the transaction so the state change and its message commit together. */
-export const changeAlert = (name: string, raised: boolean) =>
-  Effect.gen(function* () {
-    if (!/^[a-zA-Z0-9:_-]{1,160}$/.test(name)) return;
-    const sql = yield* SqlClient.SqlClient;
-    const now = yield* Clock.currentTimeMillis;
-    const { detail, url } = alertDescription(name);
-    const changed = raised
-      ? yield* sql`INSERT OR IGNORE INTO application_alert(name, raised_at, detail, url) VALUES (${name}, ${now}, ${detail}, ${url}) RETURNING name`
-      : yield* sql`DELETE FROM application_alert WHERE name = ${name} RETURNING name`;
-    if (changed.length)
-      yield* queueDiscord(
-        randomUUID(),
-        "alerts",
-        `${raised ? "알림" : "해제"}: ${name}\n${detail}\n${url}`,
-      );
   });
 
 export type Webhooks = { alerts: string | undefined; reports: string | undefined };
@@ -148,7 +110,7 @@ export const deliverDiscord = Effect.fnUntraced(function* (
   const candidates: {
     id: string;
     channel: "alerts" | "reports";
-    content: string;
+    body: string;
     attempts: number;
     due: number;
   }[] = [];
@@ -156,7 +118,7 @@ export const deliverDiscord = Effect.fnUntraced(function* (
     candidates.push(
       ...(yield* sql<
         (typeof candidates)[number]
-      >`SELECT id, channel, content, attempts, due FROM discord_outbox WHERE channel = ${channel} AND due <= ${now} ORDER BY due, id LIMIT 4`),
+      >`SELECT id, channel, body, attempts, due FROM discord_outbox WHERE channel = ${channel} AND due <= ${now} ORDER BY due, id LIMIT 4`),
     );
   const rows = candidates.toSorted((a, b) => a.due - b.due || a.id.localeCompare(b.id)).slice(0, 4);
   for (const row of rows) {
@@ -174,10 +136,11 @@ export const deliverDiscord = Effect.fnUntraced(function* (
         throw Object.assign(new Error("Discord unconfigured"), { code: "DISCORD_UNCONFIGURED" });
       const url = new URL(webhook);
       url.searchParams.set("wait", "true");
+      url.searchParams.set("with_components", "true");
       const response = await fetcher(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: row.content, allowed_mentions: { parse: [] } }),
+        body: row.body,
         signal,
         redirect: "manual",
       });

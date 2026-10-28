@@ -3,7 +3,7 @@ import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/sql";
 import type { Conversation } from "./conversations.ts";
 import { lifecycleMetric } from "../metrics/lifecycle.ts";
-import { changeAlert } from "../metrics/discord.ts";
+import { changeAlert } from "../metrics/alerts.ts";
 
 export const reselectionHash = (token: string) => createHash("sha256").update(token).digest("hex");
 

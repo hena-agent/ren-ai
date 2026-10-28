@@ -1,7 +1,7 @@
 import { Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { authorize } from "@ren-ai/transport/server";
-import { changeAlert } from "./metrics/discord.ts";
+import { changeAlert } from "./metrics/alerts.ts";
 import type { ApplicationStore } from "./application-store.ts";
 
 /** Each change and its Discord message commit together; callers never pass private detail. */

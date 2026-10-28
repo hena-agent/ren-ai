@@ -97,10 +97,20 @@ Discovery reporting persistently in that browser.
 Verify `/health` reports `discordAlerts` and `discordReports` as `accepting`, along
 with the expected service and full artifact revision. Missing webhook configuration
 or rejected delivery degrades health. Delivery state and pending messages survive
-actor replacement. A Report is due at 09:00 KST, including all-zero days; missed
-days are queued on later wakes. Delivery honours channel and global cooldowns,
-including `Retry-After` and Discord's JSON `retry_after`. Check the next Report in `#metrics`
-and correlate any failure with `metrics.task` or `discord.delivery` request IDs.
+actor replacement. A Report is due at 00:00 KST for the day that just ended,
+including all-zero days; missed days are queued on later wakes. Delivery honours
+channel and global cooldowns, including `Retry-After` and Discord's JSON
+`retry_after`. Check the next Report in `#metrics` and correlate any failure with
+`metrics.task` or `discord.delivery` request IDs.
+
+Alerts and Reports post as Discord Components V2 cards (`with_components=true`)
+named `Ren AI 알림` and `Ren AI 지표`, with the icon at
+`https://renai.im/apple-touch-icon.png`. A raised Alert has a red bar, its title,
+a safe detail and a link button to the relevant Admin page; its clearance has a
+green bar and says how long it lasted. The outbox stores each complete request
+body, so a retry posts exactly what was queued; Discord answers a malformed card
+with 400, which leaves it pending and degrades health. After deploying a change to
+either card, confirm that the next Alert and Report render on desktop and phone.
 
 History begins at deployment. Removing a person retains anonymous Metrics and
 usage; marking a live handle as a test handle subtracts its owned contributions.

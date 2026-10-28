@@ -51,6 +51,7 @@ test("the real registry rejects a reused migration number before running new sch
       ).toEqual([
         { migration_id: 55, name: "metrics" },
         { migration_id: 56, name: "invitations" },
+        { migration_id: 57, name: "discord_cards" },
       ]);
     }),
   );

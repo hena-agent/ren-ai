@@ -36,7 +36,7 @@ export async function metricsBudget(storage: DurableObjectStorage, store: Applic
     const queue = (size: number) => {
       storage.sql.exec(
         `WITH RECURSIVE messages(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM messages WHERE n < ?)
-        INSERT INTO discord_outbox(id, channel, content, due) SELECT 'budget-' || n, 'alerts', 'budget', 0 FROM messages`,
+        INSERT INTO discord_outbox(id, channel, body, due) SELECT 'budget-' || n, 'alerts', '{"content":"budget"}', 0 FROM messages`,
         size,
       );
       storage.sql.exec("UPDATE discord_delivery SET pending = ? WHERE channel = 'alerts'", size);
@@ -51,7 +51,7 @@ export async function metricsBudget(storage: DurableObjectStorage, store: Applic
     const largeQueue = meter.totals();
     const queuePlan = storage.sql
       .exec<{ detail: string }>(
-        "EXPLAIN QUERY PLAN SELECT id, channel, content, attempts, due FROM discord_outbox WHERE channel = ? AND due <= ? ORDER BY due, id LIMIT 4",
+        "EXPLAIN QUERY PLAN SELECT id, channel, body, attempts, due FROM discord_outbox WHERE channel = ? AND due <= ? ORDER BY due, id LIMIT 4",
         "alerts",
         Date.now(),
       )

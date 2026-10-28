@@ -9,6 +9,7 @@ import { browseSchema } from "./personas/browse-schema.ts";
 import { photoSchema } from "./photos/schema.ts";
 import { invitationSchema } from "./discovery/invitation-schema.ts";
 import { metricsSchema } from "./metrics/schema.ts";
+import { discordCardsSchema } from "./metrics/discord.ts";
 
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -319,6 +320,7 @@ export const migrate = Effect.gen(function* () {
       "054_conversation_photos": photoSchema,
       "055_metrics": metricsSchema,
       "056_invitations": invitationSchema,
+      "057_discord_cards": discordCardsSchema,
     }),
   );
 });

@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { SqlClient } from "effect/sql";
 import { koreaDay } from "@ren-ai/onboarding";
 import { lifecycleMetric } from "./lifecycle.ts";
-import { changeAlert } from "./discord.ts";
+import { changeAlert } from "./alerts.ts";
 
 const milestones = { sent: 1, failed: 2, uncertain: 4, firstReply: 8, resolved: 128 } as const;
 

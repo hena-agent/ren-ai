@@ -25,6 +25,27 @@ import {
   nextApplicationWake,
 } from "../src/scheduling.ts";
 
+export const visitSource = {
+  entry: "home",
+  referrer: "example.org",
+  source: "friends",
+  medium: "social",
+  campaign: "launch",
+};
+export const visitActivity = {
+  step: "visit",
+  source: visitSource,
+  device: "phone",
+  locale: "ko",
+  imageStyle: "anime",
+};
+export const activityRequest = (body: object | string, country = "KR") =>
+  new Request("https://activity.test/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "CF-IPCountry": country },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+
 const paths = vi.hoisted(() => new WeakMap<DurableObjectStorage, string>());
 // Exercise application HTTP with real SQLite; the DO harness covers storage budgets and replacement.
 vi.mock("@effect/sql-sqlite-do", () => ({
