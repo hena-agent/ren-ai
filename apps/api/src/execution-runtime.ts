@@ -27,7 +27,7 @@ import { scheduleWork } from "./scheduling.ts";
 import { usageCollector } from "./usage/collect.ts";
 import { waitlistNotifications } from "./discovery/notifications.ts";
 import { runWorkLanes, maintenanceWork, withWorkBudget, workBatchSize } from "./work-budget.ts";
-import { invalidatePublicCatalog } from "./personas/public-catalog.ts";
+import { reloadPublicCatalog } from "./personas/public-catalog.ts";
 import { conversationPhotos } from "./photos/photos.ts";
 import { conversations } from "./conversations/conversations.ts";
 
@@ -244,7 +244,7 @@ export async function createExecutionRuntime(
     const requestId = randomUUID();
     const fields = { requestId, operation: "catalog.refresh", stage: "catalog.sync" };
     try {
-      await run(invalidatePublicCatalog);
+      await run(reloadPublicCatalog);
       await run((await open()).refreshCatalog);
       contactLog({
         ...fields,
@@ -287,6 +287,7 @@ export async function createExecutionRuntime(
                   cause instanceof Error ? cause : new Error("Execution startup unavailable"),
               }).pipe(Effect.flatMap((runtime) => runtime.tick)),
             },
+            { name: "publicCatalog", run: store.maintainCatalog },
           ]),
           requestId,
         ),

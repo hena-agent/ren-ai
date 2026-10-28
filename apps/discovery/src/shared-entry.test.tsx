@@ -5,7 +5,7 @@ import { Site } from "./site.tsx";
 import { discoveryClient, type DiscoveryClient } from "./client.ts";
 import { publicPersonas } from "../test/public-personas.ts";
 import { choose, selectImageStyle, selectDropdown } from "../test/choose.ts";
-import { readPublicPeople, publicRoute } from "./public-routing.ts";
+import { readPublicBootstrap, publicRoute } from "./public-routing.ts";
 import { testClient } from "../test/client.ts";
 
 let verification: ((token: string) => void) | undefined;
@@ -37,7 +37,7 @@ function mount(bootstrap = true) {
     const script = document.createElement("script");
     script.id = "public-personas";
     script.type = "application/json";
-    script.textContent = JSON.stringify(publicPersonas.toReversed());
+    script.textContent = JSON.stringify({ people: publicPersonas.toReversed() });
     document.body.append(script);
   }
   render(<Site client={testClient(api)} />);
@@ -59,7 +59,7 @@ test("a shared URL opens the target in the original Discovery reading view and c
   const details = screen.getByRole("region", { name: /백지아/ });
   expect(within(details).getByText("햇살 좋은 날엔 같이 걸어요.")).toBeTruthy();
   expect(within(details).getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
-    publicPersonas[0]!.portraits!.photo,
+    "https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-000000000002.jpg",
   );
   expect(document.querySelector(".discovery-shell")).toBeTruthy();
   expect(document.querySelector(".public-site")).toBeNull();
@@ -71,7 +71,7 @@ test("a shared URL opens the target in the original Discovery reading view and c
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
   expect(window.location.pathname).toBe("/explore");
   expect(screen.getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
-    publicPersonas[0]!.secondaryPortraits![0]!.imageUrl,
+    "https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-000000000003.jpg",
   );
   choose(false);
   expect(screen.getByRole("heading", { name: "한수빈" })).toBeTruthy();
@@ -147,7 +147,7 @@ test("reselection reloads its private Catalog before browsing and submits only e
   const script = document.createElement("script");
   script.id = "public-personas";
   script.type = "application/json";
-  script.textContent = JSON.stringify(publicPersonas);
+  script.textContent = JSON.stringify({ people: publicPersonas });
   document.body.append(script);
   const fetcher = vi
     .fn<typeof fetch>()
@@ -187,7 +187,7 @@ test("reselection reloads its private Catalog before browsing and submits only e
     likedPersonaIDs: ["subin"],
     reselectionToken: token,
   });
-  expect(script.textContent).toBe(JSON.stringify(publicPersonas));
+  expect(script.textContent).toBe(JSON.stringify({ people: publicPersonas }));
   expect(window.location.hash).toBe(`#reselect=${token}`);
   expect(localStorage.getItem("ren-ai.discovery.choices")).not.toContain(token);
 });
@@ -209,9 +209,12 @@ test("a reselection profile URL cannot reopen an ended persona and retains the t
 });
 
 test("public bootstrap parsing narrows input and rejects malformed JSON and non-profile fields", () => {
-  expect(readPublicPeople(null)).toBeUndefined();
-  expect(() => readPublicPeople("bad JSON")).toThrow(SyntaxError);
-  expect(() => readPublicPeople('[{"private":"bad"}]')).toThrow(/id/);
+  expect(readPublicBootstrap(null)).toBeUndefined();
+  expect(() => readPublicBootstrap("bad JSON")).toThrow(SyntaxError);
+  expect(() => readPublicBootstrap('{"people":[{"private":"bad"}]}')).toThrow(/id/);
+  expect(() =>
+    readPublicBootstrap('{"people":[],"page":{"locale":"fr","nextCursor":null}}'),
+  ).toThrow(/locale/);
   expect(publicRoute(new URL("https://renai.im/personas/bad/id?style=invalid"))).toEqual({
     id: undefined,
     style: undefined,

@@ -34,32 +34,32 @@ const token = (
     }),
   ).toString("base64url");
 
-test("a cursor started during stale service retains its membership for its entire lifetime after the Catalog changes", async () => {
+test("the served snapshot never expires, and a replaced one keeps cursor membership for its lifetime before reclamation", async () => {
   await runMessagingTest(
     Effect.gen(function* () {
       yield* migrate;
-      let offline = false;
+      const sql = yield* SqlClient.SqlClient;
       let candidates = [persona("one")];
-      const cache = yield* publicCatalog(
-        async () => {
-          if (offline) throw new Error("offline");
-          return candidates;
-        },
-        () => {},
-      );
-      const revision = yield* cache.ensure("initial");
-      offline = true;
-      yield* TestClock.adjust("359 seconds");
-      expect(yield* cache.ensure("stale")).toBe(revision);
+      const cache = yield* publicCatalog(async () => candidates);
+      const revision = yield* cache.ensure;
+      yield* TestClock.adjust("2 hours");
+      expect((yield* browsePage({ locale: "ko" }, yield* cache.ensure)).people).toHaveLength(1);
       const started = yield* Clock.currentTimeMillis;
       const cursor = token(revision, started + browseLifetime);
-      offline = false;
       candidates = [...candidates, persona("two")];
       yield* TestClock.adjust("1 second");
-      const latest = yield* cache.ensure("changed");
+      yield* invalidatePublicCatalog;
+      const latest = yield* cache.ensure;
+      expect(latest).not.toBe(revision);
       yield* TestClock.adjust("3598 seconds");
       const page = yield* browsePage({ locale: "ko", cursor }, latest);
       expect(page.people.map((p) => p.id)).toEqual(["one"]);
+      yield* TestClock.adjust("3 seconds");
+      yield* cache.maintain;
+      expect(yield* sql`SELECT revision FROM browse_snapshot`).toEqual([{ revision: latest }]);
+      expect(yield* sql`SELECT DISTINCT revision FROM browse_persona`).toEqual([
+        { revision: latest },
+      ]);
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });
@@ -73,13 +73,13 @@ test("10,000 candidates use indexed, bounded pages without per-visitor writes an
       yield* migrate;
       const sql = yield* SqlClient.SqlClient;
       const cache = yield* publicCatalog(load);
-      const revision = yield* cache.ensure("initial");
+      const revision = yield* cache.ensure;
       const [before] = yield* sql<{ n: number }>`SELECT total_changes() AS n`;
       const first = yield* browsePage({ locale: "ko" }, revision);
       expect(first.people).toHaveLength(10);
       expect(first.nextCursor).not.toBeNull();
       const replacement = yield* publicCatalog(load);
-      expect(yield* replacement.ensure("replacement")).toBe(revision);
+      expect(yield* replacement.ensure).toBe(revision);
       const query = { locale: "ko", cursor: first.nextCursor! } as const;
       const second = yield* browsePage(query, revision);
       expect(yield* browsePage(query, revision)).toEqual(second);
@@ -114,7 +114,7 @@ test("language tiers exhaust in order, seeded traversal wraps without duplicates
         },
       }));
       const cache = yield* publicCatalog(async () => candidates);
-      const revision = yield* cache.ensure("start");
+      const revision = yield* cache.ensure;
       yield* sql`INSERT INTO persona_exclusion VALUES ('visitor', 'p0')`;
       const now = yield* Clock.currentTimeMillis;
       let cursor: string | null = token(revision, now + browseLifetime);
@@ -147,7 +147,7 @@ test("catalog edits preserve traversal membership and language tiers, update liv
       const sql = yield* SqlClient.SqlClient;
       let candidates = Array.from({ length: 25 }, (_, i) => persona(`p${i}`));
       const cache = yield* publicCatalog(async () => candidates);
-      const revision = yield* cache.ensure("initial");
+      const revision = yield* cache.ensure;
       const now = yield* Clock.currentTimeMillis;
       const cursor = token(revision, now + browseLifetime);
       const initial = yield* browsePage({ locale: "ko", cursor }, revision);
@@ -158,16 +158,16 @@ test("catalog edits preserve traversal membership and language tiers, update liv
         .map((p) => (p.id === edited ? { ...p, bio: "Updated writing" } : p));
       candidates.push(persona("new"));
       yield* invalidatePublicCatalog;
-      const nextRevision = yield* cache.ensure("updated");
+      const nextRevision = yield* cache.ensure;
       expect(nextRevision).not.toBe(revision);
       const replay = yield* browsePage({ locale: "ko", cursor }, nextRevision);
       expect(replay.people.some((p) => p.id === removed || p.id === "new")).toBe(false);
       expect(replay.people.find((p) => p.id === edited)?.bio).toBe("Updated writing");
       const [before] = yield* sql<{ n: number }>`SELECT total_changes() AS n`;
-      yield* TestClock.adjust("60 seconds");
-      expect(yield* cache.ensure("unchanged")).toBe(nextRevision);
+      yield* cache.maintain;
+      expect(yield* cache.ensure).toBe(nextRevision);
       const [after] = yield* sql<{ n: number }>`SELECT total_changes() AS n`;
-      expect(after!.n - before!.n).toBe(2); // refresh metadata only; no profile or membership rewrites
+      expect(after!.n - before!.n).toBe(1); // the maintenance clock; no profile or membership rewrites
       yield* sql`UPDATE browse_live SET payload = '{' WHERE id = ${edited}`;
       expect((yield* lookupProfiles([edited]).pipe(Effect.flip)).message).toBe(
         "Invalid stored public profile",
@@ -181,7 +181,7 @@ test("malformed, mismatched, expired and missing-snapshot cursors fail explicitl
     Effect.gen(function* () {
       yield* migrate;
       const cache = yield* publicCatalog(async () => []);
-      const revision = yield* cache.ensure("empty");
+      const revision = yield* cache.ensure;
       const now = yield* Clock.currentTimeMillis;
       expect(yield* browsePage({ locale: "ko" }, revision)).toEqual({
         people: [],
@@ -198,7 +198,11 @@ test("malformed, mismatched, expired and missing-snapshot cursors fail explicitl
           "personas",
         );
       yield* TestClock.adjust("2 hours");
-      expect(yield* cache.ensure("renewed")).toBe(revision);
+      expect(yield* cache.ensure).toBe(revision);
+      expect(yield* browsePage({ locale: "ko" }, revision)).toEqual({
+        people: [],
+        nextCursor: null,
+      });
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });

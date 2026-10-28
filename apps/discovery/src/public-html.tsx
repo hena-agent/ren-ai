@@ -10,14 +10,41 @@ import {
   shareUrl,
   publicRoute,
 } from "./public-routing.ts";
+import type { SampledPage } from "./public-routing.ts";
 import type { SocialImage } from "./social-image.ts";
 import copy from "./copy.json";
+
+/** The application's first HTML, followed by any public people the browser continues from. */
+function applicationRoot(url: URL, people: readonly PublicPersona[], page?: SampledPage) {
+  const { id, style = "anime" } = publicRoute(url);
+  // Profiles and the explorer's sampled page render public people; home and the bare shell do not.
+  const rendered = Boolean(id || page);
+  const markup = renderToString(
+    url.pathname === "/" ? (
+      <LocaleProvider initialLocale="ko">
+        <Home />
+      </LocaleProvider>
+    ) : (
+      <App
+        initialPeople={rendered ? people : undefined}
+        initialPage={page}
+        personaId={id}
+        initialStyle={style}
+        initialLocale="ko"
+      />
+    ),
+  );
+  // The bootstrap contains only schema-validated public fields, never a private Catalog snapshot.
+  const bootstrap = JSON.stringify({ people, ...(page && { page }) }).replace(/</g, "\\u003c");
+  return `<div id="root">${markup}</div>${rendered ? `<script id="public-personas" type="application/json">${bootstrap}</script>` : ""}`;
+}
 
 export function publicResponse(
   template: string,
   people: readonly PublicPersona[],
   url: URL,
   image: SocialImage,
+  page?: SampledPage,
 ) {
   const { id, style = "anime" } = publicRoute(url);
   const persona = people.find((person) => person.id === id);
@@ -88,32 +115,12 @@ export function publicResponse(
       <meta name="twitter:image:alt" content={image.alt} />
     </>,
   );
-  const markup = renderToString(
-    home ? (
-      <LocaleProvider initialLocale="ko">
-        <Home />
-      </LocaleProvider>
-    ) : (
-      <App
-        initialPeople={id ? people : undefined}
-        personaId={id}
-        initialStyle={style}
-        initialLocale="ko"
-      />
-    ),
-  );
-  // The bootstrap contains only schema-validated public fields, never a private Catalog snapshot.
-  const bootstrap = JSON.stringify(people).replace(/</g, "\\u003c");
   const jsonLd = JSON.stringify(structured).replace(/</g, "\\u003c");
   const html = template
     .replace(/<title>[\s\S]*?<\/title>/, "")
     .replace(/<meta\s+name="description"[\s\S]*?\/>/, "")
     .replace("</head>", () => `${head}<script type="application/ld+json">${jsonLd}</script></head>`)
-    .replace(
-      '<div id="root"></div>',
-      () =>
-        `<div id="root">${markup}</div>${id ? `<script id="public-personas" type="application/json">${bootstrap}</script>` : ""}`,
-    );
+    .replace('<div id="root"></div>', () => applicationRoot(url, people, page));
   return new Response(html, {
     status: missing ? 404 : 200,
     headers: {

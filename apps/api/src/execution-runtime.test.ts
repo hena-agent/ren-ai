@@ -69,7 +69,12 @@ afterEach(() => Effect.runPromise(Scope.close(scope, Exit.void)));
 
 const open = (bindings: CloudflareBindings = executionBindings) =>
   createExecutionRuntime(
-    fromPartial<ApplicationStore>({ context: database }),
+    fromPartial<ApplicationStore>({
+      context: database,
+      maintainCatalog: Effect.sync(() => {
+        control.events.push("publicCatalog");
+      }),
+    }),
     cloudflareConfiguration(bindings),
     bindings,
     "ground rules",
@@ -253,6 +258,7 @@ test("does not start for rejected operator access; publishes callback before rem
       "stopped",
       "endings",
       "reconcile",
+      "publicCatalog",
     ]);
     const request = new Request("https://app/operator/users?limit=1", {
       method: "POST",
@@ -287,8 +293,19 @@ test("only authenticated POST notifications refresh the Catalog, without running
     expect(control.events).toEqual([]);
     expect((await notify("GET")).status).toBe(405);
     expect(control.events).toEqual([]);
+    await execSql("INSERT INTO application_clock (name, at) VALUES ('catalog.public', 1)");
     expect((await notify()).status).toBe(204);
     expect(control.events).toEqual(["catalog", "remote", "folders", "refresh"]);
+    // The served public snapshot is fenced and reloaded by the next alarm, not by a visitor.
+    expect(await execSql("SELECT payload, generation FROM public_catalog")).toEqual([
+      { payload: null, generation: 1 },
+    ]);
+    expect(await execSql("SELECT * FROM application_clock WHERE name = 'catalog.public'")).toEqual(
+      [],
+    );
+    expect(await execSql("SELECT name FROM application_work WHERE name = 'maintenance'")).toEqual([
+      { name: "maintenance" },
+    ]);
     expect((await notify()).status).toBe(204);
     expect(control.events.filter((event) => event === "refresh")).toHaveLength(2);
     expect(control.operator).not.toHaveBeenCalled();
@@ -320,7 +337,14 @@ test("propagates boot failure and releases partially acquired resources", async 
   await expect(runtime.tick()).rejects.toThrow("failed remote");
   expect(runtime.initialized).toBe(false);
   await runtime.close();
-  expect(control.events).toEqual(["catalog", "remote", "remote.close", "callback.close"]);
+  // Discovery's public snapshot maintenance does not depend on execution starting.
+  expect(control.events).toEqual([
+    "catalog",
+    "remote",
+    "remote.close",
+    "callback.close",
+    "publicCatalog",
+  ]);
   const retrying = await open();
   control.failure = "";
   control.startup = () => Promise.reject("private non-error startup failure");

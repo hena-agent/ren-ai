@@ -225,7 +225,7 @@ test("a style change retries a broken portrait without changing the persona", as
   );
 });
 
-test("switching while reading a liked profile prepares its photos and preserves the current deck", async () => {
+function recordDecodes() {
   const requested: string[] = [];
   vi.spyOn(HTMLImageElement.prototype, "decode").mockImplementation(function (
     this: HTMLImageElement,
@@ -233,6 +233,11 @@ test("switching while reading a liked profile prepares its photos and preserves 
     requested.push(this.src);
     return Promise.resolve();
   });
+  return requested;
+}
+
+test("switching while reading a liked profile prepares its photos and preserves the current deck", async () => {
+  const requested = recordDecodes();
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
   choose(true);
@@ -248,6 +253,38 @@ test("switching while reading a liked profile prepares its photos and preserves 
     people[1]!.portraits.photo,
   );
   expect(localStorage.getItem("ren-ai.discovery.choices")).toBe('{"persona0":true}');
+});
+
+const original = (n: number) =>
+  `https://persona-images.renai.im/00000000-0000-0000-0000-00000000000${n}.png`;
+const display = (n: number) =>
+  `https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-00000000000${n}.jpg`;
+
+test("owned gallery photos browse, prepare and read through their stored display renditions", async () => {
+  const requested = recordDecodes();
+  const gallery = [0, 1].map((index) => ({
+    id: `owned${index}`,
+    name: `사진${index}`,
+    bio: "소개",
+    imageUrl: original(index * 2 + 1),
+    portraits: { anime: original(index * 2 + 1), photo: original(index * 2 + 2) },
+  }));
+  render(<App client={testClient({ ...client, profiles: async () => gallery })} />);
+  await screen.findByRole("heading", { name: "사진0" });
+  expect(screen.getByRole("img", { name: "사진0 프로필" }).getAttribute("src")).toBe(display(1));
+  expect(document.querySelector(".card-back img")?.getAttribute("src")).toBe(display(3));
+  await selectImageStyle("실사");
+  expect(requested).toEqual([display(2), display(4)]);
+  choose(true);
+  expect(
+    screen.getByRole("list", { name: "좋아한 사람" }).querySelector("img")?.getAttribute("src"),
+  ).toBe(display(2));
+  fireEvent.click(screen.getByRole("button", { name: "사진0 프로필 보기" }));
+  expect(
+    within(screen.getByRole("region", { name: "사진0" }))
+      .getByRole("img")
+      .getAttribute("src"),
+  ).toBe(display(2));
 });
 
 test.each([new Error("private image URL and secret"), "private token"])(

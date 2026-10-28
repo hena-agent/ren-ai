@@ -10,6 +10,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   window.history.replaceState(null, "", "/");
+  document.getElementById("public-personas")?.remove();
   vi.restoreAllMocks();
 });
 
@@ -139,6 +140,11 @@ test("portrait selection changes the featured scene without leaving the page or 
   const selected = screen.getByRole("button", { name: "백지아 프로필" });
   const next = screen.getByRole("button", { name: "강하린 프로필" });
   expect(selected.getAttribute("aria-pressed")).toBe("true");
+  expect(
+    [...document.querySelectorAll(".hero-scene img")].map((image) =>
+      image.getAttribute("fetchpriority"),
+    ),
+  ).toEqual(["low", "high", "low"]);
   fireEvent.click(next);
   expect(selected.getAttribute("aria-pressed")).toBe("false");
   expect(next.getAttribute("aria-pressed")).toBe("true");
@@ -202,6 +208,40 @@ test.each(["/explore", "/#reselect=private-token"])(
     expect(localStorage.getItem("ren-ai.discovery.choices")).toBe('{"saved":true}');
   },
 );
+
+test("explore starts from its server-sampled page and display rendition without loading or resampling", async () => {
+  window.history.replaceState(null, "", "/explore");
+  const script = document.createElement("script");
+  script.id = "public-personas";
+  script.type = "application/json";
+  script.textContent = JSON.stringify({
+    people: [
+      {
+        id: "jia",
+        name: "백지아",
+        bio: "반가워요.",
+        imageUrl: "https://persona-images.renai.im/00000000-0000-0000-0000-000000000009.png",
+      },
+    ],
+    page: { locale: "ko", nextCursor: null },
+  });
+  document.body.append(script);
+  const browse = vi.fn<DiscoveryClient["browse"]>();
+  const profiles = vi.fn<DiscoveryClient["profiles"]>();
+  render(
+    <Site
+      client={{ ...testClient({ profiles, join: vi.fn<DiscoveryClient["join"]>() }), browse }}
+    />,
+  );
+  expect(screen.getByRole("heading", { name: "백지아" })).toBeTruthy();
+  expect(screen.getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
+    "https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-000000000009.jpg",
+  );
+  expect(screen.queryByText("만날 사람들을 불러오고 있어요.")).toBeNull();
+  await act(async () => {});
+  expect(browse).not.toHaveBeenCalled();
+  expect(profiles).not.toHaveBeenCalled();
+});
 
 test("explore displays its shell during a delayed API request and retries a failed listing once", async () => {
   window.history.replaceState(null, "", "/explore");

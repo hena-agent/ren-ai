@@ -1,8 +1,10 @@
 import { Schema } from "effect";
-import { PublicPersona, PersonaLink } from "@ren-ai/onboarding";
+import { BrowsePage, PublicPersona, PersonaLink } from "@ren-ai/onboarding";
 import { healthResponse } from "@ren-ai/transport/health";
 import { publicResponse, sitemap } from "./public-html.tsx";
 import { publicOrigin, publicRoute, previewRoute } from "./public-routing.ts";
+import type { SampledPage } from "./public-routing.ts";
+import { preferredLocale } from "./locale.tsx";
 import { serverCause, writeServerLog } from "./server-log.ts";
 import type { ServerEvent } from "./server-log.ts";
 import { socialImage } from "./social-image.ts";
@@ -11,6 +13,44 @@ import type { PreviewCache, PreviewEnv } from "./preview-image.ts";
 
 export interface DiscoveryEnv extends PreviewEnv {
   DISCOVERY_API_URL: string;
+}
+type Failure = (
+  cause: ReturnType<typeof serverCause>,
+  stage: string,
+  upstreamStatus?: number,
+) => void;
+
+/** Bound the initial sample wait; failures leave the browser's retryable loading shell. */
+async function explorerSample(
+  fetcher: typeof fetch,
+  request: Request,
+  base: string,
+  requestId: string,
+  failed: Failure,
+): Promise<{ people: readonly PublicPersona[]; page: SampledPage } | undefined> {
+  if (new URL(request.url).pathname !== "/explore" || request.method !== "GET") return undefined;
+  const locale = preferredLocale(
+    (request.headers.get("Accept-Language") ?? "")
+      .split(",")
+      .map((range) => range.replace(/;.*/, "").trim()),
+  );
+  let stage = "catalog.read";
+  let upstreamStatus: number | undefined;
+  try {
+    const upstream = await fetcher(new URL(`/discovery/personas?locale=${locale}`, base), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(3_000),
+      headers: { "X-Request-ID": requestId },
+    });
+    upstreamStatus = upstream.status;
+    if (!upstream.ok) throw new Error("Public Catalog request failed");
+    stage = "catalog.decode";
+    const { people, nextCursor } = Schema.decodeUnknownSync(BrowsePage)(await upstream.json());
+    return { people, page: { locale, nextCursor } };
+  } catch (cause) {
+    failed(serverCause(cause), stage, upstreamStatus);
+    return undefined;
+  }
 }
 function catalogRequest(
   pathname: string,
@@ -86,10 +126,10 @@ async function servePublic(
   log: (event: ServerEvent) => void,
 ) {
   const url = new URL(request.url);
-  // Home and the explorer are prerendered static files; see `staticPages`.
+  // Home remains a prerendered asset; the explorer samples its first page per visitor.
   const dynamic =
     url.pathname.startsWith("/personas") ||
-    ["/sitemap.xml", "/robots.txt", "/health"].includes(url.pathname);
+    ["/explore", "/sitemap.xml", "/robots.txt", "/health"].includes(url.pathname);
   if (!dynamic) return env.ASSETS.fetch(request);
   const requestId = crypto.randomUUID();
   const start = performance.now();
@@ -117,27 +157,42 @@ async function servePublic(
     });
     return request.method === "HEAD" ? new Response(null, response) : response;
   };
+  const failed: Failure = (cause, failedStage, status) =>
+    log({
+      ...fields,
+      stage: failedStage,
+      outcome: "failed",
+      level: "error",
+      code: failureCodes[failedStage] ?? "PAGE_UNAVAILABLE",
+      ...cause,
+      ...(status !== undefined && { upstreamStatus: status }),
+      durationMs: performance.now() - start,
+    });
   try {
     const routed = routeResponse(request, url);
     if (routed) return finish(routed);
-    stage = "catalog.read";
-    const upstream = await fetcher(
-      ...catalogRequest(url.pathname, route.id, env.DISCOVERY_API_URL, requestId),
-    );
-    upstreamStatus = upstream.status;
-    if (!upstream.ok) throw new Error("Public Catalog request failed");
-    stage = "catalog.decode";
-    // Decoding strips private or future fields before HTML, bootstrap or metadata can see them.
-    if (url.pathname === "/sitemap.xml") {
-      const links = Schema.decodeUnknownSync(Schema.Array(PersonaLink))(await upstream.json());
-      return finish(
-        new Response(sitemap(links), {
-          headers: { "Content-Type": "application/xml; charset=utf-8" },
-        }),
+    const sample = await explorerSample(fetcher, request, env.DISCOVERY_API_URL, requestId, failed);
+    let people: readonly PublicPersona[] = sample?.people ?? [];
+    if (url.pathname !== "/explore") {
+      stage = "catalog.read";
+      const upstream = await fetcher(
+        ...catalogRequest(url.pathname, route.id, env.DISCOVERY_API_URL, requestId),
       );
+      upstreamStatus = upstream.status;
+      if (!upstream.ok) throw new Error("Public Catalog request failed");
+      stage = "catalog.decode";
+      // Decoding strips private or future fields before HTML, bootstrap or metadata can see them.
+      if (url.pathname === "/sitemap.xml") {
+        const links = Schema.decodeUnknownSync(Schema.Array(PersonaLink))(await upstream.json());
+        return finish(
+          new Response(sitemap(links), {
+            headers: { "Content-Type": "application/xml; charset=utf-8" },
+          }),
+        );
+      }
+      people = Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await upstream.json());
+      catalogReady = true;
     }
-    const people = Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await upstream.json());
-    catalogReady = true;
     if (url.pathname === "/health") {
       stage = "health.preview";
       await previewReady(env, url);
@@ -158,18 +213,9 @@ async function servePublic(
     if (!template.ok) throw new Error("Browser template unavailable");
     const image = socialImage(persona, route.style ?? "anime");
     stage = "html.render";
-    return finish(publicResponse(await template.text(), people, url, image));
+    return finish(publicResponse(await template.text(), people, url, image, sample?.page));
   } catch (cause) {
-    log({
-      ...fields,
-      stage,
-      outcome: "failed",
-      level: "error",
-      code: failureCodes[stage] ?? "PAGE_UNAVAILABLE",
-      ...serverCause(cause),
-      ...(upstreamStatus !== undefined && { upstreamStatus }),
-      durationMs: performance.now() - start,
-    });
+    failed(serverCause(cause), stage, upstreamStatus);
     return finish(unavailableResponse(url.pathname, requestId, catalogReady));
   }
 }

@@ -1,4 +1,5 @@
 import type { PublicPersona } from "@ren-ai/onboarding";
+import { thumbnailUrl } from "@ren-ai/personas/image-url";
 
 export type ImageStyle = "anime" | "photo";
 export type StyledPersona = PublicPersona & {
@@ -26,7 +27,8 @@ export function saveImageStyle(style: ImageStyle): boolean {
   }
 }
 
-export function withImageStyle(persona: PublicPersona, style: ImageStyle): StyledPersona {
+/** The same-style gallery photos in order, as the original URLs that previews read from R2. */
+export function stylePhotos(persona: PublicPersona, style: ImageStyle) {
   const legacyUrls = persona.portraitGallery?.map((pair) => pair[style]);
   const imageUrls =
     persona.secondaryPortraits !== undefined || (!legacyUrls && persona.portraits !== undefined)
@@ -38,12 +40,21 @@ export function withImageStyle(persona: PublicPersona, style: ImageStyle): Style
         ].filter((url): url is string => Boolean(url))
       : legacyUrls;
   return {
-    ...persona,
-    imageStyle: style,
     imageUrl:
       imageUrls === undefined
         ? (persona.portraits?.[style] ?? persona.imageUrl)
         : (imageUrls[0] ?? ""),
     ...(imageUrls && { imageUrls: imageUrls.length ? imageUrls : [""] }),
+  };
+}
+
+/** Browsing shows each photo's stored display rendition rather than its multi-megabyte original. */
+export function withImageStyle(persona: PublicPersona, style: ImageStyle): StyledPersona {
+  const { imageUrl, imageUrls } = stylePhotos(persona, style);
+  return {
+    ...persona,
+    imageStyle: style,
+    imageUrl: thumbnailUrl(imageUrl),
+    ...(imageUrls && { imageUrls: imageUrls.map(thumbnailUrl) }),
   };
 }

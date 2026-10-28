@@ -1,6 +1,6 @@
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { ownedImageKey } from "@ren-ai/personas/image-url";
-import { withImageStyle } from "./image-style.ts";
+import { stylePhotos } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
 import { publicOrigin, personaPath, previewVersion } from "./public-routing.ts";
 
@@ -20,7 +20,7 @@ export const brandSocialImage: SocialImage = {
   alt: "Ren AI — iMessage에서. AI 페르소나와 나누는 일상.",
 };
 export function personaPreview(persona: PublicPersona, style: ImageStyle) {
-  const source = withImageStyle(persona, style).imageUrl;
+  const source = stylePhotos(persona, style).imageUrl;
   if (!source) return undefined;
   const key = ownedImageKey(source);
   if (!key) throw new Error("Public preview requires an owned gallery photo");

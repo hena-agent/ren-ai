@@ -28,6 +28,8 @@ export interface ApplicationStoreConfig {
 
 export interface ApplicationStore {
   readonly metricsTick: (requestId: string) => Promise<void>;
+  /** Bounded alarm work that replaces Discovery's served public snapshot. */
+  readonly maintainCatalog: Effect.Effect<void, Error, SqlClient.SqlClient>;
   readonly context: Context.Context<SqlClient.SqlClient>;
   readonly run: <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => Promise<A>;
   readonly handler: (request: Request) => Promise<Response>;
@@ -75,6 +77,7 @@ export const createApplicationStore = async (
     return {
       context,
       run,
+      maintainCatalog: discovery.maintainCatalog,
       metricsTick: (requestId) =>
         run(
           metricsTasks(
