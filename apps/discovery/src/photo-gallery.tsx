@@ -1,20 +1,26 @@
 import { useCopy } from "./locale.tsx";
 
 export function GalleryControls({
-  count,
+  images,
   current,
   disabled = false,
   onChange,
 }: {
-  count: number;
+  images: readonly string[];
   current: number;
   disabled?: boolean;
   onChange: (index: number) => void;
 }) {
   const copy = useCopy();
+  const count = images.length;
   if (count <= 1) return null;
   return (
     <div className="gallery-controls">
+      {images
+        .filter((_, index) => Math.abs(index - current) === 1)
+        .map((url) => (
+          <link key={url} rel="preload" as="image" href={url} fetchPriority="low" />
+        ))}
       <div className="gallery-progress" aria-label={copy.photos}>
         {Array.from({ length: count }, (_, index) => (
           <button

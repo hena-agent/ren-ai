@@ -25,6 +25,27 @@ const client = testClient({
   join: async () => ({ status: "waiting" as const }),
 });
 
+test.each(["anime", "photo"] as const)(
+  "%s gallery prepares neighboring photos before arrow clicks in cards and expanded profiles",
+  (style) => {
+    const persona = withImageStyle(people[1]!, style);
+    const actions = { onOpen: vi.fn<() => void>(), onChoose: vi.fn<() => void>() };
+    const preloaded = (index: number) =>
+      document.head.querySelector(
+        `link[rel="preload"][as="image"][fetchpriority="low"][href="${persona.imageUrls![index]}"]`,
+      );
+    const view = render(<Card persona={persona} {...actions} />);
+    expect(preloaded(1)).not.toBeNull();
+    expect(preloaded(3)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "사진 4 / 4" }));
+    expect(preloaded(2)).not.toBeNull();
+    view.rerender(<Card persona={persona} {...actions} onCollapse={vi.fn<() => void>()} />);
+    fireEvent.click(screen.getByRole("button", { name: "이전 사진" }));
+    expect(screen.getByRole("img").getAttribute("src")).toBe(persona.imageUrls![2]);
+    expect(preloaded(3)).not.toBeNull();
+  },
+);
+
 test("persona-sized photo navigation preserves the image index on style changes and does not create Likes", async () => {
   localStorage.setItem("ren-ai.discovery.image-style", "anime");
   render(<App client={client} />);
