@@ -1,4 +1,4 @@
-import worker, { ApiApplication, DiscoveryActivity } from "../worker/entry.ts";
+import worker, { ApiApplication, DiscoveryActivity, HealthMonitor } from "../worker/entry.ts";
 import { executionSnapshot } from "./execution-catalog.ts";
 import { Schema } from "effect";
 
@@ -53,7 +53,7 @@ const fakeUpstreams: typeof fetch = async (input, init) => {
 
 globalThis.fetch = fakeUpstreams;
 
-export { ApiApplication, DiscoveryActivity };
+export { ApiApplication, DiscoveryActivity, HealthMonitor };
 export default {
   fetch(request: Request, env: Parameters<typeof worker.fetch>[1]) {
     const mode = request.headers.get("X-Activity-Fixture");

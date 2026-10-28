@@ -8,7 +8,7 @@ import { syncFolders, catalogRefresher } from "./opencode/catalog-sync.ts";
 import { catalogClient } from "./personas/catalog.ts";
 import { firstContacts } from "./discovery/first-contact.ts";
 import { operatorHandler } from "./operator/api.ts";
-import { createExecutionHealth } from "./execution-health.ts";
+import { applicationAlerts } from "./alerts.ts";
 import type { ApplicationStore } from "./application-store.ts";
 import type { CloudflareBindings, CloudflareConfiguration } from "./cloudflare-config.ts";
 import { SqlClient } from "effect/unstable/sql";
@@ -56,7 +56,7 @@ export async function createExecutionRuntime(
   const messages = await run(
     remoteMessages({ url: execution.imsgRpcUrl, token: execution.managementToken }),
   );
-  const health = await run(createExecutionHealth(execution, fetcher, messages.probe()));
+  const health = await run(applicationAlerts);
   const catalog = catalogClient(
     { url: bindings.PERSONA_CATALOG_URL, token: bindings.TOKEN_CATALOG },
     fetcher,
@@ -242,7 +242,6 @@ export async function createExecutionRuntime(
       return initialized;
     },
     tick: async (requestId: string = randomUUID()) => {
-      await run(health.tick);
       await run(
         withWorkBudget(
           runWorkLanes("alarm.cursor", [

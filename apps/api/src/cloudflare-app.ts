@@ -12,6 +12,7 @@ import { stateTransfer } from "./state-transfer.ts";
 import { healthResponse, probeHealth } from "@ren-ai/transport/health";
 import { contactCause, contactLog, contactOperationId } from "./discovery/diagnostics.ts";
 import { intakeRequests } from "./intake/http.ts";
+import { alertRequests } from "./alerts.ts";
 import { probeMessaging } from "./messaging-health.ts";
 import { discordState, type Webhooks } from "./metrics/discord.ts";
 
@@ -20,7 +21,8 @@ export interface CloudflareApplication {
   readonly configuration: CloudflareConfiguration;
   readonly fetch: (request: Request) => Promise<Response>;
   readonly close: () => Promise<void>;
-  readonly tick: (requestId?: string) => Promise<void>;
+  /** Store work always runs; conversation execution starts only when its work is due. */
+  readonly tick: (requestId: string, execution: boolean) => Promise<void>;
 }
 
 const isWriteRequest = (request: Request, path: string) =>
@@ -123,6 +125,8 @@ const health = async (
   );
 };
 
+const unavailable = async () => new Response("Unavailable", { status: 503 });
+
 const bootstrapResponse = async (request: Request) => {
   const started = performance.now();
   // Finish the forwarded upload before responding; discard chunks without buffering private input.
@@ -174,7 +178,10 @@ export const createCloudflareApplication = async (
     let runtime: ReturnType<typeof createExecutionRuntime> | undefined;
     const intake = configuration.execution.managementToken
       ? intakeRequests(store, configuration.execution.managementToken)
-      : async () => new Response("Unavailable", { status: 503 });
+      : unavailable;
+    const alerts = configuration.execution.managementToken
+      ? alertRequests(store, configuration.execution.managementToken)
+      : unavailable;
     const execution = () =>
       (runtime ??= createExecutionRuntime(store, configuration, bindings, groundRules, fetcher));
     return {
@@ -196,6 +203,7 @@ export const createCloudflareApplication = async (
             return bootstrapResponse(request);
           if (path === "/management/intake/watch" || path === "/management/intake/wake")
             return intake(request);
+          if (path === "/management/alerts") return alerts(request);
           if (
             path.startsWith("/rpc") ||
             path.startsWith("/operator/") ||
@@ -206,9 +214,10 @@ export const createCloudflareApplication = async (
           }
           return store.handler(request);
         }),
-      tick: async (requestId?: string) => {
+      tick: async (requestId, due) => {
         if (configuration.bootstrapOnly) return;
-        const metrics = store.metricsTick(requestId ?? crypto.randomUUID());
+        const metrics = store.metricsTick(requestId);
+        if (!due) return metrics;
         const current = execution();
         try {
           const results = await Promise.allSettled([

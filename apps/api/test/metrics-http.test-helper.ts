@@ -147,7 +147,7 @@ export async function metricsFixture(
     alarm: async () => {
       const work = await store.run(scheduledApplicationWork);
       await store.metricsTick("metrics-alarm");
-      await store.run(finishApplicationWork(work, false));
+      await store.run(finishApplicationWork(work, "completed"));
       return store.run(nextApplicationWake);
     },
     call,

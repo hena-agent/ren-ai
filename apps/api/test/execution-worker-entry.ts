@@ -1,4 +1,4 @@
-import worker, { ApiApplication } from "../worker/entry.ts";
+import worker, { ApiApplication, HealthMonitor } from "../worker/entry.ts";
 import type { CloudflareBindings } from "../src/cloudflare-config.ts";
 import { executionSnapshot } from "./execution-catalog.ts";
 
@@ -34,6 +34,8 @@ globalThis.fetch = async (input, init) => {
   if (url.hostname === "challenges.cloudflare.com") return Response.json({ success: true });
   throw new Error("Unexpected test upstream");
 };
+
+export { HealthMonitor };
 
 export class ExecutionApplication extends ApiApplication {
   override async fetch(request: Request) {

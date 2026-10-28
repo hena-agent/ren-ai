@@ -26,7 +26,10 @@ export const executionWorker = async (persistence: string, executor: string, dir
           name: "execution-proof",
           compatibilityDate: "2026-10-13",
           compatibilityFlags: ["nodejs_compat"],
-          exports: { ExecutionApplication: { type: "durable-object", storage: "sqlite" } },
+          exports: {
+            ExecutionApplication: { type: "durable-object", storage: "sqlite" },
+            HealthMonitor: { type: "durable-object", storage: "sqlite" },
+          },
           manifest: {
             mainModule: "execution.js",
             modules: { "execution.js": { type: "esm", contents } },
@@ -44,6 +47,11 @@ export const executionWorker = async (persistence: string, executor: string, dir
               type: "durable-object",
               worker: "execution-proof",
               exportName: "ExecutionApplication",
+            },
+            MONITOR: {
+              type: "durable-object",
+              worker: "execution-proof",
+              exportName: "HealthMonitor",
             },
           },
         },
