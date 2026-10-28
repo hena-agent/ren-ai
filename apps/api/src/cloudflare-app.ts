@@ -216,11 +216,11 @@ export const createCloudflareApplication = async (
       fetch: (incoming) => applicationRequest(incoming, handle),
       tick: async (requestId, due) => {
         if (configuration.bootstrapOnly) return;
-        const metrics = Promise.all([
-          store.metricsTick(requestId),
-          store.catalogTick(requestId),
-        ]).then(() => undefined);
-        if (!due) return metrics;
+        const metrics = Promise.all([store.metricsTick(requestId), store.catalogTick(requestId)]);
+        if (!due) {
+          await metrics;
+          return;
+        }
         const current = execution();
         try {
           const results = await Promise.allSettled([
