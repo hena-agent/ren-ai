@@ -1,5 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { catalogHandler } from "./catalog-handler.ts";
+import { rebuildProjections } from "./projection-rebuild.ts";
 import type { AdminEnv } from "./cloudflare-admin.ts";
 import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
 import { initialDocuments, portraitImage } from "../test/fixtures.ts";
@@ -74,6 +75,7 @@ test("public Catalog reads current image associations, including anime-only and 
       databasePersona.id,
     )
     .run();
+  await rebuildProjections(db);
   const prose = await read();
   expect(prose.status).toBe(200);
   expect(await prose.json()).toMatchObject([
@@ -157,7 +159,7 @@ test("private sheets use committed persona/style associations, change the snapsh
   const after = await store.catalog();
   expect(after.revision).not.toBe(before.revision);
   expect(after.personas[0]!.sheets).toEqual({ anime: second.split("/").at(-1) });
-  expect(after.personas[0]!.source).not.toContain(second);
+  expect(JSON.stringify(after.personas[0]!.persona)).not.toContain(second.split("/").at(-1));
   const read = (query: string, token = "catalog-secret") =>
     catalogHandler(
       new Request(`https://admin.test/api/catalog/sheet?${query}`, {

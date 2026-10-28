@@ -9,7 +9,7 @@ import {
   nextPersonaVersion,
   requireVersion,
 } from "@ren-ai/personas";
-import type { PersonaStore, IdentitySheets } from "@ren-ai/personas";
+import type { PersonaRecord, PersonaStore, IdentitySheets } from "@ren-ai/personas";
 import {
   personas,
   personaImages,
@@ -47,8 +47,7 @@ export function databaseStore(
   catalog: () => Promise<{
     revision: string;
     personas: readonly {
-      id: string;
-      source: string;
+      persona: PersonaRecord;
       state: string;
       memory: string;
       sheets: IdentitySheets;
@@ -106,13 +105,10 @@ export function databaseStore(
           sheets,
         }),
         personas: rows.map((row) => ({
-          id: row.id,
-          source: serializePersona(
-            recordOf(
-              row,
-              photos.filter((photo) => photo.personaId === row.id),
-              imageBase,
-            ),
+          persona: recordOf(
+            row,
+            photos.filter((photo) => photo.personaId === row.id),
+            imageBase,
           ),
           state: row.state,
           memory: row.memory,

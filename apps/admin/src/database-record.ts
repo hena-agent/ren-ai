@@ -1,4 +1,5 @@
-import { decodePersona } from "@ren-ai/personas";
+import { readProjection } from "@ren-ai/personas";
+import type { PersonaRecord } from "@ren-ai/personas";
 import { personas, personaImages, personaVersions } from "./database-schema.ts";
 import { getTableColumns, and, eq } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
@@ -17,29 +18,39 @@ export const currentPersonaRows = (db: DrizzleD1Database) =>
       ),
     );
 
+type PersonaRow = typeof personas.$inferSelect & { markdown: string };
+
+/** A stored row's document fields, as every Persona record carries them. */
+export const documentFields = (row: PersonaRow) => ({
+  id: row.id,
+  name: row.name,
+  published: row.published,
+  timeZone: row.timeZone,
+  language: row.language,
+  openingLine: row.openingLine,
+  memory: row.memoryInstruction,
+  prompt: row.markdown,
+  description: row.markdown,
+});
+
+/** Rows were validated when saved, and their projection holds every Markdown-derived value. */
 export function recordOf(
-  row: typeof personas.$inferSelect & { markdown: string },
+  row: PersonaRow,
   photos: readonly (typeof personaImages.$inferSelect)[],
   imageBase = personaImageBase,
-) {
+): PersonaRecord & { readonly version: number; readonly description: string } {
   protect(row.markdown, row.state, row.memory, row.memoryInstruction, row.openingLine);
   const portraits = Object.fromEntries(
     photos
       .filter((photo) => photo.position === 0)
       .map((photo) => [photo.style, `${imageBase}${photo.objectKey}`]),
   );
-  const record = decodePersona({
-    id: row.id,
+  const { bio, publicProfile } = readProjection(row.projection);
+  return {
+    ...documentFields(row),
     version: row.currentVersion,
-    name: row.name,
-    published: row.published,
-    timeZone: row.timeZone,
-    language: row.language,
-    openingLine: row.openingLine,
-    memory: row.memoryInstruction,
-    prompt: row.markdown,
-    description: row.markdown,
-    bio: "",
+    bio,
+    publicProfile,
     imageUrl: portraits["photo"] ?? portraits["anime"] ?? "",
     ...(row.gender && { gender: row.gender }),
     ...(row.descriptionVersion !== null && { descriptionVersion: row.descriptionVersion }),
@@ -47,6 +58,5 @@ export function recordOf(
     secondaryPortraits: photos
       .filter((photo) => photo.position > 0)
       .map((photo) => ({ style: photo.style, imageUrl: `${imageBase}${photo.objectKey}` })),
-  });
-  return { ...record, version: row.currentVersion, description: row.markdown };
+  };
 }

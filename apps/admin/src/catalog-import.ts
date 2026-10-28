@@ -33,6 +33,7 @@ async function currentMatches(binding: D1Database, input: ImportPersona, source:
     updatedAt: _updatedAt,
     markdown,
     currentVersion: _currentVersion,
+    projection: _projection,
     ...content
   } = current;
   if (

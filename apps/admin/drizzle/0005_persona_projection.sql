@@ -1,0 +1,1 @@
+ALTER TABLE `personas` ADD `projection` text DEFAULT '' NOT NULL;

@@ -168,6 +168,12 @@ export function decodePersona(input: unknown): PersonaRecord {
   }
 }
 
+/** Reads a record this system validated before storing it: checks structure and derives nothing. */
+// oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrows a stored persona record before use
+export function decodeStoredPersona(input: unknown): PersonaRecord {
+  return Schema.decodeUnknownSync(Input)(input, { onExcessProperty: "error" });
+}
+
 export function parsePersona(id: string, source: string): PersonaRecord {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)/.exec(source);
   if (!match) throw new Error(`Persona ${id}: expected YAML frontmatter and prompt`);

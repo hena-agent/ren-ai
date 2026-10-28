@@ -40,7 +40,10 @@ const fakeUpstreams: typeof fetch = async (input, init) => {
   if (url.hostname === "admin.example" && url.pathname === "/api/catalog")
     return Response.json({
       ...executionSnapshot(),
-      personas: executionSnapshot().personas.map((record) => ({ ...record, id: "sora" })),
+      personas: executionSnapshot().personas.map((record) => ({
+        ...record,
+        persona: { ...record.persona, id: "sora" },
+      })),
     });
   if (url.hostname === "challenges.cloudflare.com") return Response.json({ success: true });
   if (url.hostname === "admin.example" && url.pathname.startsWith("/discovery/images/"))

@@ -15,6 +15,7 @@ import {
   generator,
 } from "../test/fixtures.ts";
 import { GenerationError } from "./logging.ts";
+import { rebuildProjections } from "./projection-rebuild.ts";
 import { deferred, queuedRequest, finishedJob, jobUrl } from "../test/queue.ts";
 import { createAdmin } from "./admin.ts";
 import type { LogEntry } from "./logging.ts";
@@ -74,6 +75,8 @@ test("the storage upgrade preserves existing Persona documents as v1 without cha
       .bind(databasePersona.id)
       .run();
   });
+  // Deployment derives projections for documents stored before they existed.
+  await rebuildProjections(db);
   const current = await store.get(databasePersona.id);
   expect(current).toMatchObject({
     version: 1,
@@ -118,7 +121,7 @@ test("only document edits append immutable versions; private/public Catalogs exp
   );
   expect(second.version).toBe(2);
   expect((await store.version(first.id, 1)).markdown).toBe(first.description);
-  expect((await store.catalog()).personas[0]!.source).toContain("version: 2");
+  expect((await store.catalog()).personas[0]!.persona.version).toBe(2);
   expect((await store.publicList())[0]!.bio).toBe("두 번째 소개.");
   const view = await (await admin(request(`${path}/versions?version=1`))).text();
   expect(view).toContain("버전 기록");

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { decodePersona, parsePersona, serializePersona } from "./model.ts";
+import { decodePersona, decodeStoredPersona, parsePersona, serializePersona } from "./model.ts";
 import { withPublicProfile } from "./profile.ts";
 
 const persona = decodePersona({
@@ -34,6 +34,14 @@ test("one Markdown source survives storage and derives public values without dup
   expect(() => decodePersona({ ...record, profileDetails: { memory: "private" } })).toThrow(
     "profileDetails",
   );
+});
+
+test("stored records keep their derived values and still reject malformed structure", () => {
+  const stored = structuredClone({ ...persona, bio: "저장된 소개" });
+  // Nothing is re-derived from the Markdown, so a stored value survives unchanged.
+  expect(decodeStoredPersona(stored)).toEqual({ ...persona, bio: "저장된 소개" });
+  expect(() => decodeStoredPersona({ ...stored, published: "yes" })).toThrow("published");
+  expect(() => decodeStoredPersona({ ...stored, profileDetails: {} })).toThrow("profileDetails");
 });
 
 test("frontmatter rejects unknown keys and incorrect types before producing a persona", () => {

@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { parsePersona, serializePersona } from "@ren-ai/personas";
+import { parsePersona } from "@ren-ai/personas";
 import { catalogClient } from "./catalog.ts";
 const fixturePersona = parsePersona(
   "harin",
@@ -45,9 +45,7 @@ test("Catalog requests use separate public/private boundaries and validate every
     if (path === "/api/catalog")
       return Response.json({
         revision: "one",
-        personas: [
-          { id: record.id, source: serializePersona(record), state: "state", memory: "memory" },
-        ],
+        personas: [{ persona: record, state: "state", memory: "memory" }],
       });
     return Response.json([{ id: record.id, name: "name", bio: "intro", imageUrl: "" }]);
   });
@@ -80,14 +78,7 @@ test("runtime definitions carry initial documents and absolute R2 image URLs for
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
     Response.json({
       revision: "images",
-      personas: [
-        {
-          id: record.id,
-          source: serializePersona(record),
-          state: "initial state",
-          memory: "initial memory",
-        },
-      ],
+      personas: [{ persona: record, state: "initial state", memory: "initial memory" }],
     }),
   );
   const client = catalogClient({ url: "https://admin.test", token: "catalog-secret" }, fetcher);
@@ -102,23 +93,14 @@ test("runtime definitions carry initial documents and absolute R2 image URLs for
   fetcher.mockResolvedValueOnce(
     Response.json({
       revision: "draft",
-      personas: [
-        { id: record.id, source: serializePersona(fixturePersona), state: "", memory: "" },
-      ],
+      personas: [{ persona: fixturePersona, state: "", memory: "" }],
     }),
   );
   expect((await client.load()).personas.get(record.id)?.initial).toBeUndefined();
   fetcher.mockResolvedValueOnce(
     Response.json({
       revision: "partial",
-      personas: [
-        {
-          id: record.id,
-          source: serializePersona(fixturePersona),
-          state: "initial state",
-          memory: "",
-        },
-      ],
+      personas: [{ persona: fixturePersona, state: "initial state", memory: "" }],
     }),
   );
   expect((await client.load()).personas.get(record.id)?.initial).toBeUndefined();
@@ -145,16 +127,11 @@ test("Catalog rejects insecure origins, upstream failures, malformed profiles an
   fetcher.mockResolvedValueOnce(
     Response.json({
       revision: "x",
-      personas: [{ id: "invalid", source: "private payload", state: "", memory: "" }],
+      personas: [{ persona: { id: "invalid", prompt: "private payload" }, state: "", memory: "" }],
     }),
   );
   await expect(client.load()).rejects.toThrow("Invalid private Catalog response");
-  const entry = {
-    id: fixturePersona.id,
-    source: serializePersona(fixturePersona),
-    state: "",
-    memory: "",
-  };
+  const entry = { persona: fixturePersona, state: "", memory: "" };
   fetcher.mockResolvedValueOnce(Response.json({ revision: "x", personas: [entry, entry] }));
   await expect(client.load()).rejects.toThrow("Invalid private Catalog response");
   fetcher.mockResolvedValueOnce(Response.json([{ id: "bad", bio: "private payload" }]));
@@ -165,15 +142,9 @@ test("private identity sheets are authenticated, bounded and validated independe
   const fetcher = vi.fn<typeof fetch>();
   const client = catalogClient({ url: "https://admin.test", token: "private-token" }, fetcher);
   const key = "00000000-0000-0000-0000-000000000000.png";
-  const record = {
-    id: fixturePersona.id,
-    source: serializePersona(fixturePersona),
-    state: "",
-    memory: "",
-    sheets: { anime: key },
-  };
+  const record = { persona: fixturePersona, state: "", memory: "", sheets: { anime: key } };
   fetcher.mockResolvedValueOnce(Response.json({ revision: "sheet", personas: [record] }));
-  expect((await client.load()).personas.get(record.id)?.sheets).toEqual({ anime: key });
+  expect((await client.load()).personas.get(fixturePersona.id)?.sheets).toEqual({ anime: key });
   fetcher.mockResolvedValueOnce(
     Response.json({
       revision: "bad",
