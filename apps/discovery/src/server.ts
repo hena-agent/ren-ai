@@ -84,9 +84,10 @@ export function discoveryServer(
 ) {
   return async (request: Request, env: DiscoveryEnv, cache?: PreviewCache) => {
     const url = new URL(request.url);
+    // Home and the explorer are prerendered static files; see `staticPages`.
     const dynamic =
       url.pathname.startsWith("/personas") ||
-      ["/", "/explore", "/sitemap.xml", "/robots.txt", "/health"].includes(url.pathname);
+      ["/sitemap.xml", "/robots.txt", "/health"].includes(url.pathname);
     if (!dynamic) return env.ASSETS.fetch(request);
     const requestId = crypto.randomUUID();
     const start = performance.now();
@@ -117,27 +118,24 @@ export function discoveryServer(
     try {
       const routed = routeResponse(request, url);
       if (routed) return finish(routed);
-      let people: readonly PublicPersona[] = [];
-      if (url.pathname !== "/" && url.pathname !== "/explore") {
-        stage = "catalog.read";
-        const upstream = await fetcher(
-          ...catalogRequest(url.pathname, route.id, env.DISCOVERY_API_URL, requestId),
+      stage = "catalog.read";
+      const upstream = await fetcher(
+        ...catalogRequest(url.pathname, route.id, env.DISCOVERY_API_URL, requestId),
+      );
+      upstreamStatus = upstream.status;
+      if (!upstream.ok) throw new Error("Public Catalog request failed");
+      stage = "catalog.decode";
+      // Decoding strips private or future fields before HTML, bootstrap or metadata can see them.
+      if (url.pathname === "/sitemap.xml") {
+        const links = Schema.decodeUnknownSync(Schema.Array(PersonaLink))(await upstream.json());
+        return finish(
+          new Response(sitemap(links), {
+            headers: { "Content-Type": "application/xml; charset=utf-8" },
+          }),
         );
-        upstreamStatus = upstream.status;
-        if (!upstream.ok) throw new Error("Public Catalog request failed");
-        stage = "catalog.decode";
-        // Decoding strips private or future fields before HTML, bootstrap or metadata can see them.
-        if (url.pathname === "/sitemap.xml") {
-          const links = Schema.decodeUnknownSync(Schema.Array(PersonaLink))(await upstream.json());
-          return finish(
-            new Response(sitemap(links), {
-              headers: { "Content-Type": "application/xml; charset=utf-8" },
-            }),
-          );
-        }
-        people = Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await upstream.json());
-        catalogReady = true;
       }
+      const people = Schema.decodeUnknownSync(Schema.Array(PublicPersona))(await upstream.json());
+      catalogReady = true;
       if (url.pathname === "/health") {
         stage = "health.preview";
         await previewReady(env, url);
@@ -153,7 +151,8 @@ export function discoveryServer(
         return finish(await previewResponse(url, persona, imageRoute.style, env, cache));
       }
       stage = "assets.template";
-      const template = await env.ASSETS.fetch(new Request(new URL("/index.html", url)));
+      // `template.html`, served without the redirect that `/template.html` would get.
+      const template = await env.ASSETS.fetch(new Request(new URL("/template", url)));
       if (!template.ok) throw new Error("Browser template unavailable");
       const image = socialImage(persona, route.style ?? "anime");
       stage = "html.render";
