@@ -48,7 +48,13 @@
       ]
     },
     "apps/discovery": {
-      "entry": ["index.html", "src/prerender.ts!", "worker/entry.ts!", "ops/check-preview.ts!"]
+      "entry": [
+        "index.html",
+        "src/prerender.ts!",
+        "worker/entry.ts!",
+        "ops/check-preview.ts!",
+        "ops/check-worker.ts!"
+      ]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],

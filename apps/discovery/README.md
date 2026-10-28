@@ -19,7 +19,9 @@ are independent of display language.
 `/` is the public introduction home, with service details, the waitlist process,
 FAQs and the same localized privacy notice used during registration. It does not
 request the Catalog. The Worker handles root-language negotiation, then passes
-the prerendered English home asset through unchanged. Its calls to action open
+the prerendered English home body through unchanged, copying the response before
+adding locale and request headers because the asset binding's headers are immutable.
+Its calls to action open
 `/explore`, which contains image
 style selection, profile browsing and waitlist registration. `/explore` opens
 directly on its cards. The Worker requests `/discovery/personas?locale=…` in the
@@ -207,7 +209,13 @@ Wrangler preview, not a production deployment.
 
 Deploy through a PR merged into `main`, after the quality gates pass. CI builds
 with `VITE_DISCOVERY_API_URL=https://api.renai.im` and the public
-`TURNSTILE_SITE_KEY` repository variable, then deploys the static assets and checks
+`TURNSTILE_SITE_KEY` repository variable. Before deployment, `check:worker` runs
+the built pages through the local Cloudflare runtime and real `ASSETS` binding.
+It checks GET/HEAD responses, localized HTML and headers for `/`, `/ko`, `/ja`
+and `/explore`, using an isolated local Catalog on an OS-allocated port. This
+check also runs in the PR quality gates, requires no Cloudflare credentials and
+fails on runtime-only errors before production is changed.
+CI then deploys the static assets and checks
 `https://renai.im/`, `/ko`, `/ja`, localized explorer pages, localized social PNGs,
 `/sitemap.xml` and the exact artifact identity at
 `/health`. api-app's deployment checks `/discovery/personas` separately.
@@ -218,8 +226,9 @@ are reported explicitly. The Worker accepts source photos up to the Images
 binding's 20 MB input limit and returns bounded, fixed-size JPEG renditions.
 Do not deploy manually or also connect Workers Builds.
 
-`bun run build` builds browser assets and prerenders home into `index.html`; the asset
-service serves it directly without Worker CPU. Wrangler bundles `worker/entry.ts`
+`bun run build` builds browser assets and prerenders home into `index.html`; the Worker
+negotiates the root locale and serves the English asset without rendering it again.
+Wrangler bundles `worker/entry.ts`
 and serves `dist/client/` assets. The explorer, public profile routes, sitemap, robots
 and health run the Worker first. Explorer and profiles render into the unmodified
 application shell, `template.html`, so the first explorer response includes sampled cards.
@@ -230,4 +239,4 @@ and verifies waiting registrations with the matching Turnstile secret.
 Never put a private token in a `VITE_` key.
 
 For a local packaging check, run `bun run build` and
-`bunx wrangler deploy --dry-run` from this directory.
+`bun run check:worker` from this directory.

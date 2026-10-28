@@ -203,7 +203,9 @@ async function servePublic(
     if (routed) return finish(routed);
     // The prerendered English home remains static after the Worker negotiates its locale.
     if (url.pathname === "/") {
-      const home = await env.ASSETS.fetch(request);
+      const asset = await env.ASSETS.fetch(request);
+      // Binding responses have immutable headers; preserve the asset in a mutable response.
+      const home = new Response(asset.body, asset);
       home.headers.set("Content-Language", "en");
       return finish(home);
     }

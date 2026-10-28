@@ -235,6 +235,7 @@ jobs:
         env:
           VITE_DISCOVERY_API_URL: https://api.renai.im
           VITE_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      - run: bun run --cwd apps/discovery check:worker
       - run: bun run --cwd apps/discovery deploy --message "ci.yml $GITHUB_SHA" --define "BUILD_REVISION:\"$GITHUB_SHA\""
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
