@@ -146,7 +146,7 @@ test("Catalog HTTP separates public profiles from the authenticated atomic priva
 });
 
 test("private sheets use committed persona/style associations, change the snapshot and stay out of public profiles", async () => {
-  const { store, env, db, bucket } = await fixture();
+  const { store, env, db } = await fixture();
   const first = await store.saveImage(portraitImage);
   const second = await store.saveImage(portraitImage);
   await store.save(
@@ -180,10 +180,6 @@ test("private sheets use committed persona/style associations, change the snapsh
   expect(
     await (await catalogHandler(new Request("https://admin.test/api/personas"), env)).text(),
   ).not.toContain(second.split("/").at(-1));
-  await bucket.put(second.split("/").at(-1)!, new Uint8Array(20_000_001), {
-    httpMetadata: { contentType: "image/png" },
-  });
-  expect((await read("id=harin&style=anime")).status).toBe(503);
   await db
     .prepare("UPDATE persona_identity_sheets SET objectKey = ? WHERE personaId = ?")
     .bind("../foreign.png", "harin")
@@ -200,3 +196,22 @@ test("private sheets use committed persona/style associations, change the snapsh
     ).status,
   ).toBe(404);
 });
+
+test("private Catalog rejects an oversized identity sheet read from R2", async () => {
+  const { store, env, bucket } = await fixture();
+  await store.save(databasePersona, initialDocuments, { persona: "" });
+  const sheet = await store.saveImage(portraitImage);
+  await store.saveSheet(databasePersona.id, "anime", sheet);
+  await bucket.put(sheet.split("/").at(-1)!, new Uint8Array(20_000_001), {
+    httpMetadata: { contentType: "image/png" },
+  });
+  const response = await catalogHandler(
+    new Request("https://admin.test/api/catalog/sheet?id=harin&style=anime", {
+      headers: { authorization: "Bearer catalog-secret" },
+    }),
+    env,
+  );
+  expect(response.status).toBe(503);
+  expect(response.headers.get("x-request-id")).toBeTruthy();
+  // Two real 20 MB Miniflare transfers need a separate budget on shared CI runners.
+}, 15_000);
