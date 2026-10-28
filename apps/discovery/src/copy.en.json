@@ -183,8 +183,6 @@
   "animeStyle": "Anime",
   "photoStyle": "Photo",
   "styleStorageFailure": "Your photo style could not be saved. You can keep using your current choice.",
-  "styleUpdating": "Changing image style.",
-  "styleLoadFailure": "The image style could not be changed. Your current view is preserved. Please try again.",
   "explore": "Who catches your eye?",
   "instructions": "Left to Pass, right to Like. You can also use the arrow keys. Tapping a photo, name or introduction does not make a choice or expand the profile. Use the up arrow button to expand and the down arrow button to collapse.",
   "loading": "Loading people to meet.",

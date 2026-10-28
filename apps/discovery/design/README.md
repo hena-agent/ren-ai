@@ -25,8 +25,8 @@ Conversation review captures document the scroll scene, not runtime assets.
 `preview-parallax.gif` records forward and backward scrolling on a 390px mobile
 viewport in anime mode. Its looping playback is review evidence; the actual scene follows the
 visitor's scroll position and does not autoplay.
-`preview-style-reveal.gif` samples the native top-left reveal in both directions;
-the actual transition runs for 550ms after its target images are decoded.
+`preview-style-reveal.gif` records the previous top-left reveal. Image-style
+switching now updates immediately without waiting for decoding or animation.
 `preview-closing-desktop.webp` and `preview-closing-mobile.webp` show the
 2026-10-19 ink/photo closing with cherry-rose actions. The installation-free
 section uses native UI and typography. iMessage is the only channel shown. The

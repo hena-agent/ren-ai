@@ -64,11 +64,7 @@
 .site-header .style-switch > div button {
   min-height: 38px;
 }
-.style-switch[aria-busy="true"] {
-  opacity: 0.65;
-}
-.style-switch:disabled button,
-.style-switch[aria-busy="true"] button {
+.style-switch:disabled button {
   cursor: progress;
 }
 .style-feedback {

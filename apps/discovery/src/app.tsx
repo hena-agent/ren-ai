@@ -278,7 +278,7 @@ function Experience({
 }) {
   const copy = useCopy();
   const [choices, setChoices] = useState(readChoices);
-  const { style, changing, issue, choose: changeStyle } = useImageStyle(initialStyle);
+  const { style, issue, choose: changeStyle } = useImageStyle(initialStyle);
   const [storageFailure, setStorageFailure] = useState<true>();
   const { view, setView, contactOpened, navigate, back } = useBrowseView();
   const [busy, setBusy] = useState(false);
@@ -303,20 +303,6 @@ function Experience({
       );
     }
   }, [detailId, style, title]);
-  function chooseStyle(next: ImageStyle) {
-    const reading = [...remaining.slice(0, 1), ...(detail ? [detail] : [])];
-    const images = reading.flatMap((persona) => {
-      const portrait = withImageStyle(persona, next);
-      return portrait.imageUrls ?? [portrait.imageUrl];
-    });
-    images.push(
-      ...remaining
-        .slice(1, 2)
-        .concat(liked)
-        .map((persona) => withImageStyle(persona, next).imageUrl),
-    );
-    void changeStyle(next, images);
-  }
   function choose(persona: PublicPersona, like: boolean) {
     report(like ? "like" : "pass", persona.id);
     const next = { ...choices, [persona.id]: like };
@@ -331,7 +317,7 @@ function Experience({
   const header = (
     <>
       <Header>
-        <StyleSwitch style={style} onChoose={chooseStyle} changing={changing} disabled={busy} />
+        <StyleSwitch style={style} onChoose={changeStyle} disabled={busy} />
       </Header>
       <StyleFeedback issue={issue} />
     </>
@@ -353,7 +339,6 @@ function Experience({
         id="discovery-content"
         data-view={view}
         data-detail={Boolean(detail)}
-        inert={changing}
       >
         <LikedPanel people={liked} onOpen={openDetails} disabled={busy} />
         <section className="swipe-stage" aria-label={copy.explore}>
@@ -400,7 +385,7 @@ function Experience({
         <Navigation
           view={view}
           likedCount={liked.length}
-          disabled={busy || changing}
+          disabled={busy}
           onView={(next) => {
             closeDetails();
             navigate(next);

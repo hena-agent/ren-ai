@@ -4,7 +4,7 @@ import { discoveryNotice } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
 import { discoveryClient, type DiscoveryClient } from "./client.ts";
 import { publicPersonas } from "../test/public-personas.ts";
-import { choose, selectImageStyle, selectDropdown } from "../test/choose.ts";
+import { choose, selectDropdown } from "../test/choose.ts";
 import { readPublicBootstrap, publicRoute } from "./public-routing.ts";
 import { testClient } from "../test/client.ts";
 
@@ -53,7 +53,8 @@ function consentAndVerify(token: string) {
   act(() => verification!(token));
 }
 
-test("a shared URL opens the target in the original Discovery reading view and collapses back to the same prioritized card", async () => {
+test("a shared URL switches style immediately in the same reading view and collapses back to the prioritized card", () => {
+  vi.spyOn(HTMLImageElement.prototype, "decode").mockReturnValue(new Promise(() => {}));
   const api = mount();
   expect(api.profiles).not.toHaveBeenCalled();
   const details = screen.getByRole("region", { name: /백지아/ });
@@ -65,7 +66,12 @@ test("a shared URL opens the target in the original Discovery reading view and c
   expect(document.querySelector(".public-site")).toBeNull();
   expect(screen.queryByRole("link", { name: "페르소나 둘러보기" })).toBeNull();
   expect(document.title).toBe("백지아 — Ren AI의 AI 페르소나");
-  await selectImageStyle("애니메");
+  fireEvent.click(screen.getByRole("button", { name: "애니메" }));
+  expect(screen.getByRole("region", { name: /백지아/ })).toBe(details);
+  expect(within(details).getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
+    "https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-000000000001.jpg",
+  );
+  expect(api.profiles).not.toHaveBeenCalled();
   expect(window.location.search).toBe("?style=anime&preview=v2");
   fireEvent.click(within(details).getByRole("button", { name: "다음 사진" }));
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));

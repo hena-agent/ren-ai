@@ -103,16 +103,11 @@ independent deployments. Deploy API acceptance and persistence before Discovery 
 the field; clients continue accepting older API responses without it. This step records
 the choice only; it adds no photo-generation tools or model prompts.
 
-Decode the target images before committing the style. Reveal the updated root
-snapshot from the viewport's top-left corner with a 550ms expanding circle, using
-native View Transitions. Keep scroll position and parallax progress fixed. Reduced
-motion and browsers without View Transitions commit immediately after preparation.
-Disable repeat switches while preparing or revealing.
-Explorer actions are briefly inert during the change so the prepared card/photo
-set cannot advance mid-capture; preserve keyboard focus on the header control.
-A preparation failure keeps the current style and offers retry. The last failure's payload-safe stage, code,
-style, cause name and duration are recorded in the browser User Timing mark
-`discovery.imageStyle.failed`; URLs and error payloads are excluded.
+Switch image style immediately in place, without waiting for image downloads,
+decoding or a reveal animation. Load the selected images normally and keep
+navigation available, including rapid switches back and forth. Preserve keyboard
+focus, scroll position and parallax progress. Image failures must not revert the
+selected style or block navigation.
 
 Use short, purposeful feedback: 120–180ms for controls and 180–240ms for movement.
 Scroll timelines use scroll progress rather than these control durations.
