@@ -18,11 +18,13 @@ below use English URLs; asset, API, health, robots, sitemap and OG image routes
 are independent of display language.
 `/` is the public introduction home, with service details, the waitlist process,
 FAQs and the same localized privacy notice used during registration. It does not
-request the Catalog. Its calls to action open `/explore`, which contains image
+request the Catalog. The Worker handles root-language negotiation, then passes
+the prerendered English home asset through unchanged. Its calls to action open
+`/explore`, which contains image
 style selection, profile browsing and waitlist registration. `/explore` opens
 directly on its cards. The Worker requests `/discovery/personas?locale=…` in the
-language the browser will choose (the first supported `Accept-Language`, else
-English, matching `navigator.languages`), renders those ten candidates and embeds
+saved language or highest-quality supported `Accept-Language` preference, falling
+back to English, renders those ten candidates and embeds
 them with their locale and cursor. The browser continues from that page without
 resampling; with five unseen cards left it requests the next cursor page. If a
 saved display language differs from the sampled one, the browser replaces the page

@@ -4,6 +4,9 @@ import type { ImageStyle } from "./image-style.ts";
 import { useLocale } from "./locale.tsx";
 import { localizedPath, personaPath } from "./public-routing.ts";
 import { pageSeo, languageLinks, structuredPage, alternateLocales } from "./seo.ts";
+import { ownedImageKey } from "@ren-ai/personas/image-url";
+import { stylePhotos } from "./image-style.ts";
+import { socialImage } from "./social-image.ts";
 
 export function useSeo(path?: string, persona?: PublicPersona, style: ImageStyle = "anime") {
   const { locale } = useLocale();
@@ -14,7 +17,10 @@ export function useSeo(path?: string, persona?: PublicPersona, style: ImageStyle
       locale,
     );
     url.searchParams.set("style", style);
-    const seo = pageSeo(url, persona);
+    const source = persona && stylePhotos(persona, style).imageUrl;
+    const safeImage =
+      source && !ownedImageKey(source) ? socialImage(undefined, style, locale) : undefined;
+    const seo = pageSeo(url, persona, locale, safeImage);
     document.title = seo.title;
     for (const [key, content] of Object.entries(seo.meta)) {
       const attribute = key.startsWith("og:") ? "property" : "name";

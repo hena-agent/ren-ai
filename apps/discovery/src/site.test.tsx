@@ -213,7 +213,7 @@ test.each(["/ko/explore", "/ko#reselect=private-token"])(
 );
 
 test("explore starts from its server-sampled page and display rendition without loading or resampling", async () => {
-  window.history.replaceState(null, "", "/explore");
+  window.history.replaceState(null, "", "/ko/explore");
   const script = document.createElement("script");
   script.id = "public-personas";
   script.type = "application/json";

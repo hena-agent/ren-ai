@@ -16,8 +16,8 @@ const people = [2, 4].map((count, index) => ({
   bio: "소개",
   imageUrl: `https://example.net/${index}-base.jpg`,
   portraitGallery: Array.from({ length: count }, (_, scene) => ({
-    anime: `https://persona-images.renai.im/00000000-0000-0000-0000-000000000${index}${scene}1.jpg`,
-    photo: `https://persona-images.renai.im/00000000-0000-0000-0000-000000000${index}${scene}2.jpg`,
+    anime: `https://example.net/${index}-${scene}-anime.jpg`,
+    photo: `https://example.net/${index}-${scene}-photo.jpg`,
   })),
 }));
 const client = testClient({

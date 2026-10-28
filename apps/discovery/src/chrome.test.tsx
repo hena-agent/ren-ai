@@ -15,7 +15,7 @@ const people = ["하린", "지우"].map((name, index) => ({
   id: `person${index}`,
   name,
   bio: "첫째 줄의 소개입니다.\n둘째 줄도 모두 읽을 수 있어요.",
-  imageUrl: `https://persona-images.renai.im/00000000-0000-0000-0000-00000000000${index}.jpg`,
+  imageUrl: `https://example.net/${index}.jpg`,
 }));
 const client = testClient({
   profiles: async () => people,

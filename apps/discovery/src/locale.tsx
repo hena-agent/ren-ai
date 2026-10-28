@@ -16,8 +16,8 @@ import type { Locale } from "./public-routing.ts";
 export type { Locale } from "./public-routing.ts";
 export const messages = { ko, en, ja } satisfies Record<Locale, typeof ko>;
 
-/** The first supported language in preference order, as browsers report or request them. */
-export function preferredLocale(languages: readonly string[]): Locale {
+/** The first supported language in browser preference order. */
+function preferredLocale(languages: readonly string[]): Locale {
   return languages.map((language) => language.toLowerCase().split("-")[0]).find(isLocale) ?? "en";
 }
 

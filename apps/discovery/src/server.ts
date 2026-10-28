@@ -202,7 +202,11 @@ async function servePublic(
     const routed = routeResponse(request, url);
     if (routed) return finish(routed);
     // The prerendered English home remains static after the Worker negotiates its locale.
-    if (url.pathname === "/") return finish(await env.ASSETS.fetch(request));
+    if (url.pathname === "/") {
+      const home = await env.ASSETS.fetch(request);
+      home.headers.set("Content-Language", "en");
+      return finish(home);
+    }
     const sample = await explorerSample(fetcher, request, env.DISCOVERY_API_URL, requestId, failed);
     let people: readonly PublicPersona[] = sample?.people ?? [];
     if (route.path !== "/" && route.path !== "/explore") {

@@ -8,10 +8,8 @@ const people = ["하린", "지우"].map((name, index) => ({
   id: `inline-${index}`,
   name,
   bio: "친구가 찍어준 여행 사진과, 제가 직접 쓴 소개예요.",
-  imageUrl: `https://persona-images.renai.im/00000000-0000-0000-0000-0000000000${index}1.jpg`,
-  portraits: {
-    photo: `https://persona-images.renai.im/00000000-0000-0000-0000-0000000000${index}1.jpg`,
-  },
+  imageUrl: `https://example.net/${index}-main.jpg`,
+  portraits: { photo: `https://example.net/${index}-main.jpg` },
   secondaryPortraits: [
     { style: "photo" as const, imageUrl: `https://example.net/${index}-extra.jpg` },
   ],

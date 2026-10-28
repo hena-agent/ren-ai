@@ -16,7 +16,7 @@ export function Site({ client = discoveryClient }: { client?: DiscoveryClient })
     return (
       <App
         client={client}
-        initialLocale={route.locale ?? "en"}
+        initialLocale={route.locale ?? bootstrap?.page?.locale ?? "en"}
         personaId={route.id}
         initialStyle={route.style}
         reselectionToken={fragment.get("reselect") ?? undefined}

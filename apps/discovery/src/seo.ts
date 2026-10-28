@@ -9,11 +9,17 @@ import {
   shareUrl,
 } from "./public-routing.ts";
 import type { Locale } from "./public-routing.ts";
+import type { SocialImage } from "./social-image.ts";
 import { socialImage } from "./social-image.ts";
 
 const ogLocales = { ko: "ko_KR", en: "en_US", ja: "ja_JP" };
 
-export function pageSeo(url: URL, persona?: PublicPersona, initialLocale?: Locale) {
+export function pageSeo(
+  url: URL,
+  persona?: PublicPersona,
+  initialLocale?: Locale,
+  imageOverride?: SocialImage,
+) {
   const route = publicRoute(url);
   const { path, id, style = "anime" } = route;
   const locale = route.locale ?? initialLocale ?? "en";
@@ -38,7 +44,7 @@ export function pageSeo(url: URL, persona?: PublicPersona, initialLocale?: Local
       .join("");
   const description = persona ? `${introduction} — ${suffix}` : copy.home.intro;
   const canonical = `${publicOrigin}${localizedPath(path, locale)}`;
-  const image = socialImage(persona, style, locale);
+  const image = imageOverride ?? socialImage(persona, style, locale);
   const meta = {
     description,
     robots: missing ? "noindex,follow" : "index,follow,max-image-preview:large",

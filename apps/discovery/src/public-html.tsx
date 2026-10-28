@@ -46,7 +46,7 @@ export function publicResponse(
   const route = publicRoute(url);
   const persona = people.find((person) => person.id === route.id);
   const seo = pageSeo(url, persona, page?.locale);
-  const { locale, path, id, missing, title, canonical, meta } = seo;
+  const { locale, path, missing, title, canonical, meta } = seo;
   const head = renderToStaticMarkup(
     <>
       <title>{title}</title>
