@@ -243,6 +243,8 @@ test("real OC compaction receives current Memory and loss markers without resett
         ),
       );
       let summaries = 0;
+      let summaryPrompt = "";
+      let summaryMessages = "";
       yield* llm.serve((request) => {
         if (JSON.stringify(request.messages).includes("Write her Memory")) {
           summaries++;
@@ -250,10 +252,8 @@ test("real OC compaction receives current Memory and loss markers without resett
             .flatMap((message) => message.content)
             .filter((part) => part.type === "text")
             .find((part) => part.text.includes("Write her Memory"))!.text;
-          expect(prompt).toContain("사진전 작품을 고르는 중");
-          expect(prompt).toContain("forgotten");
-          expect(prompt).not.toContain("birthday-detail-0317");
-          expect(JSON.stringify(request.messages)).toContain("omit forgotten details");
+          summaryPrompt = prompt;
+          summaryMessages = JSON.stringify(request.messages);
           return TestLLM.text(
             "## Important Context\n상대에 대해: 생일 날짜가 기억나지 않는다.\n둘 사이: 아직 알아가는 중.\n약속: 없음.\n최근: 사진전 작품을 고른다.",
             "memory-summary",
@@ -265,6 +265,10 @@ test("real OC compaction receives current Memory and loss markers without resett
       yield* remote.sessions.wait(session.id);
       expect((yield* remote.sessions.get(session.id)).outcome).toBe("succeeded");
       expect(summaries).toBe(1);
+      expect(summaryPrompt).toContain("사진전 작품을 고르는 중");
+      expect(summaryPrompt).toContain("forgotten");
+      expect(summaryPrompt).not.toContain("birthday-detail-0317");
+      expect(summaryMessages).toContain("omit forgotten details");
       expect(yield* Effect.promise(() => memory.context())).toContain("사진전 작품");
       expect(
         yield* Effect.promise(() =>

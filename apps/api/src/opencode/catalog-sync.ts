@@ -1,7 +1,7 @@
 import type { OpenCode } from "@opencode/client/effect";
 import { Session } from "@opencode/schema";
 import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { decodePersona, type PersonaRecord } from "@ren-ai/personas";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
@@ -173,6 +173,17 @@ const synchronize = Effect.fn("synchronize")(function* (
   yield* scanBound;
   const folders = client.rpc(sessionFolders);
   const location = { location: { directory: root } };
+  const resolveNative = Effect.fnUntraced(function* (id: Session.ID, directory: string) {
+    if (!managedFolder(root, directory)) return undefined;
+    yield* folders.ensure({ folderID: id }, location);
+    const session = yield* client.session.get({ sessionID: id });
+    const personaID = session.agent;
+    if (!personaID)
+      return yield* Effect.fail(new Error(`Managed session ${session.id} has no catalog persona`));
+    if (session.location.directory === personaDirectory(root, personaID))
+      yield* resolve(session.id, personaID);
+    return undefined;
+  });
   const scanNative = Effect.gen(function* () {
     if (progress.phase !== "native") return undefined;
     for (;;) {
@@ -183,19 +194,8 @@ const synchronize = Effect.fn("synchronize")(function* (
       });
       for (let index = progress.offset; index < page.data.length; index++) {
         yield* check;
-        let session = page.data[index]!;
-        const source = managedFolder(root, session.location.directory);
-        if (source) {
-          yield* folders.ensure({ folderID: session.id }, location);
-          session = yield* client.session.get({ sessionID: session.id });
-          const personaID = session.agent;
-          if (!personaID)
-            return yield* Effect.fail(
-              new Error(`Managed session ${session.id} has no catalog persona`),
-            );
-          if (session.location.directory === personaDirectory(root, personaID))
-            yield* resolve(session.id, personaID);
-        }
+        const session = page.data[index]!;
+        yield* resolveNative(session.id, session.location.directory);
         progress = { ...progress, offset: index + 1 };
       }
       if (!page.cursor.next) {

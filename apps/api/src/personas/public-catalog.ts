@@ -1,5 +1,5 @@
 import { Clock, Effect, Result, Schema, Semaphore } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { PublicPersona } from "@ren-ai/onboarding";
 import { contactCause, contactLog, type ContactLog } from "../discovery/diagnostics.ts";
 import { saveBrowseSnapshot } from "./browse-snapshot.ts";

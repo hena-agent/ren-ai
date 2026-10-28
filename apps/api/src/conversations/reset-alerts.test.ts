@@ -1,6 +1,6 @@
 import { Clock, Effect } from "effect";
 import { TestLLM } from "@opencode/ai/testing";
-import { AIError, QuotaExceededError } from "@opencode/ai/schema/errors";
+import { AIError, QuotaExceededError } from "@opencode/ai/effect";
 import { Session } from "@opencode/schema/session";
 import { expect, test } from "vitest";
 import { bindTestHandle, resetFixture, startTestHandle } from "../../test/reset.test-helper.ts";
@@ -102,18 +102,15 @@ test.each(["provider", "quota", "other-provider", "other-quota"])(
           yield* host.heartbeat.failedTurns;
           yield* Effect.sleep("600 millis");
           expect(yield* requestsFor("fail this turn")).toBe(requests);
-          if (kind === "other-provider") expect(alerts).toContain("provider-failing");
-          else expect(alerts).not.toContain("provider-failing");
+          expect(alerts.includes("provider-failing")).toBe(kind === "other-provider");
           expect(alerts).toContain(`clear:conversation-turn-failing:${old.id}`);
-          if (kind === "quota") expect(alerts).toContain("clear:go-cap");
-          if (kind === "quota") expect(yield* requestsFor("subsequent quota failure")).toBe(2);
-          if (kind.includes("provider")) expect(alerts).toContain("clear:go-cap");
-          if (kind === "other-quota")
-            yield* Effect.promise(async () => {
-              await expect
-                .poll(() => Effect.runPromise(requestsFor("other failure")), { timeout: 5000 })
-                .toBeGreaterThan(otherRequests);
-            });
+          expect(alerts.includes("clear:go-cap")).toBe(kind !== "other-quota");
+          expect(yield* requestsFor("subsequent quota failure")).toBe(kind === "quota" ? 2 : 0);
+          yield* Effect.promise(async () => {
+            await expect
+              .poll(() => Effect.runPromise(requestsFor("other failure")), { timeout: 5000 })
+              .toBeGreaterThanOrEqual(otherRequests + Number(kind === "other-quota"));
+          });
           yield* host.sessions.interrupt(fresh);
           yield* host.sessions.wait(fresh);
         }).pipe(

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Effect, Exit } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { expect, test } from "vitest";
 import { migrate } from "./database.ts";

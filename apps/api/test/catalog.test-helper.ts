@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { createPersonaStore, serializePersona } from "@ren-ai/personas";
+import { createPersonaStore } from "@ren-ai/personas";
 import { Effect } from "effect";
 
 export async function startTestCatalog(directory: string) {
@@ -13,9 +13,8 @@ export async function startTestCatalog(directory: string) {
           if (request.headers.authorization !== "Bearer catalog-test")
             reply = new Response(null, { status: 401 });
           else {
-            const personas = (await store.list()).map((record) => ({
-              id: record.id,
-              source: serializePersona(record),
+            const personas = (await store.list()).map((persona) => ({
+              persona,
               state: "",
               memory: "",
             }));

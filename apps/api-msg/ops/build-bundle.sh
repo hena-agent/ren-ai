@@ -3,7 +3,7 @@
 set -euo pipefail
 ops="$(cd "$(dirname "$0")" && pwd)"
 output="${1:?Usage: build-bundle.sh NEW-OUTPUT-DIRECTORY}"
-[[ "$(bun --version)" == 1.4.2 ]] || { echo 'Bundle with Bun 1.4.2' >&2; exit 1; }
+[[ "$(bun --version)" == 1.4.4 ]] || { echo 'Bundle with Bun 1.4.4' >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo 'Use a new output directory' >&2; exit 1; }
 mkdir -p "$output"
 # RPC uses JSON; omit optional native MessagePack loading from the portable bundle.

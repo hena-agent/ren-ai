@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { ConversationRecovery } from "@ren-ai/onboarding";
 import type { Conversation } from "./conversations.ts";
 

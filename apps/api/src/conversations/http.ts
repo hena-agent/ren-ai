@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Effect, Result, Schema } from "effect";
-import { ConversationEnding, ConversationQuery, ConversationRecovery } from "@ren-ai/onboarding";
+import {
+  ConversationEnding,
+  type ConversationQuery,
+  ConversationRecovery,
+  parseConversationQuery,
+} from "@ren-ai/onboarding";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import type { conversationStatus } from "./status.ts";
-import type { SqlClient } from "effect/unstable/sql";
+import type { SqlClient } from "effect/sql";
 import { operatorEnding } from "./operator-ending.ts";
 import { RecoveryConflict } from "./recover.ts";
 import type { usageQueries } from "../usage/query.ts";
@@ -82,6 +87,20 @@ export async function conversationRequest(
   }
 }
 
+const readConversationList = async (
+  url: URL,
+  store: Effect.Success<ReturnType<typeof conversationStatus>>,
+  run: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
+) => {
+  let input: typeof ConversationQuery.Type;
+  try {
+    input = parseConversationQuery(url.searchParams);
+  } catch {
+    return Response.json({ error: "invalid_query" }, { status: 400 });
+  }
+  return Response.json(await run(store.list(input)));
+};
+
 export const conversationRecords = (
   store: Effect.Success<ReturnType<typeof conversationStatus>>,
   run: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
@@ -96,43 +115,27 @@ export const conversationRecords = (
     const result = await run(usage(id, before));
     return result ? Response.json(result) : Response.json({ error: "not_found" }, { status: 404 });
   };
-  return (request: Request) =>
-    conversationRequest(request, async () => {
-      if (request.method !== "GET") return new Response(null, { status: 405 });
-      const url = new URL(request.url);
-      if (url.pathname === "/management/conversations") {
-        let input: typeof ConversationQuery.Type;
-        try {
-          input = Schema.decodeUnknownSync(ConversationQuery)({
-            filter: url.searchParams.get("filter") ?? "active",
-            search: url.searchParams.get("search") ?? "",
-            ...(url.searchParams.has("before") && {
-              before: Number(url.searchParams.get("before")),
-            }),
-          });
-        } catch {
-          return Response.json({ error: "invalid_query" }, { status: 400 });
-        }
-        return Response.json(await run(store.list(input)));
-      }
-      const isUsage = url.pathname.endsWith("/usage");
-      const id = Number(url.pathname.split("/").at(isUsage ? -2 : -1));
-      if (!Number.isSafeInteger(id) || id <= 0)
-        return Response.json({ error: "invalid_id" }, { status: 400 });
-      if (isUsage) return readUsage(url, id);
-      let cursor: string | undefined;
-      try {
-        cursor = Schema.decodeUnknownSync(
-          Schema.UndefinedOr(ConversationRecovery.fields.requestId),
-        )(url.searchParams.get("registrationsBefore") ?? undefined);
-      } catch {
-        return Response.json({ error: "invalid_cursor" }, { status: 400 });
-      }
-      const detail = await run(store.detail(id, cursor));
-      return detail
-        ? Response.json(detail)
-        : Response.json({ error: "not_found" }, { status: 404 });
-    });
+  const handle = async (request: Request) => {
+    if (request.method !== "GET") return new Response(null, { status: 405 });
+    const url = new URL(request.url);
+    if (url.pathname === "/management/conversations") return readConversationList(url, store, run);
+    const isUsage = url.pathname.endsWith("/usage");
+    const id = Number(url.pathname.split("/").at(isUsage ? -2 : -1));
+    if (!Number.isSafeInteger(id) || id <= 0)
+      return Response.json({ error: "invalid_id" }, { status: 400 });
+    if (isUsage) return readUsage(url, id);
+    let cursor: string | undefined;
+    try {
+      cursor = Schema.decodeUnknownSync(Schema.UndefinedOr(ConversationRecovery.fields.requestId))(
+        url.searchParams.get("registrationsBefore") ?? undefined,
+      );
+    } catch {
+      return Response.json({ error: "invalid_cursor" }, { status: 400 });
+    }
+    const detail = await run(store.detail(id, cursor));
+    return detail ? Response.json(detail) : Response.json({ error: "not_found" }, { status: 404 });
+  };
+  return (request: Request) => conversationRequest(request, () => handle(request));
 };
 
 export const requestOperatorEnding = (

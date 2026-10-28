@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 
 export const photo = Buffer.from([255, 216, 255, 224, 1, 255, 217]).toString("base64");

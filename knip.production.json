@@ -43,11 +43,12 @@
         "scripts/import-local.mjs!",
         "scripts/seed.mjs!",
         "scripts/thumbnails.mjs!",
+        "scripts/projections.mjs!",
         "worker/test-seeding.ts!"
       ]
     },
     "apps/discovery": {
-      "entry": ["index.html", "worker/entry.ts!", "ops/check-preview.ts!"]
+      "entry": ["index.html", "src/prerender.ts!", "worker/entry.ts!", "ops/check-preview.ts!"]
     }
   },
   "ignore": [".agents/**", "scripts/**/*.mjs"],

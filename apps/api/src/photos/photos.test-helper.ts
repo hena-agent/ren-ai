@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import assert from "node:assert/strict";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { vi } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";

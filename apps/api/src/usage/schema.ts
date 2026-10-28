@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /** No foreign keys to live conversations: resets and session replacement retain usage. */
 export const usageSchema = Effect.gen(function* () {

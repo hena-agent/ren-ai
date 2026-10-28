@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Effect, Result, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { SelectContacts } from "@ren-ai/onboarding";
 import { parseConversationState, languageSummary } from "@ren-ai/personas";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";

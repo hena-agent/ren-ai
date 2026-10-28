@@ -1,7 +1,7 @@
 import { Clock, Effect, Queue, Result, Schema } from "effect";
 import type { Messages } from "@ren-ai/imsg";
 import { remoteMessages } from "@ren-ai/imsg/client";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { logEvent, safeError } from "./gateway.ts";
 
 const snapshot = Schema.Struct({

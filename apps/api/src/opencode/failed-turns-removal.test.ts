@@ -2,7 +2,7 @@ import { rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test, vi } from "vitest";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 import { personaMemory, readRuntime } from "@ren-ai/plugin-session-folder/memory";
@@ -156,11 +156,19 @@ test.each([false, true])(
           yield* host.operator.testHandle(handle, keep);
           expect(yield* host.operator.remove(handle)).toBe("removed");
           const privatePath = join(session.location.directory, "conversations", session.id);
+          const preserved = yield* Effect.promise(() =>
+            stat(privatePath).then(
+              (info) => info.isDirectory(),
+              () => false,
+            ),
+          );
+          expect(preserved).toBe(keep);
+          let secondRemoval: string | undefined;
           if (keep) {
-            expect((yield* Effect.promise(() => stat(privatePath))).isDirectory()).toBe(true);
             yield* host.operator.testHandle(handle, false);
-            expect(yield* host.operator.remove(handle)).toBe("removed");
+            secondRemoval = yield* host.operator.remove(handle);
           }
+          expect(secondRemoval).toBe(keep ? "removed" : undefined);
           yield* Effect.promise(() =>
             expect(stat(privatePath)).rejects.toMatchObject({ code: "ENOENT" }),
           );

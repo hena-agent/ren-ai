@@ -5,7 +5,7 @@ import {
   malformedRpcReply,
 } from "../../test/application-rpc.test-helper.ts";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 test.each([
   ["send", { sessionID: "session", callID: "send-call" }],

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { parsePersona, validatePortrait } from "@ren-ai/personas";
+import { decodeStoredPersona, validatePortrait } from "@ren-ai/personas";
 import type { Portrait } from "@ren-ai/personas";
 import { PublicPersona } from "@ren-ai/onboarding";
 import { RuntimeSheets } from "./runtime-catalog.ts";
@@ -12,8 +12,7 @@ const Snapshot = Schema.Struct({
   revision: Schema.String,
   personas: Schema.Array(
     Schema.Struct({
-      id: Schema.String,
-      source: Schema.String,
+      persona: Schema.Unknown,
       state: Schema.String,
       memory: Schema.String,
       sheets: Schema.optional(RuntimeSheets),
@@ -22,9 +21,8 @@ const Snapshot = Schema.Struct({
 });
 
 function runtimePersona(record: (typeof Snapshot.Type.personas)[number]) {
-  const persona = parsePersona(record.id, record.source);
   return {
-    ...persona,
+    ...decodeStoredPersona(record.persona),
     sheets: record.sheets ?? {},
     ...(record.state.trim() &&
       record.memory.trim() && { initial: { state: record.state, memory: record.memory } }),
@@ -71,9 +69,10 @@ export function catalogClient(connection: CatalogConnection, fetcher: typeof fet
       const response = await request("/api/catalog", true);
       try {
         const snapshot = Schema.decodeUnknownSync(Snapshot)(await response.json());
-        const entries = snapshot.personas.map(
-          (record) => [record.id, runtimePersona(record)] as const,
-        );
+        const entries = snapshot.personas.map((record) => {
+          const persona = runtimePersona(record);
+          return [persona.id, persona] as const;
+        });
         const personas = new Map(entries);
         if (personas.size !== entries.length) throw new Error("Duplicate persona ID");
         return { revision: snapshot.revision, personas };

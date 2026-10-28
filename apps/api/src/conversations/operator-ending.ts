@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { ConversationEnding } from "@ren-ai/onboarding";
 import type { Conversation } from "./conversations.ts";
 import { recordEnding } from "./ending-record.ts";

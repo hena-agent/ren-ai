@@ -3,6 +3,7 @@ import { parseInitialState, serializeInitialState, serializePersona } from "@ren
 import { cloudflareFixture, databasePersona } from "../test/cloudflare-fixture.ts";
 import { initialDocuments, portraitImage, fixture } from "../test/fixtures.ts";
 import { ageOn } from "@ren-ai/personas/birth-date";
+import { rebuildProjections } from "./projection-rebuild.ts";
 
 test("D1 and file Catalogs expose only approved initial language proficiency and fixed language labels", async () => {
   const cloud = await cloudflareFixture();
@@ -62,5 +63,6 @@ test("D1 and file Catalogs expose only approved initial language proficiency and
     .prepare("UPDATE personas SET state = '' WHERE id = ?")
     .bind(databasePersona.id)
     .run();
+  await rebuildProjections(cloud.db);
   expect((await cloud.store.publicList())[0]?.languages).toBeUndefined();
 });

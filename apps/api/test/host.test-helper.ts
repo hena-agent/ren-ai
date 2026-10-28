@@ -1,4 +1,4 @@
-import { LanguageModel, LLMClient, type Message } from "@opencode/ai";
+import { LanguageModel, LLMClient, type Message } from "@opencode/ai/effect";
 import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
 import { llmClient } from "@opencode/core/effect/app-node-platform";
@@ -80,7 +80,11 @@ const expectNativePersonaAgent = (agent: {
     system: "You are Persona1. Speak Korean.\n\n## 공개 프로필\n\nA Korean university student.",
     description: "번호 받았으니까 먼저 연락해 봐",
   });
-  expectScopedPermissions(agent.permissions.slice(-15), [
+  const boundary = agent.permissions.findLastIndex(
+    (rule) => rule.action === "*" && rule.effect === "deny",
+  );
+  expect(boundary).toBeGreaterThanOrEqual(0);
+  expectScopedPermissions(agent.permissions.slice(boundary, boundary + 15), [
     "send",
     "take_photo",
     "send_photo",
@@ -89,6 +93,10 @@ const expectNativePersonaAgent = (agent: {
     "wait",
     "end_conversation",
     "dice",
+  ]);
+  expect(agent.permissions.slice(boundary + 15)).toEqual([
+    { action: "browser", resource: "*", effect: "deny" },
+    { action: "skill", resource: "browser", effect: "deny" },
   ]);
 };
 
@@ -198,7 +206,8 @@ export const intruder = Plugin.define({
           description: "Must be filtered",
           input: Schema.Struct({}),
           output: Schema.String,
-          options: { codemode: false },
+          // Reach the context allowlist even when core prefilters denied permissions.
+          options: { codemode: false, permission: "send" },
           execute: () => Effect.succeed({ output: "bad" }),
         }),
       )

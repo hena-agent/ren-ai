@@ -1,4 +1,4 @@
-import worker, { ApiApplication, DiscoveryActivity } from "../worker/entry.ts";
+import worker, { ApiApplication, DiscoveryActivity, HealthMonitor } from "../worker/entry.ts";
 import { executionSnapshot } from "./execution-catalog.ts";
 import { Schema } from "effect";
 
@@ -40,7 +40,10 @@ const fakeUpstreams: typeof fetch = async (input, init) => {
   if (url.hostname === "admin.example" && url.pathname === "/api/catalog")
     return Response.json({
       ...executionSnapshot(),
-      personas: executionSnapshot().personas.map((record) => ({ ...record, id: "sora" })),
+      personas: executionSnapshot().personas.map((record) => ({
+        ...record,
+        persona: { ...record.persona, id: "sora" },
+      })),
     });
   if (url.hostname === "challenges.cloudflare.com") return Response.json({ success: true });
   if (url.hostname === "admin.example" && url.pathname.startsWith("/discovery/images/"))
@@ -50,7 +53,7 @@ const fakeUpstreams: typeof fetch = async (input, init) => {
 
 globalThis.fetch = fakeUpstreams;
 
-export { ApiApplication, DiscoveryActivity };
+export { ApiApplication, DiscoveryActivity, HealthMonitor };
 export default {
   fetch(request: Request, env: Parameters<typeof worker.fetch>[1]) {
     const mode = request.headers.get("X-Activity-Fixture");

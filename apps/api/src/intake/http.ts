@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { authorize } from "@ren-ai/transport/server";
 import { scheduleWork } from "../scheduling.ts";
 import type { ApplicationStore } from "../application-store.ts";

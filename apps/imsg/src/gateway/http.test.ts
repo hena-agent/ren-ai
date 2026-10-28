@@ -1,5 +1,5 @@
 import { Deferred, Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { expect, test } from "vitest";
 import { gatewayFixture } from "../../test/gateway.test-helper.ts";
 import { servePublic } from "@ren-ai/transport/listener";

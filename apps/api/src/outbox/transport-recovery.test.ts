@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Deferred, Effect, Fiber, type Scope } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { afterEach, expect, test, vi } from "vitest";
 import { fakeGestures } from "@ren-ai/imsg/testing";
 import { type Messages } from "@ren-ai/imsg";

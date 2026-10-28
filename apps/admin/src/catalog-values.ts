@@ -1,4 +1,4 @@
-import { PersonaError, personaImages } from "@ren-ai/personas";
+import { PersonaError, personaImages, projectPersona } from "@ren-ai/personas";
 import type { InitialDocuments, PersonaRecord } from "@ren-ai/personas";
 import type { personas } from "./database-schema.ts";
 import { imageKey } from "./r2-images.ts";
@@ -29,6 +29,7 @@ export function personaValues(
     commitId: crypto.randomUUID(),
     createdAt: previous?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
+    projection: projectPersona(record, documents.state),
   };
 }
 

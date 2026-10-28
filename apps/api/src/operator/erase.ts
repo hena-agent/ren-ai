@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /** Called before deleting the User, while durable removal rows still identify every session. */
 export const eraseIntake = (handle: string) =>

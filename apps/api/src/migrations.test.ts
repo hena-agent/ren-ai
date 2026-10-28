@@ -1,5 +1,5 @@
 import { Effect, Exit } from "effect";
-import { Migrator, SqlClient } from "effect/unstable/sql";
+import { Migrator, SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { withContactDatabase } from "./discovery/contact.test-helper.ts";
 import { migrateBatches } from "./migrations.ts";
@@ -40,7 +40,7 @@ test("the real registry rejects a reused migration number before running new sch
       yield* sql`UPDATE effect_sql_migrations SET name = 'invitations' WHERE migration_id = 53`;
       const failed = yield* migrate.pipe(Effect.exit);
       expect(Exit.isFailure(failed)).toBe(true);
-      if (Exit.isFailure(failed)) expect(String(failed.cause)).toContain("53_invitations");
+      expect(Exit.isFailure(failed) ? String(failed.cause) : "").toContain("53_invitations");
       expect(yield* sql`SELECT name FROM effect_sql_migrations WHERE migration_id = 53`).toEqual([
         { name: "invitations" },
       ]);

@@ -1,5 +1,5 @@
 import { Context, Effect } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { vi } from "vitest";
 import { discoveryNotice, type DiscoveryRequest } from "@ren-ai/onboarding";
 import type { remoteMessages } from "@ren-ai/imsg/client";

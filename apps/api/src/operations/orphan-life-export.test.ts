@@ -14,6 +14,7 @@ import { sessionArchive } from "../opencode/transfer-format.ts";
 import { exportSessions, restoreSessions } from "../opencode/transfer.ts";
 import { exportOffline } from "./offline-export.ts";
 import { exportLocation, runSessionTransfer } from "./session-transfer.ts";
+import type { Persona } from "@ren-ai/personas";
 
 const runtime = (text: string) => ({
   state: { mood: 73 },
@@ -121,10 +122,11 @@ test.each(["online", "offline"] as const)(
         expect(
           archive.personas.find((entry) => entry.snapshot.persona.id === "persona2")?.relationships,
         ).toEqual({});
-        if (mode === "online") {
-          expect(calls.filter((call) => call.path.endsWith("/inventory"))).toHaveLength(1);
-          expect(calls.filter((call) => call.path.endsWith("/snapshot"))).toEqual([]);
-        } else expect(calls).toEqual([]);
+        expect(calls.filter((call) => call.path.endsWith("/inventory"))).toHaveLength(
+          Number(mode === "online"),
+        );
+        expect(calls.filter((call) => call.path.endsWith("/snapshot"))).toEqual([]);
+        expect(mode === "offline" ? calls : []).toEqual([]);
         return contents;
       }),
     );
@@ -207,6 +209,58 @@ test("full export captures active metadata from its single inventory snapshot", 
     }),
   ));
 
+async function damageRoot(root: string, persona: Persona, damage: string) {
+  const target = await folderFiles(root).restore({
+    snapshot: { ...renderSnapshot(persona, "Rules"), runtime: runtime("Life") },
+    bindings: {},
+    relationships: {},
+  });
+  if (damage === "corrupt") await writeFile(join(target, "persona.json"), "invalid");
+  if (damage === "symlink") {
+    await rm(target, { recursive: true });
+    await symlink(join(root, "content"), target);
+  }
+  if (damage === "invalid-name") await mkdir(join(root, "personas", "bad name"));
+  if (["binding-name", "binding-mismatch", "missing-relationship"].includes(damage)) {
+    await folderFiles(root).write("ses_retained", renderSnapshot(persona, "Rules"), {
+      conversationKey: "retained",
+    });
+    if (damage === "binding-name")
+      await rename(
+        join(target, ".sessions", "ses_retained.json"),
+        join(target, ".sessions", "ses_retained"),
+      );
+    if (damage === "binding-mismatch")
+      await writeFile(
+        join(root, "personas", ".bindings", "ses_retained.json"),
+        JSON.stringify({
+          personaID: "persona1",
+          conversationKey: "retained",
+          writable: false,
+          sandbox: false,
+        }),
+      );
+    if (damage === "missing-relationship")
+      await rm(join(target, "conversations", "retained"), { recursive: true });
+  }
+  if (damage === "sandbox-symlink") {
+    await mkdir(join(root, "sandboxes"));
+    await symlink(target, join(root, "sandboxes", "ses_link"));
+  }
+  if (damage === "collection-symlink")
+    await symlink(join(root, "personas"), join(root, "sandboxes"));
+  if (damage === "wrong-persona") {
+    await writeFile(
+      join(target, "persona.json"),
+      JSON.stringify({ ...renderSnapshot(persona, "Rules").persona, id: "other" }),
+    );
+    await rename(
+      join(target, ".opencode", "agents", "persona1.md"),
+      join(target, ".opencode", "agents", "other.md"),
+    );
+  }
+}
+
 test.each([
   "corrupt",
   "symlink",
@@ -220,64 +274,7 @@ test.each([
 ] as const)("export rejects a %s sessionless root without writing an archive", (damage) =>
   withTransferClient(({ client, root, personas }) =>
     Effect.gen(function* () {
-      yield* Effect.promise(async () => {
-        const target = await folderFiles(root).restore({
-          snapshot: {
-            ...renderSnapshot(personas.get("persona1")!, "Rules"),
-            runtime: runtime("Life"),
-          },
-          bindings: {},
-          relationships: {},
-        });
-        if (damage === "corrupt") await writeFile(join(target, "persona.json"), "invalid");
-        if (damage === "symlink") {
-          await rm(target, { recursive: true });
-          await symlink(join(root, "content"), target);
-        }
-        if (damage === "invalid-name") await mkdir(join(root, "personas", "bad name"));
-        if (["binding-name", "binding-mismatch", "missing-relationship"].includes(damage)) {
-          await folderFiles(root).write(
-            "ses_retained",
-            renderSnapshot(personas.get("persona1")!, "Rules"),
-            { conversationKey: "retained" },
-          );
-          if (damage === "binding-name")
-            await rename(
-              join(target, ".sessions", "ses_retained.json"),
-              join(target, ".sessions", "ses_retained"),
-            );
-          if (damage === "binding-mismatch")
-            await writeFile(
-              join(root, "personas", ".bindings", "ses_retained.json"),
-              JSON.stringify({
-                personaID: "persona1",
-                conversationKey: "retained",
-                writable: false,
-                sandbox: false,
-              }),
-            );
-          if (damage === "missing-relationship")
-            await rm(join(target, "conversations", "retained"), { recursive: true });
-        }
-        if (damage === "sandbox-symlink") {
-          await mkdir(join(root, "sandboxes"));
-          await symlink(target, join(root, "sandboxes", "ses_link"));
-        }
-        if (damage === "collection-symlink") {
-          await symlink(join(root, "personas"), join(root, "sandboxes"));
-        }
-        if (damage === "wrong-persona") {
-          const persona = renderSnapshot(personas.get("persona1")!, "Rules").persona;
-          await writeFile(
-            join(target, "persona.json"),
-            JSON.stringify({ ...persona, id: "other" }),
-          );
-          await rename(
-            join(target, ".opencode", "agents", "persona1.md"),
-            join(target, ".opencode", "agents", "other.md"),
-          );
-        }
-      });
+      yield* Effect.promise(() => damageRoot(root, personas.get("persona1")!, damage));
       const file = join(root, "must-not-exist.json");
       const result = yield* runSessionTransfer(client, {
         operation: "export",

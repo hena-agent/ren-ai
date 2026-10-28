@@ -17,14 +17,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@opencode/plugin": "2.0.19",
-    "@opencode/schema": "2.0.19",
+    "@opencode/plugin": "2.2.0",
+    "@opencode/schema": "2.2.0",
     "@ren-ai/personas": "workspace:*",
-    "effect": "4.0.0-rc.112",
-    "yaml": "2.8.2"
+    "effect": "4.0.7",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
-    "@types/node": "26.6.2",
+    "@types/node": "26.6.5",
     "typescript": "7.0.2"
   }
 }

@@ -31,7 +31,7 @@ import { readState } from "../../../packages/plugins/session-folder/src/memory-m
 import { emptyMemory, restoreMemory } from "../test/memory.test-helper.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import { applicationApi } from "./opencode/application-protocol.ts";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 
 test.each(["sent", "uncertain"] as const)(
   "compiled SQLite DO alarm preserves native %s first contact across restart without resend or document reset",
@@ -82,6 +82,7 @@ test.each(["sent", "uncertain"] as const)(
               Effect.provideService(FetchHttpClient.Fetch, callbackNetwork),
             );
             let startupCallbacks = 0;
+            let startupCatalog: string[] = [];
             yield* registerApplicationPlugin(
               native,
               remotePersonaPlugins({
@@ -92,6 +93,7 @@ test.each(["sent", "uncertain"] as const)(
               callbackNetwork,
             );
             const creates: string[] = [];
+            const creatingStates: (string | undefined)[] = [];
             const openCode = yield* servePublic(async (request) => {
               expect(request.headers.get("authorization")).toBe("Basic native-secret");
               if (startupCallbacks === 0 && new URL(request.url).pathname === "/api/session") {
@@ -100,7 +102,7 @@ test.each(["sent", "uncertain"] as const)(
                 const catalog = await Effect.runPromise(
                   callback.catalog().pipe(Effect.timeout("2 seconds")),
                 );
-                expect(catalog.map((persona) => persona.id)).toEqual(["persona1"]);
+                startupCatalog = catalog.map((persona) => persona.id);
               }
               const body = request.method === "POST" ? await request.clone().text() : "";
               if (
@@ -110,8 +112,7 @@ test.each(["sent", "uncertain"] as const)(
               ) {
                 if (!runtime) throw new Error("Missing Worker");
                 const state = await executionState(runtime);
-                expect(state.contacts[0]?.state).toBe("preparing");
-                expect(typeof state.contacts[0]?.session_id).toBe("string");
+                creatingStates.push(state.contacts[0]?.state);
                 creates.push(state.contacts[0]!.session_id!);
               }
               return native.web(request);
@@ -214,6 +215,7 @@ test.each(["sent", "uncertain"] as const)(
               await executionState(runtime, "/__fixture/due");
               await executionState(runtime, "/__fixture/alarm");
               expect(startupCallbacks).toBe(1);
+              expect(startupCatalog).toEqual(["persona1"]);
               const bubbles =
                 outcome === "sent"
                   ? [{ handle: "+821012345678", text: "안녕, 실제 네이티브 인사야 🙂" }]
@@ -232,6 +234,8 @@ test.each(["sent", "uncertain"] as const)(
                 .toBe(outcome === "sent" ? "active" : "review");
               const state = await executionState(runtime);
               expect(creates).toEqual([state.conversations[0]!.session_id]);
+              expect(creatingStates).toEqual(["preparing"]);
+              expect(creates[0]).toEqual(expect.any(String));
               expect(state.sends).toEqual([{ state: outcome, tool_call_id: "native-greeting" }]);
               const headers = { authorization: "Bearer management-secret" };
               const conversations = Schema.decodeUnknownSync(ConversationList)(

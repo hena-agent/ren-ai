@@ -1,5 +1,5 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Effect, Layer } from "effect";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";

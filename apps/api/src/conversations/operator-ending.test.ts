@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Effect, Fiber } from "effect";
 import { expect, test } from "vitest";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { operatorEnding } from "./operator-ending.ts";
 import { requestOperatorEnding } from "./http.ts";
 import { relationshipFixture } from "../../test/relationship.test-helper.ts";

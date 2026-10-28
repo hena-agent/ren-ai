@@ -3,12 +3,12 @@ import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { TestLLM } from "@opencode/ai/testing";
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { Session } from "@opencode/schema/session";
 import { expect, test, vi } from "vitest";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
 import { discoveryNotice, ContactSelection } from "@ren-ai/onboarding";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { randomUUID } from "node:crypto";
 import { runOperatorCli } from "./operator/cli.ts";
 import { exportSessions } from "./opencode/transfer.ts";
@@ -144,6 +144,8 @@ test.each(["sent", "failed", "unknown", "delivered"] as const)(
           expect(selection.requestId).toBe(key);
           expect(selection.entries).toHaveLength(1);
           yield* sql`UPDATE discovery_contact SET scheduled_at = 0`;
+          // Complete cold session provisioning before timing the scripted Greeting.
+          yield* server.heartbeat;
           const waitForBubbles = (count: number) =>
             Effect.gen(function* () {
               while (fake.bubbles.length < count) yield* Effect.sleep("20 millis");

@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { remoteMessages } from "../src/gateway/client.ts";
 import { buildRevision, verifyHealth } from "@ren-ai/transport/health";
 

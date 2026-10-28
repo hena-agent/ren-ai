@@ -119,18 +119,22 @@ test.each(["taken", "declined", "failed", "send-failed", "sandbox"] as const)(
           expect(tools).toContain("send_photo");
           expect(tools).not.toContain("execute");
           const content = JSON.stringify(requests[1]!.messages);
-          if (mode === "taken" || mode === "send-failed") {
-            expect(content).toContain("photo-one");
-            expect(content).toContain("123456");
-            expect(content).toContain('"type":"file"');
-            expect(content).toContain("data:image/jpeg;base64,");
-            expect(content).toContain("image/jpeg");
-          } else {
-            expect(content).not.toContain('"type":"file"');
-            expect(content).toContain(
-              mode === "failed" ? "Application callback unavailable; request" : "declined",
-            );
-          }
+          const taken = mode === "taken" || mode === "send-failed";
+          for (const marker of [
+            "photo-one",
+            "123456",
+            '"type":"file"',
+            "data:image/jpeg;base64,",
+            "image/jpeg",
+          ])
+            expect(content.includes(marker)).toBe(taken);
+          expect(content).toContain(
+            taken
+              ? "photo-one"
+              : mode === "failed"
+                ? "Application callback unavailable; request"
+                : "declined",
+          );
           expect(takes).toEqual(
             mode === "sandbox" ? [] : [{ sessionID: session.id, input, callID: "take-call" }],
           );

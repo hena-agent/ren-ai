@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 export const safetyInterval = 300_000;
 
@@ -20,6 +20,10 @@ export const scheduledApplicationWork = Effect.gen(function* () {
   }>`SELECT name, generation FROM application_work WHERE due <= ${now} AND name != 'retry' ORDER BY due, name LIMIT 5`;
 });
 
+/** Work the application store completes without starting conversation execution. */
+const storeWork = new Set(["metrics-report", "metric-alerts", "discord"]);
+export const isStoreWork = (name: string) => storeWork.has(name);
+
 const delayed = (due: number | null | undefined, floor: number) =>
   due == null ? Number.POSITIVE_INFINITY : Math.max(due, floor);
 const laneFloor = (lanes: ReadonlyMap<string, number>, name: string) =>
@@ -28,13 +32,14 @@ const laneFloor = (lanes: ReadonlyMap<string, number>, name: string) =>
     lanes.get(`lane:execution.cursor:${name}`) ?? 0,
   );
 const directDeadline = (name: string, due: number, lanes: ReadonlyMap<string, number>) => {
-  if (name === "messaging-health" || name.startsWith("lane:alarm.cursor:")) return due;
+  if (name.startsWith("lane:alarm.cursor:")) return due;
   if (name === "notifications")
     return delayed(due, lanes.get("lane:alarm.cursor:notifications") ?? 0);
   return delayed(due, laneFloor(lanes, name === "intake" ? "intake" : "execution"));
 };
 
-export const nextApplicationWake = Effect.gen(function* () {
+/** Persisted deadlines only: an idle application has no wake, and store work never waits for execution. */
+export const applicationWakes = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
   const fixed = yield* sql<{
@@ -48,7 +53,8 @@ export const nextApplicationWake = Effect.gen(function* () {
     intake: number | null;
     failures: number | null;
     edits: number | null;
-    registrationExpiry: number | null;
+    attempts: number | null;
+    verifications: number | null;
     photos: number | null;
   }>`SELECT
     (SELECT MIN(scheduled_at) FROM discovery_contact WHERE state = 'scheduled') AS contacts,
@@ -57,8 +63,8 @@ export const nextApplicationWake = Effect.gen(function* () {
     (SELECT MIN(retry_at) FROM failed_turn WHERE review = 0) AS failures,
     (SELECT MIN(created_at) + 900001 FROM intake_edit) AS edits,
     (SELECT MIN(due) FROM photo_object WHERE due IS NOT NULL) AS photos,
-    MIN((SELECT COALESCE(MIN(at) + 3600000, 9007199254740991) FROM discovery_attempt),
-        (SELECT COALESCE(MIN(at) + 60000, 9007199254740991) FROM discovery_verification)) AS registrationExpiry`;
+    (SELECT MIN(at) + 3600000 FROM discovery_attempt) AS attempts,
+    (SELECT MIN(at) + 60000 FROM discovery_verification) AS verifications`;
   const [recovery] = yield* sql<{
     rebuilds: number | null;
     stopped: number | null;
@@ -80,8 +86,8 @@ export const nextApplicationWake = Effect.gen(function* () {
     due: number;
     attempts: number;
   }>`SELECT due, attempts FROM application_work WHERE name = 'retry'`;
-  const due = Math.min(
-    now + safetyInterval,
+  const backoff = retry?.attempts ? retry.due : Number.POSITIVE_INFINITY;
+  const execution = Math.min(
     delayed(row!.contacts, laneFloor(lanes, "contacts")),
     delayed(row!.followUps, laneFloor(lanes, "followUps")),
     delayed(row!.intake, laneFloor(lanes, "intake")),
@@ -92,43 +98,57 @@ export const nextApplicationWake = Effect.gen(function* () {
     delayed(recovery!.stopped, laneFloor(lanes, "stopped")),
     delayed(recovery!.endings, laneFloor(lanes, "endings")),
     delayed(turns!.due, laneFloor(lanes, "turns")),
-    ...fixed.map((entry) => directDeadline(entry.name, entry.due, lanes)),
-    retry?.attempts ? retry.due : Number.POSITIVE_INFINITY,
+    ...fixed
+      .filter((entry) => !isStoreWork(entry.name))
+      .map((entry) => directDeadline(entry.name, entry.due, lanes)),
+    backoff,
   );
-  return Math.max(
-    now + 1,
-    Math.min(
-      lanes.get("messaging-health") ?? Number.POSITIVE_INFINITY,
-      delayed(row!.registrationExpiry, now + 1_000),
-      Math.max(retry?.attempts ? retry.due : 0, due),
+  return {
+    store: Math.min(
+      ...fixed.filter((entry) => isStoreWork(entry.name)).map((entry) => entry.due),
+      delayed(row!.attempts, now + 1_000),
+      delayed(row!.verifications, now + 1_000),
     ),
-  );
+    // A failed tick's backoff holds every execution deadline until its retry.
+    execution: Number.isFinite(backoff) ? Math.max(backoff, execution) : execution,
+  };
 });
+
+/** The next alarm time, or undefined when no persisted work remains. */
+export const nextApplicationWake = Effect.gen(function* () {
+  const { store, execution } = yield* applicationWakes;
+  const due = Math.min(store, execution);
+  if (!Number.isFinite(due)) return undefined;
+  return Math.max((yield* Clock.currentTimeMillis) + 1, due);
+});
+
+export type WorkOutcome = "completed" | "failed" | "deferred" | "store-only";
 
 export const finishApplicationWork = (
   work: ReadonlyArray<{ name: string; generation: number }>,
-  failed: boolean | "deferred",
+  outcome: WorkOutcome,
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const now = yield* Clock.currentTimeMillis;
-    if (!failed)
+    if (outcome === "completed" || outcome === "store-only")
       for (const entry of work)
         yield* sql`DELETE FROM application_work WHERE name = ${entry.name} AND generation = ${entry.generation}
           AND name NOT LIKE 'turn:%' AND name NOT LIKE 'lane:%'`;
+    // Execution did not run, so its failure backoff stays in force.
+    if (outcome === "store-only") return;
     const [previous] = yield* sql<{
       attempts: number;
     }>`SELECT attempts FROM application_work WHERE name = 'retry'`;
-    const attempts = failed === "deferred" ? 1 : failed ? (previous?.attempts ?? 0) + 1 : 0;
+    const attempts =
+      outcome === "deferred" ? 1 : outcome === "failed" ? (previous?.attempts ?? 0) + 1 : 0;
     // Failed external work and unresolved sends cannot create a hot alarm loop.
     const delay =
-      failed === "deferred"
+      outcome === "deferred"
         ? 1_000
-        : failed
+        : outcome === "failed"
           ? Math.min(30_000 * 2 ** Math.min(attempts - 1, 4), safetyInterval)
           : 30_000;
     yield* sql`INSERT INTO application_work (name, due, attempts) VALUES ('retry', ${now + delay}, ${attempts})
     ON CONFLICT(name) DO UPDATE SET due = excluded.due, attempts = excluded.attempts`;
-    yield* sql`INSERT INTO application_work (name, due) VALUES ('maintenance', ${now + safetyInterval})
-    ON CONFLICT(name) DO NOTHING`;
   });

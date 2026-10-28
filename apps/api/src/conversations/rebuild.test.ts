@@ -4,7 +4,7 @@ import { quietTestHost } from "../../test/messaging-host.test-helper.ts";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { conversations } from "./conversations.ts";
 import { migrate } from "../database.ts";

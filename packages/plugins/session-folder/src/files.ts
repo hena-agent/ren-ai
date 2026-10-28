@@ -202,6 +202,28 @@ async function checkRelationships(target: string, archive: typeof personaFolderS
   }
 }
 
+async function checkBindings(
+  root: string,
+  target: string,
+  archive: typeof personaFolderSnapshot.Type,
+) {
+  for (const [id, binding] of Object.entries(archive.bindings)) {
+    if (
+      binding.personaID !== archive.snapshot.persona.id ||
+      !archive.relationships[binding.conversationKey]
+    )
+      throw new Error("Invalid archived session binding");
+    const prior = await locateBinding(root, id);
+    if (
+      prior &&
+      (prior.directory !== target ||
+        prior.conversationKey !== binding.conversationKey ||
+        prior.writable !== binding.writable)
+    )
+      throw new Error("Restore binding already exists");
+  }
+}
+
 export const folderFiles = (root: string) => {
   const path = (id: string) => personaDirectory(root, id);
   const locate = async (id: string) => {
@@ -344,21 +366,7 @@ export const folderFiles = (root: string) => {
             throw new Error("Restore conflicts with existing persona scope");
         }
         await checkRelationships(target, archive);
-        for (const [id, binding] of Object.entries(archive.bindings)) {
-          if (
-            binding.personaID !== archive.snapshot.persona.id ||
-            !archive.relationships[binding.conversationKey]
-          )
-            throw new Error("Invalid archived session binding");
-          const prior = await locateBinding(root, id);
-          if (
-            prior &&
-            (prior.directory !== target ||
-              prior.conversationKey !== binding.conversationKey ||
-              prior.writable !== binding.writable)
-          )
-            throw new Error("Restore binding already exists");
-        }
+        await checkBindings(root, target, archive);
         if (!exists) await writeAt(target, archive.snapshot);
         for (const [key, runtime] of Object.entries(archive.relationships)) {
           const relation = join(

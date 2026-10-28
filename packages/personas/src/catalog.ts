@@ -1,18 +1,15 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { Schema } from "effect";
-import { splitPersonaMarkdown } from "./profile.ts";
 import { personaImageBase } from "./image-url.ts";
-import { parseInitialState } from "./initial.ts";
-import { languageSummary, type PublicLanguages } from "./languages.ts";
-import { projectPublicProfile } from "./profile-projection.ts";
+import type { PublicLanguages } from "./languages.ts";
 import type { PublicProfile } from "./public-profile.ts";
-import { ageOn, birthDateOf } from "./birth-date.ts";
+import { ageOn } from "./birth-date.ts";
+import { readProjection } from "./projection.ts";
 
 const Row = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  markdown: Schema.String,
-  state: Schema.String,
+  projection: Schema.String,
   style: Schema.NullOr(Schema.Literals(["anime", "photo"])),
   objectKey: Schema.NullOr(Schema.String),
   position: Schema.NullOr(Schema.Number),
@@ -36,9 +33,8 @@ export async function readPublicCatalog(
 ) {
   const result = await db
     .prepare(`
-    SELECT p.id, p.name, v.markdown, p.state, i.style, i.objectKey, i.position
-    FROM personas p JOIN persona_versions v ON v.personaId = p.id AND v.version = p.currentVersion
-    LEFT JOIN persona_images i ON i.personaId = p.id
+    SELECT p.id, p.name, p.projection, i.style, i.objectKey, i.position
+    FROM personas p LEFT JOIN persona_images i ON i.personaId = p.id
     WHERE p.published = 1 ORDER BY p.id, i.position, i.style
   `)
     .all();
@@ -47,18 +43,15 @@ export async function readPublicCatalog(
   for (const row of rows) {
     let profile = profiles.get(row.id);
     if (!profile) {
-      const { bio, publicMarkdown } = splitPersonaMarkdown(row.markdown);
-      const birthDate = birthDateOf(row.markdown);
-      const languages = row.state.trim()
-        ? languageSummary(row.markdown, parseInitialState(row.state).languageProficiency)
-        : undefined;
+      const { bio, public: published } = readProjection(row.projection);
+      if (!published) throw new Error(`Published persona ${row.id} has no public projection`);
       profile = {
         id: row.id,
         name: row.name,
-        ...(birthDate && { age: ageOn(birthDate) }),
+        ...(published.birthDate && { age: ageOn(published.birthDate) }),
         bio,
-        ...(languages && { languages }),
-        profile: projectPublicProfile(publicMarkdown),
+        ...(published.languages && { languages: published.languages }),
+        profile: published.profile,
         portraits: {},
         secondaryPortraits: [],
       };

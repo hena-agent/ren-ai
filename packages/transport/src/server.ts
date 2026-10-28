@@ -1,6 +1,6 @@
 import { Layer } from "effect";
-import { HttpRouter, HttpServer } from "effect/unstable/http";
-import { RpcSerialization } from "effect/unstable/rpc";
+import { HttpRouter, HttpServer } from "effect/http";
+import { RpcSerialization } from "effect/rpc";
 import { authorize } from "./authorization.ts";
 export { authorize } from "./authorization.ts";
 

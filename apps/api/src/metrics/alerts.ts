@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { randomUUID } from "node:crypto";
 import { queueDiscord } from "./discord.ts";
 import { accents, card, section, text } from "./discord-message.ts";

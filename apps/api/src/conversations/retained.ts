@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Session } from "@opencode/schema/session";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { timestamp } from "../transcript/transcript.ts";

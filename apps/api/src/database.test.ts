@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test, vi } from "vitest";
 import { migrate } from "./database.ts";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";

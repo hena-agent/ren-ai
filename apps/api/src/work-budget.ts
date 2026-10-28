@@ -1,5 +1,5 @@
 import { Cause, Clock, Context, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { scheduleWork, safetyInterval } from "./scheduling.ts";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
 

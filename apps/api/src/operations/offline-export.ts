@@ -7,7 +7,7 @@ import {
   HttpRouter,
   HttpServer,
   HttpServerRequest,
-} from "effect/unstable/http";
+} from "effect/http";
 import { exportLocation } from "./session-transfer.ts";
 import { folderFiles } from "@ren-ai/plugin-session-folder/files";
 

@@ -1,9 +1,9 @@
 import { Clock, Deferred, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { remoteMessages } from "@ren-ai/imsg/client";
 import { gatewayFixture } from "../../../imsg/test/gateway.test-helper.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { captureDiagnostics } from "../../test/diagnostics.test-helper.ts";
 import { applicationRpcFixture } from "../../test/application-rpc.test-helper.ts";

@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { DiscoveryRequest } from "@ren-ai/onboarding";
 import { countMetric, countryValue, sourceValue } from "./totals.ts";
 import { changeAlert } from "./alerts.ts";

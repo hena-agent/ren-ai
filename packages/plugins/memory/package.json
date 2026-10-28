@@ -8,13 +8,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@opencode/plugin": "2.0.19",
+    "@opencode/plugin": "2.2.0",
     "@ren-ai/plugin-application": "workspace:*",
     "@ren-ai/plugin-session-folder": "workspace:*",
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.7"
   },
   "devDependencies": {
-    "@types/node": "26.6.2",
+    "@types/node": "26.6.5",
     "typescript": "7.0.2"
   }
 }

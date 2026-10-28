@@ -8,7 +8,7 @@ import {
 } from "@ren-ai/imsg/testing";
 import { runApplicationWatch } from "./watch.ts";
 import { TestClock } from "effect/testing";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 
 afterEach(() => {
   vi.unstubAllGlobals();

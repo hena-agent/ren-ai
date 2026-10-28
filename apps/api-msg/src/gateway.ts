@@ -217,8 +217,7 @@ export const createGateway = (options: GatewayOptions) => {
       "authorization",
       isOpenCode ? config.opencodeAuthorization : `Bearer ${config.imsgToken}`,
     );
-    const body = request.method === "GET" || request.method === "HEAD" ? null : request.body;
-    return forward(fetcher, request, destination, headers, body, complete);
+    return forward(fetcher, request, destination, headers, complete);
   };
 };
 
@@ -271,10 +270,10 @@ const forward = async (
   request: Request,
   destination: URL,
   headers: Headers,
-  body: ReadableStream<Uint8Array> | null,
   complete: Complete,
 ) => {
   try {
+    const body = request.method === "GET" || request.method === "HEAD" ? null : request.body;
     const upstream = await fetcher(
       new Request(destination, {
         method: request.method,

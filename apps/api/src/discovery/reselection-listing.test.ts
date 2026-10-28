@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Context, Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { expect, test } from "vitest";
 import { BrowsePage, discoveryNotice } from "@ren-ai/onboarding";
 import { relationshipFixture } from "../../test/relationship.test-helper.ts";

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { join } from "node:path";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Session } from "@opencode/schema/session";
 import { readRuntime } from "@ren-ai/plugin-session-folder/memory";
 import { readSessionBinding } from "@ren-ai/plugin-session-folder/bindings";

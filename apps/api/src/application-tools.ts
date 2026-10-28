@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { migrate } from "./database.ts";
 import { conversations, type Conversation } from "./conversations/conversations.ts";
 import { outbox, type Tapback } from "./outbox/outbox.ts";

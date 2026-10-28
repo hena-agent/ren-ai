@@ -3,7 +3,7 @@
 set -euo pipefail
 ops="$(cd "$(dirname "$0")" && pwd)"
 output="${1:?Usage: build-bundle.sh NEW-OUTPUT-DIRECTORY}"
-[[ "$(bun --version)" == 1.4.2 ]] || { echo 'Bundle with Bun 1.4.2, the runtime installed on the Mac' >&2; exit 1; }
+[[ "$(bun --version)" == 1.4.4 ]] || { echo 'Bundle with Bun 1.4.4, the runtime bundled for the Mac' >&2; exit 1; }
 [[ ! -e "$output" ]] || { echo 'Use a new output directory' >&2; exit 1; }
 mkdir -p "$output"
 bun build --target=bun --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/imsg.js" --metafile="$output/imsg.graph.json" "$ops/imsg-entry.ts"

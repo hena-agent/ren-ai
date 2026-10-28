@@ -32,6 +32,71 @@ type Request = (
   schema?: JsonSchema.JsonSchema,
 ) => Promise<{ text: string; fields: LogFields }>;
 
+function decodeAuthorResponse(
+  response: Awaited<ReturnType<Request>>,
+  name: string | undefined,
+  gender: "female" | "male" | undefined,
+  originalBirthDate: string | undefined,
+) {
+  const diagnostic = response.fields;
+  protect(response.text);
+  try {
+    const initialPacket = name
+      ? undefined
+      : Schema.decodeUnknownSync(GeneratedPersona)(JSON.parse(response.text), {
+          onExcessProperty: "error",
+        });
+    const packet =
+      initialPacket ??
+      Schema.decodeUnknownSync(ConvertedPersona)(JSON.parse(response.text), {
+        onExcessProperty: "error",
+      });
+    const description = withPublicProfile(
+      renderCharacterSheet(packet.persona),
+      packet.publicProfile,
+    );
+    const sheet = parseCharacterDescription(requirePublicProfile(description).privateMarkdown);
+    const { base, hidden, samples, languageBackground: background, ...text } = sheet;
+    protect(
+      ...Object.values(text),
+      ...(background ? [background.primary, ...background.native] : []),
+      ...samples,
+      ...Object.values(base).map((stat) => stat.reason),
+      ...hidden.flatMap((trait) => [trait.name, trait.context, trait.reason]),
+    );
+    if (gender && sheet.gender !== gender)
+      throw new GenerationError("Character gender does not match selection", {
+        ...diagnostic,
+        code: "character_gender_mismatch",
+      });
+    if (name && sheet.name !== name)
+      throw new GenerationError("Character name does not match saved identity", {
+        ...diagnostic,
+        code: "character_name_mismatch",
+      });
+    if (originalBirthDate && sheet.birthDate !== originalBirthDate)
+      throw new GenerationError("Character birth date does not match saved identity", {
+        ...diagnostic,
+        code: "character_birth_date_mismatch",
+      });
+    return {
+      name: sheet.name,
+      description: description.trim(),
+      ...(initialPacket && {
+        initial: generatedInitial(description, initialPacket.state, initialPacket.memory),
+        reviewDocument: JSON.stringify(initialPacket),
+      }),
+    };
+  } catch (cause) {
+    if (cause instanceof GenerationError) throw cause;
+    throw validationFailure(
+      "Invalid persona Markdown",
+      { ...diagnostic, code: "invalid_character" },
+      cause,
+    );
+  }
+}
+
 async function author(
   request: Request,
   seed: string,
@@ -56,63 +121,7 @@ async function author(
         Schema.toJsonSchemaDocument(name ? ConvertedPersona : GeneratedPersona).schema,
       );
       diagnostic = response.fields;
-      protect(response.text);
-      try {
-        const initialPacket = name
-          ? undefined
-          : Schema.decodeUnknownSync(GeneratedPersona)(JSON.parse(response.text), {
-              onExcessProperty: "error",
-            });
-        const packet =
-          initialPacket ??
-          Schema.decodeUnknownSync(ConvertedPersona)(JSON.parse(response.text), {
-            onExcessProperty: "error",
-          });
-        const description = withPublicProfile(
-          renderCharacterSheet(packet.persona),
-          packet.publicProfile,
-        );
-        const parts = requirePublicProfile(description);
-        const sheet = parseCharacterDescription(parts.privateMarkdown);
-        const { base, hidden, samples, languageBackground: background, ...text } = sheet;
-        protect(
-          ...Object.values(text),
-          ...(background ? [background.primary, ...background.native] : []),
-          ...samples,
-          ...Object.values(base).map((stat) => stat.reason),
-          ...hidden.flatMap((trait) => [trait.name, trait.context, trait.reason]),
-        );
-        if (gender && sheet.gender !== gender)
-          throw new GenerationError("Character gender does not match selection", {
-            ...diagnostic,
-            code: "character_gender_mismatch",
-          });
-        if (name && sheet.name !== name)
-          throw new GenerationError("Character name does not match saved identity", {
-            ...diagnostic,
-            code: "character_name_mismatch",
-          });
-        if (originalBirthDate && sheet.birthDate !== originalBirthDate)
-          throw new GenerationError("Character birth date does not match saved identity", {
-            ...diagnostic,
-            code: "character_birth_date_mismatch",
-          });
-        return {
-          name: sheet.name,
-          description: description.trim(),
-          ...(initialPacket && {
-            initial: generatedInitial(description, initialPacket.state, initialPacket.memory),
-            reviewDocument: JSON.stringify(initialPacket),
-          }),
-        };
-      } catch (cause) {
-        if (cause instanceof GenerationError) throw cause;
-        throw validationFailure(
-          "Invalid persona Markdown",
-          { ...diagnostic, code: "invalid_character" },
-          cause,
-        );
-      }
+      return decodeAuthorResponse(response, name, gender, originalBirthDate);
     });
   const review = (document: string) =>
     operation("character.review", {}, async () => {

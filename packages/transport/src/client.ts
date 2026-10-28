@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, type Rpc, type RpcGroup } from "effect/unstable/rpc";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { RpcClient, RpcSerialization, type Rpc, type RpcGroup } from "effect/rpc";
 
 export const rpcClient = <Rpcs extends Rpc.Any>(
   group: RpcGroup.RpcGroup<Rpcs>,

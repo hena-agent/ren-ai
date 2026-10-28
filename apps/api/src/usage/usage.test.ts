@@ -4,7 +4,7 @@ import { SessionMessage } from "@opencode/schema/session-message";
 import { Model } from "@opencode/schema/model";
 import type { MessageListInput, MessageListOutput } from "@opencode/client/effect/api";
 import { DateTime, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { exhaustedAlarm } from "../../test/work-budget.test-helper.ts";
 import { expect, test, vi } from "vitest";
 import { runMessagingTest, registration } from "../../test/messaging.test-helper.ts";

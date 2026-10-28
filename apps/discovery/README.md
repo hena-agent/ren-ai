@@ -42,7 +42,7 @@ and has no exclusivity section or its images. The Worker validates and strips un
 fields, renders public content into the initial HTML, and embeds only that public snapshot
 for the browser; the browser separately samples the following candidates. No private
 persona description, State, Memory, identity sheet or authoring prompt is used.
-HTML, sitemap and health responses use `Cache-Control: no-store`.
+Profile HTML, sitemap and health responses use `Cache-Control: no-store`.
 
 Home, explorer and profile requests all return the actual application UI in their
 first HTML: home has its editorial content, explorer has its loading state, and
@@ -173,9 +173,12 @@ are reported explicitly. The Worker accepts source photos up to the Images
 binding's 20 MB input limit and returns bounded, fixed-size JPEG renditions.
 Do not deploy manually or also connect Workers Builds.
 
-`bun run build` builds browser assets. Wrangler bundles `worker/entry.ts` and
-serves `dist/client/` assets. Home, explorer, public profile routes, sitemap,
-robots and health run the Worker first; home remains independent of the live Catalog.
+`bun run build` builds browser assets and prerenders home and the explorer, which depend
+only on the build, into `index.html` and `explore.html`. The asset service serves them
+directly, so the most visited pages never run the Worker or spend its CPU. Wrangler
+bundles `worker/entry.ts` and serves `dist/client/` assets. Public profile routes,
+sitemap, robots and health run the Worker first; profiles render into the unmodified
+application shell, `template.html`.
 CI embeds `GITHUB_SHA` through Wrangler's `BUILD_REVISION` define.
 `wrangler.jsonc` binds `renai.im` as a custom domain.
 `www.renai.im` is a zone redirect. The api-app API permits `https://renai.im`

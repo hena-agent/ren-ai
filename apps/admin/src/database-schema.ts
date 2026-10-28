@@ -26,6 +26,8 @@ export const personas = sqliteTable(
     commitId: text().notNull(),
     createdAt: integer().notNull(),
     updatedAt: integer().notNull(),
+    /** Derived from the current Markdown and initial State on save; see `projectPersona`. */
+    projection: text().notNull().default(""),
   },
   (table) => [
     index("persona_created_order").on(table.createdAt, table.id),

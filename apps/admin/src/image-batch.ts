@@ -228,14 +228,17 @@ export function createImageBatch(
         !images.some((image) => `${image.style}:${image.imageUrl}` === key)
       )
         throw new PersonaError("conflict", copy.stale);
-      if (intent !== "regenerate" && !sheets)
-        for (const style of ["anime", "photo"] as const)
-          if (
+      if (
+        intent !== "regenerate" &&
+        !sheets &&
+        ["anime", "photo"].some(
+          (style) =>
             images.filter((image) => image.style === style).length +
               selected.filter((slot) => slot.style === style).length >
-            6
-          )
-            throw new PersonaError("invalid", copy.galleryFull);
+            6,
+        )
+      )
+        throw new PersonaError("invalid", copy.galleryFull);
       expectedBase = editing.base;
       latest = {
         ...latest,

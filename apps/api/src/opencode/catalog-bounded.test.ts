@@ -1,7 +1,7 @@
 import { Clock, Deferred, Effect, Fiber, Schema } from "effect";
 import { AbsolutePath, Session } from "@opencode/schema";
 import { TestClock } from "effect/testing";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { catalogTest } from "./catalog-sync.test-helper.ts";
 import { syncFolders } from "./catalog-sync.ts";

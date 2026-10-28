@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, PlatformError, Queue, Schema, Scope, Sink, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { vi } from "vitest";
 import type { BridgeMessage } from "../src/messages/bridge-protocol.ts";
 import { makeRustpushMessages } from "../src/messages/rustpush.ts";

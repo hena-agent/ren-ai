@@ -2,7 +2,7 @@ import { control } from "../test/execution-runtime.test-helper.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Context, Effect, Exit, Layer, Scope } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { migrate } from "./database.ts";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ApplicationStore } from "./application-store.ts";
@@ -243,7 +243,6 @@ test("does not start for rejected operator access; publishes callback before rem
     expect(control.callback).toHaveBeenCalledTimes(1);
     expect(control.events).toEqual([
       "catalog",
-      "health",
       "remote",
       "folders",
       "intake",
@@ -321,7 +320,7 @@ test("propagates boot failure and releases partially acquired resources", async 
   await expect(runtime.tick()).rejects.toThrow("failed remote");
   expect(runtime.initialized).toBe(false);
   await runtime.close();
-  expect(control.events).toEqual(["health", "catalog", "remote", "remote.close", "callback.close"]);
+  expect(control.events).toEqual(["catalog", "remote", "remote.close", "callback.close"]);
   const retrying = await open();
   control.failure = "";
   control.startup = () => Promise.reject("private non-error startup failure");

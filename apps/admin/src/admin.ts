@@ -7,10 +7,11 @@ import {
   emptyPersona,
   readIntent,
   selectedGender,
+  readSeed,
   characterOf,
 } from "./authoring.ts";
 import {
-  restoreDraft,
+  assertDraftIdentity,
   draftTokens,
   previewOf,
   documentsOf,
@@ -59,7 +60,7 @@ import { seedingRoutes } from "./seeding-routes.ts";
 import { seedingEngine } from "./seeding-engine.ts";
 import { imageJobPages } from "./image-job-page.ts";
 import { personaQuery } from "./persona-query.ts";
-import { readEditor, type EditorRecord } from "./editor-record.ts";
+import { readEditor, editorDraft, type EditorRecord } from "./editor-record.ts";
 const authorized = (request: Request, expected: Buffer) =>
   timingSafeEqual(
     createHash("sha256")
@@ -67,6 +68,15 @@ const authorized = (request: Request, expected: Buffer) =>
       .digest(),
     expected,
   );
+
+const managementResponse = (request: Request, url: URL, management: AdminOptions["management"]) => {
+  if (["/waitlist", "/first-contacts"].includes(url.pathname))
+    return contactRoutes(request, management);
+  if (url.pathname === "/metrics") return metricsRoutes(request, management);
+  if (url.pathname.startsWith("/conversations"))
+    return conversationRoutes(request, management?.conversations);
+  return undefined;
+};
 
 export function createAdmin(
   store: PersonaStore,
@@ -308,8 +318,7 @@ export function createAdmin(
       await seeds?.assertEditable(draft.id);
       protectEditingForm(form);
       requestFields({ personaId: draft.id });
-      if ((id && (id !== draft.id || !draft.base)) || (!id && draft.base))
-        throw new PersonaError("invalid", copy.identityError);
+      assertDraftIdentity(draft, id);
       const intent = readIntent(form);
       requestFields({ intent });
       const submission = imageSubmission(draft, subDrafts.get(draft.id), intent, url.searchParams);
@@ -320,10 +329,7 @@ export function createAdmin(
       if (intent === "character") {
         const gender = selectedGender(form, previous);
         record = { ...previous, description: descriptionOf(previous), ...(gender && { gender }) };
-        const seed = form.get("seed");
-        if (typeof seed !== "string" || !seed.trim())
-          throw new PersonaError("invalid", copy.seedRequired);
-        draft = { ...draft, seed: seed.trim(), characterPending: true };
+        draft = { ...draft, seed: readSeed(form), characterPending: true };
       } else {
         record = authorPersona(form, previous);
         if (!record.name || !record.description)
@@ -359,12 +365,7 @@ export function createAdmin(
       const active = queue.pending(record.id);
       if (active) return jobPage(queue.get(active), true);
     }
-    let draft = record ? restoreDraft(record, editing, subDrafts.get(record.id)) : undefined;
-    if (draft) draft = { ...draft, sheets: loaded!.sheets };
-    if (draft && editing && !draft.initial) {
-      const initial = loaded!.initial;
-      draft = { ...draft, initial: initial ? { base: initial, preview: initial } : {} };
-    }
+    const draft = editorDraft(loaded, editing, record && subDrafts.get(record.id));
     if (draft) subDrafts.set(draft.id, draft);
     const content: PageContent = record
       ? {
@@ -394,6 +395,54 @@ export function createAdmin(
     return html(renderPage({ ...content, saved, catalogPending: await catalogPending?.() }));
   };
 
+  const privateRoute = async (request: Request, url: URL): Promise<Response> => {
+    const seeded = await seedRoute(request);
+    if (seeded) return seeded;
+    const managed = managementResponse(request, url, management);
+    if (managed) return managed;
+    if (url.pathname === "/upload-image")
+      return await uploadRoute(request, url, store, tokens, subDrafts, busy, queue.pending);
+    const versionResponse = await versionRoutes(request, url, {
+      store,
+      tokens,
+      drafts: subDrafts,
+      busy,
+      pending: queue.pending,
+      assertEditable: assertSeedEditable,
+    });
+    if (versionResponse) return versionResponse;
+    const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
+    if (resource) return resource;
+    const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/(?:retry|delete|clear))?$/.exec(url.pathname);
+    if (jobMatch)
+      return await imageJobRoute(
+        request,
+        url,
+        jobMatch,
+        queue,
+        tokens,
+        subDrafts,
+        jobPage,
+        busy,
+        assertSeedEditable,
+      );
+    const match = /^\/personas\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
+    if (request.method === "POST") return submit(request, url, match?.[1]);
+    let loaded: EditorRecord | undefined;
+    if (match) loaded = await readEditor(store, match[1]!);
+    // A fresh ID has no saved sheets or documents to read.
+    else if (url.pathname === "/new")
+      loaded = { record: { ...emptyPersona, id: randomUUID() }, sheets: {} };
+    else if (url.pathname !== "/")
+      return html(renderPage({ personas: [], error: copy.notFound }), 404);
+    return await editorPage(
+      loaded,
+      Boolean(match),
+      url.searchParams.get("saved") === "1",
+      url.searchParams.get("tab"),
+      url.searchParams,
+    );
+  };
   const handle = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     try {
@@ -411,55 +460,7 @@ export function createAdmin(
         });
       if (!["GET", "POST"].includes(request.method))
         return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
-      const seeded = await seedRoute(request);
-      if (seeded) return seeded;
-      if (["/waitlist", "/first-contacts"].includes(url.pathname))
-        return contactRoutes(request, management);
-      if (url.pathname === "/metrics") return metricsRoutes(request, management);
-      if (url.pathname.startsWith("/conversations"))
-        return conversationRoutes(request, management?.conversations);
-      if (url.pathname === "/upload-image")
-        return await uploadRoute(request, url, store, tokens, subDrafts, busy, queue.pending);
-      const versionResponse = await versionRoutes(request, url, {
-        store,
-        tokens,
-        drafts: subDrafts,
-        busy,
-        pending: queue.pending,
-        assertEditable: assertSeedEditable,
-      });
-      if (versionResponse) return versionResponse;
-      const resource = request.method === "GET" ? await privateResource(url.pathname) : undefined;
-      if (resource) return resource;
-      const jobMatch = /^\/image-jobs\/([0-9a-f-]+)(\/(?:retry|delete|clear))?$/.exec(url.pathname);
-      if (jobMatch)
-        return await imageJobRoute(
-          request,
-          url,
-          jobMatch,
-          queue,
-          tokens,
-          subDrafts,
-          jobPage,
-          busy,
-          assertSeedEditable,
-        );
-      const match = /^\/personas\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
-      if (request.method === "POST") return submit(request, url, match?.[1]);
-      let loaded: EditorRecord | undefined;
-      if (match) loaded = await readEditor(store, match[1]!);
-      // A fresh ID has no saved sheets or documents to read.
-      else if (url.pathname === "/new")
-        loaded = { record: { ...emptyPersona, id: randomUUID() }, sheets: {} };
-      else if (url.pathname !== "/")
-        return html(renderPage({ personas: [], error: copy.notFound }), 404);
-      return await editorPage(
-        loaded,
-        Boolean(match),
-        url.searchParams.get("saved") === "1",
-        url.searchParams.get("tab"),
-        url.searchParams,
-      );
+      return await privateRoute(request, url);
     } catch (error) {
       return failure(error);
     }

@@ -49,6 +49,11 @@ const Draft = Schema.Struct({
   ),
 });
 export type Draft = typeof Draft.Type;
+
+export function assertDraftIdentity(draft: Draft, id: string | undefined) {
+  if ((id && (id !== draft.id || !draft.base)) || (!id && draft.base))
+    throw new PersonaError("invalid", copy.identityError);
+}
 export const documentsOf = (draft: Draft) =>
   draft.initial?.preview ?? draft.initial?.base ?? { state: "", memory: "" };
 

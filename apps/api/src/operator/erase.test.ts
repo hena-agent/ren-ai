@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 import { migrate } from "../database.ts";

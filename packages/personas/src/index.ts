@@ -1,6 +1,12 @@
 export { loadPersonas } from "./files.ts";
 export { createPersonaStore } from "./store.ts";
-export { decodePersona, parsePersona, serializePersona, PersonaError } from "./model.ts";
+export {
+  decodePersona,
+  decodeStoredPersona,
+  parsePersona,
+  serializePersona,
+  PersonaError,
+} from "./model.ts";
 export type { Portrait } from "./images.ts";
 export { validatePortrait } from "./images.ts";
 export type { Persona, PersonaRecord } from "./model.ts";
@@ -40,4 +46,5 @@ export {
   validateInitialMemory,
 } from "./initial.ts";
 export { PersonaVersion, nextPersonaVersion, requireVersion } from "./versions.ts";
+export { projectPersona, readProjection } from "./projection.ts";
 export type { VersionSummary, SaveSnapshot } from "./versions.ts";

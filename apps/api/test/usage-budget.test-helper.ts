@@ -4,7 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { DateTime, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { ApplicationStore } from "../src/application-store.ts";
 import { usageCollector } from "../src/usage/collect.ts";
 

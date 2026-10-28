@@ -1,7 +1,7 @@
 import { outgoingStatus, tapback } from "@ren-ai/imsg/protocol";
 import { Schema } from "effect";
 import { StartingRelationship } from "@ren-ai/onboarding";
-import { Rpc, RpcGroup } from "effect/unstable/rpc";
+import { Rpc, RpcGroup } from "effect/rpc";
 
 const session = { sessionID: Schema.String };
 export const takePhotoInput = Schema.Struct({

@@ -119,20 +119,24 @@ test("real OC continues with base guidance when the optional adjustment document
         }),
       );
       yield* Effect.promise(() => rm(document));
+      const systems: string[] = [];
       yield* llm.serve((request) => {
         if (request.tools.some((tool) => tool.name === "review_adjustments")) {
-          const system = JSON.stringify(request.system);
-          expect(system).toContain("You are Persona1.");
-          expect(system).not.toContain("ADJUSTMENTS.md");
-          expect(system).not.toContain("<persona-adjustments");
-          expect(system).not.toContain("Previous correction");
-          expect(system).not.toContain("Prior review");
+          systems.push(JSON.stringify(request.system));
         }
         return TestLLM.text("계속 이야기하자.", "answer");
       });
       yield* remote.sessions.prompt({ sessionID: session.id, text: "안녕" });
       yield* remote.sessions.wait(session.id);
       expect((yield* remote.sessions.get(session.id)).outcome).toBe("succeeded");
+      expect(systems.length).toBeGreaterThan(0);
+      for (const system of systems) {
+        expect(system).toContain("You are Persona1.");
+        expect(system).not.toContain("ADJUSTMENTS.md");
+        expect(system).not.toContain("<persona-adjustments");
+        expect(system).not.toContain("Previous correction");
+        expect(system).not.toContain("Prior review");
+      }
       const saved = yield* Effect.promise(() => readAdjustments(session.location.directory));
       expect(saved!.markdown).toBe("");
       expect(saved!.state.history).toEqual(history);

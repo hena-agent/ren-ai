@@ -1,4 +1,4 @@
-import { LLMClient } from "@opencode/ai";
+import { LLMClient } from "@opencode/ai/effect";
 import { TestLLM } from "@opencode/ai/testing";
 import { llmClient } from "@opencode/core/effect/app-node-platform";
 import { SessionRunnerModel } from "@opencode/core/session/runner/model";

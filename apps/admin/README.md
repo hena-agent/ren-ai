@@ -261,7 +261,8 @@ before Discovery offers them.
 
 After the quality gates pass on `main`, the `Deploy admin.renai.im` job in
 [`ci.yml`](../../.github/workflows/ci.yml) applies D1 migrations with `bun run db:remote`,
-deploys with `bun run deploy` and checks the public `/api/personas`. Each Worker
+rebuilds stored Persona projections, deploys with `bun run deploy`, rebuilds them once
+more and checks the public `/api/personas`. Each Worker
 version's message names the commit it came from. The job authenticates with the
 `CLOUDFLARE_API_TOKEN` repository secret, an `Ambivalent Co.` account API
 token with Workers Scripts, D1 and Workers R2 Storage (Write), Account Settings
@@ -456,6 +457,28 @@ image requests no longer reach Admin/API. Existing objects may lack cache metada
 the checked production JPEG returned HTTP 200 with `CF-Cache-Status: DYNAMIC` and
 no `Cache-Control`. Configure a Cloudflare cache rule for this image domain if
 edge caching is desired for existing objects; new-upload metadata is not retroactive.
+
+### Persona projections
+
+Saving a Persona stores her projection next to her document: the bio and public
+Markdown split from it and, while she is published, the public profile, birth date and
+languages that Discovery reads (ADR-0026). Admin pages, the public `/api/personas`
+list and the private `/api/catalog` transfer read stored values and never parse Persona
+Markdown, so they stay within the Workers Free CPU limit as the Catalog grows. The
+transfer sends each stored record as JSON; the application decodes it structurally.
+
+Projections derive from the stored Markdown with the code being deployed, so every
+deploy rebuilds them. The command rewrites only missing or changed projections and
+leaves a Persona saved meanwhile untouched:
+
+```sh
+bun run --cwd apps/admin projections             # local .wrangler D1
+bun run --cwd apps/admin projections -- --remote # production persona-catalog
+```
+
+CI runs it after migrations and before deploying, then once more after deploying,
+covering saves the previous version served in between. `--remote` connects only the
+D1 binding through your Wrangler login; run it with Node 24 activated (`nvm use`).
 
 ### Thumbnail backfill
 

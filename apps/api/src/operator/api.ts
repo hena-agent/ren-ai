@@ -1,7 +1,7 @@
 import { normalizeHandle } from "@ren-ai/onboarding";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { Effect, Layer, Schema } from "effect";
-import { HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
+import { HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
 import { ObservedSendFailure } from "../outbox/observe.ts";
 import {
   HttpApi,
@@ -9,7 +9,7 @@ import {
   HttpApiEndpoint,
   HttpApiGroup,
   HttpApiSchema,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 
 const handlePayload = Schema.Struct({ handle: Schema.String });
 const error = Schema.Struct({ reason: Schema.String }).pipe(HttpApiSchema.status(503));

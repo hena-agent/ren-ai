@@ -3,8 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context, Effect, Schema, type Scope } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { SqlClient } from "effect/sql";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Session } from "@opencode/schema/session";
@@ -80,6 +80,7 @@ test.each([
           yield* contactFixture;
           const web = yield* makeDiscoveryWeb({ catalog, turnstileSecret: "secret" });
           yield* Effect.addFinalizer(() => Effect.promise(web.dispose));
+          const accepted: string[] = [];
           for (const imageStyle of [
             chosenStyle,
             expectedStyle === "photo" ? "anime" : "photo",
@@ -115,8 +116,12 @@ test.each([
               imageStyle === "invalid" || imageStyle === null ? 400 : 200,
             );
             if (response.status === 200)
-              expect(yield* Effect.promise(() => response.json())).toEqual({ status: "waiting" });
+              accepted.push(yield* Effect.promise(() => response.text()));
           }
+          expect(accepted).toEqual([
+            JSON.stringify({ status: "waiting" }),
+            JSON.stringify({ status: "waiting" }),
+          ]);
         }),
       );
       await run(

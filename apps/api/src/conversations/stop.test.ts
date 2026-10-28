@@ -240,7 +240,9 @@ test.each(["missing", "untagged", "tagged"])(
         const retained = yield* retainedSessions(host);
         const result = yield* Effect.result(retained.resume);
         expect(Result.isFailure(result)).toBe(kind !== "missing");
-        if (Result.isFailure(result)) expect(result.failure).toBe(failure);
+        expect(Result.isFailure(result) ? result.failure : undefined).toBe(
+          kind === "missing" ? undefined : failure,
+        );
         expect((yield* f.sql`SELECT session_id FROM retained_session`).length).toBe(1);
         expect(yield* f.sql`SELECT stopped FROM retained_session`).toEqual([
           { stopped: Number(kind === "missing") },

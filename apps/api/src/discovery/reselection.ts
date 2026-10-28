@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { DiscoveryRequest } from "@ren-ai/onboarding";
 import { reselectionHash } from "../conversations/ending-record.ts";
 import { contactCause, type ContactLog } from "./diagnostics.ts";

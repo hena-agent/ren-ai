@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { expect, test, vi } from "vitest";
 import { ConversationMessages } from "@ren-ai/onboarding";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { remoteMessages } from "@ren-ai/imsg/client";
 import { relationshipFixture } from "../../test/relationship.test-helper.ts";
 import { withContactDatabase } from "../discovery/contact.test-helper.ts";

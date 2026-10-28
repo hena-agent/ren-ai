@@ -1,5 +1,5 @@
 import { Clock, Effect, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { scheduleWork } from "../scheduling.ts";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import type { Metrics } from "@ren-ai/onboarding";
@@ -89,139 +89,140 @@ const scheduleDiscord = Effect.gen(function* () {
   yield* sql`DELETE FROM application_work WHERE name = 'discord' AND NOT EXISTS (SELECT 1 FROM discord_outbox)`;
 });
 
-export const deliverDiscord = (webhooks: Webhooks, fetcher: typeof fetch, requestId: string) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const now = yield* Clock.currentTimeMillis;
-    const channels = yield* sql<{
-      channel: "alerts" | "reports";
-    }>`SELECT channel FROM discord_delivery WHERE cooldown <= ${now}`;
-    const candidates: {
-      id: string;
-      channel: "alerts" | "reports";
-      body: string;
-      attempts: number;
-      due: number;
-    }[] = [];
-    for (const { channel } of channels)
-      candidates.push(
-        ...(yield* sql<
-          (typeof candidates)[number]
-        >`SELECT id, channel, body, attempts, due FROM discord_outbox WHERE channel = ${channel} AND due <= ${now} ORDER BY due, id LIMIT 4`),
-      );
-    const rows = candidates
-      .toSorted((a, b) => a.due - b.due || a.id.localeCompare(b.id))
-      .slice(0, 4);
-    for (const row of rows) {
-      const webhook = webhooks[row.channel];
-      const due = now + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7));
-      const claimed =
-        yield* sql`UPDATE discord_outbox SET due = ${due}, attempts = attempts + 1 WHERE id = ${row.id} AND due <= ${now} RETURNING id`;
-      if (!claimed.length) continue;
-      let state: "unconfigured" | "accepting" | "rejected" = webhook ? "rejected" : "unconfigured";
-      const started = performance.now();
-      let status: number | undefined;
-      let globalLimit = false;
-      const sent = yield* Effect.tryPromise(async (signal) => {
-        if (!webhook)
-          throw Object.assign(new Error("Discord unconfigured"), { code: "DISCORD_UNCONFIGURED" });
-        const url = new URL(webhook);
-        url.searchParams.set("wait", "true");
-        // Ordinary webhooks ignore card components unless the request opts in.
-        url.searchParams.set("with_components", "true");
-        const response = await fetcher(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: row.body,
-          signal,
-          redirect: "manual",
-        });
-        status = response.status;
-        const retry = response.headers.get("Retry-After");
-        const rateLimit =
-          response.status === 429
-            ? await response
-                .json()
-                .then(
-                  Schema.decodeUnknownSync(
-                    Schema.Struct({
-                      retry_after: Schema.optionalKey(Schema.Number),
-                      global: Schema.optionalKey(Schema.Boolean),
-                    }),
-                  ),
-                )
-                .catch(() => ({ retry_after: 0, global: false }))
-            : { retry_after: 0, global: false };
-        globalLimit = rateLimit.global === true;
-        await response.body?.cancel().catch(() => {});
-        const seconds = Number(retry);
-        if (response.status === 429)
-          return {
-            accepted: false,
-            retry: Math.max(
-              ...[
-                due,
-                retry && Number.isFinite(seconds)
-                  ? now + seconds * 1000
-                  : retry && Number.isFinite(Date.parse(retry))
-                    ? Date.parse(retry)
-                    : now,
-                now + (rateLimit.retry_after ?? 0) * 1000,
-              ].filter(Number.isFinite),
-            ),
-          };
-        if (!response.ok)
-          throw Object.assign(new Error("Discord rejected delivery"), {
-            code: "DISCORD_HTTP",
-            upstreamStatus: status,
-          });
-        return { accepted: true, retry: due };
-      }).pipe(
-        Effect.timeout("10 seconds"),
-        Effect.catch((cause) => {
-          contactLog({
-            requestId,
-            operation: "discord.delivery",
-            stage: row.channel,
-            outcome: "failed",
-            durationMs: performance.now() - started,
-            level: "error",
-            ...(status && { upstreamStatus: status }),
-            ...contactCause(cause),
-          });
-          return Effect.succeed({ accepted: false, retry: due });
-        }),
-      );
-      if (status === 429)
-        yield* Effect.gen(function* () {
-          contactLog({
-            requestId,
-            operation: "discord.delivery",
-            stage: row.channel,
-            outcome: "failed",
-            level: "warn",
-            code: "DISCORD_RATE_LIMITED",
-            upstreamStatus: 429,
-            durationMs: performance.now() - started,
-          });
-          yield* sql`UPDATE discord_delivery SET cooldown = MAX(cooldown, ${sent.retry}) WHERE channel = ${row.channel} OR ${Number(globalLimit)}`;
-        });
-      if (sent.accepted) {
-        state = "accepting";
-        yield* acceptDiscord(row.id, row.channel);
-      } else
-        yield* sql`UPDATE discord_outbox SET due = ${sent.retry} WHERE id = ${row.id} AND due != ${sent.retry}`;
-      yield* sql`UPDATE discord_delivery SET state = ${state} WHERE channel = ${row.channel} AND state != ${state}`;
-      contactLog({
-        requestId,
-        operation: "discord.delivery",
-        stage: "complete",
-        outcome: sent.accepted ? "completed" : "failed",
-        durationMs: performance.now() - started,
-        level: "info",
-        ...(status && { upstreamStatus: status }),
+const retryAfter = (header: string | null, now: number) => {
+  if (!header) return now;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return now + seconds * 1000;
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? date : now;
+};
+
+export const deliverDiscord = Effect.fnUntraced(function* (
+  webhooks: Webhooks,
+  fetcher: typeof fetch,
+  requestId: string,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const now = yield* Clock.currentTimeMillis;
+  const channels = yield* sql<{
+    channel: "alerts" | "reports";
+  }>`SELECT channel FROM discord_delivery WHERE cooldown <= ${now}`;
+  const candidates: {
+    id: string;
+    channel: "alerts" | "reports";
+    body: string;
+    attempts: number;
+    due: number;
+  }[] = [];
+  for (const { channel } of channels)
+    candidates.push(
+      ...(yield* sql<
+        (typeof candidates)[number]
+      >`SELECT id, channel, body, attempts, due FROM discord_outbox WHERE channel = ${channel} AND due <= ${now} ORDER BY due, id LIMIT 4`),
+    );
+  const rows = candidates.toSorted((a, b) => a.due - b.due || a.id.localeCompare(b.id)).slice(0, 4);
+  for (const row of rows) {
+    const webhook = webhooks[row.channel];
+    const due = now + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7));
+    const claimed =
+      yield* sql`UPDATE discord_outbox SET due = ${due}, attempts = attempts + 1 WHERE id = ${row.id} AND due <= ${now} RETURNING id`;
+    if (!claimed.length) continue;
+    let state: "unconfigured" | "accepting" | "rejected" = webhook ? "rejected" : "unconfigured";
+    const started = performance.now();
+    let status: number | undefined;
+    let globalLimit = false;
+    const sent = yield* Effect.tryPromise(async (signal) => {
+      if (!webhook)
+        throw Object.assign(new Error("Discord unconfigured"), { code: "DISCORD_UNCONFIGURED" });
+      const url = new URL(webhook);
+      url.searchParams.set("wait", "true");
+      url.searchParams.set("with_components", "true");
+      const response = await fetcher(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: row.body,
+        signal,
+        redirect: "manual",
       });
-      if (status === 429) break;
-    }
-    yield* scheduleDiscord;
-  });
+      status = response.status;
+      const retry = response.headers.get("Retry-After");
+      const rateLimit =
+        response.status === 429
+          ? await response
+              .json()
+              .then(
+                Schema.decodeUnknownSync(
+                  Schema.Struct({
+                    retry_after: Schema.optionalKey(Schema.Number),
+                    global: Schema.optionalKey(Schema.Boolean),
+                  }),
+                ),
+              )
+              .catch(() => ({ retry_after: 0, global: false }))
+          : { retry_after: 0, global: false };
+      globalLimit = rateLimit.global === true;
+      await response.body?.cancel().catch(() => {});
+      if (response.status === 429)
+        return {
+          accepted: false,
+          retry: Math.max(
+            ...[due, retryAfter(retry, now), now + (rateLimit.retry_after ?? 0) * 1000].filter(
+              Number.isFinite,
+            ),
+          ),
+        };
+      if (!response.ok)
+        throw Object.assign(new Error("Discord rejected delivery"), {
+          code: "DISCORD_HTTP",
+          upstreamStatus: status,
+        });
+      return { accepted: true, retry: due };
+    }).pipe(
+      Effect.timeout("10 seconds"),
+      Effect.catch((cause) => {
+        contactLog({
+          requestId,
+          operation: "discord.delivery",
+          stage: row.channel,
+          outcome: "failed",
+          durationMs: performance.now() - started,
+          level: "error",
+          ...(status && { upstreamStatus: status }),
+          ...contactCause(cause),
+        });
+        return Effect.succeed({ accepted: false, retry: due });
+      }),
+    );
+    if (status === 429)
+      yield* Effect.gen(function* () {
+        contactLog({
+          requestId,
+          operation: "discord.delivery",
+          stage: row.channel,
+          outcome: "failed",
+          level: "warn",
+          code: "DISCORD_RATE_LIMITED",
+          upstreamStatus: 429,
+          durationMs: performance.now() - started,
+        });
+        yield* sql`UPDATE discord_delivery SET cooldown = MAX(cooldown, ${sent.retry}) WHERE channel = ${row.channel} OR ${Number(globalLimit)}`;
+      });
+    if (sent.accepted) {
+      state = "accepting";
+      yield* acceptDiscord(row.id, row.channel);
+    } else
+      yield* sql`UPDATE discord_outbox SET due = ${sent.retry} WHERE id = ${row.id} AND due != ${sent.retry}`;
+    yield* sql`UPDATE discord_delivery SET state = ${state} WHERE channel = ${row.channel} AND state != ${state}`;
+    contactLog({
+      requestId,
+      operation: "discord.delivery",
+      stage: "complete",
+      outcome: sent.accepted ? "completed" : "failed",
+      durationMs: performance.now() - started,
+      level: "info",
+      ...(status && { upstreamStatus: status }),
+    });
+    if (status === 429) break;
+  }
+  yield* scheduleDiscord;
+});

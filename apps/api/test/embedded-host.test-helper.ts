@@ -5,7 +5,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes";
 import { AbsolutePath, Agent, Location, Model } from "@opencode/schema";
 import { SessionEvent } from "@opencode/schema/session-event";
 import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect";
-import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http";
+import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
 import { sessionFolderPlugin } from "@ren-ai/plugin-session-folder";
 import { folderFiles, loadGroundRules, renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
@@ -119,55 +119,48 @@ export const createHost = (options: HostOptions) =>
       retry: sessions.resume,
       run: runtime.runPromise.bind(runtime),
       web,
-      createSession: (
+      createSession: Effect.fnUntraced(function* (
         personaID: string,
         sessionID?: Session.ID,
         conversationKey?: string,
-        writable = true,
-      ) =>
-        Effect.gen(function* () {
-          if (!options.personas.has(personaID))
-            return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
-          const id = sessionID ?? Session.ID.create();
-          const directory = yield* Effect.tryPromise(async () =>
-            folderFiles(options.personaDirectory).write(
-              id,
-              renderSnapshot(options.personas.get(personaID)!, await loadGroundRules()),
-              { conversationKey: conversationKey ?? id, writable },
-            ),
-          );
-          return yield* sessions.create({
+        writable: boolean = true,
+      ) {
+        if (!options.personas.has(personaID))
+          return yield* Effect.fail(new Error(`Unknown persona: ${personaID}`));
+        const id = sessionID ?? Session.ID.create();
+        const directory = yield* Effect.tryPromise(async () =>
+          folderFiles(options.personaDirectory).write(
             id,
-            agent: Agent.ID.make(personaID),
-            model: Model.Ref.parse(options.model),
-            location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
-            permissions: [
-              { action: "*", resource: "*", effect: "deny" },
-              ...(options.send
-                ? [{ action: "send", resource: "*", effect: "allow" } as const]
-                : []),
-              ...(options.wait
-                ? [{ action: "wait", resource: "*", effect: "allow" } as const]
-                : []),
-              ...(options.read
-                ? [{ action: "read", resource: "*", effect: "allow" } as const]
-                : []),
-              ...(options.react
-                ? [{ action: "react", resource: "*", effect: "allow" } as const]
-                : []),
-              ...(options.endConversation
-                ? [{ action: "end_conversation", resource: "*", effect: "allow" } as const]
-                : []),
-              { action: "dice", resource: "*", effect: "allow" },
-              { action: "review_adjustments", resource: "*", effect: "allow" },
-              { action: "websearch", resource: "*", effect: "allow" },
-              ...["update_state", "update_memory", "remember", "search_memory"].map((action) => ({
-                action,
-                resource: "*",
-                effect: "allow" as const,
-              })),
-            ],
-          });
-        }),
+            renderSnapshot(options.personas.get(personaID)!, await loadGroundRules()),
+            { conversationKey: conversationKey ?? id, writable },
+          ),
+        );
+        return yield* sessions.create({
+          id,
+          agent: Agent.ID.make(personaID),
+          model: Model.Ref.parse(options.model),
+          location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
+          permissions: [
+            { action: "*", resource: "*", effect: "deny" },
+            ...(options.send ? [{ action: "send", resource: "*", effect: "allow" } as const] : []),
+            ...(options.wait ? [{ action: "wait", resource: "*", effect: "allow" } as const] : []),
+            ...(options.read ? [{ action: "read", resource: "*", effect: "allow" } as const] : []),
+            ...(options.react
+              ? [{ action: "react", resource: "*", effect: "allow" } as const]
+              : []),
+            ...(options.endConversation
+              ? [{ action: "end_conversation", resource: "*", effect: "allow" } as const]
+              : []),
+            { action: "dice", resource: "*", effect: "allow" },
+            { action: "review_adjustments", resource: "*", effect: "allow" },
+            { action: "websearch", resource: "*", effect: "allow" },
+            ...["update_state", "update_memory", "remember", "search_memory"].map((action) => ({
+              action,
+              resource: "*",
+              effect: "allow" as const,
+            })),
+          ],
+        });
+      }),
     };
   });

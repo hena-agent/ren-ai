@@ -1,6 +1,6 @@
 import { Clock, Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test, vi } from "vitest";
 import type { BrowsePage, PublicPersona } from "@ren-ai/onboarding";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";

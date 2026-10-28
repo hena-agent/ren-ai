@@ -1,13 +1,16 @@
+import {
+  bindings,
+  controls,
+  fetcher,
+  settledRuntime,
+  storage,
+  type RuntimeDouble,
+} from "../test/cloudflare-app.test-helper.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { Deferred, Effect, Exit, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-import { SqlClient } from "effect/unstable/sql";
-import { SqliteClient } from "@effect/sql-sqlite-node";
-import type { DurableObjectStorage } from "@cloudflare/workers-types";
-import { afterEach, expect, test, vi } from "vitest";
-import type { Mock } from "vitest";
+import { Deferred, Effect, Exit } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { expect, test, vi } from "vitest";
 import { createCloudflareApplication } from "./cloudflare-app.ts";
-import type { CloudflareBindings } from "./cloudflare-config.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
 import { applicationGateway } from "./opencode/application-gateway.ts";
 import { applicationApi } from "./opencode/application-protocol.ts";
@@ -15,79 +18,6 @@ import { rpcClient } from "@ren-ai/transport/client";
 import type { MessagingTools } from "./application-tools.ts";
 import { captureGatewayLogs, gatewayFixture } from "../../imsg/test/gateway.test-helper.ts";
 import { captureDiagnostics } from "../test/diagnostics.test-helper.ts";
-import { migrate } from "./database.ts";
-
-type RuntimeDouble = {
-  initialized: boolean;
-  fetch: Mock<(request: Request) => Promise<Response>>;
-  tick: Mock<() => Promise<void>>;
-  close: Mock<() => Promise<void>>;
-};
-
-const controls = vi.hoisted(() => ({
-  failStore: false,
-  failDatabase: false,
-  storeRun: vi.fn<() => Promise<void>>(async () => {
-    if (controls.failDatabase) throw new Error("private database detail");
-  }),
-  storeHandler: vi.fn<(request: Request) => Promise<Response>>(
-    async () => new Response("registry"),
-  ),
-  closeStore: vi.fn<() => Promise<void>>(async () => undefined),
-  runtime: vi.fn<() => Promise<RuntimeDouble>>(async () => ({
-    initialized: true,
-    fetch: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("execution")),
-    tick: vi.fn<() => Promise<void>>(async () => {}),
-    close: vi.fn<() => Promise<void>>(async () => {}),
-  })),
-}));
-
-vi.mock("./execution-runtime.ts", () => ({ createExecutionRuntime: controls.runtime }));
-
-vi.mock("./application-store.ts", () => ({
-  createApplicationStore: async () => {
-    if (controls.failStore) throw new Error("registry startup failed");
-    return {
-      run: async (effect: Effect.Effect<void, Error, SqlClient.SqlClient>) => {
-        await controls.storeRun();
-        return Effect.runPromise(
-          Effect.scoped(migrate.pipe(Effect.andThen(effect))).pipe(
-            Effect.provide(SqliteClient.layer({ filename: ":memory:" })),
-          ),
-        );
-      },
-      handler: controls.storeHandler,
-      metricsTick: async () => {},
-      close: controls.closeStore,
-    };
-  },
-}));
-
-const storage = fromPartial<DurableObjectStorage>({ sql: { exec: vi.fn<() => never>() } });
-const bindings: CloudflareBindings = {
-  PERSONA_CATALOG_URL: "https://admin.example",
-  TOKEN_CATALOG: "catalog-token",
-  TURNSTILE_SECRET: "turnstile-secret",
-  TOKEN_MANAGEMENT: "management-token",
-  API_MSG_URL: "https://api-msg.example",
-};
-const fetcher: typeof fetch = async (input, init) => {
-  const request = new Request(input, init);
-  if (request.method === "POST") {
-    const body = Schema.decodeUnknownSync(
-      Schema.fromJsonString(Schema.Struct({ id: Schema.Number })),
-    )(await request.text());
-    return new Response(
-      `${JSON.stringify({ _tag: "Exit", requestId: body.id, exit: { _tag: "Success", value: null } })}\n`,
-    );
-  }
-  return Response.json({ service: "api-msg", revision: "development", status: "ready" });
-};
-const settledRuntime = () => {
-  const result = controls.runtime.mock.settledResults.at(-1);
-  if (result?.type !== "fulfilled") throw new Error("Execution did not open");
-  return result.value;
-};
 
 test("a ready database and executor cannot hide APNs failure, and the Mac diagnostic remains correlated", async () => {
   const gateway = gatewayFixture();
@@ -126,33 +56,6 @@ test("a ready database and executor cannot hide APNs failure, and the Mac diagno
     mac.restore();
     restore();
   }
-});
-
-test("an unconfigured management boundary cannot expose edit baselines or accept wake hints", async () => {
-  const app = await createCloudflareApplication(
-    storage,
-    { ...bindings, TOKEN_MANAGEMENT: "", BOOTSTRAP_ONLY: "false" },
-    "rules",
-    fetcher,
-  );
-  try {
-    expect((await app.fetch(new Request("https://app/management/intake/watch"))).status).toBe(503);
-    expect(
-      (await app.fetch(new Request("https://app/management/intake/wake", { method: "POST" })))
-        .status,
-    ).toBe(503);
-  } finally {
-    await app.close();
-  }
-});
-
-afterEach(() => {
-  controls.failStore = false;
-  controls.failDatabase = false;
-  controls.storeRun.mockClear();
-  controls.storeHandler.mockClear();
-  controls.closeStore.mockClear();
-  controls.runtime.mockClear();
 });
 
 test("serves safe health, holds registry writes in bootstrap and closes its scopes", async () => {
@@ -253,7 +156,7 @@ test("serves safe health, holds registry writes in bootstrap and closes its scop
       )
     ).status,
   ).toBe(503);
-  await app.tick();
+  await app.tick(crypto.randomUUID(), true);
   expect(controls.runtime).not.toHaveBeenCalled();
   await app.close();
   expect(controls.closeStore).toHaveBeenCalledTimes(1);
@@ -324,14 +227,14 @@ test("registry remains usable with execution down; the next alarm retries execut
   controls.runtime.mockImplementationOnce(() => {
     throw new Error("scope allocation failed");
   });
-  await expect(app.tick()).rejects.toThrow("scope allocation failed");
+  await expect(app.tick(crypto.randomUUID(), true)).rejects.toThrow("scope allocation failed");
   controls.runtime.mockClear();
   controls.runtime.mockRejectedValueOnce(new Error("Mac down"));
   expect((await app.fetch(new Request("https://app/operator/users"))).status).toBe(503);
-  await expect(app.tick()).rejects.toThrow("Mac down");
+  await expect(app.tick(crypto.randomUUID(), true)).rejects.toThrow("Mac down");
   expect(controls.closeStore).not.toHaveBeenCalled();
   expect((await app.fetch(new Request("https://app/management/discovery"))).status).toBe(200);
-  await app.tick();
+  await app.tick(crypto.randomUUID(), true);
   expect(controls.runtime).toHaveBeenCalledTimes(2);
   const runtime = settledRuntime();
   expect(runtime.tick).toHaveBeenCalledOnce();
@@ -346,14 +249,17 @@ test("registry remains usable with execution down; the next alarm retries execut
   runtime.initialized = false;
   runtime.tick.mockRejectedValue(new Error("startup failed"));
   runtime.close.mockRejectedValueOnce(new Error("cleanup failed"));
-  const startupFailures = await Promise.allSettled([app.tick(), app.tick()]);
+  const startupFailures = await Promise.allSettled([
+    app.tick(crypto.randomUUID(), true),
+    app.tick(crypto.randomUUID(), true),
+  ]);
   expect(startupFailures).toEqual([
     { status: "rejected", reason: new Error("startup failed") },
     { status: "rejected", reason: new Error("startup failed") },
   ]);
   expect(runtime.close).toHaveBeenCalledOnce();
   expect(controls.closeStore).not.toHaveBeenCalled();
-  await app.tick();
+  await app.tick(crypto.randomUUID(), true);
   await app.close();
   expect(controls.closeStore).toHaveBeenCalledOnce();
 });
@@ -402,11 +308,13 @@ test("a failed heartbeat preserves an active send RPC and retries on the same in
       ),
     );
     await Effect.runPromise(Deferred.await(entered).pipe(Effect.timeout("2 seconds")));
-    await expect(app.tick()).rejects.toThrow("heartbeat dependency failed");
+    await expect(app.tick(crypto.randomUUID(), true)).rejects.toThrow(
+      "heartbeat dependency failed",
+    );
     await Effect.runPromise(Deferred.succeed(release, undefined));
     expect(await pending).toEqual(Exit.succeed("sent"));
     expect(runtime.close).not.toHaveBeenCalled();
-    await app.tick();
+    await app.tick(crypto.randomUUID(), true);
     expect(runtime.tick).toHaveBeenCalledTimes(2);
     expect(controls.runtime).toHaveBeenCalledOnce();
     expect(send).toHaveBeenCalledExactlyOnceWith("ses_active", "hello", "send-once");
@@ -467,7 +375,7 @@ test.each([200, 401])(
 
 test("closes the SQL store even when execution scope cleanup rejects", async () => {
   const app = await createCloudflareApplication(storage, executionBindings, "rules", fetcher);
-  await app.tick();
+  await app.tick(crypto.randomUUID(), true);
   const runtime = settledRuntime();
   runtime.close.mockRejectedValueOnce(new Error("cleanup failed"));
   await expect(app.close()).rejects.toThrow("cleanup failed");

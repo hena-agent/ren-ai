@@ -1,7 +1,7 @@
 import * as filesystem from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as ai from "@opencode/ai";
+import * as ai from "@opencode/ai/effect";
 import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
 import { llmClient as replaceClient } from "@opencode/core/effect/app-node-platform";
@@ -9,7 +9,7 @@ import { SessionRunnerModel } from "@opencode/core/session/runner/model";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { conversationTools } from "../../test/host.test-helper.ts";
 import { startMessagingHost } from "../../test/application.test-helper.ts";

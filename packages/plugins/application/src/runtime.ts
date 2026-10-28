@@ -4,7 +4,7 @@ import { resolve, join } from "node:path";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 import { readSessionBinding } from "@ren-ai/plugin-session-folder/bindings";
 import { Cause, Effect, Schema, Stream } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { applicationApi, persona } from "./protocol.ts";
 import { rpcClient } from "@ren-ai/transport/client";
 import type { PersonaPluginOptions } from "./options.ts";

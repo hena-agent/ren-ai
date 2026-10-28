@@ -1,5 +1,5 @@
 import { Deferred, Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { expect, test } from "vitest";
 import { fakeMessages } from "../messages/messages.fake.ts";
 import type { IncomingMessage } from "../messages/messages.ts";

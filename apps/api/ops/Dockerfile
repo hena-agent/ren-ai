@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM oven/bun:1.4.2 AS source
+FROM oven/bun:1.4.4 AS source
 WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
@@ -15,7 +15,7 @@ RUN for name in tools context memory title dice session-folder; do \
     done
 COPY packages/plugins/session-folder/templates /plugins/session-folder/templates
 
-FROM oven/bun:1.4.2 AS plugin
+FROM oven/bun:1.4.4 AS plugin
 COPY --from=plugin-build /plugins /artifact/plugins
 COPY apps/api/ops/install-location.sh /install-location.sh
 ENTRYPOINT ["bash", "/install-location.sh"]

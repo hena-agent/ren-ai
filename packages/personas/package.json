@@ -20,17 +20,17 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.7",
     "mdast-util-from-markdown": "2.1.0",
     "mdast-util-to-string": "4.0.0",
-    "react": "19.2.4",
-    "yaml": "2.8.2"
+    "react": "19.3.1",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261011.1",
-    "@types/node": "26.6.2",
-    "@types/react": "19.2.14",
+    "@cloudflare/workers-types": "5.20261028.1",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.1"
+    "vitest": "5.0.5"
   }
 }

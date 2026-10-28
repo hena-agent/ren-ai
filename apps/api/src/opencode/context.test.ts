@@ -1,4 +1,4 @@
-import { Message } from "@opencode/ai";
+import { Message } from "@opencode/ai/effect";
 import { expect, test } from "vitest";
 import { phone } from "@ren-ai/plugin-application/phone";
 import { cleanContext } from "../../../../packages/plugins/context/src/clean.ts";

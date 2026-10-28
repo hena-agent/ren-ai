@@ -1,6 +1,6 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Effect } from "effect";
-import { HttpClient } from "effect/unstable/http";
+import { HttpClient } from "effect/http";
 import { vi } from "vitest";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 import type { Session } from "@opencode/schema/session";
@@ -59,8 +59,8 @@ vi.mock("@ren-ai/imsg/client", () => ({
       return { gestures: {}, probe: () => Effect.void };
     }),
 }));
-vi.mock("../src/execution-health.ts", () => ({
-  createExecutionHealth: () => Effect.succeed({ tick: step("health") }),
+vi.mock("../src/alerts.ts", () => ({
+  applicationAlerts: Effect.succeed({ raise: () => Effect.void, clear: () => Effect.void }),
 }));
 vi.mock("../src/usage/collect.ts", () => ({
   usageCollector: (api: typeof control.usageApi) =>

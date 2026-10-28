@@ -1,6 +1,6 @@
 import { Config, Effect } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { operatorApi } from "./api.ts";
 
 export interface OperatorConnection {
@@ -9,8 +9,8 @@ export interface OperatorConnection {
 }
 
 export const operatorConnection = Config.all({
-  url: Config.string("API_APP_URL"),
-  token: Config.string("TOKEN_MANAGEMENT"),
+  url: Config.String("API_APP_URL"),
+  token: Config.String("TOKEN_MANAGEMENT"),
 });
 
 /** The API client validates responses against the shared operator schemas. */

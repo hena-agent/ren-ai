@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Clock, Context, Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { discoveryNotice, discoveryNotices, type DiscoveryRequest } from "@ren-ai/onboarding";
 import { expect, test } from "vitest";
 import { makeDiscoveryWeb } from "./discovery.ts";

@@ -1,6 +1,6 @@
 import { Session } from "@opencode/schema";
 import { Cause, Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { PersonaRuntime } from "./runtime.ts";
 import type { Conversation, conversations } from "../conversations/conversations.ts";
 import { claimWork, workBatchSize, workRequestId } from "../work-budget.ts";

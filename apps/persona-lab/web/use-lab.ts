@@ -199,6 +199,29 @@ export const useLab = () => {
       );
   };
 
+  const finishRemoval = async (id: string, version: number) => {
+    try {
+      await deleteSession(id);
+      if (version !== generation.current) return;
+      update(null);
+      setSessions((list) => list.filter((info) => info.id !== id));
+      showLocation(persona, null, "replace");
+      const list = await sessionsFor(persona);
+      const next = list[0] ? await openSession(list[0].id) : null;
+      if (version !== generation.current) return;
+      setSessions(list);
+      update(next);
+      showLocation(persona, next?.session.id ?? null, "replace");
+      setChanges("세션을 삭제했습니다.");
+    } catch (cause) {
+      if (version === generation.current)
+        setError(messageOf(cause instanceof Error ? cause : "세션을 삭제하지 못했습니다."));
+    } finally {
+      working.current = false;
+      setBusy(false);
+    }
+  };
+
   const removeSession = () => {
     if (!current || working.current || !window.confirm("이 세션의 모든 기록을 삭제할까요?")) return;
     const id = current.session.id;
@@ -206,28 +229,7 @@ export const useLab = () => {
     working.current = true;
     setBusy(true);
     setError("");
-    void (async () => {
-      try {
-        await deleteSession(id);
-        if (version !== generation.current) return;
-        update(null);
-        setSessions((list) => list.filter((info) => info.id !== id));
-        showLocation(persona, null, "replace");
-        const list = await sessionsFor(persona);
-        const next = list[0] ? await openSession(list[0].id) : null;
-        if (version !== generation.current) return;
-        setSessions(list);
-        update(next);
-        showLocation(persona, next?.session.id ?? null, "replace");
-        setChanges("세션을 삭제했습니다.");
-      } catch (cause) {
-        if (version === generation.current)
-          setError(messageOf(cause instanceof Error ? cause : "세션을 삭제하지 못했습니다."));
-      } finally {
-        working.current = false;
-        setBusy(false);
-      }
-    })();
+    void finishRemoval(id, version);
   };
 
   const send = (event: FormEvent<HTMLFormElement>) => {

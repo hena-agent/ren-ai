@@ -25,6 +25,7 @@ export {
 } from "./browsing.ts";
 export {
   ConversationQuery,
+  parseConversationQuery,
   ConversationRecovery,
   ConversationEnding,
   ConversationEntry,

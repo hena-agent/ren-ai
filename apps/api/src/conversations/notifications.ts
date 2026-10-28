@@ -1,5 +1,5 @@
 import { Effect, Result } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { remoteMessages } from "@ren-ai/imsg/client";
 import type { Conversation } from "./conversations.ts";
 import { contactCause, contactLog, type ContactLog } from "../discovery/diagnostics.ts";

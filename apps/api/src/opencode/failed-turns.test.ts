@@ -12,8 +12,8 @@ import {
 } from "../../test/messaging-host.test-helper.ts";
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { AIError, AuthenticationError, QuotaExceededError } from "@opencode/ai/schema/errors";
-import { LanguageModel } from "@opencode/ai";
+import { AIError, AuthenticationError, QuotaExceededError } from "@opencode/ai/effect";
+import { LanguageModel } from "@opencode/ai/effect";
 import { OpenAIChat } from "@opencode/ai/protocols";
 import { TestLLM } from "@opencode/ai/testing";
 import { SessionRunnerModel } from "@opencode/core/session/runner/model";
@@ -138,9 +138,9 @@ test("quota holds Conversations and probes one every 15 minutes before releasing
             if (sessions.length === 1) {
               yield* TestClock.adjust("20 millis");
               yield* awaitAlert(alerts, "raise:go-cap", 1);
-              expect(alerts).toContain("raise:go-cap");
-              expect(alerts).not.toContain(`raise:conversation-turn-failing:${session.id}`);
             }
+            expect(alerts).toContain("raise:go-cap");
+            expect(alerts).not.toContain(`raise:conversation-turn-failing:${session.id}`);
           }
           yield* TestClock.adjust("20 millis");
           expect(alerts.filter((alert) => alert === "raise:go-cap")).toHaveLength(1);

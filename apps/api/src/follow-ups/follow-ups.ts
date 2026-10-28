@@ -1,5 +1,5 @@
 import { Clock, Effect, Random } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import { checkedPhone } from "../transcript/transcript.ts";
 import { workBatchSize } from "../work-budget.ts";

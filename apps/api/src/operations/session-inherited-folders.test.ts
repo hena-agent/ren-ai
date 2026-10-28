@@ -79,8 +79,10 @@ test("native-created sessions and forks are archived with isolated copies of the
         expect(scopes.relationships[id]?.shortTerm).toBe(
           id === fork.id ? "Only this relationship remembers Hana" : "",
         );
-        if (id === fork.id) expect(scopes.relationships[id]?.state).toEqual({ affection: 83 });
       }
+      expect(
+        saved.personas.find((entry) => entry.sandboxID === fork.id)!.relationships[fork.id]?.state,
+      ).toEqual({ affection: 83 });
       const childSnapshot = yield* remote.client
         .rpc(sessionFolders)
         .read({ folderID: child.id }, { location: { directory: root } });

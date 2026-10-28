@@ -4,6 +4,8 @@ status: accepted
 
 # The Mac observes and waits; Cloudflare decides and stores
 
+[ADR-0026](0026-idle-ren-ai-spends-no-cpu-on-the-free-plan.md) makes the Free plan a requirement: it removes the five-minute safety net and moves Mac health checks to a separate monitor, so the cost estimate below no longer applies. The rest of this decision stands.
+
 This revises ADR-0014's two-second heartbeat, streaming `wait`, and startup-wide reconciliation. Keeping authoritative application state in Cloudflare is the priority; fitting the Free plan is not a requirement.
 
 ## Decision

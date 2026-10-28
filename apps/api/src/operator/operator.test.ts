@@ -1,8 +1,8 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, Random, Result } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import { FetchHttpClient, HttpClientError } from "effect/unstable/http";
-import { OpenApi } from "effect/unstable/httpapi";
+import { SqlClient } from "effect/sql";
+import { FetchHttpClient, HttpClientError } from "effect/http";
+import { OpenApi } from "effect/http-api";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";

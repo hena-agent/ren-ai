@@ -1,5 +1,5 @@
 import { Effect, Exit, Option } from "effect";
-import { HttpServerRequest } from "effect/unstable/http";
+import { HttpServerRequest } from "effect/http";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 
 /** The transport failure already has a correlated diagnostic. */

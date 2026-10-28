@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 import { conversations } from "../conversations/conversations.ts";
@@ -180,15 +180,18 @@ test.each([false, true])(
         }
         const current = replay ? yield* rebuild : source;
         const deliver = replay ? incoming.replay(current) : incoming.poll;
-        if (replay) expect((yield* deliver.pipe(Effect.flip)).message).toBe("Image unavailable");
-        else yield* deliver;
+        const failure = yield* deliver.pipe(
+          Effect.match({ onFailure: (error) => error.message, onSuccess: () => undefined }),
+        );
+        expect(failure).toBe(replay ? "Image unavailable" : undefined);
         const captured = replay ? replayPrompts : prompts;
         expect(captured).toHaveLength(1);
         expect(
           yield* sql`SELECT guid FROM intake_seen WHERE session_id = ${current.sessionID}`,
         ).toEqual([{ guid: first.guid }]);
-        if (!replay)
-          expect(yield* sql`SELECT guid FROM intake_pending`).toEqual([{ guid: failed.guid }]);
+        expect(yield* sql`SELECT guid FROM intake_pending`).toEqual(
+          replay ? [] : [{ guid: failed.guid }],
+        );
         unavailable.clear();
         yield* sql`UPDATE intake_pending SET retry_at = 0`;
         yield* deliver;

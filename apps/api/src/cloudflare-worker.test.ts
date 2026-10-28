@@ -46,6 +46,7 @@ const openWorker = async (
           exports: {
             ApiApplication: { type: "durable-object", storage: "sqlite" },
             DiscoveryActivity: { type: "durable-object", storage: "sqlite" },
+            HealthMonitor: { type: "durable-object", storage: "sqlite" },
           },
           manifest: {
             mainModule: "index.js",
@@ -61,6 +62,11 @@ const openWorker = async (
               type: "durable-object",
               worker: "api-app-worker-test",
               exportName: "ApiApplication",
+            },
+            MONITOR: {
+              type: "durable-object",
+              worker: "api-app-worker-test",
+              exportName: "HealthMonitor",
             },
             PERSONA_CATALOG_URL: textBinding(catalogUrl),
             ...(secrets && {

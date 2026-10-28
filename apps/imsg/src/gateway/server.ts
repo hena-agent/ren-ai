@@ -1,5 +1,5 @@
 import { Effect, Layer, Queue, Stream, Result } from "effect";
-import { RpcServer } from "effect/unstable/rpc";
+import { RpcServer } from "effect/rpc";
 import { authorize, rpcRouter } from "@ren-ai/transport/server";
 import { healthResponse } from "@ren-ai/transport/health";
 import type { IncomingMessage, Messages, Notifications } from "../messages/messages.ts";

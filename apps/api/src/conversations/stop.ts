@@ -1,6 +1,6 @@
 import { Clock, Effect, Result, Semaphore } from "effect";
 import { Session } from "@opencode/schema/session";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { randomUUID } from "node:crypto";
 import type { PersonaRuntime } from "../opencode/runtime.ts";
 import { contactCause, contactLog, type ContactLog } from "../discovery/diagnostics.ts";

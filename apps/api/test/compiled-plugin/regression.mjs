@@ -155,7 +155,7 @@ try {
     "XDG_CACHE_HOME=/tmp/isolated-home/cache",
     "--entrypoint",
     "opencode",
-    process.env["COMPILED_OPENCODE_IMAGE"] ?? "ren-ai/opencode-pty-gcompat:2.0.19",
+    process.env["COMPILED_OPENCODE_IMAGE"] ?? "ghcr.io/anomalyco/opencode:2.2.0",
     "serve",
     "--hostname",
     "0.0.0.0",
@@ -167,7 +167,7 @@ try {
   );
   started = true;
   containers.push(name);
-  assert.equal(docker("exec", name, "opencode", "--version").trim(), "opencode v2.0.19");
+  assert.equal(docker("exec", name, "opencode", "--version").trim(), "opencode v2.2.0");
   docker(
     "exec",
     name,
@@ -484,7 +484,7 @@ try {
     `Compiled turns must emit the application observe callback; native events: ${request("events", undefined, 4710)}`,
   );
   process.stdout.write(
-    "Compiled OpenCode 2.0.19: shared persona RPC provisioning, bindings, updates, retained relationship scopes and isolated native/fork Sandboxes work; six standalone plugins load; memory/dice/context share one lock and isolate relationships; messaging tools, titles and Memory compaction work; no catalog fetch.\n",
+    "Compiled OpenCode 2.2.0: shared persona RPC provisioning, bindings, updates, retained relationship scopes and isolated native/fork Sandboxes work; six standalone plugins load; memory/dice/context share one lock and isolate relationships; messaging tools, titles and Memory compaction work; no catalog fetch.\n",
   );
 } catch (error) {
   if (probing)

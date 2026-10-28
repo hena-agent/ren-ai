@@ -114,16 +114,16 @@ export const personaAdjustments = (directory: string, sessionID: string) => ({
       return reviewContext(next, sessionID, binding.writable && latestMessageID !== undefined);
     }),
   // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: model-authored tool input
-  run: (input: unknown, callID: string, now = Date.now()) =>
-    lockedMemory(directory, async () => {
-      let action: typeof adjustmentTool.input.Type;
-      try {
-        action = Schema.decodeUnknownSync(adjustmentTool.input)(input, {
-          onExcessProperty: "error",
-        });
-      } catch (cause) {
-        throw new Error("Invalid adjustment tool input", { cause });
-      }
+  run: async (input: unknown, callID: string, now = Date.now()) => {
+    let action: typeof adjustmentTool.input.Type;
+    try {
+      action = Schema.decodeUnknownSync(adjustmentTool.input)(input, {
+        onExcessProperty: "error",
+      });
+    } catch (cause) {
+      throw new Error("Invalid adjustment tool input", { cause });
+    }
+    return lockedMemory(directory, async () => {
       const binding = await readSessionBinding(directory, sessionID);
       const snapshot = (await readAdjustments(directory)) ?? emptyAdjustments();
       const id = `${sessionID}:${callID}`;
@@ -165,5 +165,6 @@ export const personaAdjustments = (directory: string, sessionID: string) => ({
         },
       });
       return output;
-    }),
+    });
+  },
 });

@@ -5,7 +5,7 @@ import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Clock, Deferred, Effect, Fiber, Random, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { outbox } from "./outbox.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";

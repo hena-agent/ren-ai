@@ -9,7 +9,7 @@ import {
   nextPersonaVersion,
   requireVersion,
 } from "@ren-ai/personas";
-import type { PersonaStore, IdentitySheets } from "@ren-ai/personas";
+import type { PersonaRecord, PersonaStore, IdentitySheets } from "@ren-ai/personas";
 import {
   personas,
   personaImages,
@@ -26,6 +26,13 @@ import { readPublicCatalog } from "@ren-ai/personas/catalog";
 import { personaImageBase } from "@ren-ai/personas/image-url";
 import { databaseSheets } from "./database-sheets.ts";
 import { databaseListing } from "./database-listing.ts";
+
+function requirePublication(record: PersonaRecord, documents: Parameters<PersonaStore["save"]>[1]) {
+  if (!record.published) return;
+  const issues = publicationIssues(record, documents);
+  if (issues.length)
+    throw new PersonaError("invalid", issues.map((issue) => issue.message).join(" "));
+}
 
 async function databaseOperation<T>(run: () => Promise<T>) {
   try {
@@ -47,8 +54,7 @@ export function databaseStore(
   catalog: () => Promise<{
     revision: string;
     personas: readonly {
-      id: string;
-      source: string;
+      persona: PersonaRecord;
       state: string;
       memory: string;
       sheets: IdentitySheets;
@@ -106,13 +112,10 @@ export function databaseStore(
           sheets,
         }),
         personas: rows.map((row) => ({
-          id: row.id,
-          source: serializePersona(
-            recordOf(
-              row,
-              photos.filter((photo) => photo.personaId === row.id),
-              imageBase,
-            ),
+          persona: recordOf(
+            row,
+            photos.filter((photo) => photo.personaId === row.id),
+            imageBase,
           ),
           state: row.state,
           memory: row.memory,
@@ -164,11 +167,7 @@ export function databaseStore(
     publicList: () => databaseOperation(() => readPublicCatalog(binding, imageBase)),
     save: async (input, documents, expected) => {
       const record = decodePersona(input);
-      if (record.published) {
-        const issues = publicationIssues(record, documents);
-        if (issues.length)
-          throw new PersonaError("invalid", issues.map((issue) => issue.message).join(" "));
-      }
+      requirePublication(record, documents);
       const previous = await currentPersonaRows(db).where(eq(personas.id, record.id)).get();
       if (
         (previous ? serializePersona(await get(record.id)) : "") !== expected.persona ||

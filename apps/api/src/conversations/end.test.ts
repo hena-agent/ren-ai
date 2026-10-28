@@ -123,7 +123,7 @@ test("ending validation and persistence failures are correlated without logging 
       });
       expect(last.causeName).toBeDefined();
       expect(last.stack).toBeDefined();
-      if (Result.isFailure(result)) expect(result.failure.message).toContain(last.requestId);
+      expect(Result.isFailure(result) ? result.failure.message : "").toContain(last.requestId);
       expect(JSON.stringify(f.logs)).not.toMatch(
         /private farewell|821099999999|private failure|end-private/,
       );

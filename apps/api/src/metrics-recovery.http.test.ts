@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { metricsFixture } from "../test/metrics-http.test-helper.ts";

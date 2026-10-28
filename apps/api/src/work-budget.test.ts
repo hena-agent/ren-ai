@@ -1,6 +1,6 @@
 import { Cause, Clock, Deferred, Effect, Exit, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { runMessagingTest } from "../test/messaging.test-helper.ts";
 import { captureDiagnostics } from "../test/diagnostics.test-helper.ts";
@@ -232,7 +232,7 @@ test("Handle heads bound storage work and let other users pass a large failed pr
         expect(new Set(seen).size).toBe(5);
         expect(yield* sql`SELECT COUNT(*) AS n FROM intake_pending`).toEqual([{ n: 5000 }]);
         yield* TestClock.adjust("1 second");
-        yield* finishApplicationWork(yield* scheduledApplicationWork, false);
+        yield* finishApplicationWork(yield* scheduledApplicationWork, "completed");
         expect(yield* nextApplicationWake).toBe(30_000);
         const plan =
           yield* sql`EXPLAIN QUERY PLAN SELECT handle FROM intake_handle WHERE retry_at <= ${0} ORDER BY retry_at, head LIMIT ${5}`;
@@ -281,7 +281,7 @@ test("lane retries survive replacement without delaying healthy work or spinning
         expect(
           yield* withWorkBudget(runWorkLanes("execution.cursor", lanes)).pipe(Effect.flip),
         ).toBeInstanceOf(WorkLaneFailure);
-        yield* finishApplicationWork(original, false);
+        yield* finishApplicationWork(original, "completed");
         expect(yield* nextApplicationWake).toBe(30_000);
         yield* withWorkBudget(runWorkLanes("execution.cursor", lanes));
         expect([attempts, healthy]).toEqual([1, 2]);
@@ -305,7 +305,7 @@ test("lane retries survive replacement without delaying healthy work or spinning
   }
 });
 
-test("nested failure backoff belongs to its lane and cannot hold health or notifications behind executor recovery", async () => {
+test("nested failure backoff belongs to its lane and cannot hold store work or notifications behind executor recovery", async () => {
   const { restore } = captureDiagnostics();
   try {
     await runMessagingTest(
@@ -335,13 +335,13 @@ test("nested failure backoff belongs to its lane and cannot hold health or notif
           ["lane:execution.cursor:turns", 30_000],
           ["lane:alarm.cursor:notifications", 40_000],
           ["notifications", 0],
-          ["messaging-health", 20_000],
+          ["discord", 20_000],
           ["intake", 0],
         ] as const)
           yield* scheduleWork(name, due);
         expect(yield* scheduledApplicationWork).toHaveLength(5);
         expect(yield* nextApplicationWake).toBe(20_000);
-        yield* sql`DELETE FROM application_work WHERE name = 'messaging-health'`;
+        yield* sql`DELETE FROM application_work WHERE name = 'discord'`;
         expect(yield* nextApplicationWake).toBe(40_000);
         yield* sql`DELETE FROM application_work WHERE name = 'lane:alarm.cursor:notifications'`;
         expect(yield* nextApplicationWake).toBe(1);
@@ -373,7 +373,8 @@ test("private photo deadlines wake the actor through an indexed query and respec
       expect(yield* nextApplicationWake).toBe(30000);
       yield* sql`DELETE FROM photo_object WHERE photo_id = 'expired'`;
       yield* sql`DELETE FROM application_work`;
-      expect(yield* nextApplicationWake).toBe(300000);
+      // No persisted work means no wake at all.
+      expect(yield* nextApplicationWake).toBeUndefined();
       expect(
         JSON.stringify(
           yield* sql`EXPLAIN QUERY PLAN SELECT MIN(due) FROM photo_object WHERE due IS NOT NULL`,

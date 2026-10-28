@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { Session } from "@opencode/schema";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { PromptInput } from "@opencode/schema/prompt-input";

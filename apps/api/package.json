@@ -25,9 +25,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@effect/sql-sqlite-do": "4.0.0-rc.112",
-    "@opencode/client": "2.0.19",
-    "@opencode/schema": "2.0.19",
+    "@effect/sql-sqlite-do": "4.0.7",
+    "@opencode/client": "2.2.0",
+    "@opencode/schema": "2.2.0",
     "@ren-ai/image-generation": "workspace:*",
     "@ren-ai/imsg": "workspace:*",
     "@ren-ai/onboarding": "workspace:*",
@@ -35,28 +35,29 @@
     "@ren-ai/plugin-application": "workspace:*",
     "@ren-ai/plugin-session-folder": "workspace:*",
     "@ren-ai/transport": "workspace:*",
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.7"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261011.1",
-    "@effect/platform-node": "4.0.0-rc.112",
-    "@effect/sql-sqlite-bun": "4.0.0-rc.112",
-    "@effect/sql-sqlite-node": "4.0.0-rc.112",
-    "@opencode/ai": "2.0.19",
-    "@opencode/core": "2.0.19",
-    "@opencode/plugin": "2.0.19",
-    "@opencode/server": "2.0.19",
+    "@cloudflare/workers-types": "5.20261028.1",
+    "@effect/platform-node": "4.0.7",
+    "@effect/sql-sqlite-bun": "4.0.7",
+    "@effect/sql-sqlite-node": "4.0.7",
+    "@opencode/ai": "2.2.0",
+    "@opencode/core": "2.2.0",
+    "@opencode/plugin": "2.2.0",
+    "@opencode/server": "2.2.0",
     "@ren-ai/plugin-context": "workspace:*",
     "@ren-ai/plugin-dice": "workspace:*",
     "@ren-ai/plugin-memory": "workspace:*",
     "@ren-ai/plugin-title": "workspace:*",
     "@ren-ai/plugin-tools": "workspace:*",
     "@total-typescript/shoehorn": "0.1.2",
-    "@types/node": "26.6.2",
+    "@types/node": "26.6.5",
     "esbuild": "0.28.2",
-    "miniflare": "5.20261006.1-alpha",
+    "mdast-util-from-markdown": "2.1.0",
+    "miniflare": "5.20261023.1-beta",
     "typescript": "7.0.2",
-    "vitest": "5.0.1",
-    "wrangler": "4.149.0"
+    "vitest": "5.0.5",
+    "wrangler": "4.154.0"
   }
 }

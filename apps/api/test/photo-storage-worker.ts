@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectStorage, SqlStorageValue } from "@cloudflare/workers-types";
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { storageMeter } from "./storage-meter.test-helper.ts";
 import { migrate } from "../src/database.ts";
 import { photoStore } from "../src/photos/store.ts";

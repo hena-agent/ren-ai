@@ -1,11 +1,11 @@
 import { Effect, Layer, Option } from "effect";
-import { RpcServer } from "effect/unstable/rpc";
+import { RpcServer } from "effect/rpc";
 import { rpcRouter } from "@ren-ai/transport/server";
 import type { MessagingTools } from "../application-tools.ts";
 import type { FailureAlerts } from "./failed-turns.ts";
 import { applicationApi } from "./application-protocol.ts";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
-import { HttpServerRequest } from "effect/unstable/http";
+import { HttpServerRequest } from "effect/http";
 
 const diagnosed = <A, R>(operation: string, stage: string, effect: Effect.Effect<A, Error, R>) =>
   Effect.gen(function* () {

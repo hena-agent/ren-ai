@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /** Preserve reservations and their IDs while replacing the exclusive-persona constraints. */
 export const sharedAssignmentsSchema = Effect.gen(function* () {

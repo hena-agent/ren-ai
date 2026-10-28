@@ -3,7 +3,7 @@ import { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigProvider, Effect, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { afterEach, expect, test, vi } from "vitest";
 import { bridgeFixture, service } from "../../test/bridge.test-helper.ts";
 import { listenerUrl } from "../../test/listener.test-helper.ts";

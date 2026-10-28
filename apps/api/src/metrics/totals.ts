@@ -1,6 +1,6 @@
 import { Effect, Option, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import { koreaDay, VisitSource, type MetricTotal, type MetricsQuery } from "@ren-ai/onboarding";
+import { SqlClient } from "effect/sql";
+import { koreaDay, type MetricTotal, type MetricsQuery, VisitSource } from "@ren-ai/onboarding";
 
 export const counterSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

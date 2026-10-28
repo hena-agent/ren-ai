@@ -1,0 +1,14 @@
+---
+status: accepted
+---
+
+# Idle Ren AI spends no CPU on the Free plan
+
+Ren AI now has to fit the Workers Free plan, whose limit is 10 ms of CPU per invocation, including each Durable Object request and alarm. This reverses [ADR-0019](0019-the-mac-observes-and-waits-cloudflare-decides-and-stores.md)'s statement that fitting the Free plan is not a requirement. Production showed the cause on 2026-10-28: with almost no messaging, the application alarm fired about 1,700 times a day and spent a median 542 ms each. A two-minute Messages probe and the five-minute safety net woke an evicted actor, and every rebuild parsed the Markdown of all 140 personas to load the cached Catalog. Admin's Worker failed with Error 1102 while reading the same Markdown, and Discovery rendered its static pages on every request.
+
+- **The application wakes only for persisted work.** There is no safety-net wake; with nothing scheduled the actor has no alarm. Store work, such as Discord delivery, Reports and registration limits, runs without starting conversation execution and never waits behind execution's failure backoff. Missed wake hints rely on api-msg's capped retries and its restart from Cloudflare's bookmark. Failed-turn recovery and native-session Catalog reconciliation run only while the application is awake for other work. A Sandbox created while the service is idle therefore receives Catalog edits at the next activity or Catalog refresh, rather than within five minutes.
+- **A separate monitor probes the Mac.** A small `HealthMonitor` Durable Object keeps the two-minute Messages and five-minute executor checks, and reports only changed alerts to the application. Steady health never wakes the application, and Mac-outage detection latency is unchanged.
+- **Persona Markdown is derived once, when she is saved.** Admin stores each Persona's projection: her bio, public Markdown and, when published, the public profile Discovery reads. Reads, the public list and the Catalog transfer use the stored values, and the application decodes stored records structurally. Each deploy rebuilds every projection from the stored Markdown with the deployed code, so a changed derivation never leaves stale profiles.
+- **Discovery prerenders home and the explorer.** Both depend only on the build, so the asset service serves them without the Worker. Persona pages still render per request.
+
+Upgrading to Workers Paid was rejected because it would leave idle activity, cold rebuilds and repeated parsing in place, and they grow with the Catalog and with time. Work that a message actually needs, such as admitting a photo, can still exceed 10 ms occasionally. Cloudflare tolerates infrequent overruns per isolate; sustained traffic beyond that is the point at which to reconsider Workers Paid.

@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Layer } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 export const mediaFixtures = (jpeg = Buffer.from("jpeg")) => {
   const commands: string[][] = [];

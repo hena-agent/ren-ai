@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { MetricsQuery, type Metrics, MetricTotal } from "@ren-ai/onboarding";
 import { previousPeriod, readTotals } from "./totals.ts";
 import { authorize } from "@ren-ai/transport/server";

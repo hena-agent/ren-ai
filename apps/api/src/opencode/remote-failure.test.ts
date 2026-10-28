@@ -6,7 +6,7 @@ import { providerUnavailable } from "../../test/messaging-host.test-helper.ts";
 import { exportSessions, restoreSessions } from "./transfer.ts";
 import { sessionArchive } from "./transfer-format.ts";
 import { remoteHost } from "./remote.ts";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { readSessionBinding } from "@ren-ai/plugin-session-folder/bindings";

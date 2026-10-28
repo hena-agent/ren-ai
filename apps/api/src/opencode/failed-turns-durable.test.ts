@@ -4,7 +4,7 @@ import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Clock, DateTime, Effect, Stream, type Scope } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";
@@ -185,13 +185,13 @@ test.each([false, true])(
             quota ? ["first", "second"] : ["first", "second", "first", "second"],
           );
           yield* scheduler.tick;
-          if (!quota) expect(f.alerts).toContain("conversation-turn-failing:ses_first");
+          expect(f.alerts.includes("conversation-turn-failing:ses_first")).toBe(!quota);
           f.states.set("second", { idle: 4, outcome: "succeeded" });
           yield* scheduler.tick;
-          if (quota) {
-            expect(f.calls).toEqual(["first", "second", "first"]);
-            expect(f.alerts.filter((name) => name === "go-cap")).toHaveLength(1);
-          }
+          expect(f.calls).toEqual(
+            quota ? ["first", "second", "first"] : ["first", "second", "first", "second"],
+          );
+          expect(f.alerts.filter((name) => name === "go-cap")).toHaveLength(Number(quota));
         }),
         filename,
       );

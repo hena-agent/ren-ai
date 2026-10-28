@@ -1,6 +1,6 @@
 import { Clock, Data, Deferred, Effect, Exit, Fiber, Queue, Scope, Stream } from "effect";
 import { randomUUID } from "node:crypto";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { parseFrame, type BridgeMessage, type BridgeResult } from "./bridge-protocol.ts";
 import { observe } from "../diagnostics.ts";
 
