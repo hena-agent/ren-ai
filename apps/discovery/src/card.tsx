@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import type { MouseEvent, Ref } from "react";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { useCopy } from "./locale.tsx";
 import { ProfileLanguages } from "./profile-languages.tsx";
 import type { StyledPersona } from "./image-style.ts";
-import { GalleryControls } from "./photo-gallery.tsx";
+import { prefersReducedMotion } from "./motion.ts";
+import { GalleryControls, tapColumn, usePhotoSteps } from "./photo-gallery.tsx";
 import { ProfileDetails } from "./profile-details.tsx";
+
+const isDrag = (x: number, y: number) => Math.abs(x) > 6 || Math.abs(y) > 6;
 
 function PortraitImage({ persona }: { persona: PublicPersona }) {
   const copy = useCopy();
@@ -26,7 +30,13 @@ function PortraitImage({ persona }: { persona: PublicPersona }) {
   );
 }
 
-function ProfileCaption({ persona }: { persona: PublicPersona }) {
+function ProfileCaption({
+  persona,
+  nameRef,
+}: {
+  persona: PublicPersona;
+  nameRef: Ref<HTMLHeadingElement>;
+}) {
   const facts =
     persona.profile?.sections.flatMap((section) =>
       section.type === "basics" ? section.items : [],
@@ -38,7 +48,7 @@ function ProfileCaption({ persona }: { persona: PublicPersona }) {
     .join(" · ");
   return (
     <div className="profile-caption">
-      <h2>
+      <h2 ref={nameRef}>
         {persona.name}
         {age !== undefined && `, ${age}`}
       </h2>
@@ -102,7 +112,9 @@ export function Card({
 }) {
   const copy = useCopy();
   const pointer = useRef<{ id: number; x: number; y: number } | null>(null);
+  const dragged = useRef(false);
   const openButton = useRef<HTMLButtonElement>(null);
+  const nameLine = useRef<HTMLHeadingElement>(null);
   const pending = useRef<boolean | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [drag, setDrag] = useState(0);
@@ -111,9 +123,16 @@ export function Card({
   const images = persona.imageUrls ?? [persona.imageUrl];
   const currentImage = Math.min(image, images.length - 1);
   const shown = { ...persona, imageUrl: images[currentImage]! };
+  const { nudge, step, endNudge } = usePhotoSteps(images.length, currentImage, setImage);
   function open() {
     if (images.length > 1) onOpen(persona, currentImage);
     else onOpen(persona);
+  }
+  function tap(event: MouseEvent<HTMLElement>) {
+    if (dragged.current || exit !== undefined) return;
+    const column = tapColumn(event, 3);
+    if (column === 1 || event.clientY >= nameLine.current!.getBoundingClientRect().top) open();
+    else step(column === 0 ? -1 : 1);
   }
   useEffect(() => {
     if (!onCollapse && document.activeElement === document.body)
@@ -139,7 +158,7 @@ export function Card({
     pending.current = like;
     pointer.current = null;
     onBusyChange?.(true);
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (prefersReducedMotion()) {
       setDrag(0);
       finish();
     } else {
@@ -191,14 +210,20 @@ export function Card({
             <>
               <div
                 className="swipe-surface"
+                role="presentation"
+                data-nudge={nudge}
+                onClick={tap}
+                onAnimationEnd={endNudge}
                 onPointerDown={(event) => {
                   if (event.button !== 0 || !event.isPrimary) return;
+                  dragged.current = false;
                   pointer.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
                   event.currentTarget.setPointerCapture(event.pointerId);
                 }}
                 onPointerMove={(event) => {
                   if (pointer.current?.id === event.pointerId) {
                     const offset = event.clientX - pointer.current.x;
+                    dragged.current ||= isDrag(offset, event.clientY - pointer.current.y);
                     setDrag(offset);
                   }
                 }}
@@ -209,6 +234,7 @@ export function Card({
                   if (pointer.current?.id !== event.pointerId) return;
                   const offset = event.clientX - pointer.current.x;
                   const vertical = event.clientY - pointer.current.y;
+                  dragged.current ||= isDrag(offset, vertical);
                   pointer.current = null;
                   if (offset >= 90 && Math.abs(offset) > Math.abs(vertical)) choose(true);
                   else if (offset <= -90 && Math.abs(offset) > Math.abs(vertical)) choose(false);
@@ -233,9 +259,9 @@ export function Card({
                   PASS
                 </span>
               )}
-              <ProfileCaption persona={persona} />
+              <ProfileCaption persona={persona} nameRef={nameLine} />
               <button
-                className="profile-info"
+                className="gallery-zone gallery-open"
                 ref={openButton}
                 type="button"
                 aria-label={`${persona.name} ${copy.fullProfile}`}
@@ -248,9 +274,7 @@ export function Card({
                     choose(event.key === "ArrowRight");
                   }
                 }}
-              >
-                <span className="icon icon-arrow" aria-hidden="true" />
-              </button>
+              />
             </>
           )}
         </article>

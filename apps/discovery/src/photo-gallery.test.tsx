@@ -1,13 +1,20 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
 import { Card } from "./card.tsx";
 import { ProfileDetails } from "./profile-details.tsx";
 import { withImageStyle } from "./image-style.ts";
-import { choose, selectImageStyle } from "../test/choose.ts";
+import {
+  choose,
+  endAnimation,
+  layOutCard,
+  resetCardTest,
+  selectImageStyle,
+  tap,
+} from "../test/choose.ts";
 
 afterEach(() => {
-  cleanup();
+  resetCardTest();
   localStorage.clear();
 });
 const people = [2, 4].map((count, index) => ({
@@ -26,7 +33,7 @@ const client = testClient({
 });
 
 test.each(["anime", "photo"] as const)(
-  "%s gallery prepares neighboring photos before arrow clicks in cards and expanded profiles",
+  "%s gallery prepares neighboring photos before photo changes in cards and expanded profiles",
   (style) => {
     const persona = withImageStyle(people[1]!, style);
     const actions = { onOpen: vi.fn<() => void>(), onChoose: vi.fn<() => void>() };
@@ -62,7 +69,7 @@ test("persona-sized photo navigation preserves the image index on style changes 
   expect(
     screen.getByRole("button", { name: "사진 1 / 2" }).getAttribute("aria-current"),
   ).toBeNull();
-  expect(document.querySelector(".gallery-position")?.textContent).toBe("2 / 2");
+  expect(screen.getByText("2 / 2")).toBeTruthy();
   await selectImageStyle("실사");
   expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
     people[0]!.portraitGallery[1]!.photo,
@@ -169,3 +176,38 @@ test("inline details clamp changed collections and leave Tab to native navigatio
   expect(close.hasAttribute("disabled")).toBe(true);
 });
 import { testClient } from "../test/client.ts";
+
+test("tapping the halves of an expanded photo changes it, the ends nudge, and a disabled profile ignores taps", () => {
+  layOutCard();
+  const persona = withImageStyle(people[1]!, "photo");
+  const change = vi.fn<(image: number) => void>();
+  const details = (image: number, disabled = false) => (
+    <ProfileDetails
+      persona={persona}
+      image={image}
+      onImageChange={change}
+      onClose={vi.fn<() => void>()}
+      disabled={disabled}
+    />
+  );
+  const view = render(details(1));
+  const surface = document.querySelector<HTMLElement>(".details-surface")!;
+  tap(surface, 280);
+  expect(change).toHaveBeenLastCalledWith(2);
+  tap(surface, 20);
+  expect(change).toHaveBeenLastCalledWith(0);
+  view.rerender(details(0));
+  tap(surface, 20);
+  expect(surface.getAttribute("data-nudge")).toBe("previous");
+  endAnimation(surface, "photo-nudge");
+  expect(surface.hasAttribute("data-nudge")).toBe(false);
+  view.rerender(details(3));
+  tap(surface, 280);
+  expect(surface.getAttribute("data-nudge")).toBe("next");
+  endAnimation(surface, "photo-nudge");
+  view.rerender(details(1, true));
+  tap(surface, 280);
+  tap(surface, 20);
+  expect(surface.hasAttribute("data-nudge")).toBe(false);
+  expect(change).toHaveBeenCalledTimes(2);
+});

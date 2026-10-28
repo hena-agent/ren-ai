@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 import type { StyledPersona } from "./image-style.ts";
-import { GalleryControls } from "./photo-gallery.tsx";
+import { GalleryControls, tapColumn, usePhotoSteps } from "./photo-gallery.tsx";
 import { useCopy } from "./locale.tsx";
 import { ProfileLanguages } from "./profile-languages.tsx";
 import { PublicProfileView } from "@ren-ai/personas/public-profile-view";
@@ -33,21 +33,32 @@ function DetailsGallery({
   const copy = useCopy();
   const images = persona.imageUrls ?? [persona.imageUrl];
   const currentImage = Math.min(image, images.length - 1);
+  const { nudge, step, endNudge } = usePhotoSteps(images.length, currentImage, onImageChange);
   return (
     <div className="details-media">
-      {images[currentImage] ? (
-        <img
-          className="details-photo"
-          src={images[currentImage]}
-          fetchPriority="high"
-          alt={`${persona.name} ${copy.profilePhoto}`}
-        />
-      ) : (
-        <div className="photo-fallback">
-          <span>{persona.name.slice(0, 1)}</span>
-          <p>{copy.noStylePhoto}</p>
-        </div>
-      )}
+      <div
+        className="details-surface"
+        role="presentation"
+        data-nudge={nudge}
+        onClick={(event) => {
+          if (!disabled) step(tapColumn(event, 2) === 0 ? -1 : 1);
+        }}
+        onAnimationEnd={endNudge}
+      >
+        {images[currentImage] ? (
+          <img
+            className="details-photo"
+            src={images[currentImage]}
+            fetchPriority="high"
+            alt={`${persona.name} ${copy.profilePhoto}`}
+          />
+        ) : (
+          <div className="photo-fallback">
+            <span>{persona.name.slice(0, 1)}</span>
+            <p>{copy.noStylePhoto}</p>
+          </div>
+        )}
+      </div>
       <GalleryControls
         images={images}
         current={currentImage}

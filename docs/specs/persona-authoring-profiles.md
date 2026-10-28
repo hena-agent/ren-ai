@@ -204,7 +204,7 @@ Discovery는 Markdown을 파싱하거나 렌더링하지 않는다. Admin 미리
 
 배포 순서는 API 읽기 계약 → Discovery → Admin 공개 응답이다. `profile`은 API가
 배포되는 동안 선택 필드로 유지한다. 실행 중인 구 API 응답에도 기존 `bio`를 표시하며
-이전 Markdown 응답은 파싱하지 않는다. 기존 ↑/↓·Escape, 사진·스타일 선택,
+이전 Markdown 응답은 파싱하지 않는다. 기존 사진 탭 넘김·상세 열기, ↓·Escape, 스타일 선택,
 Like/Pass와 연락처 입력을 유지하며 마지막 내용이 플로팅 버튼 위까지 스크롤되도록 한다.
 
 ## 페르소나 개선

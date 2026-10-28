@@ -12,6 +12,7 @@ import type { ImageStyle } from "./image-style.ts";
 import type { StyledPersona } from "./image-style.ts";
 import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
 import { useImageStyle } from "./use-image-style.ts";
+import { useInputModality } from "./use-input-modality.ts";
 import { Header, LikedPanel, Navigation } from "./chrome.tsx";
 import type { BrowseView } from "./chrome.tsx";
 import { Receipt } from "./receipt.tsx";
@@ -292,6 +293,7 @@ function Experience({
   const { view, setView, contactOpened, navigate, back } = useBrowseView();
   const [busy, setBusy] = useState(false);
   const { details, openDetails, closeDetails } = useProfileDetails(personaId);
+  useInputModality();
   const ordered = prioritizePersona(people, personaId);
   const displayed = ordered.map((persona) => withImageStyle(persona, style));
   const remaining = displayed.filter((persona) => !Object.hasOwn(choices, persona.id));
