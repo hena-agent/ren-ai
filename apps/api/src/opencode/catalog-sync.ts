@@ -174,16 +174,15 @@ const synchronize = Effect.fn("synchronize")(function* (
   const folders = client.rpc(sessionFolders);
   const location = { location: { directory: root } };
   const resolveNative = Effect.fnUntraced(function* (id: Session.ID, directory: string) {
-    if (!managedFolder(root, directory)) return;
+    if (!managedFolder(root, directory)) return undefined;
     yield* folders.ensure({ folderID: id }, location);
     const session = yield* client.session.get({ sessionID: id });
     const personaID = session.agent;
-    if (!personaID) {
-      yield* Effect.fail(new Error(`Managed session ${session.id} has no catalog persona`));
-      return;
-    }
+    if (!personaID)
+      return yield* Effect.fail(new Error(`Managed session ${session.id} has no catalog persona`));
     if (session.location.directory === personaDirectory(root, personaID))
       yield* resolve(session.id, personaID);
+    return undefined;
   });
   const scanNative = Effect.gen(function* () {
     if (progress.phase !== "native") return undefined;

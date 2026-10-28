@@ -1,5 +1,5 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { Effect } from "effect";
+import { Deferred, Effect, Exit } from "effect";
 import { TestClock } from "effect/testing";
 import { SqlClient } from "effect/sql";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -167,6 +167,47 @@ test("rejected and failed alert deliveries log safe diagnostics and stay queued 
 
 const changes = (alerts: readonly { name: string; raised: boolean }[]) =>
   JSON.stringify({ alerts });
+
+test("stalled Discord delivery aborts at its deadline and remains queued with safe diagnostics", async () => {
+  const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  const entered = Deferred.makeUnsafe<void>();
+  const signals: AbortSignal[] = [];
+  const requestId = crypto.randomUUID();
+  const fetcher: typeof fetch = (_input, init) => {
+    signals.push(init!.signal!);
+    Effect.runSync(Deferred.succeed(entered, undefined));
+    return new Promise((_resolve, reject) => {
+      init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true });
+    });
+  };
+  try {
+    await run(
+      Effect.gen(function* () {
+        const alerts = yield* applicationAlerts;
+        yield* alerts.raise("executor-unavailable", "private prompt");
+        const delivery = yield* deliverDiscord(
+          { alerts: "https://hook.example/private-token", reports: undefined },
+          fetcher,
+          requestId,
+        ).pipe(Effect.forkScoped);
+        yield* Deferred.await(entered);
+        yield* TestClock.adjust("10 seconds");
+        expect(Exit.isSuccess(delivery.pollUnsafe()!)).toBe(true);
+        expect(signals).toHaveLength(1);
+        expect(signals[0]!.aborted).toBe(true);
+        const sql = yield* SqlClient.SqlClient;
+        expect(yield* sql`SELECT attempts FROM discord_outbox`).toEqual([{ attempts: 1 }]);
+      }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
+    );
+    const logs = stderr.mock.calls.map(([line]) => String(line)).join("");
+    expect(logs).toContain(requestId);
+    expect(logs).toContain("discord.delivery");
+    expect(logs).toContain("TimeoutError");
+    expect(logs).not.toMatch(/private prompt|private-token|hook.example/);
+  } finally {
+    stderr.mockRestore();
+  }
+});
 
 test("monitor reports authenticate, reject malformed changes and commit every change together", async () => {
   await run(
