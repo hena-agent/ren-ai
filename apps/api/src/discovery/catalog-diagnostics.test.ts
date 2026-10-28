@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Context, Effect, Exit, Layer, Scope } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { contactCause } from "./diagnostics.ts";
 import { catalogClient } from "../personas/catalog.ts";
 import { makeDiscoveryWeb } from "./discovery.ts";

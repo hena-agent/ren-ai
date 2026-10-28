@@ -1,9 +1,45 @@
-import { Effect, Exit, Option, Schedule, Schema } from "effect";
-import type { RpcClientError } from "effect/unstable/rpc";
+import { Effect, Exit, Option, Schedule, Schema, type Cause } from "effect";
+import type { RpcClientError } from "effect/rpc";
 
 const responseStatus = Schema.decodeUnknownOption(
   Schema.Struct({ response: Schema.Struct({ status: Schema.Number }) }),
 );
+
+// RPC causes can contain authorization headers and the entire request payload.
+const diagnostic = (cause: string | RpcClientError.RpcClientError | Cause.TimeoutError) => {
+  const code = typeof cause === "string" ? "ApplicationError" : cause["_tag"];
+  const reason =
+    typeof cause !== "string" && cause["_tag"] === "RpcClientError" ? cause.reason : undefined;
+  const root =
+    reason?.["_tag"] === "HttpError" && reason.cause instanceof Error ? reason.cause : cause;
+  const underlyingCode =
+    typeof root !== "string" &&
+    "code" in root &&
+    typeof root.code === "string" &&
+    /^[A-Z][A-Z0-9_]{0,63}$/.test(root.code)
+      ? root.code
+      : undefined;
+  const stack =
+    typeof root === "string"
+      ? ""
+      : (root.stack
+          ?.split("\n")
+          .filter((line) => /^\s+at .*(?:\.(?:ts|js|mjs):\d+:\d+|node:.*:\d+:\d+)/.test(line))
+          .join("\n")
+          .slice(0, 4000) ?? "");
+  return {
+    code,
+    causeName: reason?.["_tag"] ?? code,
+    underlyingCode,
+    stack,
+    ...(reason?.["_tag"] === "HttpError" && {
+      causeCode: reason.kind,
+      upstreamStatus: Option.getOrUndefined(
+        responseStatus(reason.cause).pipe(Option.map((value) => value.response.status)),
+      ),
+    }),
+  };
+};
 
 /** Context acknowledgement/observation is repeatable; sends and reactions are not. */
 export const resilientContext = <A>(
@@ -21,48 +57,12 @@ export const resilientContext = <A>(
         Effect.sync(() => {
           failures++;
           if (failures !== 1) return;
-          // RPC causes can contain authorization headers and the entire request payload.
-          const code = typeof cause === "string" ? "ApplicationError" : cause["_tag"];
-          const reason =
-            typeof cause !== "string" && cause["_tag"] === "RpcClientError"
-              ? cause.reason
-              : undefined;
-          const root =
-            reason?.["_tag"] === "HttpError" && reason.cause instanceof Error
-              ? reason.cause
-              : cause;
-          const underlyingCode =
-            typeof root !== "string" &&
-            "code" in root &&
-            typeof root.code === "string" &&
-            /^[A-Z][A-Z0-9_]{0,63}$/.test(root.code)
-              ? root.code
-              : undefined;
-          const stack =
-            typeof root === "string"
-              ? ""
-              : (root.stack
-                  ?.split("\n")
-                  .filter((line) =>
-                    /^\s+at .*(?:\.(?:ts|js|mjs):\d+:\d+|node:.*:\d+:\d+)/.test(line),
-                  )
-                  .join("\n")
-                  .slice(0, 4000) ?? "");
           process.stderr.write(
             `${JSON.stringify({
               ...fields,
               level: "error",
               outcome: "retrying",
-              code,
-              causeName: reason?.["_tag"] ?? code,
-              underlyingCode,
-              stack,
-              ...(reason?.["_tag"] === "HttpError" && {
-                causeCode: reason.kind,
-                upstreamStatus: Option.getOrUndefined(
-                  responseStatus(reason.cause).pipe(Option.map((value) => value.response.status)),
-                ),
-              }),
+              ...diagnostic(cause),
               durationMs: performance.now() - started,
             })}\n`,
           );

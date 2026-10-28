@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 import type { Messages } from "@ren-ai/imsg";
 import { expect, test } from "vitest";

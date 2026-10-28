@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type {
   InvitationGrant,
   InvitationAccount,

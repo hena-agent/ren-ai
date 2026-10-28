@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect, type Scope } from "effect";
-import type { SqlClient } from "effect/unstable/sql";
+import type { SqlClient } from "effect/sql";
 import type { FailureAlerts } from "../src/opencode/failed-turns.ts";
 
 const quiet = () => Effect.void;

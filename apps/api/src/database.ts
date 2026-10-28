@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Migrator, SqlClient } from "effect/unstable/sql";
+import { Migrator, SqlClient } from "effect/sql";
 import { relationshipSchema, registrationHistorySchema } from "./conversations/schema.ts";
 import { usageSchema } from "./usage/schema.ts";
 import { notificationSchema, notificationSubmissionsSchema } from "./discovery/notifications.ts";

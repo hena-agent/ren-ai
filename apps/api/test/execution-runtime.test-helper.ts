@@ -1,6 +1,6 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Effect } from "effect";
-import { HttpClient } from "effect/unstable/http";
+import { HttpClient } from "effect/http";
 import { vi } from "vitest";
 import type { folderSnapshot } from "@ren-ai/plugin-session-folder/protocol";
 import type { Session } from "@opencode/schema/session";

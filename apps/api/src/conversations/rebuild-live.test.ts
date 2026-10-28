@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { Deferred, Effect, Fiber, Stream } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Session } from "@opencode/schema/session";
 import { TestLLM } from "@opencode/ai/testing";
 import { fakeMessages } from "@ren-ai/imsg/testing";

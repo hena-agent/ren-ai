@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { ConversationEntry, ConversationQuery, PublicPersona } from "@ren-ai/onboarding";
 
 type Entry = typeof ConversationEntry.Type;

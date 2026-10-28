@@ -9,7 +9,7 @@ import type {
 import { Session } from "@opencode/schema";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Effect, Stream } from "effect";
-import { HttpClient, HttpClientError, HttpClientRequest } from "effect/unstable/http";
+import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import type { Persona } from "@ren-ai/personas";

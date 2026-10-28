@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.2
+FROM oven/bun:1.4.4
 WORKDIR /app
 COPY --chmod=444 api-msg.js api-msg-verify.js ./
 USER bun

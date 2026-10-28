@@ -75,6 +75,23 @@ const conflictMessage = (path: string) =>
         ? "이 테스트 연락처는 지금 고른 페르소나로 시작할 수 없습니다. 배정 한도 5명과 이 연락처의 관계 종료 이력·현재 상태를 확인해 주세요."
         : "선정 요청이나 배정 후보가 변경되었습니다. 배정 한도 5명과 각 연락처의 관계 종료 이력·현재 상태, 배정할 수 없는 Like 후보가 있는지 확인해 주세요. 상태를 새로고침한 뒤 새 요청으로 제출해 주세요.";
 
+const managementBase = (url: string, token: string) => {
+  protect(token);
+  if (!url || !token)
+    throw new GenerationError("메시징 API 연결 설정이 필요합니다.", {
+      code: "management_unconfigured",
+    });
+  const base = new URL(url);
+  if (
+    base.username ||
+    base.password ||
+    (base.protocol !== "https:" &&
+      !(base.protocol === "http:" && ["127.0.0.1", "localhost"].includes(base.hostname)))
+  )
+    throw new GenerationError("메시징 API 주소 설정을 확인해 주세요.", { code: "management_url" });
+  return base;
+};
+
 export function managementClient(
   url: string,
   token: string,
@@ -93,21 +110,7 @@ export function managementClient(
       | typeof InvitationLookup.Type,
     method = input ? "POST" : "GET",
   ) => {
-    protect(token);
-    if (!url || !token)
-      throw new GenerationError("메시징 API 연결 설정이 필요합니다.", {
-        code: "management_unconfigured",
-      });
-    const base = new URL(url);
-    if (
-      base.username ||
-      base.password ||
-      (base.protocol !== "https:" &&
-        !(base.protocol === "http:" && ["127.0.0.1", "localhost"].includes(base.hostname)))
-    )
-      throw new GenerationError("메시징 API 주소 설정을 확인해 주세요.", {
-        code: "management_url",
-      });
+    const base = managementBase(url, token);
     let response: Response;
     try {
       response = await fetcher(new URL(path, base), {

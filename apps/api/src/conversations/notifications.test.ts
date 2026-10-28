@@ -8,7 +8,7 @@ import { endingNotifications } from "./notifications.ts";
 import { conversationStatus } from "./status.ts";
 import { fakeNotifications, messageGateway } from "@ren-ai/imsg/testing";
 import { remoteMessages } from "@ren-ai/imsg/client";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { prepareMessaging } from "../application-tools.ts";
 
 test("ending delivery uses the separate authenticated Mac notification RPC and observes later receipts", () =>

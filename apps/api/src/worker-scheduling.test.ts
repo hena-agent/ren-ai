@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, expect, test, vi } from "vitest";
 import { ApiApplication } from "../worker/entry.ts";

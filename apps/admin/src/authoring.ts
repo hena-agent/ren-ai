@@ -32,6 +32,13 @@ export function selectedGender(form: FormData, previous: PersonaRecord) {
   throw new PersonaError("invalid", copy.genderUnavailable);
 }
 
+export function readSeed(form: FormData) {
+  const seed = form.get("seed");
+  if (typeof seed !== "string" || !seed.trim())
+    throw new PersonaError("invalid", copy.seedRequired);
+  return seed.trim();
+}
+
 export function readIntent(form: FormData) {
   const intent = form.get("intent") ?? "save";
   if (

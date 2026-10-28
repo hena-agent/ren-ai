@@ -17,14 +17,29 @@ const Facts = Schema.Struct({
 const MonitorState = Schema.fromJsonString(
   Schema.Struct({
     messagingFailures: Schema.Number,
+    messagingDue: Schema.Number,
     executorDue: Schema.Number,
     reported: Schema.Record(Schema.String, Schema.Boolean),
   }),
 );
 const initialState: typeof MonitorState.Type = {
   messagingFailures: 0,
+  messagingDue: 0,
   executorDue: 0,
   reported: {},
+};
+
+const messagingResult = (
+  state: typeof MonitorState.Type,
+  available: boolean | undefined,
+  now: number,
+) => {
+  const alerts: Record<string, boolean> = {};
+  if (available === undefined)
+    return { failures: state.messagingFailures, due: state.messagingDue, alerts };
+  const failures = available ? 0 : Math.min(2, state.messagingFailures + 1);
+  if (available || failures === 2) alerts["messaging-unavailable"] = !available;
+  return { failures, due: now + (available ? messagingInterval : messagingRetry), alerts };
 };
 
 export interface MonitorStorage {
@@ -118,23 +133,24 @@ const healthMonitor = (options: {
       () => initialState,
     );
     const executorDue = now >= state.executorDue;
+    const messagingDue = now >= state.messagingDue;
     const [available, executor] = yield* Effect.all(
       [
-        options.messaging.pipe(
-          Effect.timeout("5 seconds"),
-          Effect.as(true),
-          Effect.catch(recover("messaging.probe", now, false)),
-        ),
+        messagingDue
+          ? options.messaging.pipe(
+              Effect.timeout("5 seconds"),
+              Effect.as(true),
+              Effect.catch(recover("messaging.probe", now, false)),
+            )
+          : Effect.succeed(undefined),
         executorDue ? executorAlerts(options.execution, options.fetcher, now) : Effect.succeed({}),
       ],
       { concurrency: "unbounded" },
     );
-    const messagingFailures = available ? 0 : Math.min(2, state.messagingFailures + 1);
+    const messaging = messagingResult(state, available, now);
     const desired: Record<string, boolean> = {
       ...executor,
-      ...(available
-        ? { "messaging-unavailable": false }
-        : messagingFailures === 2 && { "messaging-unavailable": true }),
+      ...messaging.alerts,
     };
     const changes = Object.entries(desired)
       .filter(([name, raised]) => state.reported[name] !== raised)
@@ -147,16 +163,13 @@ const healthMonitor = (options: {
         Effect.catch(recover("alert.report", now, false)),
       ));
     const next = {
-      messagingFailures,
+      messagingFailures: messaging.failures,
+      messagingDue: messaging.due,
       executorDue: executorDue ? now + executorInterval : state.executorDue,
       reported: reported ? { ...state.reported, ...desired } : state.reported,
     };
     yield* Effect.promise(() => storage.put("state", Schema.encodeSync(MonitorState)(next)));
-    yield* Effect.promise(() =>
-      storage.setAlarm(
-        Math.min(now + (available ? messagingInterval : messagingRetry), next.executorDue),
-      ),
-    );
+    yield* Effect.promise(() => storage.setAlarm(Math.min(next.messagingDue, next.executorDue)));
   });
   const ensure = Effect.gen(function* () {
     if ((yield* Effect.promise(() => storage.getAlarm())) !== null) return;

@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, type Scope } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { createHost } from "./embedded-host.test-helper.ts";
 import { remoteHost } from "../src/opencode/remote.ts";
 import { loadPersonas, type Persona } from "@ren-ai/personas";

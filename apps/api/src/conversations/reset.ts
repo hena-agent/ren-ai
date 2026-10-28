@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { conversations } from "./conversations.ts";
 import type { IncomingMessage, Messages } from "@ren-ai/imsg";
 import { resetBoundary } from "./reset-boundary.ts";

@@ -7,7 +7,7 @@ import {
 import { scriptedPersona, startTestHost } from "../../test/messaging-host.test-helper.ts";
 import { TestLLM } from "@opencode/ai/testing";
 import { Deferred, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 

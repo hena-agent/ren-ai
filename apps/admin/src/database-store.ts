@@ -27,6 +27,13 @@ import { personaImageBase } from "@ren-ai/personas/image-url";
 import { databaseSheets } from "./database-sheets.ts";
 import { databaseListing } from "./database-listing.ts";
 
+function requirePublication(record: PersonaRecord, documents: Parameters<PersonaStore["save"]>[1]) {
+  if (!record.published) return;
+  const issues = publicationIssues(record, documents);
+  if (issues.length)
+    throw new PersonaError("invalid", issues.map((issue) => issue.message).join(" "));
+}
+
 async function databaseOperation<T>(run: () => Promise<T>) {
   try {
     return await run();
@@ -160,11 +167,7 @@ export function databaseStore(
     publicList: () => databaseOperation(() => readPublicCatalog(binding, imageBase)),
     save: async (input, documents, expected) => {
       const record = decodePersona(input);
-      if (record.published) {
-        const issues = publicationIssues(record, documents);
-        if (issues.length)
-          throw new PersonaError("invalid", issues.map((issue) => issue.message).join(" "));
-      }
+      requirePublication(record, documents);
       const previous = await currentPersonaRows(db).where(eq(personas.id, record.id)).get();
       if (
         (previous ? serializePersona(await get(record.id)) : "") !== expected.persona ||

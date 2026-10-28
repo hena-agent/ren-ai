@@ -1,7 +1,7 @@
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { Context, Effect, Exit, Layer, Scope } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { SqlClient } from "effect/sql";
+import { FetchHttpClient, HttpClient } from "effect/http";
 import { createApplicationStore } from "./application-store.ts";
 import type { ApplicationStore } from "./application-store.ts";
 import { cloudflareConfiguration } from "./cloudflare-config.ts";
@@ -184,36 +184,36 @@ export const createCloudflareApplication = async (
       : unavailable;
     const execution = () =>
       (runtime ??= createExecutionRuntime(store, configuration, bindings, groundRules, fetcher));
+    const handle = async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/health" && request.method === "GET")
+        return health(request, store, configuration, fetcher, webhooks);
+      if (path.startsWith("/management/state/"))
+        return stateTransfer(
+          request,
+          store,
+          configuration.applicationStore.managementToken,
+          configuration.bootstrapOnly,
+        );
+      if (configuration.bootstrapOnly && isWriteRequest(request, path))
+        return bootstrapResponse(request);
+      if (path === "/management/intake/watch" || path === "/management/intake/wake")
+        return intake(request);
+      if (path === "/management/alerts") return alerts(request);
+      if (
+        path.startsWith("/rpc") ||
+        path.startsWith("/operator/") ||
+        path === "/management/catalog/refresh"
+      ) {
+        if (configuration.bootstrapOnly) return bootstrapResponse(request);
+        return (await execution()).fetch(request);
+      }
+      return store.handler(request);
+    };
     return {
       store,
       configuration,
-      fetch: (incoming) =>
-        applicationRequest(incoming, async (request) => {
-          const path = new URL(request.url).pathname;
-          if (path === "/health" && request.method === "GET")
-            return health(request, store, configuration, fetcher, webhooks);
-          if (path.startsWith("/management/state/"))
-            return stateTransfer(
-              request,
-              store,
-              configuration.applicationStore.managementToken,
-              configuration.bootstrapOnly,
-            );
-          if (configuration.bootstrapOnly && isWriteRequest(request, path))
-            return bootstrapResponse(request);
-          if (path === "/management/intake/watch" || path === "/management/intake/wake")
-            return intake(request);
-          if (path === "/management/alerts") return alerts(request);
-          if (
-            path.startsWith("/rpc") ||
-            path.startsWith("/operator/") ||
-            path === "/management/catalog/refresh"
-          ) {
-            if (configuration.bootstrapOnly) return bootstrapResponse(request);
-            return (await execution()).fetch(request);
-          }
-          return store.handler(request);
-        }),
+      fetch: (incoming) => applicationRequest(incoming, handle),
       tick: async (requestId, due) => {
         if (configuration.bootstrapOnly) return;
         const metrics = store.metricsTick(requestId);

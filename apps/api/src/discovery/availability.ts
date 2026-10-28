@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Clock, Effect, Option } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { remoteMessages } from "@ren-ai/imsg/client";
 import { contactCause, type ContactLog } from "./diagnostics.ts";
 

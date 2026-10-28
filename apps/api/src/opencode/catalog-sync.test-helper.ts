@@ -1,8 +1,8 @@
 import { Deferred, Effect, Fiber, type Scope } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { Session } from "@opencode/schema";
 import { SessionMessage } from "@opencode/schema/session-message";
-import type { SqlClient } from "effect/unstable/sql";
+import type { SqlClient } from "effect/sql";
 import { TestLLM } from "@opencode/ai/testing";
 import {
   createPersonaStore,

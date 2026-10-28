@@ -55,24 +55,21 @@ test.each(["restore", "shared-life"] as const)(
             "Restore requires CONFIRM_BOOTSTRAP_ONLY=yes; do not restore alongside live intake",
           );
         }
-        if (operation === "restore")
-          expect(
-            (yield* runSessionTransfer(client, { ...input, confirmation: "yes" }).pipe(Effect.flip))
-              .message,
-          ).toContain("ENOENT");
-        else {
-          expect(
-            (yield* runSessionTransfer(client, { ...input, confirmation: "yes" }).pipe(Effect.flip))
-              .message,
-          ).toBe("Shared-life cutover requires an application state file");
-          expect(
-            (yield* runSessionTransfer(client, {
-              ...input,
-              confirmation: "yes",
-              applicationFile: join(root, "missing-application.json"),
-            }).pipe(Effect.flip)).message,
-          ).toContain("ENOENT");
-        }
+        expect(
+          (yield* runSessionTransfer(client, { ...input, confirmation: "yes" }).pipe(Effect.flip))
+            .message,
+        ).toContain(
+          operation === "restore"
+            ? "ENOENT"
+            : "Shared-life cutover requires an application state file",
+        );
+        expect(
+          (yield* runSessionTransfer(client, {
+            ...input,
+            confirmation: "yes",
+            applicationFile: join(root, "missing-application.json"),
+          }).pipe(Effect.flip)).message,
+        ).toContain("ENOENT");
         expect(calls).toEqual([]);
       }),
     ),

@@ -1,6 +1,6 @@
 import { Effect, Scope } from "effect";
 import { vi } from "vitest";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { fakeMessages } from "../src/messages/messages.fake.ts";
 import { fakeGestures } from "../src/gestures/gestures.fake.ts";
 import { fakeNotifications } from "../src/messages/notifications.fake.ts";

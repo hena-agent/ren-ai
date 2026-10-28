@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Session } from "@opencode/schema/session";
 import { fromPartial } from "@total-typescript/shoehorn";
 import type { PersonaRuntime } from "../src/opencode/runtime.ts";

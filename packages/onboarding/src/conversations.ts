@@ -7,6 +7,12 @@ export const ConversationQuery = Schema.Struct({
   search: Schema.String.check(Schema.isMaxLength(100)),
   before: Schema.optionalKey(id),
 });
+export const parseConversationQuery = (params: URLSearchParams) =>
+  Schema.decodeUnknownSync(ConversationQuery)({
+    filter: params.get("filter") ?? "active",
+    search: params.get("search") ?? "",
+    ...(params.has("before") && { before: Number(params.get("before")) }),
+  });
 export const ConversationRecovery = Schema.Struct({
   id,
   requestId: Schema.String.check(Schema.isPattern(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/)),

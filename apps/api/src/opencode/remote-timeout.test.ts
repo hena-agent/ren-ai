@@ -1,7 +1,7 @@
 import { Session } from "@opencode/schema";
 import { Deferred, Effect, Exit, Fiber, Stream } from "effect";
 import { TestClock } from "effect/testing";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { expect, test } from "vitest";
 import { remoteHost } from "./remote.ts";
 import { sessionFolders } from "@ren-ai/plugin-session-folder/protocol";
@@ -86,10 +86,10 @@ test.each(
           yield* TestClock.adjust("61 seconds");
           const result = call.pollUnsafe();
           expect(result).toBeDefined();
-          if (result) expect(Exit.isFailure(result)).toBe(true);
+          expect(Exit.isFailure(result!)).toBe(true);
           expect(signals).toHaveLength(1);
           expect(signals[0]!.aborted).toBe(true);
-          if (stage === "body") expect(bodyCancelled).toBe(true);
+          expect(bodyCancelled).toBe(stage === "body");
         }).pipe(Effect.provide(TestClock.layer())),
       ),
     );

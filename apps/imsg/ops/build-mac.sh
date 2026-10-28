@@ -3,7 +3,7 @@ set -euo pipefail
 ops="$(cd "$(dirname "$0")" && pwd)"
 output="${1:?Usage: build-mac.sh NEW-ARTIFACT-DIRECTORY RUSTPUSH-BINARY}"
 native="${2:?Supply the ren-rustpush executable built from this checkout}"
-[[ "$(uname -s)" == Darwin && "$(bun --version)" == 1.4.2 ]] || { echo 'Build on macOS with Bun 1.4.2' >&2; exit 1; }
+[[ "$(uname -s)" == Darwin && "$(bun --version)" == 1.4.4 ]] || { echo 'Build on macOS with Bun 1.4.4' >&2; exit 1; }
 [[ -x "$native" && ! -e "$output" ]] || { echo 'Executable ren-rustpush and a new output directory are required' >&2; exit 1; }
 file -b "$native" | grep -q 'Mach-O' || { echo 'Pass the native ren-rustpush executable' >&2; exit 1; }
 for binary in "$native" "$(command -v bun)"; do
@@ -22,7 +22,7 @@ cp "$ops/install-deploy-agent.sh" "$ops/write-deploy-plist.sh" "$ops/update.sh" 
 chmod 700 "$output/bin/bun" "$output/ren-rustpush"
 (
   cd "$output"
-  printf 'architecture=%s\nbun=1.4.2\ntransport=rustpush\n' "$(uname -m)" > artifact.info
+  printf 'architecture=%s\nbun=1.4.4\ntransport=rustpush\n' "$(uname -m)" > artifact.info
   find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} \; > SHA256SUMS
 )
 echo "Built $output. No OpenCode packages/credentials; installer does not start services."

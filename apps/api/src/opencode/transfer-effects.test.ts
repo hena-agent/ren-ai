@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { Effect, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
 import {
@@ -72,6 +72,12 @@ test.each([false, true])(
                     part.type === "tool" &&
                     part.id === "completed-send" &&
                     part.state.status === "completed",
+                ) &&
+                current.content.some(
+                  (part) =>
+                    part.type === "tool" &&
+                    part.id === "blocked-wait" &&
+                    part.state.status === "running",
                 )
               )
                 return;

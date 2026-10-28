@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { rebuildHistoryParent } from "./schema-rebuild.ts";
 
 /** Runs in the migrator's transaction. Rebuild the parent without triggering child cascades. */

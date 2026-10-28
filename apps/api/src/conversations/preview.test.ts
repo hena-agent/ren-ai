@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { SqlClient } from "effect/unstable/sql";
+import type { SqlClient } from "effect/sql";
 import type { remoteMessages } from "@ren-ai/imsg/client";
 import { expect, test, vi } from "vitest";
 import { relationshipFixture } from "../../test/relationship.test-helper.ts";

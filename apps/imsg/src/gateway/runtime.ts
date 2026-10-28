@@ -9,11 +9,11 @@ const serviceHandle = "hi@renai.im";
 
 export const startMessagingGateway = Effect.gen(function* () {
   const config = yield* Config.all({
-    token: Config.string("IMSG_TOKEN"),
-    port: Config.int("IMSG_PORT").pipe(Config.withDefault(4702)),
-    hostname: Config.string("IMSG_LISTEN_HOST").pipe(Config.withDefault("127.0.0.1")),
+    token: Config.String("IMSG_TOKEN"),
+    port: Config.Int("IMSG_PORT").pipe(Config.withDefault(4702)),
+    hostname: Config.String("IMSG_LISTEN_HOST").pipe(Config.withDefault("127.0.0.1")),
     // The installed LaunchAgent runs in its messaging home; tests and local runs choose another.
-    home: Config.string("IMSG_HOME").pipe(Config.withDefault(".")),
+    home: Config.String("IMSG_HOME").pipe(Config.withDefault(".")),
   });
   const health = {
     raise: (name: string, detail: string) => Effect.logWarning(`${name}: ${detail}`),

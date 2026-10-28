@@ -24,6 +24,76 @@ export interface FolderSnapshotIO {
   ) => Effect.Effect<ReadonlyArray<typeof personaFolderSnapshot.Type>, Error>;
 }
 
+const exportOneSession = Effect.fnUntraced(function* (
+  client: Client,
+  sessionID: Session.ID,
+  folders: Map<string, typeof personaFolderSnapshot.Type>,
+  requireInventory: boolean,
+) {
+  const pending = yield* client.session.inbox.list({ sessionID });
+  const [last] = (yield* client.message.list({ sessionID, order: "desc", limit: 1 })).data;
+  const data = yield* client.session.export({ sessionID, sanitize: false });
+  const directory = data.info.location.directory;
+  const root = dirname(dirname(directory));
+  if (!managedFolder(root, directory))
+    return yield* Effect.fail(new Error("Migrate legacy sessions before exporting shared life"));
+  if (!folders.has(directory)) {
+    if (requireInventory)
+      return yield* Effect.fail(
+        new Error("Inventory has no session scope; retry after admission settles"),
+      );
+    const snapshot = yield* client
+      .rpc(sessionFolders)
+      .snapshot({ folderID: sessionID }, { location: { directory: root } });
+    const target = snapshot.sandboxID
+      ? sessionDirectory(root, snapshot.sandboxID)
+      : personaDirectory(root, snapshot.snapshot.persona.id);
+    if (target !== directory)
+      return yield* Effect.fail(
+        new Error(
+          "Session location does not match its durable persona scope; retry after admission settles",
+        ),
+      );
+    folders.set(directory, snapshot);
+  }
+  const saved = folders.get(directory);
+  const binding = saved?.bindings[sessionID];
+  if (!saved || !binding)
+    return yield* Effect.fail(
+      new Error("Snapshot has no session binding; retry after admission settles"),
+    );
+  const folder = {
+    persona: saved.snapshot.persona,
+    agent: saved.snapshot.agent,
+    rules: saved.snapshot.rules,
+    binding,
+  };
+  const unfinished =
+    last !== undefined &&
+    data.messages.at(-1)?.type !== "idle" &&
+    (last.type === "user" ||
+      last.type === "synthetic" ||
+      !data.messages.some((message) => message.id === last.id));
+  return {
+    ...data,
+    pending,
+    folder,
+    ...(unfinished
+      ? {
+          recovery: {
+            id: SessionMessage.ID.make(`msg_cutover_${last.id}`),
+            tools:
+              last.type === "assistant"
+                ? last.content
+                    .filter((part) => part.type === "tool")
+                    .map((part) => ({ callID: part.id, tool: part.name, state: part.state }))
+                : [],
+          },
+        }
+      : {}),
+  };
+});
+
 export const exportSessions = (
   client: Client,
   ids: ReadonlyArray<Session.ID>,
@@ -43,73 +113,7 @@ export const exportSessions = (
       folders.set(target, snapshot);
     }
     const sessions = yield* Effect.forEach(ids, (sessionID) =>
-      Effect.gen(function* () {
-        const pending = yield* client.session.inbox.list({ sessionID });
-        const [last] = (yield* client.message.list({ sessionID, order: "desc", limit: 1 })).data;
-        const data = yield* client.session.export({ sessionID, sanitize: false });
-        const directory = data.info.location.directory;
-        const root = dirname(dirname(directory));
-        const source = managedFolder(root, directory);
-        if (!source)
-          return yield* Effect.fail(
-            new Error("Migrate legacy sessions before exporting shared life"),
-          );
-        if (!folders.has(directory)) {
-          if (inventory)
-            return yield* Effect.fail(
-              new Error("Inventory has no session scope; retry after admission settles"),
-            );
-          const snapshot = yield* client
-            .rpc(sessionFolders)
-            .snapshot({ folderID: sessionID }, { location: { directory: root } });
-          const target = snapshot.sandboxID
-            ? sessionDirectory(root, snapshot.sandboxID)
-            : personaDirectory(root, snapshot.snapshot.persona.id);
-          if (target !== directory)
-            return yield* Effect.fail(
-              new Error(
-                "Session location does not match its durable persona scope; retry after admission settles",
-              ),
-            );
-          folders.set(directory, snapshot);
-        }
-        const saved = folders.get(directory);
-        const binding = saved?.bindings[sessionID];
-        if (!saved || !binding)
-          return yield* Effect.fail(
-            new Error("Snapshot has no session binding; retry after admission settles"),
-          );
-        const folder = {
-          persona: saved.snapshot.persona,
-          agent: saved.snapshot.agent,
-          rules: saved.snapshot.rules,
-          binding,
-        };
-        const unfinished =
-          last !== undefined &&
-          data.messages.at(-1)?.type !== "idle" &&
-          (last.type === "user" ||
-            last.type === "synthetic" ||
-            !data.messages.some((message) => message.id === last.id));
-        return {
-          ...data,
-          pending,
-          folder,
-          ...(unfinished
-            ? {
-                recovery: {
-                  id: SessionMessage.ID.make(`msg_cutover_${last.id}`),
-                  tools:
-                    last.type === "assistant"
-                      ? last.content
-                          .filter((part) => part.type === "tool")
-                          .map((part) => ({ callID: part.id, tool: part.name, state: part.state }))
-                      : [],
-                },
-              }
-            : {}),
-        };
-      }),
+      exportOneSession(client, sessionID, folders, inventory !== undefined),
     );
     return Schema.encodeSync(sessionArchive)({
       version: 2,

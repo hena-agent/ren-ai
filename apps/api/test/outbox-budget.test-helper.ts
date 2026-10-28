@@ -1,6 +1,6 @@
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { fakeMessages } from "../../imsg/src/messages/messages.fake.ts";
 import { fakeGestures } from "../../imsg/src/gestures/gestures.fake.ts";
 import type { ApplicationStore } from "../src/application-store.ts";

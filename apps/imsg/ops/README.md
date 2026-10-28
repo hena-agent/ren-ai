@@ -9,7 +9,7 @@ separate RPC and outgoing ledger. See [the alias runbook](notifications.md).
 
 ## Build and install
 
-Build on Apple Silicon macOS with Bun 1.4.2, Rustup, Xcode command-line tools and
+Build on Apple Silicon macOS with Bun 1.4.4, Rustup, Xcode command-line tools and
 `protoc`. The pinned Rust toolchain and dependency revisions live in `apps/rustpush`.
 
 ```sh
@@ -114,7 +114,7 @@ and inspect a Conversation photo before choosing to send it.
 ## Automatic deployment
 
 CI checks native code on a GitHub-hosted Mac. Once all gates pass, it packages the
-native bridge and gateway with Bun 1.4.2, attests provenance and publishes
+native bridge and gateway with Bun 1.4.4, attests provenance and publishes
 `imsg-bundle`. The Mac's `im.renai.imsg-deploy` LaunchAgent pulls completed `main`
 builds every two minutes; CI never reaches the Mac.
 

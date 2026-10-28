@@ -28,6 +28,19 @@ import { identitySheetFiles } from "./identity-sheets.ts";
 import { fileListing } from "./file-listing.ts";
 import type { PersonaQuery } from "./listing.ts";
 
+async function rollbackWrites(
+  failure: AggregateError,
+  rollbacks: Array<(() => Promise<void | void[]>) | undefined>,
+) {
+  for (const rollback of rollbacks) {
+    try {
+      await rollback?.();
+    } catch (rollbackError) {
+      failure.errors.push(rollbackError);
+    }
+  }
+}
+
 export async function createPersonaStore(directory: string) {
   await mkdir(directory, { recursive: true });
   const initialWrites = new Set<string>();
@@ -104,13 +117,7 @@ export async function createPersonaStore(directory: string) {
       const failure = new AggregateError([error], "Persona commit and initial rollback failed", {
         cause: error,
       });
-      for (const rollback of [history?.rollback, installed ? staged!.rollback : undefined]) {
-        try {
-          await rollback?.();
-        } catch (rollbackError) {
-          failure.errors.push(rollbackError);
-        }
-      }
+      await rollbackWrites(failure, [history?.rollback, installed ? staged!.rollback : undefined]);
       if (failure.errors.length > 1) throw failure;
       throw error;
     } finally {

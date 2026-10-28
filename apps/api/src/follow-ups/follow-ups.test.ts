@@ -1,6 +1,6 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vitest";
 import { followUps } from "./follow-ups.ts";

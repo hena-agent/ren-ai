@@ -400,7 +400,7 @@ and rejects writes during bootstrap. Duplicate notifications are safe. Catalog
 loading runs at execution startup and on notifications, never on heartbeats.
 Admin retains and retries unacknowledged notifications across restarts.
 
-No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.2 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
+No script below performs the live cutover, stops existing services, changes an existing Cloudflare ingress, or edits the external OpenCode deployment. Install/restore refuse existing destinations. Run scripts with `bash`; TypeScript edges run with Bun 1.4.4 from a dependency-installed checkout. Treat exported archives as private: they contain conversations and service credentials. Encrypt and copy backups off-host yourself; no paid service is required.
 
 ## Services and credentials
 
@@ -458,7 +458,7 @@ source automatically.
 
    Initial inventory can be empty while a location initializes. Inspect the loaded location again before treating it as empty. On the deployed 2.0.19 instance, disabling versioned package targets did not disable the loaded plugins; their actual IDs (`henadev.anthropic-auth`, `opencode-discord-noti`, `opencode-translate`) did. Verify those plugins are absent or disabled after reloading the persona location, while ordinary locations retain them.
 
-2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at `/srv/ren-ai/plugins/{tools,context,memory,title,dice,session-folder}/src`. OpenCode 2.0.19's local directory loader needs the directory containing `index.js`; the parent package's `main` field is insufficient. Runtime modules receive the root directory and callback URL and read `TOKEN_MANAGEMENT` from the process environment. They resolve the event's session ID through its durable binding, rather than deriving it from a directory name. The folder RPC is registered in the root location. Source declarations and installed platform dependencies remain pinned to OpenCode 2.0.19.
+2. Generate config with `bun ops/location-config.ts REVIEWED-targets.json NEW-opencode.json`. Default callback is `https://api.renai.im/rpc`; override `REN_AI_CALLBACK_URL` only deliberately. Config points at `/srv/ren-ai/plugins/{tools,context,memory,title,dice,session-folder}/src`, the directory containing `index.js`. Runtime modules receive the root directory and callback URL and read `TOKEN_MANAGEMENT` from the process environment. They resolve the event's session ID through its durable binding, rather than deriving it from a directory name. The folder RPC is registered in the root location. Current source declarations and standalone dependencies are pinned to OpenCode 2.2.0 and Effect 4.0.7. Upgrade the external executor to the same OpenCode version with the plugin rollout; its historical 2.0.19 Compose pin is not the current deployment target.
 3. Put `opencode.json` in `REN_AI_LOCATION_INPUT`, owner-only. Supply `TOKEN_MANAGEMENT` through the protected environment. During an approved pause, stop intake/scheduling and export stopped volumes before changing an installed location. Select a **new**, empty `REN_AI_LOCATION_VOLUME` and create it explicitly; never overwrite the previous plugin volume. Keep `BOOTSTRAP_ONLY=true` throughout the [cutover](shared-life-cutover.md).
 4. Validate `docker compose -f ops/compose.yml config --quiet`, then run `docker compose -f ops/compose.yml --profile tools run --build --rm install-location`. The installer refuses a nonempty volume and creates persona and Sandbox mountpoints. The Worker bundles ground rules as text; Node adapters use `loadGroundRules`.
 
@@ -572,10 +572,35 @@ stable public addresses. Reconcile uncertain sends and pause-period intake,
 activate exactly one intake, then retire the old host. Keep backups and
 credentials together under access control.
 
+## Coordinated Catalog and OpenCode upgrade
+
+The stored-record Catalog contract and OpenCode 2.2.0 plugins must roll out in one
+approved pause. Before merging this upgrade, set the GitHub repository variable
+`API_BOOTSTRAP_ONLY=true` and deploy the currently running API revision with
+`--var BOOTSTRAP_ONLY:true`. Confirm degraded bootstrap health and settle or record
+in-flight work before replacing executor plugins. CI preserves this pause while
+deploying the new API, rebuilding projections and deploying Admin. Leave the
+pause in place if any deployment fails; do not run a new consumer against the old
+Catalog producer.
+
+After CI completes, install the matching Mac artifacts and OpenCode 2.2.0 plugin
+bundle. Validate authenticated `/api/catalog` using the new `catalogClient.load`
+contract, and verify the executor and Messages readiness. Clear
+`API_BOOTSTRAP_ONLY`, deploy the exact merged API artifact with
+`--var BOOTSTRAP_ONLY:false`, then send authenticated
+`POST /management/catalog/refresh` and `POST /management/intake/wake` before
+declaring the rollout complete. Verify exact artifact revisions and readiness
+for all services and catch-up of messages received during the pause.
+
+Every subsequent projection rebuild that changes derived values advances the
+Catalog revision. After deployments, refresh the runtime Catalog through the same
+management endpoint once the executor is ready, even when no Persona was edited.
+This replaces its persisted projection snapshot and synchronizes native folders.
+
 ## Verification scope
 
 Repo tests prove the transfer and service contracts; operation tests exercise native snapshot exports, pagination, artifact graph rejection and proxy credential behavior. Validate scripts with `bash -n` and Compose with configured staging values. Image builds and private artifact/installer checks are safe before live deployment. Actual PPPC delivery, public hostname routing, old-version snapshot fidelity and native UI/model behavior require the attended staged checks above; they are not claimed complete by source tests.
 
-After changing runtime plugins, build the plugin image and run the compiled-plugin regression harness with the separate plugin-directory artifact layout. Its default path exercises cold activation and folder RPCs inside the compiled CLI using isolated fake services; `--preprovisioned` is only a debugging fallback. The former `/artifact/plugin` layout is obsolete. Cross-instance schema failures can escape embedded-runtime tests: keep every folder RPC input/output/error/event schema and the positive-number `wait` input behind opaque Standard Schema boundaries. Void folder operations return JSON `null` on the wire. `COMPILED_OPENCODE_IMAGE` can select the pinned CLI image when the local compatibility image is unavailable.
+After changing runtime plugins, build the plugin image and run the compiled-plugin regression harness with the separate plugin-directory artifact layout. It exercises cold activation and folder RPCs inside the compiled CLI using isolated fake services. Cross-instance schema failures can escape embedded-runtime tests: keep every folder RPC input/output/error/event schema and the positive-number `wait` input behind opaque Standard Schema boundaries. Void folder operations return JSON `null` on the wire. The harness defaults to `ghcr.io/anomalyco/opencode:2.2.0`; `COMPILED_OPENCODE_IMAGE` can select a compatibility image of the same version.
 
-From the repository root, with Bun 1.4.2, run `COMPILED_PLUGIN_IMAGE=ren-ai/plugin:local bun apps/api/test/compiled-plugin/regression.mjs`. The harness builds that plugin image; `--artifact-only` uses an already built image. It also verifies finite context responses, local wait deadlines and interruption by admitted input, and the absence of `wait`, `status` and `sends` RPC calls.
+From the repository root, with Bun 1.4.4, build `docker build --target plugin -f apps/api/ops/Dockerfile -t ren-ai/plugin:local .`, then run `COMPILED_PLUGIN_IMAGE=ren-ai/plugin:local bun apps/api/test/compiled-plugin/regression.mjs`. It also verifies finite context responses, local wait deadlines and interruption by admitted input, and the absence of `wait`, `status` and `sends` RPC calls.

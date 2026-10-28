@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { Conversation } from "../conversations/conversations.ts";
 import type { IncomingMessage, Messages } from "@ren-ai/imsg";
 import { edited, unsent } from "../transcript/transcript.ts";

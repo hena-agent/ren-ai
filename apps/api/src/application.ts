@@ -15,7 +15,7 @@ import { failedTurns, type FailureAlerts } from "./opencode/failed-turns.ts";
 import { setupRebuilding } from "./conversations/rebuild.ts";
 import { retainedSessions } from "./conversations/retained.ts";
 import { stoppedConversations } from "./conversations/stop.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { ConversationPhotos } from "./photos/photos.ts";
 
 export const startMessagingApplication = <Host extends PersonaRuntime, E, R>(

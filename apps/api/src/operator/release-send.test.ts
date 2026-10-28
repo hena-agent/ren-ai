@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { ConfigProvider, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { captureDiagnostics } from "../../test/diagnostics.test-helper.ts";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";

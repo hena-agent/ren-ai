@@ -1,7 +1,7 @@
 import { rm, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Stream } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { TestLLM } from "@opencode/ai/testing";
 import { loadGroundRules } from "@ren-ai/plugin-session-folder/files";
 import { expect, test } from "vitest";

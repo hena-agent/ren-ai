@@ -2,7 +2,7 @@ import { Session } from "@opencode/schema";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Cause, Clock, Effect, Exit } from "effect";
 import { TestClock } from "effect/testing";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { conversations } from "../conversations/conversations.ts";
 import { migrate } from "../database.ts";

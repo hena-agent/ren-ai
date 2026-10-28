@@ -1,6 +1,6 @@
 import { Effect, Result } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
@@ -55,11 +55,11 @@ test.each([
           text: "recover this",
           ...(pending && { resume: false }),
         });
-        if (pending) expect(yield* app.sessions.inbox(session.id)).toHaveLength(1);
-        else {
-          yield* app.sessions.wait(session.id);
-          expect((yield* app.sessions.get(session.id)).outcome).toBe("failed");
-        }
+        if (!pending) yield* app.sessions.wait(session.id);
+        const initial = pending
+          ? (yield* app.sessions.inbox(session.id)).length
+          : (yield* app.sessions.get(session.id)).outcome;
+        expect(initial).toBe(pending ? 1 : "failed");
         offline = true;
         expect(Result.isSuccess(yield* Effect.result(app.heartbeat.failedTurns))).toBe(true);
         const sql = yield* SqlClient.SqlClient;
@@ -73,9 +73,9 @@ test.each([
           injectInventoryFailure = true;
           inventoryFailures = 0;
           yield* app.heartbeat.failedTurns;
-          expect(inventoryFailures).toBe(1);
           yield* sql`UPDATE application_work SET due = 0 WHERE name = ${`turn:${session.id}`}`;
         }
+        expect(inventoryFailures).toBe(failInventory ? 1 : 0);
         yield* Effect.gen(function* () {
           while ((yield* app.sessions.get(session.id)).outcome !== "succeeded") {
             yield* app.heartbeat.failedTurns;

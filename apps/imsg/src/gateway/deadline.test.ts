@@ -32,11 +32,12 @@ test.each(["read", "send"])(
           yield* TestClock.adjust("1 second");
           const result = call.pollUnsafe();
           expect(result).toBeDefined();
-          if (result && Exit.isFailure(result)) {
-            const failure = result.cause.reasons.find(Cause.isFailReason)?.error;
-            expect(failure).toBeInstanceOf(Error);
-            expect(failure).toHaveProperty("cause._tag", "TimeoutError");
-          }
+          const failure =
+            result && Exit.isFailure(result)
+              ? result.cause.reasons.find(Cause.isFailReason)?.error
+              : undefined;
+          expect(failure).toBeInstanceOf(Error);
+          expect(failure).toHaveProperty("cause._tag", "TimeoutError");
           expect(signals).toHaveLength(1);
           expect(signals[0]!.aborted).toBe(true);
           expect(f.local.bubbles).toEqual([]);

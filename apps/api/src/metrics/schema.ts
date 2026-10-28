@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { counterSchema } from "./totals.ts";
 import { discordSchema } from "./discord.ts";
 

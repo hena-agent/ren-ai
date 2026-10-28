@@ -8,7 +8,7 @@ import {
 } from "../test/cloudflare-app.test-helper.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Deferred, Effect, Exit } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { expect, test, vi } from "vitest";
 import { createCloudflareApplication } from "./cloudflare-app.ts";
 import { executionBindings } from "../test/execution-bindings.ts";

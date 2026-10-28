@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { remoteMessages } from "@ren-ai/imsg/client";
 import type { CloudflareConfiguration } from "./cloudflare-config.ts";
 

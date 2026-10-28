@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Context, Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { expect, test, vi } from "vitest";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { BrowsePage, discoveryNotice, type DiscoveryRequest } from "@ren-ai/onboarding";

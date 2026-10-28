@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigProvider, Effect, Scope } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { afterEach, expect, test, vi } from "vitest";
 import { bridgeFixture, incoming, service } from "../../test/bridge.test-helper.ts";
 import { listenerUrl } from "../../test/listener.test-helper.ts";

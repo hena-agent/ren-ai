@@ -2,7 +2,7 @@ import { control } from "../test/execution-runtime.test-helper.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Context, Effect, Exit, Layer, Scope } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { migrate } from "./database.ts";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ApplicationStore } from "./application-store.ts";

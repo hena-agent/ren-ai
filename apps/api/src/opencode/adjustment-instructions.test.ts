@@ -12,6 +12,37 @@ import { emptyAdjustments } from "../../../../packages/plugins/session-folder/sr
 import { folderFiles } from "@ren-ai/plugin-session-folder/files";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
 
+interface ObservedContext {
+  phase: string;
+  compacting: boolean;
+  system: string;
+  tools: number;
+}
+
+const expectInstructions = (
+  { system, phase }: ObservedContext,
+  directory: string,
+  groundRules: string,
+) => {
+  const correction =
+    phase === "first"
+      ? "FIRST_CORRECTION_TOKEN"
+      : phase === "second"
+        ? "SECOND_CORRECTION_TOKEN"
+        : "";
+  expect(system).toContain("You are Persona1.");
+  expect(system).toContain(groundRules);
+  expect(system).not.toContain("<persona-adjustments");
+  expect(system.includes("ADJUSTMENTS.md")).toBe(Boolean(correction));
+  expect(system.split("FIRST_CORRECTION_TOKEN")).toHaveLength(phase === "first" ? 2 : 1);
+  expect(system.split("SECOND_CORRECTION_TOKEN")).toHaveLength(phase === "second" ? 2 : 1);
+  expect(system).toContain(
+    correction
+      ? `${groundRules}\n\nInstructions from: ${join(directory, "ADJUSTMENTS.md")}\n${correction}`
+      : groundRules,
+  );
+};
+
 test.each([
   "",
   "\n\nInstructions from: /other/notes.md\nOther instructions.",
@@ -96,30 +127,15 @@ test("real OC appends the latest corrections directly to Ground rules in primary
         );
       let phase = "first";
       let compactions = 0;
+      const contexts: ObservedContext[] = [];
       yield* llm.serve((request) => {
         const compacting = JSON.stringify(request.messages).includes("Write her Memory");
         if (!compacting && !request.tools.some((tool) => tool.name === "review_adjustments"))
           return TestLLM.text("Persona1", "title");
         const system = request.system.map((part) => part.text).join("\n\n");
-        expect(system).toContain("You are Persona1.");
-        expect(system).toContain(groundRules);
-        expect(system).not.toContain("<persona-adjustments");
-        if (phase === "first" || phase === "second") {
-          const correction =
-            phase === "first" ? "FIRST_CORRECTION_TOKEN" : "SECOND_CORRECTION_TOKEN";
-          const combined = `${groundRules}\n\nInstructions from: ${join(session.location.directory, "ADJUSTMENTS.md")}\n${correction}`;
-          expect(system).toContain(combined);
-          expect(system.split(correction)).toHaveLength(2);
-          if (phase === "second") expect(system).not.toContain("FIRST_CORRECTION_TOKEN");
-          if (!compacting)
-            expect(system.indexOf("<current-state")).toBeGreaterThan(system.indexOf(correction));
-        } else {
-          expect(system).not.toContain("ADJUSTMENTS.md");
-          expect(system).not.toContain("SECOND_CORRECTION_TOKEN");
-        }
+        contexts.push({ phase, compacting, system, tools: request.tools.length });
         if (compacting) {
           compactions++;
-          expect(request.tools).toHaveLength(0);
           return TestLLM.text("## Important Context\nWe talked about books.", "checkpoint");
         }
         return phase === "first"
@@ -147,5 +163,18 @@ test("real OC appends the latest corrections directly to Ground rules in primary
       yield* remote.sessions.wait(session.id);
       expect((yield* remote.sessions.get(session.id)).outcome).toBe("succeeded");
       expect((yield* Effect.promise(() => files.read(session.id))).rules).toBe(groundRules);
+      expect(new Set(contexts.map((context) => context.phase))).toEqual(
+        new Set(["first", "second", "missing", "blank"]),
+      );
+      for (const context of contexts)
+        expectInstructions(context, session.location.directory, groundRules);
+      for (const context of contexts.filter((entry) => entry.compacting))
+        expect(context.tools).toBe(0);
+      for (const context of contexts.filter(
+        (entry) => !entry.compacting && ["first", "second"].includes(entry.phase),
+      ))
+        expect(context.system.indexOf("<current-state")).toBeGreaterThan(
+          context.system.indexOf("_CORRECTION_TOKEN"),
+        );
     }),
   ));

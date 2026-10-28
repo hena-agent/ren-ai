@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { SqlClient } from "effect/sql";
 import { createApplicationStore, type ApplicationStore } from "../src/application-store.ts";
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { registrationSchemaProbe } from "./registration-schema.test-helper.ts";

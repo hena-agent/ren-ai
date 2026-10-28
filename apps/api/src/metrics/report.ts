@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { koreaDay, type Metrics, type MetricTotal, type MetricsQuery } from "@ren-ai/onboarding";
 import { queueDiscord } from "./discord.ts";
 

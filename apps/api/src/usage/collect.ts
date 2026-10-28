@@ -1,49 +1,56 @@
 import type { MessageListInput, MessageListOutput } from "@opencode/client/effect/api";
 import { Session } from "@opencode/schema/session";
 import { Cause, Clock, Effect, Semaphore } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import { saveUsage } from "./save.ts";
 import { safetyInterval } from "../scheduling.ts";
 import { claimWork, workBatchSize } from "../work-budget.ts";
 
-export const usageCollector = (api: {
+interface UsageApi {
   readonly messages: (input: MessageListInput) => Effect.Effect<MessageListOutput, Error>;
   readonly get: (id: Session.ID) => Effect.Effect<Session.Info, Error>;
-}) =>
+}
+
+const collectUsage = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  api: UsageApi,
+  sessionID: string,
+) {
+  const [bound] = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
+  if (!bound) return;
+  // Native cursors paginate a snapshot, not a change feed. SQL persists only changed accounting metadata.
+  const messages: MessageListOutput["data"][number][] = [];
+  let cursor: string | undefined;
+  const visited = new Set<string>();
+  do {
+    const page = yield* api.messages({
+      sessionID: Session.ID.make(sessionID),
+      ...(cursor ? { cursor } : { order: "asc", limit: 100 }),
+    });
+    messages.push(...page.data);
+    cursor = page.cursor.next;
+    if (cursor && visited.has(cursor))
+      yield* Effect.fail(new Error("Repeated usage message cursor"));
+    if (cursor) visited.add(cursor);
+  } while (cursor);
+  const session = yield* api.get(Session.ID.make(sessionID));
+  const now = yield* Clock.currentTimeMillis;
+  yield* Effect.gen(function* () {
+    const live = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
+    if (live.length) yield* saveUsage(sql, session, messages, now);
+  }).pipe(sql.withTransaction);
+});
+
+export const usageCollector = (api: UsageApi) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const lock = yield* Semaphore.make(1);
     const collect = (sessionID: string) =>
       Effect.gen(function* () {
         const started = yield* Clock.currentTimeMillis;
-        const work = Effect.gen(function* () {
-          const [bound] = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
-          if (!bound) return;
-          // Native cursors paginate a snapshot, not a change feed. SQL persists only changed accounting metadata.
-          const messages: MessageListOutput["data"][number][] = [];
-          let cursor: string | undefined;
-          const visited = new Set<string>();
-          do {
-            const page = yield* api.messages({
-              sessionID: Session.ID.make(sessionID),
-              ...(cursor ? { cursor } : { order: "asc", limit: 100 }),
-            });
-            messages.push(...page.data);
-            cursor = page.cursor.next;
-            if (cursor && visited.has(cursor))
-              yield* Effect.fail(new Error("Repeated usage message cursor"));
-            if (cursor) visited.add(cursor);
-          } while (cursor);
-          const session = yield* api.get(Session.ID.make(sessionID));
-          const now = yield* Clock.currentTimeMillis;
-          yield* Effect.gen(function* () {
-            const live = yield* sql`SELECT 1 FROM usage_session WHERE session_id = ${sessionID}`;
-            if (live.length) yield* saveUsage(sql, session, messages, now);
-          }).pipe(sql.withTransaction);
-        });
-        yield* work.pipe(
+        yield* collectUsage(sql, api, sessionID).pipe(
           Effect.timeout("30 seconds"),
           Effect.catchCause((cause) =>
             Effect.gen(function* () {

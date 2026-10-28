@@ -1,6 +1,6 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { Effect, Exit } from "effect";
-import { HttpClient } from "effect/unstable/http";
+import { HttpClient } from "effect/http";
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { afterEach, expect, test, vi } from "vitest";
 import { createApplicationStore } from "./application-store.ts";

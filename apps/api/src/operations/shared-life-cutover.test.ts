@@ -16,6 +16,26 @@ const archivedSessions = (sessions: readonly Session.Info[], persona: Persona) =
     folder: renderSnapshot(persona, "old"),
   }));
 
+const cutoverApplication = (failure: string, session: Session.Info, persona: Persona) =>
+  JSON.stringify({
+    version: 1,
+    tables: [
+      {
+        name: "conversation",
+        columns: ["session_id", "persona_id", "usage_key", "ended_at", "rebuilding"],
+        rows: [
+          [
+            failure === "missing-session" ? "ses_missing" : session.id,
+            failure === "wrong-binding" ? "other" : persona.id,
+            "key",
+            null,
+            failure === "rebuilding" ? 1 : 0,
+          ],
+        ],
+      },
+    ],
+  });
+
 test("paused cutover preserves native history and isolates old user memories from the shared life", () =>
   withTransferClient(({ client, root, personas }) =>
     Effect.gen(function* () {
@@ -228,24 +248,7 @@ test.each([
                 version: 1,
                 sessions: failure === "duplicate" ? [entry, entry] : [entry],
               });
-        const application = JSON.stringify({
-          version: 1,
-          tables: [
-            {
-              name: "conversation",
-              columns: ["session_id", "persona_id", "usage_key", "ended_at", "rebuilding"],
-              rows: [
-                [
-                  failure === "missing-session" ? "ses_missing" : session.id,
-                  failure === "wrong-binding" ? "other" : persona.id,
-                  "key",
-                  null,
-                  failure === "rebuilding" ? 1 : 0,
-                ],
-              ],
-            },
-          ],
-        });
+        const application = cutoverApplication(failure, session, persona);
         const events: ContactDiagnostic[] = [];
         calls.length = 0;
         const error = yield* runSharedLifeCutover(client, {

@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { prepareMessaging } from "../src/application-tools.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
 import { applicationGateway } from "../src/opencode/application-gateway.ts";

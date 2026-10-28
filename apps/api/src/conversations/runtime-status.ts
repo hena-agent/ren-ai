@@ -1,5 +1,5 @@
 import { Effect, Result, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Session } from "@opencode/schema/session";
 import { ConversationRecovery, type ConversationRuntime } from "@ren-ai/onboarding";
 import { MissingSession, type PersonaRuntime } from "../opencode/runtime.ts";
@@ -76,40 +76,49 @@ export const runtimeStatus = (
     return { inspect, recover: endings.recover };
   });
 
+const handleRuntimeRequest = async (
+  service: Effect.Success<ReturnType<typeof runtimeStatus>>,
+  run: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
+  request: Request,
+  requestId: string,
+) => {
+  if (request.method === "GET") {
+    const id = Number(new URL(request.url).searchParams.get("id"));
+    if (!Number.isSafeInteger(id) || id <= 0)
+      return Response.json({ error: "invalid_id" }, { status: 400 });
+    const result = await run(service.inspect(id, requestId));
+    return Response.json(result ?? { error: "not_found" }, { status: result ? 200 : 404 });
+  }
+  if (request.method !== "POST") return new Response(null, { status: 405 });
+  let input: typeof ConversationRecovery.Type;
+  try {
+    input = Schema.decodeUnknownSync(ConversationRecovery)(await request.json());
+  } catch {
+    return Response.json({ error: "invalid_recovery" }, { status: 400 });
+  }
+  const result = await run(Effect.result(service.recover(input)));
+  if (Result.isFailure(result)) {
+    if (!(result.failure instanceof RecoveryConflict)) throw result.failure;
+    contactLog({
+      requestId,
+      operation: "conversation.recover",
+      stage: "recovery.commit",
+      outcome: "failed",
+      level: "warn",
+      durationMs: 0,
+      ...contactCause(result.failure),
+    });
+    return Response.json({ error: "recovery_conflict" }, { status: 409 });
+  }
+  return Response.json({ queued: true });
+};
+
 export const runtimeStatusRequest =
   (
     service: Effect.Success<ReturnType<typeof runtimeStatus>>,
     run: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>,
   ) =>
   (request: Request) =>
-    conversationRequest(request, async (requestId) => {
-      if (request.method === "GET") {
-        const id = Number(new URL(request.url).searchParams.get("id"));
-        if (!Number.isSafeInteger(id) || id <= 0)
-          return Response.json({ error: "invalid_id" }, { status: 400 });
-        const result = await run(service.inspect(id, requestId));
-        return Response.json(result ?? { error: "not_found" }, { status: result ? 200 : 404 });
-      }
-      if (request.method !== "POST") return new Response(null, { status: 405 });
-      let input: typeof ConversationRecovery.Type;
-      try {
-        input = Schema.decodeUnknownSync(ConversationRecovery)(await request.json());
-      } catch {
-        return Response.json({ error: "invalid_recovery" }, { status: 400 });
-      }
-      const result = await run(Effect.result(service.recover(input)));
-      if (Result.isFailure(result)) {
-        if (!(result.failure instanceof RecoveryConflict)) throw result.failure;
-        contactLog({
-          requestId,
-          operation: "conversation.recover",
-          stage: "recovery.commit",
-          outcome: "failed",
-          level: "warn",
-          durationMs: 0,
-          ...contactCause(result.failure),
-        });
-        return Response.json({ error: "recovery_conflict" }, { status: 409 });
-      }
-      return Response.json({ queued: true });
-    });
+    conversationRequest(request, (requestId) =>
+      handleRuntimeRequest(service, run, request, requestId),
+    );

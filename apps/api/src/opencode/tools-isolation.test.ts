@@ -92,13 +92,15 @@ test.each(
           text: "A permissive read rule must not expose filesystem read.",
         });
         yield* remote.sessions.wait(session.id);
-        if (name === "read" || mode === "wrong-schema") expect(beforeCleanup).not.toBe("");
+        expect(Boolean(beforeCleanup)).toBe(name === "read" || mode === "wrong-schema");
         const requests = yield* llm.requests();
         expect(requests.length).toBeGreaterThan(0);
         expect(requests.every((request) => request.tools.every((tool) => tool.name !== name))).toBe(
           true,
         );
-        if (beforeCleanup) expect(removed).toContain(`OpenCode offered disallowed tool: ${name}`);
+        expect(removed.includes(`OpenCode offered disallowed tool: ${name}`)).toBe(
+          Boolean(beforeCleanup),
+        );
         expect(reads).toBe(0);
       }),
     );

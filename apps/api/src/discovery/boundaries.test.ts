@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { Context, Effect } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { HttpClient, HttpClientError, HttpClientResponse } from "effect/unstable/http";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
+import { SqlClient } from "effect/sql";
 import { expect, test, vi } from "vitest";
 import { discoveryNotice } from "@ren-ai/onboarding";
 import { migrate } from "../database.ts";

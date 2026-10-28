@@ -156,7 +156,7 @@ test.each([
             expect(transcript).toContain(
               tool === "wait" ? "cut short by something new" : "not sent: a new message arrived",
             );
-            if (change === "tapback") expect(transcript).toContain("<tapback");
+            expect(transcript.includes("<tapback")).toBe(change === "tapback");
             expect(fake.bubbles).toEqual([]);
           }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
         ),

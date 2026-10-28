@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { AbsolutePath, Agent, Location, Model, Session } from "@opencode/schema";
 import { createEmbeddedRoutes } from "@opencode/server/routes";
 import { Effect, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { expect, test } from "vitest";
 import { createHost } from "../../test/embedded-host.test-helper.ts";
 import { remoteHost } from "../opencode/remote.ts";

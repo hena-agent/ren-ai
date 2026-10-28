@@ -129,6 +129,38 @@ test("executor checks run every five minutes, report only changes and keep facts
   }
 });
 
+test("independent persisted deadlines preserve the two-minute and five-minute cadence", async () => {
+  capture();
+  const { gateway, fetcher } = mac(async () => facts(false, false));
+  const app = application();
+  const { state, storage } = memory();
+  const messaging: number[] = [];
+  let minute = 0;
+  gateway.gestures.gestures.probe = () =>
+    Effect.sync(() => {
+      messaging.push(minute);
+    });
+  try {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        for (const due of [0, 2, 4, 5, 6, 8, 10]) {
+          yield* TestClock.adjust((due - minute) * 60_000);
+          minute = due;
+          yield* monitorObject(storage, bindings, app.object, fetcher).alarm;
+        }
+        expect(messaging).toEqual([0, 2, 4, 6, 8, 10]);
+        expect(
+          fetcher.mock.calls.filter(([input]) => new Request(input).url.endsWith("/health")),
+        ).toHaveLength(3);
+        expect(app.reports).toHaveLength(1);
+        expect(state.alarm).toBe(12 * 60_000);
+      }).pipe(Effect.provide(TestClock.layer())),
+    );
+  } finally {
+    await gateway.server.dispose();
+  }
+});
+
 test.each([502, 503, 200])(
   "executor HTTP %s records a safe diagnostic and raises the unavailable alert",
   async (status) => {

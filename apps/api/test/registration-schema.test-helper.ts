@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { registrationHistorySchema } from "../src/conversations/schema.ts";
 
 /** Run the deployed predecessor shape against the caller's actual SQLite adapter. */

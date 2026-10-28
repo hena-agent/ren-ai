@@ -1,5 +1,5 @@
 import { Context, Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { expect, test } from "vitest";
 import { BrowsePage, PersonaLink, PublicPersona } from "@ren-ai/onboarding";
 import { withContactDatabase } from "./contact.test-helper.ts";

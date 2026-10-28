@@ -66,10 +66,10 @@ Open http://127.0.0.1:3867 to browse. Discovery samples ten candidates at a time
 
 For public hosting, configure Discovery's `VITE_DISCOVERY_API_URL=https://api.renai.im` and real `VITE_TURNSTILE_SITE_KEY`, and api-app's matching `TURNSTILE_SECRET`. api-app serves `/discovery/personas` from the current Admin Catalog and `/discovery/waitlist` through its application Durable Object. Its DB-free executor runs in Docker on the Mac at `api-msg.renai.im`. Discovery serves browser assets only and opens no separate catalog listener. See the app `.env.example` files for configuration.
 
-Quality checks use Node 24 from `.nvmrc` and Bun 1.4.2 from `package.json`.
+Quality checks use Node 24 from `.nvmrc` and Bun 1.4.4 from `package.json`.
 The artifact tests enforce the exact Bun version. To use it without changing your
-global installation, prefix commands with `bunx --package bun@1.4.2`, for example
-`bunx --package bun@1.4.2 bun run ci`.
+global installation, prefix commands with `bunx --package bun@1.4.4`, for example
+`bunx --package bun@1.4.4 bun run ci`.
 
 ```sh
 nvm use

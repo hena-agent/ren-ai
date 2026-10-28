@@ -1,5 +1,5 @@
 import { Context, Effect } from "effect";
-import { HttpClient } from "effect/unstable/http";
+import { HttpClient } from "effect/http";
 import { catalogClient } from "../src/personas/catalog.ts";
 import { migrate } from "../src/database.ts";
 import { servePublic } from "@ren-ai/transport/listener";

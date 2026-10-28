@@ -12,7 +12,7 @@ import { afterAll, expect, test, vi } from "vitest";
 import { startMessagingHost, startPersonaHost } from "../../test/application.test-helper.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";
 import { SqliteClient } from "@effect/sql-sqlite-node";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import {
   intruder,
   model,

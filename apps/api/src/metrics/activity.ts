@@ -1,7 +1,7 @@
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { Effect, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Activity, MetricsQuery } from "@ren-ai/onboarding";
 import { counterSchema, countMetric, countryValue, readTotals, sourceValue } from "./totals.ts";
 import { applicationRequest } from "../application-request.ts";

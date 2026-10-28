@@ -1,5 +1,5 @@
 import { Array, Clock, Deferred, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /** Each notification belongs to one session, including across a Conversation's reset. */
 export const timing = Effect.gen(function* () {

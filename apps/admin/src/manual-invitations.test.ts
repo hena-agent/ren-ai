@@ -81,6 +81,36 @@ const setup = async () => {
   const receipts = new Set<string>();
   const submissions: (typeof InvitationGrant.Type)[] = [];
   const logs: LogEntry[] = [];
+  const grantAccount = async (call: Request) => {
+    const grant = Schema.decodeUnknownSync(InvitationGrant)(await call.json());
+    submissions.push(grant);
+    if (!receipts.has(grant.requestId)) {
+      if (grant.kind === "basic" && account.basicGranted)
+        return new Response(null, { status: 409 });
+      const count = grant.kind === "basic" ? 2 : 1;
+      account = {
+        ...account,
+        basicGranted: account.basicGranted || grant.kind === "basic",
+        extraCount: account.extraCount + (grant.kind === "extra" ? 1 : 0),
+        invitations: [
+          ...account.invitations,
+          ...Array.from({ length: count }, (_, index) => ({
+            token: String(account.invitations.length + index).padStart(64, "0"),
+            createdAt: 1,
+            redeemedAt: null,
+            kind: grant.kind,
+            state: "queued" as const,
+          })),
+        ],
+      };
+      receipts.add(grant.requestId);
+    }
+    if (interrupted) {
+      interrupted = false;
+      throw new Error("connection closed");
+    }
+    return Response.json(badReply ? {} : account);
+  };
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const call = new Request(input, init);
     const path = new URL(call.url).pathname;
@@ -88,36 +118,7 @@ const setup = async () => {
       expect(Schema.decodeUnknownSync(InvitationLookup)(await call.json()).handle).toBe(phone);
       return Response.json(account);
     }
-    if (path.endsWith("/grant")) {
-      const grant = Schema.decodeUnknownSync(InvitationGrant)(await call.json());
-      submissions.push(grant);
-      if (!receipts.has(grant.requestId)) {
-        if (grant.kind === "basic" && account.basicGranted)
-          return new Response(null, { status: 409 });
-        const count = grant.kind === "basic" ? 2 : 1;
-        account = {
-          ...account,
-          basicGranted: account.basicGranted || grant.kind === "basic",
-          extraCount: account.extraCount + (grant.kind === "extra" ? 1 : 0),
-          invitations: [
-            ...account.invitations,
-            ...Array.from({ length: count }, (_, index) => ({
-              token: String(account.invitations.length + index).padStart(64, "0"),
-              createdAt: 1,
-              redeemedAt: null,
-              kind: grant.kind,
-              state: "queued" as const,
-            })),
-          ],
-        };
-        receipts.add(grant.requestId);
-      }
-      if (interrupted) {
-        interrupted = false;
-        throw new Error("connection closed");
-      }
-      return Response.json(badReply ? {} : account);
-    }
+    if (path.endsWith("/grant")) return grantAccount(call);
     return Response.json({ entries: [], eligibleCount: 0, invitationSettings: { enabled: false } });
   });
   const admin = createAdmin(f.store, "test-password", {

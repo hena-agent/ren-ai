@@ -1,6 +1,6 @@
 import { Context, Effect } from "effect";
-import { HttpClient } from "effect/unstable/http";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient } from "effect/http";
+import { SqlClient } from "effect/sql";
 import { silentAlerts } from "./messaging.test-helper.ts";
 import { startMessagingApplication } from "../src/application.ts";
 import { prepareMessaging, type MessagingTools } from "../src/application-tools.ts";

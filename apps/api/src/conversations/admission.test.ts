@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { registration, runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { migrate } from "../database.ts";
 import { conversations } from "./conversations.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 test("blocking a User prevents both waiting and later admissions to their Conversation", () =>
   runMessagingTest(
@@ -63,8 +63,8 @@ test.each(["superseded", "blocked", "rebuilding"] as const)(
           const current = (yield* directory.byHandle(original.handle))!;
           yield* directory.rebuilt(current);
           yield* directory.admitLive(current, action);
-          expect(delivered).toEqual(["live input"]);
         }
+        expect(delivered).toEqual(change === "blocked" ? [] : ["live input"]);
       }),
     ),
 );

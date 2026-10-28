@@ -2,13 +2,8 @@ import { rm } from "node:fs/promises";
 import { Effect, Layer } from "effect";
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { NodeServices } from "@effect/platform-node";
-import {
-  HttpClient,
-  HttpClientResponse,
-  FetchHttpClient,
-  HttpClientRequest,
-} from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { HttpClient, HttpClientResponse, FetchHttpClient, HttpClientRequest } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { expect, test } from "vitest";
 import { messagingFixture } from "../test/messaging.test-helper.ts";
 import { composeServer } from "../test/composition.test-helper.ts";

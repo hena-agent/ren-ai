@@ -4,7 +4,7 @@ import { vi } from "vitest";
 import type { TestLLM } from "@opencode/ai/testing";
 import type { Session } from "@opencode/core/session";
 import { Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { startPersonaHost } from "./application.test-helper.ts";
 import { composeServer } from "./composition.test-helper.ts";
 import { servePublic } from "@ren-ai/transport/listener";

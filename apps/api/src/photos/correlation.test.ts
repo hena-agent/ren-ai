@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
 import { rpcClient } from "@ren-ai/transport/client";
 import { expect, test } from "vitest";
@@ -69,16 +69,11 @@ test.each(["http", "network", "unsafe-cause"] as const)(
             : { code: "network_error" }),
           personaId: "persona1",
           model: "gpt-image-2.5",
+          ...(kind === "network" ? { causeName: "SocketError", causeCode: "ECONNRESET" } : {}),
         });
-        if (kind === "network")
-          expect(events.find((event) => event.outcome === "failed")).toMatchObject({
-            causeName: "SocketError",
-            causeCode: "ECONNRESET",
-          });
-        if (kind === "unsafe-cause")
-          expect(events.find((event) => event.outcome === "failed")).not.toHaveProperty(
-            "causeCode",
-          );
+        expect(events.find((event) => event.outcome === "failed")?.causeCode).toBe(
+          kind === "network" ? "ECONNRESET" : undefined,
+        );
         expect(events.find((event) => event.stage === "complete")?.requestId).toBe(responseId);
         expect(JSON.stringify(events)).not.toMatch(
           /private scene|private key|private-call|private-forged|private handle|application-secret/,

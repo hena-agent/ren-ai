@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { Rpc, RpcGroup, RpcServer } from "effect/unstable/rpc";
+import { Rpc, RpcGroup, RpcServer } from "effect/rpc";
 import { expect, test } from "vitest";
 import { rpcRouter } from "@ren-ai/transport/server";
 import { incomingMessage } from "./protocol.ts";

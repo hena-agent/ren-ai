@@ -1,5 +1,5 @@
 import { Effect, Option, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { authorize } from "@ren-ai/transport/server";
 import { changeAlert } from "./metrics/discord.ts";
 import type { ApplicationStore } from "./application-store.ts";

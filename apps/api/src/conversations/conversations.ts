@@ -1,5 +1,5 @@
 import { Clock, Effect, PartitionedSemaphore, Semaphore } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { bindUsageSessions } from "../usage/schema.ts";
 import { claimPersona } from "../discovery/assignment.ts";
 

@@ -1,5 +1,5 @@
 import { Deferred, Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { expect, test, vi } from "vitest";
 import { prepareMessaging } from "../application-tools.ts";
 import { fakeMessages, fakeGestures } from "@ren-ai/imsg/testing";

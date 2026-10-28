@@ -6,7 +6,7 @@ import {
   currentMemory,
   startTestHandle,
 } from "../../test/reset.test-helper.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 test("startup does not reinterpret a reset already passed by the bookmark before the User joined", async () => {
   const f = await resetFixture("reset-bookmark-");

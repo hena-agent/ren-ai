@@ -16,7 +16,9 @@ test("rebuilding rewrites only missing or changed projections, in batches", asyn
   const { db, store } = await cloudflareFixture();
   await store.save(databasePersona, initialDocuments, { persona: "" });
   const [saved] = await projections(db);
+  const revision = (await store.catalog()).revision;
   expect(await rebuildProjections(db)).toEqual({ personas: 1, updated: 0 });
+  expect((await store.catalog()).revision).toBe(revision);
   const columns =
     "name, gender, descriptionVersion, currentVersion, timeZone, language, openingLine, memoryInstruction, published, state, memory, revision, commitId, createdAt, updatedAt";
   await db
@@ -46,6 +48,7 @@ test("rebuilding rewrites only missing or changed projections, in batches", asyn
 test("a Persona the previous version published fails the public list until her projection is rebuilt", async () => {
   const { db, store } = await cloudflareFixture();
   await store.save(databasePersona, initialDocuments, { persona: "" });
+  const revision = (await store.catalog()).revision;
   // The previous version publishes without writing a projection.
   await db.prepare("UPDATE personas SET published = 1").run();
   await expect(store.publicList()).rejects.toMatchObject({
@@ -53,6 +56,10 @@ test("a Persona the previous version published fails the public list until her p
   });
   expect(await rebuildProjections(db)).toEqual({ personas: 1, updated: 1 });
   expect(await store.publicList()).toMatchObject([{ id: databasePersona.id }]);
+  expect((await store.catalog()).revision).not.toBe(revision);
+  const rebuilt = (await store.catalog()).revision;
+  expect(await rebuildProjections(db)).toEqual({ personas: 1, updated: 0 });
+  expect((await store.catalog()).revision).toBe(rebuilt);
 });
 
 test("a Persona saved during the rebuild keeps the projection her save derived", async () => {

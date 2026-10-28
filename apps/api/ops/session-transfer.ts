@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { remoteHost } from "../src/opencode/remote.ts";
 import { runSessionTransfer } from "../src/operations/session-transfer.ts";
 import { catalogClient } from "../src/personas/catalog.ts";

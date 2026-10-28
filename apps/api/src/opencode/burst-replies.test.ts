@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 import { TestLLM } from "@opencode/ai/testing";
 import { Deferred, Effect, Fiber, Stream } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test, vi } from "vitest";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";
 import { scriptedPersona } from "../../test/messaging-host.test-helper.ts";
@@ -34,6 +34,7 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
           let step = 0;
           let replied = false;
           let partial = false;
+          const combined: { context: string; system: string }[] = [];
           yield* llm.serve((request) => {
             if (!request.tools.some((tool) => tool.name === "send"))
               return TestLLM.text("title", "title");
@@ -57,14 +58,7 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
             }
             if (!replied && context.includes("Message C")) {
               replied = true;
-              expect(context).toContain("Discard this unsent draft");
-              expect(context).toContain("the User never received it");
-              expect(context).toContain("Do not resume, paraphrase, or explain it later");
-              expect(JSON.stringify(request.system)).toContain(
-                "취소된 초안과 그 답변에 이어 보내려던 내용은 미뤄 두지 말고 폐기해",
-              );
-              for (const text of ["Message A", "Message B", "Message C"])
-                expect(context).toContain(text);
+              combined.push({ context, system: JSON.stringify(request.system) });
               return TestLLM.tool("combined", "send", {
                 text: "Reply to A, B and C",
               });
@@ -129,6 +123,7 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
               )
               .pipe(Effect.andThen(host.heartbeat.intake)),
           );
+          let bubblesBeforeRelease = fake.bubbles.length;
           if (stage === "attachment" || stage === "acknowledgement") {
             yield* Deferred.await(admitting).pipe(Effect.timeout("5 seconds"));
             yield* Deferred.succeed(finish, undefined);
@@ -136,7 +131,7 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
               yield* fake.text(handle, "Message C", Date.now());
               yield* Effect.sleep("4500 millis");
             } else yield* host.sessions.wait(session.id).pipe(Effect.timeout("5 seconds"));
-            expect(fake.bubbles).toEqual([]);
+            bubblesBeforeRelease = fake.bubbles.length;
             yield* Deferred.succeed(admitted, undefined);
           }
           yield* Fiber.join(second);
@@ -144,6 +139,17 @@ test.each(["generation", "context", "attachment", "acknowledgement"] as const)(
           yield* host.heartbeat.intake;
           yield* Deferred.succeed(finish, undefined);
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("10 seconds"));
+          expect(bubblesBeforeRelease).toBe(0);
+          expect(combined).toHaveLength(1);
+          const context = combined[0]!.context;
+          expect(context).toContain("Discard this unsent draft");
+          expect(context).toContain("the User never received it");
+          expect(context).toContain("Do not resume, paraphrase, or explain it later");
+          expect(combined[0]!.system).toContain(
+            "취소된 초안과 그 답변에 이어 보내려던 내용은 미뤄 두지 말고 폐기해",
+          );
+          for (const text of ["Message A", "Message B", "Message C"])
+            expect(context).toContain(text);
           expect(fake.bubbles).toEqual([{ handle, text: "Reply to A, B and C" }]);
           const sql = yield* SqlClient.SqlClient;
           expect(yield* sql`SELECT tool_call_id AS callID FROM send ORDER BY id`).toEqual([

@@ -40,6 +40,13 @@ interface QueuedJob extends ImageJob {
   completion: Promise<void>;
 }
 
+const completionStatus = (failed: boolean, failure: Error | undefined) =>
+  !failed
+    ? 200
+    : failure instanceof PersonaError
+      ? { invalid: 400, not_found: 404, conflict: 409 }[failure.kind]
+      : 503;
+
 function restoreJob(
   saved: QueueSnapshot["jobs"][number],
   restoreBatch: DurableQueue["restoreBatch"],
@@ -236,11 +243,7 @@ export function createImageQueue(
           publish(job, preserved || job.batch.finish(failed));
           job.state = failed ? "failed" : "completed";
           job.finishedAt = Date.now();
-          const status = !failed
-            ? 200
-            : job.failure instanceof PersonaError
-              ? { invalid: 400, not_found: 404, conflict: 409 }[job.failure.kind]
-              : 503;
+          const status = completionStatus(failed, job.failure);
           reportQueueCompleted({
             jobId: job.id,
             status,

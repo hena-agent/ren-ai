@@ -75,7 +75,8 @@ test("the storage upgrade preserves existing Persona documents as v1 without cha
       .bind(databasePersona.id)
       .run();
   });
-  // Deployment derives projections for documents stored before they existed.
+  expect(await db.prepare("SELECT revision FROM personas").first()).toEqual({ revision: 7 });
+  // Deployment derives projections and advances Catalog identity, not document versions.
   await rebuildProjections(db);
   const current = await store.get(databasePersona.id);
   expect(current).toMatchObject({
@@ -91,7 +92,7 @@ test("the storage upgrade preserves existing Persona documents as v1 without cha
   });
   expect(await store.initial(current.id)).toEqual(initialDocuments);
   expect(await db.prepare("SELECT revision, createdAt, updatedAt FROM personas").first()).toEqual({
-    revision: 7,
+    revision: 8,
     createdAt: 100,
     updatedAt: 200,
   });

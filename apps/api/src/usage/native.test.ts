@@ -1,6 +1,6 @@
 import { TestLLM } from "@opencode/ai/testing";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { withRemoteHost } from "../../test/remote-host.test-helper.ts";
 import { runMessagingTest, registration } from "../../test/messaging.test-helper.ts";

@@ -1,5 +1,5 @@
 import { Array, Effect } from "effect";
-import { Migrator, SqlClient } from "effect/unstable/sql";
+import { Migrator, SqlClient } from "effect/sql";
 
 /** Cloudflare SQLite allows 100 bind variables; each migration receipt binds two. */
 export const migrateBatches = (loader: Migrator.Loader<SqlClient.SqlClient>) =>

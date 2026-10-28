@@ -1,7 +1,7 @@
 import { Clock, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { HttpClientError } from "effect/unstable/http";
-import { RpcClientError } from "effect/unstable/rpc";
+import { HttpClientError } from "effect/http";
+import { RpcClientError } from "effect/rpc";
 import { afterEach, expect, test, vi } from "vitest";
 import { resilientContext } from "./context.ts";
 
@@ -72,8 +72,12 @@ test.each([503, undefined])(
           yield* TestClock.adjust("1 minute");
           expect(logs.errors).toHaveBeenCalledTimes(1);
           expect(logs.errors.mock.calls[0]?.[0]).toContain('"causeCode":"TransportError"');
-          if (status) expect(logs.errors.mock.calls[0]?.[0]).toContain('"upstreamStatus":503');
-          else expect(logs.errors.mock.calls[0]?.[0]).not.toContain("upstreamStatus");
+          expect(String(logs.errors.mock.calls[0]?.[0]).includes('"upstreamStatus":503')).toBe(
+            status === 503,
+          );
+          expect(String(logs.errors.mock.calls[0]?.[0]).includes("upstreamStatus")).toBe(
+            status !== undefined,
+          );
           expect(logs.summaries.mock.calls[0]?.[0]).toContain('"outcome":"interrupted"');
           expect(JSON.stringify(logs.errors.mock.calls)).not.toContain("private");
         }).pipe(Effect.provide(TestClock.layer())),

@@ -1,5 +1,5 @@
 import { Effect, Layer } from "effect";
-import { RpcGroup, RpcServer } from "effect/unstable/rpc";
+import { RpcGroup, RpcServer } from "effect/rpc";
 import { rpcRouter } from "@ren-ai/transport/server";
 import { expect, test } from "vitest";
 import { captureGatewayLogs, gatewayFixture } from "../../test/gateway.test-helper.ts";

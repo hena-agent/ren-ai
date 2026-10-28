@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { Conversation } from "./conversations.ts";
 
 /** A separate service bubble marks the new relationship in the shared iMessage thread. */

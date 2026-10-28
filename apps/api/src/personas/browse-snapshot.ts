@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { PublicPersona } from "@ren-ai/onboarding";
 
 export const browseLifetime = 60 * 60 * 1000;

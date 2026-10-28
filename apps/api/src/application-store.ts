@@ -1,7 +1,7 @@
 import { SqliteClient } from "@effect/sql-sqlite-do";
 import { Context, Effect, Exit, Layer, Scope } from "effect";
-import { HttpClient } from "effect/unstable/http";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient } from "effect/http";
+import { SqlClient } from "effect/sql";
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { migrate } from "./database.ts";
 import { contacts } from "./discovery/contacts.ts";

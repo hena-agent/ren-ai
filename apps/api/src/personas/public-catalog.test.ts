@@ -1,6 +1,6 @@
 import { Deferred, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test, vi } from "vitest";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { migrate } from "../database.ts";

@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 
 export const verifyTurnstile = (token: string, secret: string) =>
   Effect.gen(function* () {

@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
 import { fakeMessages } from "@ren-ai/imsg/testing";

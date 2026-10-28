@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { TestLLM } from "@opencode/ai/testing";
-import { AIError, AuthenticationError } from "@opencode/ai/schema/errors";
+import { AIError, AuthenticationError } from "@opencode/ai/effect";
 import { Effect } from "effect";
 import { scriptedOverrides } from "./host.test-helper.ts";
 import { startMessagingHost, startPersonaHost } from "./application.test-helper.ts";

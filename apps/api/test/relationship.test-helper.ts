@@ -1,5 +1,5 @@
 import { Deferred, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { fromPartial } from "@total-typescript/shoehorn";
 import type { Persona } from "@ren-ai/personas";
 import { fakeGestures, fakeMessages } from "@ren-ai/imsg/testing";

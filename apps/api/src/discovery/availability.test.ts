@@ -93,8 +93,8 @@ test.each([true, false])(
           expect(row.imessage?.checkedAt).toEqual(expect.any(Number));
           if (!available) {
             yield* assertSelectionHeld(f, row);
-            expect(yield* f.sql`SELECT * FROM notification_attempt`).toEqual([]);
           }
+          expect(yield* f.sql`SELECT * FROM notification_attempt`).toHaveLength(Number(available));
           expect(f.logs).toContainEqual(
             expect.objectContaining({
               operation: "recipient.availability",

@@ -3,7 +3,7 @@ import type { SessionMessage } from "@opencode/schema/session-message";
 import type { TokenUsage } from "@opencode/schema/token-usage";
 import type { Model } from "@opencode/schema/model";
 import { DateTime, Effect } from "effect";
-import type { SqlClient } from "effect/unstable/sql";
+import type { SqlClient } from "effect/sql";
 import { createHash } from "node:crypto";
 
 const counters = (tokens?: TokenUsage.Info) => ({

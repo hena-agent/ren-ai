@@ -20,7 +20,7 @@ export async function rebuildProjections(binding: D1Database) {
       : [
           db
             .update(personas)
-            .set({ projection })
+            .set({ projection, revision: row.revision + 1 })
             .where(and(eq(personas.id, row.id), eq(personas.revision, row.revision))),
         ];
   });

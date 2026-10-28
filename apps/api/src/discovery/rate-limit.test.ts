@@ -4,7 +4,7 @@ import { expireSubmissionLimits, submissionLimit, verificationLimit } from "./ra
 import { nextApplicationWake } from "../scheduling.ts";
 import { migrate } from "../database.ts";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 test("rejected retries do not extend the window and actor replacement retains admission history", () =>
   runMessagingTest(

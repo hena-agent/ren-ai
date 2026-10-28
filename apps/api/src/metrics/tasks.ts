@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { Metrics, MetricsQuery } from "@ren-ai/onboarding";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { dailyReport } from "./report.ts";

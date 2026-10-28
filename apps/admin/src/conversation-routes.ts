@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Schema } from "effect";
-import { ConversationQuery, ConversationRecovery, ConversationEnding } from "@ren-ai/onboarding";
+import {
+  parseConversationQuery,
+  ConversationRecovery,
+  ConversationEnding,
+} from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import type { ConversationClient } from "./contact-client.ts";
 import type { ConversationView } from "./conversation-page.tsx";
@@ -55,11 +59,7 @@ async function recoverRequest(
 
 function readQuery(url: URL) {
   try {
-    return Schema.decodeUnknownSync(ConversationQuery)({
-      filter: url.searchParams.get("filter") ?? "active",
-      search: url.searchParams.get("search") ?? "",
-      ...(url.searchParams.has("before") && { before: Number(url.searchParams.get("before")) }),
-    });
+    return parseConversationQuery(url.searchParams);
   } catch {
     throw new PersonaError("invalid", "대화 검색 조건을 확인해 주세요.");
   }

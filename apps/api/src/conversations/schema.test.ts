@@ -1,5 +1,5 @@
 import { Effect, Result } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { expect, test } from "vitest";
 import { withContactDatabase } from "../discovery/contact.test-helper.ts";
 import { relationshipSchema } from "./schema.ts";
@@ -96,8 +96,7 @@ test("a missing required child table aborts history conversion before replacing 
       yield* sql`DROP TABLE follow_up`;
       const result = yield* Effect.result(relationshipSchema.pipe(sql.withTransaction));
       expect(Result.isFailure(result)).toBe(true);
-      if (Result.isFailure(result))
-        expect(result.failure.message).toBe("History child table missing");
+      expect(result).toMatchObject({ failure: { message: "History child table missing" } });
       expect(yield* sql`SELECT session_id FROM conversation`).toEqual([
         { session_id: "ses_original" },
       ]);
@@ -131,8 +130,9 @@ test("unexpected predecessor schemas and pre-existing foreign key violations abo
       yield* sql`PRAGMA foreign_keys = ON`;
       const result = yield* Effect.result(relationshipSchema.pipe(sql.withTransaction));
       expect(Result.isFailure(result)).toBe(true);
-      if (Result.isFailure(result))
-        expect(result.failure.message).toBe("History schema foreign key validation failed");
+      expect(result).toMatchObject({
+        failure: { message: "History schema foreign key validation failed" },
+      });
       expect(yield* sql`SELECT session_id FROM conversation`).toEqual([
         { session_id: "ses_original" },
       ]);

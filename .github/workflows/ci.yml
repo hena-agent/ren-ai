@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       # OpenCode uses explicit resource management (await using), which needs
       # Node 24. Bun installs and runs scripts; Node runs tests with v8 coverage.
       - uses: actions/setup-node@v6
@@ -49,7 +49,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -119,10 +119,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      # The bundle runs on the Bun installed on the Mac, not the toolchain the gates use.
+      # Ship the same pinned Bun runtime that builds and tests the bundle.
       - uses: oven-sh/setup-bun@v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@v8
         with:
@@ -157,7 +157,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bash apps/api-msg/ops/build-bundle.sh "$RUNNER_TEMP/api-msg-bundle"
       - run: bash apps/api-msg/ops/check-container.sh "$RUNNER_TEMP/api-msg-bundle"
@@ -187,6 +187,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.4
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -223,6 +225,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.4
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -255,12 +259,16 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.4
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
       - run: bun install --frozen-lockfile
-      - run: bun run --cwd apps/api deploy --message "ci.yml $GITHUB_SHA"
+      # A coordinated contract/plugin rollout keeps execution paused across CI deployments.
+      - run: bun run --cwd apps/api deploy --var "BOOTSTRAP_ONLY:$BOOTSTRAP_ONLY" --message "ci.yml $GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          BOOTSTRAP_ONLY: ${{ vars.API_BOOTSTRAP_ONLY || 'false' }}
       - run: bun run --cwd apps/api check:health https://api.renai.im api-app "$GITHUB_SHA"
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null 'https://api.renai.im/discovery/personas?locale=ko'

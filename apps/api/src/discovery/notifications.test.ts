@@ -129,17 +129,18 @@ test.each(["sent", "pending", "failed"] as const)(
               },
             ],
           });
-          if (state === "failed") {
-            expect(f.logs).toContainEqual(
-              expect.objectContaining({
-                stage: "transport.status",
-                operationId: "mac-request",
-                code: "IMSG_SEND_22",
-                level: "error",
-              }),
-            );
-            expect(f.logs.at(-1)?.outcome).toBe("failed");
-          }
+          const failure = {
+            stage: "transport.status",
+            operationId: "mac-request",
+            code: "IMSG_SEND_22",
+            level: "error",
+          };
+          expect(
+            f.logs
+              .filter((event) => event.level === "error")
+              .map(({ stage, operationId, code, level }) => ({ stage, operationId, code, level })),
+          ).toEqual(state === "failed" ? [failure] : []);
+          expect(f.logs.at(-1)?.outcome).toBe(state === "failed" ? "failed" : "completed");
         }),
       ),
     ),
@@ -171,7 +172,7 @@ test.each(["send", "status", "commit"])(
             stage: stage === "commit" ? "notification.commit" : `transport.${stage}`,
             outcome: "failed",
           });
-          if (stage !== "commit") expect(failure.causeCode).toBe("ECONNRESET");
+          expect(failure.causeCode).toBe(stage === "commit" ? undefined : "ECONNRESET");
           expect(f.logs.at(-1)).toMatchObject({
             requestId: failure.requestId,
             stage: "complete",

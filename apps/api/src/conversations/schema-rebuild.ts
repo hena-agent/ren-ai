@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /** Internal schema names only. Preserve child rows before replacing a UNIQUE parent. */
 export const rebuildHistoryParent = (

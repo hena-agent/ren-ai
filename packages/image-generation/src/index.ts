@@ -7,7 +7,7 @@ export const codexImageModel = "gpt-image-2.5";
 
 const Reply = Schema.Struct({
   data: Schema.Array(Schema.Struct({ b64_json: Schema.String })).check(
-    Schema.isLengthBetween(1, 1),
+    Schema.isBetweenLength(1, 1),
   ),
 });
 const Failure = Schema.Struct({

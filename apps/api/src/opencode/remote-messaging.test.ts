@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Deferred, Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { TestLLM } from "@opencode/ai/testing";
 import { expect, test } from "vitest";
 import { conversationTools } from "../../test/host.test-helper.ts";
@@ -93,12 +93,11 @@ test("an incoming message reaches Docker's persona plugin and replies through th
             alertRequests++ > 0
           )
             return new Response("diagnostics unavailable", { status: 503 });
-          const response = await (hostname === "oc.test"
-            ? native.web(request)
-            : hostname === "imsg.test"
-              ? mac.handler(request)
-              : applicationWeb(request));
-          return response;
+          const routes: Record<string, typeof applicationWeb> = {
+            "oc.test": native.web,
+            "imsg.test": mac.handler,
+          };
+          return (routes[hostname] ?? applicationWeb)(request);
         };
         const application = yield* Effect.gen(function* () {
           const messages = yield* remoteMessages({

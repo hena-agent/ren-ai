@@ -1,4 +1,4 @@
-import { Message } from "@opencode/ai";
+import { Message } from "@opencode/ai/effect";
 import type { SessionContext } from "@opencode/plugin/effect/session";
 
 const restart =
@@ -8,7 +8,7 @@ const sourceStart =
 const unwanted =
   /^(?:Today's date(?::| is now:) [A-Z][a-z]{2} [A-Z][a-z]{2} \d{2} \d{4}\s*$|Here is some useful information about the environment you are running in:\n<env>|The environment you are running in is now:\n<env>|# Code Mode\n\nUse the `execute` tool|# Your Model|When you create a worktree outside|The Code Mode tool catalog|Code Mode tools are no longer|No Code Mode tools|Skills provide specialized|The available skills|New skills are available|The following skill IDs|Skill guidance is no longer)/;
 
-// OpenCode 2.0.19 joins instruction sources with two newlines, including in history updates.
+// OpenCode joins instruction sources with two newlines, including in history updates.
 // Keep the agent's own system part intact; never reconstruct it from catalog metadata.
 const cleanInstructions = (text: string) =>
   text

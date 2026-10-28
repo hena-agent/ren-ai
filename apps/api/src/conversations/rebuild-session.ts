@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import type { Conversation, conversations } from "./conversations.ts";
 import { conversationStarted } from "../transcript/transcript.ts";
 import { Session } from "@opencode/schema/session";

@@ -1,5 +1,5 @@
 import { Clock, Context, Effect, Exit, Layer, Scope } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient } from "effect/http";
 import { remoteMessages } from "@ren-ai/imsg/client";
 import { startMessagingApplication } from "./application.ts";
 import { applicationGateway } from "./opencode/application-gateway.ts";
@@ -11,7 +11,7 @@ import { operatorHandler } from "./operator/api.ts";
 import { applicationAlerts } from "./alerts.ts";
 import type { ApplicationStore } from "./application-store.ts";
 import type { CloudflareBindings, CloudflareConfiguration } from "./cloudflare-config.ts";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { contactCause, contactLog } from "./discovery/diagnostics.ts";
@@ -237,6 +237,39 @@ export async function createExecutionRuntime(
       });
     return ready;
   };
+  const refreshCatalog = async (request: Request) => {
+    if (request.method !== "POST")
+      return new Response(null, { status: 405, headers: { Allow: "POST" } });
+    const start = performance.now();
+    const requestId = randomUUID();
+    const fields = { requestId, operation: "catalog.refresh", stage: "catalog.sync" };
+    try {
+      await run(invalidatePublicCatalog);
+      await run((await open()).refreshCatalog);
+      contactLog({
+        ...fields,
+        outcome: "completed",
+        durationMs: performance.now() - start,
+        level: "info",
+      });
+      return new Response(null, { status: 204, headers: { "X-Request-ID": requestId } });
+    } catch (cause) {
+      contactLog({
+        ...fields,
+        ...contactCause(cause),
+        outcome: "failed",
+        durationMs: performance.now() - start,
+        level: "error",
+      });
+      return Response.json(
+        { error: "Catalog refresh failed", requestId },
+        {
+          status: 503,
+          headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" },
+        },
+      );
+    }
+  };
   return {
     get initialized() {
       return initialized;
@@ -293,39 +326,7 @@ export async function createExecutionRuntime(
         return conversationMessagesRequest(request, messages, run);
       if (url.pathname === "/operator/message-image")
         return conversationImageRequest(request, messages, run);
-      if (url.pathname === "/management/catalog/refresh") {
-        if (request.method !== "POST")
-          return new Response(null, { status: 405, headers: { Allow: "POST" } });
-        const start = performance.now();
-        const requestId = randomUUID();
-        const fields = { requestId, operation: "catalog.refresh", stage: "catalog.sync" };
-        try {
-          await run(invalidatePublicCatalog);
-          await run((await open()).refreshCatalog);
-          contactLog({
-            ...fields,
-            outcome: "completed",
-            durationMs: performance.now() - start,
-            level: "info",
-          });
-          return new Response(null, { status: 204, headers: { "X-Request-ID": requestId } });
-        } catch (cause) {
-          contactLog({
-            ...fields,
-            ...contactCause(cause),
-            outcome: "failed",
-            durationMs: performance.now() - start,
-            level: "error",
-          });
-          return Response.json(
-            { error: "Catalog refresh failed", requestId },
-            {
-              status: 503,
-              headers: { "X-Request-ID": requestId, "Cache-Control": "no-store" },
-            },
-          );
-        }
-      }
+      if (url.pathname === "/management/catalog/refresh") return refreshCatalog(request);
       const runtime = await open();
       if (url.pathname === "/operator/languages" && request.method === "GET")
         return run(runtime.languages(request));

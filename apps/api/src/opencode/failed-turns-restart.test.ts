@@ -11,7 +11,7 @@ import {
 } from "../../test/messaging-host.test-helper.ts";
 import { join } from "node:path";
 import { TestLLM } from "@opencode/ai/testing";
-import { AIError, InvalidRequestError } from "@opencode/ai/schema/errors";
+import { AIError, InvalidRequestError } from "@opencode/ai/effect";
 import { Session } from "@opencode/schema/session";
 import { SessionMessage } from "@opencode/schema/session-message";
 import { Effect } from "effect";
@@ -154,8 +154,8 @@ test.each([false, true])(
               new Map([["persona1", { timeZone: "Asia/Seoul" }]]),
             );
             yield* sends.send(conversation, "already sent", "call-1");
-            expect(fake.bubbles).toHaveLength(1);
           }
+          expect(fake.bubbles).toHaveLength(outgoing ? 1 : 0);
         }),
         databaseFile,
       );

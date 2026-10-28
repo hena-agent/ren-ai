@@ -1,6 +1,6 @@
 import { notSent } from "../transcript/transcript.ts";
 import { Effect, Option } from "effect";
-import { HttpServerRequest } from "effect/unstable/http";
+import { HttpServerRequest } from "effect/http";
 import { contactLog } from "../discovery/diagnostics.ts";
 
 /** Return a corrective tool result without changing the installed plugin's input schema. */
