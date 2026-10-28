@@ -7,7 +7,7 @@ import { SqliteClient } from "@effect/sql-sqlite-do";
 import { registrationSchemaProbe } from "./registration-schema.test-helper.ts";
 import { usageBudget } from "./usage-budget.test-helper.ts";
 import { outboxBudget } from "./outbox-budget.test-helper.ts";
-import { changeAlert } from "../src/metrics/discord.ts";
+import { changeAlert } from "../src/metrics/alerts.ts";
 import { metricsBudget } from "./metrics-budget.test-helper.ts";
 import { blockedContact } from "./blocked-contact.test-helper.ts";
 export { ActivityStore } from "./activity-store.test-helper.ts";
@@ -46,7 +46,7 @@ const httpClient = HttpClient.make((request) =>
 
 export class Registry extends DurableObject<Environment> {
   private store: Promise<ApplicationStore> | undefined;
-  private posts: { content: string; wait: string | null }[] = [];
+  private posts: { body: string; wait: string | null }[] = [];
   private discordStatus = 200;
   private discordGlobal = false;
   private failActivity = false;
@@ -68,11 +68,8 @@ export class Registry extends DurableObject<Environment> {
       },
       fetcher: async (input, init) => {
         const request = new Request(input, init);
-        const body = Schema.decodeUnknownSync(
-          Schema.fromJsonString(Schema.Struct({ content: Schema.String })),
-        )(await request.text());
         this.posts.push({
-          content: body.content,
+          body: await request.text(),
           wait: new URL(request.url).searchParams.get("wait"),
         });
         return Response.json(

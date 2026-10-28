@@ -19,7 +19,7 @@ import { checkAvailability } from "./availability.ts";
 import { claimWork, workBatchSize } from "../work-budget.ts";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { contacts } from "./contacts.ts";
-import { changeAlert } from "../metrics/discord.ts";
+import { changeAlert } from "../metrics/alerts.ts";
 
 export const notificationSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

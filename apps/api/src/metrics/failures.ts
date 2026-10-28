@@ -2,7 +2,7 @@ import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { DiscoveryRequest } from "@ren-ai/onboarding";
 import { countMetric, countryValue, sourceValue } from "./totals.ts";
-import { changeAlert } from "./discord.ts";
+import { changeAlert } from "./alerts.ts";
 import { scheduleWork } from "../scheduling.ts";
 import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 
