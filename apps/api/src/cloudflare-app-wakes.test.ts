@@ -44,6 +44,7 @@ test("store work runs without creating the conversation runtime when no executio
   try {
     await app.tick("store-only", false);
     expect(controls.metricsTick).toHaveBeenLastCalledWith("store-only");
+    expect(controls.catalogTick).toHaveBeenLastCalledWith("store-only");
     expect(controls.runtime).not.toHaveBeenCalled();
   } finally {
     await app.close();

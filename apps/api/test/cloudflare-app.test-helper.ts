@@ -26,6 +26,7 @@ const controls = vi.hoisted(() => ({
   ),
   closeStore: vi.fn<() => Promise<void>>(async () => undefined),
   metricsTick: vi.fn<(requestId: string) => Promise<void>>(async () => {}),
+  catalogTick: vi.fn<(requestId: string) => Promise<void>>(async () => {}),
   runtime: vi.fn<() => Promise<RuntimeDouble>>(async () => ({
     initialized: true,
     fetch: vi.fn<(request: Request) => Promise<Response>>(async () => new Response("execution")),
@@ -52,6 +53,7 @@ vi.mock("../src/application-store.ts", () => ({
       },
       handler: controls.storeHandler,
       metricsTick: controls.metricsTick,
+      catalogTick: controls.catalogTick,
       close: controls.closeStore,
     };
   },
@@ -90,5 +92,6 @@ afterEach(() => {
   controls.storeHandler.mockClear();
   controls.closeStore.mockClear();
   controls.metricsTick.mockClear();
+  controls.catalogTick.mockClear();
   controls.runtime.mockClear();
 });

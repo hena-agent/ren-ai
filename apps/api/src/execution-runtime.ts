@@ -287,7 +287,6 @@ export async function createExecutionRuntime(
                   cause instanceof Error ? cause : new Error("Execution startup unavailable"),
               }).pipe(Effect.flatMap((runtime) => runtime.tick)),
             },
-            { name: "publicCatalog", run: store.maintainCatalog },
           ]),
           requestId,
         ),

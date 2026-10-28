@@ -10,6 +10,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { ApiApplication } from "../worker/entry.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
 import { DeferredWork } from "./work-budget.ts";
+import { reloadPublicCatalog } from "./personas/public-catalog.ts";
 
 const state = vi.hoisted(() => ({
   filename: "",
@@ -62,7 +63,15 @@ const nextReport = () =>
 test("idle actors keep no wake, store work never starts execution, and execution backoff keeps its work", async () => {
   const root = await mkdtemp(join(tmpdir(), "alarm-lifecycle-"));
   vi.useFakeTimers({ toFake: ["Date"], now: Date.now() });
-  vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ id: "accepted" }));
+  let catalogFails = false;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.pathname === "/api/personas") {
+      if (catalogFails) return new Response("private catalog failure", { status: 503 });
+      return Response.json([]);
+    }
+    return Response.json({ id: "accepted" });
+  });
   state.filename = join(root, "state.sqlite");
   let alarm: number | null = Date.now() + 600_000;
   const storage = fromPartial<DurableObjectState>({
@@ -138,9 +147,18 @@ test("idle actors keep no wake, store work never starts execution, and execution
     expect(alarm).toBe(Date.now() + 30_000);
     // A store wake during the backoff neither starts execution nor drops its pending work.
     state.fail = false;
+    // Catalog replacement runs during execution backoff, and its failure preserves that backoff.
+    await Effect.runPromise(
+      reloadPublicCatalog.pipe(
+        Effect.scoped,
+        Effect.provide(SqliteClient.layer({ filename: state.filename })),
+      ),
+    );
+    catalogFails = true;
     await app.alarm();
     expect(state.ticks).toBe(1);
     expect(alarm).toBe(Date.now() + 30_000);
+    catalogFails = false;
     advance(30_000);
     await app.alarm();
     expect(state.ticks).toBe(2);

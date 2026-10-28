@@ -30,7 +30,7 @@ function applicationRoot(url: URL, people: readonly PublicPersona[], page?: Samp
         initialPage={page}
         personaId={id}
         initialStyle={style}
-        initialLocale="ko"
+        initialLocale={page?.locale ?? "ko"}
       />
     ),
   );
@@ -117,6 +117,7 @@ export function publicResponse(
   );
   const jsonLd = JSON.stringify(structured).replace(/</g, "\\u003c");
   const html = template
+    .replace('<html lang="ko">', `<html lang="${page?.locale ?? "ko"}">`)
     .replace(/<title>[\s\S]*?<\/title>/, "")
     .replace(/<meta\s+name="description"[\s\S]*?\/>/, "")
     .replace("</head>", () => `${head}<script type="application/ld+json">${jsonLd}</script></head>`)

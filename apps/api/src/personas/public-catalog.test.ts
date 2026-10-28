@@ -7,6 +7,7 @@ import { migrate } from "../database.ts";
 import { publicCatalog, invalidatePublicCatalog, reloadPublicCatalog } from "./public-catalog.ts";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { lookupProfiles } from "./browse.ts";
+import { applicationWakes } from "../scheduling.ts";
 
 const profiles = [
   {
@@ -110,14 +111,21 @@ test.each([false, true])(
         yield* cache.ensure;
         yield* cache.maintain;
         paused = true;
-        yield* reloadPublicCatalog;
         const now = yield* Clock.currentTimeMillis;
+        yield* sql`INSERT INTO application_work(name, due, attempts) VALUES
+          ('retry', ${now + 300_000}, 1), ('lane:catalog.cursor:refresh', ${now + 300_000}, 1)`;
+        yield* reloadPublicCatalog;
         expect(
           yield* sql`SELECT name FROM application_clock WHERE name = 'catalog.public'`,
         ).toEqual([]);
-        expect(yield* sql`SELECT due FROM application_work WHERE name = 'maintenance'`).toEqual([
+        expect(yield* sql`SELECT due FROM application_work WHERE name = 'public-catalog'`).toEqual([
           { due: now },
         ]);
+        expect(
+          yield* sql`SELECT name FROM application_work WHERE name = 'lane:catalog.cursor:refresh'`,
+        ).toEqual([]);
+        expect((yield* applicationWakes).store).toBe(now);
+        expect((yield* applicationWakes).execution).toBe(now + 300_000);
         const reading = yield* cache.ensure.pipe(Effect.flip, Effect.forkScoped);
         yield* Deferred.await(entered);
         yield* invalidatePublicCatalog;

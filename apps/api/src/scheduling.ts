@@ -21,7 +21,13 @@ export const scheduledApplicationWork = Effect.gen(function* () {
 });
 
 /** Work the application store completes without starting conversation execution. */
-const storeWork = new Set(["metrics-report", "metric-alerts", "discord"]);
+const storeWork = new Set([
+  "metrics-report",
+  "metric-alerts",
+  "discord",
+  "public-catalog",
+  "lane:catalog.cursor:refresh",
+]);
 export const isStoreWork = (name: string) => storeWork.has(name);
 
 const delayed = (due: number | null | undefined, floor: number) =>

@@ -41,7 +41,7 @@ test("the execution tick sends through the dedicated Mac RPC even when Persona s
         yield* Effect.addFinalizer(() => Effect.promise(gateway.dispose));
         const open = () =>
           createExecutionRuntime(
-            fromPartial<ApplicationStore>({ context, maintainCatalog: Effect.void }),
+            fromPartial<ApplicationStore>({ context }),
             cloudflareConfiguration(executionBindings),
             executionBindings,
             "ground rules",

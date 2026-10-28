@@ -317,6 +317,7 @@ test("explorer HTML renders a first page sampled in the browser's language", asy
   const explore = await response.text();
   expect(explore).toContain('class="discovery-shell"');
   expect(explore).toContain('class="profile-card"');
+  expect(explore).toContain('lang="ja"');
   expect(explore).toContain("<h2>백지아<!-- -->, 26</h2>");
   expect(explore).toContain("커피와 산책을 좋아해요.");
   expect(explore).toMatch(

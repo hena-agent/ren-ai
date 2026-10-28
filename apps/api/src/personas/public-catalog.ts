@@ -25,7 +25,9 @@ export const publicCatalog = (load: () => Promise<readonly PublicPersona[]>) =>
       ([row]) => row!,
     );
     const served = Effect.map(
-      sql<{ revision: string }>`SELECT revision FROM public_catalog WHERE id = 1 AND payload IS NOT NULL`,
+      sql<{
+        revision: string;
+      }>`SELECT revision FROM public_catalog WHERE id = 1 AND payload IS NOT NULL`,
       ([row]) => row?.revision,
     );
     // An invalidation during the load fences its result; an unchanged source writes nothing.
@@ -86,5 +88,6 @@ export const reloadPublicCatalog = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* invalidatePublicCatalog;
   yield* sql`DELETE FROM application_clock WHERE name = ${maintenance}`;
-  yield* scheduleWork("maintenance", yield* Clock.currentTimeMillis);
+  yield* sql`DELETE FROM application_work WHERE name = 'lane:catalog.cursor:refresh'`;
+  yield* scheduleWork("public-catalog", yield* Clock.currentTimeMillis);
 });

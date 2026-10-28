@@ -200,9 +200,10 @@ a failed one yields HTTP 503.
 
 Admin's authenticated Catalog refresh is the change signal. It invalidates the
 snapshot, fencing in-flight loads, and schedules the alarm to reload it at once.
-The alarm's `publicCatalog` lane (maintenance clock `catalog.public`) also replaces
+The store alarm's Catalog lane (maintenance clock `catalog.public`) also replaces
 the snapshot from Admin's public list at most once per five minutes while the application
-is awake for persisted work, independent of execution startup succeeding. It adds no
+is awake for persisted work, without starting or waiting for conversation execution. Admin
+notifications clear Catalog retry backoff and schedule independent store work. It adds no
 periodic idle wake. An unchanged list writes only that persisted clock, with no snapshot
 transaction; a failed one keeps serving the current snapshot, logs the lane failure
 and retries with the lane backoff. The lane also
