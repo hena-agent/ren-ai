@@ -3,26 +3,17 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterEach, expect, test, vi } from "vitest";
 import { MetricTotal, discoveryNotice } from "@ren-ai/onboarding";
 import { captureDiagnostics } from "../test/diagnostics.test-helper.ts";
-import { metricsFixture as fixture } from "../test/metrics-http.test-helper.ts";
+import {
+  metricsFixture as fixture,
+  activityRequest as request,
+  visitActivity as report,
+  visitSource as source,
+} from "../test/metrics-http.test-helper.ts";
+import { discordPost } from "../test/discord.test-helper.ts";
 import { waitlistNotifications } from "./discovery/notifications.ts";
 import { fakeMessages } from "@ren-ai/imsg/testing";
 
 afterEach(() => vi.restoreAllMocks());
-
-const source = {
-  entry: "home",
-  referrer: "example.org",
-  source: "friends",
-  medium: "social",
-  campaign: "launch",
-};
-const report = { step: "visit", source, device: "phone", locale: "ko", imageStyle: "anime" };
-const request = (body: object | string, country = "KR") =>
-  new Request("https://activity.test/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "CF-IPCountry": country },
-    body: typeof body === "string" ? body : JSON.stringify(body),
-  });
 
 test("activity intake, registration attribution and range reads reject invalid inputs without leaking private data", async () => {
   const f = await fixture();
@@ -115,10 +106,10 @@ test("Metrics read failures remain correlated and a failed Report cannot prevent
       reports: "accepting",
       pending: 0,
     });
-    const body = await new Request(...f.fetcher.mock.calls[1]!).text();
-    expect(body).toContain("방문: 0 / 0");
-    expect(body).toContain("30일 유지");
-    expect(body).toContain("종료·운영자");
+    const { text } = await discordPost(...f.fetcher.mock.calls[1]!);
+    expect(text).toContain("**방문** 0 · 7일 0");
+    expect(text).toContain("**유지율** 1일 — · 7일 — · 30일 —");
+    expect(text).toContain("**관계 종료** 페르소나 0 · 운영자 0 · 사용자 0");
     const logs = diagnostics.logs.join("\n");
     expect(logs).toContain("report-failure");
     expect(logs).toContain("DISCORD_RATE_LIMITED");
@@ -227,47 +218,6 @@ test("marking removes cost history, unmarking counts only new entries, and remov
     });
     expect(removed.status).toBe(200);
     expect((await f.read()).cost).toEqual([expect.objectContaining({ cost: 4, conversations: 1 })]);
-  } finally {
-    await f.close();
-  }
-});
-
-test("a nonempty Report compares periods and retains its link and Retention in one Discord message", async () => {
-  const f = await fixture();
-  try {
-    await f.browser(request(report));
-    await f.browser(request(report));
-    await f.browser(request({ ...report, source: { ...source, campaign: "second" } }));
-    await f.register("+821012345678", { source });
-    await f.store.run(
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`INSERT INTO usage_session(session_id, conversation_id, conversation_key, persona_id) VALUES ('historical', 0, 'anonymous', 'sora')`;
-        yield* sql`INSERT INTO usage_entry(id, session_id, source, started_at, outcome, cost) VALUES ('historical', 'historical', 'message', ${Date.now()}, 'succeeded', 1)`;
-        yield* sql`INSERT INTO metric_total(day, step, dimension, value, count) VALUES (${f.day}, 'ending', 'initiator', 'operator', 1)`;
-      }),
-    );
-    await f.store.metricsTick("first-report");
-    const now = Date.now();
-    vi.spyOn(Date, "now").mockReturnValue(now + 86_400_000);
-    await Promise.all([f.store.metricsTick("next-report-a"), f.store.metricsTick("next-report-b")]);
-    const contents = await Promise.all(
-      f.fetcher.mock.calls.map(
-        async ([input, init]) =>
-          Schema.decodeUnknownSync(Schema.Struct({ content: Schema.String }))(
-            await new Request(input, init).json(),
-          ).content,
-      ),
-    );
-    expect(contents).toHaveLength(2);
-    const content = contents[1]!;
-    expect(content).toContain("방문: 3 / 0");
-    expect(content).toContain("등록: 1 / 0");
-    expect(content).toContain("33.3%");
-    expect(content).toContain("둘러보기");
-    expect(content).toContain("friends");
-    expect(content).toContain("https://admin.renai.im/metrics");
-    expect(content.length).toBeLessThanOrEqual(2000);
   } finally {
     await f.close();
   }

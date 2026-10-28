@@ -8,7 +8,7 @@ import {
   type MetricTotal,
 } from "@ren-ai/onboarding";
 import { countMetric, sourceValue, countryValue, type Dimensions } from "./totals.ts";
-import { changeAlert } from "./discord.ts";
+import { changeAlert } from "./alerts.ts";
 
 const DimensionsSchema = Schema.Array(Schema.Tuple([MetricDimension, Schema.String]));
 export const registrationMetric = (

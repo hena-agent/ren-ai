@@ -1,11 +1,6 @@
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import {
-  koreaDay,
-  type MetricTotal,
-  type MetricsQuery,
-  type VisitSource,
-} from "@ren-ai/onboarding";
+import { koreaDay, VisitSource, type MetricTotal, type MetricsQuery } from "@ren-ai/onboarding";
 
 export const counterSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -39,6 +34,32 @@ export const sourceValue = (source: VisitSource | undefined) =>
   source
     ? JSON.stringify([source.entry, source.referrer, source.source, source.medium, source.campaign])
     : "unknown";
+const StoredSource = Schema.fromJsonString(
+  Schema.Tuple([
+    VisitSource.fields.entry,
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String,
+  ]),
+);
+const entries = {
+  home: "홈",
+  explore: "둘러보기",
+  profile: "공유 프로필",
+  reselection: "재선택 링크",
+};
+/** Names a stored Source value for the Operator, such as `example.org · friends/social/launch · 홈`. */
+export const sourceLabel = (value: string) => {
+  if (value === "other") return "기타 경로";
+  return Option.match(Schema.decodeUnknownOption(StoredSource)(value), {
+    onNone: () => "경로 정보 없음",
+    onSome: ([entry, referrer, ...tags]) =>
+      [referrer || "직접 방문", tags.filter(Boolean).join("/"), entries[entry]]
+        .filter(Boolean)
+        .join(" · "),
+  });
+};
 export const countryValue = (country: string | null) =>
   country && /^[A-Z]{2}$/.test(country) ? country : "unknown";
 export type Dimensions = ReadonlyArray<readonly [MetricTotal["dimension"], string]>;

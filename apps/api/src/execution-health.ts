@@ -4,7 +4,7 @@ import type { CloudflareConfiguration } from "./cloudflare-config.ts";
 import { contactCause, contactLog, contactOperationId } from "./discovery/diagnostics.ts";
 import { randomUUID } from "node:crypto";
 import { parseHealth } from "@ren-ai/transport/health";
-import { changeAlert } from "./metrics/discord.ts";
+import { changeAlert } from "./metrics/alerts.ts";
 
 const Facts = Schema.Struct({
   diskNearlyFull: Schema.Boolean,
