@@ -65,7 +65,7 @@ export function InvitationCodes({
         선정자에게 지급한 새 코드도 최대 사용 인원과 초대장 지급 수를 그대로 상속합니다. 인원 한도는
         코드마다 따로 적용됩니다. 지급 수가 0이면 다음 초대장을 지급하지 않습니다.
       </p>
-      <form action="/waitlist" method="post" className="contact-selection">
+      <form action="/invitations?section=codes" method="post" className="contact-selection">
         <input type="hidden" name="action" value="invitation-create" />
         <input type="hidden" name="requestId" value={creation.requestId} />
         <label>
@@ -89,7 +89,7 @@ export function InvitationCodes({
         </button>
       </form>
       <h3>최근 생성한 코드 (최대 50개)</h3>
-      <ul>
+      <ul className="invitation-code-list">
         {codes?.map((code) => (
           <li key={code.token}>
             <code>{code.token}</code> · {code.usedCount}/{code.maxUses}명 사용 · 선정자에게{" "}
@@ -101,10 +101,22 @@ export function InvitationCodes({
                 readOnly
                 value={`https://renai.im/explore#invite=${code.token}`}
               />
+              <button
+                type="button"
+                className="secondary"
+                data-copy-text={`https://renai.im/explore#invite=${code.token}`}
+              >
+                링크 복사
+              </button>
             </label>
+            <button type="button" className="secondary" data-copy-text={code.token}>
+              코드 복사
+            </button>
           </li>
         ))}
       </ul>
+      {codes?.length === 0 && <p className="empty">생성한 초대 코드가 없습니다.</p>}
+      <output data-copy-status aria-live="polite" />
     </section>
   );
 }

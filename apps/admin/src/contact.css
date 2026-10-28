@@ -1,0 +1,269 @@
+/* Onboarding operations: compact lists, quiet structure, color reserved for state. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+body > header {
+  flex-wrap: wrap;
+  gap: 16px 24px;
+}
+body > header nav {
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+body > header nav a {
+  padding-block: 8px;
+}
+body > header nav a[aria-current="page"] {
+  box-shadow: inset 0 -2px var(--signal);
+}
+.contact-management .contact-summary {
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.contact-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.contact-totals strong {
+  color: var(--ink);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.contact-totals .contact-eligible strong {
+  color: var(--signal);
+}
+.contact-filters {
+  gap: 12px;
+  padding: 16px;
+}
+.contact-filters label {
+  flex-basis: 130px;
+}
+.contact-filters .catalog-search {
+  flex-basis: 220px;
+}
+.contact-filters input,
+.contact-filters select {
+  font-size: 13px;
+}
+.contact-management .contact-actions {
+  align-items: start;
+  gap: 16px;
+  border-top: 0;
+}
+.contact-management #contact-direct-selection {
+  margin: 0;
+  min-height: 40px;
+}
+.contact-selection output {
+  margin-right: 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.contact-random {
+  max-width: 380px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.contact-random > summary {
+  color: var(--signal);
+}
+.contact-management summary,
+.invitation-management summary {
+  cursor: pointer;
+}
+.contact-policy {
+  color: var(--muted);
+  font-size: 12px;
+}
+.contact-policy p {
+  max-width: 90ch;
+  margin-bottom: 8px;
+}
+.contact-management .contact-table {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.contact-management .contact-table table {
+  min-width: 980px;
+  font-size: 13px;
+}
+.contact-management .contact-table thead {
+  background: var(--panel);
+}
+.contact-management .contact-table td,
+.contact-management .contact-table th {
+  padding: 16px 12px;
+}
+.contact-management .contact-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.contact-management .contact-table tbody tr:hover {
+  background: var(--panel);
+}
+.contact-table input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0;
+}
+.contact-table small {
+  margin-top: 4px;
+  font-size: 11px;
+}
+.contact-meta-link {
+  display: block;
+  margin-top: 6px;
+  font-weight: 400;
+  font-size: 11px;
+}
+.contact-status {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+.contact-status[data-state="waiting"],
+.contact-status[data-state="active"] {
+  color: var(--signal);
+}
+.contact-status[data-state="failed"],
+.contact-status[data-state="review"],
+.contact-status[data-state="unreachable"] {
+  color: var(--warning);
+}
+.contact-detail {
+  margin-top: 8px;
+  max-width: 200px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.contact-detail select {
+  min-width: 150px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.contact-detail label {
+  margin-top: 12px;
+}
+.contact-row-actions button,
+.contact-test-start button {
+  min-height: 36px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.contact-test-start button {
+  margin-top: 8px;
+}
+.contact-panel {
+  padding: 24px;
+  margin-block: 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.contact-panel h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+.contact-notice {
+  display: block;
+  padding: 12px 16px;
+  border-left: 2px solid var(--signal);
+  background: var(--panel);
+  font-size: 13px;
+}
+.contact-management > .catalog-result-count {
+  display: block;
+}
+.contact-tabs {
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.contact-tabs a {
+  padding: 12px 0;
+}
+.contact-tabs [aria-current="page"] {
+  box-shadow: inset 0 -2px var(--signal);
+}
+.invitation-management .contact-selection {
+  align-items: end;
+  gap: 12px;
+  margin-block: 24px;
+}
+.invitation-management .contact-selection label {
+  display: grid;
+  gap: 8px;
+}
+.invitation-management .contact-selection input[type="number"] {
+  width: 120px;
+}
+.invitation-management .contact-selection input,
+.invitation-management .contact-selection select {
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.invitation-management .contact-selection button {
+  min-height: 44px;
+}
+.invitation-management .contact-selection label:has(input[name="code"]) {
+  flex: 0 1 280px;
+}
+.invitation-management .contact-selection input[type="tel"] {
+  width: min(100%, 320px);
+}
+.invitation-code-list {
+  list-style: none;
+  padding: 0;
+}
+.invitation-code-list li {
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.invitation-code-list label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.invitation-management .invitation-code-list input[readonly] {
+  flex: 1 1 280px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.invitation-code-list button {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .contact-panel {
+    padding: 16px;
+  }
+  .contact-tabs {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .contact-management .contact-actions {
+    flex-direction: column;
+  }
+  .contact-filters .catalog-search {
+    flex-basis: 100%;
+  }
+}

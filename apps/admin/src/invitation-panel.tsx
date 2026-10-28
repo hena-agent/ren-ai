@@ -31,7 +31,7 @@ export function InvitationPanel({ view }: { view: InvitationView | undefined }) 
         자동 지급이 OFF여도 수동 지급할 수 있습니다. 미등록 번호도 가능하며, 받은 링크는 본인이
         사용하거나 친구에게 전달할 수 있습니다.
       </p>
-      <form action="/waitlist" method="post" className="contact-selection">
+      <form action="/invitations?section=phone" method="post" className="contact-selection">
         <label htmlFor="invitation-handle">초대장을 받을 전화번호</label>
         <input
           id="invitation-handle"
@@ -59,7 +59,7 @@ export function InvitationPanel({ view }: { view: InvitationView | undefined }) 
               {view.account.extraCount}장
             </p>
           )}
-          <form action="/waitlist" method="post" className="contact-selection">
+          <form action="/invitations?section=phone" method="post" className="contact-selection">
             <input type="hidden" name="action" value="invitation-grant" />
             <input type="hidden" name="requestId" value={view.requestId} />
             <input type="hidden" name="handle" value={view.handle} />

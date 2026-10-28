@@ -142,10 +142,13 @@ const setup = async () => {
 
 test("Admin normalizes a phone, grants fixed basics and individual extras with automatic issuance OFF, and preserves uncertain submissions", async () => {
   const f = await setup();
-  const initial = await f.admin(request("/waitlist"));
+  const linked = await f.admin(request(`/invitations?handle=${encodeURIComponent(phone)}`));
+  expect(linked.status).toBe(200);
+  expect(await linked.text()).toContain("기본 지급: 미지급");
+  const initial = await f.admin(request("/invitations?section=phone"));
   expect(await initial.text()).toContain("전화번호로 초대장 지급");
   const lookup = await f.admin(
-    request("/waitlist", { action: "invitation-lookup", handle: "010-1111-1111" }),
+    request("/invitations?section=phone", { action: "invitation-lookup", handle: "010-1111-1111" }),
   );
   const page = await lookup.text();
   expect(page).toContain("미등록 번호도 가능");
@@ -161,14 +164,14 @@ test("Admin normalizes a phone, grants fixed basics and individual extras with a
     grantCount: "2",
   };
   f.interrupt();
-  const failed = await f.admin(request("/waitlist", fields));
+  const failed = await f.admin(request("/invitations?section=phone", fields));
   expect(failed.status).toBe(503);
   const retryPage = await failed.text();
   expect(retryPage).toContain("같은 지급 요청 확인");
   expect(formID(retryPage)).toBe(id);
   expect(retryPage).toContain('name="kind" value="basic"');
   expect(retryPage).toContain('name="locale" value="en"');
-  const retried = await f.admin(request("/waitlist", fields));
+  const retried = await f.admin(request("/invitations?section=phone", fields));
   expect(retried.status).toBe(200);
   const after = await retried.text();
   expect(after).toContain("iMessage 발송을 예약했습니다");
@@ -177,12 +180,14 @@ test("Admin normalizes a phone, grants fixed basics and individual extras with a
   expect(f.account().invitations).toHaveLength(2);
   expect(f.submissions[0]).toEqual(f.submissions[1]);
   const extra = await f.admin(
-    request("/waitlist", { ...fields, kind: "extra", requestId: formID(after) }),
+    request("/invitations?section=phone", { ...fields, kind: "extra", requestId: formID(after) }),
   );
   expect(extra.status).toBe(200);
   expect(await extra.text()).toContain("추가 지급: 1장");
   expect(f.account().invitations).toHaveLength(3);
-  const conflict = await f.admin(request("/waitlist", { ...fields, requestId: randomUUID() }));
+  const conflict = await f.admin(
+    request("/invitations?section=phone", { ...fields, requestId: randomUUID() }),
+  );
   expect(conflict.status).toBe(400);
   expect(await conflict.text()).toContain("이미 기본 2장을 지급했거나");
   const log = f.logs.find((event) => event.code === "management_transport");
@@ -203,14 +208,17 @@ test("manual invitation forms reject invalid inputs and foreign-origin posts and
       locale: "ko",
     },
   ])
-    expect((await f.admin(request("/waitlist", fields))).status).toBe(400);
+    expect((await f.admin(request("/invitations?section=phone", fields))).status).toBe(400);
   expect(f.fetcher).not.toHaveBeenCalled();
-  const foreign = request("/waitlist", { action: "invitation-grant", handle: phone });
+  const foreign = request("/invitations?section=phone", {
+    action: "invitation-grant",
+    handle: phone,
+  });
   foreign.headers.set("origin", "https://other.test");
   expect((await f.admin(foreign)).status).toBe(400);
   f.invalidReply();
   const invalid = await f.admin(
-    request("/waitlist", {
+    request("/invitations?section=phone", {
       action: "invitation-grant",
       handle: phone,
       requestId: randomUUID(),

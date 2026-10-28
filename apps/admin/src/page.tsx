@@ -227,7 +227,12 @@ export type PageContent =
     });
 
 function heading(view: ContactView | undefined) {
-  if (view) return view.tab === "waitlist" ? "대기자 관리" : "첫 연락 현황";
+  if (view)
+    return {
+      waitlist: "대기자 관리",
+      "first-contacts": "첫 연락 현황",
+      invitations: "초대장 관리",
+    }[view.tab];
   return copy.list;
 }
 
@@ -306,6 +311,9 @@ function Navigation({
       </a>
       <a href="/conversations" aria-current={conversationView ? "page" : undefined}>
         대화 상태
+      </a>
+      <a href="/invitations" aria-current={contactView?.tab === "invitations" ? "page" : undefined}>
+        초대장
       </a>
       <a href="/metrics">지표</a>
     </nav>
@@ -390,7 +398,15 @@ export function renderPage({
               <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
               <h1>{heading(contactView)}</h1>
               <p className="description">
-                {contactView ? "대기자 선정과 첫 연락 진행 상태를 관리합니다." : copy.description}
+                {contactView
+                  ? {
+                      waitlist:
+                        "연락할 대기자를 찾고 선정합니다. 테스트 기록은 숨겨 목록을 정리하세요.",
+                      "first-contacts":
+                        "예약부터 첫 인사까지, 진행 상황과 확인이 필요한 기록을 살펴보세요.",
+                      invitations: "초대 코드를 만들고 공유하거나, 전화번호로 초대장을 지급합니다.",
+                    }[contactView.tab]
+                  : copy.description}
               </p>
             </div>
             <PageNotices

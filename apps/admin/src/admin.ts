@@ -70,7 +70,7 @@ const authorized = (request: Request, expected: Buffer) =>
   );
 
 const managementResponse = (request: Request, url: URL, management: AdminOptions["management"]) => {
-  if (["/waitlist", "/first-contacts"].includes(url.pathname))
+  if (["/waitlist", "/first-contacts", "/invitations"].includes(url.pathname))
     return contactRoutes(request, management);
   if (url.pathname === "/metrics") return metricsRoutes(request, management);
   if (url.pathname.startsWith("/conversations"))
