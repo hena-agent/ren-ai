@@ -6,7 +6,6 @@ import { HomeNavigation } from "./home-navigation.tsx";
 import { HeroGallery } from "./home-artwork.tsx";
 import { ConversationScene } from "./conversation-scene.tsx";
 import { useImageStyle } from "./use-image-style.ts";
-import { landingImages } from "./landing-images.ts";
 import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
 import { HomeHighlights } from "./home-highlights.tsx";
 import { landingImage } from "./landing-images.ts";
@@ -26,7 +25,7 @@ function ExploreLink() {
 export function Home({ client = discoveryClient }: { client?: DiscoveryClient }) {
   const copy = useCopy();
   const home = copy.home;
-  const { style, changing, issue, choose } = useImageStyle();
+  const { style, issue, choose } = useImageStyle();
   useActivity(client, style);
   useEffect(() => {
     document.title = home.pageTitle;
@@ -34,13 +33,7 @@ export function Home({ client = discoveryClient }: { client?: DiscoveryClient })
   return (
     <div className="home">
       <Header>
-        <StyleSwitch
-          style={style}
-          changing={changing}
-          onChoose={(next) => {
-            void choose(next, landingImages(next));
-          }}
-        />
+        <StyleSwitch style={style} onChoose={choose} />
         <HomeNavigation />
       </Header>
       <StyleFeedback issue={issue} />

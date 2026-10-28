@@ -93,7 +93,8 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   ).toBeTruthy();
 });
 
-test("landing starts in anime and changes every image together while retaining the selected persona", async () => {
+test("landing switches immediately during slow image loading and retains the selected persona", async () => {
+  vi.spyOn(HTMLImageElement.prototype, "decode").mockReturnValue(new Promise(() => {}));
   const profiles = vi.fn<DiscoveryClient["profiles"]>();
   const client = testClient({ profiles, join: vi.fn<DiscoveryClient["join"]>() });
   const first = render(<Site client={client} />);
@@ -101,7 +102,7 @@ test("landing starts in anime and changes every image together while retaining t
     "/landing/dohee-daily-anime.webp",
   );
   fireEvent.click(screen.getByRole("button", { name: "강하린 프로필" }));
-  await selectImageStyle("실사");
+  fireEvent.click(screen.getByRole("button", { name: "실사" }));
   expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
     "/landing/seoyul.webp",
   );

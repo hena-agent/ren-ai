@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
@@ -13,7 +13,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   localStorage.clear();
-  performance.clearMarks("discovery.imageStyle.failed");
   delete window.turnstile;
 });
 const people = ["하린", "지우", "미라"].map((name, index) => ({
@@ -98,35 +97,22 @@ test("a legacy profile before styled profiles remains usable with the anime defa
   );
 });
 
-test("preparation keeps the old image, prevents repeat requests and retains keyboard focus", async () => {
-  let finish: () => void = vi.fn<() => void>();
-  const prepared = new Promise<void>((resolve) => {
-    finish = resolve;
-  });
-  const decode = vi.spyOn(HTMLImageElement.prototype, "decode").mockReturnValue(prepared);
+test("style switches immediately during slow image loading and retains keyboard focus", async () => {
+  vi.spyOn(HTMLImageElement.prototype, "decode").mockReturnValue(new Promise(() => {}));
   render(<App client={testClient({ ...client, profiles: async () => [people[0]!] })} />);
   await screen.findByRole("heading", { name: "하린" });
   const target = screen.getByRole("button", { name: "실사" });
   target.focus();
   fireEvent.click(target);
-  expect(document.querySelector(".app-workspace")?.hasAttribute("inert")).toBe(true);
-  expect(
-    within(screen.getByRole("group", { name: "이미지 스타일" })).getByRole("status").textContent,
-  ).toBe("이미지 스타일을 바꾸고 있어요.");
-  expect(document.querySelector(".profile-photo")?.getAttribute("src")).toBe(
-    people[0]!.portraits.anime,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "애니메" }));
-  fireEvent.click(target);
-  expect(decode).toHaveBeenCalledOnce();
-  await act(async () => {
-    finish();
-  });
   expect(document.querySelector(".app-workspace")?.hasAttribute("inert")).toBe(false);
   expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
     people[0]!.portraits.photo,
   );
   expect(document.activeElement).toBe(target);
+  fireEvent.click(screen.getByRole("button", { name: "애니메" }));
+  expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
+    people[0]!.portraits.anime,
+  );
 });
 
 test("style changes and reloads preserve Like and Pass, contact input and candidate IDs", async () => {
@@ -225,29 +211,18 @@ test("a style change retries a broken portrait without changing the persona", as
   );
 });
 
-function recordDecodes() {
-  const requested: string[] = [];
-  vi.spyOn(HTMLImageElement.prototype, "decode").mockImplementation(function (
-    this: HTMLImageElement,
-  ) {
-    requested.push(this.src);
-    return Promise.resolve();
-  });
-  return requested;
-}
-
-test("switching while reading a liked profile prepares its photos and preserves the current deck", async () => {
-  const requested = recordDecodes();
+test("switching while reading a liked profile preserves the current deck and scroll position", async () => {
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
   choose(true);
   fireEvent.click(screen.getByRole("button", { name: "하린 프로필 보기" }));
   const reading = screen.getByRole("region", { name: "하린" });
-  await selectImageStyle("실사");
+  const scroll = reading.querySelector(".details-scroll")!;
+  scroll.scrollTop = 300;
+  fireEvent.click(screen.getByRole("button", { name: "실사" }));
   expect(screen.getByRole("region", { name: "하린" })).toBe(reading);
   expect(within(reading).getByRole("img").getAttribute("src")).toBe(people[0]!.portraits.photo);
-  expect(requested).toContain(people[0]!.portraits.photo);
-  expect(requested).toContain(people[1]!.portraits.photo);
+  expect(scroll.scrollTop).toBe(300);
   fireEvent.click(within(reading).getByRole("button", { name: "프로필 접기" }));
   expect(screen.getByRole("img", { name: "지우 프로필" }).getAttribute("src")).toBe(
     people[1]!.portraits.photo,
@@ -260,8 +235,7 @@ const original = (n: number) =>
 const display = (n: number) =>
   `https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-00000000000${n}.jpg`;
 
-test("owned gallery photos browse, prepare and read through their stored display renditions", async () => {
-  const requested = recordDecodes();
+test("owned gallery photos switch immediately through their stored display renditions", async () => {
   const gallery = [0, 1].map((index) => ({
     id: `owned${index}`,
     name: `사진${index}`,
@@ -273,8 +247,9 @@ test("owned gallery photos browse, prepare and read through their stored display
   await screen.findByRole("heading", { name: "사진0" });
   expect(screen.getByRole("img", { name: "사진0 프로필" }).getAttribute("src")).toBe(display(1));
   expect(document.querySelector(".card-back img")?.getAttribute("src")).toBe(display(3));
-  await selectImageStyle("실사");
-  expect(requested).toEqual([display(2), display(4)]);
+  fireEvent.click(screen.getByRole("button", { name: "실사" }));
+  expect(screen.getByRole("img", { name: "사진0 프로필" }).getAttribute("src")).toBe(display(2));
+  expect(document.querySelector(".card-back img")?.getAttribute("src")).toBe(display(4));
   choose(true);
   expect(
     screen.getByRole("list", { name: "좋아한 사람" }).querySelector("img")?.getAttribute("src"),
@@ -287,38 +262,18 @@ test("owned gallery photos browse, prepare and read through their stored display
   ).toBe(display(2));
 });
 
-test.each([new Error("private image URL and secret"), "private token"])(
-  "failed preparation keeps the current view and records safe diagnostics (%#)",
-  async (failure) => {
-    const decode = vi.spyOn(HTMLImageElement.prototype, "decode").mockRejectedValue(failure);
-    const mark = vi.spyOn(performance, "mark");
-    render(<App client={client} />);
-    await screen.findByRole("heading", { name: "하린" });
-    await selectImageStyle("실사");
-    expect(screen.getByRole("alert").textContent).toContain("현재 모습은 그대로예요");
-    expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
-      people[0]!.portraits.anime,
-    );
-    expect(localStorage.getItem("ren-ai.discovery.image-style")).toBeNull();
-    const diagnostics = mark.mock.calls.filter(([name]) => name === "discovery.imageStyle.failed");
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.[1]).toMatchObject({
-      detail: {
-        operation: "discovery.imageStyle",
-        stage: "images.decode",
-        outcome: "failed",
-        code: "IMAGE_STYLE_CHANGE_FAILED",
-      },
-    });
-    expect(JSON.stringify(mark.mock.calls)).not.toMatch(/private|secret|example\.net/);
-    decode.mockResolvedValue(undefined);
-    await selectImageStyle("실사");
-    expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByRole("img", { name: "하린 프로필" }).getAttribute("src")).toBe(
-      people[0]!.portraits.photo,
-    );
-  },
-);
+test("a failed image does not revert the selected style or block navigation", async () => {
+  render(<App client={client} />);
+  await screen.findByRole("heading", { name: "하린" });
+  fireEvent.click(screen.getByRole("button", { name: "실사" }));
+  fireEvent.error(screen.getByRole("img", { name: "하린 프로필" }));
+  expect(screen.getByRole("button", { name: "실사" }).getAttribute("aria-pressed")).toBe("true");
+  expect(localStorage.getItem("ren-ai.discovery.image-style")).toBe("photo");
+  choose(false);
+  expect(screen.getByRole("img", { name: "지우 프로필" }).getAttribute("src")).toBe(
+    people[1]!.portraits.photo,
+  );
+});
 
 test("only supported styles restore and absent, invalid or blocked storage defaults to anime", () => {
   expect(readImageStyle()).toBe("anime");
