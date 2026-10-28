@@ -321,6 +321,8 @@ export const migrate = Effect.gen(function* () {
       "055_metrics": metricsSchema,
       "056_invitations": invitationSchema,
       "057_discord_cards": discordCardsSchema,
+      // Reload once so the served snapshot's browse revision is pinned instead of timing out.
+      "058_served_public_catalog": sql`UPDATE public_catalog SET payload = NULL WHERE id = 1`,
     }),
   );
 });

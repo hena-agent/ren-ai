@@ -69,7 +69,9 @@ afterEach(() => Effect.runPromise(Scope.close(scope, Exit.void)));
 
 const open = (bindings: CloudflareBindings = executionBindings) =>
   createExecutionRuntime(
-    fromPartial<ApplicationStore>({ context: database }),
+    fromPartial<ApplicationStore>({
+      context: database,
+    }),
     cloudflareConfiguration(bindings),
     bindings,
     "ground rules",
@@ -287,8 +289,19 @@ test("only authenticated POST notifications refresh the Catalog, without running
     expect(control.events).toEqual([]);
     expect((await notify("GET")).status).toBe(405);
     expect(control.events).toEqual([]);
+    await execSql("INSERT INTO application_clock (name, at) VALUES ('catalog.public', 1)");
     expect((await notify()).status).toBe(204);
     expect(control.events).toEqual(["catalog", "remote", "folders", "refresh"]);
+    // The served public snapshot is fenced and reloaded by the next alarm, not by a visitor.
+    expect(await execSql("SELECT payload, generation FROM public_catalog")).toEqual([
+      { payload: null, generation: 1 },
+    ]);
+    expect(await execSql("SELECT * FROM application_clock WHERE name = 'catalog.public'")).toEqual(
+      [],
+    );
+    expect(
+      await execSql("SELECT name FROM application_work WHERE name = 'public-catalog'"),
+    ).toEqual([{ name: "public-catalog" }]);
     expect((await notify()).status).toBe(204);
     expect(control.events.filter((event) => event === "refresh")).toHaveLength(2);
     expect(control.operator).not.toHaveBeenCalled();

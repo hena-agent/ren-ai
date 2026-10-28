@@ -15,6 +15,7 @@ import { usageQueries } from "./usage/query.ts";
 import { loadMetrics, metricsHandler } from "./metrics/query.ts";
 import { configureDiscord, type Webhooks } from "./metrics/discord.ts";
 import { metricsTasks } from "./metrics/tasks.ts";
+import { runWorkLanes, withWorkBudget, WorkLaneFailure } from "./work-budget.ts";
 
 export interface ApplicationStoreConfig {
   readonly catalog: () => Promise<readonly PublicPersona[]>;
@@ -28,6 +29,8 @@ export interface ApplicationStoreConfig {
 
 export interface ApplicationStore {
   readonly metricsTick: (requestId: string) => Promise<void>;
+  /** Bounded alarm work that replaces Discovery's served public snapshot. */
+  readonly catalogTick: (requestId: string) => Promise<void>;
   readonly context: Context.Context<SqlClient.SqlClient>;
   readonly run: <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) => Promise<A>;
   readonly handler: (request: Request) => Promise<Response>;
@@ -75,6 +78,21 @@ export const createApplicationStore = async (
     return {
       context,
       run,
+      catalogTick: (requestId) =>
+        run(
+          withWorkBudget(
+            runWorkLanes("catalog.cursor", [
+              { name: "refresh", run: discovery.maintainCatalog },
+            ]).pipe(
+              // This store lane owns its diagnostic and retry; it must not mask execution failures.
+              Effect.catchIf(
+                (cause) => cause instanceof WorkLaneFailure,
+                () => Effect.void,
+              ),
+            ),
+            requestId,
+          ),
+        ),
       metricsTick: (requestId) =>
         run(
           metricsTasks(

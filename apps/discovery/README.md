@@ -5,12 +5,17 @@ Cloudflare Worker with static assets.
 `/` is the public introduction home, with service details, the waitlist process,
 FAQs and the same localized privacy notice used during registration. It does not
 request the Catalog. Its calls to action open `/explore`, which contains image
-style selection, profile browsing and waitlist registration. `/explore` returns its
-header and loading state without requesting or waiting for the Catalog. After the
-browser application starts, its client fetches `/discovery/personas?locale=ko`
-(using the selected UI language) and displays ten candidates. With five unseen
-cards left it requests the next cursor page. A failed listing offers an inline retry; an unavailable API
-does not prevent the initial HTML response. No empty Catalog bootstrap is embedded.
+style selection, profile browsing and waitlist registration. `/explore` opens
+directly on its cards. The Worker requests `/discovery/personas?locale=…` in the
+language the browser will choose (the first supported `Accept-Language`, else
+English, matching `navigator.languages`), renders those ten candidates and embeds
+them with their locale and cursor. The browser continues from that page without
+resampling; with five unseen cards left it requests the next cursor page. If a
+saved display language differs from the sampled one, the browser replaces the page
+with a sample in its own language. The Worker waits at most three seconds: a
+failed, invalid or slow listing is logged and `/explore` returns its loading shell
+without a snapshot, so the browser fetches the listing and offers an inline retry.
+`HEAD /explore` never requests the Catalog.
 The Discovery logo returns home; native links support browser history, reloads
 and direct entry.
 Display language, image style and Likes retain their existing browser storage.
@@ -18,6 +23,8 @@ Private `/#reselect=…` links sent through iMessage still open Discovery direct
 and retain their fragment for registration. The browser also sends the token to
 the private Reselection listing, which hides personas who ended a relationship
 with that handle only. Public listings remain independent of relationship endings.
+Fragments never reach the Worker, so reloading `/explore#reselect=…` shows the
+public first page until the browser script replaces it with the private listing.
 
 ## Public profile links
 
@@ -45,8 +52,8 @@ persona description, State, Memory, identity sheet or authoring prompt is used.
 Profile HTML, sitemap and health responses use `Cache-Control: no-store`.
 
 Home, explorer and profile requests all return the actual application UI in their
-first HTML: home has its editorial content, explorer has its loading state, and
-profile links have their full public profile. Each profile has a distinct title,
+first HTML: home has its editorial content, explorer has its first sampled cards,
+and profile links have their full public profile. Each profile has a distinct title,
 description and canonical URL,
 Open Graph and Twitter metadata, and WebPage/CreativeWork JSON-LD that explicitly
 identifies a fictional AI persona. Sharing carries the selected `style` and a
@@ -93,11 +100,15 @@ Discovery → api-app /discovery/profiles → requested public IDs only
 Discovery → api-app /discovery/waitlist → application Durable Object
 ```
 
-api-app serves the public Catalog through its existing snapshot cache, invalidated
-by Catalog changes. Server-rendered profiles request it with `cache: no-store`;
-explorer uses the existing browser client, so later visits see profiles without a
-frontend rebuild. The public snapshot retains the original R2 image URLs. Private persona
-descriptions, State and Memory never enter the public response.
+api-app serves the public Catalog from its persisted snapshot without waiting for
+Admin. Admin's change notification invalidates and promptly reloads it, and bounded
+maintenance checks it at most once per five minutes while the application is awake for work (see the
+[api-app freshness notes](../api/ops/README.md#public-catalog-freshness)).
+Server-rendered profiles and the explorer's first page request it with
+`cache: no-store`; later pages use the existing browser client, so visits see
+profiles without a frontend rebuild. The public snapshot retains the original
+R2 image URLs. Private persona descriptions, State and Memory never enter the
+public response.
 
 ### Sampling and continuation
 
@@ -130,10 +141,19 @@ continues to subsequent pages as needed. Retried pages are merged by ID.
 
 ## Browsing images
 
-Browsing loads original photos directly from `persona-images.renai.im`, without a
-Discovery image proxy or request-time resizing/re-encoding. The current card and
-expanded profile have high fetch priority. The next card loads at low priority;
-Like thumbnails are lazy-loaded. Style preparation decodes the same original URLs.
+Browsing loads each photo's stored display rendition from `persona-images.renai.im`
+(`thumbnails/<uuid>.jpg`, a 640px JPEG that Admin writes before every original),
+without a Discovery image proxy or request-time resizing/re-encoding. Originals
+average about 1.9 MB (mostly 1024px PNGs); renditions average about 115 KB. Cards,
+expanded profiles, Likes, the contact list and style preparation all use the
+rendition; OG previews and the sitemap keep the original. Photos outside the
+owned bucket are shown unchanged. The current card and expanded profile have high
+fetch priority, and the server-rendered first card is preloaded. The next card
+loads at low priority; Like thumbnails are lazy-loaded.
+
+Home preloads only the selected hero portrait at high priority; the other two load
+at low priority. Content-hashed `/assets/*` are served with
+`Cache-Control: public, max-age=31536000, immutable` from `public/_headers`.
 
 New R2 photos have `Cache-Control: public, max-age=31536000, immutable`. Cloudflare
 can cache JPG, PNG and WebP through the R2 custom domain without an additional Cache
@@ -173,12 +193,11 @@ are reported explicitly. The Worker accepts source photos up to the Images
 binding's 20 MB input limit and returns bounded, fixed-size JPEG renditions.
 Do not deploy manually or also connect Workers Builds.
 
-`bun run build` builds browser assets and prerenders home and the explorer, which depend
-only on the build, into `index.html` and `explore.html`. The asset service serves them
-directly, so the most visited pages never run the Worker or spend its CPU. Wrangler
-bundles `worker/entry.ts` and serves `dist/client/` assets. Public profile routes,
-sitemap, robots and health run the Worker first; profiles render into the unmodified
-application shell, `template.html`.
+`bun run build` builds browser assets and prerenders home into `index.html`; the asset
+service serves it directly without Worker CPU. Wrangler bundles `worker/entry.ts`
+and serves `dist/client/` assets. The explorer, public profile routes, sitemap, robots
+and health run the Worker first. Explorer and profiles render into the unmodified
+application shell, `template.html`, so the first explorer response includes sampled cards.
 CI embeds `GITHUB_SHA` through Wrangler's `BUILD_REVISION` define.
 `wrangler.jsonc` binds `renai.im` as a custom domain.
 `www.renai.im` is a zone redirect. The api-app API permits `https://renai.im`

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { PublicPersona } from "@ren-ai/onboarding";
+import { BrowsePage, DiscoveryLocale, PublicPersona } from "@ren-ai/onboarding";
 import type { ImageStyle } from "./image-style.ts";
 
 export const publicOrigin = "https://renai.im";
@@ -32,8 +32,17 @@ export function previewRoute(url: URL) {
   return { id, style };
 }
 
-export function readPublicPeople(text: string | null) {
-  return text === null
-    ? undefined
-    : Schema.decodeUnknownSync(Schema.Array(PublicPersona))(JSON.parse(text));
+/** Where the explorer's server-sampled first page continues: its language and next cursor. */
+const SampledPage = Schema.Struct({
+  locale: DiscoveryLocale,
+  nextCursor: BrowsePage.fields.nextCursor,
+});
+export type SampledPage = typeof SampledPage.Type;
+const PublicBootstrap = Schema.Struct({
+  people: Schema.Array(PublicPersona),
+  page: Schema.optionalKey(SampledPage),
+});
+
+export function readPublicBootstrap(text: string | null) {
+  return text === null ? undefined : Schema.decodeUnknownSync(PublicBootstrap)(JSON.parse(text));
 }

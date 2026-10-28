@@ -206,11 +206,17 @@ images and validate real JPEG bytes, dimensions and the 5 MB output limit. Verif
 the photo and watermark pixels in a real Cloudflare preview. Keep search canonical
 URLs independent of style. Return profile content and unique metadata in the
 first HTML for all visitors, including non-JavaScript crawlers. Home renders its
-editorial content independently of the live Catalog. `/explore` returns its header
-and loading state without a Catalog request; the browser fetches the listing once
-using the existing Discovery client and offers inline retry on failure. Do not
-embed an empty public snapshot that would suppress that browser request. Public
-profile links keep their server-rendered content and public snapshot. Sitemap
+editorial content independently of the live Catalog. `/explore` opens directly on
+its cards, with no loading screen: the Worker samples the first page in the
+language the browser will choose (`Accept-Language`, as `navigator.languages`),
+renders it and embeds that page and its cursor so browsing continues without
+resampling. A page sampled for a different saved language is replaced by a sample
+in that language. The Worker waits at most three seconds; on failure it returns
+the loading shell without a snapshot, and the browser fetches the listing with
+inline retry. Public profile links keep their server-rendered content and public
+snapshot. Browsing shows each photo's stored 640px display rendition rather than
+its original; previews and sitemaps keep originals. On home, only the selected
+hero portrait loads at high priority. Sitemap
 and image locations reflect publication changes without rebuilding. JSON-LD
 describes fictional creative works rather than claiming personas are real people.
 Shared URLs contain no private fragments, handles or browser choices. Missing

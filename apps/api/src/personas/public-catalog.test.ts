@@ -1,13 +1,13 @@
-import { Deferred, Effect, Fiber } from "effect";
+import { Clock, Deferred, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { SqlClient } from "effect/sql";
 import { expect, test, vi } from "vitest";
 import { runMessagingTest } from "../../test/messaging.test-helper.ts";
 import { migrate } from "../database.ts";
-import { publicCatalog, invalidatePublicCatalog } from "./public-catalog.ts";
+import { publicCatalog, invalidatePublicCatalog, reloadPublicCatalog } from "./public-catalog.ts";
 import type { PublicPersona } from "@ren-ai/onboarding";
-import type { ContactDiagnostic } from "../discovery/diagnostics.ts";
 import { lookupProfiles } from "./browse.ts";
+import { applicationWakes } from "../scheduling.ts";
 
 const profiles = [
   {
@@ -18,7 +18,7 @@ const profiles = [
   },
 ];
 
-test("public browsing coalesces requests, survives actor replacement and keeps idle checkpoints write-free", async () => {
+test("public browsing coalesces first loads, survives actor replacement and never ages into Admin requests", async () => {
   await runMessagingTest(
     Effect.gen(function* () {
       yield* migrate;
@@ -28,7 +28,7 @@ test("public browsing coalesces requests, survives actor replacement and keeps i
       );
       const cache = yield* publicCatalog(load);
       const results = yield* Effect.all(
-        Array.from({ length: 20 }, (_, i) => cache.ensure(`request-${i}`)),
+        Array.from({ length: 20 }, () => cache.ensure),
         { concurrency: "unbounded" },
       );
       expect(new Set(results).size).toBe(1);
@@ -39,61 +39,67 @@ test("public browsing coalesces requests, survives actor replacement and keeps i
       );
       const [before] = yield* sql<{ n: number }>`SELECT total_changes() AS n`;
       const replacement = yield* publicCatalog(load);
-      expect(yield* replacement.ensure("replacement")).toBe(results[0]);
+      yield* TestClock.adjust("1 day");
+      expect(yield* replacement.ensure).toBe(results[0]);
       expect(yield* sql`SELECT total_changes() AS n`).toEqual([before]);
       expect(load).toHaveBeenCalledOnce();
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });
 
-test("stale browsing has a hard expiry, backs off failed refreshes and emits private-data-free diagnostics", async () => {
+test("bounded maintenance replaces the served snapshot, writes only its schedule when unchanged and leaves browsing up while Admin fails", async () => {
   await runMessagingTest(
     Effect.gen(function* () {
       yield* migrate;
+      const sql = yield* SqlClient.SqlClient;
       let failing = false;
-      const logs: ContactDiagnostic[] = [];
+      let candidates: readonly PublicPersona[] = profiles;
       const load = vi.fn<() => Promise<readonly PublicPersona[]>>(async () => {
         if (failing)
           throw Object.assign(new Error("private upstream payload"), {
             code: "CATALOG_HTTP",
             upstreamStatus: 503,
           });
-        return profiles;
+        return candidates;
       });
-      const cache = yield* publicCatalog(load, (event) => logs.push(event));
-      const revision = yield* cache.ensure("first");
+      const cache = yield* publicCatalog(load);
+      const revision = yield* cache.ensure;
       failing = true;
-      yield* TestClock.adjust("60 seconds");
-      expect(yield* cache.ensure("stale")).toBe(revision);
-      yield* TestClock.adjust("5 seconds");
-      yield* cache.ensure("retry-window");
-      expect(load).toHaveBeenCalledTimes(2);
-      expect(logs).toHaveLength(1);
-      expect(logs[0]).toMatchObject({
-        requestId: "stale",
-        stage: "catalog.stale",
-        level: "warn",
-        causeCode: "CATALOG_HTTP",
-        upstreamStatus: 503,
-      });
-      expect(JSON.stringify(logs)).not.toContain("private upstream payload");
-      yield* TestClock.adjust("6 seconds");
-      yield* cache.ensure("refresh-again");
-      expect(load).toHaveBeenCalledTimes(3);
-      yield* TestClock.adjust("289 seconds");
-      expect((yield* cache.ensure("expired").pipe(Effect.flip)).message).toBe(
-        "Public Catalog unavailable",
+      const failure = yield* cache.maintain.pipe(Effect.flip);
+      expect(failure.message).toBe("Public Catalog unavailable");
+      expect(yield* sql`SELECT name FROM application_clock WHERE name = 'catalog.public'`).toEqual(
+        [],
       );
+      yield* TestClock.adjust("1 hour");
+      expect(yield* cache.ensure).toBe(revision);
+      expect(load).toHaveBeenCalledTimes(2);
+      failing = false;
+      const [before] = yield* sql<{ n: number }>`SELECT total_changes() AS n`;
+      yield* cache.maintain;
+      const [after] = yield* sql<{ n: number }>`SELECT total_changes() AS n`;
+      expect(after!.n - before!.n).toBe(1); // the persisted maintenance clock only
+      yield* TestClock.adjust("4 minutes");
+      candidates = [...profiles, { ...profiles[0]!, id: "two" }];
+      yield* cache.maintain;
+      expect(load).toHaveBeenCalledTimes(3);
+      expect(yield* cache.ensure).toBe(revision);
+      yield* TestClock.adjust("1 minute");
+      yield* cache.maintain;
+      const latest = yield* cache.ensure;
+      expect(latest).not.toBe(revision);
+      expect((yield* lookupProfiles(["two"])).map((persona) => persona.id)).toEqual(["two"]);
+      expect(load).toHaveBeenCalledTimes(4);
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });
 
 test.each([false, true])(
-  "Catalog invalidation fences in-flight refreshes and their stale fallback (failure: %s)",
+  "Admin's change notification fences in-flight loads and schedules an immediate reload (failure: %s)",
   async (failed) => {
     await runMessagingTest(
       Effect.gen(function* () {
         yield* migrate;
+        const sql = yield* SqlClient.SqlClient;
         let paused = false;
         const entered = Deferred.makeUnsafe<void>();
         const gate = Deferred.makeUnsafe<readonly PublicPersona[], Error>();
@@ -102,18 +108,32 @@ test.each([false, true])(
           Effect.runSync(Deferred.succeed(entered, undefined));
           return Effect.runPromise(Deferred.await(gate));
         });
-        yield* cache.ensure("initial");
+        yield* cache.ensure;
+        yield* cache.maintain;
         paused = true;
-        yield* TestClock.adjust("60 seconds");
-        const reading = yield* cache.ensure("racing").pipe(Effect.flip, Effect.forkScoped);
+        const now = yield* Clock.currentTimeMillis;
+        yield* sql`INSERT INTO application_work(name, due, attempts) VALUES
+          ('retry', ${now + 300_000}, 1), ('lane:catalog.cursor:refresh', ${now + 300_000}, 1)`;
+        yield* reloadPublicCatalog;
+        expect(
+          yield* sql`SELECT name FROM application_clock WHERE name = 'catalog.public'`,
+        ).toEqual([]);
+        expect(yield* sql`SELECT due FROM application_work WHERE name = 'public-catalog'`).toEqual([
+          { due: now },
+        ]);
+        expect(
+          yield* sql`SELECT name FROM application_work WHERE name = 'lane:catalog.cursor:refresh'`,
+        ).toEqual([]);
+        expect((yield* applicationWakes).store).toBe(now);
+        expect((yield* applicationWakes).execution).toBe(now + 300_000);
+        const reading = yield* cache.ensure.pipe(Effect.flip, Effect.forkScoped);
         yield* Deferred.await(entered);
         yield* invalidatePublicCatalog;
         if (failed) yield* Deferred.fail(gate, new Error("Upstream unavailable"));
         else yield* Deferred.succeed(gate, profiles);
         expect(yield* Fiber.join(reading)).toBeInstanceOf(Error);
-        const sql = yield* SqlClient.SqlClient;
         expect(yield* sql`SELECT payload, generation FROM public_catalog`).toEqual([
-          { payload: null, generation: 1 },
+          { payload: null, generation: 2 },
         ]);
       }).pipe(Effect.provide(TestClock.layer())),
     );
@@ -125,17 +145,20 @@ test("invalid sources fail safely and browsing reads its indexed projection with
     Effect.gen(function* () {
       yield* migrate;
       const invalid = yield* publicCatalog(async () => [{ ...profiles[0]!, bio: "" }]);
-      expect((yield* invalid.ensure("bad-source").pipe(Effect.flip)).message).toBe(
+      expect((yield* invalid.ensure.pipe(Effect.flip)).message).toBe(
         "Invalid public Catalog response",
       );
       const cache = yield* publicCatalog(async () => profiles);
-      const revision = yield* cache.ensure("good");
+      const revision = yield* cache.ensure;
       const sql = yield* SqlClient.SqlClient;
       yield* sql`UPDATE public_catalog SET payload = '{'`;
-      expect(yield* cache.ensure("without-full-payload")).toBe(revision);
+      expect(yield* cache.ensure).toBe(revision);
       expect(yield* lookupProfiles(["one"])).toEqual(profiles);
-      yield* TestClock.adjust("60 seconds");
-      expect(yield* cache.ensure("refreshed")).toBe(revision);
+      yield* cache.maintain;
+      expect(yield* cache.ensure).toBe(revision);
+      expect(yield* sql`SELECT payload FROM public_catalog`).toEqual([
+        { payload: JSON.stringify(profiles) },
+      ]);
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });

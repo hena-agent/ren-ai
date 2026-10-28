@@ -7,8 +7,8 @@
 The executor forwards to `https://oc.renai.im` and
 `https://imsg.renai.im/rpc`. Discovery registration and Admin management use
 api-app; Discovery also reads its public profiles through api-app's persisted
-public Catalog cache (60 seconds fresh, up to 300 additional seconds stale on
-upstream failure). Registration and Selection revalidate against Admin directly.
+public Catalog snapshot, which browsing serves without waiting for Admin. Registration
+and Selection revalidate against Admin directly.
 
 Local `bun dev` serves api-app at `http://127.0.0.1:4879` and its Wrangler
 debugger at `http://127.0.0.1:5879`. Export `API_APP_PORT` or
@@ -192,15 +192,29 @@ during blocked intake backs off from one second to 30 seconds and resets on prog
 
 ### Public Catalog freshness
 
-Only public profile fields enter the durable cache. Concurrent refreshes coalesce;
-warm reads perform no storage writes. Failed refreshes retry after ten seconds
-within the hard six-minute snapshot lifetime. A missing/expired snapshot yields
-HTTP 503. Successful browse responses include `Age` and
-`Cache-Control: public, max-age=60, stale-while-revalidate=300`; other responses
-remain `no-store`. Registration and Selection never admit a stale-only candidate.
-Admin's authenticated Catalog refresh invalidates the stored snapshot and fences
-in-flight refreshes; already-cached browser/CDN responses can remain visible until
-their HTTP freshness window ends. State archives exclude this reconstructible cache.
+Only public profile fields enter the durable snapshot. Browsing reads serve the
+stored snapshot regardless of its age and never call Admin, so a slow or failing
+Admin cannot delay or break Discovery; reads perform no storage writes. Only a
+missing or invalidated snapshot is loaded on demand: concurrent loads coalesce and
+a failed one yields HTTP 503.
+
+Admin's authenticated Catalog refresh is the change signal. It invalidates the
+snapshot, fencing in-flight loads, and schedules the alarm to reload it at once.
+The store alarm's Catalog lane (maintenance clock `catalog.public`) also replaces
+the snapshot from Admin's public list at most once per five minutes while the application
+is awake for persisted work, without starting or waiting for conversation execution. Admin
+notifications clear Catalog retry backoff and schedule independent store work. It adds no
+periodic idle wake. An unchanged list writes only that persisted clock, with no snapshot
+transaction; a failed one keeps serving the current snapshot, logs the lane failure
+and retries with the lane backoff. The lane also
+reclaims expired browse snapshots in bounded batches. Bootstrap-only mode runs no
+alarm, so it serves the snapshot it first loaded until an import invalidates it.
+
+The served browse revision never expires. When a reload replaces it, the previous
+revision stays valid for one cursor lifetime (one hour), so existing traversals keep
+their membership, and is reclaimed afterwards. Browse responses are `no-store`.
+Registration and Selection never admit a candidate from the snapshot alone. State
+archives exclude this reconstructible snapshot; import invalidates it.
 
 `renai.im` is the Discovery app in `apps/discovery`, and `admin.renai.im` is the
 Catalog and authoring Worker in `apps/admin`. GitHub Actions deploys both after the

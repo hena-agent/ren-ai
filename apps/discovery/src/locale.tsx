@@ -11,6 +11,11 @@ const key = "renai.locale";
 const supported = (value: string | null | undefined): value is Locale =>
   value === "ko" || value === "en" || value === "ja";
 
+/** The first supported language in preference order, as browsers report or request them. */
+export function preferredLocale(languages: readonly string[]): Locale {
+  return languages.map((language) => language.toLowerCase().split("-")[0]).find(supported) ?? "en";
+}
+
 function readLocale(): Locale {
   try {
     const saved = localStorage.getItem(key);
@@ -18,7 +23,7 @@ function readLocale(): Locale {
   } catch {
     // Browser language still works when storage is unavailable.
   }
-  return navigator.languages.map((language) => language.split("-")[0]).find(supported) ?? "en";
+  return preferredLocale(navigator.languages);
 }
 
 const LocaleContext = createContext<{

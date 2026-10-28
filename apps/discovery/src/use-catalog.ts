@@ -4,6 +4,7 @@ import type { DiscoveryClient } from "./client.ts";
 import { BrowseExpiredError } from "./client.ts";
 import { readChoices } from "./choices.ts";
 import { useLocale } from "./locale.tsx";
+import type { SampledPage } from "./public-routing.ts";
 
 type Catalog =
   | { phase: "loading" }
@@ -18,24 +19,28 @@ export function useCatalog(
   initialPeople?: readonly PublicPersona[],
   reselectionToken?: string,
   personaId?: string,
+  initialPage?: SampledPage,
 ) {
   const { locale } = useLocale();
   const [catalog, setCatalog] = useState<Catalog>(
     initialPeople ? { phase: "ready", people: initialPeople } : { phase: "loading" },
   );
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(initialPage?.nextCursor ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const active = useRef(new AbortController());
   const pending = useRef(false);
+  // The server-sampled page answers the first request in its language until a reload succeeds.
+  const sampled = useRef(initialPeople && initialPage && { ...initialPage, people: initialPeople });
   const reload = useCallback(async () => {
     active.current.abort();
     const controller = new AbortController();
     active.current = controller;
     pending.current = true;
+    const sample = sampled.current?.locale === locale ? sampled.current : undefined;
     setLoadingMore(false);
     setMoreFailed(false);
-    setCursor(null);
+    if (!sample) setCursor(null);
     if (!initialPeople)
       setCatalog((current) => (current.phase === "ready" ? current : { phase: "loading" }));
     const ids = Object.entries(readChoices())
@@ -44,17 +49,20 @@ export function useCatalog(
     if (personaId && !ids.includes(personaId)) ids.push(personaId);
     try {
       const [page, liked] = await Promise.all([
-        client.browse({ locale }, controller.signal, reselectionToken),
+        sample ?? client.browse({ locale }, controller.signal, reselectionToken),
         ids.length
           ? client.profiles(controller.signal, reselectionToken, ids)
           : Promise.resolve([]),
       ]);
       if (controller.signal.aborted) return;
+      sampled.current = undefined;
       setCatalog({ phase: "ready", people: merge(page.people, liked) });
       setCursor(page.nextCursor);
     } catch {
       if (!controller.signal.aborted) {
         setCatalog((current) => (current.phase === "ready" ? current : { phase: "failed" }));
+        // Retrying restarts this load, including any Likes the sampled page still lacks.
+        setCursor(null);
         setMoreFailed(true);
       }
     } finally {

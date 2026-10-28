@@ -132,7 +132,7 @@ export const makeDiscoveryWeb = Effect.fnUntraced(function* ({
   const clock = yield* Clock.Clock;
   const limit = yield* submissionLimit;
   const verification = yield* verificationLimit;
-  const cached = yield* publicCatalog(catalog, log);
+  const cached = yield* publicCatalog(catalog);
   const checkedLimit = (check: Effect.Effect<number, Error>, requestId: string, stage: string) =>
     Effect.suspend(() => {
       const started = performance.now();
@@ -213,7 +213,7 @@ export const makeDiscoveryWeb = Effect.fnUntraced(function* ({
   const browsing = (query: BrowseQuery, requestId: string, handle = "") =>
     catalogOperation(
       Effect.gen(function* () {
-        const revision = yield* cached.ensure(requestId);
+        const revision = yield* cached.ensure;
         return yield* browsePage(query, revision, handle);
       }),
       requestId,
@@ -384,7 +384,7 @@ export const makeDiscoveryWeb = Effect.fnUntraced(function* ({
           }
           return yield* catalogOperation(
             Effect.gen(function* () {
-              yield* cached.ensure(requestId);
+              yield* cached.ensure;
               return yield* lookupProfiles(payload.ids, handle);
             }),
             requestId,
@@ -396,7 +396,7 @@ export const makeDiscoveryWeb = Effect.fnUntraced(function* ({
           const request = yield* HttpServerRequest.HttpServerRequest;
           return yield* catalogOperation(
             Effect.gen(function* () {
-              yield* cached.ensure(operationID(request.headers["x-operation-id"]));
+              yield* cached.ensure;
               return yield* sql<{ id: string; imageUrl: string }>`SELECT id,
               COALESCE(json_extract(payload, '$.portraits.anime'), json_extract(payload, '$.imageUrl')) AS imageUrl
               FROM browse_live ORDER BY id`;
@@ -444,6 +444,10 @@ export const makeDiscoveryWeb = Effect.fnUntraced(function* ({
   );
   return {
     ...web,
+    maintainCatalog: cached.maintain.pipe(
+      Effect.provideService(SqlClient.SqlClient, sql),
+      Effect.provideService(Clock.Clock, clock),
+    ),
     handler: async (...args: Parameters<typeof web.handler>) => {
       const headers = new Headers(args[0].headers);
       const requestId = operationID(headers.get("x-operation-id") ?? undefined);

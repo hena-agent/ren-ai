@@ -17,6 +17,7 @@ import type { BrowseView } from "./chrome.tsx";
 import { Receipt } from "./receipt.tsx";
 import { useCatalog } from "./use-catalog.ts";
 import { shareUrl, personaTitle } from "./public-routing.ts";
+import type { SampledPage } from "./public-routing.ts";
 import { BrowseLoading, type Paging } from "./browse-loading.tsx";
 import { useActivity, useBrowseActivity } from "./activity.ts";
 
@@ -24,6 +25,7 @@ type Entry = {
   personaId?: string | undefined;
   initialStyle?: ImageStyle | undefined;
   initialPeople?: readonly PublicPersona[] | undefined;
+  initialPage?: SampledPage | undefined;
   reselectionToken?: string | undefined;
 };
 
@@ -145,6 +147,7 @@ function LoadingActivity({
 function DiscoveryApp({
   client,
   initialPeople,
+  initialPage,
   personaId,
   initialStyle,
   reselectionToken,
@@ -155,6 +158,7 @@ function DiscoveryApp({
     initialPeople,
     reselectionToken,
     personaId,
+    initialPage,
   );
   const [reviewingSelection, setReviewingSelection] = useState(false);
   const requested =

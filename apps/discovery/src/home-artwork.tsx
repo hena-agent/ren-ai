@@ -16,7 +16,7 @@ export function HeroGallery({ style }: { style: ImageStyle }) {
               width="720"
               height="894"
               alt=""
-              fetchPriority="high"
+              fetchPriority={selected === index ? "high" : "low"}
             />
           </div>
         ))}

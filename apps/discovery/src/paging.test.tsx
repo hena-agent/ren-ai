@@ -57,6 +57,66 @@ test("ten-card pages prefetch at five, preserve the current card and deduplicate
   expect(screen.getByRole("heading", { name: "오늘의 프로필을 모두 봤어요." })).toBeTruthy();
 });
 
+const renderSampled = (client: DiscoveryClient, locale: "ko" | "en" = "ko") =>
+  render(
+    <App
+      client={client}
+      initialPeople={people.slice(0, 10)}
+      initialPage={{ locale, nextCursor: "next" }}
+    />,
+  );
+
+test("a server-sampled first page shows cards at once, restores absent Likes and continues from its cursor", async () => {
+  localStorage.setItem("ren-ai.discovery.choices", JSON.stringify({ p19: true }));
+  const browse = vi
+    .fn<DiscoveryClient["browse"]>()
+    .mockResolvedValue({ people: people.slice(10, 15), nextCursor: null });
+  const lookup = vi.fn<DiscoveryClient["profiles"]>(profiles);
+  renderSampled({ browse, profiles: lookup, join, activity });
+  expect(screen.getByRole("heading", { name: "Person 0" })).toBeTruthy();
+  expect(screen.queryByText("만날 사람들을 불러오고 있어요.")).toBeNull();
+  await waitFor(() =>
+    expect(screen.getByRole("list", { name: "좋아한 사람" }).textContent).toBe("Person 19"),
+  );
+  expect(lookup).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal), undefined, ["p19"]);
+  expect(browse).not.toHaveBeenCalled();
+  for (let i = 0; i < 5; i++) choose(false);
+  await waitFor(() => expect(browse).toHaveBeenCalledOnce());
+  expect(browse.mock.calls[0]![0]).toEqual({ locale: "ko", cursor: "next" });
+  expect(screen.getByRole("heading", { name: "Person 5" })).toBeTruthy();
+});
+
+test("a page sampled for another language is replaced by a sample in the visitor's language", async () => {
+  const browse = vi
+    .fn<DiscoveryClient["browse"]>()
+    .mockResolvedValue({ people: [people[12]!], nextCursor: null });
+  renderSampled({ browse, profiles, join, activity }, "en");
+  expect(screen.getByRole("heading", { name: "Person 0" })).toBeTruthy();
+  await screen.findByRole("heading", { name: "Person 12" });
+  expect(browse).toHaveBeenCalledExactlyOnceWith(
+    { locale: "ko" },
+    expect.any(AbortSignal),
+    undefined,
+  );
+});
+
+test("retrying a failed Like restoration reuses the sampled page instead of resampling", async () => {
+  localStorage.setItem("ren-ai.discovery.choices", JSON.stringify({ p19: true }));
+  const browse = vi.fn<DiscoveryClient["browse"]>();
+  const lookup = vi
+    .fn<DiscoveryClient["profiles"]>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementation(profiles);
+  renderSampled({ browse, profiles: lookup, join, activity });
+  fireEvent.click(await screen.findByRole("button", { name: "다시 불러오기" }));
+  await waitFor(() =>
+    expect(screen.getByRole("list", { name: "좋아한 사람" }).textContent).toBe("Person 19"),
+  );
+  expect(screen.getByRole("heading", { name: "Person 0" })).toBeTruthy();
+  expect(lookup).toHaveBeenCalledTimes(2);
+  expect(browse).not.toHaveBeenCalled();
+});
+
 test("a failed continuation retains existing cards and offers retry rather than a false exhausted state", async () => {
   const browse = vi
     .fn<DiscoveryClient["browse"]>()
