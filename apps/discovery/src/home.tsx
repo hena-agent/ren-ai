@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import { Header } from "./chrome.tsx";
-import { useCopy } from "./locale.tsx";
+import { useCopy, useLocale } from "./locale.tsx";
+import { localizedPath } from "./public-routing.ts";
 import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
 import { HomeNavigation } from "./home-navigation.tsx";
 import { HeroGallery } from "./home-artwork.tsx";
@@ -11,11 +11,13 @@ import { HomeHighlights } from "./home-highlights.tsx";
 import { landingImage } from "./landing-images.ts";
 import { useActivity } from "./activity.ts";
 import { discoveryClient, type DiscoveryClient } from "./client.ts";
+import { useSeo } from "./use-seo.ts";
 
 function ExploreLink() {
   const copy = useCopy();
+  const { locale } = useLocale();
   return (
-    <a className="home-cta" href="/explore">
+    <a className="home-cta" href={localizedPath("/explore", locale)}>
       {copy.home.start}
       <span className="icon icon-external" aria-hidden="true" />
     </a>
@@ -24,12 +26,11 @@ function ExploreLink() {
 
 export function Home({ client = discoveryClient }: { client?: DiscoveryClient }) {
   const copy = useCopy();
+  const { locale } = useLocale();
   const home = copy.home;
   const { style, issue, choose } = useImageStyle();
   useActivity(client, style);
-  useEffect(() => {
-    document.title = home.pageTitle;
-  }, [home.pageTitle]);
+  useSeo("/");
   return (
     <div className="home">
       <Header>
@@ -129,7 +130,7 @@ export function Home({ client = discoveryClient }: { client?: DiscoveryClient })
       </main>
       <footer className="home-footer">
         <div>
-          <a className="wordmark" href="/">
+          <a className="wordmark" href={localizedPath("/", locale)}>
             <img src="/brand.svg" width="30" height="30" alt="" />
             {copy.brand}
           </a>

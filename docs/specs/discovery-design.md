@@ -84,6 +84,9 @@ selection or Escape, restoring toggle focus on Escape.
 Language-menu keyboard focus uses an inset ring inside the rounded option so
 the popover cannot clip it. Retain a distinct selected-language background and
 check, and the circular globe trigger's visible keyboard focus.
+Japanese screens, language labels and shared artwork prioritize complete Japanese
+font families (Hiragino Sans, then Japanese system alternatives) before Korean
+fonts so kanji and kana retain consistent shapes and weight.
 
 ## Interaction
 
@@ -120,6 +123,26 @@ Reduced motion shows immediate control states.
 Use native CSS before introducing animation dependencies.
 
 ## Public profiles and sharing
+
+English home, explorer and profile URLs use `/`, `/explore` and `/personas/{id}`;
+Korean and Japanese add `/ko` and `/ja` prefixes. Explicit prefixes control initial
+server HTML and browser display. Unprefixed pages use the saved language cookie,
+then the highest-priority supported `Accept-Language` preference. Korean/Japanese
+preferences temporarily redirect to their prefixes; English or no detection
+renders English in place. Responses vary on `Accept-Language, Cookie` and are
+non-cacheable. `/en` page URLs permanently normalize to their unprefixed English
+counterpart, saving English to prevent a language-detection bounce. Language
+switching preserves mounted inputs, browsing state, queries and private fragments,
+replaces the language prefix and saves the choice in browser storage and a
+host-only cookie. Navigation and sharing retain the language. `/` is the stable
+`x-default` destination.
+Each variant has self-canonical metadata, localized SEO/OG/Twitter writing and
+image alt, reciprocal three-language plus `x-default` links, and matching HTML,
+OG and JSON-LD language declarations. Sitemap entries repeat these alternates.
+Missing profiles stay 404/noindex without language alternates. Persona public
+writing remains in its original language. Main sharing previews combine the
+existing anime/photo editorial portraits and localized copy at 1200×630; individual
+profile renditions continue using the selected style's first public gallery photo.
 
 Keep published personas visible even at capacity, with no capacity badge.
 The token-aware Reselection listing hides a persona who ended a relationship

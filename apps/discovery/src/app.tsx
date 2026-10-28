@@ -5,7 +5,7 @@ import type { DiscoveryClient } from "./client.ts";
 import { readChoices, saveChoices } from "./choices.ts";
 import { Card } from "./card.tsx";
 import { JoinForm } from "./join-form.tsx";
-import { useCopy, LocaleProvider } from "./locale.tsx";
+import { useCopy, useLocale, LocaleProvider } from "./locale.tsx";
 import type { Locale } from "./locale.tsx";
 import { withImageStyle, readImageStyle } from "./image-style.ts";
 import type { ImageStyle } from "./image-style.ts";
@@ -16,7 +16,8 @@ import { Header, LikedPanel, Navigation } from "./chrome.tsx";
 import type { BrowseView } from "./chrome.tsx";
 import { Receipt } from "./receipt.tsx";
 import { useCatalog } from "./use-catalog.ts";
-import { shareUrl, personaTitle } from "./public-routing.ts";
+import { shareUrl, publicRoute, localizedPath } from "./public-routing.ts";
+import { useSeo } from "./use-seo.ts";
 import type { SampledPage } from "./public-routing.ts";
 import { BrowseLoading, type Paging } from "./browse-loading.tsx";
 import { useActivity, useBrowseActivity } from "./activity.ts";
@@ -125,7 +126,7 @@ export function App({
   client = discoveryClient,
   initialLocale,
   ...entry
-}: Entry & { client?: DiscoveryClient; initialLocale?: Locale }) {
+}: Entry & { client?: DiscoveryClient; initialLocale?: Locale | undefined }) {
   return (
     <LocaleProvider initialLocale={initialLocale}>
       <DiscoveryApp client={client} {...entry} />
@@ -141,6 +142,7 @@ function LoadingActivity({
   initialStyle: ImageStyle | undefined;
 }) {
   useActivity(client, initialStyle ?? readImageStyle(), true);
+  useSeo();
   return null;
 }
 
@@ -153,6 +155,7 @@ function DiscoveryApp({
   reselectionToken,
 }: Entry & { client: DiscoveryClient }) {
   const copy = useCopy();
+  const { locale } = useLocale();
   const { catalog, retry, refresh, ...paging } = useCatalog(
     client,
     initialPeople,
@@ -184,8 +187,8 @@ function DiscoveryApp({
                 <a
                   href={
                     reselectionToken === undefined
-                      ? "/explore"
-                      : `/explore#reselect=${encodeURIComponent(reselectionToken)}`
+                      ? localizedPath("/explore", locale)
+                      : `${localizedPath("/explore", locale)}#reselect=${encodeURIComponent(reselectionToken)}`
                   }
                 >
                   {copy.back}
@@ -249,14 +252,19 @@ function prioritizePersona(people: readonly PublicPersona[], personaId: string |
 }
 
 function useProfileDetails(personaId: string | undefined) {
+  const { locale } = useLocale();
   const [details, setDetails] = useState<{ id: string; image: number } | undefined>(() =>
     personaId ? { id: personaId, image: 0 } : undefined,
   );
   const openDetails = (persona: PublicPersona, image = 0) => setDetails({ id: persona.id, image });
   const closeDetails = () => {
     setDetails(undefined);
-    if (window.location.pathname.startsWith("/personas/"))
-      window.history.replaceState(window.history.state, "", `/explore${window.location.hash}`);
+    if (publicRoute(new URL(window.location.href)).id)
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${localizedPath("/explore", locale)}${window.location.hash}`,
+      );
   };
   return { details, openDetails, closeDetails };
 }
@@ -277,6 +285,7 @@ function Experience({
   paging: Paging;
 }) {
   const copy = useCopy();
+  const { locale } = useLocale();
   const [choices, setChoices] = useState(readChoices);
   const { style, issue, choose: changeStyle } = useImageStyle(initialStyle);
   const [storageFailure, setStorageFailure] = useState<true>();
@@ -291,18 +300,17 @@ function Experience({
   const detail = displayed.find((persona) => persona.id === details?.id);
   const detailId = detail?.id;
   const report = useBrowseActivity(client, style, current?.id, detailId, view);
-  const title = detail ? personaTitle(detail) : `${copy.brand} — ${copy.explore}`;
+  useSeo("/explore", detail, style);
   useEffect(() => {
-    document.title = title;
     if (detailId) {
-      const target = new URL(shareUrl(detailId, style));
+      const target = new URL(shareUrl(detailId, style, locale));
       window.history.replaceState(
         window.history.state,
         "",
         `${target.pathname}${target.search}${window.location.hash}`,
       );
     }
-  }, [detailId, style, title]);
+  }, [detailId, style, locale]);
   function choose(persona: PublicPersona, like: boolean) {
     report(like ? "like" : "pass", persona.id);
     const next = { ...choices, [persona.id]: like };

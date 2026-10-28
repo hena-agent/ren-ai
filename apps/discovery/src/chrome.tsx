@@ -1,17 +1,19 @@
 import type { ReactNode } from "react";
 import type { PublicPersona } from "@ren-ai/onboarding";
-import { useCopy, LocalePicker } from "./locale.tsx";
+import { useCopy, useLocale, LocalePicker } from "./locale.tsx";
+import { localizedPath } from "./public-routing.ts";
 
 export type BrowseView = "browse" | "liked" | "contact";
 
 export function Header({ children }: { children?: ReactNode }) {
   const copy = useCopy();
+  const { locale } = useLocale();
   return (
     <header className="site-header">
       <a className="skip-link" href="#discovery-content">
         {copy.skip}
       </a>
-      <a className="wordmark" href="/">
+      <a className="wordmark" href={localizedPath("/", locale)}>
         <img src="/brand.svg" width="30" height="30" alt="" />
         {copy.brand}
       </a>

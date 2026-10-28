@@ -2,13 +2,29 @@
 
 `renai.im` serves this Vite browser app and public profile HTML through a
 Cloudflare Worker with static assets.
+English public pages use `/`, `/explore` and `/personas/{id}` directly. Korean and
+Japanese pages add `/ko` and `/ja` prefixes. Explicit prefixes control initial
+server HTML and browser display. Unprefixed pages respect the saved language
+cookie, then `Accept-Language`: Korean/Japanese preferences temporarily redirect
+to their prefixed counterpart; English or undetected languages render English
+in place. These responses use `Vary: Accept-Language, Cookie` and
+`Cache-Control: no-store`. `/en` page URLs permanently normalize to the matching
+unprefixed URL and save English so the next request cannot bounce to another
+language. Switching language replaces the URL in place and saves the preference
+in browser storage and a host-only language cookie, preserving mounted forms,
+browsing state, queries and private fragments. Navigation and profile sharing
+retain that language. `/` is the stable `x-default` destination. The page paths
+below use English URLs; asset, API, health, robots, sitemap and OG image routes
+are independent of display language.
 `/` is the public introduction home, with service details, the waitlist process,
 FAQs and the same localized privacy notice used during registration. It does not
-request the Catalog. Its calls to action open `/explore`, which contains image
+request the Catalog. The Worker handles root-language negotiation, then passes
+the prerendered English home asset through unchanged. Its calls to action open
+`/explore`, which contains image
 style selection, profile browsing and waitlist registration. `/explore` opens
 directly on its cards. The Worker requests `/discovery/personas?locale=…` in the
-language the browser will choose (the first supported `Accept-Language`, else
-English, matching `navigator.languages`), renders those ten candidates and embeds
+saved language or highest-quality supported `Accept-Language` preference, falling
+back to English, renders those ten candidates and embeds
 them with their locale and cursor. The browser continues from that page without
 resampling; with five unseen cards left it requests the next cursor page. If a
 saved display language differs from the sampled one, the browser replaces the page
@@ -71,16 +87,24 @@ HTML metadata generation does not fetch image bytes. This removes the original
 Workers-only failure: `redirect: "error"` was accepted in Node tests but throws
 before an outbound Workers request. A renderer failure returns a correlated,
 retryable 503; it never silently replaces a published persona preview with brand
-artwork. Home/explorer and genuinely absent same-style photos use `social.png`.
+artwork. Home/explorer and genuinely absent same-style photos use `social-{locale}-v2.png`.
+These 1200×630 previews pair Jia's existing anime/photo editorial portraits with
+localized headlines, the Ren AI logo and an illustrative-image label.
 Open Graph includes image MIME type, width, height, secure URL and alt text;
 Twitter uses the large-image card and explicit image/title/description/alt fields.
 Style variants share one canonical
 URL for search indexing. Without an explicit style query, the server starts in
 anime and the browser restores a saved preference. Public writing stays in its
 authored language; controls support Korean, English and Japanese.
+Each language has its own canonical URL, localized title/description/image alt,
+`html lang`, `Content-Language`, OG locale and JSON-LD `inLanguage`. Reciprocal
+`hreflang` links include all three languages and `x-default`; missing profiles
+have no language alternates. Browser language/profile/style changes refresh the
+same metadata and structured data without leaking invitation or reselection fragments.
 
-`/sitemap.xml` lists home, `/explore` and current public profile URLs with public
-image locations. It never lists a separate directory or withdrawn personas.
+`/sitemap.xml` lists all three language variants of home, explorer and current
+public profile URLs, with reciprocal XHTML language alternates and public image
+locations. It never lists a separate directory or withdrawn personas.
 `/robots.txt` advertises the sitemap. A missing or unpublished profile
 returns an actual 404 with `noindex`. Catalog-dependent routes or rendering failures
 return 503 with `Retry-After`, a request ID and payload-safe structured diagnostics.
@@ -184,7 +208,8 @@ Wrangler preview, not a production deployment.
 Deploy through a PR merged into `main`, after the quality gates pass. CI builds
 with `VITE_DISCOVERY_API_URL=https://api.renai.im` and the public
 `TURNSTILE_SITE_KEY` repository variable, then deploys the static assets and checks
-`https://renai.im/`, `/explore`, `/social.png`, `/sitemap.xml` and the exact artifact identity at
+`https://renai.im/`, `/ko`, `/ja`, localized explorer pages, localized social PNGs,
+`/sitemap.xml` and the exact artifact identity at
 `/health`. api-app's deployment checks `/discovery/personas` separately.
 `check:preview` then reads a published profile in each available style and fetches
 the exact advertised image, requiring a public JPEG, 1200×630 dimensions and less

@@ -1,10 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { discoveryNotices } from "@ren-ai/onboarding";
 import { Site } from "./site.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { selectImageStyle, selectDropdown } from "../test/choose.ts";
 import { testClient } from "../test/client.ts";
+
+beforeEach(() => window.history.replaceState(null, "", "/ko"));
 
 afterEach(() => {
   cleanup();
@@ -23,7 +25,7 @@ test("the home explains the service without loading profiles and offers real nav
   expect(profiles).not.toHaveBeenCalled();
   expect(document.querySelector(".discovery-shell")).toBeNull();
   for (const link of screen.getAllByRole("link", { name: "페르소나 만나보기" })) {
-    expect(link.getAttribute("href")).toBe("/explore");
+    expect(link.getAttribute("href")).toBe("/ko/explore");
   }
   const nav = screen.getByRole("navigation", { name: "서비스 소개 메뉴" });
   for (const link of within(nav).getAllByRole("link")) {
@@ -163,7 +165,7 @@ test("portrait selection changes the featured scene without leaving the page or 
   expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
     "/landing/seoyul-anime.webp",
   );
-  expect(window.location.pathname).toBe("/");
+  expect(window.location.pathname).toBe("/ja");
   expect(profiles).not.toHaveBeenCalled();
 });
 
@@ -184,7 +186,7 @@ test("the menu toggles, closes after following a section and restores keyboard f
   expect(document.activeElement).toBe(toggle);
 });
 
-test.each(["/explore", "/#reselect=private-token"])(
+test.each(["/ko/explore", "/ko#reselect=private-token"])(
   "direct navigation to %s opens Discovery, preserves choices and keeps reselection fragments",
   async (url) => {
     window.history.replaceState(null, "", url);
@@ -199,11 +201,11 @@ test.each(["/explore", "/#reselect=private-token"])(
     render(<Site client={client} />);
     await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
     expect(screen.getByRole("list", { name: "좋아한 사람" }).textContent).toBe("소연");
-    expect(screen.getByRole("link", { name: "Ren AI" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Ren AI" }).getAttribute("href")).toBe("/ko");
     expect(document.title).toBe("Ren AI — 누가 궁금한가요?");
     expect(window.location.pathname + window.location.hash).toBe(url);
     cleanup();
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, "", "/ko");
     render(<Site client={client} />);
     expect(screen.getAllByRole("link", { name: "페르소나 만나보기" })).toHaveLength(2);
     expect(localStorage.getItem("ren-ai.discovery.choices")).toBe('{"saved":true}');
@@ -211,7 +213,7 @@ test.each(["/explore", "/#reselect=private-token"])(
 );
 
 test("explore starts from its server-sampled page and display rendition without loading or resampling", async () => {
-  window.history.replaceState(null, "", "/explore");
+  window.history.replaceState(null, "", "/ko/explore");
   const script = document.createElement("script");
   script.id = "public-personas";
   script.type = "application/json";
@@ -245,7 +247,7 @@ test("explore starts from its server-sampled page and display rendition without 
 });
 
 test("explore displays its shell during a delayed API request and retries a failed listing once", async () => {
-  window.history.replaceState(null, "", "/explore");
+  window.history.replaceState(null, "", "/ko/explore");
   let rejectListing: (cause: Error) => void = vi.fn<(cause: Error) => void>();
   const listing = new Promise<Awaited<ReturnType<DiscoveryClient["profiles"]>>>((_, reject) => {
     rejectListing = reject;
@@ -267,4 +269,25 @@ test("explore displays its shell during a delayed API request and retries a fail
   fireEvent.click(screen.getByRole("button", { name: "다시 불러오기" }));
   expect(await screen.findByRole("heading", { name: "백지아" })).toBeTruthy();
   expect(profiles).toHaveBeenCalledTimes(2);
+});
+
+test("the English root uses unprefixed links and remembers an explicit English choice when switching back", () => {
+  window.history.replaceState(null, "", "/?utm_source=friend#about");
+  localStorage.setItem("renai.locale", "ko");
+  const view = render(<Site />);
+  expect(document.documentElement.lang).toBe("en");
+  expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe(
+    "https://renai.im/",
+  );
+  for (const link of screen.getAllByRole("link", { name: "Meet the personas" }))
+    expect(link.getAttribute("href")).toBe("/explore");
+  selectDropdown("Display language", "日本語");
+  selectDropdown("表示言語", "English");
+  expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+    "/?utm_source=friend#about",
+  );
+  expect(document.cookie).toContain("renai.locale=en");
+  view.unmount();
+  render(<Site />);
+  expect(document.documentElement.lang).toBe("en");
 });

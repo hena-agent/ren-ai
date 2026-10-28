@@ -2,14 +2,20 @@ import { Schema } from "effect";
 import { BrowsePage, PublicPersona, PersonaLink } from "@ren-ai/onboarding";
 import { healthResponse } from "@ren-ai/transport/health";
 import { publicResponse, sitemap } from "./public-html.tsx";
-import { publicOrigin, publicRoute, previewRoute } from "./public-routing.ts";
+import {
+  publicOrigin,
+  publicRoute,
+  previewRoute,
+  localizedPath,
+  localePreferenceCookie,
+} from "./public-routing.ts";
 import type { SampledPage } from "./public-routing.ts";
-import { preferredLocale } from "./locale.tsx";
+import { requestLocale } from "./request-locale.ts";
 import { serverCause, writeServerLog } from "./server-log.ts";
 import type { ServerEvent } from "./server-log.ts";
-import { socialImage } from "./social-image.ts";
 import { previewReady, previewResponse } from "./preview-image.ts";
 import type { PreviewCache, PreviewEnv } from "./preview-image.ts";
+import { messages } from "./locale.tsx";
 
 export interface DiscoveryEnv extends PreviewEnv {
   DISCOVERY_API_URL: string;
@@ -28,12 +34,9 @@ async function explorerSample(
   requestId: string,
   failed: Failure,
 ): Promise<{ people: readonly PublicPersona[]; page: SampledPage } | undefined> {
-  if (new URL(request.url).pathname !== "/explore" || request.method !== "GET") return undefined;
-  const locale = preferredLocale(
-    (request.headers.get("Accept-Language") ?? "")
-      .split(",")
-      .map((range) => range.replace(/;.*/, "").trim()),
-  );
+  const route = publicRoute(new URL(request.url));
+  if (route.path !== "/explore" || request.method !== "GET") return undefined;
+  const locale = route.locale ?? requestLocale(request);
   let stage = "catalog.read";
   let upstreamStatus: number | undefined;
   try {
@@ -52,6 +55,7 @@ async function explorerSample(
     return undefined;
   }
 }
+
 function catalogRequest(
   pathname: string,
   id: string | undefined,
@@ -80,16 +84,34 @@ const failureCodes: Readonly<Record<string, string>> = {
 function routeResponse(request: Request, url: URL) {
   if (request.method !== "GET" && request.method !== "HEAD")
     return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
-  const trimmed = url.pathname.replace(/\/$/, "");
-  if (url.pathname.endsWith("/") && publicRoute(new URL(trimmed, url)).id) {
-    url.pathname = trimmed;
-    return new Response(null, { status: 308, headers: { Location: url.href } });
+  const route = publicRoute(url);
+  const trimmed = new URL(url);
+  trimmed.pathname = url.pathname.replace(/\/$/, "") || "/";
+  const page = publicRoute(trimmed);
+  if (page.path === "/" || page.path === "/explore" || page.id) {
+    const locale = page.locale ?? requestLocale(request);
+    const target = localizedPath(page.path, locale);
+    if (url.pathname !== target) {
+      url.pathname = target;
+      return new Response(null, {
+        status: page.locale ? 308 : 307,
+        headers: {
+          Location: url.href,
+          ...(!page.locale && { Vary: "Accept-Language, Cookie" }),
+          ...(page.locale === "en" && { "Set-Cookie": localePreferenceCookie("en") }),
+        },
+      });
+    }
   }
   if (url.pathname === "/robots.txt")
     return new Response(`User-agent: *\nAllow: /\nSitemap: ${publicOrigin}/sitemap.xml\n`, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
-  if (url.pathname.startsWith("/personas") && !publicRoute(url).id && !previewRoute(url))
+  if (
+    route.locale
+      ? route.path !== "/" && route.path !== "/explore" && !route.id
+      : url.pathname.startsWith("/personas") && !route.id && !previewRoute(url)
+  )
     return new Response("Profile not found", {
       status: 404,
       headers: { "X-Robots-Tag": "noindex" },
@@ -105,8 +127,10 @@ function unavailableResponse(path: string, requestId: string, catalogReady: bool
         preview: { status: "degraded" },
       },
     });
+  const { locale = "en" } = publicRoute(new URL(path, publicOrigin));
+  const copy = messages[locale];
   return new Response(
-    `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Ren AI</title></head><body><h1>프로필을 불러오지 못했어요.</h1><p>잠시 후 다시 시도해 주세요.</p><p>Request ID: ${requestId}</p><a href="/explore">다시 불러오기</a></body></html>`,
+    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Ren AI</title></head><body><h1>${copy.loadFailure}</h1><p>Request ID: ${requestId}</p><a href="${localizedPath("/explore", locale)}">${copy.retry}</a></body></html>`,
     {
       status: 503,
       headers: {
@@ -126,15 +150,15 @@ async function servePublic(
   log: (event: ServerEvent) => void,
 ) {
   const url = new URL(request.url);
-  // Home remains a prerendered asset; the explorer samples its first page per visitor.
+  const imageRoute = previewRoute(url);
+  const route = { ...publicRoute(url), ...imageRoute };
   const dynamic =
+    Boolean(route.locale) ||
     url.pathname.startsWith("/personas") ||
-    ["/explore", "/sitemap.xml", "/robots.txt", "/health"].includes(url.pathname);
+    ["/", "/explore", "/explore/", "/sitemap.xml", "/robots.txt", "/health"].includes(url.pathname);
   if (!dynamic) return env.ASSETS.fetch(request);
   const requestId = crypto.randomUUID();
   const start = performance.now();
-  const imageRoute = previewRoute(url);
-  const route = imageRoute ?? publicRoute(url);
   let stage = "route";
   let upstreamStatus: number | undefined;
   let catalogReady = false;
@@ -147,6 +171,12 @@ async function servePublic(
   const finish = (response: Response) => {
     response.headers.set("X-Request-ID", requestId);
     response.headers.set("Cache-Control", "no-store");
+    if (
+      !route.locale &&
+      !imageRoute &&
+      (route.path === "/" || route.path === "/explore" || route.id)
+    )
+      response.headers.set("Vary", "Accept-Language, Cookie");
     log({
       ...fields,
       stage: "request",
@@ -171,9 +201,15 @@ async function servePublic(
   try {
     const routed = routeResponse(request, url);
     if (routed) return finish(routed);
+    // The prerendered English home remains static after the Worker negotiates its locale.
+    if (url.pathname === "/") {
+      const home = await env.ASSETS.fetch(request);
+      home.headers.set("Content-Language", "en");
+      return finish(home);
+    }
     const sample = await explorerSample(fetcher, request, env.DISCOVERY_API_URL, requestId, failed);
     let people: readonly PublicPersona[] = sample?.people ?? [];
-    if (url.pathname !== "/explore") {
+    if (route.path !== "/" && route.path !== "/explore") {
       stage = "catalog.read";
       const upstream = await fetcher(
         ...catalogRequest(url.pathname, route.id, env.DISCOVERY_API_URL, requestId),
@@ -181,7 +217,6 @@ async function servePublic(
       upstreamStatus = upstream.status;
       if (!upstream.ok) throw new Error("Public Catalog request failed");
       stage = "catalog.decode";
-      // Decoding strips private or future fields before HTML, bootstrap or metadata can see them.
       if (url.pathname === "/sitemap.xml") {
         const links = Schema.decodeUnknownSync(Schema.Array(PersonaLink))(await upstream.json());
         return finish(
@@ -208,12 +243,10 @@ async function servePublic(
       return finish(await previewResponse(url, persona, imageRoute.style, env, cache));
     }
     stage = "assets.template";
-    // `template.html`, served without the redirect that `/template.html` would get.
     const template = await env.ASSETS.fetch(new Request(new URL("/template", url)));
     if (!template.ok) throw new Error("Browser template unavailable");
-    const image = socialImage(persona, route.style ?? "anime");
     stage = "html.render";
-    return finish(publicResponse(await template.text(), people, url, image, sample?.page));
+    return finish(publicResponse(await template.text(), people, url, sample?.page));
   } catch (cause) {
     failed(serverCause(cause), stage, upstreamStatus);
     return finish(unavailableResponse(url.pathname, requestId, catalogReady));

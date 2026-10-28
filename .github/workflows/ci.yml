@@ -241,8 +241,14 @@ jobs:
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/
       - run: bun run --cwd apps/api check:health https://renai.im discovery "$GITHUB_SHA"
       - run: bun run --cwd apps/discovery check:preview https://renai.im "$GITHUB_SHA"
-      - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/explore
-      - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/social.png
+      - run: |
+          for locale in ko en ja; do
+            prefix="/$locale"
+            if [ "$locale" = en ]; then prefix=""; fi
+            for path in "${prefix:-/}" "$prefix/explore" "/social-$locale-v2.png"; do
+              curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null "https://renai.im$path"
+            done
+          done
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/sitemap.xml
 
   deploy-api-app:

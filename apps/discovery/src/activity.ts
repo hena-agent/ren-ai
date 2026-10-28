@@ -4,6 +4,7 @@ import { BrowserStep, VisitSource, type Activity } from "@ren-ai/onboarding";
 import type { DiscoveryClient } from "./client.ts";
 import { useLocale } from "./locale.tsx";
 import type { ImageStyle } from "./image-style.ts";
+import { languageRoute } from "./public-routing.ts";
 
 const visitKey = "ren-ai.visit";
 const optOutKey = "ren-ai.metrics.off";
@@ -37,12 +38,13 @@ function visit() {
   }
   const url = new URL(window.location.href);
   const referrer = URL.canParse(document.referrer) ? new URL(document.referrer) : undefined;
+  const { path } = languageRoute(url.pathname);
   const source: VisitSource = {
     entry: new URLSearchParams(url.hash.slice(1)).has("reselect")
       ? "reselection"
-      : url.pathname.startsWith("/personas/")
+      : path.startsWith("/personas/")
         ? "profile"
-        : url.pathname === "/explore"
+        : path === "/explore"
           ? "explore"
           : "home",
     referrer: referrer && referrer.host !== url.host ? referrer.hostname : "",
