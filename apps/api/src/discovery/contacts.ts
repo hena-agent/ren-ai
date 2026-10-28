@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
-import { Clock, Data, Effect, Schema } from "effect";
+import { Array, Clock, Data, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
-import { ContactEntry, SelectContacts, StartContact } from "@ren-ai/onboarding";
+import { ContactEntry, ContactVisibility, SelectContacts, StartContact } from "@ren-ai/onboarding";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import { withLifecycle } from "../conversations/lifecycle.ts";
 import { assignmentCapacity, claimPersona } from "./assignment.ts";
@@ -52,6 +52,7 @@ export const contacts = Effect.fnUntraced(function* (
         admitted: number;
         occupied: number;
         testHandle: number;
+        hidden: number;
         endedAt: number | null;
         endingComplete: number | null;
         notification: typeof ContactEntry.Type.notification | null;
@@ -71,7 +72,7 @@ export const contacts = Effect.fnUntraced(function* (
       EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle,
        (SELECT state FROM discovery_notification WHERE registration_id = r.id ORDER BY id DESC LIMIT 1) AS notification,
        r.imessage_status AS imessageStatus,
-       r.imessage_checked_at AS imessageCheckedAt
+        r.imessage_checked_at AS imessageCheckedAt, r.hidden
       FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id
       LEFT JOIN conversation v ON v.session_id = c.session_id LEFT JOIN conversation_end e ON e.conversation_id = v.id
        WHERE r.archived_at IS NULL ${registrationIDs ? sql`AND ${sql.in("r.id", registrationIDs)}` : sql``} ORDER BY r.created_at, r.id`;
@@ -115,7 +116,7 @@ export const contacts = Effect.fnUntraced(function* (
           likedPersonas,
           assignablePersonas: likedPersonas.filter((p) => available.has(p.id)),
           state: row.state ?? (row.admitted ? "active" : "waiting"),
-          eligible: reason === "ready",
+          eligible: reason === "ready" && row.hidden === 0,
           reason,
           persona: row.personaID
             ? {
@@ -126,6 +127,7 @@ export const contacts = Effect.fnUntraced(function* (
           scheduledAt: row.scheduledAt,
           requestId: row.requestId,
           testHandle: row.testHandle === 1,
+          hidden: row.hidden === 1,
           ...(row.notification && { notification: row.notification }),
           ...(row.imessageStatus && {
             imessage: { status: row.imessageStatus, checkedAt: row.imessageCheckedAt! },
@@ -297,6 +299,15 @@ export const contacts = Effect.fnUntraced(function* (
     );
   return {
     list,
+    visibility: (input: typeof ContactVisibility.Type) =>
+      Effect.gen(function* () {
+        const decoded = Schema.decodeUnknownSync(ContactVisibility)(input);
+        // Leave room for the value binding within Cloudflare SQLite's 100-variable limit.
+        for (const ids of Array.chunksOf(decoded.registrationIDs, 50))
+          yield* sql`UPDATE discovery_registration SET hidden = ${Number(decoded.hidden)}
+              WHERE ${sql.in("id", ids)} AND archived_at IS NULL`;
+        return decoded;
+      }).pipe(sql.withTransaction),
     select,
     start,
     configureInvitations: invites.configure,

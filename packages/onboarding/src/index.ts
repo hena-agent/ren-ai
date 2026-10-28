@@ -38,6 +38,7 @@ export {
   InvitationSettings,
   ContactEntry,
   ContactSnapshot,
+  ContactVisibility,
   SelectContacts,
   StartContact,
   ContactSelection,

@@ -7,6 +7,7 @@ import {
   InvitationCreate,
   SelectContacts,
   StartContact,
+  ContactVisibility,
 } from "@ren-ai/onboarding";
 import type { contacts } from "./contacts.ts";
 import { contactCause, contactLog } from "./diagnostics.ts";
@@ -96,6 +97,7 @@ const manageContacts = async (
     name:
       | "selection"
       | "start"
+      | "visibility"
       | "invitations"
       | "invitation_grant"
       | "invitation_lookup"
@@ -155,6 +157,8 @@ const manageContacts = async (
     );
   if (path === "/management/discovery/start")
     return commit("start", StartContact, (input) => store.start(input, requestId));
+  if (path === "/management/discovery/visibility")
+    return commit("visibility", ContactVisibility, store.visibility);
   return failure("not_found", 404);
 };
 
