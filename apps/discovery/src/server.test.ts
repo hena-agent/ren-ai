@@ -218,6 +218,12 @@ test("English home remains a prerendered asset after locale negotiation", async 
   const response = await f.send("/");
   expect(response.status).toBe(200);
   expect(f.assets.mock.lastCall?.[0].url).toBe("https://renai.im/");
+  expect(response.headers.get("content-type")).toContain("text/html");
+  expect(response.headers.get("content-language")).toBe("en");
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("vary")).toBe("Accept-Language, Cookie");
+  expect(response.headers.get("x-request-id")).toBeTruthy();
+  expect(await response.text()).toContain('class="home"');
   expect(f.fetcher).not.toHaveBeenCalled();
   expect(f.log).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
   const korean = await f.send("/ko");

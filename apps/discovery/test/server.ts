@@ -34,9 +34,12 @@ export async function fixture() {
     .fn<(request: Request) => Promise<Response>>()
     .mockImplementation(async (request) => {
       const path = new URL(request.url).pathname;
+      // Real fetch responses enforce the immutable headers returned by Cloudflare ASSETS.
       return path === "/og-watermark-v2.png"
         ? new Response(mark)
-        : new Response(path === "/" ? home : template);
+        : fetch(
+            `data:text/html;charset=utf-8;base64,${Buffer.from(path === "/" ? home : template).toString("base64")}`,
+          );
     });
   const log = vi.fn<(event: ServerEvent) => void>();
   const handler = discoveryServer(fetcher, log);
