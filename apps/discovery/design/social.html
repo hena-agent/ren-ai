@@ -2,7 +2,12 @@
 <html lang="ko">
   <meta charset="utf-8" />
   <title>Ren AI social image source</title>
+  <link rel="stylesheet" href="../src/typography.css" />
   <style>
+    :root {
+      font-family: "Apple SD Gothic Neo", "Hiragino Sans", sans-serif;
+      font-synthesis: none;
+    }
     * {
       box-sizing: border-box;
     }
@@ -12,40 +17,163 @@
       height: 630px;
       background: #f4f5f7;
       color: #20242b;
-      padding: 64px 76px;
-      font-family: "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+    main {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .copy {
+      position: relative;
+      z-index: 1;
+      width: 640px;
+      height: 100%;
+      padding: 54px 0 46px 58px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
     }
     header {
       display: flex;
       align-items: center;
-      gap: 16px;
-      font-size: 40px;
+      gap: 13px;
+      font-size: 35px;
       font-weight: 750;
-      letter-spacing: -1.5px;
+      letter-spacing: -1.3px;
     }
     header img {
-      width: 54px;
-      height: 54px;
+      width: 46px;
+      height: 46px;
     }
     h1 {
-      margin: 62px 0 28px;
-      font-size: 88px;
-      line-height: 1.14;
-      letter-spacing: -5px;
+      margin: 65px 0 25px;
+      font-size: 64px;
+      line-height: 1.16;
       font-weight: 750;
+      letter-spacing: -3px;
+      white-space: pre-line;
     }
     h1 span {
       color: #c72c52;
     }
+    .description {
+      margin: 0;
+      color: #626975;
+      font-size: 23px;
+      line-height: 1.6;
+      white-space: pre-line;
+    }
     footer {
+      margin-top: auto;
+      width: 465px;
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      font-size: 25px;
+      align-items: center;
+      font-size: 19px;
       color: #626975;
     }
+    .channel {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: #20242b;
+      font-weight: 650;
+    }
+    .channel::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      background: #c72c52;
+      border-radius: 50%;
+    }
+    .portraits {
+      position: absolute;
+      inset: 0 0 0 620px;
+      display: flex;
+      gap: 5px;
+      background: #f4f5f7;
+    }
+    .portraits::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(0deg, #20242b8c, transparent 35%);
+    }
+    .portraits img {
+      width: 50%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 28%;
+    }
+    .caption {
+      position: absolute;
+      bottom: 42px;
+      left: 30px;
+      right: 30px;
+      color: white;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+    }
+    .caption strong {
+      font-size: 26px;
+      letter-spacing: -0.5px;
+    }
+    .caption span {
+      font-size: 15px;
+      opacity: 0.85;
+    }
+    html[lang="en"] h1 {
+      font-size: 63px;
+      letter-spacing: -2.8px;
+    }
+    html[lang="ja"] h1 {
+      font-size: 57px;
+      letter-spacing: -2.8px;
+    }
   </style>
-  <header><img src="../public/brand.svg" alt="" />Ren AI</header>
-  <h1><span>iMessage</span>에서.</h1>
-  <footer><span>AI 페르소나와 나누는 일상. 새 앱 설치 없이.</span><span>renai.im</span></footer>
+  <main>
+    <div class="copy">
+      <header><img src="../public/brand.svg" alt="" />Ren AI</header>
+      <h1><span id="opening"></span><br /><span id="headline" style="color: inherit"></span></h1>
+      <p class="description" id="description"></p>
+      <footer><span class="channel">iMessage</span><span>renai.im</span></footer>
+    </div>
+    <div class="portraits">
+      <img src="../public/landing/dohee-anime.webp" alt="" />
+      <img src="../public/landing/dohee.webp" alt="" />
+      <div class="caption"><strong id="name"></strong><span id="label"></span></div>
+    </div>
+  </main>
+  <script>
+    const locale = new URLSearchParams(location.search).get("lang") || "ko";
+    const copy = {
+      ko: {
+        opening: "일상에,",
+        headline: "기다려지는\n메시지 하나.",
+        description:
+          "취향도, 이야기도 저마다 다른 AI 페르소나.\n새 앱 설치 없이, iMessage에서 만나요.",
+        name: "백지아",
+        label: "AI 페르소나 · 이미지 예시",
+      },
+      en: {
+        opening: "Every day,",
+        headline: "a message to\nlook forward to.",
+        description: "AI personas with stories of their own.\nOn iMessage. No new app needed.",
+        name: "Jia",
+        label: "AI persona · Illustrative images",
+      },
+      ja: {
+        opening: "毎日に、",
+        headline: "待ち遠しい\nメッセージを。",
+        description: "それぞれの好みと物語を持つAIペルソナ。\nアプリの追加なしで、iMessageで。",
+        name: "ジア",
+        label: "AIペルソナ · 画像はイメージです",
+      },
+    }[locale];
+    document.documentElement.lang = locale;
+    for (const [id, text] of Object.entries(copy)) document.getElementById(id).textContent = text;
+  </script>
 </html>

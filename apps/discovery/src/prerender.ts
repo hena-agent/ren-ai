@@ -1,9 +1,8 @@
 import { publicResponse } from "./public-html.tsx";
 import { publicOrigin } from "./public-routing.ts";
-import { socialImage } from "./social-image.ts";
 
 const page = (template: string, path: string) =>
-  publicResponse(template, [], new URL(path, publicOrigin), socialImage(undefined, "anime")).text();
+  publicResponse(template, [], new URL(path, publicOrigin)).text();
 
 /**
  * Home depends only on the build. Explorer and persona pages render into the application shell.

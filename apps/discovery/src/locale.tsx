@@ -4,22 +4,29 @@ import ko from "./copy.json";
 import en from "./copy.en.json";
 import ja from "./copy.ja.json";
 import { LanguageSelect } from "./language-select.tsx";
+import {
+  isLocale,
+  languageRoute,
+  localizedPath,
+  localePreferenceKey,
+  localePreferenceCookie,
+} from "./public-routing.ts";
+import type { Locale } from "./public-routing.ts";
 
-export type Locale = "ko" | "en" | "ja";
-const messages = { ko, en, ja } satisfies Record<Locale, typeof ko>;
-const key = "renai.locale";
-const supported = (value: string | null | undefined): value is Locale =>
-  value === "ko" || value === "en" || value === "ja";
+export type { Locale } from "./public-routing.ts";
+export const messages = { ko, en, ja } satisfies Record<Locale, typeof ko>;
 
 /** The first supported language in preference order, as browsers report or request them. */
 export function preferredLocale(languages: readonly string[]): Locale {
-  return languages.map((language) => language.toLowerCase().split("-")[0]).find(supported) ?? "en";
+  return languages.map((language) => language.toLowerCase().split("-")[0]).find(isLocale) ?? "en";
 }
 
 function readLocale(): Locale {
+  const route = languageRoute(window.location.pathname);
+  if (route.locale) return route.locale;
   try {
-    const saved = localStorage.getItem(key);
-    if (supported(saved)) return saved;
+    const saved = localStorage.getItem(localePreferenceKey);
+    if (isLocale(saved)) return saved;
   } catch {
     // Browser language still works when storage is unavailable.
   }
@@ -47,9 +54,13 @@ export function LocaleProvider({
     document.documentElement.lang = locale;
   }, [locale]);
   const choose = (next: Locale) => {
+    const url = new URL(window.location.href);
+    url.pathname = localizedPath(url.pathname, next);
+    window.history.replaceState(window.history.state, "", url);
     setLocale(next);
     try {
-      localStorage.setItem(key, next);
+      document.cookie = localePreferenceCookie(next);
+      localStorage.setItem(localePreferenceKey, next);
       setStorageFailure(false);
     } catch {
       setStorageFailure(true);

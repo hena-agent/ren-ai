@@ -24,7 +24,7 @@ const people = [
     id: "harin",
     name: "하린",
     bio: "밤 산책을 좋아해요.",
-    imageUrl: "https://example.com/harin.jpg",
+    imageUrl: "https://persona-images.renai.im/00000000-0000-0000-0000-000000000001.jpg",
   },
   {
     id: "jiu",
@@ -76,7 +76,7 @@ test.each([undefined, "harin"])(
       fireEvent.click(screen.getByRole("button", { name: "최신 목록에서 다시 선택" })),
     );
     expect(profiles).toHaveBeenCalledTimes(personaId ? 3 : 2);
-    expect(window.location.pathname).toBe("/explore");
+    expect(window.location.pathname).toBe(personaId ? "/ko/explore" : "/explore");
     expect(screen.getByRole("heading", { name: "지우" })).toBeTruthy();
     choose(true);
     fireEvent.click(screen.getByRole("button", { name: "연락받기" }));

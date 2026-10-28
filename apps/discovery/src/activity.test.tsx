@@ -83,7 +83,7 @@ test("resuming a shared profile counts its new Visit and visible profile while p
     profiles: async () => publicPersonas,
     join: async () => ({ status: "waiting" }),
   });
-  window.history.replaceState(null, "", "/personas/jia?utm_source=friends");
+  window.history.replaceState(null, "", "/ko/personas/jia?utm_source=friends");
   render(<Site client={client} />);
   await screen.findByRole("region", { name: /백지아/ });
   await act(async () => {});
@@ -107,7 +107,7 @@ test("resuming a shared profile counts its new Visit and visible profile while p
 test("a Reselection entry counts only one first Like while counting each persona Like", async () => {
   vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone");
   const activity = vi.fn<(report: Activity) => Promise<void>>(async () => {});
-  window.history.replaceState(null, "", `/explore#reselect=${"a".repeat(64)}`);
+  window.history.replaceState(null, "", `/ko/explore#reselect=${"a".repeat(64)}`);
   vi.spyOn(document, "referrer", "get").mockReturnValue(window.location.origin + "/private");
   render(
     <Site

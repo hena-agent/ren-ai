@@ -8,7 +8,7 @@ import { publicRoute, readPublicBootstrap } from "./public-routing.ts";
 export function Site({ client = discoveryClient }: { client?: DiscoveryClient }) {
   const route = publicRoute(new URL(window.location.href));
   const fragment = new URLSearchParams(window.location.hash.slice(1));
-  if (route.id || window.location.pathname === "/explore" || fragment.has("reselect")) {
+  if (route.id || route.path === "/explore" || fragment.has("reselect")) {
     // A private Reselection listing never starts from the public server-rendered people.
     const bootstrap = fragment.has("reselect")
       ? undefined
@@ -16,6 +16,7 @@ export function Site({ client = discoveryClient }: { client?: DiscoveryClient })
     return (
       <App
         client={client}
+        initialLocale={route.locale ?? "en"}
         personaId={route.id}
         initialStyle={route.style}
         reselectionToken={fragment.get("reselect") ?? undefined}
@@ -25,7 +26,7 @@ export function Site({ client = discoveryClient }: { client?: DiscoveryClient })
     );
   }
   return (
-    <LocaleProvider>
+    <LocaleProvider initialLocale={route.locale ?? "en"}>
       <Home client={client} />
     </LocaleProvider>
   );

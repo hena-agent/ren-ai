@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { PublicPersona } from "@ren-ai/onboarding";
 import type { ImageStyle } from "./image-style.ts";
 import { readImageStyle } from "./image-style.ts";
-import { useCopy } from "./locale.tsx";
+import { useCopy, useLocale } from "./locale.tsx";
 import { shareUrl } from "./public-routing.ts";
 
 export function ProfileShare({
@@ -15,10 +15,11 @@ export function ProfileShare({
   disabled?: boolean;
 }) {
   const copy = useCopy().publicProfile;
+  const { locale } = useLocale();
   const [state, setState] = useState<"idle" | "pending" | "copied" | "failed">("idle");
   async function share() {
     setState("pending");
-    const url = shareUrl(persona.id, imageStyle ?? readImageStyle());
+    const url = shareUrl(persona.id, imageStyle ?? readImageStyle(), locale);
     try {
       if (navigator.share) {
         await navigator.share({ title: `${persona.name} — Ren AI`, url });

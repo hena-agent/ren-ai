@@ -28,7 +28,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 function mount(bootstrap = true) {
-  window.history.replaceState(null, "", "/personas/jia?style=photo");
+  window.history.replaceState(null, "", "/ko/personas/jia?style=photo");
   const api = {
     profiles: vi.fn<DiscoveryClient["profiles"]>().mockResolvedValue(publicPersonas.toReversed()),
     join: vi.fn<DiscoveryClient["join"]>().mockResolvedValue({ status: "waiting" }),
@@ -75,7 +75,7 @@ test("a shared URL switches style immediately in the same reading view and colla
   expect(window.location.search).toBe("?style=anime&preview=v2");
   fireEvent.click(within(details).getByRole("button", { name: "다음 사진" }));
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
-  expect(window.location.pathname).toBe("/explore");
+  expect(window.location.pathname).toBe("/ko/explore");
   expect(screen.getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
     "https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-000000000003.jpg",
   );
@@ -91,7 +91,7 @@ test("previously passed shared personas can be Liked without losing siblings, th
     jia: true,
     subin: true,
   });
-  expect(window.location.pathname).toBe("/explore");
+  expect(window.location.pathname).toBe("/ko/explore");
   fireEvent.click(screen.getByRole("button", { name: "연락받기" }));
   expect(
     within(screen.getByRole("list", { name: "관심을 전할 페르소나" })).getAllByRole("listitem"),
@@ -116,16 +116,16 @@ test("explore cards have no sharing action; opening details exposes footer shari
     `${window.location.pathname}${window.location.search}#reselect=private-token`,
   );
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
-  expect(window.location.pathname).toBe("/explore");
+  expect(window.location.pathname).toBe("/ko/explore");
   expect(screen.queryByRole("button", { name: "프로필 공유하기" })).toBeNull();
   expect(screen.queryByRole("region", { name: /백지아/ })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "백지아 소개 전체 보기" }));
-  expect(window.location.pathname).toBe("/personas/jia");
+  expect(window.location.pathname).toBe("/ko/personas/jia");
   const button = screen.getByRole("button", { name: "프로필 공유하기" });
   expect(button.closest(".details-footer")).toBeTruthy();
   fireEvent.click(button);
   await screen.findByText("링크를 복사했어요.");
-  expect(writeText).toHaveBeenCalledWith("https://renai.im/personas/jia?style=photo&preview=v2");
+  expect(writeText).toHaveBeenCalledWith("https://renai.im/ko/personas/jia?style=photo&preview=v2");
   expect(screen.getByRole("region", { name: /백지아/ })).toBeTruthy();
   expect(localStorage.getItem("ren-ai.discovery.choices")).toBeNull();
   expect(window.location.hash).toBe("#reselect=private-token");
@@ -148,7 +148,7 @@ test("local direct entry loads the Catalog, retains authored writing across loca
 
 test("reselection reloads its private Catalog before browsing and submits only eligible Likes after a retry", async () => {
   const token = "a".repeat(64);
-  window.history.replaceState(null, "", `/explore#reselect=${token}`);
+  window.history.replaceState(null, "", `/ko/explore#reselect=${token}`);
   localStorage.setItem("ren-ai.discovery.choices", JSON.stringify({ jia: true }));
   const script = document.createElement("script");
   script.id = "public-personas";
@@ -202,7 +202,7 @@ test("a reselection profile URL cannot reopen an ended persona and retains the t
   const token = "b".repeat(64);
   const api = mount();
   cleanup();
-  window.history.replaceState(null, "", `/personas/jia#reselect=${token}`);
+  window.history.replaceState(null, "", `/ko/personas/jia#reselect=${token}`);
   api.profiles.mockResolvedValue([publicPersonas[1]!]);
   render(<Site client={testClient(api)} />);
   expect(screen.queryByRole("region", { name: /백지아/ })).toBeNull();
@@ -210,7 +210,7 @@ test("a reselection profile URL cannot reopen an ended persona and retains the t
   expect(api.profiles).toHaveBeenCalledWith(expect.any(AbortSignal), token, ["jia"]);
   expect(screen.queryByText("백지아")).toBeNull();
   expect(screen.getByRole("link", { name: "탐색으로 돌아가기" }).getAttribute("href")).toBe(
-    `/explore#reselect=${token}`,
+    `/ko/explore#reselect=${token}`,
   );
 });
 
@@ -222,6 +222,8 @@ test("public bootstrap parsing narrows input and rejects malformed JSON and non-
     readPublicBootstrap('{"people":[],"page":{"locale":"fr","nextCursor":null}}'),
   ).toThrow(/locale/);
   expect(publicRoute(new URL("https://renai.im/personas/bad/id?style=invalid"))).toEqual({
+    locale: undefined,
+    path: "/personas/bad/id",
     id: undefined,
     style: undefined,
   });

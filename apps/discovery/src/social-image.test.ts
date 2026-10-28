@@ -36,8 +36,15 @@ test("only home or genuinely absent same-style gallery photos use the branded PN
       "photo",
     ),
   ).toEqual(brandSocialImage);
-  const bytes = await readFile(new URL("../public/social.png", import.meta.url));
-  expect(imageSize(bytes)).toMatchObject({ width: 1200, height: 630, type: "png" });
+  for (const locale of ["ko", "en", "ja"] as const) {
+    const bytes = await readFile(new URL(`../public/social-${locale}-v2.png`, import.meta.url));
+    expect(imageSize(bytes)).toMatchObject({ width: 1200, height: 630, type: "png" });
+    expect(bytes.length).toBeLessThan(5_000_000);
+    expect(socialImage(undefined, "anime", locale).url).toBe(
+      `https://renai.im/social-${locale}-v2.png`,
+    );
+    expect(socialImage(publicPersonas[0], "photo", locale).alt).toContain("Ren AI");
+  }
 });
 
 test("renditions follow current gallery order and cannot turn arbitrary image URLs into R2 access", () => {

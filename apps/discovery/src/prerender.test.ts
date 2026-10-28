@@ -7,10 +7,10 @@ test("home prerenders complete public HTML, and dynamic pages keep the bare shel
   const template = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const pages = await staticPages(template);
   const home = pages["index.html"];
-  expect(home).toContain("일상에,");
+  expect(home).toContain("Every day,");
   expect(home).toContain('class="home-hero"');
   expect(home).toContain('<link rel="canonical" href="https://renai.im/"');
-  expect(home).toContain('property="og:image" content="https://renai.im/social.png"');
+  expect(home).toContain('property="og:image" content="https://renai.im/social-en-v2.png"');
   expect(home).not.toContain('id="public-personas"');
   expect(pages["template.html"]).toBe(template);
 });

@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import { afterEach, expect, test, vi } from "vitest";
 import { discoveryServer } from "./server.ts";
 import type { ServerEvent } from "./server-log.ts";
-import { serverCause, writeServerLog } from "./server-log.ts";
 import { publicPersonas } from "../test/public-personas.ts";
 import { readPublicBootstrap } from "./public-routing.ts";
 import { previewFixture } from "../test/preview.ts";
@@ -14,44 +13,6 @@ const photoPreview =
   "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v2.jpg";
 
 afterEach(() => vi.restoreAllMocks());
-
-test("server diagnostics preserve safe causes and write structured JSON to the matching sink", () => {
-  const info = vi.spyOn(process.stdout, "write").mockReturnValue(true);
-  const error = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-  const event = {
-    requestId: "request",
-    operation: "discovery.public" as const,
-    stage: "request",
-    outcome: "completed" as const,
-    durationMs: 1,
-  };
-  writeServerLog({ ...event, level: "info" });
-  writeServerLog({ ...event, level: "warn" });
-  expect(info).toHaveBeenCalledWith(expect.stringContaining('"service":"discovery"'));
-  expect(error).toHaveBeenCalledWith(expect.stringContaining('"level":"warn"'));
-  const cause = Object.assign(new TypeError("private"), {
-    code: "ETIMEDOUT",
-    stack: "TypeError: private\n at call (server.ts:1:1)",
-  });
-  expect(serverCause(new Error("wrapper", { cause }))).toEqual({
-    causeName: "TypeError",
-    causeCode: "ETIMEDOUT",
-    stack: " at call (server.ts:1:1)",
-  });
-  expect(serverCause({ private: "payload" })).toMatchObject({ causeName: "Error" });
-  expect(
-    serverCause(
-      Object.assign(new Error("private"), { code: "private input with spaces", stack: undefined }),
-    ),
-  ).toEqual({ causeName: "Error", stack: "" });
-  expect(serverCause(Object.assign(new Error("private"), { code: 42 }))).toHaveProperty(
-    "causeCode",
-    "42",
-  );
-  expect(serverCause(Object.assign(new Error("private"), { code: Number.NaN }))).not.toHaveProperty(
-    "causeCode",
-  );
-});
 
 async function fixture() {
   const template = await readFile(new URL("../index.html", import.meta.url), "utf8");
@@ -107,7 +68,7 @@ test("a direct profile request includes readable public HTML, canonical SEO, sty
       publicPersonas[1],
     ]),
   );
-  const response = await f.send("/personas/jia?style=photo&tracking=ignored");
+  const response = await f.send("/ko/personas/jia?style=photo&tracking=ignored");
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(response.headers.get("content-type")).toContain("text/html");
@@ -117,9 +78,9 @@ test("a direct profile request includes readable public HTML, canonical SEO, sty
   expect(html).toContain(
     'src="https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-000000000002.jpg"',
   );
-  expect(html).toContain('<link rel="canonical" href="https://renai.im/personas/jia"');
+  expect(html).toContain('<link rel="canonical" href="https://renai.im/ko/personas/jia"');
   expect(html).toContain(
-    '<meta property="og:url" content="https://renai.im/personas/jia?style=photo&amp;preview=v2"',
+    '<meta property="og:url" content="https://renai.im/ko/personas/jia?style=photo&amp;preview=v2"',
   );
   expect(html).toContain(`<meta property="og:image" content="${photoPreview}"`);
   expect(html).toContain('name="twitter:card" content="summary_large_image"');
@@ -174,14 +135,14 @@ test("the sitemap exposes current profile links without a separate directory or 
   const xml = await f.send("/sitemap.xml");
   expect(xml.headers.get("content-type")).toContain("application/xml");
   const body = await xml.text();
-  expect(body).toContain("<loc>https://renai.im/personas/jia</loc>");
-  expect(body).toContain("<loc>https://renai.im/explore</loc>");
+  expect(body).toContain("<loc>https://renai.im/ko/personas/jia</loc>");
+  expect(body).toContain("<loc>https://renai.im/ko/explore</loc>");
   expect(body).not.toContain("<loc>https://renai.im/personas</loc>");
   expect(body).toContain(`<image:loc>${publicPersonas[0]!.portraits!.anime}</image:loc>`);
   f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
   expect(await (await f.send("/sitemap.xml")).text()).not.toContain("/personas/jia");
   f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
-  const removed = await f.send("/personas/jia");
+  const removed = await f.send("/ko/personas/jia");
   expect(removed.status).toBe(404);
   expect(removed.headers.get("x-robots-tag")).toBe("noindex");
   expect(await removed.text()).toContain('name="robots" content="noindex,follow"');
@@ -190,17 +151,17 @@ test("the sitemap exposes current profile links without a separate directory or 
 
 test("profiles without photos, structured profiles or a style query still have public content and metadata", async () => {
   const f = await fixture();
-  const html = await (await f.send("/personas/subin?style=invalid")).text();
+  const html = await (await f.send("/ko/personas/subin?style=invalid")).text();
   expect(html).toContain("반가워요.");
   expect(html).toContain("이 스타일의 사진이 아직 없어요.");
   expect(html).toContain(
     'name="description" content="반가워요. — Ren AI의 가상 AI 페르소나. iMessage로 일상을 나눠요."',
   );
-  expect(html).toContain('property="og:image" content="https://renai.im/social.png"');
+  expect(html).toContain('property="og:image" content="https://renai.im/social-ko-v2.png"');
   expect(html).toContain('property="og:image:width" content="1200"');
   expect(html).toContain('property="og:image:height" content="630"');
   expect(html).toContain('name="twitter:card" content="summary_large_image"');
-  const normal = await (await f.send("/personas/jia?style=anime")).text();
+  const normal = await (await f.send("/ko/personas/jia?style=anime")).text();
   expect(normal).toContain(`<meta property="og:image" content="${animePreview}"`);
 });
 
@@ -210,7 +171,7 @@ test("routing handles HEAD, invalid paths, trailing slashes, methods, robots and
   expect(await robots.text()).toContain("Sitemap: https://renai.im/sitemap.xml");
   for (const path of ["/personas/", "/personas/invalid/id", "/personas/%3Cscript%3E"])
     expect((await f.send(path)).status).toBe(404);
-  for (const path of ["/personas/jia/?style=photo"]) {
+  for (const path of ["/ko/personas/jia/?style=photo"]) {
     const response = await f.send(path);
     expect(response.status).toBe(308);
     expect(response.headers.get("location")).toBe(
@@ -221,7 +182,7 @@ test("routing handles HEAD, invalid paths, trailing slashes, methods, robots and
   expect(method.status).toBe(405);
   expect(method.headers.get("allow")).toBe("GET, HEAD");
   expect(f.fetcher).not.toHaveBeenCalled();
-  const head = await f.send("/personas/jia", "HEAD");
+  const head = await f.send("/ko/personas/jia", "HEAD");
   expect(head.status).toBe(200);
   expect(await head.text()).toBe("");
   await f.send("/assets/browser.js");
@@ -244,7 +205,7 @@ test.each(["http", "decode", "network", "assets"])(
       );
     if (failure === "assets")
       f.assets.mockResolvedValueOnce(new Response("PRIVATE ASSET", { status: 500 }));
-    const response = await f.send("/personas/jia?style=photo&secret=PRIVATE QUERY");
+    const response = await f.send("/ko/personas/jia?style=photo&secret=PRIVATE QUERY");
     expect(response.status).toBe(503);
     expect(response.headers.get("retry-after")).toBe("30");
     const requestId = response.headers.get("x-request-id");
@@ -298,18 +259,21 @@ test("health reports artifact identity and Catalog readiness independently of st
   );
 });
 
-test("home is a static file the Worker passes to the asset service untouched", async () => {
+test("English home remains a prerendered asset after locale negotiation", async () => {
   const f = await fixture();
   const response = await f.send("/");
   expect(response.status).toBe(200);
   expect(f.assets.mock.lastCall?.[0].url).toBe("https://renai.im/");
   expect(f.fetcher).not.toHaveBeenCalled();
-  expect(f.log).not.toHaveBeenCalled();
+  expect(f.log).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
+  const korean = await f.send("/ko");
+  expect(await korean.text()).toContain('<html lang="ko">');
+  expect(f.fetcher).not.toHaveBeenCalled();
 });
 
 test("explorer HTML renders a first page sampled in the browser's language", async () => {
   const f = await fixture();
-  const response = await f.send("/explore", "GET", {
+  const response = await f.send("/ja/explore", "GET", {
     "Accept-Language": "fr-FR,fr;q=0.9,JA;q=0.8,ko;q=0.7",
   });
   expect(response.status).toBe(200);
@@ -340,8 +304,8 @@ test("explorer HTML renders a first page sampled in the browser's language", asy
   );
   expect(explore).not.toContain('href="/personas"');
   expect(explore).toContain('name="robots" content="index,follow,max-image-preview:large"');
-  expect(explore).toContain('<link rel="canonical" href="https://renai.im/explore"');
-  const head = await f.send("/explore", "HEAD");
+  expect(explore).toContain('<link rel="canonical" href="https://renai.im/ja/explore"');
+  const head = await f.send("/ja/explore", "HEAD");
   expect(head.status).toBe(200);
   expect(await head.text()).toBe("");
   expect(f.fetcher).toHaveBeenCalledOnce();
@@ -408,7 +372,7 @@ test("render failures keep the persona rendition URL and report a correlated ret
   f.output.mockRejectedValue(
     Object.assign(new Error("PRIVATE IMAGE PAYLOAD"), { name: "ImagesError", code: 9412 }),
   );
-  const response = await f.send("/personas/jia?style=photo&private=PRIVATE QUERY");
+  const response = await f.send("/ko/personas/jia?style=photo&private=PRIVATE QUERY");
   expect(response.status).toBe(200);
   const html = await response.text();
   expect(html).toContain(`property="og:image" content="${photoPreview}"`);
@@ -416,7 +380,7 @@ test("render failures keep the persona rendition URL and report a correlated ret
   const failed = await f.send(new URL(photoPreview).pathname);
   expect(failed.status).toBe(503);
   expect(failed.headers.get("retry-after")).toBe("30");
-  expect(await failed.text()).not.toContain("social.png");
+  expect(await failed.text()).not.toContain("social-");
   expect(f.log).toHaveBeenCalledTimes(3);
   expect(f.log.mock.calls[1]![0]).toMatchObject({
     requestId: failed.headers.get("x-request-id"),
@@ -438,7 +402,7 @@ test("owned local sources still advertise same-origin HTTPS renditions, and imag
     portraits: { anime: "http://127.0.0.1:3729/images/00000000-0000-0000-0000-000000000001.jpg" },
   };
   f.fetcher.mockResolvedValueOnce(Response.json([persona]));
-  const html = await (await f.send("/personas/jia")).text();
+  const html = await (await f.send("/ko/personas/jia")).text();
   expect(html).toContain(`property="og:image:secure_url" content="${animePreview}"`);
   f.fetcher.mockResolvedValueOnce(
     Response.json([{ id: persona.id, imageUrl: `${persona.portraits.anime}?x=1&y=2` }]),
@@ -487,4 +451,116 @@ test("an unavailable preview executor degrades health even while the public Cata
     code: "PREVIEW_UNAVAILABLE",
   });
   expect(JSON.stringify(f.log.mock.calls)).not.toContain("PRIVATE");
+});
+
+test.each(["ko", "en", "ja"] as const)(
+  "%s URLs render localized HTML and reciprocal language metadata before JavaScript",
+  async (locale) => {
+    const f = await fixture();
+    for (const path of ["", "/explore", "/personas/jia"]) {
+      const canonicalPath = locale === "en" ? path || "/" : `/${locale}${path}`;
+      const response = await f.send(`${canonicalPath}?style=photo`);
+      const html = await response.text();
+      expect(response.headers.get("content-language")).toBe(locale);
+      expect(html).toContain(`<html lang="${locale}">`);
+      expect(html).toContain(`rel="canonical" href="https://renai.im${canonicalPath}"`);
+      for (const language of ["ko", "en", "ja", "x-default"])
+        expect(html).toContain(
+          `hrefLang="${language}" href="https://renai.im${language === "x-default" || language === "en" ? path || "/" : `/${language}${path}`}"`,
+        );
+      expect(html.match(/property="og:locale:alternate"/g)).toHaveLength(2);
+      expect(html).toContain(`"inLanguage":"${locale}"`);
+      expect(html).toContain(
+        `property="og:locale" content="${{ ko: "ko_KR", en: "en_US", ja: "ja_JP" }[locale]}"`,
+      );
+      expect(html).toContain(
+        `content="${path.startsWith("/personas") ? photoPreview : `https://renai.im/social-${locale}-v2.png`}"`,
+      );
+    }
+    const profilePath = `${locale === "en" ? "" : `/${locale}`}/personas/jia`;
+    expect(await (await f.send(profilePath)).text()).toContain("햇살 좋은 날엔 같이 걸어요.");
+    const xml = await (await f.send("/sitemap.xml")).text();
+    expect(xml).toContain(`<loc>https://renai.im${profilePath}</loc>`);
+    expect(xml).toContain(`hreflang="${locale}" href="https://renai.im${profilePath}"`);
+    expect(xml).not.toContain("https://renai.im/en");
+  },
+);
+
+test("language redirects preserve queries without Catalog reads and invalid localized routes stay unindexed", async () => {
+  const f = await fixture();
+  for (const [from, to] of [
+    ["/en", "/"],
+    ["/en/explore", "/explore"],
+    ["/explore/", "/explore"],
+    ["/en/personas/jia", "/personas/jia"],
+    ["/personas/jia/", "/personas/jia"],
+    ["/en/", "/"],
+  ] as const) {
+    const response = await f.send(`${from}?style=photo&utm_source=friend`);
+    expect(response.status).toBe(from.startsWith("/en") ? 308 : 307);
+    expect(response.headers.get("location")).toBe(
+      `https://renai.im${to}?style=photo&utm_source=friend`,
+    );
+  }
+  expect((await f.send("/ja/invalid")).status).toBe(404);
+  expect(f.fetcher).not.toHaveBeenCalled();
+  f.fetcher.mockResolvedValueOnce(Response.json([]));
+  const missing = await (await f.send("/personas/withdrawn")).text();
+  expect(missing).toContain("This profile isn&#x27;t public.");
+  expect(missing).not.toContain('rel="alternate"');
+  f.fetcher.mockRejectedValueOnce(new Error("private"));
+  const failed = await f.send("/ja/personas/jia");
+  expect(failed.status).toBe(503);
+  expect(await failed.text()).toContain('<html lang="ja">');
+});
+
+test.each([
+  ["ko-KR,ko;q=0.9,en;q=0.8", "ko"],
+  ["ja-JP,en;q=0.8", "ja"],
+  ["fr-FR,ko;q=0.5,ja;q=0.9", "ja"],
+  ["ja;q=0,ko;q=0.8", "ko"],
+  ["fr-FR,*;q=0.5", "en"],
+  ["ko;q=bad,ja;q=2,en;q=0.5", "en"],
+  ["KO-kr;q=0.8,ja;q=0.8", "ko"],
+  ["ko;q=0", "en"],
+])(
+  "unprefixed pages negotiate %s as %s without overriding explicit URLs",
+  async (header, locale) => {
+    const f = await fixture();
+    for (const path of ["/", "/explore", "/personas/jia"]) {
+      const response = await f.send(path, "HEAD", { "Accept-Language": header });
+      expect(response.status).toBe(locale === "en" ? 200 : 307);
+      expect(response.headers.get("vary")).toBe("Accept-Language, Cookie");
+      expect(response.headers.get("location")).toBe(
+        locale === "en" ? null : `https://renai.im/${locale}${path === "/" ? "" : path}`,
+      );
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    expect(f.fetcher).toHaveBeenCalledTimes(locale === "en" ? 1 : 0);
+    expect(
+      (await f.send("/ja", "GET", { "Accept-Language": header })).headers.get("content-language"),
+    ).toBe("ja");
+  },
+);
+
+test("the English root renders directly and an explicit language choice survives reload despite device language", async () => {
+  const f = await fixture();
+  const root = await f.send("/");
+  expect(root.status).toBe(200);
+  expect(root.headers.get("location")).toBeNull();
+  expect(root.headers.get("content-language")).toBe("en");
+  expect(await root.text()).toContain('rel="canonical" href="https://renai.im/"');
+  const normalized = await f.send("/en", "GET", { "Accept-Language": "ko-KR" });
+  expect(normalized.status).toBe(308);
+  expect(normalized.headers.get("location")).toBe("https://renai.im/");
+  expect(normalized.headers.get("set-cookie")).toContain("renai.locale=en;");
+  for (const [cookie, status, target] of [
+    ["other=1; renai.locale=en", 200, null],
+    ["renai.locale=invalid", 307, "https://renai.im/ko"],
+    ["renai.locale=ja", 307, "https://renai.im/ja"],
+  ] as const) {
+    const response = await f.send("/", "GET", { "Accept-Language": "ko-KR", Cookie: cookie });
+    expect(response.status).toBe(status);
+    expect(response.headers.get("location")).toBe(target);
+  }
 });

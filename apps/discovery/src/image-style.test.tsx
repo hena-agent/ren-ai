@@ -21,8 +21,8 @@ const people = ["하린", "지우", "미라"].map((name, index) => ({
   bio: "함께 이야기해요.",
   imageUrl: `https://example.net/${index}-legacy.jpg`,
   portraits: {
-    anime: `https://example.net/${index}-anime.jpg`,
-    photo: `https://example.net/${index}-photo.jpg`,
+    anime: `https://persona-images.renai.im/00000000-0000-0000-0000-0000000000${index}1.jpg`,
+    photo: `https://persona-images.renai.im/00000000-0000-0000-0000-0000000000${index}2.jpg`,
   },
 }));
 const client = testClient({
