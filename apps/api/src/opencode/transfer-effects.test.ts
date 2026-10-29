@@ -95,16 +95,16 @@ test.each([false, true])(
               resume: false,
             });
           const contents = yield* exportSessions(remote.client, [session.id]);
-          expect(
-            Schema.decodeUnknownSync(sessionArchive)(contents).sessions[0]?.recovery?.tools,
-          ).toMatchObject([
+          const tools =
+            Schema.decodeUnknownSync(sessionArchive)(contents).sessions[0]?.recovery?.tools;
+          expect(tools).toMatchObject([
             {
               callID: "completed-send",
               tool: "send",
               state: {
                 status: "completed",
                 input: { text: "one-time bubble" },
-                content: [{ type: "text", text: expect.stringMatching(/^sent \d{2}:\d{2}$/) }],
+                content: [{ type: "text" }],
               },
             },
             {
@@ -113,6 +113,7 @@ test.each([false, true])(
               state: { status: "running", input: { seconds: 3300 } },
             },
           ]);
+          expect(JSON.stringify(tools?.[0]?.state)).toMatch(/"text":"sent \d{2}:\d{2}"/);
           yield* remote.sessions.interrupt(session.id);
           yield* remote.sessions.wait(session.id);
           yield* remote.sessions.remove(session.id);
