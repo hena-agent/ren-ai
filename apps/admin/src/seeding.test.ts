@@ -16,6 +16,13 @@ test.each([1, 4])(
     const logs = captureWorkerLogs();
     const env = adminBindings(db, bucket);
     let admin = await cloudflareAdmin(env, storage);
+    const empty = await (await admin.fetch(request("/seeding"))).text();
+    expect(empty).toContain("아직 시딩 기록이 없습니다.");
+    expect(empty).toContain('href="/seeding" aria-current="page"');
+    expect(empty).toContain('class="admin-sidebar"');
+    expect(empty).toContain('href="/assets/admin-test.css"');
+    expect(empty).toContain('<main id="main"');
+    expect(empty).not.toContain("Seeding runs");
     const upload = () => uploadSeeds(count);
     const response = await admin.fetch(upload());
     expect(response.status).toBe(303);
@@ -26,6 +33,8 @@ test.each([1, 4])(
     const page = await (await admin.fetch(request(location))).text();
     expect(page).toContain(`${count * 4} images`);
     expect(page).toContain("Confirm paid run");
+    expect(page).toContain("← 시딩 목록");
+    expect(page).toContain('href="/seeding" aria-current="page"');
     expect((await admin.fetch(upload())).headers.get("location")).toBe(location);
     expect(await (await admin.fetch(request("/api/personas"))).json()).toEqual([]);
     expect(logs.stdout.mock.calls.join(" ")).not.toContain("취업을 준비");

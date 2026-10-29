@@ -16,9 +16,7 @@ import type { VersionView } from "./version-page.tsx";
 import { ConversationPage, type ConversationView } from "./conversation-page.tsx";
 import { PortraitManager } from "./portrait-manager.tsx";
 import { MetricsPage } from "./metrics-page.tsx";
-
-/** Content-hashed browser asset paths, defined by `scripts/build.mjs` and Vitest. */
-declare const ADMIN_ASSETS: { script: string; stylesheet: string };
+import { AdminLayout } from "./admin-layout.tsx";
 
 interface EditorFields {
   sheets?: IdentitySheets | undefined;
@@ -280,44 +278,17 @@ function PageNotices({
   );
 }
 
-function Navigation({
-  record,
-  contactView,
-  conversationView,
-  recoveryAvailable,
-}: {
-  record: PersonaRecord | undefined;
-  contactView: ContactView | undefined;
-  conversationView: ConversationView | undefined;
-  recoveryAvailable?: boolean;
-}) {
-  return (
-    <nav aria-label={copy.navigation}>
-      <a href="/" aria-current={record || contactView || conversationView ? undefined : "page"}>
-        {copy.list}
-      </a>
-      <a className="new-link" href="/new">
-        + {copy.new}
-      </a>
-      {recoveryAvailable && <a href="/editing-recovery">편집 기록 복구 파일</a>}
-      <a href="/waitlist" aria-current={contactView?.tab === "waitlist" ? "page" : undefined}>
-        대기자
-      </a>
-      <a
-        href="/first-contacts"
-        aria-current={contactView?.tab === "first-contacts" ? "page" : undefined}
-      >
-        첫 연락
-      </a>
-      <a href="/conversations" aria-current={conversationView ? "page" : undefined}>
-        대화 상태
-      </a>
-      <a href="/invitations" aria-current={contactView?.tab === "invitations" ? "page" : undefined}>
-        초대장
-      </a>
-      <a href="/metrics">지표</a>
-    </nav>
-  );
+function pageSection(
+  contactTab: ContactView["tab"] | undefined,
+  metrics: boolean,
+  conversations: boolean,
+  record: PersonaRecord | undefined,
+  editing: boolean | undefined,
+) {
+  if (contactTab) return contactTab;
+  if (metrics) return "metrics";
+  if (conversations) return "conversations";
+  return record && !editing ? "new" : "personas";
 }
 
 export function renderPage({
@@ -365,94 +336,78 @@ export function renderPage({
   return (
     "<!doctype html>" +
     renderToStaticMarkup(
-      <html lang="ko">
-        <head>
-          <meta charSet="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>{copy.title}</title>
-          <link rel="icon" type="image/svg+xml" href="/brand.svg" />
-          <link rel="stylesheet" href={ADMIN_ASSETS.stylesheet} />
-          <script src={ADMIN_ASSETS.script} type="module" />
-        </head>
-        <body>
-          <a className="skip-link" href="#main">
-            {copy.skip}
-          </a>
-          <header>
-            <a className="brand" href="/">
-              {copy.brand}
-            </a>
-            <Navigation
-              record={record}
-              contactView={contactView}
-              conversationView={conversationView}
-              {...(recoveryAvailable !== undefined && { recoveryAvailable })}
-            />
-            <a href="/seeding">Seeding runs</a>
-          </header>
-          <main id="main" className={record || versionView ? "persona-workbench" : undefined}>
-            <div
-              className="page-heading"
-              hidden={Boolean(record || versionView || conversationView || metricsView)}
-            >
-              <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
-              <h1>{heading(contactView)}</h1>
-              <p className="description">
-                {contactView
-                  ? {
-                      waitlist:
-                        "연락할 대기자를 찾고 선정합니다. 테스트 기록은 숨겨 목록을 정리하세요.",
-                      "first-contacts":
-                        "예약부터 첫 인사까지, 진행 상황과 확인이 필요한 기록을 살펴보세요.",
-                      invitations: "초대 코드를 만들고 공유하거나, 전화번호로 초대장을 지급합니다.",
-                    }[contactView.tab]
-                  : copy.description}
-              </p>
-            </div>
-            <PageNotices
-              error={error}
-              saved={saved}
-              catalogPending={catalogPending}
+      <AdminLayout
+        active={pageSection(
+          contactView?.tab,
+          Boolean(metricsView),
+          Boolean(conversationView),
+          record,
+          editing,
+        )}
+        {...(recoveryAvailable !== undefined && { recoveryAvailable })}
+      >
+        <main id="main" className={record || versionView ? "persona-workbench" : undefined}>
+          <div
+            className="page-heading"
+            hidden={Boolean(record || versionView || conversationView || metricsView)}
+          >
+            <p className="eyebrow">{contactView ? "ONBOARDING" : copy.eyebrow}</p>
+            <h1>{heading(contactView)}</h1>
+            <p className="description">
+              {contactView
+                ? {
+                    waitlist:
+                      "연락할 대기자를 찾고 선정합니다. 테스트 기록은 숨겨 목록을 정리하세요.",
+                    "first-contacts":
+                      "예약부터 첫 인사까지, 진행 상황과 확인이 필요한 기록을 살펴보세요.",
+                    invitations: "초대 코드를 만들고 공유하거나, 전화번호로 초대장을 지급합니다.",
+                  }[contactView.tab]
+                : copy.description}
+            </p>
+          </div>
+          <PageNotices
+            error={error}
+            saved={saved}
+            catalogPending={catalogPending}
+            imageJob={imageJob}
+            imageJobs={imageJobs}
+            queuePosition={queuePosition}
+            queueObservedAt={queueObservedAt}
+          />
+          {metricsView ? (
+            <MetricsPage {...metricsView} />
+          ) : conversationView ? (
+            <ConversationPage view={conversationView} />
+          ) : versionView ? (
+            <VersionPage {...versionView} />
+          ) : contactView ? (
+            <ContactPage view={contactView} />
+          ) : record ? (
+            <Editor
+              sheets={sheets}
+              persona={record}
+              editing={editing}
+              draft={draft}
+              seed={seed}
+              portraitInstructions={portraitInstructions}
+              portraitOperation={portraitOperation}
+              imageCount={imageCount}
+              imagePrompts={imagePrompts}
               imageJob={imageJob}
               imageJobs={imageJobs}
-              queuePosition={queuePosition}
-              queueObservedAt={queueObservedAt}
+              imageReservations={imageReservations}
+              conversion={conversion}
+              improvementInput={improvementInput}
+              changed={changed}
+              documents={documents}
+              tab={tab}
+              showIdea={showIdea}
             />
-            {metricsView ? (
-              <MetricsPage {...metricsView} />
-            ) : conversationView ? (
-              <ConversationPage view={conversationView} />
-            ) : versionView ? (
-              <VersionPage {...versionView} />
-            ) : contactView ? (
-              <ContactPage view={contactView} />
-            ) : record ? (
-              <Editor
-                sheets={sheets}
-                persona={record}
-                editing={editing}
-                draft={draft}
-                seed={seed}
-                portraitInstructions={portraitInstructions}
-                portraitOperation={portraitOperation}
-                imageCount={imageCount}
-                imagePrompts={imagePrompts}
-                imageJob={imageJob}
-                imageJobs={imageJobs}
-                imageReservations={imageReservations}
-                conversion={conversion}
-                improvementInput={improvementInput}
-                changed={changed}
-                documents={documents}
-                tab={tab}
-                showIdea={showIdea}
-              />
-            ) : (
-              <PersonaList personas={personas} listing={listing} />
-            )}
-          </main>
-        </body>
-      </html>,
+          ) : (
+            <PersonaList personas={personas} listing={listing} />
+          )}
+        </main>
+      </AdminLayout>,
     )
   );
 }

@@ -310,11 +310,6 @@ nav a {
 nav [aria-current] {
   color: var(--signal);
 }
-.new-link {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 12px;
-}
 main {
   max-width: 1248px;
   margin: 0 auto;
