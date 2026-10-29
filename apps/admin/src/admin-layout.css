@@ -49,20 +49,15 @@
   align-items: center;
   min-height: 44px;
   padding: 10px 12px;
-  border-radius: 6px;
-}
-.admin-menu a:hover {
-  background: var(--field);
 }
 .admin-menu [aria-current="page"] {
-  background: var(--field);
-  box-shadow: inset 2px 0 var(--signal);
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  box-shadow: inset 3px 0 var(--signal);
   font-weight: 700;
 }
 .admin-menu .admin-recovery {
   color: var(--muted);
   border-top: 1px solid var(--line);
-  border-radius: 0;
   font-size: 12px;
 }
 .admin-layout > main {

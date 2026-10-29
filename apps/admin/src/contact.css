@@ -8,20 +8,6 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-body > header {
-  flex-wrap: wrap;
-  gap: 16px 24px;
-}
-body > header nav {
-  flex-wrap: wrap;
-  gap: 8px 20px;
-}
-body > header nav a {
-  padding-block: 8px;
-}
-body > header nav a[aria-current="page"] {
-  box-shadow: inset 0 -2px var(--signal);
-}
 .contact-management .contact-summary {
   gap: 16px;
   margin-bottom: 20px;
