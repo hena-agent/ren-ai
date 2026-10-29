@@ -9,6 +9,8 @@ export const checkAvailability = (
   registrationID: string,
   transport: Pick<Effect.Success<ReturnType<typeof remoteMessages>>, "availability">,
   log: ContactLog,
+  recheck = false,
+  requestId = randomUUID(),
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -16,13 +18,21 @@ export const checkAvailability = (
       handle: string;
       status: "available" | "unavailable" | "failed" | null;
     }>`SELECT handle, imessage_status AS status FROM discovery_registration WHERE id = ${registrationID}`;
-    if (!row || row.status !== null) return row?.status;
+    if (!row || (!recheck && row.status !== null)) return row?.status;
+    let reason: string | null = null;
     const started = performance.now();
-    const fields = { requestId: randomUUID(), operation: "recipient.availability" };
+    const fields = { requestId, operation: "recipient.availability" };
     const result = yield* transport.availability(row.handle).pipe(
       Effect.timeout("10 seconds"),
       Effect.tapError((cause) =>
-        Effect.sync(() =>
+        Effect.sync(() => {
+          const detail = /\[stage=([a-z_]{1,80});code=([a-zA-Z0-9_-]{1,80})\]/.exec(cause.message);
+          reason =
+            cause.name === "TimeoutError"
+              ? "조회 제한 시간(10초)을 초과했습니다."
+              : detail
+                ? `iMessage 조회 오류: ${detail[1]} / ${detail[2]}`
+                : "메시징 서비스 조회에 실패했습니다. 연결 상태를 확인한 뒤 재확인해 주세요.";
           log({
             ...fields,
             ...("requestId" in cause && cause.requestId && { operationId: cause.requestId }),
@@ -31,8 +41,8 @@ export const checkAvailability = (
             level: "error",
             durationMs: performance.now() - started,
             ...contactCause(cause),
-          }),
-        ),
+          });
+        }),
       ),
       Effect.option,
     );
@@ -42,7 +52,7 @@ export const checkAvailability = (
         ? "available"
         : "unavailable";
     const now = yield* Clock.currentTimeMillis;
-    yield* sql`UPDATE discovery_registration SET imessage_status = ${status}, imessage_checked_at = ${now}
+    yield* sql`UPDATE discovery_registration SET imessage_status = ${status}, imessage_checked_at = ${now}, imessage_reason = ${reason}
       WHERE id = ${registrationID}`;
     log({
       ...fields,

@@ -14,6 +14,8 @@ pub struct Apple {
 
 impl Native for Apple {
     async fn availability(&self, from: &str, to: &str) -> Result<bool, Failure> {
+        // Explicit checks must not reuse negative entries or the refresh minimum interval.
+        self.client.identity.cache.lock().await.invalidate(from, to);
         self.client
             .identity
             .validate_targets(&[to.to_owned()], "com.apple.madrid", from)

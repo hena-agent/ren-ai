@@ -6,6 +6,7 @@ import {
   InvitationCreate,
   InvitationTicket,
   ContactVisibility,
+  ContactRecheck,
 } from "@ren-ai/onboarding";
 import {
   ContactSnapshot,
@@ -40,6 +41,7 @@ export interface ConversationClient {
 }
 
 export interface ManagementClient {
+  recheck: (input: typeof ContactRecheck.Type) => Promise<void>;
   visibility: (input: typeof ContactVisibility.Type) => Promise<void>;
   metrics?: (query: MetricsQuery) => Promise<Metrics>;
   conversations?: ConversationClient;
@@ -110,7 +112,8 @@ export function managementClient(
       | typeof InvitationGrant.Type
       | typeof InvitationCreate.Type
       | typeof InvitationLookup.Type
-      | typeof ContactVisibility.Type,
+      | typeof ContactVisibility.Type
+      | typeof ContactRecheck.Type,
     method = input ? "POST" : "GET",
   ) => {
     const base = managementBase(url, token);
@@ -154,6 +157,9 @@ export function managementClient(
     return response;
   };
   return {
+    recheck: async (input) => {
+      await request("/operator/imessage-recheck", input);
+    },
     visibility: async (input) => {
       await request("/management/discovery/visibility", input);
     },

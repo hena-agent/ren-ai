@@ -29,7 +29,7 @@ export const attachInvitation = (registrationID: string, token: string, handle: 
       ON CONFLICT(registration_id) DO UPDATE SET token = excluded.token
       WHERE NOT EXISTS (SELECT 1 FROM discovery_contact WHERE registration_id = ${registrationID})`;
     // A fresh, consented submission is the explicit retry; idle queue checks never poll lookup failures.
-    yield* sql`UPDATE discovery_registration SET imessage_status = NULL, imessage_checked_at = NULL
+    yield* sql`UPDATE discovery_registration SET imessage_status = NULL, imessage_checked_at = NULL, imessage_reason = NULL
       WHERE id = ${registrationID} AND imessage_status IN ('failed','unavailable')
       AND NOT EXISTS (SELECT 1 FROM discovery_contact WHERE registration_id = ${registrationID})`;
   });

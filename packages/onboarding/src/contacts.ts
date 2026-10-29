@@ -59,6 +59,7 @@ export const ContactEntry = Schema.Struct({
     Schema.Struct({
       status: Schema.Literals(["available", "unavailable", "failed"]),
       checkedAt: Schema.Number,
+      reason: Schema.optionalKey(Schema.String),
     }),
   ),
   notification: Schema.optionalKey(
@@ -98,6 +99,7 @@ export const StartContact = Schema.Struct({
   registrationID: identifier,
   personaID: Schema.String.check(Schema.isNonEmpty()),
 });
+export const ContactRecheck = Schema.Struct({ registrationID: identifier });
 export const ContactVisibility = Schema.Struct({
   registrationIDs: Schema.Array(identifier).check(
     Schema.isMinLength(1),

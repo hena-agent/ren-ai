@@ -58,6 +58,7 @@ test("text queued before Discord cards is still delivered after the upgrade", as
         // Recreate the deployed predecessor with one undelivered Alert.
         yield* sql`ALTER TABLE discord_outbox RENAME COLUMN body TO content`;
         yield* sql`ALTER TABLE discovery_registration DROP COLUMN hidden`;
+        yield* sql`ALTER TABLE discovery_registration DROP COLUMN imessage_reason`;
         yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id >= 57`;
         yield* sql`INSERT INTO discord_outbox(id, channel, content, due) VALUES ('queued', 'alerts', '알림: disk-nearly-full', 0)`;
         yield* sql`UPDATE discord_delivery SET pending = 1 WHERE channel = 'alerts'`;

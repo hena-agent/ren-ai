@@ -212,6 +212,19 @@ test.each(["sent", "uncertain"] as const)(
                 (await runtime.dispatchFetch("https://app/discovery/personas?locale=ko")).status,
               ).toBe(200);
               available = true;
+              expect(
+                (
+                  await runtime.dispatchFetch("https://app/operator/imessage-recheck", {
+                    method: "POST",
+                    body: JSON.stringify({ registrationID: selection.entries[0]!.id }),
+                  })
+                ).status,
+              ).toBe(401);
+              const rechecked = await send("/operator/imessage-recheck", {
+                registrationID: selection.entries[0]!.id,
+              });
+              expect(rechecked.status).toBe(200);
+              expect(attempts).toBe(0);
               await executionState(runtime, "/__fixture/due");
               await executionState(runtime, "/__fixture/alarm");
               expect(startupCallbacks).toBe(1);
