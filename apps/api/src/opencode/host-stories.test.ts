@@ -103,9 +103,9 @@ test("reading and silence end turns without sending a bubble", async () => {
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(ui.reads).toEqual(["quiet@example.com"]);
           expect(fake.bubbles).toEqual([]);
-          expect(
-            JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
-          ).toContain('"text":"read"');
+          expect(JSON.stringify(yield* host.sessions.messages({ sessionID: session.id }))).toMatch(
+            /"text":"read \d{2}:\d{2}"/,
+          );
           yield* fake.text("quiet@example.com", "second", Date.now());
           yield* host.sessions.wait(session.id).pipe(Effect.timeout("20 seconds"));
           expect(ui.reads).toHaveLength(1);

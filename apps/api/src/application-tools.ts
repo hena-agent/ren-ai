@@ -1,10 +1,10 @@
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/sql";
 import { migrate } from "./database.ts";
 import { conversations, type Conversation } from "./conversations/conversations.ts";
 import { outbox, type Tapback } from "./outbox/outbox.ts";
 import { timing } from "./timing/timing.ts";
-import { notReacted } from "./transcript/transcript.ts";
+import { notReacted, readAt, sent, sentAt } from "./transcript/transcript.ts";
 import type { Persona } from "@ren-ai/personas";
 import type { Messages, Gestures } from "@ren-ai/imsg";
 import type { PersonaPluginOptions } from "@ren-ai/plugin-application";
@@ -38,6 +38,12 @@ export const prepareMessaging = (
     const pace = yield* timing;
     const sends = yield* outbox(messages, gestures, personas, directory.active, pace);
     const endings = yield* conversationEndings(directory, sends, messages, gestures, personas);
+    const sentResult = (conversation: Conversation, result: string) =>
+      result === sent()
+        ? Clock.currentTimeMillis.pipe(
+            Effect.map((now) => sentAt(now, personas.get(conversation.personaID)!.timeZone)),
+          )
+        : Effect.succeed(result);
     const inConversation = (
       sessionID: string,
       action: (conversation: Conversation) => Effect.Effect<string, Error>,
@@ -67,9 +73,9 @@ export const prepareMessaging = (
         Effect.gen(function* () {
           const conversation = yield* directory.bySession(sessionID);
           return conversation && photos
-            ? yield* sends.sendPhoto(conversation, photo, callID, () =>
-                photos.sendable(conversation, photo),
-              )
+            ? yield* sends
+                .sendPhoto(conversation, photo, callID, () => photos.sendable(conversation, photo))
+                .pipe(Effect.flatMap((result) => sentResult(conversation, result)))
             : "not sent: photo unavailable";
         }),
       endConversation: endings.end,
@@ -82,7 +88,8 @@ export const prepareMessaging = (
         inConversation(sessionID, (conversation) =>
           Effect.gen(function* () {
             const rejected = yield* bubbleRejection(text, conversation.personaID);
-            return rejected ?? (yield* sends.send(conversation, text, callID));
+            if (rejected) return rejected;
+            return yield* sentResult(conversation, yield* sends.send(conversation, text, callID));
           }),
         ),
       wait: (sessionID, seconds) =>
@@ -131,7 +138,8 @@ export const prepareMessaging = (
           if (!(yield* directory.active(conversation)))
             return "not read: Conversation is replaying or inactive";
           return yield* gestures.read(conversation.handle).pipe(
-            Effect.as("read"),
+            Effect.andThen(Clock.currentTimeMillis),
+            Effect.map((now) => readAt(now, personas.get(conversation.personaID)!.timeZone)),
             Effect.catch((error) => Effect.succeed(`not read: ${error.message}`)),
           );
         }).pipe(Effect.mapError((error) => new Error(String(error)))),
