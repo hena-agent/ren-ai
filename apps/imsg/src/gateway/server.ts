@@ -38,8 +38,10 @@ export const messageGateway = (
           ),
       ),
     availability: ({ handle }) =>
-      messageRequest("recipient.availability", (requestId) =>
-        messages.availability(handle, requestId),
+      messageRequest(
+        "recipient.availability",
+        (requestId) => messages.availability(handle, requestId),
+        true,
       ),
     ...notificationHandlers(notifications),
     probe: () =>

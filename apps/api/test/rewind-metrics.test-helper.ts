@@ -29,7 +29,10 @@ export const rewindMetrics = Effect.gen(function* () {
     yield* sql`DROP TABLE ${sql(table)}`;
   for (const [table, columns] of [
     ["application_alert", ["raised_at", "detail", "url"]],
-    ["discovery_registration", ["metric_source", "metric_country", "metric_joining", "hidden"]],
+    [
+      "discovery_registration",
+      ["metric_source", "metric_country", "metric_joining", "hidden", "imessage_reason"],
+    ],
     ["conversation", ["metric_greeting_at", "metric_active_day", "metric_flags"]],
     ["usage_session", ["metric_excluded", "metric_excluded_until"]],
     ["usage_entry", ["metric_excluded"]],

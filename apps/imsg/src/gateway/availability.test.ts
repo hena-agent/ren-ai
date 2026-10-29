@@ -29,6 +29,24 @@ test("availability RPC returns a correlated lookup without sending and preserves
           "IDS_LOOKUP_FAILED",
         );
         expect(error.message).not.toContain("private");
+        for (const detail of [
+          { stage: "ids_lookup", code: "6005" },
+          { stage: "private secret", code: "6005" },
+          { stage: "ids_lookup", code: "private secret" },
+          { stage: "ids_lookup" },
+        ]) {
+          f.local.messages.availability = () =>
+            Effect.fail(
+              new Error("private", {
+                cause: Object.assign(new Error("private upstream"), detail),
+              }),
+            );
+          const failure = yield* remote.availability("+821012345678").pipe(Effect.flip);
+          expect(failure.message.includes("[stage=ids_lookup;code=6005]")).toBe(
+            "code" in detail && detail.code === "6005" && detail.stage === "ids_lookup",
+          );
+          expect(failure.message).not.toContain("private");
+        }
         expect(f.local.bubbles).toEqual([]);
         expect(yield* f.local.messages.after(0)).toEqual([]);
       }),

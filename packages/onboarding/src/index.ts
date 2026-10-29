@@ -39,6 +39,7 @@ export {
   ContactEntry,
   ContactSnapshot,
   ContactVisibility,
+  ContactRecheck,
   SelectContacts,
   StartContact,
   ContactSelection,

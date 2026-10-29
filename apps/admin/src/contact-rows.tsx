@@ -188,9 +188,27 @@ export function ContactRows({ entries, view }: { entries: readonly Entry[]; view
                   <>
                     {imessage[entry.imessage.status]}
                     <small>{time(entry.imessage.checkedAt)}</small>
+                    {entry.imessage.reason && <small>{entry.imessage.reason}</small>}
+                    {entry.imessage.status === "unavailable" && (
+                      <small>조회에서 수신 기기를 찾지 못했습니다.</small>
+                    )}
                   </>
                 ) : (
                   "미확인"
+                )}
+                {view && (
+                  <form action={view.action} method="post">
+                    <input type="hidden" name="registrationID" value={entry.id} />
+                    <button
+                      type="submit"
+                      name="action"
+                      value="imessage-recheck"
+                      className="secondary"
+                      aria-label={`${entry.handle} iMessage 재확인`}
+                    >
+                      재확인
+                    </button>
+                  </form>
                 )}
               </td>
               <td>{entry.likedPersonas.map((p) => p.name).join(", ") || "없음"}</td>

@@ -30,6 +30,7 @@ import { runWorkLanes, maintenanceWork, withWorkBudget, workBatchSize } from "./
 import { reloadPublicCatalog } from "./personas/public-catalog.ts";
 import { conversationPhotos } from "./photos/photos.ts";
 import { conversations } from "./conversations/conversations.ts";
+import { recheckRequest } from "./discovery/recheck.ts";
 
 type RuntimeServices = SqlClient.SqlClient | HttpClient.HttpClient | Scope.Scope;
 const digest = (value: string) => createHash("sha256").update(value).digest();
@@ -322,6 +323,8 @@ export async function createExecutionRuntime(
       )
         return new Response("Unauthorized", { status: 401 });
       if (url.pathname === "/operator/conversations") return (await inspect())(request);
+      if (url.pathname === "/operator/imessage-recheck")
+        return recheckRequest(request, messages, run);
       if (url.pathname === "/operator/messages")
         return conversationMessagesRequest(request, messages, run);
       if (url.pathname === "/operator/message-image")

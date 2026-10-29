@@ -57,6 +57,18 @@ test("the execution tick sends through the dedicated Mac RPC even when Persona s
           yield* (yield* SqlClient.SqlClient)`UPDATE application_work SET due = 0 WHERE name = 'lane:alarm.cursor:execution'`;
           const runtime = yield* Effect.promise(open);
           try {
+            const registrationID = (yield* f.store.list).entries[0]!.id;
+            const response = yield* Effect.promise(() =>
+              runtime.fetch(
+                new Request("https://app/operator/imessage-recheck", {
+                  method: "POST",
+                  headers: { authorization: "Bearer management-secret" },
+                  body: JSON.stringify({ registrationID }),
+                }),
+              ),
+            );
+            expect(response.status).toBe(200);
+            expect(runtime.initialized).toBe(false);
             yield* Effect.promise(() =>
               expect(runtime.tick()).rejects.toHaveProperty(
                 "cause.cause.message",

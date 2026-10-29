@@ -58,6 +58,7 @@ export const contacts = Effect.fnUntraced(function* (
         notification: typeof ContactEntry.Type.notification | null;
         imessageStatus: NonNullable<typeof ContactEntry.Type.imessage>["status"] | null;
         imessageCheckedAt: number | null;
+        imessageReason: string | null;
       }>`SELECT r.id, r.handle, r.created_at AS createdAt, c.state, c.persona_id AS personaID,
       c.scheduled_at AS scheduledAt, c.request_id AS requestId, v.ended_at AS endedAt,
        EXISTS(SELECT 1 FROM ending_notification n WHERE n.conversation_id = v.id AND n.call_id = e.call_id || ':notice:' || e.notice_attempt AND n.state IN ('sent','delivered')) AS endingComplete,
@@ -72,7 +73,7 @@ export const contacts = Effect.fnUntraced(function* (
       EXISTS(SELECT 1 FROM test_handle WHERE handle = r.handle) AS testHandle,
        (SELECT state FROM discovery_notification WHERE registration_id = r.id ORDER BY id DESC LIMIT 1) AS notification,
        r.imessage_status AS imessageStatus,
-        r.imessage_checked_at AS imessageCheckedAt, r.hidden
+         r.imessage_checked_at AS imessageCheckedAt, r.imessage_reason AS imessageReason, r.hidden
       FROM discovery_registration r LEFT JOIN discovery_contact c ON c.registration_id = r.id
       LEFT JOIN conversation v ON v.session_id = c.session_id LEFT JOIN conversation_end e ON e.conversation_id = v.id
        WHERE r.archived_at IS NULL ${registrationIDs ? sql`AND ${sql.in("r.id", registrationIDs)}` : sql``} ORDER BY r.created_at, r.id`;
@@ -130,7 +131,11 @@ export const contacts = Effect.fnUntraced(function* (
           hidden: row.hidden === 1,
           ...(row.notification && { notification: row.notification }),
           ...(row.imessageStatus && {
-            imessage: { status: row.imessageStatus, checkedAt: row.imessageCheckedAt! },
+            imessage: {
+              status: row.imessageStatus,
+              checkedAt: row.imessageCheckedAt!,
+              ...(row.imessageReason && { reason: row.imessageReason }),
+            },
           }),
           ...(row.endedAt !== null && {
             relationshipEnd: { at: row.endedAt, noticeDelivered: row.endingComplete === 1 },

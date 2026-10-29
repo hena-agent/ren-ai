@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { Schema } from "effect";
-import { ContactVisibility, SelectContacts, StartContact } from "@ren-ai/onboarding";
+import {
+  ContactRecheck,
+  ContactVisibility,
+  SelectContacts,
+  StartContact,
+} from "@ren-ai/onboarding";
 import { PersonaError } from "@ren-ai/personas";
 import type { ManagementClient } from "./contact-client.ts";
 import type { ContactView } from "./contact-page.tsx";
@@ -62,8 +67,23 @@ const start = (form: FormData, client: ManagementClient) => {
   return operation("management.start", {}, () => client.start(input));
 };
 
+async function recheck(form: FormData, view: ContactView, client: ManagementClient) {
+  let input: typeof ContactRecheck.Type;
+  try {
+    input = Schema.decodeUnknownSync(ContactRecheck)({
+      registrationID: form.get("registrationID"),
+    });
+  } catch {
+    throw new PersonaError("invalid", "재확인할 연락처를 다시 선택해 주세요.");
+  }
+  await operation("management.imessage-recheck", {}, () => client.recheck(input));
+  view.notice =
+    "iMessage 지원 여부를 다시 확인했습니다. 해당 행의 결과를 확인해 주세요. 메시지는 발송하지 않았습니다.";
+}
+
 async function submit(form: FormData, view: ContactView, client: ManagementClient) {
   const action = form.get("action");
+  if (action === "imessage-recheck") return recheck(form, view, client);
   if (action === "hide" || action === "restore") {
     if (view.tab === "invitations")
       throw new PersonaError("invalid", "대기자 화면에서 제출해 주세요.");
