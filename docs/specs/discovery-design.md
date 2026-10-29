@@ -122,6 +122,20 @@ naturally when scrolling back; there is no autoplay or simulated live typing.
 Reduced motion shows immediate control states.
 Use native CSS before introducing animation dependencies.
 
+Cards browse by touch, as in Tinder. Tapping the left or right third of a card's
+photo shows the previous or next photo; tapping the middle third, or anywhere from
+the name down, opens the inline reading view. In the reading view the left and
+right halves of the photo change it. A press that moves more than 6px is a swipe,
+never a tap, and a tap acts on its click so the view it opens cannot receive the
+same tap. Tapping past the first or last photo nudges the photo for 220ms; reduced
+motion skips the nudge. There are no photo arrows, details button or visible photo
+counter; the progress bars stay and jump to a photo. Transparent Previous, Next
+and View full profile buttons cover the same areas for keyboard and assistive
+technology, and the photo position is still announced. Their focus ring shows only
+while the keyboard is in use, from a key press until the next pointer press,
+because browsers treat the card's focus on load as keyboard focus and would
+otherwise draw it over the photo before any input.
+
 ## Public profiles and sharing
 
 English home, explorer and profile URLs use `/`, `/explore` and `/personas/{id}`;

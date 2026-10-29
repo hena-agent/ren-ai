@@ -21,6 +21,7 @@ const client = testClient({
   profiles: async () => people,
   join: async () => ({ status: "waiting" }),
 });
+const inputMode = () => document.documentElement.getAttribute("data-input");
 const currentTabs = () =>
   within(screen.getByRole("navigation", { name: "페르소나 탐색 메뉴" }))
     .getAllByRole("button")
@@ -122,4 +123,14 @@ test("pending registration disables navigation until a recoverable failure compl
   expect(screen.getByRole("textbox", { name: "휴대전화 번호" }).getAttribute("value")).toBe(
     "010-1234-5678",
   );
+});
+
+test("browsing records keyboard use on the page, for the focus rings of the invisible photo buttons", async () => {
+  render(<App client={client} />);
+  await screen.findByRole("heading", { name: "하린" });
+  expect(inputMode()).toBeNull();
+  fireEvent.keyDown(document.body, { key: "Tab" });
+  expect(inputMode()).toBe("keyboard");
+  cleanup();
+  expect(inputMode()).toBeNull();
 });

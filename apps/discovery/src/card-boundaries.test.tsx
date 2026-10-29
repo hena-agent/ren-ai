@@ -1,7 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { Card } from "./card.tsx";
-import { endAnimation, resetCardTest, preferReducedMotion, swipeSurface } from "../test/choose.ts";
+import {
+  endAnimation,
+  layOutCard,
+  resetCardTest,
+  preferReducedMotion,
+  swipeSurface,
+} from "../test/choose.ts";
 
 afterEach(resetCardTest);
 const persona = { id: "mira", name: "미라", bio: "소개", imageUrl: "https://example.net/mira.jpg" };
@@ -25,54 +31,49 @@ function fixture() {
   return { view, surface, article: surface.closest("article")! };
 }
 
-test("taps and small gestures never open a profile, including after returning to their origin", () => {
-  for (const [x, y] of [
-    [0, 0],
-    [6, 0],
-    [0, 6],
-    [7, 0],
-    [0, 7],
-  ] as const) {
-    const open = vi.fn<(profile: typeof persona) => void>();
-    const view = render(
-      <Card persona={persona} onChoose={vi.fn<(like: boolean) => void>()} onOpen={open} />,
-    );
-    const surface = swipeSurface();
-    fireEvent.pointerDown(surface, point(100, 100));
-    fireEvent.pointerMove(surface, point(100 + x, 100 + y));
-    fireEvent.pointerMove(surface, point(100, 100));
-    fireEvent.pointerUp(surface, point(100, 100));
-    fireEvent.click(surface, { detail: 1 });
-    expect(open).not.toHaveBeenCalled();
-    fireEvent.click(surface, { detail: 0 });
-    expect(open).not.toHaveBeenCalled();
-    view.unmount();
-  }
+function pressAt(x: number, y: number) {
+  layOutCard();
+  const open = vi.fn<(profile: typeof persona) => void>();
+  render(<Card persona={persona} onChoose={vi.fn<(like: boolean) => void>()} onOpen={open} />);
+  const surface = swipeSurface();
+  fireEvent.pointerDown(surface, point(x, y));
+  return { open, surface };
+}
+
+test.each([
+  [0, 0, true],
+  [6, 0, true],
+  [0, 6, true],
+  [7, 0, false],
+  [0, 7, false],
+])("a press that strays (%i, %i) and returns is a tap only within 6px: %s", (x, y, tapped) => {
+  const { open, surface } = pressAt(150, 100);
+  fireEvent.pointerMove(surface, point(150 + x, 100 + y));
+  fireEvent.pointerMove(surface, point(150, 100));
+  fireEvent.pointerUp(surface, point(150, 100));
+  fireEvent.click(surface, { detail: 1, clientX: 150, clientY: 100 });
+  expect(open).toHaveBeenCalledTimes(tapped ? 1 : 0);
 });
 
-test("release coordinates classify taps, diagonal drags and horizontal swipes independently of pointermove", () => {
-  for (const [x, y, result] of [
-    [0, 6, "tap"],
-    [0, 7, "drag"],
-    [90, 90, "drag"],
-    [-90, 90, "drag"],
-    [100, 0, "like"],
-    [-100, 0, "pass"],
-  ] as const) {
-    const select = vi.fn<(like: boolean) => void>();
-    const open = vi.fn<(profile: typeof persona) => void>();
-    const view = render(<Card persona={persona} onChoose={select} onOpen={open} />);
-    const surface = swipeSurface();
-    fireEvent.pointerDown(surface, point(150, 200));
+test.each([
+  [0, 6, "tap"],
+  [0, 7, "drag"],
+  [90, 90, "drag"],
+  [-90, 90, "drag"],
+  [100, 0, "like"],
+  [-100, 0, "pass"],
+] as const)(
+  "releasing %i, %i from the press is a %s, whatever pointermove reported",
+  (x, y, result) => {
+    const { open, surface } = pressAt(150, 200);
     fireEvent.pointerUp(surface, point(150 + x, 200 + y));
+    fireEvent.click(surface, { detail: 1, clientX: 150 + x, clientY: 200 + y });
     expect(surface.closest("article")?.getAttribute("data-exit")).toBe(
       result === "like" || result === "pass" ? result : null,
     );
-    fireEvent.click(surface, { detail: 1 });
-    expect(open).not.toHaveBeenCalled();
-    view.unmount();
-  }
-});
+    expect(open).toHaveBeenCalledTimes(result === "tap" ? 1 : 0);
+  },
+);
 
 test.each([
   { button: 2, isPrimary: true },

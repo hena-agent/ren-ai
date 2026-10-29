@@ -39,3 +39,17 @@ export async function selectImageStyle(label: string) {
 }
 
 export const swipeSurface = () => document.querySelector<HTMLElement>(".swipe-surface")!;
+
+// happy-dom has no layout: every element is a 300×400 photo, except the name line, which starts at y=280.
+export function layOutCard() {
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    return this.tagName === "H2" ? new DOMRect(24, 280, 252, 40) : new DOMRect(0, 0, 300, 400);
+  });
+}
+
+export function tap(target: Element, clientX: number, clientY = 100) {
+  const pointer = { clientX, clientY, pointerId: 1, isPrimary: true, button: 0 };
+  fireEvent.pointerDown(target, pointer);
+  fireEvent.pointerUp(target, pointer);
+  fireEvent.click(target, { clientX, clientY, detail: 1 });
+}

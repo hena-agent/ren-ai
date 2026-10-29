@@ -1,7 +1,14 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { Card } from "./card.tsx";
-import { endAnimation, resetCardTest, preferReducedMotion, swipeSurface } from "../test/choose.ts";
+import {
+  endAnimation,
+  layOutCard,
+  resetCardTest,
+  preferReducedMotion,
+  swipeSurface,
+  tap,
+} from "../test/choose.ts";
 
 afterEach(resetCardTest);
 const profile = {
@@ -63,11 +70,12 @@ test("the swipe caption uses only explicitly disclosed basic keys, never inferri
   expect(view.container.querySelector(".profile-meta")).toBeNull();
 });
 
-test("a swipe commits exactly one choice and only the up-arrow opens details", () => {
+test("a swipe commits exactly one choice, while a middle tap or the profile button opens details", () => {
   const select = vi.fn<(like: boolean) => void>();
   const open = vi.fn<(persona: typeof profile) => void>();
   const busy = vi.fn<(value: boolean) => void>();
   const focus = vi.spyOn(HTMLElement.prototype, "focus");
+  layOutCard();
   render(
     <Card
       persona={profile}
@@ -89,11 +97,11 @@ test("a swipe commits exactly one choice and only the up-arrow opens details", (
   expect(screen.getByRole("img").getAttribute("srcset")).toBeNull();
   expect(screen.getByRole("img").getAttribute("fetchpriority")).toBe("high");
   expect(screen.getByRole("img").getAttribute("draggable")).toBe("false");
-  fireEvent.click(surface, { detail: 1 });
-  expect(open).not.toHaveBeenCalled();
+  tap(surface, 150);
+  expect(open).toHaveBeenCalledExactlyOnceWith(profile);
   fireEvent.click(screen.getByRole("button", { name: "예린 소개 전체 보기" }));
-  expect(open).toHaveBeenCalledTimes(1);
-  expect(open).toHaveBeenCalledWith(profile);
+  expect(open).toHaveBeenCalledTimes(2);
+  expect(open).toHaveBeenLastCalledWith(profile);
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerMove(surface, point(160));
   expect(article.style.transform).toBe("translateX(60px) rotate(2.5deg)");
@@ -106,7 +114,7 @@ test("a swipe commits exactly one choice and only the up-arrow opens details", (
   expect(select).not.toHaveBeenCalled();
   fireEvent.click(surface);
   fireEvent.click(screen.getByRole("button", { name: "예린 소개 전체 보기" }));
-  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledTimes(2);
   fireEvent.keyDown(screen.getByRole("button", { name: "예린 소개 전체 보기" }), {
     key: "ArrowLeft",
   });
@@ -129,7 +137,7 @@ test("a swipe commits exactly one choice and only the up-arrow opens details", (
   expect(select).toHaveBeenLastCalledWith(false);
 });
 
-test("small, vertical or cancelled drags do not become a choice or an accidental profile tap", () => {
+test("short, vertical or cancelled drags become neither a choice nor a tap", () => {
   const select = vi.fn<(like: boolean) => void>();
   const open = vi.fn<(persona: typeof profile) => void>();
   render(<Card persona={profile} onChoose={select} onOpen={open} />);
@@ -162,10 +170,6 @@ test("small, vertical or cancelled drags do not become a choice or an accidental
   fireEvent.keyDown(screen.getByRole("button", { name: "예린 소개 전체 보기" }), { key: "Home" });
   expect(surface.closest("article")!.hasAttribute("data-exit")).toBe(false);
   expect(select).not.toHaveBeenCalled();
-  expect(open).not.toHaveBeenCalled();
-  fireEvent.pointerDown(surface, point(100));
-  fireEvent.pointerUp(surface, point(106));
-  fireEvent.click(surface, { detail: 1 });
   expect(open).not.toHaveBeenCalled();
   fireEvent.pointerDown(surface, point(100));
   fireEvent.pointerMove(surface, point(100, 1, 7));

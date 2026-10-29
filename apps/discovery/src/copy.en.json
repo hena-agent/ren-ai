@@ -184,7 +184,7 @@
   "photoStyle": "Photo",
   "styleStorageFailure": "Your photo style could not be saved. You can keep using your current choice.",
   "explore": "Who catches your eye?",
-  "instructions": "Left to Pass, right to Like. You can also use the arrow keys. Tapping a photo, name or introduction does not make a choice or expand the profile. Use the up arrow button to expand and the down arrow button to collapse.",
+  "instructions": "Left to Pass, right to Like. You can also use the arrow keys. Tap the left or right side of a photo for the previous or next photo, and tap the middle or the name and introduction to expand the profile. Use the down arrow button to collapse it.",
   "loading": "Loading people to meet.",
   "loadFailure": "Couldn't load profiles.",
   "retry": "Try again",
