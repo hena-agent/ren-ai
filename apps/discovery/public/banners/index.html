@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Ren AI — 배너 스튜디오</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 48px 32px;
+        background: #eceef1;
+        color: #20242b;
+        font-family: "Apple SD Gothic Neo", sans-serif;
+      }
+      main {
+        max-width: 1200px;
+        margin: auto;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      header img {
+        width: 34px;
+      }
+      header span {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      header small {
+        margin-left: auto;
+        color: #626975;
+        font-size: 12px;
+      }
+      h1 {
+        margin: 42px 0 10px;
+        font-size: 36px;
+        letter-spacing: -1.5px;
+      }
+      p {
+        color: #626975;
+        font-size: 14px;
+        line-height: 1.8;
+      }
+      section {
+        margin-top: 38px;
+      }
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      .canvas {
+        overflow: auto;
+        border-radius: 4px;
+        box-shadow: 0 8px 30px #20242b0c;
+        background: #fff;
+      }
+      iframe {
+        display: block;
+        border: 0;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin-top: 14px;
+      }
+      a {
+        color: #a82042;
+        font-size: 12px;
+        text-underline-offset: 4px;
+      }
+      footer {
+        margin-top: 42px;
+        border-top: 1px solid #20242b18;
+        padding-top: 15px;
+      }
+      code {
+        font-size: 12px;
+      }
+      @media (max-width: 600px) {
+        body {
+          padding: 24px 16px;
+        }
+        h1 {
+          font-size: 28px;
+        }
+        header small {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="../brand.svg" alt="" /><span>Ren AI</span><small>DISPLAY CAMPAIGN / 01</small>
+      </header>
+      <h1>네 생각나서, 문자했어.</h1>
+      <p>
+        익숙한 메시지로 시작되는 새로운 일상.<br />캐릭터와 iMessage를 담은 6초 루프 배너 · 원본
+        크기로 표시됩니다.
+      </p>
+      <section>
+        <h2>01 / WIDE — 1200 × 120</h2>
+        <div class="canvas">
+          <iframe
+            src="banner.html"
+            width="1200"
+            height="120"
+            title="Ren AI 1200 × 120 애니메이션 배너"
+          ></iframe>
+        </div>
+        <nav aria-label="1200 × 120 파일">
+          <a href="banner.html" target="_blank" rel="noopener">HTML 열기 ↗</a
+          ><a href="ren-ai-1200x120.webp" download>WebP 다운로드</a
+          ><a href="ren-ai-1200x120.gif" download>GIF 다운로드</a
+          ><a href="ren-ai-1200x120.png" download>정지 이미지</a>
+        </nav>
+      </section>
+      <section>
+        <h2>02 / COMPACT — 750 × 180</h2>
+        <div class="canvas" style="max-width: 750px">
+          <iframe
+            src="banner.html"
+            width="750"
+            height="180"
+            title="Ren AI 750 × 180 애니메이션 배너"
+          ></iframe>
+        </div>
+        <nav aria-label="750 × 180 파일">
+          <a href="banner.html" target="_blank" rel="noopener">HTML 열기 ↗</a
+          ><a href="ren-ai-750x180.webp" download>WebP 다운로드</a
+          ><a href="ren-ai-750x180.gif" download>GIF 다운로드</a
+          ><a href="ren-ai-750x180.png" download>정지 이미지</a>
+        </nav>
+      </section>
+      <footer>
+        <p>
+          HTML은 iframe의 너비에 따라 두 규격을 전환합니다. 움직임 줄이기 설정에서는 완성된 대화가
+          정지 상태로 표시됩니다.<br />이미지 배너는 이미지 전체에
+          <code>https://renai.im/</code> 링크를 연결하세요.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>
