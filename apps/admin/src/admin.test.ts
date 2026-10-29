@@ -34,9 +34,12 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(empty.headers.get("content-security-policy")).toContain("script-src 'self'");
     const emptyPage = await empty.text();
     expect(emptyPage).toContain(copy.empty);
-    expect(emptyPage).toContain('aria-current="page"');
+    expect(emptyPage).toContain('href="/" aria-current="page"');
+    expect(emptyPage).toContain('class="admin-sidebar"');
+    expect(emptyPage).toContain('href="/seeding">시딩</a>');
     const editorResponse = await admin(request("/new"));
     const page = await editorResponse.text();
+    expect(page).toContain('href="/new" aria-current="page"');
     expect(page).toMatch(/^<!doctype html>/);
     window.document.write(page);
     const nonce = window.document.querySelector<HTMLMetaElement>(
@@ -208,7 +211,7 @@ test("generation is a private preview until saving; publishing exposes only the 
     await editedWindow.happyDOM.close();
   }
   expect(editPage).toContain("checked");
-  expect(editPage).not.toContain('aria-current="page"');
+  expect(editPage).toContain('href="/" aria-current="page"');
   const withdraw = await admin(
     request(`/personas/${id}`, { ...character, draft: tokenOf(editPage) }),
   );

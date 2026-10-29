@@ -1,0 +1,133 @@
+.admin-layout {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.admin-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  display: block;
+  padding: 28px 16px;
+  border-bottom: 0;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+.admin-sidebar .brand {
+  display: block;
+  padding: 0 12px;
+  font-size: 18px;
+  white-space: nowrap;
+}
+.admin-menu {
+  margin-top: 32px;
+}
+.admin-menu > summary {
+  display: none;
+}
+.admin-menu::details-content {
+  content-visibility: visible;
+}
+.admin-menu nav,
+.admin-nav-group {
+  display: grid;
+  align-items: stretch;
+  gap: 4px;
+}
+.admin-menu nav {
+  gap: 28px;
+}
+.admin-nav-group p {
+  margin: 0 12px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.admin-menu a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 6px;
+}
+.admin-menu a:hover {
+  background: var(--field);
+}
+.admin-menu [aria-current="page"] {
+  background: var(--field);
+  box-shadow: inset 2px 0 var(--signal);
+  font-weight: 700;
+}
+.admin-menu .admin-recovery {
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  font-size: 12px;
+}
+.admin-layout > main {
+  width: 100%;
+  min-width: 0;
+}
+.seeding-workspace {
+  overflow-wrap: anywhere;
+}
+.seeding-workspace form {
+  margin-block: 24px;
+}
+.seeding-workspace input[type="number"] {
+  display: block;
+  max-width: 240px;
+  margin-top: 8px;
+}
+.seeding-workspace .contact-table table {
+  min-width: 560px;
+}
+.seeding-runs {
+  list-style: none;
+  padding: 0;
+}
+.seeding-runs li {
+  padding: 20px;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .admin-layout {
+    display: block;
+  }
+  .admin-sidebar {
+    position: static;
+    height: auto;
+    padding: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .admin-sidebar .brand {
+    padding: 0;
+  }
+  .admin-menu {
+    margin-top: 12px;
+  }
+  .admin-menu > summary {
+    display: list-item;
+    min-height: 44px;
+    padding-block: 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .admin-menu::details-content {
+    content-visibility: hidden;
+  }
+  .admin-menu[open]::details-content {
+    content-visibility: visible;
+  }
+  .admin-menu nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    padding-top: 12px;
+  }
+  .admin-nav-group {
+    align-content: start;
+  }
+}
