@@ -5,6 +5,7 @@ import {
   InvitationLookup,
   InvitationCreate,
   InvitationTicket,
+  ContactVisibility,
 } from "@ren-ai/onboarding";
 import {
   ContactSnapshot,
@@ -39,6 +40,7 @@ export interface ConversationClient {
 }
 
 export interface ManagementClient {
+  visibility: (input: typeof ContactVisibility.Type) => Promise<void>;
   metrics?: (query: MetricsQuery) => Promise<Metrics>;
   conversations?: ConversationClient;
   list: () => Promise<typeof ContactSnapshot.Type>;
@@ -107,7 +109,8 @@ export function managementClient(
       | typeof InvitationSettings.Type
       | typeof InvitationGrant.Type
       | typeof InvitationCreate.Type
-      | typeof InvitationLookup.Type,
+      | typeof InvitationLookup.Type
+      | typeof ContactVisibility.Type,
     method = input ? "POST" : "GET",
   ) => {
     const base = managementBase(url, token);
@@ -151,6 +154,9 @@ export function managementClient(
     return response;
   };
   return {
+    visibility: async (input) => {
+      await request("/management/discovery/visibility", input);
+    },
     metrics: async (query) =>
       conversationResponse(
         Metrics,

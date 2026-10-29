@@ -43,6 +43,7 @@ export const ContactEntry = Schema.Struct({
   scheduledAt: Schema.NullOr(Schema.Number),
   requestId: Schema.NullOr(Schema.String),
   testHandle: Schema.optionalKey(Schema.Boolean),
+  hidden: Schema.optionalKey(Schema.Boolean),
   invitations: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
@@ -96,6 +97,14 @@ export const StartContact = Schema.Struct({
   requestId: identifier,
   registrationID: identifier,
   personaID: Schema.String.check(Schema.isNonEmpty()),
+});
+export const ContactVisibility = Schema.Struct({
+  registrationIDs: Schema.Array(identifier).check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(100),
+    Schema.isUnique(),
+  ),
+  hidden: Schema.Boolean,
 });
 export const ContactSelection = Schema.Struct({
   requestId: identifier,

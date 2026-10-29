@@ -46,27 +46,35 @@ test("Admin displays and changes persisted invitation issuance with same-origin 
     management: managementClient("https://api.test", "private-secret", fetcher),
     log: (event) => logs.push(event),
   });
-  const get = await admin(request("/waitlist"));
+  const get = await admin(request("/invitations?section=settings"));
   const page = await get.text();
-  expect(page).toContain("초대장 지급 OFF");
-  expect(page).toContain(`https://renai.im/explore#invite=${"a".repeat(64)}`);
-  expect(page).toContain("초대장 2 · 사용 완료");
-  expect(page).toContain("https://renai.im/explore#invite=PARTIAL");
-  expect(page).toContain("1/20명 사용 · 선정자에게 2개 지급");
+  expect(page).toContain("초대장 자동 지급");
+  expect(page).toContain(">OFF</span>");
+  const waitlist = await (await admin(request("/waitlist"))).text();
+  expect(waitlist).toContain("/invitations?section=phone");
+  expect(waitlist).not.toContain(`https://renai.im/explore#invite=${"a".repeat(64)}`);
+  expect(waitlist).not.toContain("초대장 지급 설정");
   for (const next of [true, false]) {
     const response = await admin(
-      request("/waitlist", { action: "invitations", enabled: String(next) }),
+      request("/invitations?section=settings", { action: "invitations", enabled: String(next) }),
     );
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain(`초대장 지급 ${next ? "ON" : "OFF"}`);
+    expect(await response.text()).toContain(`>${next ? "ON" : "OFF"}</span>`);
     expect(enabled).toBe(next);
   }
-  const foreign = request("/waitlist", { action: "invitations", enabled: "true" });
+  const foreign = request("/invitations?section=settings", {
+    action: "invitations",
+    enabled: "true",
+  });
   foreign.headers.set("origin", "https://other.test");
   expect((await admin(foreign)).status).toBe(400);
   expect(enabled).toBe(false);
   expect(
-    (await admin(request("/waitlist", { action: "invitations", enabled: "invalid" }))).status,
+    (
+      await admin(
+        request("/invitations?section=settings", { action: "invitations", enabled: "invalid" }),
+      )
+    ).status,
   ).toBe(400);
   expect(enabled).toBe(false);
   expect(JSON.stringify(logs)).not.toContain("private-secret");

@@ -20,6 +20,7 @@ const entry = (state: typeof ContactState.Type = "waiting"): typeof ContactEntry
   requestId: null,
 });
 const idle = {
+  visibility: vi.fn<ManagementClient["visibility"]>(),
   createInvitation: vi.fn<ManagementClient["createInvitation"]>(),
   grantInvitations: vi.fn<ManagementClient["grantInvitations"]>(),
   invitationAccount: vi.fn<ManagementClient["invitationAccount"]>(),
@@ -117,7 +118,7 @@ test("Waitlist shows Notification outcomes without offering resend or changing s
   ])
     expect(page).toContain(label);
   expect(page).not.toContain("resend");
-  expect(page.match(/name="registrationIDs"/g)).toHaveLength(5);
+  expect(page.match(/data-contact-select="true"/g)).toHaveLength(5);
 });
 
 test("Waitlist holds unverified iMessage entries and enables only confirmed available entries", async () => {
@@ -183,7 +184,7 @@ test("a waiting test handle starts now with a chosen liked persona", async () =>
     languages: idle.languages,
   });
   const page = await (await admin(request("/waitlist"))).text();
-  expect(page).toContain("테스트 연락처 바로 시작");
+  expect(page).toContain("테스트 바로 시작");
   expect(page).toContain("테스트 연락처</small>");
   expect(page.match(/name="action" value="start"/g)).toHaveLength(1);
   expect(page).toContain('<option value="harin">하린</option>');
@@ -228,7 +229,7 @@ test("operators select checked waiters with the same scheduling API and keep exa
   expect(page).toContain("대기자 직접 선정");
   expect(page).toContain('form="contact-direct-selection"');
   expect(page).toContain(`name="registrationIDs" value="${chosen.id}"`);
-  expect(page).toContain(`disabled="" name="registrationIDs" value="${reserved.id}"`);
+  expect(page).toContain(`data-eligible="false" name="registrationIDs" value="${reserved.id}"`);
   const requestId = randomUUID();
   const fields = {
     action: "select-specific",

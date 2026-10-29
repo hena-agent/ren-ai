@@ -61,7 +61,7 @@ const id = (html: string) => /name="requestId" value="([^"]+)"/.exec(codeForm(ht
 
 test("Admin creates contact-free codes with two inherited settings, preserves uncertain requests, and exposes shareable history", async () => {
   const f = await setup();
-  const page = await (await f.admin(request("/waitlist"))).text();
+  const page = await (await f.admin(request("/invitations"))).text();
   expect(page).toContain("연락처 없이 초대 코드 만들기");
   expect(page).toContain("인원 한도는 코드마다 따로 적용");
   const fields = {
@@ -72,7 +72,7 @@ test("Admin creates contact-free codes with two inherited settings, preserves un
     grantCount: "2",
   };
   f.mode("disconnect");
-  const failed = await f.admin(request("/waitlist", fields));
+  const failed = await f.admin(request("/invitations", fields));
   expect(failed.status).toBe(503);
   const retry = await failed.text();
   expect(id(retry)).toBe(fields.requestId);
@@ -81,7 +81,7 @@ test("Admin creates contact-free codes with two inherited settings, preserves un
   expect(codeForm(retry)).toContain('readOnly=""');
   expect(codeForm(retry)).toContain('value="20"');
   f.mode("ok");
-  const completed = await f.admin(request("/waitlist", fields));
+  const completed = await f.admin(request("/invitations", fields));
   expect(completed.status).toBe(200);
   const history = await completed.text();
   expect(id(history)).not.toBe(fields.requestId);
@@ -90,7 +90,7 @@ test("Admin creates contact-free codes with two inherited settings, preserves un
   expect(f.inputs[0]).toEqual(f.inputs[1]);
   expect(f.inputs[0]).not.toHaveProperty("handle");
   await f.admin(
-    request("/waitlist", {
+    request("/invitations", {
       action: fields.action,
       requestId: id(history),
       maxUses: "1",
@@ -98,7 +98,7 @@ test("Admin creates contact-free codes with two inherited settings, preserves un
     }),
   );
   expect(f.inputs[2]).not.toHaveProperty("code");
-  const later = await (await f.admin(request("/waitlist"))).text();
+  const later = await (await f.admin(request("/invitations"))).text();
   expect(later).toContain("https://renai.im/explore#invite=" + "a".repeat(64));
   expect(JSON.stringify(f.logs)).not.toContain("THREAD20");
   expect(JSON.stringify(f.logs)).not.toContain("secret");
@@ -119,13 +119,13 @@ test("code creation validates inputs and same-origin posts and reports malformed
     { grantCount: "-1" },
     { requestId: "invalid" },
   ])
-    expect((await f.admin(request("/waitlist", { ...fields, ...bad }))).status).toBe(400);
-  const foreign = request("/waitlist", fields);
+    expect((await f.admin(request("/invitations", { ...fields, ...bad }))).status).toBe(400);
+  const foreign = request("/invitations", fields);
   foreign.headers.set("origin", "https://other.test");
   expect((await f.admin(foreign)).status).toBe(400);
   expect(f.fetcher).not.toHaveBeenCalled();
   f.mode("malformed");
-  const malformed = await f.admin(request("/waitlist", fields));
+  const malformed = await f.admin(request("/invitations", fields));
   expect(malformed.status).toBe(503);
   expect(await malformed.text()).toContain("초대 코드 응답 형식이 올바르지 않습니다.");
 });

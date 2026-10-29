@@ -22,4 +22,4 @@ pre-push:
       run: sh scripts/pinned-node.sh bun run typecheck
     - name: test
       glob: *check-inputs
-      run: sh scripts/pinned-node.sh bun run test:changed
+      run: sh scripts/pinned-node.sh bun run test:changed -- --maxWorkers=2

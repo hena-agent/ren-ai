@@ -323,6 +323,7 @@ export const migrate = Effect.gen(function* () {
       "057_discord_cards": discordCardsSchema,
       // Reload once so the served snapshot's browse revision is pinned instead of timing out.
       "058_served_public_catalog": sql`UPDATE public_catalog SET payload = NULL WHERE id = 1`,
+      "059_contact_visibility": sql`ALTER TABLE discovery_registration ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0 CHECK(hidden IN (0, 1))`,
     }),
   );
 });
