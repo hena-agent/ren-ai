@@ -53,7 +53,7 @@ test("Conversation tools generate, reconsider a cancelled photo, send once, and 
       yield* app.tools.context(session, ["new-message"]);
       const send = yield* app.tools.sendPhoto(session, photo.photo, "send").pipe(Effect.forkScoped);
       yield* TestClock.adjust("4 seconds");
-      expect(yield* Fiber.join(send)).toBe("sent");
+      expect(yield* Fiber.join(send)).toBe("sent 09:00");
       expect(yield* app.tools.sendPhoto(session, photo.photo, "duplicate")).toContain("not sent");
       expect(yield* fake.messages.recent(f.conversation.handle, 0)).toHaveLength(1);
       expect(f.fetcher).toHaveBeenCalledTimes(1);

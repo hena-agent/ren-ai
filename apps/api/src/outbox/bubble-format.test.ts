@@ -32,7 +32,7 @@ test.each(["", " \t\r\n", "가".repeat(121), "😀".repeat(121), "one\n\ntwo", "
             text: "짧게 고친 말",
             callID: "rejected",
           }),
-        ).toBe("sent");
+        ).toMatch(/^sent \d{2}:\d{2}$/);
         expect(f.messages.bubbles.map((row) => row.text)).toEqual(["짧게 고친 말"]);
       }),
     ),
@@ -46,7 +46,7 @@ test.each(["가".repeat(120), "😀".repeat(120), "one\nline", "one\r\nline", " 
         const f = yield* applicationRpcFixture;
         expect(
           yield* f.client.send({ sessionID: f.conversation.sessionID, text, callID: "valid" }),
-        ).toBe("sent");
+        ).toMatch(/^sent \d{2}:\d{2}$/);
         expect(f.messages.bubbles).toEqual([{ handle: f.conversation.handle, text }]);
       }),
     ),

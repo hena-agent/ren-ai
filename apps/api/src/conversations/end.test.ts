@@ -18,7 +18,7 @@ test("historical replay neither waits for live input nor sends read receipts", a
       expect(yield* f.app.tools.wait(f.conversation.sessionID, 3600)).toContain("read-only");
       expect(f.ui.reads).toEqual([]);
       yield* f.sql`UPDATE conversation SET rebuilding = 0 WHERE id = ${f.conversation.id}`;
-      expect(yield* f.app.tools.read(f.conversation.sessionID)).toBe("read");
+      expect(yield* f.app.tools.read(f.conversation.sessionID)).toMatch(/^read \d{2}:\d{2}$/);
       expect(f.ui.reads).toEqual([f.conversation.handle]);
     }),
   );
@@ -179,7 +179,9 @@ test("service notices respect the User's locale and new relationship introductio
         yield* f.sql`INSERT INTO conversation (user_id, persona_id, session_id, started_at)
         SELECT id, 'harin', 'ses_new', 200 FROM user`;
         f.personas.set("harin", fromPartial<Persona>({ id: "harin", timeZone: "Asia/Seoul" }));
-        expect(yield* f.app.tools.send("ses_new", "hello", "hello-new")).toBe("sent");
+        expect(yield* f.app.tools.send("ses_new", "hello", "hello-new")).toMatch(
+          /^sent \d{2}:\d{2}$/,
+        );
         expect(f.fake.bubbles.at(-2)?.text).toContain(
           locale === "ko"
             ? "지금부터 다른 페르소나"
@@ -195,7 +197,9 @@ test("service notices respect the User's locale and new relationship introductio
         expect(yield* restarted.tools.send("ses_new", "hello", "hello-new")).toContain(
           "already recorded",
         );
-        expect(yield* restarted.tools.send("ses_new", "next", "next-new")).toBe("sent");
+        expect(yield* restarted.tools.send("ses_new", "next", "next-new")).toMatch(
+          /^sent \d{2}:\d{2}$/,
+        );
         expect(f.fake.bubbles).toHaveLength(5);
         expect(f.fake.bubbles.at(-1)?.text).toBe("next");
       }),

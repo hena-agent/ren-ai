@@ -2,6 +2,10 @@ import { timestamp } from "@ren-ai/plugin-application/phone";
 import type { StartingRelationship } from "@ren-ai/onboarding";
 export { timestamp } from "@ren-ai/plugin-application/phone";
 export const sent = () => "sent";
+export const sentAt = (date: number, timeZone: string) =>
+  `sent ${timestamp(date, timeZone).slice(-5)}`;
+export const readAt = (date: number, timeZone: string) =>
+  `read ${timestamp(date, timeZone).slice(-5)}`;
 export const notSent = (reason: string) => `not sent: ${reason}`;
 export const notReacted = (reason: string) => `not reacted: ${reason}`;
 

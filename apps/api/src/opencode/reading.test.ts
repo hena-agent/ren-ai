@@ -129,9 +129,9 @@ You are Persona1.
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).toContain("reacted love");
-          expect(
-            JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
-          ).toContain('"text":"read"');
+          expect(JSON.stringify(yield* host.sessions.messages({ sessionID: session.id }))).toMatch(
+            /"text":"read \d{2}:\d{2}"/,
+          );
           expect(
             JSON.stringify(yield* host.sessions.messages({ sessionID: session.id })),
           ).toContain("not read: UI unavailable");

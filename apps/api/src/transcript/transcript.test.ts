@@ -5,10 +5,18 @@ import {
   message,
   notSent,
   photoByYou,
+  readAt,
   sent,
+  sentAt,
   sentByYou,
   unsent,
 } from "./transcript.ts";
+
+test("successful tool results tell her when she sent or read in her own time zone", () => {
+  const at = Date.parse("2026-09-25T15:04:59Z");
+  expect(sentAt(at, "Asia/Seoul")).toBe("sent 00:04");
+  expect(readAt(at, "America/New_York")).toBe("read 11:04");
+});
 
 test("the transcript uses her local date, marks silence, and leaves his words intact", () => {
   const zone = "Asia/Seoul";

@@ -104,7 +104,7 @@ test.each([false, true])(
               state: {
                 status: "completed",
                 input: { text: "one-time bubble" },
-                content: [{ type: "text", text: "sent" }],
+                content: [{ type: "text", text: expect.stringMatching(/^sent \d{2}:\d{2}$/) }],
               },
             },
             {
