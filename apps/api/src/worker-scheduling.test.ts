@@ -91,6 +91,7 @@ test("idle actors keep no wake, store work never starts execution, and execution
       super(storage, {
         ...executionBindings,
         APPLICATION: fromPartial({}),
+        SOCIAL: fromPartial({}),
         ACTIVITY: {
           idFromName: () => fromPartial({}),
           get: () => ({ fetch: async () => Response.json([]) }),
@@ -245,6 +246,7 @@ test("a failing health monitor never fails the application's own request", async
           super(storage, {
             ...executionBindings,
             APPLICATION: fromPartial({}),
+            SOCIAL: fromPartial({}),
             ACTIVITY: fromPartial({}),
             MONITOR: fromPartial(monitor),
           });

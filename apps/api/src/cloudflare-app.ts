@@ -15,6 +15,7 @@ import { intakeRequests } from "./intake/http.ts";
 import { alertRequests } from "./alerts.ts";
 import { probeMessaging } from "./messaging-health.ts";
 import { discordState, type Webhooks } from "./metrics/discord.ts";
+import { invitationAvailability } from "./social/invitation.ts";
 
 export interface CloudflareApplication {
   readonly store: ApplicationStore;
@@ -188,6 +189,8 @@ export const createCloudflareApplication = async (
       const path = new URL(request.url).pathname;
       if (path === "/health" && request.method === "GET")
         return health(request, store, configuration, fetcher, webhooks);
+      if (path === "/management/invitation-availability")
+        return invitationAvailability(request, store, configuration.execution.managementToken);
       if (path.startsWith("/management/state/"))
         return stateTransfer(
           request,
