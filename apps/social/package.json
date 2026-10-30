@@ -1,0 +1,25 @@
+{
+  "name": "@ren-ai/social",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun ops/build.mjs",
+    "dev": "bun --watch ops/entry.mjs",
+    "start": "bun ops/entry.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@opencode/client": "2.2.0",
+    "@opencode/schema": "2.2.0",
+    "@ren-ai/onboarding": "workspace:*",
+    "@ren-ai/plugin-session-folder": "workspace:*",
+    "@ren-ai/transport": "workspace:*",
+    "effect": "4.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

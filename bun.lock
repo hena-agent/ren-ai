@@ -188,6 +188,23 @@
         "vitest": "5.0.5",
       },
     },
+    "apps/social": {
+      "name": "@ren-ai/social",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/client": "2.2.0",
+        "@opencode/schema": "2.2.0",
+        "@ren-ai/onboarding": "workspace:*",
+        "@ren-ai/plugin-session-folder": "workspace:*",
+        "@ren-ai/transport": "workspace:*",
+        "effect": "4.0.7",
+      },
+      "devDependencies": {
+        "@types/node": "26.6.5",
+        "typescript": "7.0.2",
+        "vitest": "5.0.5",
+      },
+    },
     "packages/image-generation": {
       "name": "@ren-ai/image-generation",
       "version": "0.0.0",
@@ -1133,6 +1150,8 @@
     "@ren-ai/plugin-title": ["@ren-ai/plugin-title@workspace:packages/plugins/title"],
 
     "@ren-ai/plugin-tools": ["@ren-ai/plugin-tools@workspace:packages/plugins/tools"],
+
+    "@ren-ai/social": ["@ren-ai/social@workspace:apps/social"],
 
     "@ren-ai/transport": ["@ren-ai/transport@workspace:packages/transport"],
 
