@@ -9,7 +9,7 @@ Persona는 OpenCode에서 실행한다. [ADR-0023](../adr/0023-personas-share-on
 정체성·기본 성향·말투는 Persona agent에, 공통 행동 규칙은 인물 루트의 `AGENTS.md`에 둔다.
 
 Admin의 Persona·초기 State·초기 Memory는 D1 Catalog에 보관한다.
-[작성 계약](persona-authoring-profiles.md)에 따라 첫 Conversation에서 공유 범위를 한 번 초기화한다.
+[작성 계약](persona-authoring-profiles.md)에 따라 첫 managed 활동(Conversation 또는 Social activity)에서 공유 범위를 한 번 초기화한다.
 이후 새 Conversation은 현재 공유 범위를 사용하고 자체 Relationship 범위를 만든다.
 Catalog 초기값 수정은 이후 Conversation의 출발 호감도와 Discovery의 공개 초기 언어 실력에만 반영한다.
 기존 공유·관계 문서는 Catalog 수정·서버 재시작으로 다시 초기화하지 않는다.
