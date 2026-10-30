@@ -7,15 +7,15 @@ import { previewFixture } from "./preview.ts";
 import { staticPages } from "../src/prerender.ts";
 
 export const animePreview =
-  "https://renai.im/personas/jia/og/anime/00000000-0000-0000-0000-000000000001.v2.jpg";
+  "https://renai.im/personas/jia/og/anime/00000000-0000-0000-0000-000000000001.v3.jpg";
 export const photoPreview =
-  "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v2.jpg";
+  "https://renai.im/personas/jia/og/photo/00000000-0000-0000-0000-000000000002.v3.jpg";
 
 export async function fixture() {
   const template = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const { "index.html": home } = await staticPages(template);
   const photo = await readFile(new URL("../public/landing/dohee-anime.webp", import.meta.url));
-  const mark = await readFile(new URL("../public/og-watermark-v2.png", import.meta.url));
+  const mark = await readFile(new URL("../public/og-watermark-v3.png", import.meta.url));
   const preview = previewFixture(photo);
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
     const path = new URL(input instanceof Request ? input.url : input).pathname;
@@ -35,7 +35,7 @@ export async function fixture() {
     .mockImplementation(async (request) => {
       const path = new URL(request.url).pathname;
       // Real fetch responses enforce the immutable headers returned by Cloudflare ASSETS.
-      return path === "/og-watermark-v2.png"
+      return path === "/og-watermark-v3.png"
         ? new Response(mark)
         : fetch(
             `data:text/html;charset=utf-8;base64,${Buffer.from(path === "/" ? home : template).toString("base64")}`,

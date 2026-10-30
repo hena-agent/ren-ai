@@ -75,13 +75,13 @@ and profile links have their full public profile. Each profile has a distinct ti
 description and canonical URL,
 Open Graph and Twitter metadata, and WebPage/CreativeWork JSON-LD that explicitly
 identifies a fictional AI persona. Sharing carries the selected `style` and a
-`preview=v2` rendition version, so new shares have a fresh identity after the OG
+`preview=v3` rendition version, so new shares have a fresh identity after the OG
 format changes. Open Graph and Twitter advertise a same-origin 1200×630 JPEG at
-`/personas/{id}/og/{style}/{photo-id}.v2.jpg`. Its source is the first published
+`/personas/{id}/og/{style}/{photo-id}.v3.jpg`. Its source is the first published
 same-style gallery photo: the Worker reads its owned object key directly from
 R2, then uses the Images binding to draw a blurred/dimmed backdrop, the uncropped
-portrait and a small Ren AI watermark in the lower-right corner. Watermark source
-is `design/og-watermark.html`; the transparent PNG is `public/og-watermark-v2.png`.
+portrait and a small RenAI watermark in the lower-right corner. Watermark source
+is `design/og-watermark.html`; the transparent PNG is `public/og-watermark-v3.png`.
 The cherry-rose brand symbol and white wordmark have no surrounding background box.
 Bump the rendition version when changing its composition or watermark.
 
@@ -89,9 +89,9 @@ HTML metadata generation does not fetch image bytes. This removes the original
 Workers-only failure: `redirect: "error"` was accepted in Node tests but throws
 before an outbound Workers request. A renderer failure returns a correlated,
 retryable 503; it never silently replaces a published persona preview with brand
-artwork. Home/explorer and genuinely absent same-style photos use `social-{locale}-v2.png`.
+artwork. Home/explorer and genuinely absent same-style photos use `social-{locale}-v3.png`.
 These 1200×630 previews pair Jia's existing anime/photo editorial portraits with
-localized headlines, the Ren AI logo and an illustrative-image label.
+localized headlines, the RenAI logo and an illustrative-image label.
 Open Graph includes image MIME type, width, height, secure URL and alt text;
 Twitter uses the large-image card and explicit image/title/description/alt fields.
 Style variants share one canonical

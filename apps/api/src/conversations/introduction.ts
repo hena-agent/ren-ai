@@ -14,8 +14,8 @@ export const introduceRelationship = (conversation: Conversation) =>
         OR tool_call_id = 'relationship-introduction'))`;
     if (!row) return undefined;
     return row.locale === "ko"
-      ? "[Ren AI] 지금부터 다른 페르소나와의 새로운 대화입니다. 이전 관계의 기억은 공유되지 않습니다."
+      ? "[RenAI] 지금부터 다른 페르소나와의 새로운 대화입니다. 이전 관계의 기억은 공유되지 않습니다."
       : row.locale === "ja"
-        ? "[Ren AI] 別のペルソナとの新しい会話です。以前の関係の記憶は共有されません。"
-        : "[Ren AI] This is a new conversation with a different persona. Memories from your previous relationship are not shared.";
+        ? "[RenAI] 別のペルソナとの新しい会話です。以前の関係の記憶は共有されません。"
+        : "[RenAI] This is a new conversation with a different persona. Memories from your previous relationship are not shared.";
   });

@@ -12,9 +12,9 @@ import { scheduleWork } from "../scheduling.ts";
 import { SelectionConflict } from "./selection.ts";
 
 const announcement = {
-  ko: "[Ren AI] 초대장이 도착했어요. 별도 선정 없이 연락 가능한 페르소나와 연결됩니다. 직접 사용하거나 친구에게 전달해 주세요. 이 주소는 안내 전용이라 답장을 확인하지 않습니다.",
-  en: "[Ren AI] Your invitations are here. Connect with an available persona without waiting for selection. Use them yourself or share them with friends. This address only sends notifications and doesn't read replies.",
-  ja: "[Ren AI] 招待状が届きました。選考を待たずに連絡可能なペルソナとつながれます。自分で使うことも友だちに共有することもできます。このアドレスは通知専用で返信は確認していません。",
+  ko: "[RenAI] 초대장이 도착했어요. 별도 선정 없이 연락 가능한 페르소나와 연결됩니다. 직접 사용하거나 친구에게 전달해 주세요. 이 주소는 안내 전용이라 답장을 확인하지 않습니다.",
+  en: "[RenAI] Your invitations are here. Connect with an available persona without waiting for selection. Use them yourself or share them with friends. This address only sends notifications and doesn't read replies.",
+  ja: "[RenAI] 招待状が届きました。選考を待たずに連絡可能なペルソナとつながれます。自分で使うことも友だちに共有することもできます。このアドレスは通知専用で返信は確認していません。",
 };
 
 export const attachInvitation = (registrationID: string, token: string, handle: string) =>

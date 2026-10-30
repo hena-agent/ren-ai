@@ -14,11 +14,11 @@ export interface SocialImage {
 }
 
 export const brandSocialImage: SocialImage = {
-  url: `${publicOrigin}/social-ko-v2.png`,
+  url: `${publicOrigin}/social-ko-v3.png`,
   type: "image/png",
   width: 1200,
   height: 630,
-  alt: "Ren AI — 일상에, 기다려지는 메시지 하나. iMessage에서 만나는 AI 페르소나.",
+  alt: "RenAI — 일상에, 기다려지는 메시지 하나. iMessage에서 만나는 AI 페르소나.",
 };
 export function personaPreview(persona: PublicPersona, style: ImageStyle) {
   const source = stylePhotos(persona, style).imageUrl;
@@ -41,11 +41,11 @@ export function socialImage(
   if (!preview)
     return {
       ...brandSocialImage,
-      url: `${publicOrigin}/social-${locale}-v2.png`,
+      url: `${publicOrigin}/social-${locale}-v3.png`,
       alt: {
-        ko: "Ren AI — 일상에, 기다려지는 메시지 하나. iMessage에서 만나는 AI 페르소나.",
-        en: "Ren AI — A message to look forward to. Meet AI personas on iMessage.",
-        ja: "Ren AI — 毎日に、待ち遠しいメッセージを。iMessageで出会うAIペルソナ。",
+        ko: "RenAI — 일상에, 기다려지는 메시지 하나. iMessage에서 만나는 AI 페르소나.",
+        en: "RenAI — A message to look forward to. Meet AI personas on iMessage.",
+        ja: "RenAI — 毎日に、待ち遠しいメッセージを。iMessageで出会うAIペルソナ。",
       }[locale],
     };
   return {
@@ -55,9 +55,9 @@ export function socialImage(
     height: 630,
     alt: `${persona.name} — ${
       {
-        ko: `${style === "photo" ? "실사" : "애니메"} 스타일의 AI 페르소나 프로필 사진과 Ren AI 로고`,
-        en: `AI persona in ${style} style with the Ren AI logo`,
-        ja: `${style === "photo" ? "フォト" : "アニメ"}スタイルのAIペルソナとRen AIのロゴ`,
+        ko: `${style === "photo" ? "실사" : "애니메"} 스타일의 AI 페르소나 프로필 사진과 RenAI 로고`,
+        en: `AI persona in ${style} style with the RenAI logo`,
+        ja: `${style === "photo" ? "フォト" : "アニメ"}スタイルのAIペルソナとRenAIのロゴ`,
       }[locale]
     }`,
   };

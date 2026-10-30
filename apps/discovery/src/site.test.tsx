@@ -37,7 +37,7 @@ test("the home explains the service without loading profiles and offers real nav
   expect(screen.getByText(/Android는 아직 지원하지 않아요/)).toBeTruthy();
   expect(document.querySelectorAll(".home-questions details")).toHaveLength(5);
   expect(screen.getByText(discoveryNotices.ko.title)).toBeTruthy();
-  expect(document.title).toBe("Ren AI — 일상에, 기다려지는 메시지 하나");
+  expect(document.title).toBe("RenAI — 일상에, 기다려지는 메시지 하나");
   expect(screen.getByRole("heading", { name: "페르소나가 연락할 거예요" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "새 앱 말고, 늘 쓰던 메시지에서." })).toBeTruthy();
   expect(screen.getByText("새 앱 설치 없이, 익숙한 iMessage에서.")).toBeTruthy();
@@ -69,7 +69,7 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(music.getAttribute("target")).toBe("_blank");
   expect(screen.getByText("Am I talking to a real person?")).toBeTruthy();
   expect(screen.getByText(discoveryNotices.en.title)).toBeTruthy();
-  expect(document.title).toBe("Ren AI — A little more to look forward to");
+  expect(document.title).toBe("RenAI — A little more to look forward to");
   expect(screen.getByRole("heading", { name: "A persona will reach out" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "A new person. Not another app." })).toBeTruthy();
   expect(screen.getByText("No new app. Just iMessage.", { selector: ".home-intro" })).toBeTruthy();
@@ -82,7 +82,7 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   for (const name of ["スビン", "ジア", "ハリン"]) {
     expect(screen.getByRole("button", { name: `${name} プロフィール写真` })).toBeTruthy();
   }
-  expect(document.title).toBe("Ren AI — 日常に、待ち遠しいメッセージを");
+  expect(document.title).toBe("RenAI — 日常に、待ち遠しいメッセージを");
   expect(screen.getByRole("heading", { name: "ペルソナから連絡します" })).toBeTruthy();
   expect(
     screen.getByRole("heading", { name: "新しいアプリより、 いつものメッセージで。" }),
@@ -176,7 +176,7 @@ test("the menu toggles, closes after following a section and restores keyboard f
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(toggle);
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
-  fireEvent.click(within(nav).getByRole("link", { name: "Ren AI 소개" }));
+  fireEvent.click(within(nav).getByRole("link", { name: "RenAI 소개" }));
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(toggle);
   fireEvent.keyDown(within(nav).getAllByRole("link")[0]!, { key: "Tab" });
@@ -201,8 +201,8 @@ test.each(["/ko/explore", "/ko#reselect=private-token"])(
     render(<Site client={client} />);
     await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
     expect(screen.getByRole("list", { name: "좋아한 사람" }).textContent).toBe("소연");
-    expect(screen.getByRole("link", { name: "Ren AI" }).getAttribute("href")).toBe("/ko");
-    expect(document.title).toBe("Ren AI — 누가 궁금한가요?");
+    expect(screen.getByRole("link", { name: "RenAI" }).getAttribute("href")).toBe("/ko");
+    expect(document.title).toBe("RenAI — 누가 궁금한가요?");
     expect(window.location.pathname + window.location.hash).toBe(url);
     cleanup();
     window.history.replaceState(null, "", "/ko");
@@ -259,7 +259,7 @@ test("explore displays its shell during a delayed API request and retries a fail
       { id: "jia", name: "백지아", bio: "반가워요.", imageUrl: "/photo.jpg" },
     ]);
   render(<Site client={testClient({ profiles, join: vi.fn<DiscoveryClient["join"]>() })} />);
-  expect(screen.getByRole("link", { name: "Ren AI" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "RenAI" })).toBeTruthy();
   expect(screen.getByRole("status").textContent).toBe("만날 사람들을 불러오고 있어요.");
   await act(async () => {});
   expect(profiles).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal), undefined, []);

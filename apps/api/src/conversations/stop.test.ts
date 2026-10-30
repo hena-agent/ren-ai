@@ -188,7 +188,7 @@ test("an unavailable farewell observation cannot block the service notice or mas
       );
       yield* faulted.tick;
       expect(f.fake.bubbles).toHaveLength(1);
-      expect(f.fake.bubbles[0]?.text).toContain("[Ren AI]");
+      expect(f.fake.bubbles[0]?.text).toContain("[RenAI]");
       yield* faulted.observe(f.conversation.id);
       expect(f.logs.at(-1)).toMatchObject({ stage: "ending.observe.farewell", outcome: "failed" });
       const host = fromPartial<PersonaRuntime>({

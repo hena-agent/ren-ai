@@ -38,7 +38,7 @@ test("explicit URL language overrides storage and device language; switching kee
   expect(document.documentElement.lang).toBe("en");
   expect(document.title).toBe(pageSeo(new URL("https://renai.im/en")).title);
   expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute("content")).toBe(
-    "https://renai.im/social-en-v2.png",
+    "https://renai.im/social-en-v3.png",
   );
   expect(document.head.querySelectorAll("link[hreflang]")).toHaveLength(4);
   selectDropdown("Display language", "日本語");
@@ -55,12 +55,12 @@ test("explicit URL language overrides storage and device language; switching kee
       <Preview profile photo />
     </LocaleProvider>,
   );
-  expect(document.title).toContain("Ren AIのAIペルソナ");
+  expect(document.title).toContain("RenAIのAIペルソナ");
   expect(
     document.head.querySelector('meta[property="og:image:alt"]')?.getAttribute("content"),
   ).toContain("フォト");
   expect(document.head.querySelector('meta[property="og:url"]')?.getAttribute("content")).toBe(
-    "https://renai.im/ja/personas/jia?style=photo&preview=v2",
+    "https://renai.im/ja/personas/jia?style=photo&preview=v3",
   );
   expect(document.head.querySelector('script[type="application/ld+json"]')?.textContent).toContain(
     "Fictional AI persona",
@@ -81,11 +81,11 @@ test("localized direct exploration and profile navigation preserve the current l
   const profiles = vi.fn<DiscoveryClient["profiles"]>(async () => publicPersonas);
   render(<Site client={testClient({ profiles, join: async () => ({ status: "waiting" }) })} />);
   await screen.findByRole("heading", { name: "백지아, 26" });
-  expect(screen.getByRole("link", { name: "Ren AI" }).getAttribute("href")).toBe("/");
+  expect(screen.getByRole("link", { name: "RenAI" }).getAttribute("href")).toBe("/");
   fireEvent.click(screen.getByRole("button", { name: "백지아 View full profile" }));
   expect(window.location.pathname).toBe("/personas/jia");
   expect(window.location.hash).toBe("#invite=PRIVATE");
-  expect(document.title).toContain("An AI persona on Ren AI");
+  expect(document.title).toContain("An AI persona on RenAI");
   expect(
     document.head.querySelector('meta[property="og:url"]')?.getAttribute("content"),
   ).not.toContain("PRIVATE");

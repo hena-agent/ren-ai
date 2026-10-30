@@ -88,7 +88,7 @@ test.each([
   ["image-size", ".jpg"],
 ])("%s cannot pass a preview deployment probe", async (failure, path) => {
   const f = await fixture();
-  const brand = await readFile(new URL("../public/social-ko-v2.png", import.meta.url));
+  const brand = await readFile(new URL("../public/social-ko-v3.png", import.meta.url));
   f.fetcher.mockImplementation(async (input) => {
     const url = new URL(input instanceof Request ? input.url : input);
     if (!url.pathname.endsWith(path)) return f.response(url);
@@ -97,7 +97,7 @@ test.each([
     if (failure === "catalog-json") return Response.json([{ private: "PRIVATE payload" }]);
     if (failure === "profile") return new Response(null, { status: 503 });
     if (failure === "brand")
-      return new Response('<meta property="og:image" content="https://renai.im/social-ko-v2.png">');
+      return new Response('<meta property="og:image" content="https://renai.im/social-ko-v3.png">');
     if (failure === "image-http") return new Response(null, { status: 503 });
     if (failure === "image-type") return new Response("HTML instead of image");
     if (failure === "image-dimensions")

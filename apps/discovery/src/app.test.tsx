@@ -162,7 +162,7 @@ test.each(
       screen.getByText(
         invitation
           ? /같은 초대 링크에서 다시 신청할 수 있어요/
-          : "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
+          : "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 RenAI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
       ),
     ).toBeTruthy();
   },
@@ -187,7 +187,7 @@ test("an existing user is directed to the assigned conversation instead of a new
   expect(screen.getByText("iMessage에서 기존 페르소나와 대화를 이어가 주세요.")).toBeTruthy();
   expect(
     screen.queryByText(
-      "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
+      "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 RenAI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
     ),
   ).toBeNull();
 });

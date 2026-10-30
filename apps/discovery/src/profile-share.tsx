@@ -22,7 +22,7 @@ export function ProfileShare({
     const url = shareUrl(persona.id, imageStyle ?? readImageStyle(), locale);
     try {
       if (navigator.share) {
-        await navigator.share({ title: `${persona.name} — Ren AI`, url });
+        await navigator.share({ title: `${persona.name} — RenAI`, url });
         setState("idle");
       } else {
         await navigator.clipboard.writeText(url);

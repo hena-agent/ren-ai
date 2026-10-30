@@ -39,7 +39,7 @@ test("an uncertain introduction fences the greeting across replacement without r
         guid: string;
         content: string;
       }>`SELECT guid, content FROM send`;
-      expect(attempt!.content).toContain("[Ren AI]");
+      expect(attempt!.content).toContain("[RenAI]");
       expect(attempt!.content).not.toContain("hello");
       yield* f.fake.settle(attempt!.guid, "delivered");
       expect(yield* restarted.send(conversation, "hello", "greeting")).toContain("did go out");
