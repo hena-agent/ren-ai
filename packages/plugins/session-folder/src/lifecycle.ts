@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { AbsolutePath, Agent, Model, Session } from "@opencode/schema";
 import { Cause, Effect, Schema, Semaphore } from "effect";
-import { folderFiles, personaPermissions } from "./files.ts";
+import { folderFiles, personaPermissions, socialPermissions } from "./files.ts";
 import { folderSnapshot } from "./protocol.ts";
 import { managedFolder } from "./paths.ts";
 import { readSessionBinding } from "./bindings.ts";
@@ -69,12 +69,10 @@ export const folderLifecycle = (ctx: Plugin.Context, root: string) => {
       const binding = yield* io(() => files.locate(id));
       if (!binding.sandbox || session.location.directory === binding.directory) {
         const target = yield* bound(session, id, session.agent ?? "");
+        const permissions = binding.social ? socialPermissions : personaPermissions;
         // Root reconciliation owns persisted policy; prompt admission preserves session overrides.
-        if (
-          ctx.location.directory === root &&
-          !isDeepStrictEqual(session.permissions, personaPermissions)
-        )
-          yield* ctx.session.update({ sessionID: session.id, permissions: personaPermissions });
+        if (ctx.location.directory === root && !isDeepStrictEqual(session.permissions, permissions))
+          yield* ctx.session.update({ sessionID: session.id, permissions });
         return target;
       }
       const sourceSnapshot = yield* io(() => files.readAt(session.location.directory));
@@ -139,6 +137,8 @@ export const folderLifecycle = (ctx: Plugin.Context, root: string) => {
         if (session) {
           const target = yield* bound(session, id, snapshot.persona.id);
           const binding = yield* io(() => files.locate(id));
+          if (snapshot.binding && !isDeepStrictEqual(snapshot.binding.social, binding.social))
+            return yield* Effect.fail(new Error("Session social scope does not match"));
           if (conversationKey !== undefined && binding.conversationKey !== conversationKey)
             return yield* Effect.fail(new Error("Session Conversation binding does not match"));
           return target;
@@ -156,7 +156,7 @@ export const folderLifecycle = (ctx: Plugin.Context, root: string) => {
             agent: Agent.ID.make(snapshot.persona.id),
             model: selected,
             location: { directory: AbsolutePath.make(directory) },
-            permissions: personaPermissions,
+            permissions: snapshot.binding?.social ? socialPermissions : personaPermissions,
           })
           .pipe(
             Effect.catchCause((cause) =>

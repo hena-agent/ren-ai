@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./authorization": "./src/authorization.ts",
     "./client": "./src/client.ts",
     "./server": "./src/server.ts",
     "./listener": "./src/listener.ts",

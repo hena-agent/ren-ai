@@ -10,6 +10,9 @@ export const sessionBinding = Schema.Struct({
   personaID,
   conversationKey,
   writable: Schema.Boolean,
+  social: Schema.optionalKey(
+    Schema.Struct({ accountID: personaID, contact: Schema.NullOr(Schema.String) }),
+  ),
 });
 export const folderSnapshot = Schema.Struct({
   persona: Schema.Struct({

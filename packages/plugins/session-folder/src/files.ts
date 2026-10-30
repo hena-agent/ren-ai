@@ -45,6 +45,15 @@ export const personaPermissions = [
   })),
 ];
 
+export const socialPermissions = [
+  { action: "*", resource: "*", effect: "deny" as const },
+  ...["dice", ...memoryToolNames].map((action) => ({
+    action,
+    resource: "*",
+    effect: "allow" as const,
+  })),
+];
+
 export const loadGroundRules = () =>
   readFile(new URL("../templates/ground-rules.md", import.meta.url), "utf8");
 
@@ -72,6 +81,19 @@ const directory = async (path: string) => {
 const absent = (error: Error & { code?: string }) => {
   if (error.code === "ENOENT") return undefined;
   throw error;
+};
+const socialBinding = (
+  snapshot: typeof folderSnapshot.Type,
+  prior: Awaited<ReturnType<typeof locateBinding>>,
+) => {
+  const social = snapshot.binding?.social ?? prior?.social;
+  if (
+    prior &&
+    snapshot.binding?.social &&
+    !isDeepStrictEqual(prior.social, snapshot.binding.social)
+  )
+    throw new Error("Session social binding cannot change");
+  return social ? { social } : {};
 };
 
 const entries = async (target: string) => {
@@ -254,6 +276,7 @@ export const folderFiles = (root: string) => {
       if (snapshot.binding && snapshot.binding.personaID !== snapshot.persona.id)
         throw new Error("Snapshot persona binding does not match");
       const prior = await locateBinding(root, id);
+      const scope = socialBinding(snapshot, prior);
       const key = Schema.decodeUnknownSync(conversationKey)(
         options?.conversationKey ??
           snapshot.binding?.conversationKey ??
@@ -275,6 +298,7 @@ export const folderFiles = (root: string) => {
           personaID: snapshot.persona.id,
           conversationKey: key,
           writable: options?.writable ?? snapshot.binding?.writable ?? prior?.writable ?? true,
+          ...scope,
         },
         options?.sandbox ?? false,
       );

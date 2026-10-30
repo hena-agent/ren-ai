@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./social": "./src/social.ts",
     "./turnstile": "./src/turnstile.tsx"
   },
   "scripts": {
