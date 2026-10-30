@@ -72,6 +72,11 @@ function Editor({
   );
   return (
     <div className="persona-authoring">
+      {editing && (
+        <a href={`/social?persona=${encodeURIComponent(persona.id)}`}>
+          이 페르소나에 소셜 계정 연결
+        </a>
+      )}
       {needsCreation(persona, editing, showIdea) && (
         <div className="persona-creation">
           {!editing && (

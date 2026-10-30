@@ -20,6 +20,7 @@ const groups = [
       ["first-contacts", "/first-contacts", "첫 연락"],
       ["conversations", "/conversations", "대화 상태"],
       ["invitations", "/invitations", "초대장"],
+      ["social", "/social", "소셜 활동"],
       ["metrics", "/metrics", "지표"],
     ],
   },

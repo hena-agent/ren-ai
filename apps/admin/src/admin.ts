@@ -61,6 +61,7 @@ import { seedingEngine } from "./seeding-engine.ts";
 import { imageJobPages } from "./image-job-page.ts";
 import { personaQuery } from "./persona-query.ts";
 import { readEditor, editorDraft, type EditorRecord } from "./editor-record.ts";
+import { socialRoutes } from "./social-routes.ts";
 const authorized = (request: Request, expected: Buffer) =>
   timingSafeEqual(
     createHash("sha256")
@@ -69,7 +70,13 @@ const authorized = (request: Request, expected: Buffer) =>
     expected,
   );
 
-const managementResponse = (request: Request, url: URL, management: AdminOptions["management"]) => {
+const managementResponse = (
+  request: Request,
+  url: URL,
+  management: AdminOptions["management"],
+  store: PersonaStore,
+) => {
+  if (url.pathname === "/social") return socialRoutes(request, store, management?.social);
   if (["/waitlist", "/first-contacts", "/invitations"].includes(url.pathname))
     return contactRoutes(request, management);
   if (url.pathname === "/metrics") return metricsRoutes(request, management);
@@ -398,7 +405,7 @@ export function createAdmin(
   const privateRoute = async (request: Request, url: URL): Promise<Response> => {
     const seeded = await seedRoute(request);
     if (seeded) return seeded;
-    const managed = managementResponse(request, url, management);
+    const managed = await managementResponse(request, url, management, store);
     if (managed) return managed;
     if (url.pathname === "/upload-image")
       return await uploadRoute(request, url, store, tokens, subDrafts, busy, queue.pending);
