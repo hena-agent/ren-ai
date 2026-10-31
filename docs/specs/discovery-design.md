@@ -2,6 +2,43 @@
 
 ## Direction
 
+The default entry is Explore: `/`, `/en`, `/ko` and `/ja` temporarily redirect
+directly to the corresponding `/explore` URL, negotiating language on the
+unprefixed root and preserving queries and private fragments. The editorial
+landing lives at `/about` (with `/ko` and `/ja` variants), independent of the
+Catalog. The logo opens Explore. Unknown pages return 404/noindex with a link
+to Explore instead of rendering the landing.
+
+### First-visit guide
+
+Shorten the path to browsing with one friendly, dismissible native dialog over
+the loaded deck, rather than requiring a landing-page visit. Use “마음에 드는
+페르소나와 대화해 보세요!” and matching friendly English/Japanese writing.
+Explain Like/Pass, leaving an iPhone number and later first contact if selected;
+mention iMessage, no extra app, no Android support and no fixed contact time.
+Keep one primary action, links to About and its privacy notice, and an in-dialog
+language picker. Language changes preserve the open guide and browsing state.
+The guide and cards have no additional AI notice; the existing contact-form
+notice remains before consent, as chosen for this entry experience.
+
+Show once per browser after the deck is ready, including shared profiles and
+invitation links. Skip automatic opening for Reselection and saved Likes/Passes.
+Every dismissal (primary button, close, Escape, backdrop or a guide link) records
+the browser-only seen preference, never sent to Metrics. With blocked storage,
+dismissal lasts for the current mounted page. Do not open over loading, errors,
+missing profiles or an empty Catalog. An info button reopens it without changing
+the deck, selections, photo or private fragment. Restore focus on dismissal;
+keep keyboard focus inside the native dialog and its language popover. Fit a
+360px phone without scrolling at normal text size, allow scrolling on shorter
+screens or enlarged text, and use 220ms entry motion (none with reduced motion).
+
+Metrics records new About entries as `about`, while `home` retains its historical
+meaning. Root entries count as Explore. Compare join rate and Explore → first
+Like around rollout; Visit → Explore is no longer evidence of landing conversion.
+No new guide activity steps or cross-Visit identity are introduced.
+
+### About page
+
 Ren AI is refined, photo-led and personal. Preserve the existing white, cool gray
 (`#f4f5f7`), ink (`#20242b`) and cherry rose (`#c72c52`, hover `#a82042`) palette. Improve proportions,
 spacing, typography and feedback within that palette. Use the official product
@@ -138,7 +175,7 @@ otherwise draw it over the photo before any input.
 
 ## Public profiles and sharing
 
-English home, explorer and profile URLs use `/`, `/explore` and `/personas/{id}`;
+English About, explorer and profile URLs use `/about`, `/explore` and `/personas/{id}`;
 Korean and Japanese add `/ko` and `/ja` prefixes. Explicit prefixes control initial
 server HTML and browser display. Unprefixed pages use the saved language cookie,
 then the highest-priority supported `Accept-Language` preference. Korean/Japanese
@@ -148,8 +185,8 @@ non-cacheable. `/en` page URLs permanently normalize to their unprefixed English
 counterpart, saving English to prevent a language-detection bounce. Language
 switching preserves mounted inputs, browsing state, queries and private fragments,
 replaces the language prefix and saves the choice in browser storage and a
-host-only cookie. Navigation and sharing retain the language. `/` is the stable
-`x-default` destination.
+host-only cookie. Navigation and sharing retain the language. The
+`x-default` destination for each page is its unprefixed English URL.
 Each variant has self-canonical metadata, localized SEO/OG/Twitter writing and
 image alt, reciprocal three-language plus `x-default` links, and matching HTML,
 OG and JSON-LD language declarations. Sitemap entries repeat these alternates.
@@ -229,7 +266,7 @@ private identity sheets or user-supplied source URLs. Check publication and
 current gallery selection before serving cached renditions too.
 
 Include JPEG MIME type, dimensions, secure URL and alt text in Open Graph and
-explicit large-image Twitter metadata. Home/explorer and genuinely absent
+explicit large-image Twitter metadata. About/explorer and genuinely absent
 same-style photos use the branded PNG from `design/social.html`; rendering or
 storage failures return retryable image errors rather than substituting it for
 a published persona. Keep HTML independent of image fetching. Bump the rendition
@@ -237,7 +274,7 @@ version when changing its layout/watermark. Deployment checks fetch the advertis
 images and validate real JPEG bytes, dimensions and the 5 MB output limit. Verify
 the photo and watermark pixels in a real Cloudflare preview. Keep search canonical
 URLs independent of style. Return profile content and unique metadata in the
-first HTML for all visitors, including non-JavaScript crawlers. Home renders its
+first HTML for all visitors, including non-JavaScript crawlers. About renders its
 editorial content independently of the live Catalog. `/explore` opens directly on
 its cards, with no loading screen: the Worker samples the first page in the
 language the browser will choose (`Accept-Language`, as `navigator.languages`),
@@ -247,7 +284,7 @@ in that language. The Worker waits at most three seconds; on failure it returns
 the loading shell without a snapshot, and the browser fetches the listing with
 inline retry. Public profile links keep their server-rendered content and public
 snapshot. Browsing shows each photo's stored 640px display rendition rather than
-its original; previews and sitemaps keep originals. On home, only the selected
+its original; previews and sitemaps keep originals. On About, only the selected
 hero portrait loads at high priority. Sitemap
 and image locations reflect publication changes without rebuilding. JSON-LD
 describes fictional creative works rather than claiming personas are real people.

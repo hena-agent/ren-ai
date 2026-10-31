@@ -17,6 +17,7 @@ export function LanguageSelect({
   className?: string;
   iconOnly?: boolean;
   disabled?: boolean;
+  portalContainer?: HTMLElement | null | undefined;
   onValueChange: (value: Locale) => void;
 }) {
   return (

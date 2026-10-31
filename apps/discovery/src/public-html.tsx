@@ -2,7 +2,7 @@ import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import type { PublicPersona, PersonaLink } from "@ren-ai/onboarding";
 import { LocaleProvider } from "./locale.tsx";
 import { App } from "./app.tsx";
-import { Home } from "./home.tsx";
+import { About } from "./about.tsx";
 import {
   publicOrigin,
   personaPath,
@@ -19,9 +19,9 @@ function applicationRoot(url: URL, people: readonly PublicPersona[], page?: Samp
   const locale = route.locale ?? page?.locale ?? "en";
   const rendered = Boolean(route.id || page);
   const markup = renderToString(
-    route.path === "/" ? (
+    route.path === "/about" ? (
       <LocaleProvider initialLocale={locale}>
-        <Home />
+        <About />
       </LocaleProvider>
     ) : (
       <App
@@ -86,7 +86,7 @@ export function publicResponse(
 
 export function sitemap(people: readonly (typeof PersonaLink.Type)[]) {
   const pages = [
-    { path: "/", image: undefined },
+    { path: "/about", image: undefined },
     { path: "/explore", image: undefined },
     ...people.map((persona) => ({ path: personaPath(persona.id), image: persona.imageUrl })),
   ];

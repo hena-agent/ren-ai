@@ -13,7 +13,7 @@ export function Header({ children }: { children?: ReactNode }) {
       <a className="skip-link" href="#discovery-content">
         {copy.skip}
       </a>
-      <a className="wordmark" href={localizedPath("/", locale)}>
+      <a className="wordmark" href={localizedPath("/explore", locale)}>
         <img src="/brand.svg" width="30" height="30" alt="" />
         {copy.brand}
       </a>

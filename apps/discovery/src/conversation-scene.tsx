@@ -26,7 +26,7 @@ export function ConversationScene({ style }: { style: ImageStyle }) {
   const copy = useCopy();
   const daily = landingImage("dohee-daily", style);
   return (
-    <figure className="conversation-demo" aria-label={copy.home.exampleLabel}>
+    <figure className="conversation-demo" aria-label={copy.about.exampleLabel}>
       <div className="conversation-story">
         <div className="conversation-viewport">
           <div className="conversation-photo" aria-hidden="true">
@@ -42,20 +42,20 @@ export function ConversationScene({ style }: { style: ImageStyle }) {
                 loading="lazy"
               />
               <div>
-                <strong>{copy.home.personaNames.dohee}</strong>
-                <span>{copy.home.personaLabel}</span>
+                <strong>{copy.about.personaNames.dohee}</strong>
+                <span>{copy.about.personaLabel}</span>
               </div>
               <span className="conversation-platform">iMessage</span>
             </div>
             <div className="conversation-window">
               <ol className="conversation-messages">
-                {copy.home.exchanges.map((scene, index) => (
+                {copy.about.exchanges.map((scene, index) => (
                   <Fragment key={scene.message}>
                     <Message media direction={index === 1 ? "outgoing" : "incoming"}>
                       {index === 2 ? (
                         <a
                           className="conversation-music"
-                          aria-label={`Best Part (feat. H.E.R.) — Daniel Caesar. ${copy.home.openMusic}`}
+                          aria-label={`Best Part (feat. H.E.R.) — Daniel Caesar. ${copy.about.openMusic}`}
                           href="https://open.spotify.com/track/1RMJOxR6GRPsBHL8qeC2ux"
                           target="_blank"
                           rel="noreferrer"
@@ -67,7 +67,7 @@ export function ConversationScene({ style }: { style: ImageStyle }) {
                             <strong>Best Part (feat. H.E.R.)</strong>
                             <span>Daniel Caesar</span>
                             <small>
-                              {copy.home.openMusic}
+                              {copy.about.openMusic}
                               <span className="icon icon-external" aria-hidden="true" />
                             </small>
                           </span>
@@ -78,13 +78,13 @@ export function ConversationScene({ style }: { style: ImageStyle }) {
                             src={index === 1 ? "/landing/cafe.webp" : daily}
                             width="400"
                             height={index === 1 ? "267" : "497"}
-                            alt={index === 1 ? copy.home.cafePhoto : copy.home.dailyPhoto}
+                            alt={index === 1 ? copy.about.cafePhoto : copy.about.dailyPhoto}
                             loading="lazy"
                           />
                           {index === 1 && (
                             <span className="conversation-reaction">
                               <span className="icon icon-heart" aria-hidden="true" />
-                              <span className="sr-only">{copy.home.heartReaction}</span>
+                              <span className="sr-only">{copy.about.heartReaction}</span>
                             </span>
                           )}
                         </>
@@ -103,7 +103,7 @@ export function ConversationScene({ style }: { style: ImageStyle }) {
           </div>
         </div>
       </div>
-      <figcaption className="conversation-note">{copy.home.exampleNote}</figcaption>
+      <figcaption className="conversation-note">{copy.about.exampleNote}</figcaption>
     </figure>
   );
 }

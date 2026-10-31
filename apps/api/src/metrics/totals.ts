@@ -45,6 +45,7 @@ const StoredSource = Schema.fromJsonString(
 );
 const entries = {
   home: "홈",
+  about: "소개",
   explore: "둘러보기",
   profile: "공유 프로필",
   reselection: "재선택 링크",

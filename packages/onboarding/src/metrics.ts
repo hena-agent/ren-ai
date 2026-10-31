@@ -2,7 +2,7 @@ import { Schema } from "effect";
 
 const tag = Schema.String.check(Schema.isMaxLength(80), Schema.isPattern(/^[\p{L}\p{N} ._-]*$/u));
 export const VisitSource = Schema.Struct({
-  entry: Schema.Literals(["home", "explore", "profile", "reselection"]),
+  entry: Schema.Literals(["home", "about", "explore", "profile", "reselection"]),
   referrer: Schema.String.check(Schema.isMaxLength(253), Schema.isPattern(/^[a-zA-Z0-9.-]*$/)),
   source: tag,
   medium: tag,

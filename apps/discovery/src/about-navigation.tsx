@@ -2,8 +2,8 @@ import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useCopy } from "./locale.tsx";
 
-export function HomeNavigation() {
-  const { home } = useCopy();
+export function AboutNavigation() {
+  const { about } = useCopy();
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
   function close() {
@@ -16,29 +16,29 @@ export function HomeNavigation() {
     }
   }
   return (
-    <div className="home-navigation" data-open={open}>
+    <div className="about-navigation" data-open={open}>
       <button
-        className="home-menu-toggle"
+        className="about-menu-toggle"
         type="button"
         ref={toggle}
-        aria-label={home.menu}
+        aria-label={about.menu}
         aria-expanded={open}
-        aria-controls="home-menu"
+        aria-controls="about-menu"
         onClick={() => setOpen(!open)}
         onKeyDown={handleKey}
       >
         <span />
         <span />
       </button>
-      <nav id="home-menu" className="home-nav" aria-label={home.navigation}>
+      <nav id="about-menu" className="about-nav" aria-label={about.navigation}>
         <a href="#about" onClick={close} onKeyDown={handleKey}>
-          {home.about}
+          {about.about}
         </a>
         <a href="#how-it-works" onClick={close} onKeyDown={handleKey}>
-          {home.how}
+          {about.how}
         </a>
         <a href="#faq" onClick={close} onKeyDown={handleKey}>
-          {home.faq}
+          {about.faq}
         </a>
       </nav>
     </div>

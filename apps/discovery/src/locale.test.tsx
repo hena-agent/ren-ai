@@ -138,7 +138,7 @@ test("display changes preserve original profiles, photos, Likes and the mounted 
   fireEvent.click(screen.getByRole("button", { name: "同意してウェイトリストに登録" }));
   await screen.findByRole("heading", { name: "ウェイトリストに登録しました。" });
   expect(join).toHaveBeenCalledWith({
-    source: { entry: "home", referrer: "", source: "", medium: "", campaign: "" },
+    source: { entry: "about", referrer: "", source: "", medium: "", campaign: "" },
     handle: "+821012345678",
     locale: "ja",
     conversationLanguage: "ja",

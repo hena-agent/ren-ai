@@ -239,6 +239,7 @@ test.each([
     "example.org · friends/social/launch · 홈",
   ],
   ['["explore","","summer_sale","",""]', "직접 방문 · summer\\_sale · 둘러보기"],
+  ['["about","","","",""]', "직접 방문 · 소개"],
   ['["profile","t.co","","",""]', "t.co · 공유 프로필"],
   ['["reselection","","","",""]', "직접 방문 · 재선택 링크"],
   [`["home","${"a".repeat(70)}.com","","",""]`, `${"a".repeat(59)}…`],

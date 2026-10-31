@@ -52,7 +52,7 @@ test("지표 is authenticated and renders a selected period, comparison, SVG cha
     "<svg",
     "등록 저장 실패",
     "거부됨",
-    "https://renai.im/?metrics=off",
+    "https://renai.im/explore?metrics=off",
   ])
     expect(page).toContain(text);
 });

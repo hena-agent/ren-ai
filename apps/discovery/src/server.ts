@@ -84,17 +84,16 @@ const failureCodes: Readonly<Record<string, string>> = {
 function routeResponse(request: Request, url: URL) {
   if (request.method !== "GET" && request.method !== "HEAD")
     return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
-  const route = publicRoute(url);
   const trimmed = new URL(url);
   trimmed.pathname = url.pathname.replace(/\/$/, "") || "/";
   const page = publicRoute(trimmed);
-  if (page.path === "/" || page.path === "/explore" || page.id) {
+  if (["/", "/about", "/explore"].includes(page.path) || page.id) {
     const locale = page.locale ?? requestLocale(request);
-    const target = localizedPath(page.path, locale);
+    const target = localizedPath(page.path === "/" ? "/explore" : page.path, locale);
     if (url.pathname !== target) {
       url.pathname = target;
       return new Response(null, {
-        status: page.locale ? 308 : 307,
+        status: page.path === "/" || !page.locale ? 307 : 308,
         headers: {
           Location: url.href,
           ...(!page.locale && { Vary: "Accept-Language, Cookie" }),
@@ -107,16 +106,23 @@ function routeResponse(request: Request, url: URL) {
     return new Response(`User-agent: *\nAllow: /\nSitemap: ${publicOrigin}/sitemap.xml\n`, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
-  if (
-    route.locale
-      ? route.path !== "/" && route.path !== "/explore" && !route.id
-      : url.pathname.startsWith("/personas") && !route.id && !previewRoute(url)
-  )
-    return new Response("Profile not found", {
-      status: 404,
-      headers: { "X-Robots-Tag": "noindex" },
-    });
   return undefined;
+}
+
+function notFound(url: URL) {
+  const { locale = "en" } = publicRoute(url);
+  const copy = messages[locale];
+  return new Response(
+    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>404 — Ren AI</title></head><body><h1>404 — Ren AI</h1><a href="${localizedPath("/explore", locale)}">${copy.back}</a></body></html>`,
+    {
+      status: 404,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Language": locale,
+        "X-Robots-Tag": "noindex",
+      },
+    },
+  );
 }
 
 function unavailableResponse(path: string, requestId: string, catalogReady: boolean) {
@@ -152,11 +158,6 @@ async function servePublic(
   const url = new URL(request.url);
   const imageRoute = previewRoute(url);
   const route = { ...publicRoute(url), ...imageRoute };
-  const dynamic =
-    Boolean(route.locale) ||
-    url.pathname.startsWith("/personas") ||
-    ["/", "/explore", "/explore/", "/sitemap.xml", "/robots.txt", "/health"].includes(url.pathname);
-  if (!dynamic) return env.ASSETS.fetch(request);
   const requestId = crypto.randomUUID();
   const start = performance.now();
   let stage = "route";
@@ -174,7 +175,7 @@ async function servePublic(
     if (
       !route.locale &&
       !imageRoute &&
-      (route.path === "/" || route.path === "/explore" || route.id)
+      (["/", "/about", "/explore"].includes(route.path) || route.id)
     )
       response.headers.set("Vary", "Accept-Language, Cookie");
     log({
@@ -201,17 +202,25 @@ async function servePublic(
   try {
     const routed = routeResponse(request, url);
     if (routed) return finish(routed);
-    // The prerendered English home remains static after the Worker negotiates its locale.
-    if (url.pathname === "/") {
+    if (
+      !["/about", "/explore"].includes(route.path) &&
+      !["/sitemap.xml", "/health"].includes(url.pathname) &&
+      !route.id
+    ) {
+      const asset = await env.ASSETS.fetch(request);
+      return asset.status === 404 ? finish(notFound(url)) : asset;
+    }
+    // The prerendered English About page remains independent of the Catalog.
+    if (url.pathname === "/about") {
       const asset = await env.ASSETS.fetch(request);
       // Binding responses have immutable headers; preserve the asset in a mutable response.
-      const home = new Response(asset.body, asset);
-      home.headers.set("Content-Language", "en");
-      return finish(home);
+      const about = new Response(asset.body, asset);
+      about.headers.set("Content-Language", "en");
+      return finish(about);
     }
     const sample = await explorerSample(fetcher, request, env.DISCOVERY_API_URL, requestId, failed);
     let people: readonly PublicPersona[] = sample?.people ?? [];
-    if (route.path !== "/" && route.path !== "/explore") {
+    if (route.path !== "/about" && route.path !== "/explore") {
       stage = "catalog.read";
       const upstream = await fetcher(
         ...catalogRequest(url.pathname, route.id, env.DISCOVERY_API_URL, requestId),

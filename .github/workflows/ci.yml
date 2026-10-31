@@ -267,16 +267,18 @@ jobs:
       - run: bun run --cwd apps/discovery deploy --message "ci.yml $GITHUB_SHA" --define "BUILD_REVISION:\"$GITHUB_SHA\""
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/
+      - run: curl --fail --location --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/
       - run: bun run --cwd apps/api check:health https://renai.im discovery "$GITHUB_SHA"
       - run: bun run --cwd apps/discovery check:preview https://renai.im "$GITHUB_SHA"
       - run: |
           for locale in ko en ja; do
             prefix="/$locale"
             if [ "$locale" = en ]; then prefix=""; fi
-            for path in "${prefix:-/}" "$prefix/explore" "/social-$locale-v2.png"; do
+            test "$(curl --silent --show-error -H "Accept-Language: en" -o /dev/null -w '%{http_code} %{redirect_url}' "https://renai.im${prefix:-/}?utm_source=deployment")" = "307 https://renai.im$prefix/explore?utm_source=deployment"
+            for path in "$prefix/about" "$prefix/explore" "/social-$locale-v2.png"; do
               curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null "https://renai.im$path"
             done
+            test "$(curl --silent --show-error -o /dev/null -w '%{http_code}' "https://renai.im$prefix/route-does-not-exist")" = 404
           done
       - run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null https://renai.im/sitemap.xml
 

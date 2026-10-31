@@ -29,9 +29,9 @@ try {
   });
   try {
     for (const [path, locale] of [
-      ["/", "en"],
-      ["/ko", "ko"],
-      ["/ja", "ja"],
+      ["/about", "en"],
+      ["/ko/about", "ko"],
+      ["/ja/about", "ja"],
       ["/explore", "en"],
     ]) {
       for (const method of ["GET", "HEAD"]) {
@@ -50,12 +50,34 @@ try {
         if (method === "HEAD") assert.equal(html, "");
         else {
           assert(html.includes(`<html lang="${locale}">`));
-          assert(html.includes(path === "/explore" ? 'id="public-personas"' : 'class="home"'));
+          assert(html.includes(path === "/explore" ? 'id="public-personas"' : 'class="about"'));
         }
         process.stdout.write(`${method} ${path}: verified\n`);
       }
     }
     assert.equal(catalogReads, 1, "only GET /explore reads the Catalog");
+    for (const [path, target] of [
+      ["/", "/explore"],
+      ["/ko", "/ko/explore"],
+      ["/ja/", "/ja/explore"],
+      ["/en", "/explore"],
+    ]) {
+      const response = await worker.fetch(`${path}?utm_source=check`, {
+        redirect: "manual",
+        headers: { "Accept-Language": "en" },
+      });
+      assert.equal(response.status, 307);
+      assert.equal(new URL(response.headers.get("location")!).pathname, target);
+      assert.equal(new URL(response.headers.get("location")!).search, "?utm_source=check");
+      process.stdout.write(`redirect ${path}: verified\n`);
+    }
+    for (const path of ["/missing", "/ko/missing", "/home", "/personas", "/ja/health"]) {
+      const response = await worker.fetch(path, { redirect: "manual" });
+      assert.equal(response.status, 404, path);
+      assert.equal(response.headers.get("x-robots-tag"), "noindex");
+      assert((await response.text()).includes("/explore"));
+      process.stdout.write(`404 ${path}: verified\n`);
+    }
   } finally {
     await worker.stop();
   }

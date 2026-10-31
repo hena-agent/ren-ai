@@ -1,5 +1,19 @@
 {
-  "home": {
+  "guide": {
+    "title": "気になるペルソナと話してみよう！",
+    "steps": [
+      "右にスワイプかハートで「いいね」。左でパス！",
+      "いいねしたら、iPhoneの電話番号を教えてね。",
+      "選ばれると、その中の1人からiMessageで連絡が届くよ。連絡の時期はまだ決まっていないよ。"
+    ],
+    "requirement": "アプリのインストールは不要。iMessageが使えるiPhoneだけでOK。Androidはまだ対応していないよ。",
+    "start": "ペルソナに会ってみる",
+    "open": "Ren AIについて",
+    "close": "ガイドを閉じる",
+    "about": "Ren AIをもっと知る",
+    "privacy": "プライバシー"
+  },
+  "about": {
     "menu": "メニューの開閉",
     "personaLabel": "AIペルソナ",
     "personaNames": { "seoyeon": "スビン", "dohee": "ジア", "seoyul": "ハリン" },

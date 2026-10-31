@@ -38,7 +38,7 @@ const notice = (locale: string, token: string, initiator: Initiator) => {
       : locale === "ja"
         ? "このアドレスは通知専用のため、返信は確認していません。"
         : "This address only sends notifications and doesn't read replies.";
-  return `[Ren AI] ${opening ? `${opening} ` : ""}${text}\n${replies}\nhttps://renai.im/#reselect=${token}`;
+  return `[Ren AI] ${opening ? `${opening} ` : ""}${text}\n${replies}\nhttps://renai.im/explore#reselect=${token}`;
 };
 
 /** The caller owns the transaction and admission fence. No executor or physical-send dependency. */

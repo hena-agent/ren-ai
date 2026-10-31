@@ -3,16 +3,17 @@
 @import "./photo-gallery.css";
 @import "./profile-details.css";
 @import "./language-select.css";
-@import "./home.css";
-@import "./home-artwork.css";
-@import "./home-mobile.css";
-@import "./home-highlights.css";
-@import "./home-navigation.css";
+@import "./about.css";
+@import "./about-artwork.css";
+@import "./about-mobile.css";
+@import "./about-highlights.css";
+@import "./about-navigation.css";
 @import "./conversation-scene.css";
 @import "./style-switch.css";
 @import "./interactions.css";
 @import "./profile-share.css";
 @import "./typography.css";
+@import "./guide.css";
 
 :root {
   --canvas: #f4f5f7;

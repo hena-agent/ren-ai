@@ -138,7 +138,7 @@ test.each(
       privacyNoticeVersion: discoveryNotice.version,
       ...(metrics === "counted" && {
         source: {
-          entry: invitation ? "explore" : "home",
+          entry: invitation ? "explore" : "about",
           referrer: "",
           source: "",
           medium: "",

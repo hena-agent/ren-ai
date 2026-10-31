@@ -69,7 +69,7 @@ export function LocaleProvider({
   return <LocaleContext value={{ locale, choose, storageFailure }}>{children}</LocaleContext>;
 }
 
-export function LocalePicker() {
+export function LocalePicker({ portalContainer }: { portalContainer?: HTMLElement | null } = {}) {
   const { locale, choose, storageFailure } = useLocale();
   const copy = useCopy();
   return (
@@ -81,6 +81,7 @@ export function LocalePicker() {
           label={copy.languageSetting}
           iconOnly
           onValueChange={choose}
+          portalContainer={portalContainer}
         />
       </label>
       {storageFailure && <output className="storage-warning">{copy.languageStorageFailure}</output>}

@@ -46,7 +46,7 @@ function visit() {
         ? "profile"
         : path === "/explore"
           ? "explore"
-          : "home",
+          : "about",
     referrer: referrer && referrer.host !== url.host ? referrer.hostname : "",
     source: tag(url.searchParams.get("utm_source")),
     medium: tag(url.searchParams.get("utm_medium")),

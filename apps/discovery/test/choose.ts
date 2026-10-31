@@ -20,11 +20,13 @@ export function endAnimation(element: Element, name = "card-exit") {
 }
 
 export function choose(like: boolean) {
+  dismissGuide();
   fireEvent.click(screen.getByRole("button", { name: like ? "좋아요" : "넘기기" }));
   endAnimation(document.querySelector(".profile-card")!);
 }
 
 export function selectDropdown(label: string, next: string) {
+  dismissGuide();
   const trigger = screen.getByRole("combobox", { name: label });
   fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown" });
   const option = screen.getByRole("option", { name: next });
@@ -33,6 +35,7 @@ export function selectDropdown(label: string, next: string) {
 }
 
 export async function selectImageStyle(label: string) {
+  dismissGuide();
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: label }));
   });
@@ -48,8 +51,14 @@ export function layOutCard() {
 }
 
 export function tap(target: Element, clientX: number, clientY = 100) {
+  dismissGuide();
   const pointer = { clientX, clientY, pointerId: 1, isPrimary: true, button: 0 };
   fireEvent.pointerDown(target, pointer);
   fireEvent.pointerUp(target, pointer);
   fireEvent.click(target, { clientX, clientY, detail: 1 });
+}
+
+export function dismissGuide() {
+  const button = document.querySelector<HTMLButtonElement>(".guide[open] .primary-button");
+  if (button) fireEvent.click(button);
 }

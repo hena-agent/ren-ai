@@ -1,9 +1,9 @@
 import { App } from "./app.tsx";
 import type { DiscoveryClient } from "./client.ts";
 import { discoveryClient } from "./client.ts";
-import { Home } from "./home.tsx";
+import { About } from "./about.tsx";
 import { LocaleProvider } from "./locale.tsx";
-import { publicRoute, readPublicBootstrap } from "./public-routing.ts";
+import { localizedPath, publicRoute, readPublicBootstrap } from "./public-routing.ts";
 
 export function Site({ client = discoveryClient }: { client?: DiscoveryClient }) {
   const route = publicRoute(new URL(window.location.href));
@@ -25,9 +25,16 @@ export function Site({ client = discoveryClient }: { client?: DiscoveryClient })
       />
     );
   }
+  if (route.path !== "/about")
+    return (
+      <main>
+        <h1>404 — Ren AI</h1>
+        <a href={localizedPath("/explore", route.locale ?? "en")}>Ren AI</a>
+      </main>
+    );
   return (
     <LocaleProvider initialLocale={route.locale ?? "en"}>
-      <Home client={client} />
+      <About client={client} />
     </LocaleProvider>
   );
 }
