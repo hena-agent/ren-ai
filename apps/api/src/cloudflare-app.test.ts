@@ -19,6 +19,24 @@ import type { MessagingTools } from "./application-tools.ts";
 import { captureGatewayLogs, gatewayFixture } from "../../imsg/test/gateway.test-helper.ts";
 import { captureDiagnostics } from "../test/diagnostics.test-helper.ts";
 
+test("invitation availability routes to the authoritative ledger without starting conversation execution", async () => {
+  const app = await createCloudflareApplication(storage, bindings, "rules", fetcher);
+  try {
+    const url = "https://app/management/invitation-availability?code=MISSING";
+    expect((await app.fetch(new Request(url))).status).toBe(401);
+    const response = await app.fetch(
+      new Request(url, { headers: { Authorization: "Bearer management-token" } }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ available: false });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(controls.storeHandler).not.toHaveBeenCalled();
+    expect(controls.runtime).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+  }
+});
+
 test("a ready database and executor cannot hide APNs failure, and the Mac diagnostic remains correlated", async () => {
   const gateway = gatewayFixture();
   gateway.gestures.gestures.probe = () =>

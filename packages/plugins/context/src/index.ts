@@ -13,6 +13,7 @@ import {
 import { phone } from "@ren-ai/plugin-application/phone";
 import { isDiceTool } from "@ren-ai/plugin-dice";
 import { cleanContext } from "./clean.ts";
+import { applySocialContext } from "./social.ts";
 import { personaMemory, memoryToolNames, isMemoryTool } from "@ren-ai/plugin-session-folder/memory";
 import { managedFolder } from "@ren-ai/plugin-session-folder/paths";
 import {
@@ -48,6 +49,8 @@ const messagingTools = (
   ).flatMap(([name, action]) => (action && isMessagingTool(name, tools[name]) ? [name] : []));
 
 type Snapshot = Effect.Success<ReturnType<NonNullable<PersonaPluginOptions["context"]>>>;
+const phoneState = (snapshot: Snapshot | undefined) =>
+  snapshot?.status?.readAt ?? (snapshot?.status?.delivered ? "delivered" : "sent");
 
 const allowedTools = (options: PersonaPluginOptions, tools: SessionContext["tools"]) =>
   new Set([
@@ -112,18 +115,21 @@ export const contextPlugin = (options: PersonaPluginOptions) =>
           Effect.fnUntraced(function* (event: SessionContext) {
             const persona = yield* getPersona(options, event.agent, ctx.location.directory);
             if (!persona) return;
+            if (
+              managedFolder(options.personaDirectory, ctx.location.directory) &&
+              (yield* Effect.promise(() => applySocialContext(event, ctx.location.directory)))
+            )
+              return;
             const snapshot = yield* (
               options.context?.(
                 event.sessionID,
                 event.messages.flatMap((entry) => entry.id ?? []),
               ) ?? Effect.succeed(undefined)
             );
-            const status = snapshot?.status;
-            const state = status?.readAt ?? (status?.delivered ? "delivered" : "sent");
             const now = yield* Clock.currentTimeMillis;
             const removed = cleanContext(
               event,
-              phone(now, persona.timeZone, state),
+              phone(now, persona.timeZone, phoneState(snapshot)),
               allowedTools(options, event.tools),
             );
             if (managedFolder(options.personaDirectory, ctx.location.directory)) {

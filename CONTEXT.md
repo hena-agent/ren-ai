@@ -194,6 +194,15 @@ _Avoid_: test conversation, fork, copy
 The person who runs the service: watches conversations as they happen and fixes what breaks.
 _Avoid_: admin, moderator
 
+**Social account**:
+An external social-media account the Operator connects to a chosen Persona. One account represents one Persona at a time; changing its Persona ends its current Social activity without carrying that Persona's private social relationships to the replacement.
+
+**Social activity**:
+A Persona's public writing, discovery of relevant people, replies, private messages and invitations on her connected Social account, within the Operator's activity settings.
+
+**Social relationship**:
+A Persona's private interaction with one contact on one Social account. It is distinct from an iMessage Conversation; an invitation does not identify the contact as an iMessage User or transfer their private history.
+
 ### Operations
 
 **Metrics**:

@@ -12,6 +12,8 @@ import { DeferredWork, WorkLaneFailure } from "../src/work-budget.ts";
 import { expireSubmissionLimits } from "../src/discovery/rate-limit.ts";
 import { activityHandler } from "../src/metrics/activity.ts";
 import { monitorObject } from "../src/health-monitor.ts";
+import { createSocial } from "../src/social/http.ts";
+import { socialBindings } from "../src/social/bindings.ts";
 import {
   applicationWakes,
   finishApplicationWork,
@@ -31,6 +33,7 @@ interface Environment extends CloudflareBindings {
   readonly APPLICATION: ApplicationNamespace;
   readonly ACTIVITY: ApplicationNamespace;
   readonly MONITOR: ApplicationNamespace;
+  readonly SOCIAL: ApplicationNamespace;
   readonly ACTIVITY_LIMIT?: { limit: (input: { key: string }) => Promise<{ success: boolean }> };
 }
 
@@ -60,6 +63,19 @@ export class HealthMonitor extends DurableObject<Environment> {
   }
   async alarm() {
     await Effect.runPromise(this.monitor.alarm);
+  }
+}
+
+export class SocialActivity extends DurableObject<Environment> {
+  private social = createSocial(
+    this.ctx.storage,
+    socialBindings(this.env, groundRules, (request) => applicationObject(this.env).fetch(request)),
+  );
+  override fetch(request: Request) {
+    return this.social.fetch(request);
+  }
+  async alarm() {
+    if (this.env.BOOTSTRAP_ONLY === "false") await this.social.alarm();
   }
 }
 
@@ -196,6 +212,11 @@ export class ApiApplication extends DurableObject<Environment> {
 
 export default {
   async fetch(request: Request, env: Environment) {
+    if (new URL(request.url).pathname.startsWith("/management/social")) {
+      if (env.BOOTSTRAP_ONLY !== "false" && request.method !== "GET")
+        return new Response(null, { status: 503 });
+      return env.SOCIAL.get(env.SOCIAL.idFromName("ren-ai-social")).fetch(request);
+    }
     if (new URL(request.url).pathname === "/discovery/activity") {
       const headers = {
         "Access-Control-Allow-Origin": "https://renai.im",

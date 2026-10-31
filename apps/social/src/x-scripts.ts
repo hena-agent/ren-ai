@@ -1,0 +1,8 @@
+/** Fixed DOM readers only. Model-authored JavaScript is never evaluated. */
+export const identityScript = `JSON.stringify({handle:document.querySelector('[data-testid="AppTabBar_Profile_Link"]')?.getAttribute('href')?.slice(1)??null})`;
+export const publicScript = `JSON.stringify(Array.from(document.querySelectorAll('article')).slice(0,10).map(a=>({text:(a.innerText??'').slice(0,1800),body:a.querySelector('[data-testid="tweetText"]')?.textContent??'',url:Array.from(a.querySelectorAll('a[href]')).map(l=>l.getAttribute('href')).find(h=>/^\\/[^/]+\\/status\\/\\d+$/.test(h))??null})))`;
+export const inboxScript = `JSON.stringify(Array.from(document.querySelectorAll('[data-testid="conversation"]')).slice(0,20).map(a=>({contact:a.querySelector('[data-testid="User-Name"]')?.textContent?.match(/@[A-Za-z0-9_]{1,15}/)?.[0]??null,path:Array.from(a.querySelectorAll('a[href]')).map(l=>l.getAttribute('href')).find(h=>/^\\/messages\\/\\d+-\\d+$/.test(h))??null})).filter(a=>a.contact))`;
+export const messagesScript = `JSON.stringify(Array.from(document.querySelectorAll('[data-testid="messageEntry"]')).slice(-20).map(a=>(a.querySelector('[data-testid="tweetText"]')?.textContent??'').slice(0,1000)))`;
+export const candidatesScript = `JSON.stringify(Array.from(document.querySelectorAll('[data-testid="TypeaheadUser"]')).map(a=>a.innerText))`;
+export const sentScript = `JSON.stringify({empty:!(document.querySelector('[data-testid="tweetTextarea_0"]')?.textContent??'').trim(),alerts:Array.from(document.querySelectorAll('[role="alert"]')).map(a=>a.textContent)})`;
+export const dmSentScript = `JSON.stringify({empty:!(document.querySelector('[data-testid="dmComposerTextInput"]')?.textContent??'').trim()})`;

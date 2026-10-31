@@ -29,6 +29,7 @@ import type {
   ConversationRecovery,
   ConversationEnding,
 } from "@ren-ai/onboarding";
+import { socialClient, type SocialClient } from "./social-client.ts";
 
 export interface ConversationClient {
   list: (input: typeof ConversationQuery.Type) => Promise<typeof ConversationList.Type>;
@@ -41,6 +42,7 @@ export interface ConversationClient {
 }
 
 export interface ManagementClient {
+  social?: SocialClient;
   recheck: (input: typeof ContactRecheck.Type) => Promise<void>;
   visibility: (input: typeof ContactVisibility.Type) => Promise<void>;
   metrics?: (query: MetricsQuery) => Promise<Metrics>;
@@ -157,6 +159,7 @@ export function managementClient(
     return response;
   };
   return {
+    social: socialClient(url, token, fetcher),
     recheck: async (input) => {
       await request("/operator/imessage-recheck", input);
     },

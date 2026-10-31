@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>im.renai.social</string>
+  <key>ProgramArguments</key><array>
+    <string>/opt/homebrew/bin/bun</string>
+    <string>--env-file=/Users/REPLACE/.config/ren-ai/social.env</string>
+    <string>/Users/REPLACE/Library/Application Support/ren-ai-social/entry.js</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>LimitLoadToSessionType</key><string>Aqua</string>
+  <key>StandardOutPath</key><string>/Users/REPLACE/Library/Logs/ren-ai-social/stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/REPLACE/Library/Logs/ren-ai-social/stderr.log</string>
+</dict></plist>

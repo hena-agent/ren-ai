@@ -18,9 +18,13 @@ const bundle = await build({
 if (!bundle.success) throw new AggregateError(bundle.logs, "Admin browser build failed");
 const css = (
   await Promise.all(
-    ["src/style.css", "src/editor.css", "src/contact.css", "src/admin-layout.css"].map((file) =>
-      readFile(file, "utf8"),
-    ),
+    [
+      "src/style.css",
+      "src/editor.css",
+      "src/contact.css",
+      "src/admin-layout.css",
+      "src/social.css",
+    ].map((file) => readFile(file, "utf8")),
   )
 ).join("\n");
 const stylesheet = `admin-${createHash("sha256").update(css).digest("hex").slice(0, 16)}.css`;

@@ -35,6 +35,9 @@
     "apps/api-msg": {
       "entry": ["ops/api-msg-entry.mjs!", "ops/probe-entry.mjs!"]
     },
+    "apps/social": {
+      "entry": ["ops/entry.mjs!", "ops/build.mjs!"]
+    },
     "apps/admin": {
       "entry": [
         "worker/entry.mjs!",

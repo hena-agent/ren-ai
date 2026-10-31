@@ -14,6 +14,7 @@ export interface CloudflareBindings {
   readonly TURNSTILE_SECRET?: string;
   readonly TOKEN_MANAGEMENT?: string;
   readonly API_MSG_URL: string;
+  readonly SOCIAL_EXECUTOR_URL?: string;
   readonly PERSONA_MODEL?: string;
   readonly OPENCODE_DIRECTORY?: string;
   readonly BOOTSTRAP_ONLY?: string;

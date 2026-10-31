@@ -123,7 +123,21 @@ export const remotePlugin = (id: string, factory: Factory, config: RemoteConfig)
                   const requestId = crypto.randomUUID();
                   const started = performance.now();
                   return ctx.session.get({ sessionID: event.data.sessionID }).pipe(
-                    Effect.map((session) => session.location.directory === ctx.location.directory),
+                    Effect.flatMap((session) =>
+                      session.location.directory !== ctx.location.directory
+                        ? Effect.succeed(false)
+                        : Effect.tryPromise({
+                            try: async () =>
+                              !(
+                                await readSessionBinding(
+                                  ctx.location.directory,
+                                  event.data.sessionID,
+                                )
+                              ).social,
+                            catch: (cause) =>
+                              new Error("Cannot read session activity scope", { cause }),
+                          }),
+                    ),
                     Effect.catchCause((cause) =>
                       Effect.sync(() => {
                         observationFailure(Cause.squash(cause), "turn.session", requestId, started);
