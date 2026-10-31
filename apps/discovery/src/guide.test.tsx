@@ -153,3 +153,38 @@ test("Escape in the guide preserves the shared profile, including a language-men
   expect(screen.getByRole("region", { name: /백지아/ })).toBe(profile);
   expect(window.location.hash).toBe("#invite=secret");
 });
+
+test("dismissal is persisted synchronously even if the browser defers its native close event", async () => {
+  render(<App client={client} />);
+  const dialog = await screen.findByRole<HTMLDialogElement>("dialog");
+  vi.spyOn(dialog, "close").mockImplementation(() => dialog.removeAttribute("open"));
+  dismissGuide();
+  expect(localStorage.getItem("ren-ai.discovery.guide-seen")).toBe("1");
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: messages.ko.guide.open }));
+});
+
+test("changing guide language preserves an opened profile and photo when the new sample excludes it", async () => {
+  const browse = vi.fn<typeof client.browse>().mockImplementation(async ({ locale }) => ({
+    people: locale === "ko" ? [publicPersonas[0]!] : [publicPersonas[1]!],
+    nextCursor: null,
+  }));
+  render(<App client={{ ...client, browse }} />);
+  await screen.findByRole("dialog");
+  dismissGuide();
+  fireEvent.click(screen.getByRole("button", { name: "다음 사진" }));
+  fireEvent.click(screen.getByRole("button", { name: "백지아 소개 전체 보기" }));
+  const profile = screen.getByRole("region", { name: /백지아/ });
+  const photo = within(profile).getByRole("img").getAttribute("src");
+  fireEvent.click(screen.getByRole("button", { name: messages.ko.guide.open }));
+  const dialog = screen.getByRole("dialog");
+  fireEvent.keyDown(within(dialog).getByRole("combobox"), { key: "ArrowDown" });
+  fireEvent.click(within(dialog).getByRole("option", { name: "English" }));
+  await act(async () => {});
+  expect(browse.mock.lastCall?.[0]).toEqual({ locale: "en" });
+  expect(screen.getByRole("dialog")).toBe(dialog);
+  expect(screen.getByRole("region", { name: /백지아/ })).toBe(profile);
+  expect(within(profile).getByRole("img").getAttribute("src")).toBe(photo);
+  dismissGuide();
+  fireEvent.click(screen.getByRole("button", { name: "Collapse profile" }));
+  expect(document.querySelector(".profile-photo")?.getAttribute("src")).toBe(photo);
+});

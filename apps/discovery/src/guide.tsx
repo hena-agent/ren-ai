@@ -23,7 +23,7 @@ export function Guide({ firstVisit }: { firstVisit: boolean }) {
   useEffect(() => {
     const element = dialog.current!;
     const backdropClick = (event: MouseEvent) => {
-      if (event.target === element) element.close();
+      if (event.target === element) close();
     };
     element.addEventListener("click", backdropClick);
     return () => element.removeEventListener("click", backdropClick);
@@ -42,7 +42,9 @@ export function Guide({ firstVisit }: { firstVisit: boolean }) {
     start.current!.focus();
   }
   function close() {
+    remember();
     dialog.current!.close();
+    trigger.current!.focus();
   }
   return (
     <>
@@ -55,16 +57,7 @@ export function Guide({ firstVisit }: { firstVisit: boolean }) {
       >
         <span className="icon icon-info" aria-hidden="true" />
       </button>
-      <dialog
-        ref={dialog}
-        className="guide"
-        aria-labelledby="guide-title"
-        onCancel={close}
-        onClose={() => {
-          remember();
-          trigger.current!.focus();
-        }}
-      >
+      <dialog ref={dialog} className="guide" aria-labelledby="guide-title" onCancel={close}>
         <div className="guide-content">
           <div className="guide-toolbar">
             <LocalePicker portalContainer={portal} />

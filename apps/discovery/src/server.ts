@@ -2,13 +2,7 @@ import { Schema } from "effect";
 import { BrowsePage, PublicPersona, PersonaLink } from "@ren-ai/onboarding";
 import { healthResponse } from "@ren-ai/transport/health";
 import { publicResponse, sitemap } from "./public-html.tsx";
-import {
-  publicOrigin,
-  publicRoute,
-  previewRoute,
-  localizedPath,
-  localePreferenceCookie,
-} from "./public-routing.ts";
+import { publicOrigin, publicRoute, previewRoute, localizedPath } from "./public-routing.ts";
 import type { SampledPage } from "./public-routing.ts";
 import { requestLocale } from "./request-locale.ts";
 import { serverCause, writeServerLog } from "./server-log.ts";
@@ -16,6 +10,7 @@ import type { ServerEvent } from "./server-log.ts";
 import { previewReady, previewResponse } from "./preview-image.ts";
 import type { PreviewCache, PreviewEnv } from "./preview-image.ts";
 import { messages } from "./locale.tsx";
+import { pageRedirect } from "./page-redirect.ts";
 
 export interface DiscoveryEnv extends PreviewEnv {
   DISCOVERY_API_URL: string;
@@ -84,24 +79,8 @@ const failureCodes: Readonly<Record<string, string>> = {
 function routeResponse(request: Request, url: URL) {
   if (request.method !== "GET" && request.method !== "HEAD")
     return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
-  const trimmed = new URL(url);
-  trimmed.pathname = url.pathname.replace(/\/$/, "") || "/";
-  const page = publicRoute(trimmed);
-  if (["/", "/about", "/explore"].includes(page.path) || page.id) {
-    const locale = page.locale ?? requestLocale(request);
-    const target = localizedPath(page.path === "/" ? "/explore" : page.path, locale);
-    if (url.pathname !== target) {
-      url.pathname = target;
-      return new Response(null, {
-        status: page.path === "/" || !page.locale ? 307 : 308,
-        headers: {
-          Location: url.href,
-          ...(!page.locale && { Vary: "Accept-Language, Cookie" }),
-          ...(page.locale === "en" && { "Set-Cookie": localePreferenceCookie("en") }),
-        },
-      });
-    }
-  }
+  const redirect = pageRedirect(request);
+  if (redirect) return redirect;
   if (url.pathname === "/robots.txt")
     return new Response(`User-agent: *\nAllow: /\nSitemap: ${publicOrigin}/sitemap.xml\n`, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },

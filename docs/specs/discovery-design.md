@@ -28,7 +28,10 @@ the browser-only seen preference, never sent to Metrics. With blocked storage,
 dismissal lasts for the current mounted page. Do not open over loading, errors,
 missing profiles or an empty Catalog. An info button reopens it without changing
 the deck, selections, photo or private fragment. Restore focus on dismissal;
-keep keyboard focus inside the native dialog and its language popover. Fit a
+keep keyboard focus inside the native dialog and its language popover.
+The explorer header stays visible on mobile expanded profiles so the guide and
+its focus-restoration target remain reachable. Persist dismissal synchronously,
+before navigation can interrupt the browser's deferred native close event. Fit a
 360px phone without scrolling at normal text size, allow scrolling on shorter
 screens or enlarged text, and use 220ms entry motion (none with reduced motion).
 
