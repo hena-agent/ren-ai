@@ -198,7 +198,7 @@ test("a relationship introduction precedes a photo and its cancellation preserve
         { kind: "text", tool_call_id: "relationship-introduction" },
         { kind: "photo", tool_call_id: "sent" },
       ]);
-      expect(fake.bubbles[0]?.text).toContain("[Ren AI]");
+      expect(fake.bubbles[0]?.text).toContain("[RenAI]");
       expect(ui.typing).toHaveLength(1);
       expect(readyUI.typing).toHaveLength(1);
       expect(yield* fake.messages.recent(conversation.handle, 0)).toHaveLength(2);

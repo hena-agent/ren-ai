@@ -4,7 +4,7 @@
 
 Users choose a starting relationship when requesting contact in Discovery, including
 reselection. The choice is independent of gender and applies to every Like in that
-registration. Ren AI continues to offer female Personas only.
+registration. RenAI continues to offer female Personas only.
 
 | Value       | Label     | Starting premise                                                    |
 | ----------- | --------- | ------------------------------------------------------------------- |

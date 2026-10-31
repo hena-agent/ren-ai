@@ -1,4 +1,4 @@
-# Ren AI: Agent 역할 분리와 중단·복귀 스펙 (초안)
+# RenAI: Agent 역할 분리와 중단·복귀 스펙 (초안)
 
 > 소유권·저장·세션 수명은 [ADR-0023](../adr/0023-personas-share-one-life-across-up-to-five-conversations.md)이
 > 이 초안보다 우선한다. State와 Life memory는 인물 공통, Relationship state·memory와 이력은 해당

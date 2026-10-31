@@ -20,11 +20,11 @@ export function localizedPath(path: string, locale: Locale) {
   if (locale === "en") return route.path;
   return `/${locale}${route.path === "/" ? "" : route.path}`;
 }
-export const previewVersion = "v2";
+export const previewVersion = "v3";
 export const invitationToken = (hash: string) => new URLSearchParams(hash.slice(1)).get("invite");
 export const personaPath = (id: string) => `/personas/${encodeURIComponent(id)}`;
 export const personaTitle = (persona: PublicPersona, locale: Locale = "en") =>
-  `${persona.name} — ${{ ko: "Ren AI의 AI 페르소나", en: "An AI persona on Ren AI", ja: "Ren AIのAIペルソナ" }[locale]}`;
+  `${persona.name} — ${{ ko: "RenAI의 AI 페르소나", en: "An AI persona on RenAI", ja: "RenAIのAIペルソナ" }[locale]}`;
 
 export function publicRoute(url: URL) {
   const language = languageRoute(url.pathname);

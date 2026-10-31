@@ -86,7 +86,7 @@ const response = await fetch(process.env.IMSG_URL, {
   headers: { Authorization: `Bearer ${process.env.IMSG_TOKEN}`, "Content-Type": "application/ndjson" },
   body: JSON.stringify({ _tag: "Request", id: "0", tag: "notify", headers: [],
     payload: { handle: process.env.NOTIFICATION_TEST_HANDLE,
-      text: "[Ren AI] Notification handle test. Replies to this address are not read." } }) + "\n",
+      text: "[RenAI] Notification handle test. Replies to this address are not read." } }) + "\n",
 });
 if (!response.ok) throw new Error(`RPC HTTP ${response.status}; do not resubmit`);
 console.log(await response.text());

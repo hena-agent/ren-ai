@@ -170,7 +170,7 @@ function DiscoveryApp({
   const missing =
     catalog.phase === "ready" && Boolean(personaId) && !requested && !reviewingSelection;
   useEffect(() => {
-    if (missing) document.title = `${copy.publicProfile.notFound} — Ren AI`;
+    if (missing) document.title = `${copy.publicProfile.notFound} — RenAI`;
   }, [missing, copy.publicProfile.notFound]);
   return (
     <div className="discovery-shell">
@@ -352,7 +352,7 @@ function Experience({
       >
         <LikedPanel people={liked} onOpen={openDetails} disabled={busy} />
         <section className="swipe-stage" aria-label={copy.explore}>
-          <h1 className="sr-only">{detail ? `${detail.name} — Ren AI` : copy.explore}</h1>
+          <h1 className="sr-only">{detail ? `${detail.name} — RenAI` : copy.explore}</h1>
           {contactOpened && (
             <div className="contact-surface" hidden={view !== "contact" || Boolean(detail)}>
               <JoinForm

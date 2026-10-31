@@ -4,7 +4,7 @@ status: accepted
 
 # The service lives at renai.im in one Cloudflare account
 
-Ren AI's hostnames were split across two domains in two Cloudflare accounts. Admin and Discovery were Workers under ambivalent.dev in the Ambivalent Co. account. The application, the Messages Mac, OpenCode and Fleet were tunnels under hena.dev in a different account. The service now has its own domain, renai.im, registered in the Ambivalent Co. account. Cloudflare routes a tunnel only to DNS records in the tunnel's own account, and a Worker's custom domain must be in the Worker's account. So every hostname that moves is provisioned again in Ambivalent Co.: a DNS rename alone is not enough.
+RenAI's hostnames were split across two domains in two Cloudflare accounts. Admin and Discovery were Workers under ambivalent.dev in the Ambivalent Co. account. The application, the Messages Mac, OpenCode and Fleet were tunnels under hena.dev in a different account. The service now has its own domain, renai.im, registered in the Ambivalent Co. account. Cloudflare routes a tunnel only to DNS records in the tunnel's own account, and a Worker's custom domain must be in the Worker's account. So every hostname that moves is provisioned again in Ambivalent Co.: a DNS rename alone is not enough.
 
 ## Decision
 

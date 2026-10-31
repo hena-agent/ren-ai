@@ -2,7 +2,7 @@
 
 ## Direction
 
-Ren AI is refined, photo-led and personal. Preserve the existing white, cool gray
+RenAI is refined, photo-led and personal. Preserve the existing white, cool gray
 (`#f4f5f7`), ink (`#20242b`) and cherry rose (`#c72c52`, hover `#a82042`) palette. Improve proportions,
 spacing, typography and feedback within that palette. Use the official product
 name from `CONTEXT.md` throughout.
@@ -221,7 +221,7 @@ feedback. Shared URLs include the selected anime/photo style and a public previe
 version. Advertise a versioned, same-origin 1200×630 JPEG made from the first
 same-style gallery photo, read directly from R2 after checking the live public
 Catalog. Place the uncropped portrait over a blurred, dimmed copy of the same
-photo; draw a small Ren AI watermark at the lower-right without covering the face.
+photo; draw a small RenAI watermark at the lower-right without covering the face.
 Keep the cherry-rose brand symbol and white wordmark on a transparent background,
 with no surrounding badge or background box.
 Use the native Images binding for composition. Do not expose arbitrary R2 keys,

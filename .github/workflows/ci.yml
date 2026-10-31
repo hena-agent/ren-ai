@@ -274,7 +274,7 @@ jobs:
           for locale in ko en ja; do
             prefix="/$locale"
             if [ "$locale" = en ]; then prefix=""; fi
-            for path in "${prefix:-/}" "$prefix/explore" "/social-$locale-v2.png"; do
+            for path in "${prefix:-/}" "$prefix/explore" "/social-$locale-v3.png"; do
               curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors -o /dev/null "https://renai.im$path"
             done
           done

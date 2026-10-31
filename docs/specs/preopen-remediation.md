@@ -1,4 +1,4 @@
-# Ren AI 오픈 준비 — 점검 및 개선 기록
+# RenAI 오픈 준비 — 점검 및 개선 기록
 
 ## 기준과 사용법
 
@@ -42,7 +42,7 @@
 
 ### 현재 묶음의 결정·검증
 
-- 운영자가 특정 사용자의 현재 관계를 영구 종료한다. 전체 서비스 중지·Handle 차단·삭제와 별개이며 Persona 마지막 인사 없이 Ren AI 재선택 안내만 보낸다. 기록은 보존하고 다른 Persona를 선택할 수 있다.
+- 운영자가 특정 사용자의 현재 관계를 영구 종료한다. 전체 서비스 중지·Handle 차단·삭제와 별개이며 Persona 마지막 인사 없이 RenAI 재선택 안내만 보낸다. 기록은 보존하고 다른 Persona를 선택할 수 있다.
 - Mac 연결 없이 Cloudflare SQLite에서 종료·Assignment 해제·복구 작업을 영속 기록한다. 숫자 ID와 기존 불변 Conversation key를 함께 검증해 삭제 후 ID 재사용·오래된 화면의 다른 관계 종료를 차단한다. 요청 receipt는 영속 중복 제거하며 실행 정지·전달 결과는 별도로 표시한다.
 - focused 검사에서 삭제 중 prompt/usage collector 완료 경합, 교체된 세션 정리, Turnstile 별도 예산, 실제 SQLite DO의 인증·bootstrap·Mac 불가·재시작 뒤 종료 보존, 한국어/영어/일본어 안내, 일반 발신 fence·uncertain 보존, 운영자 종료 후 재선택을 확인했다.
 - 최종 검사: Node v24.15.0·Bun 1.4.2, 343개 파일·1,588개 테스트·파일별 lines/functions/branches/statements 100%, 포맷·lint·17개 workspace/루트 타입·knip·duplication 0·예외·Discovery production build·verify-gates 통과. `bun run ci`의 production knip에서 테스트에서만 외부 사용한 export를 발견해 HTTP 경계와 SQL 작업을 기존 모듈별로 분리한 뒤 영향 검사와 남은 게이트를 순서대로 통과했다.

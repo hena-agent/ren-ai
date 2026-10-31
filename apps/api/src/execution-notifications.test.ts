@@ -83,7 +83,7 @@ test("the execution tick sends through the dedicated Mac RPC even when Persona s
           }
         }
         expect(submitted).toHaveLength(1);
-        expect(submitted[0]).toContain("[Ren AI]");
+        expect(submitted[0]).toContain("[RenAI]");
         expect(messages.bubbles).toEqual([]);
       }),
     ),

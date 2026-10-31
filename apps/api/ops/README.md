@@ -104,7 +104,7 @@ channel and global cooldowns, including `Retry-After` and Discord's JSON
 `metrics.task` or `discord.delivery` request IDs.
 
 Alerts and Reports post as Discord Components V2 cards (`with_components=true`)
-named `Ren AI 알림` and `Ren AI 지표`, with the icon at
+named `RenAI 알림` and `RenAI 지표`, with the icon at
 `https://renai.im/apple-touch-icon.png`. A raised Alert has a red bar, its title,
 a safe detail and a link button to the relevant Admin page; its clearance has a
 green bar and says how long it lasted. The outbox stores each complete request

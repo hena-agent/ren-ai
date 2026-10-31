@@ -28,14 +28,14 @@ export function pageSeo(
   const title = persona
     ? personaTitle(persona, locale)
     : missing
-      ? `${copy.publicProfile.notFound} — Ren AI`
+      ? `${copy.publicProfile.notFound} — RenAI`
       : path === "/"
         ? copy.home.pageTitle
-        : `Ren AI — ${copy.explore}`;
+        : `RenAI — ${copy.explore}`;
   const suffix = {
-    ko: "Ren AI의 가상 AI 페르소나. iMessage로 일상을 나눠요.",
-    en: "A fictional AI persona on Ren AI. Share everyday moments on iMessage.",
-    ja: "Ren AIの架空のAIペルソナ。iMessageで日常を分かち合おう。",
+    ko: "RenAI의 가상 AI 페르소나. iMessage로 일상을 나눠요.",
+    en: "A fictional AI persona on RenAI. Share everyday moments on iMessage.",
+    ja: "RenAIの架空のAIペルソナ。iMessageで日常を分かち合おう。",
   }[locale];
   const introduction =
     persona &&
@@ -49,7 +49,7 @@ export function pageSeo(
     description,
     robots: missing ? "noindex,follow" : "index,follow,max-image-preview:large",
     "og:type": "website",
-    "og:site_name": "Ren AI",
+    "og:site_name": "RenAI",
     "og:locale": ogLocales[locale],
     "og:title": title,
     "og:description": description,
@@ -90,7 +90,7 @@ export function structuredPage(seo: ReturnType<typeof pageSeo>, persona?: Public
       "@type": "WebSite",
       "@id": `${publicOrigin}/#website`,
       url: `${publicOrigin}/`,
-      name: "Ren AI",
+      name: "RenAI",
     },
     ...(persona && {
       about: {

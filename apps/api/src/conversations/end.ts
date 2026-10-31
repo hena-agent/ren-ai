@@ -178,7 +178,7 @@ export const conversationEndings = Effect.fnUntraced(function* (
               }).pipe(sql.withTransaction),
             ),
           );
-          return "Conversation ended. Farewell and Ren AI reselection notice are queued. Do not send further messages.";
+          return "Conversation ended. Farewell and RenAI reselection notice are queued. Do not send further messages.";
         }),
       );
       const failed = Result.isFailure(result);

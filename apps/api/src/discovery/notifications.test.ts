@@ -33,7 +33,7 @@ test("each successful submission queues a Notification without duplicating the r
         expect(f.notify).toHaveBeenCalledTimes(2);
         expect(f.notify).toHaveBeenCalledWith(
           "+821012345678",
-          "[Ren AI] This number has joined the Ren AI waitlist. There's no set order or date for contact. If you're selected, a persona you liked will text you from hi@renai.im. This address only sends notifications and doesn't read replies. To leave the waitlist, or if you didn't sign up, email hi@renai.im.",
+          "[RenAI] This number has joined the RenAI waitlist. There's no set order or date for contact. If you're selected, a persona you liked will text you from hi@renai.im. This address only sends notifications and doesn't read replies. To leave the waitlist, or if you didn't sign up, email hi@renai.im.",
         );
         expect(yield* f.snapshot).toMatchObject({
           entries: [{ notification: "sent", eligible: true }],
@@ -85,12 +85,12 @@ test("the rolling service-wide cap skips excess joins permanently and survives d
 test.each([
   {
     locale: "ko" as const,
-    phrase: "이 번호로 Ren AI 대기 등록이 완료되었습니다.",
+    phrase: "이 번호로 RenAI 대기 등록이 완료되었습니다.",
     email: "이메일을 보내 주세요.",
   },
   {
     locale: "ja" as const,
-    phrase: "この番号でRen AIのウェイトリストへの登録が完了しました。",
+    phrase: "この番号でRenAIのウェイトリストへの登録が完了しました。",
     email: "メールをお送りください。",
   },
 ])(

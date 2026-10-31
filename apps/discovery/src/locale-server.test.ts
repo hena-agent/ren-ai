@@ -23,7 +23,7 @@ test.each(["ko", "en", "ja"] as const)(
         `property="og:locale" content="${{ ko: "ko_KR", en: "en_US", ja: "ja_JP" }[locale]}"`,
       );
       expect(html).toContain(
-        `content="${path.startsWith("/personas") ? photoPreview : `https://renai.im/social-${locale}-v2.png`}"`,
+        `content="${path.startsWith("/personas") ? photoPreview : `https://renai.im/social-${locale}-v3.png`}"`,
       );
     }
     const profilePath = `${locale === "en" ? "" : `/${locale}`}/personas/jia`;

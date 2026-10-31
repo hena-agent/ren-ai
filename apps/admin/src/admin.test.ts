@@ -48,7 +48,7 @@ test("the authoring form asks for name and a long description, with no internal 
     expect(nonce).not.toBe("");
     expect(editorResponse.headers.get("content-security-policy")).toContain(`'nonce-${nonce}'`);
     expect(editorResponse.headers.get("content-security-policy")).not.toContain("unsafe-inline");
-    expect(window.document.title).toBe("Ren AI / Admin");
+    expect(window.document.title).toBe("RenAI / Admin");
     expect(window.document.querySelector("form")?.getAttribute("action")).toBe("/personas");
     expect(window.document.querySelector("#persona-editor")?.getAttribute("action")).toBe(
       "/personas",

@@ -100,7 +100,7 @@ export function Home({ client = discoveryClient }: { client?: DiscoveryClient })
 
         <section className="home-closing" aria-labelledby="closing-title">
           <div className="home-closing-copy">
-            <p className="home-eyebrow">Ren AI</p>
+            <p className="home-eyebrow">RenAI</p>
             <h2 id="closing-title">
               {home.closingTitle}
               <span>{home.closingAccent}</span>
