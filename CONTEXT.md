@@ -6,9 +6,9 @@ A service where people text fictional personas over iMessage. The repo also carr
 
 ### Product
 
-**Ren AI**:
-The official product name, written with this capitalization and space in logos, UI, metadata, documentation and communication.
-_Avoid_: Ren, RenAI
+**RenAI**:
+The official product name, written with this capitalization and no space in logos, UI, metadata, documentation and communication.
+_Avoid_: Ren, Ren AI
 
 **Persona**:
 A fictional character the service plays in iMessage. She lives one life across all her Conversations. A conversation's persona is chosen at onboarding and never changes.

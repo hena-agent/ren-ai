@@ -57,7 +57,7 @@ test("a repeat keeps the earlier uncertain attempt and uses the new submission's
         expect(yield* f.snapshot).toMatchObject({ entries: [{ notification: "queued" }] });
         yield* (yield* f.reopen()).tick;
         expect(f.notify).toHaveBeenCalledTimes(2);
-        expect(f.notify.mock.calls[1]?.[1]).toContain("この番号でRen AI");
+        expect(f.notify.mock.calls[1]?.[1]).toContain("この番号でRenAI");
         expect(yield* f.sql`SELECT state, guid FROM discovery_notification ORDER BY id`).toEqual([
           { state: "uncertain", guid: "original-guid" },
           { state: "sent", guid: "notification-guid" },

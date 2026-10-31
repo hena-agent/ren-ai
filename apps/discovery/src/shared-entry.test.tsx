@@ -65,14 +65,14 @@ test("a shared URL switches style immediately in the same reading view and colla
   expect(document.querySelector(".discovery-shell")).toBeTruthy();
   expect(document.querySelector(".public-site")).toBeNull();
   expect(screen.queryByRole("link", { name: "페르소나 둘러보기" })).toBeNull();
-  expect(document.title).toBe("백지아 — Ren AI의 AI 페르소나");
+  expect(document.title).toBe("백지아 — RenAI의 AI 페르소나");
   fireEvent.click(screen.getByRole("button", { name: "애니메" }));
   expect(screen.getByRole("region", { name: /백지아/ })).toBe(details);
   expect(within(details).getByRole("img", { name: "백지아 프로필" }).getAttribute("src")).toBe(
     "https://persona-images.renai.im/thumbnails/00000000-0000-0000-0000-000000000001.jpg",
   );
   expect(api.profiles).not.toHaveBeenCalled();
-  expect(window.location.search).toBe("?style=anime&preview=v2");
+  expect(window.location.search).toBe("?style=anime&preview=v3");
   fireEvent.click(within(details).getByRole("button", { name: "다음 사진" }));
   fireEvent.click(screen.getByRole("button", { name: "프로필 접기" }));
   expect(window.location.pathname).toBe("/ko/explore");
@@ -125,7 +125,7 @@ test("explore cards have no sharing action; opening details exposes footer shari
   expect(button.closest(".details-footer")).toBeTruthy();
   fireEvent.click(button);
   await screen.findByText("링크를 복사했어요.");
-  expect(writeText).toHaveBeenCalledWith("https://renai.im/ko/personas/jia?style=photo&preview=v2");
+  expect(writeText).toHaveBeenCalledWith("https://renai.im/ko/personas/jia?style=photo&preview=v3");
   expect(screen.getByRole("region", { name: /백지아/ })).toBeTruthy();
   expect(localStorage.getItem("ren-ai.discovery.choices")).toBeNull();
   expect(window.location.hash).toBe("#reselect=private-token");

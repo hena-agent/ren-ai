@@ -154,7 +154,7 @@ test("an ending waits for observed delivery after a lost acknowledgement and nev
       );
       yield* restarted.tick;
       expect(f.fake.bubbles).toHaveLength(1);
-      expect(f.fake.bubbles[0]?.text).toContain("[Ren AI]");
+      expect(f.fake.bubbles[0]?.text).toContain("[RenAI]");
       yield* restarted.tick;
       expect(f.fake.bubbles).toHaveLength(1);
     }),
@@ -259,7 +259,7 @@ test("confirmed failed or rejected ending sends leave the relationship ended and
           personaId: "seoyul",
         });
         expect(f.fake.bubbles).toHaveLength(1);
-        expect(f.fake.bubbles[0]?.text).toContain("[Ren AI]");
+        expect(f.fake.bubbles[0]?.text).toContain("[RenAI]");
         expect(JSON.stringify(f.logs)).not.toMatch(/private farewell|821099999999|reselect=/);
         expect(yield* f.app.directory.byHandle(f.conversation.handle)).toBeUndefined();
       }),
@@ -355,7 +355,7 @@ test("a failed ending checkpoint is diagnosed and observed sends are not repeate
       yield* f.sql`DROP TRIGGER fail_ending_checkpoint`;
       yield* f.ending.tick;
       expect(f.fake.bubbles).toHaveLength(2);
-      expect(f.fake.bubbles[1]?.text).toContain("[Ren AI]");
+      expect(f.fake.bubbles[1]?.text).toContain("[RenAI]");
     }),
   );
 });

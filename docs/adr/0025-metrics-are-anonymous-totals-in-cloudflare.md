@@ -1,6 +1,6 @@
 # Metrics are anonymous totals in Cloudflare
 
-Ren AI keeps Metrics in its own Cloudflare account rather than adding an analytics vendor or a cross-Visit browser identity. Public Discovery activity reaches a separate Durable Object, while lifecycle totals commit in the application's existing transaction. Both retain only marginal totals by Korea-time day; history starts at rollout rather than being backfilled. See [issue #168](https://github.com/hena-agent/ren-ai/issues/168).
+RenAI keeps Metrics in its own Cloudflare account rather than adding an analytics vendor or a cross-Visit browser identity. Public Discovery activity reaches a separate Durable Object, while lifecycle totals commit in the application's existing transaction. Both retain only marginal totals by Korea-time day; history starts at rollout rather than being backfilled. See [issue #168](https://github.com/hena-agent/ren-ai/issues/168).
 
 Visit state and duplicate-step markers stay in tab storage; only the operator opt-out persists across Visits. Source contains a referring host, campaign tags and entry, never a full URL. The activity response returns Cloudflare's country so later activity and registration retain the Visit's country. Source and persona cardinality have a daily bound; excess values contribute to an `other` bucket without losing totals.
 

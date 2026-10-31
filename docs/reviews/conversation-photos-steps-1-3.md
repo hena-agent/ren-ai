@@ -40,7 +40,7 @@ storage and Admin Conversation-photo previews belong to steps 4–5.
 ## Live Mac evidence
 
 The operator authorized one JPEG to their chosen test handle on this Mac Mini.
-The image was Discovery's public Ren AI branding card, converted to JPEG.
+The image was Discovery's public RenAI branding card, converted to JPEG.
 
 - Local and public health reported the implementation's full revision and ready
   Messages and Notifications dependencies before the send.

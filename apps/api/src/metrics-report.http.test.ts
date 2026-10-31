@@ -44,12 +44,12 @@ test("a Report card sections traffic, first conversations, retention and cost wi
     expect(posts).toHaveLength(2);
     const post = posts[1]!;
     expect(post).toMatchObject({
-      sender: "Ren AI 지표",
+      sender: "RenAI 지표",
       accent: 0xc72c52,
       links: [{ label: "지표", url: "https://admin.renai.im/metrics" }],
     });
     expect(post.text).toMatch(
-      /^## 📊 Ren AI 일일 보고서\n-# \d{1,2}월 \d{1,2}일 \([일월화수목금토]\) · 한국 시간 · 괄호 안은 전일·이전 7일 대비 증감\n/,
+      /^## 📊 RenAI 일일 보고서\n-# \d{1,2}월 \d{1,2}일 \([일월화수목금토]\) · 한국 시간 · 괄호 안은 전일·이전 7일 대비 증감\n/,
     );
     expect(post.text).toContain(
       [
@@ -142,7 +142,7 @@ test("a Report shows declines, unchanged values, sub-cent cost and ongoing Alert
     for (const missed of ["before", "first", "second"])
       await f.store.metricsTick(`report-${missed}`);
     const posts = await Promise.all(f.fetcher.mock.calls.map((call) => discordPost(...call)));
-    const { text } = posts.findLast((post) => post.sender === "Ren AI 지표")!;
+    const { text } = posts.findLast((post) => post.sender === "RenAI 지표")!;
     expect(text).toContain("**방문** 3 (▼3) · 7일 9 (▲9)");
     expect(text).toContain("**등록** 1 (▼1) · 7일 3 (▲3)");
     expect(text).toContain("**등록률** 33.3% · 7일 33.3%");
@@ -221,7 +221,7 @@ test("the largest possible Report still fits one Discord message", async () => {
     for (let wake = 0; wake < 4; wake++) await f.store.metricsTick(`largest-${wake}`);
     const posts = await Promise.all(f.fetcher.mock.calls.map((call) => discordPost(...call)));
     expect(posts).toHaveLength(14);
-    const largest = posts.find((post) => post.sender === "Ren AI 지표")!;
+    const largest = posts.find((post) => post.sender === "RenAI 지표")!;
     expect(largest.text).toContain("🔴 진행 중인 운영 알림 13건 · 첫 인사 실패 2 · ");
     expect(largest.text).toContain("1. \\-\\-\\-");
     for (const post of posts) {

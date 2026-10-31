@@ -1,14 +1,14 @@
 # Landing artwork
 
 `social.html?lang=ko` (also `en` and `ja`) is the reproducible 1200×630 source for
-`public/social-{locale}-v2.png`, rendered with Chromium at device scale 1 after
+`public/social-{locale}-v3.png`, rendered with Chromium at device scale 1 after
 fonts and images decode. It pairs Jia's existing `dohee-anime.webp` and `dohee.webp`
-editorial portraits with Ren AI's brand symbol, palette, localized headline and
+editorial portraits with RenAI's brand symbol, palette, localized headline and
 illustrative-image label. Home/explorer sharing and absent same-style profile
 photos use the matching display-language preview. Valid profile previews use the
 first published photo in the shared style. `og-watermark.html` produces the
-transparent 220×72 `public/og-watermark-v2.png` from that same brand symbol and
-the official Ren AI wordmark, without a surrounding background box. The Images
+transparent 220×72 `public/og-watermark-v3.png` from that same brand symbol and
+the official RenAI wordmark, without a surrounding background box. The Images
 binding overlays it 28px from the lower-right of a 1200×630 JPEG, with the complete
 photo centered over a blurred, dimmed copy of itself. Renderer failures do not use
 the brand-only image.
@@ -40,7 +40,7 @@ messaging-app symbol is a local SVG illustration, and first-greeting notificatio
 are explicitly examples. Notification examples use the iMessage symbol rather
 than another copy of Jia's portrait.
 
-The portraits are static editorial selections from Ren AI's Catalog,
+The portraits are static editorial selections from RenAI's Catalog,
 exported on 2026-10-18–19. They do not depend on the local authoring service at runtime.
 Landing display names are independent editorial names: 한수빈 (Subin / スビン),
 백지아 (Jia / ジア) and 강하린 (Harin / ハリン). The source asset keys below

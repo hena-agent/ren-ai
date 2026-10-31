@@ -135,7 +135,7 @@ function Detail({ view }: { view: ConversationView }) {
         <output>복구 작업을 접수했습니다. 상태 다시 확인으로 진행 결과를 확인해 주세요.</output>
       )}
       {view.ended && (
-        <output>관계가 종료되었습니다. 실행 정지와 Ren AI 재선택 안내는 별도로 처리됩니다.</output>
+        <output>관계가 종료되었습니다. 실행 정지와 RenAI 재선택 안내는 별도로 처리됩니다.</output>
       )}
       <Connections entries={[detail.entry]} />
       <MessageHistory view={view} />
@@ -144,7 +144,7 @@ function Detail({ view }: { view: ConversationView }) {
           <h2 id="end-title">관계 정리</h2>
           <p>
             이 사용자와 {detail.entry.personaName}의 관계를 영구 종료합니다. 기록은 보존하고 다른
-            페르소나를 선택할 수 있는 Ren AI 안내만 보냅니다.
+            페르소나를 선택할 수 있는 RenAI 안내만 보냅니다.
           </p>
           {!detail.entry.key && (
             <p role="alert">

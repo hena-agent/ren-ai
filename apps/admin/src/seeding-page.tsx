@@ -14,7 +14,7 @@ export function seedingPage(
   return html(
     "<!doctype html>" +
       renderToStaticMarkup(
-        <AdminLayout active="seeding" title="시딩 · Ren AI">
+        <AdminLayout active="seeding" title="시딩 · RenAI">
           <main id="main" className="seeding-workspace">
             <div className="page-heading">
               <p className="eyebrow">PERSONAS / SEEDING</p>

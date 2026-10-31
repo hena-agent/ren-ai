@@ -8,9 +8,9 @@
     ],
     "requirement": "Nothing to install: just an iPhone with iMessage. Android isn't supported yet.",
     "start": "Meet the personas",
-    "open": "About Ren AI",
+    "open": "About RenAI",
     "close": "Close guide",
-    "about": "More about Ren AI",
+    "about": "More about RenAI",
     "privacy": "Privacy"
   },
   "about": {
@@ -19,7 +19,7 @@
     "personaNames": { "seoyeon": "Subin", "dohee": "Jia", "seoyul": "Harin" },
     "profileNote": "Different tastes. A story of their own.",
     "navigation": "About the service",
-    "about": "About Ren AI",
+    "about": "About RenAI",
     "how": "How it works",
     "faq": "FAQ",
     "start": "Meet the personas",
@@ -96,7 +96,7 @@
     "questions": [
       {
         "title": "Am I talking to a real person?",
-        "body": "No. Ren AI personas are fictional people played by AI. Their photos and profiles represent fictional people, too. This isn't a service for connecting with real people."
+        "body": "No. RenAI personas are fictional people played by AI. Their photos and profiles represent fictional people, too. This isn't a service for connecting with real people."
       },
       {
         "title": "Do I need another app?",
@@ -118,8 +118,8 @@
     "closingTitle": "Someone you'll",
     "closingAccent": "hope to hear from.",
     "closingBody": "No new app. Just a new connection in iMessage. Start with someone who catches your interest.",
-    "footer": "Everyday moments with AI personas. Ren AI.",
-    "pageTitle": "Ren AI — A little more to look forward to"
+    "footer": "Everyday moments with AI personas. RenAI.",
+    "pageTitle": "RenAI — A little more to look forward to"
   },
   "profileNamePlaceholder": "What should we call you?",
   "profileName": "Name",
@@ -175,7 +175,7 @@
   "profilePhoto": "profile photo",
   "fullProfile": "View full profile",
   "noStylePhoto": "There are no photos in this style yet.",
-  "brand": "Ren AI",
+  "brand": "RenAI",
   "photos": "Choose a profile photo",
   "photo": "Photo",
   "previousPhoto": "Previous photo",
@@ -224,7 +224,7 @@
   "invitationIntro": "Your invitation will be applied. After checking iMessage availability, we automatically select an available persona from your Likes. The invitation is used when you are selected.",
   "invitationTitle": "Your invitation request is in.",
   "invitationMessage": "After checking iMessage availability, we automatically select an available persona from your Likes. Their first message is then scheduled for 5–60 minutes later.",
-  "invitationHint": "Your invitation is only used when you are selected. If you don't hear from us, you can submit again through the same invitation link. Ren AI notifications come from noti@renai.im and persona greetings from hi@renai.im.",
+  "invitationHint": "Your invitation is only used when you are selected. If you don't hear from us, you can submit again through the same invitation link. RenAI notifications come from noti@renai.im and persona greetings from hi@renai.im.",
   "countryCode": "Country code",
   "handle": "Mobile number",
   "handleHint": "Enter the number of an iPhone that uses iMessage. Android isn't supported yet.",
@@ -249,7 +249,7 @@
   "privacy": "Read about privacy and data use",
   "waitingTitle": "You're on the waitlist.",
   "waitingMessage": "When things are ready, one of the personas you liked may get in touch.",
-  "waitingHint": "There is no guaranteed order or contact date. On iMessage, Ren AI's notifications come from noti@renai.im and the persona's first greeting comes from hi@renai.im.",
+  "waitingHint": "There is no guaranteed order or contact date. On iMessage, RenAI's notifications come from noti@renai.im and the persona's first greeting comes from hi@renai.im.",
   "activeTitle": "This contact already has a conversation.",
   "activeMessage": "Continue with your existing persona on iMessage.",
   "selected": "Personas you're interested in"

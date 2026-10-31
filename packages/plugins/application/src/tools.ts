@@ -19,7 +19,7 @@ export const messagingToolDefinitions = {
     Schema.Struct({ photo: Schema.String }),
   ),
   end_conversation: definition(
-    "Permanently end only this Conversation when you no longer want a relationship. Records the ending and sends your farewell plus Ren AI's reselection notice. The User can choose another persona. Do not send the farewell separately or use this for a temporary break or a declined suggestion.",
+    "Permanently end only this Conversation when you no longer want a relationship. Records the ending and sends your farewell plus RenAI's reselection notice. The User can choose another persona. Do not send the farewell separately or use this for a temporary break or a declined suggestion.",
     Schema.Struct({
       farewell: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1000)),
     }),

@@ -100,7 +100,7 @@ export function About({ client = discoveryClient }: { client?: DiscoveryClient }
 
         <section className="about-closing" aria-labelledby="closing-title">
           <div className="about-closing-copy">
-            <p className="about-eyebrow">Ren AI</p>
+            <p className="about-eyebrow">RenAI</p>
             <h2 id="closing-title">
               {about.closingTitle}
               <span>{about.closingAccent}</span>

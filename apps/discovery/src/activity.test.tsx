@@ -171,7 +171,7 @@ test("blocked tab storage never interrupts the home page or emits malformed acti
       })}
     />,
   );
-  expect(screen.getAllByText("Ren AI").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("RenAI").length).toBeGreaterThan(0);
   expect(activity).not.toHaveBeenCalled();
 });
 

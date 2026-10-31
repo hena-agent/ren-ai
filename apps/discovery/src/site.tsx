@@ -28,8 +28,8 @@ export function Site({ client = discoveryClient }: { client?: DiscoveryClient })
   if (route.path !== "/about")
     return (
       <main>
-        <h1>404 — Ren AI</h1>
-        <a href={localizedPath("/explore", route.locale ?? "en")}>Ren AI</a>
+        <h1>404 — RenAI</h1>
+        <a href={localizedPath("/explore", route.locale ?? "en")}>RenAI</a>
       </main>
     );
   return (

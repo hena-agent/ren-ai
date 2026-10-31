@@ -8,9 +8,9 @@
     ],
     "requirement": "アプリのインストールは不要。iMessageが使えるiPhoneだけでOK。Androidはまだ対応していないよ。",
     "start": "ペルソナに会ってみる",
-    "open": "Ren AIについて",
+    "open": "RenAIについて",
     "close": "ガイドを閉じる",
-    "about": "Ren AIをもっと知る",
+    "about": "RenAIをもっと知る",
     "privacy": "プライバシー"
   },
   "about": {
@@ -19,7 +19,7 @@
     "personaNames": { "seoyeon": "スビン", "dohee": "ジア", "seoyul": "ハリン" },
     "profileNote": "それぞれの好み。それぞれの物語。",
     "navigation": "サービス紹介メニュー",
-    "about": "Ren AIとは",
+    "about": "RenAIとは",
     "how": "はじめ方",
     "faq": "よくある質問",
     "start": "ペルソナに出会う",
@@ -96,7 +96,7 @@
     "questions": [
       {
         "title": "実在する人と話すのですか？",
-        "body": "いいえ。Ren AIのペルソナはAIが演じる架空の人物です。写真やプロフィールも架空の人物を表現したもので、実在する人とつながるサービスではありません。"
+        "body": "いいえ。RenAIのペルソナはAIが演じる架空の人物です。写真やプロフィールも架空の人物を表現したもので、実在する人とつながるサービスではありません。"
       },
       {
         "title": "別のアプリが必要ですか？",
@@ -118,8 +118,8 @@
     "closingTitle": "次のメッセージが、",
     "closingAccent": "待ち遠しくなる相手。",
     "closingBody": "新しいアプリなしで、いつものiMessageから。気になるひとりに出会ってみませんか。",
-    "footer": "AIペルソナと分かち合う日常、Ren AI。",
-    "pageTitle": "Ren AI — 日常に、待ち遠しいメッセージを"
+    "footer": "AIペルソナと分かち合う日常、RenAI。",
+    "pageTitle": "RenAI — 日常に、待ち遠しいメッセージを"
   },
   "profileNamePlaceholder": "どのようにお呼びすればいいですか？",
   "profileName": "名前",
@@ -175,7 +175,7 @@
   "profilePhoto": "プロフィール写真",
   "fullProfile": "プロフィール全体を見る",
   "noStylePhoto": "このスタイルの写真はまだありません。",
-  "brand": "Ren AI",
+  "brand": "RenAI",
   "photos": "プロフィール写真を選ぶ",
   "photo": "写真",
   "previousPhoto": "前の写真",
@@ -224,7 +224,7 @@
   "invitationIntro": "招待状が適用されます。iMessageの利用可否を確認した後、いいねした中から空きのあるペルソナを自動で選定します。招待状は選定時に使用されます。",
   "invitationTitle": "招待の申し込みを受け付けました。",
   "invitationMessage": "iMessageの利用可否を確認した後、いいねした中から空きのあるペルソナを自動で選定します。最初の連絡は選定から5分〜1時間後に予定されます。",
-  "invitationHint": "招待状は選定時にのみ使用されます。連絡が届かない場合は同じ招待リンクから再度申し込めます。Ren AIの通知はnoti@renai.imから、ペルソナの最初の挨拶はhi@renai.imから届きます。",
+  "invitationHint": "招待状は選定時にのみ使用されます。連絡が届かない場合は同じ招待リンクから再度申し込めます。RenAIの通知はnoti@renai.imから、ペルソナの最初の挨拶はhi@renai.imから届きます。",
   "countryCode": "国番号",
   "handle": "携帯電話番号",
   "handleHint": "iMessageを使っているiPhoneの番号を入力してください。Androidにはまだ対応していません。",
@@ -249,7 +249,7 @@
   "privacy": "個人情報の取り扱いを読む",
   "waitingTitle": "ウェイトリストに登録しました。",
   "waitingMessage": "準備ができたら、いいねしたペルソナの1人から連絡が届くことがあります。",
-  "waitingHint": "登録順や連絡時期は決まっていません。iMessageでは、Ren AIの通知はnoti@renai.imから、ペルソナの最初の挨拶はhi@renai.imから届きます。",
+  "waitingHint": "登録順や連絡時期は決まっていません。iMessageでは、RenAIの通知はnoti@renai.imから、ペルソナの最初の挨拶はhi@renai.imから届きます。",
   "activeTitle": "この連絡先ではすでに会話が始まっています。",
   "activeMessage": "iMessageで今のペルソナとの会話を続けてください。",
   "selected": "気になるペルソナ"

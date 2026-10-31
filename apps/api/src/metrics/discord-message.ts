@@ -34,7 +34,7 @@ export const card = (accent: number, parts: readonly Part[]): DiscordMessage => 
   components: [{ type: 17, accent_color: accent, components: parts }],
 });
 
-const senders = { alerts: "Ren AI 알림", reports: "Ren AI 지표" } as const;
+const senders = { alerts: "RenAI 알림", reports: "RenAI 지표" } as const;
 /** The complete webhook request body: the card, its channel's sender and no mentions. */
 export const requestBody = (channel: keyof typeof senders, message: DiscordMessage) =>
   JSON.stringify({
@@ -44,5 +44,5 @@ export const requestBody = (channel: keyof typeof senders, message: DiscordMessa
     allowed_mentions: { parse: [] },
   });
 
-/** Escapes Discord formatting in values that originate outside Ren AI, such as campaign tags. */
+/** Escapes Discord formatting in values that originate outside RenAI, such as campaign tags. */
 export const escapeMarkdown = (value: string) => value.replace(/[\\*_~`|<>#[\]()-]/g, "\\$&");

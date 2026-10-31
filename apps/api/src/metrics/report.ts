@@ -158,7 +158,7 @@ const ongoingAlerts = (alerts: Metrics["alerts"]) => {
 const reportMessage = (daily: Metrics, weekly: Metrics, cohorts: readonly Metrics[]) =>
   card(accents.report, [
     text(
-      `## 📊 Ren AI 일일 보고서\n-# ${reportDate.format(Date.parse(daily.to))} · 한국 시간 · 괄호 안은 전일·이전 7일 대비 증감`,
+      `## 📊 RenAI 일일 보고서\n-# ${reportDate.format(Date.parse(daily.to))} · 한국 시간 · 괄호 안은 전일·이전 7일 대비 증감`,
     ),
     divider,
     text(

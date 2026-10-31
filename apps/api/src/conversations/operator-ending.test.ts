@@ -69,7 +69,7 @@ test.each(["ko", "en", "ja"])(
         expect(f.fake.bubbles[0]?.text).toContain(
           locale === "ko" ? "운영자가" : locale === "ja" ? "運営者" : "The operator",
         );
-        expect(f.fake.bubbles[0]?.text).toContain("[Ren AI]");
+        expect(f.fake.bubbles[0]?.text).toContain("[RenAI]");
         expect(f.fake.bubbles[0]?.text).toContain("#reselect=");
       }),
     ),

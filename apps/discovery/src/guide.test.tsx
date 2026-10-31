@@ -59,7 +59,7 @@ test("reopening, all dismissal methods and in-dialog locale changes preserve bro
   expect(localStorage.getItem("ren-ai.discovery.guide-seen")).toBeNull();
   expect(window.location.pathname + window.location.hash).toBe("/explore#invite=secret");
   fireEvent.click(within(dialog).getByRole("button", { name: "Close guide" }));
-  const trigger = screen.getByRole("button", { name: "About Ren AI" });
+  const trigger = screen.getByRole("button", { name: "About RenAI" });
   expect(document.activeElement).toBe(trigger);
   fireEvent.click(trigger);
   fireEvent(dialog, new Event("cancel", { bubbles: true, cancelable: true }));
@@ -130,7 +130,7 @@ test.each(["/missing", "/ko/missing"])(
   (path) => {
     window.history.replaceState(null, "", path);
     render(<Site client={client} />);
-    expect(screen.getByRole("heading").textContent).toBe("404 — Ren AI");
+    expect(screen.getByRole("heading").textContent).toBe("404 — RenAI");
     expect(screen.getByRole("link").getAttribute("href")).toContain("/explore");
   },
 );

@@ -115,7 +115,7 @@ export function MetricsPage({ metrics, query }: { metrics?: Metrics; query: Metr
   return (
     <section>
       <h1>지표</h1>
-      <p>Ren AI · 한국 시간(UTC+9) · 익명 합계</p>
+      <p>RenAI · 한국 시간(UTC+9) · 익명 합계</p>
       <nav aria-label="기간">
         {[
           ["today", "오늘"],

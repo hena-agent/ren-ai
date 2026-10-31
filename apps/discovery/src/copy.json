@@ -8,9 +8,9 @@
     ],
     "requirement": "앱 설치 없이, iMessage를 쓰는 iPhone이면 충분해요. Android는 아직 지원하지 않아요.",
     "start": "페르소나 만나보기",
-    "open": "Ren AI 알아보기",
+    "open": "RenAI 알아보기",
     "close": "안내 닫기",
-    "about": "Ren AI 더 알아보기",
+    "about": "RenAI 더 알아보기",
     "privacy": "개인정보 처리 안내"
   },
   "about": {
@@ -19,7 +19,7 @@
     "personaNames": { "seoyeon": "한수빈", "dohee": "백지아", "seoyul": "강하린" },
     "profileNote": "저마다의 취향. 서로 다른 이야기.",
     "navigation": "서비스 소개 메뉴",
-    "about": "Ren AI 소개",
+    "about": "RenAI 소개",
     "how": "이용 방법",
     "faq": "자주 묻는 질문",
     "start": "페르소나 만나보기",
@@ -96,7 +96,7 @@
     "questions": [
       {
         "title": "실제 사람과 대화하나요?",
-        "body": "아니요. Ren AI의 페르소나는 AI가 연기하는 가상의 인물이에요. 사진과 프로필도 가상 인물을 표현한 것이며, 실제 사람과 연결하는 서비스가 아니에요."
+        "body": "아니요. RenAI의 페르소나는 AI가 연기하는 가상의 인물이에요. 사진과 프로필도 가상 인물을 표현한 것이며, 실제 사람과 연결하는 서비스가 아니에요."
       },
       {
         "title": "별도의 앱이 필요한가요?",
@@ -118,8 +118,8 @@
     "closingTitle": "다음 메시지가",
     "closingAccent": "기다려지는 사람.",
     "closingBody": "새 앱 설치 없이, 익숙한 iMessage에서. 마음이 가는 한 사람부터 만나보세요.",
-    "footer": "AI 페르소나와 나누는 일상, Ren AI.",
-    "pageTitle": "Ren AI — 일상에, 기다려지는 메시지 하나"
+    "footer": "AI 페르소나와 나누는 일상, RenAI.",
+    "pageTitle": "RenAI — 일상에, 기다려지는 메시지 하나"
   },
   "publicProfile": {
     "share": "프로필 공유하기",
@@ -156,7 +156,7 @@
   "profilePhoto": "프로필",
   "fullProfile": "소개 전체 보기",
   "noStylePhoto": "이 스타일의 사진이 아직 없어요.",
-  "brand": "Ren AI",
+  "brand": "RenAI",
   "photos": "프로필 사진 선택",
   "photo": "사진",
   "previousPhoto": "이전 사진",
@@ -205,7 +205,7 @@
   "invitationIntro": "초대장이 적용됩니다. iMessage 사용 가능 여부를 확인한 뒤, 배정 여유가 있는 좋아요한 페르소나로 자동 선정해요. 초대장은 선정될 때 사용됩니다.",
   "invitationTitle": "초대 신청을 받았어요.",
   "invitationMessage": "iMessage 사용 가능 여부를 확인한 뒤, 배정 여유가 있는 좋아요한 페르소나로 자동 선정해요. 선정되면 5분~1시간 뒤 첫 연락을 예약해요.",
-  "invitationHint": "초대장은 선정될 때만 사용돼요. 연락이 오지 않으면 같은 초대 링크에서 다시 신청할 수 있어요. Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
+  "invitationHint": "초대장은 선정될 때만 사용돼요. 연락이 오지 않으면 같은 초대 링크에서 다시 신청할 수 있어요. RenAI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
   "countryCode": "국가 번호",
   "handle": "휴대전화 번호",
   "profileNamePlaceholder": "어떻게 불러드리면 될까요?",
@@ -240,7 +240,7 @@
   "privacy": "개인정보 처리 내용 읽기",
   "waitingTitle": "대기 등록이 완료됐어요.",
   "waitingMessage": "준비되는 대로, 좋아한 페르소나 중 한 명이 연락할 거예요.",
-  "waitingHint": "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 Ren AI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
+  "waitingHint": "등록 순서와 연락 시점은 정해져 있지 않아요. iMessage에서 RenAI 안내는 noti@renai.im, 페르소나의 첫 인사는 hi@renai.im에서 와요.",
   "activeTitle": "이미 대화가 시작된 연락처예요.",
   "activeMessage": "iMessage에서 기존 페르소나와 대화를 이어가 주세요.",
   "selected": "관심을 전할 페르소나"

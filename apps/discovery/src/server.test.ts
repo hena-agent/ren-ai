@@ -34,7 +34,7 @@ test("a direct profile request includes readable public HTML, canonical SEO, sty
   );
   expect(html).toContain('<link rel="canonical" href="https://renai.im/ko/personas/jia"');
   expect(html).toContain(
-    '<meta property="og:url" content="https://renai.im/ko/personas/jia?style=photo&amp;preview=v2"',
+    '<meta property="og:url" content="https://renai.im/ko/personas/jia?style=photo&amp;preview=v3"',
   );
   expect(html).toContain(`<meta property="og:image" content="${photoPreview}"`);
   expect(html).toContain('name="twitter:card" content="summary_large_image"');
@@ -109,9 +109,9 @@ test("profiles without photos, structured profiles or a style query still have p
   expect(html).toContain("반가워요.");
   expect(html).toContain("이 스타일의 사진이 아직 없어요.");
   expect(html).toContain(
-    'name="description" content="반가워요. — Ren AI의 가상 AI 페르소나. iMessage로 일상을 나눠요."',
+    'name="description" content="반가워요. — RenAI의 가상 AI 페르소나. iMessage로 일상을 나눠요."',
   );
-  expect(html).toContain('property="og:image" content="https://renai.im/social-ko-v2.png"');
+  expect(html).toContain('property="og:image" content="https://renai.im/social-ko-v3.png"');
   expect(html).toContain('property="og:image:width" content="1200"');
   expect(html).toContain('property="og:image:height" content="630"');
   expect(html).toContain('name="twitter:card" content="summary_large_image"');
@@ -215,7 +215,7 @@ test("health reports artifact identity and Catalog readiness independently of st
     dependencies: { catalog: { status: "degraded" } },
   });
   expect(f.assets).toHaveBeenCalledWith(
-    expect.objectContaining({ url: "https://renai.im/og-watermark-v2.png" }),
+    expect.objectContaining({ url: "https://renai.im/og-watermark-v3.png" }),
   );
 });
 
@@ -395,7 +395,7 @@ test("advertised rendition routes return JPEGs and reject withdrawn or stale gal
   f.fetcher.mockResolvedValueOnce(Response.json([publicPersonas[1]]));
   expect((await f.send(new URL(animePreview).pathname)).status).toBe(404);
   expect(
-    (await f.send(new URL(animePreview).pathname.replace(/[^/]+$/, "unknown.v2.jpg"))).status,
+    (await f.send(new URL(animePreview).pathname.replace(/[^/]+$/, "unknown.v3.jpg"))).status,
   ).toBe(404);
   expect(f.cache.match).toHaveBeenCalledTimes(2);
   expect(f.PORTRAITS.get).toHaveBeenCalledOnce();

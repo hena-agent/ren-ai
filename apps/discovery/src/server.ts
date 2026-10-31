@@ -92,7 +92,7 @@ function notFound(url: URL) {
   const { locale = "en" } = publicRoute(url);
   const copy = messages[locale];
   return new Response(
-    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>404 — Ren AI</title></head><body><h1>404 — Ren AI</h1><a href="${localizedPath("/explore", locale)}">${copy.back}</a></body></html>`,
+    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>404 — RenAI</title></head><body><h1>404 — RenAI</h1><a href="${localizedPath("/explore", locale)}">${copy.back}</a></body></html>`,
     {
       status: 404,
       headers: {
@@ -115,7 +115,7 @@ function unavailableResponse(path: string, requestId: string, catalogReady: bool
   const { locale = "en" } = publicRoute(new URL(path, publicOrigin));
   const copy = messages[locale];
   return new Response(
-    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Ren AI</title></head><body><h1>${copy.loadFailure}</h1><p>Request ID: ${requestId}</p><a href="${localizedPath("/explore", locale)}">${copy.retry}</a></body></html>`,
+    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>RenAI</title></head><body><h1>${copy.loadFailure}</h1><p>Request ID: ${requestId}</p><a href="${localizedPath("/explore", locale)}">${copy.retry}</a></body></html>`,
     {
       status: 503,
       headers: {

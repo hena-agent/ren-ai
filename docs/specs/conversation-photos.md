@@ -22,7 +22,7 @@ user; gallery photos stay in her public profile.
 - **Only her side.** Her description of the moment never includes the user's name, photos or
   other personal details, because it goes to the image provider.
 - **Truthfulness.** Asked whether a photo is real, she answers within the ground rules: it is an
-  image of her as a Ren AI persona, not proof of a real body.
+  image of her as a RenAI persona, not proof of a real body.
 - **Limit.** At most 3 successful takes per Conversation in any 24 hours, whether or not she
   sends them. Failed attempts don't count. There is no minimum gap, so two shots in a row are
   possible. Test handles count like any other Conversation.

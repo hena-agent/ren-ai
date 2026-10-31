@@ -46,7 +46,7 @@ test("alerts are durable, deduplicated and never forward private detail", async 
   );
   expect(raised).toMatchObject({
     url: "https://hook.example/?wait=true&with_components=true",
-    sender: "Ren AI 알림",
+    sender: "RenAI 알림",
     avatar: "https://renai.im/apple-touch-icon.png",
     accent: 0xed4245,
     links: [{ label: "대화 상태", url: "https://admin.renai.im/conversations" }],
