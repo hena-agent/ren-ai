@@ -22,16 +22,16 @@ export function HeroGallery({ style }: { style: ImageStyle }) {
         ))}
       </div>
       <fieldset className="hero-gallery-controls">
-        <legend className="sr-only">{copy.home.profileNote}</legend>
+        <legend className="sr-only">{copy.about.profileNote}</legend>
         {landingPersonas.map((portrait, index) => (
           <button
             type="button"
             key={portrait.image}
-            aria-label={`${copy.home.personaNames[portrait.image]} ${copy.profilePhoto}`}
+            aria-label={`${copy.about.personaNames[portrait.image]} ${copy.profilePhoto}`}
             aria-pressed={selected === index}
             onClick={() => setSelected(index)}
           >
-            <span>{copy.home.personaNames[portrait.image]}</span>
+            <span>{copy.about.personaNames[portrait.image]}</span>
             <span className="hero-selector-dot" aria-hidden="true" />
           </button>
         ))}

@@ -89,6 +89,8 @@ export function ProfileDetails({
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     close.current!.focus({ preventScroll: true });
     const key = (event: KeyboardEvent) => {
+      // A modal guide or an open language menu owns its keyboard interaction.
+      if (event.defaultPrevented || document.querySelector("dialog[open]")) return;
       if (!disabled && event.key === "Escape") {
         event.preventDefault();
         collapse();

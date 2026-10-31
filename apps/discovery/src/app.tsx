@@ -22,6 +22,7 @@ import { useSeo } from "./use-seo.ts";
 import type { SampledPage } from "./public-routing.ts";
 import { BrowseLoading, type Paging } from "./browse-loading.tsx";
 import { useActivity, useBrowseActivity } from "./activity.ts";
+import { Guide } from "./guide.tsx";
 
 type Entry = {
   personaId?: string | undefined;
@@ -204,6 +205,7 @@ function DiscoveryApp({
             personaId={personaId}
             initialStyle={initialStyle}
             paging={paging}
+            firstVisit={reselectionToken === undefined && catalog.people.length > 0}
             onRefresh={() => {
               setReviewingSelection(true);
               return refresh();
@@ -277,6 +279,7 @@ function Experience({
   initialStyle,
   onRefresh,
   paging,
+  firstVisit,
 }: {
   people: readonly PublicPersona[];
   client: DiscoveryClient;
@@ -284,6 +287,7 @@ function Experience({
   initialStyle: ImageStyle | undefined;
   onRefresh: () => Promise<void>;
   paging: Paging;
+  firstVisit: boolean;
 }) {
   const copy = useCopy();
   const { locale } = useLocale();
@@ -328,6 +332,7 @@ function Experience({
     <>
       <Header>
         <StyleSwitch style={style} onChoose={changeStyle} disabled={busy} />
+        <Guide firstVisit={firstVisit} />
       </Header>
       <StyleFeedback issue={issue} />
     </>

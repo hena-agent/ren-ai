@@ -6,9 +6,9 @@ A service where people text fictional personas over iMessage. The repo also carr
 
 ### Product
 
-**Ren AI**:
-The official product name, written with this capitalization and space in logos, UI, metadata, documentation and communication.
-_Avoid_: Ren, RenAI
+**RenAI**:
+The official product name, written with this capitalization and no space in logos, UI, metadata, documentation and communication.
+_Avoid_: Ren, Ren AI
 
 **Persona**:
 A fictional character the service plays in iMessage. She lives one life across all her Conversations. A conversation's persona is chosen at onboarding and never changes.
@@ -214,7 +214,7 @@ One browser tab's time in Discovery, ending when the tab closes or is idle for 3
 _Avoid_: visitor, browser identity, session
 
 **Source**:
-Where a Visit began: the referring site's host, campaign tags and entry through home, Explore, a shared profile or a Reselection link. Navigation within Discovery does not change it.
+Where a Visit began: the referring site's host, campaign tags and entry through the About page, Explore, a shared profile or a Reselection link. Navigation within Discovery does not change it.
 _Avoid_: full referrer URL, attribution identity
 
 **First reply**:

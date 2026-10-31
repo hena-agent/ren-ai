@@ -28,6 +28,7 @@ const currentTabs = () =>
     .map((button) => button.getAttribute("aria-current"));
 
 test("the app navigation exposes liked profiles and full details without turning taps into Likes", async () => {
+  localStorage.setItem("ren-ai.discovery.guide-seen", "1");
   localStorage.setItem("ren-ai.discovery.image-style", "photo");
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });

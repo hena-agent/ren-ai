@@ -1,0 +1,120 @@
+.guide-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+}
+.guide-trigger:hover {
+  background: var(--canvas);
+}
+.guide-trigger .icon {
+  width: 22px;
+  height: 22px;
+}
+.guide {
+  width: min(440px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 24px 80px #20242b33;
+}
+.guide::backdrop {
+  background: #20242b66;
+}
+.guide[open] {
+  animation: guide-enter 220ms var(--ease-out);
+}
+.guide-content {
+  padding: 16px 24px 24px;
+}
+.guide-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.guide h2 {
+  margin: 12px 0 20px;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.6px;
+}
+.guide ul {
+  display: grid;
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.guide li {
+  display: flex;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.guide li .icon {
+  flex: 0 0 20px;
+  height: 20px;
+  margin-top: 2px;
+  background: var(--accent);
+}
+.guide-requirement {
+  margin: 20px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.guide .primary-button {
+  width: 100%;
+}
+.guide nav {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+.guide nav a {
+  color: var(--muted);
+  padding-block: 8px;
+}
+@keyframes guide-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 480px) {
+  .discovery-shell .wordmark {
+    gap: 6px;
+    font-size: 18px;
+  }
+  .discovery-shell .wordmark img {
+    width: 24px;
+    height: 24px;
+  }
+  .discovery-shell .site-header {
+    gap: 4px;
+  }
+  .guide-content {
+    padding: 12px 20px 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide[open] {
+    animation: none;
+  }
+}

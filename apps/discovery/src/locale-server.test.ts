@@ -6,7 +6,7 @@ test.each(["ko", "en", "ja"] as const)(
   "%s URLs render localized HTML and reciprocal language metadata before JavaScript",
   async (locale) => {
     const f = await fixture();
-    for (const path of ["", "/explore", "/personas/jia"]) {
+    for (const path of ["/about", "/explore", "/personas/jia"]) {
       const canonicalPath = locale === "en" ? path || "/" : `/${locale}${path}`;
       const response = await f.send(`${canonicalPath}?style=photo`);
       const html = await response.text();
@@ -38,12 +38,12 @@ test.each(["ko", "en", "ja"] as const)(
 test("language redirects preserve queries and invalid localized routes stay unindexed", async () => {
   const f = await fixture();
   for (const [from, to] of [
-    ["/en", "/"],
+    ["/en/about", "/about"],
     ["/en/explore", "/explore"],
     ["/explore/", "/explore"],
     ["/en/personas/jia", "/personas/jia"],
     ["/personas/jia/", "/personas/jia"],
-    ["/en/", "/"],
+    ["/en/about/", "/about"],
   ] as const) {
     const response = await f.send(`${from}?style=photo&utm_source=friend`);
     expect(response.status).toBe(from.startsWith("/en") ? 308 : 307);
@@ -76,7 +76,7 @@ test.each([
   "unprefixed pages negotiate %s as %s without overriding explicit URLs",
   async (header, locale) => {
     const f = await fixture();
-    for (const path of ["/", "/explore", "/personas/jia"]) {
+    for (const path of ["/about", "/explore", "/personas/jia"]) {
       const response = await f.send(path, "HEAD", { "Accept-Language": header });
       expect(response.status).toBe(locale === "en" ? 200 : 307);
       expect(response.headers.get("vary")).toBe("Accept-Language, Cookie");
@@ -87,29 +87,43 @@ test.each([
     }
     expect(f.fetcher).toHaveBeenCalledTimes(locale === "en" ? 1 : 0);
     expect(
-      (await f.send("/ja", "GET", { "Accept-Language": header })).headers.get("content-language"),
+      (await f.send("/ja/about", "GET", { "Accept-Language": header })).headers.get(
+        "content-language",
+      ),
     ).toBe("ja");
   },
 );
 
-test("the English root renders directly and an explicit language choice survives reload despite device language", async () => {
+test("roots redirect directly to Explore and explicit language choices survive reload", async () => {
   const f = await fixture();
   const root = await f.send("/");
-  expect(root.status).toBe(200);
-  expect(root.headers.get("location")).toBeNull();
-  expect(root.headers.get("content-language")).toBe("en");
-  expect(await root.text()).toContain('rel="canonical" href="https://renai.im/"');
+  expect(root.status).toBe(307);
+  expect(root.headers.get("location")).toBe("https://renai.im/explore");
   const normalized = await f.send("/en", "GET", { "Accept-Language": "ko-KR" });
-  expect(normalized.status).toBe(308);
-  expect(normalized.headers.get("location")).toBe("https://renai.im/");
+  expect(normalized.status).toBe(307);
+  expect(normalized.headers.get("location")).toBe("https://renai.im/explore");
   expect(normalized.headers.get("set-cookie")).toContain("renai.locale=en;");
   for (const [cookie, status, target] of [
-    ["other=1; renai.locale=en", 200, null],
-    ["renai.locale=invalid", 307, "https://renai.im/ko"],
-    ["renai.locale=ja", 307, "https://renai.im/ja"],
+    ["other=1; renai.locale=en", 307, "https://renai.im/explore"],
+    ["renai.locale=invalid", 307, "https://renai.im/ko/explore"],
+    ["renai.locale=ja", 307, "https://renai.im/ja/explore"],
   ] as const) {
     const response = await f.send("/", "GET", { "Accept-Language": "ko-KR", Cookie: cookie });
     expect(response.status).toBe(status);
     expect(response.headers.get("location")).toBe(target);
   }
+  for (const [path, target] of [
+    ["/ko", "/ko/explore"],
+    ["/ja/", "/ja/explore"],
+    ["/en/", "/explore"],
+  ]) {
+    const response = await f.send(`${path}?utm_source=friends&metrics=off`, "HEAD");
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      `https://renai.im${target}?utm_source=friends&metrics=off`,
+    );
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.text()).toBe("");
+  }
+  expect(f.fetcher).not.toHaveBeenCalled();
 });

@@ -1,5 +1,19 @@
 {
-  "home": {
+  "guide": {
+    "title": "마음에 드는 페르소나와 대화해 보세요!",
+    "steps": [
+      "오른쪽으로 넘기거나 하트를 누르면 좋아요, 왼쪽은 패스!",
+      "좋아요를 보낼 때 iPhone 번호를 남겨 주세요.",
+      "선정되면 그중 한 명이 iMessage로 먼저 말을 걸어요. 연락이 언제 올지는 정해져 있지 않아요."
+    ],
+    "requirement": "앱 설치 없이, iMessage를 쓰는 iPhone이면 충분해요. Android는 아직 지원하지 않아요.",
+    "start": "페르소나 만나보기",
+    "open": "RenAI 알아보기",
+    "close": "안내 닫기",
+    "about": "RenAI 더 알아보기",
+    "privacy": "개인정보 처리 안내"
+  },
+  "about": {
     "menu": "메뉴 열기 및 닫기",
     "personaLabel": "AI 페르소나",
     "personaNames": { "seoyeon": "한수빈", "dohee": "백지아", "seoyul": "강하린" },

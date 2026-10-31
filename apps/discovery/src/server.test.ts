@@ -139,10 +139,16 @@ test("routing handles HEAD, invalid paths, trailing slashes, methods, robots and
   const head = await f.send("/ko/personas/jia", "HEAD");
   expect(head.status).toBe(200);
   expect(await head.text()).toBe("");
-  await f.send("/assets/browser.js");
+  expect((await f.send("/assets/browser.js")).status).toBe(200);
   expect(f.assets).toHaveBeenLastCalledWith(
     expect.objectContaining({ url: "https://renai.im/assets/browser.js" }),
   );
+  for (const path of ["/typo", "/ko/typo", "/ja/health"]) {
+    const response = await f.send(path);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    expect(await response.text()).toContain("/explore");
+  }
 });
 
 test.each(["http", "decode", "network", "assets"])(
@@ -213,20 +219,20 @@ test("health reports artifact identity and Catalog readiness independently of st
   );
 });
 
-test("English home remains a prerendered asset after locale negotiation", async () => {
+test("English About remains a prerendered asset after locale negotiation", async () => {
   const f = await fixture();
-  const response = await f.send("/");
+  const response = await f.send("/about");
   expect(response.status).toBe(200);
-  expect(f.assets.mock.lastCall?.[0].url).toBe("https://renai.im/");
+  expect(f.assets.mock.lastCall?.[0].url).toBe("https://renai.im/about");
   expect(response.headers.get("content-type")).toContain("text/html");
   expect(response.headers.get("content-language")).toBe("en");
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(response.headers.get("vary")).toBe("Accept-Language, Cookie");
   expect(response.headers.get("x-request-id")).toBeTruthy();
-  expect(await response.text()).toContain('class="home"');
+  expect(await response.text()).toContain('class="about"');
   expect(f.fetcher).not.toHaveBeenCalled();
   expect(f.log).toHaveBeenCalledWith(expect.objectContaining({ status: 200 }));
-  const korean = await f.send("/ko");
+  const korean = await f.send("/ko/about");
   expect(await korean.text()).toContain('<html lang="ko">');
   expect(f.fetcher).not.toHaveBeenCalled();
 });

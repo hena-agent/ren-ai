@@ -84,16 +84,16 @@
   box-shadow: 0 8px 28px #20242b1a;
 }
 @media (max-width: 480px) {
-  .home .site-header {
+  .about .site-header {
     gap: 4px;
     padding-inline: 12px;
   }
-  .home .wordmark {
+  .about .wordmark {
     gap: 6px;
     font-size: 18px;
     letter-spacing: -0.7px;
   }
-  .home .wordmark img {
+  .about .wordmark img {
     width: 24px;
     height: 24px;
   }

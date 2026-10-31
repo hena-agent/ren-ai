@@ -14,8 +14,8 @@ test("Discovery development serves only the frontend, with no separate catalog l
   expect(manifest.scripts["build"]).toBe("vite build");
   expect(deployment).not.toContain("d1_databases");
   expect(deployment).toMatch(/"run_worker_first":\s*\[/);
-  // Home is still prerendered; the Worker checks locale preferences before serving it.
+  // About is still prerendered; the Worker checks locale preferences before serving it.
   expect(deployment).toContain('"/"');
-  expect(deployment).toContain('"/explore"');
-  expect(deployment).toContain('"/personas/*"');
+  expect(deployment).toContain('"/about"');
+  expect(deployment).toContain('"not_found_handling": "none"');
 });

@@ -6,7 +6,7 @@ import type { DiscoveryClient } from "./client.ts";
 import { selectImageStyle, selectDropdown } from "../test/choose.ts";
 import { testClient } from "../test/client.ts";
 
-beforeEach(() => window.history.replaceState(null, "", "/ko"));
+beforeEach(() => window.history.replaceState(null, "", "/ko/about"));
 
 afterEach(() => {
   cleanup();
@@ -35,7 +35,7 @@ test("the home explains the service without loading profiles and offers real nav
   expect(screen.getByRole("figure", { name: "서비스 이해를 위한 가상의 대화 예시" })).toBeTruthy();
   expect(screen.getByText(/등록이 즉시 연결을 보장하지는 않아요/)).toBeTruthy();
   expect(screen.getByText(/Android는 아직 지원하지 않아요/)).toBeTruthy();
-  expect(document.querySelectorAll(".home-questions details")).toHaveLength(5);
+  expect(document.querySelectorAll(".about-questions details")).toHaveLength(5);
   expect(screen.getByText(discoveryNotices.ko.title)).toBeTruthy();
   expect(document.title).toBe("RenAI — 일상에, 기다려지는 메시지 하나");
   expect(screen.getByRole("heading", { name: "페르소나가 연락할 거예요" })).toBeTruthy();
@@ -72,7 +72,7 @@ test("home navigation, FAQs, title and the shared privacy notice follow the disp
   expect(document.title).toBe("RenAI — A little more to look forward to");
   expect(screen.getByRole("heading", { name: "A persona will reach out" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "A new person. Not another app." })).toBeTruthy();
-  expect(screen.getByText("No new app. Just iMessage.", { selector: ".home-intro" })).toBeTruthy();
+  expect(screen.getByText("No new app. Just iMessage.", { selector: ".about-intro" })).toBeTruthy();
   selectDropdown("Display language", "日本語");
   expect(screen.getAllByRole("link", { name: "ペルソナに出会う" })).toHaveLength(2);
   expect(screen.getByText("実在する人と話すのですか？")).toBeTruthy();
@@ -114,10 +114,10 @@ test("landing switches immediately during slow image loading and retains the sel
   expect(document.querySelector(".conversation-contact img")?.getAttribute("src")).toBe(
     "/landing/dohee.webp",
   );
-  expect(document.querySelector(".home-notification img")?.getAttribute("src")).toBe(
+  expect(document.querySelector(".about-notification img")?.getAttribute("src")).toBe(
     "/icons/imessage.svg",
   );
-  expect(document.querySelector(".home-closing-photo > img")?.getAttribute("src")).toBe(
+  expect(document.querySelector(".about-closing-photo > img")?.getAttribute("src")).toBe(
     "/landing/dohee-daily.webp",
   );
   await selectImageStyle("애니메");
@@ -165,7 +165,7 @@ test("portrait selection changes the featured scene without leaving the page or 
   expect(document.querySelector('.hero-scene[data-active="true"] img')?.getAttribute("src")).toBe(
     "/landing/seoyul-anime.webp",
   );
-  expect(window.location.pathname).toBe("/ja");
+  expect(window.location.pathname).toBe("/ja/about");
   expect(profiles).not.toHaveBeenCalled();
 });
 
@@ -201,11 +201,11 @@ test.each(["/ko/explore", "/ko#reselect=private-token"])(
     render(<Site client={client} />);
     await screen.findByRole("heading", { name: "오늘의 프로필을 모두 봤어요." });
     expect(screen.getByRole("list", { name: "좋아한 사람" }).textContent).toBe("소연");
-    expect(screen.getByRole("link", { name: "RenAI" }).getAttribute("href")).toBe("/ko");
+    expect(screen.getByRole("link", { name: "RenAI" }).getAttribute("href")).toBe("/ko/explore");
     expect(document.title).toBe("RenAI — 누가 궁금한가요?");
     expect(window.location.pathname + window.location.hash).toBe(url);
     cleanup();
-    window.history.replaceState(null, "", "/ko");
+    window.history.replaceState(null, "", "/ko/about");
     render(<Site client={client} />);
     expect(screen.getAllByRole("link", { name: "페르소나 만나보기" })).toHaveLength(2);
     expect(localStorage.getItem("ren-ai.discovery.choices")).toBe('{"saved":true}');
@@ -272,19 +272,19 @@ test("explore displays its shell during a delayed API request and retries a fail
 });
 
 test("the English root uses unprefixed links and remembers an explicit English choice when switching back", () => {
-  window.history.replaceState(null, "", "/?utm_source=friend#about");
+  window.history.replaceState(null, "", "/about?utm_source=friend#about");
   localStorage.setItem("renai.locale", "ko");
   const view = render(<Site />);
   expect(document.documentElement.lang).toBe("en");
   expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe(
-    "https://renai.im/",
+    "https://renai.im/about",
   );
   for (const link of screen.getAllByRole("link", { name: "Meet the personas" }))
     expect(link.getAttribute("href")).toBe("/explore");
   selectDropdown("Display language", "日本語");
   selectDropdown("表示言語", "English");
   expect(window.location.pathname + window.location.search + window.location.hash).toBe(
-    "/?utm_source=friend#about",
+    "/about?utm_source=friend#about",
   );
   expect(document.cookie).toContain("renai.locale=en");
   view.unmount();

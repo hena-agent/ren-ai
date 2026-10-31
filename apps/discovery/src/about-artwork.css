@@ -41,7 +41,7 @@
   position: absolute;
   z-index: 3;
   top: 32px;
-  right: max(32px, calc((100% - var(--home-width)) / 2));
+  right: max(32px, calc((100% - var(--about-width)) / 2));
   display: flex;
   gap: 8px;
   min-width: 0;
@@ -103,7 +103,7 @@
 }
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    .home-hero {
+    .about-hero {
       view-timeline-name: --hero;
     }
     .hero-portraits {

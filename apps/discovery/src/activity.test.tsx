@@ -31,14 +31,14 @@ test("a tab preserves its Source on navigation, expires after 30 idle minutes, a
   window.history.replaceState(
     null,
     "",
-    "/?utm_source=friends&utm_medium=social&utm_campaign=launch",
+    "/about?utm_source=friends&utm_medium=social&utm_campaign=launch",
   );
   const first = render(<Site client={client} />);
   expect(reports).toEqual([
     expect.objectContaining({
       step: "visit",
       source: {
-        entry: "home",
+        entry: "about",
         referrer: "example.org",
         source: "friends",
         medium: "social",
@@ -50,7 +50,7 @@ test("a tab preserves its Source on navigation, expires after 30 idle minutes, a
   window.history.replaceState(null, "", "/explore");
   const second = render(<Site client={client} />);
   expect(reports.filter((report) => report.step === "visit")).toHaveLength(1);
-  expect(reports.find((report) => report.step === "explore")?.source.entry).toBe("home");
+  expect(reports.find((report) => report.step === "explore")?.source.entry).toBe("about");
   vi.spyOn(Date, "now").mockReturnValue(Date.now() + 30 * 60_000);
   fireEvent.pointerDown(document);
   expect(reports.filter((report) => report.step === "visit")).toHaveLength(2);
@@ -64,7 +64,7 @@ test("the device opt-out removes its parameter and survives reloads without repo
     profiles: async () => [],
     join: async () => ({ status: "waiting" }),
   });
-  window.history.replaceState(null, "", "/?metrics=off&utm_source=operator");
+  window.history.replaceState(null, "", "/explore?metrics=off&utm_source=operator");
   const first = render(<Site client={client} />);
   expect(window.location.search).toBe("?utm_source=operator");
   expect(activity).not.toHaveBeenCalled();
@@ -141,13 +141,13 @@ test("a delayed country response from an expired Visit cannot label the new Visi
     profiles: async () => [],
     join: async () => ({ status: "waiting" }),
   });
-  const home = render(<Site client={client} />);
+  const about = render(<Site client={client} />);
   vi.spyOn(Date, "now").mockReturnValue(Date.now() + 30 * 60_000);
   fireEvent.scroll(document);
   await act(async () => {
     complete("KR");
   });
-  home.unmount();
+  about.unmount();
   window.history.replaceState(null, "", "/explore");
   render(<Site client={client} />);
   expect(

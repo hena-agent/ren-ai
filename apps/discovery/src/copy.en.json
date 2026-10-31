@@ -1,5 +1,19 @@
 {
-  "home": {
+  "guide": {
+    "title": "Try chatting with a persona you like!",
+    "steps": [
+      "Swipe right or tap the heart to Like. Swipe left to Pass.",
+      "Leave your iPhone number along with your Likes.",
+      "If you're selected, one of them will text you first on iMessage. There's no set time."
+    ],
+    "requirement": "Nothing to install: just an iPhone with iMessage. Android isn't supported yet.",
+    "start": "Meet the personas",
+    "open": "About RenAI",
+    "close": "Close guide",
+    "about": "More about RenAI",
+    "privacy": "Privacy"
+  },
+  "about": {
     "menu": "Toggle menu",
     "personaLabel": "AI persona",
     "personaNames": { "seoyeon": "Subin", "dohee": "Jia", "seoyul": "Harin" },

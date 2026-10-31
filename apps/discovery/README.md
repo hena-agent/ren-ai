@@ -2,7 +2,7 @@
 
 `renai.im` serves this Vite browser app and public profile HTML through a
 Cloudflare Worker with static assets.
-English public pages use `/`, `/explore` and `/personas/{id}` directly. Korean and
+English public pages use `/about`, `/explore` and `/personas/{id}` directly. Korean and
 Japanese pages add `/ko` and `/ja` prefixes. Explicit prefixes control initial
 server HTML and browser display. Unprefixed pages respect the saved language
 cookie, then `Accept-Language`: Korean/Japanese preferences temporarily redirect
@@ -13,13 +13,15 @@ unprefixed URL and save English so the next request cannot bounce to another
 language. Switching language replaces the URL in place and saves the preference
 in browser storage and a host-only language cookie, preserving mounted forms,
 browsing state, queries and private fragments. Navigation and profile sharing
-retain that language. `/` is the stable `x-default` destination. The page paths
+retain that language. Each page's English URL is its `x-default` destination. The page paths
 below use English URLs; asset, API, health, robots, sitemap and OG image routes
 are independent of display language.
-`/` is the public introduction home, with service details, the waitlist process,
+`/`, `/en`, `/ko` and `/ja` redirect with HTTP 307 directly to the appropriate
+localized explorer, preserving query parameters and browser-carried fragments.
+`/about` is the public introduction page, with service details, the waitlist process,
 FAQs and the same localized privacy notice used during registration. It does not
-request the Catalog. The Worker handles root-language negotiation, then passes
-the prerendered English home body through unchanged, copying the response before
+request the Catalog. The Worker handles language negotiation, then passes
+the prerendered English About body through unchanged, copying the response before
 adding locale and request headers because the asset binding's headers are immutable.
 Its calls to action open
 `/explore`, which contains image
@@ -34,10 +36,11 @@ with a sample in its own language. The Worker waits at most three seconds: a
 failed, invalid or slow listing is logged and `/explore` returns its loading shell
 without a snapshot, so the browser fetches the listing and offers an inline retry.
 `HEAD /explore` never requests the Catalog.
-The Discovery logo returns home; native links support browser history, reloads
+The Discovery logo opens Explore; native links support browser history, reloads
 and direct entry.
 Display language, image style and Likes retain their existing browser storage.
-Private `/#reselect=…` links sent through iMessage still open Discovery directly
+New private links use `/explore#reselect=…`. Previously sent `/#reselect=…` links
+reach Discovery through the root redirect
 and retain their fragment for registration. The browser also sends the token to
 the private Reselection listing, which hides personas who ended a relationship
 with that handle only. Public listings remain independent of relationship endings.
@@ -45,6 +48,17 @@ Fragments never reach the Worker, so reloading `/explore#reselect=…` shows the
 public first page until the browser script replaces it with the private listing.
 
 ## Public profile links
+
+The first loaded deck shows a short native Guide dialog, with a friendly invitation,
+Like/Pass instructions, iPhone/iMessage requirements and selection timing. It has
+an in-dialog language picker, About/privacy links and a header info button to reopen
+it. Every dismissal stores `ren-ai.discovery.guide-seen` locally; blocked storage
+still permits dismissal for the mounted page. Reselection, saved Likes/Passes,
+loading/error/missing-profile screens and an empty Catalog skip automatic opening.
+Shared profiles and invitations show it without losing their entry or private fragment.
+The guide has no AI disclaimer; the existing registration notice remains before consent.
+New About Visits use the `about` Metrics entry; historical `home` data retains its
+meaning. Root Visits count as Explore; measure join rate and Explore → first Like.
 
 `/personas/{id}` opens that persona in Discovery's existing expanded card. There
 is no separate directory, menu or profile layout. The target is prioritized in
@@ -69,8 +83,8 @@ for the browser; the browser separately samples the following candidates. No pri
 persona description, State, Memory, identity sheet or authoring prompt is used.
 Profile HTML, sitemap and health responses use `Cache-Control: no-store`.
 
-Home, explorer and profile requests all return the actual application UI in their
-first HTML: home has its editorial content, explorer has its first sampled cards,
+About, explorer and profile requests all return the actual application UI in their
+first HTML: About has its editorial content, explorer has its first sampled cards,
 and profile links have their full public profile. Each profile has a distinct title,
 description and canonical URL,
 Open Graph and Twitter metadata, and WebPage/CreativeWork JSON-LD that explicitly
@@ -89,7 +103,7 @@ HTML metadata generation does not fetch image bytes. This removes the original
 Workers-only failure: `redirect: "error"` was accepted in Node tests but throws
 before an outbound Workers request. A renderer failure returns a correlated,
 retryable 503; it never silently replaces a published persona preview with brand
-artwork. Home/explorer and genuinely absent same-style photos use `social-{locale}-v3.png`.
+artwork. About/explorer and genuinely absent same-style photos use `social-{locale}-v3.png`.
 These 1200×630 previews pair Jia's existing anime/photo editorial portraits with
 localized headlines, the RenAI logo and an illustrative-image label.
 Open Graph includes image MIME type, width, height, secure URL and alt text;
@@ -104,11 +118,12 @@ Each language has its own canonical URL, localized title/description/image alt,
 have no language alternates. Browser language/profile/style changes refresh the
 same metadata and structured data without leaking invitation or reselection fragments.
 
-`/sitemap.xml` lists all three language variants of home, explorer and current
+`/sitemap.xml` lists all three language variants of About, explorer and current
 public profile URLs, with reciprocal XHTML language alternates and public image
 locations. It never lists a separate directory or withdrawn personas.
 `/robots.txt` advertises the sitemap. A missing or unpublished profile
-returns an actual 404 with `noindex`. Catalog-dependent routes or rendering failures
+returns an actual 404 with `noindex`. Unknown routes also return 404/noindex with
+an Explore link; assets no longer use a single-page-app fallback. Catalog-dependent routes or rendering failures
 return 503 with `Retry-After`, a request ID and payload-safe structured diagnostics.
 `/health` identifies service `discovery`, embeds the artifact's source commit
 (`development` locally), and reports Catalog and preview-executor readiness
@@ -177,7 +192,7 @@ owned bucket are shown unchanged. The current card and expanded profile have hig
 fetch priority, and the server-rendered first card is preloaded. The next card
 loads at low priority; Like thumbnails are lazy-loaded.
 
-Home preloads only the selected hero portrait at high priority; the other two load
+About preloads only the selected hero portrait at high priority; the other two load
 at low priority. Content-hashed `/assets/*` are served with
 `Cache-Control: public, max-age=31536000, immutable` from `public/_headers`.
 
@@ -211,12 +226,13 @@ Deploy through a PR merged into `main`, after the quality gates pass. CI builds
 with `VITE_DISCOVERY_API_URL=https://api.renai.im` and the public
 `TURNSTILE_SITE_KEY` repository variable. Before deployment, `check:worker` runs
 the built pages through the local Cloudflare runtime and real `ASSETS` binding.
-It checks GET/HEAD responses, localized HTML and headers for `/`, `/ko`, `/ja`
-and `/explore`, using an isolated local Catalog on an OS-allocated port. This
+It checks GET/HEAD responses, localized HTML and headers for `/about`, `/ko/about`,
+`/ja/about` and `/explore`, plus root redirects and unknown-page 404s, using an
+isolated local Catalog on an OS-allocated port. This
 check also runs in the PR quality gates, requires no Cloudflare credentials and
 fails on runtime-only errors before production is changed.
 CI then deploys the static assets and checks
-`https://renai.im/`, `/ko`, `/ja`, localized explorer pages, localized social PNGs,
+the root redirects, localized About/explorer pages, unknown-page 404s, localized social PNGs,
 `/sitemap.xml` and the exact artifact identity at
 `/health`. api-app's deployment checks `/discovery/personas` separately.
 `check:preview` then reads a published profile in each available style and fetches
@@ -226,11 +242,12 @@ are reported explicitly. The Worker accepts source photos up to the Images
 binding's 20 MB input limit and returns bounded, fixed-size JPEG renditions.
 Do not deploy manually or also connect Workers Builds.
 
-`bun run build` builds browser assets and prerenders home into `index.html`; the Worker
-negotiates the root locale and serves the English asset without rendering it again.
+`bun run build` builds browser assets and prerenders About into `about.html`; the Worker
+negotiates the page locale and serves the English asset without rendering it again.
 Wrangler bundles `worker/entry.ts`
-and serves `dist/client/` assets. The explorer, public profile routes, sitemap, robots
-and health run the Worker first. Explorer and profiles render into the unmodified
+and serves `dist/client/` assets. The roots and localized pages run the Worker first;
+asset misses (including explorer, profiles, sitemap, robots and health) run it too.
+Explorer and profiles render into the unmodified
 application shell, `template.html`, so the first explorer response includes sampled cards.
 CI embeds `GITHUB_SHA` through Wrangler's `BUILD_REVISION` define.
 `wrangler.jsonc` binds `renai.im` as a custom domain.

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
 import { App } from "./app.tsx";
-import { choose, endAnimation } from "../test/choose.ts";
+import { choose, dismissGuide, endAnimation } from "../test/choose.ts";
 import { fakeVerification } from "../test/turnstile.ts";
 
 const people = ["하린", "지우"].map((name, index) => ({
@@ -32,6 +32,7 @@ async function browse() {
   localStorage.setItem("ren-ai.discovery.image-style", "photo");
   render(<App client={client} />);
   await screen.findByRole("heading", { name: "하린" });
+  dismissGuide();
 }
 
 test("expanded profiles keep the original card and shared choices, and selecting once advances the deck", async () => {

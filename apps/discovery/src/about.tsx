@@ -2,12 +2,12 @@ import { Header } from "./chrome.tsx";
 import { useCopy, useLocale } from "./locale.tsx";
 import { localizedPath } from "./public-routing.ts";
 import { PrivacyDisclosure } from "./privacy-disclosure.tsx";
-import { HomeNavigation } from "./home-navigation.tsx";
-import { HeroGallery } from "./home-artwork.tsx";
+import { AboutNavigation } from "./about-navigation.tsx";
+import { HeroGallery } from "./about-artwork.tsx";
 import { ConversationScene } from "./conversation-scene.tsx";
 import { useImageStyle } from "./use-image-style.ts";
 import { StyleSwitch, StyleFeedback } from "./style-switch.tsx";
-import { HomeHighlights } from "./home-highlights.tsx";
+import { AboutHighlights } from "./about-highlights.tsx";
 import { landingImage } from "./landing-images.ts";
 import { useActivity } from "./activity.ts";
 import { discoveryClient, type DiscoveryClient } from "./client.ts";
@@ -17,76 +17,76 @@ function ExploreLink() {
   const copy = useCopy();
   const { locale } = useLocale();
   return (
-    <a className="home-cta" href={localizedPath("/explore", locale)}>
-      {copy.home.start}
+    <a className="about-cta" href={localizedPath("/explore", locale)}>
+      {copy.about.start}
       <span className="icon icon-external" aria-hidden="true" />
     </a>
   );
 }
 
-export function Home({ client = discoveryClient }: { client?: DiscoveryClient }) {
+export function About({ client = discoveryClient }: { client?: DiscoveryClient }) {
   const copy = useCopy();
   const { locale } = useLocale();
-  const home = copy.home;
+  const about = copy.about;
   const { style, issue, choose } = useImageStyle();
   useActivity(client, style);
-  useSeo("/");
+  useSeo("/about");
   return (
-    <div className="home">
+    <div className="about">
       <Header>
         <StyleSwitch style={style} onChoose={choose} />
-        <HomeNavigation />
+        <AboutNavigation />
       </Header>
       <StyleFeedback issue={issue} />
       <main id="discovery-content">
-        <section className="home-hero" aria-labelledby="home-title">
+        <section className="about-hero" aria-labelledby="about-hero-title">
           <HeroGallery style={style} />
-          <div className="home-hero-copy">
-            <p className="home-eyebrow">{home.eyebrow}</p>
-            <h1 id="home-title">
-              {home.title}
-              <span>{home.titleAccent}</span>
+          <div className="about-hero-copy">
+            <p className="about-eyebrow">{about.eyebrow}</p>
+            <h1 id="about-hero-title">
+              {about.title}
+              <span>{about.titleAccent}</span>
             </h1>
-            <div className="home-hero-bottom">
-              <p className="home-intro">{home.heroIntro}</p>
+            <div className="about-hero-bottom">
+              <p className="about-intro">{about.heroIntro}</p>
               <ExploreLink />
             </div>
           </div>
-          <a className="home-scroll" href="#about" aria-label={home.about}>
+          <a className="about-scroll" href="#about" aria-label={about.about}>
             <span className="icon icon-down" aria-hidden="true" />
           </a>
         </section>
-        <p className="home-notice">
+        <p className="about-notice">
           <span aria-hidden="true" />
-          {home.waiting}
+          {about.waiting}
         </p>
 
-        <section className="home-conversation" id="about" aria-labelledby="about-title">
-          <div className="home-conversation-copy">
+        <section className="about-conversation" id="about" aria-labelledby="about-title">
+          <div className="about-conversation-copy">
             <div>
-              <p className="home-eyebrow">{home.aboutEyebrow}</p>
+              <p className="about-eyebrow">{about.aboutEyebrow}</p>
               <h2 id="about-title">
-                {home.conversationTitle}
-                <span>{home.conversationAccent}</span>
+                {about.conversationTitle}
+                <span>{about.conversationAccent}</span>
               </h2>
             </div>
             <div>
-              <p className="home-section-intro">{home.features[1]!.body}</p>
-              <p className="home-conversation-note">{home.features[2]!.body}</p>
+              <p className="about-section-intro">{about.features[1]!.body}</p>
+              <p className="about-conversation-note">{about.features[2]!.body}</p>
             </div>
           </div>
           <ConversationScene style={style} />
         </section>
 
-        <HomeHighlights />
+        <AboutHighlights />
 
-        <section className="home-faq" id="faq" aria-labelledby="faq-title">
+        <section className="about-faq" id="faq" aria-labelledby="faq-title">
           <div>
-            <p className="home-eyebrow">{home.faq}</p>
-            <h2 id="faq-title">{home.faqTitle}</h2>
+            <p className="about-eyebrow">{about.faq}</p>
+            <h2 id="faq-title">{about.faqTitle}</h2>
           </div>
-          <div className="home-questions">
-            {home.questions.map((question) => (
+          <div className="about-questions">
+            {about.questions.map((question) => (
               <details key={question.title}>
                 <summary>
                   {question.title}
@@ -98,43 +98,43 @@ export function Home({ client = discoveryClient }: { client?: DiscoveryClient })
           </div>
         </section>
 
-        <section className="home-closing" aria-labelledby="closing-title">
-          <div className="home-closing-copy">
-            <p className="home-eyebrow">RenAI</p>
+        <section className="about-closing" aria-labelledby="closing-title">
+          <div className="about-closing-copy">
+            <p className="about-eyebrow">RenAI</p>
             <h2 id="closing-title">
-              {home.closingTitle}
-              <span>{home.closingAccent}</span>
+              {about.closingTitle}
+              <span>{about.closingAccent}</span>
             </h2>
-            <p>{home.closingBody}</p>
+            <p>{about.closingBody}</p>
             <ExploreLink />
           </div>
-          <figure className="home-closing-photo">
+          <figure className="about-closing-photo">
             <img
               src={landingImage("dohee-daily", style)}
               width="928"
               height="1152"
-              alt={home.dailyPhoto}
+              alt={about.dailyPhoto}
               loading="lazy"
             />
             <figcaption>
-              <span className="home-greeting-name">
+              <span className="about-greeting-name">
                 <span className="icon icon-message" aria-hidden="true" />
-                <span>{home.personaNames.dohee}</span>
+                <span>{about.personaNames.dohee}</span>
                 <span>iMessage</span>
               </span>
-              <p>{home.greeting}</p>
-              <small>{home.exampleNote}</small>
+              <p>{about.greeting}</p>
+              <small>{about.exampleNote}</small>
             </figcaption>
           </figure>
         </section>
       </main>
-      <footer className="home-footer">
+      <footer className="about-footer">
         <div>
-          <a className="wordmark" href={localizedPath("/", locale)}>
+          <a className="wordmark" href={localizedPath("/explore", locale)}>
             <img src="/brand.svg" width="30" height="30" alt="" />
             {copy.brand}
           </a>
-          <p>{home.footer}</p>
+          <p>{about.footer}</p>
         </div>
         <PrivacyDisclosure />
       </footer>

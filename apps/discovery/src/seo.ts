@@ -29,8 +29,8 @@ export function pageSeo(
     ? personaTitle(persona, locale)
     : missing
       ? `${copy.publicProfile.notFound} — RenAI`
-      : path === "/"
-        ? copy.home.pageTitle
+      : path === "/about"
+        ? copy.about.pageTitle
         : `RenAI — ${copy.explore}`;
   const suffix = {
     ko: "RenAI의 가상 AI 페르소나. iMessage로 일상을 나눠요.",
@@ -42,7 +42,7 @@ export function pageSeo(
     Array.from((persona.profile?.introduction ?? persona.bio).replace(/\s+/g, " "))
       .slice(0, 150)
       .join("");
-  const description = persona ? `${introduction} — ${suffix}` : copy.home.intro;
+  const description = persona ? `${introduction} — ${suffix}` : copy.about.intro;
   const canonical = `${publicOrigin}${localizedPath(path, locale)}`;
   const image = imageOverride ?? socialImage(persona, style, locale);
   const meta = {

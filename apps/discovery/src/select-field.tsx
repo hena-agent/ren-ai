@@ -9,6 +9,7 @@ export function SelectField({
   iconOnly = false,
   disabled = false,
   options,
+  portalContainer,
   onValueChange,
 }: {
   value: string;
@@ -19,6 +20,7 @@ export function SelectField({
   iconOnly?: boolean;
   disabled?: boolean;
   options: readonly { value: string; label: string; language?: string }[];
+  portalContainer?: HTMLElement | null | undefined;
   onValueChange: (value: string) => void;
 }) {
   return (
@@ -47,7 +49,7 @@ export function SelectField({
           </svg>
         </Select.Icon>
       </Select.Trigger>
-      <Select.Portal>
+      <Select.Portal container={portalContainer}>
         <Select.Content
           className="language-select-content"
           position="popper"

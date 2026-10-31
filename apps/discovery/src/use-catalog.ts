@@ -30,9 +30,11 @@ export function useCatalog(
   const [moreFailed, setMoreFailed] = useState(false);
   const active = useRef(new AbortController());
   const pending = useRef(false);
+  const sampling = useRef({ locale, preserve: false });
   // The server-sampled page answers the first request in its language until a reload succeeds.
   const sampled = useRef(initialPeople && initialPage && { ...initialPage, people: initialPeople });
   const reload = useCallback(async () => {
+    const preserve = sampling.current.preserve;
     active.current.abort();
     const controller = new AbortController();
     active.current = controller;
@@ -56,7 +58,15 @@ export function useCatalog(
       ]);
       if (controller.signal.aborted) return;
       sampled.current = undefined;
-      setCatalog({ phase: "ready", people: merge(page.people, liked) });
+      setCatalog((current) => ({
+        phase: "ready",
+        people: merge(
+          preserve && current.phase === "ready" ? current.people : [],
+          page.people,
+          liked,
+        ),
+      }));
+      sampling.current.preserve = false;
       setCursor(page.nextCursor);
     } catch {
       if (!controller.signal.aborted) {
@@ -70,13 +80,14 @@ export function useCatalog(
     }
   }, [client, initialPeople, reselectionToken, personaId, locale]);
   useEffect(() => {
+    if (sampling.current.locale !== locale) sampling.current = { locale, preserve: true };
     let disposed = false;
     void Promise.resolve().then(() => (disposed ? undefined : reload()));
     return () => {
       disposed = true;
       active.current.abort();
     };
-  }, [reload]);
+  }, [reload, locale]);
 
   const loadMore = useCallback(async () => {
     if (pending.current || catalog.phase !== "ready") return;

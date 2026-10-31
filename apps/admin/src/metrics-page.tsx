@@ -147,7 +147,7 @@ export function MetricsPage({ metrics, query }: { metrics?: Metrics; query: Metr
         </label>
         <button type="submit">조회</button>
       </form>
-      <a href="https://renai.im/?metrics=off">이 브라우저를 집계에서 제외</a>
+      <a href="https://renai.im/explore?metrics=off">이 브라우저를 집계에서 제외</a>
       {metrics && (
         <>
           <p>

@@ -1,10 +1,10 @@
-.home {
-  --home-width: 1280px;
+.about {
+  --about-width: 1280px;
   background: var(--surface);
   overflow: clip;
   overflow-wrap: anywhere;
 }
-.home-hero {
+.about-hero {
   position: relative;
   display: flex;
   align-items: end;
@@ -15,7 +15,7 @@
   color: white;
   isolation: isolate;
 }
-.home-hero::after {
+.about-hero::after {
   position: absolute;
   z-index: 1;
   inset: 0;
@@ -23,24 +23,24 @@
   pointer-events: none;
   content: "";
 }
-.home-hero-copy {
+.about-hero-copy {
   z-index: 2;
-  width: min(var(--home-width), calc(100% - 112px));
+  width: min(var(--about-width), calc(100% - 112px));
   margin: 0 auto;
   padding: 40px 0 52px;
 }
-.home-eyebrow {
+.about-eyebrow {
   margin: 0 0 24px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.025em;
 }
-.home-hero .home-eyebrow {
+.about-hero .about-eyebrow {
   margin-bottom: 18px;
   color: #fff;
 }
-.home h1 {
+.about h1 {
   max-width: 1140px;
   margin: 0;
   font-size: clamp(64px, 7.1vw, 112px);
@@ -49,10 +49,10 @@
   letter-spacing: -0.065em;
   word-break: keep-all;
 }
-.home h1 > span {
+.about h1 > span {
   display: block;
 }
-.home-hero-bottom {
+.about-hero-bottom {
   display: flex;
   align-items: end;
   justify-content: space-between;
@@ -60,14 +60,14 @@
   margin-top: 32px;
   padding-right: 68px;
 }
-.home-intro {
+.about-intro {
   max-width: 430px;
   margin: 0;
   font-size: 16px;
   line-height: 1.7;
   word-break: keep-all;
 }
-.home-cta {
+.about-cta {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -86,27 +86,27 @@
     background var(--motion-fast),
     transform var(--motion-fast);
 }
-.home-cta:hover {
+.about-cta:hover {
   background: var(--accent-hover);
 }
-.home-cta:active {
+.about-cta:active {
   transform: scale(0.97);
 }
-.home-cta > span {
+.about-cta > span {
   font-size: 23px;
   line-height: 1;
   transition: transform var(--motion-standard) var(--ease-out);
 }
-.home-cta:hover > span {
+.about-cta:hover > span {
   transform: translate(3px, -3px);
 }
-.home-hero :focus-visible {
+.about-hero :focus-visible {
   outline-color: white;
 }
-.home-scroll {
+.about-scroll {
   position: absolute;
   z-index: 2;
-  right: max(32px, calc((100% - var(--home-width)) / 2));
+  right: max(32px, calc((100% - var(--about-width)) / 2));
   bottom: 58px;
   display: grid;
   place-items: center;
@@ -119,10 +119,10 @@
   text-decoration: none;
   transition: transform var(--motion-standard);
 }
-.home-scroll:hover {
+.about-scroll:hover {
   transform: translateY(4px);
 }
-.home-notice {
+.about-notice {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -134,14 +134,14 @@
   font-size: 12px;
   text-align: center;
 }
-.home-notice > span {
+.about-notice > span {
   flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--accent);
 }
-.home h2 {
+.about h2 {
   margin: 0;
   font-size: clamp(42px, 4.7vw, 72px);
   font-weight: 600;
@@ -150,25 +150,25 @@
   word-break: keep-all;
   text-wrap: balance;
 }
-.home h2 > span {
+.about h2 > span {
   display: block;
 }
-.home-conversation {
+.about-conversation {
   scroll-margin-top: 80px;
 }
-.home-conversation-copy {
+.about-conversation-copy {
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: 80px;
-  width: min(var(--home-width), calc(100% - 112px));
+  width: min(var(--about-width), calc(100% - 112px));
   margin-inline: auto;
   padding-block: 96px;
 }
-.home-conversation-copy h2 > span {
+.about-conversation-copy h2 > span {
   color: var(--accent);
 }
-.home-section-intro {
+.about-section-intro {
   max-width: 380px;
   margin: 0;
   color: var(--muted);
@@ -176,7 +176,7 @@
   line-height: 1.9;
   word-break: keep-all;
 }
-.home-conversation-note {
+.about-conversation-note {
   max-width: 380px;
   margin: 24px 0 0;
   color: var(--muted);
@@ -184,36 +184,36 @@
   line-height: 1.8;
   word-break: keep-all;
 }
-.home-how,
-.home-faq,
-.home-footer {
-  width: min(var(--home-width), calc(100% - 112px));
+.about-how,
+.about-faq,
+.about-footer {
+  width: min(var(--about-width), calc(100% - 112px));
   margin-inline: auto;
 }
-.home-questions p {
+.about-questions p {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.9;
   word-break: keep-all;
 }
-.home-faq {
+.about-faq {
   display: grid;
   grid-template-columns: 1fr 1.3fr;
   gap: 80px;
   padding-block: 64px 112px;
   scroll-margin-top: 80px;
 }
-.home-faq h2 {
+.about-faq h2 {
   font-size: clamp(32px, 3vw, 46px);
 }
-.home-questions details {
+.about-questions details {
   border-bottom: 1px solid var(--line);
 }
-.home-questions details:first-child {
+.about-questions details:first-child {
   border-top: 1px solid var(--line);
 }
-.home-questions summary {
+.about-questions summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -225,37 +225,37 @@
   cursor: pointer;
   list-style: none;
 }
-.home-questions summary::-webkit-details-marker {
+.about-questions summary::-webkit-details-marker {
   display: none;
 }
-.home-questions summary > span {
+.about-questions summary > span {
   color: var(--muted);
   font-size: 24px;
   font-weight: 400;
   transition: transform var(--motion-standard) var(--ease-out);
 }
-.home-questions details[open] summary > span {
+.about-questions details[open] summary > span {
   transform: rotate(45deg);
 }
-.home-questions p {
+.about-questions p {
   padding: 0 28px 24px 0;
 }
-.home-footer {
+.about-footer {
   padding-block: 40px;
 }
-.home-footer > div {
+.about-footer > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
 }
-.home-footer p {
+.about-footer p {
   color: var(--muted);
   font-size: 12px;
 }
-.home-footer > .privacy-disclosure {
+.about-footer > .privacy-disclosure {
   margin-top: 24px;
 }
-.home:lang(ja) :is(h1, h2, h3, p) {
+.about:lang(ja) :is(h1, h2, h3, p) {
   word-break: normal;
 }

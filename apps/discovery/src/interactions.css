@@ -101,7 +101,7 @@ input:not([type="checkbox"]) {
   animation: menu-enter var(--motion-fast) var(--ease-out);
 }
 @supports (interpolate-size: allow-keywords) {
-  .home-questions details::details-content {
+  .about-questions details::details-content {
     height: 0;
     overflow: clip;
     opacity: 0;
@@ -111,7 +111,7 @@ input:not([type="checkbox"]) {
       opacity var(--motion-standard),
       content-visibility var(--motion-standard) allow-discrete;
   }
-  .home-questions details[open]::details-content {
+  .about-questions details[open]::details-content {
     height: auto;
     opacity: 1;
   }

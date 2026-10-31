@@ -178,7 +178,6 @@
   );
 }
 @media (max-width: 800px) {
-  .discovery-shell:has(.app-workspace[data-detail="true"]) .site-header,
   .app-workspace[data-detail="true"] .app-navigation,
   .app-workspace[data-detail="true"] .discovery-sidebar {
     display: none;

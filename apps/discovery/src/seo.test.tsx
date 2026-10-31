@@ -20,7 +20,7 @@ afterEach(() => {
 
 function Preview({ profile = false, missing = false, photo = false }) {
   useSeo(
-    missing ? "/personas/missing" : "/",
+    missing ? "/personas/missing" : "/about",
     profile ? publicPersonas[0] : undefined,
     photo ? "photo" : "anime",
   );
@@ -29,24 +29,24 @@ function Preview({ profile = false, missing = false, photo = false }) {
 
 test("explicit URL language overrides storage and device language; switching keeps the route, query, fragment and localized metadata", () => {
   localStorage.setItem("renai.locale", "ko");
-  window.history.replaceState(null, "", "/en?utm_source=friend#about");
+  window.history.replaceState(null, "", "/en/about?utm_source=friend#about");
   const view = render(
     <LocaleProvider>
       <Preview />
     </LocaleProvider>,
   );
   expect(document.documentElement.lang).toBe("en");
-  expect(document.title).toBe(pageSeo(new URL("https://renai.im/en")).title);
+  expect(document.title).toBe(pageSeo(new URL("https://renai.im/en/about")).title);
   expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute("content")).toBe(
     "https://renai.im/social-en-v3.png",
   );
   expect(document.head.querySelectorAll("link[hreflang]")).toHaveLength(4);
   selectDropdown("Display language", "日本語");
   expect(window.location.pathname + window.location.search + window.location.hash).toBe(
-    "/ja?utm_source=friend#about",
+    "/ja/about?utm_source=friend#about",
   );
   expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe(
-    "https://renai.im/ja",
+    "https://renai.im/ja/about",
   );
   expect(document.head.querySelectorAll('meta[name="description"]')).toHaveLength(1);
   expect(document.head.querySelectorAll('meta[property="og:locale:alternate"]')).toHaveLength(2);
@@ -81,7 +81,7 @@ test("localized direct exploration and profile navigation preserve the current l
   const profiles = vi.fn<DiscoveryClient["profiles"]>(async () => publicPersonas);
   render(<Site client={testClient({ profiles, join: async () => ({ status: "waiting" }) })} />);
   await screen.findByRole("heading", { name: "백지아, 26" });
-  expect(screen.getByRole("link", { name: "RenAI" }).getAttribute("href")).toBe("/");
+  expect(screen.getByRole("link", { name: "RenAI" }).getAttribute("href")).toBe("/explore");
   fireEvent.click(screen.getByRole("button", { name: "백지아 View full profile" }));
   expect(window.location.pathname).toBe("/personas/jia");
   expect(window.location.hash).toBe("#invite=PRIVATE");

@@ -71,7 +71,7 @@ test("a persona can end only her own relationship, stop all normal actions and d
       yield* f.app.endings.tick;
       expect(f.fake.bubbles).toHaveLength(2);
       expect(f.fake.bubbles[0]?.text).toBe("이 대화는 여기까지 할게요.");
-      expect(f.fake.bubbles[1]?.text).toContain("https://renai.im/#reselect=");
+      expect(f.fake.bubbles[1]?.text).toContain("https://renai.im/explore#reselect=");
       expect(f.fake.notifications).toHaveLength(1);
       expect(f.fake.notifications[0]?.text).toContain("답장을 확인하지 않습니다");
       expect(
