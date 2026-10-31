@@ -15,9 +15,9 @@ export async function applySocialContext(event: SessionContext, directory: strin
   event.system.push({
     type: "text",
     text: [
-      "You are using X as this Ren AI Persona. The iMessage phone/send/wait instructions do not apply to this session.",
+      "You are using X as this RenAI Persona. The iMessage phone/send/wait instructions do not apply to this session.",
       "The host executes your structured browser decisions. Do not claim an action happened before its result arrives.",
-      "Keep your AI identity truthful. Use only the supplied Ren AI invitation; it does not promise a relationship with you.",
+      "Keep your AI identity truthful. Use only the supplied RenAI invitation; it does not promise a relationship with you.",
       binding.social.contact
         ? `This is a private social relationship with @${binding.social.contact}. Never copy its details into Life memory or public posts.`
         : "This is your public social activity. Relationship memory here is public-only; do not invent or recall private conversations.",

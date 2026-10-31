@@ -1,4 +1,4 @@
-# Ren AI social executor
+# RenAI social executor
 
 Native macOS executor for autonomous X activity. Uses **agent-browser → CDP → headful Chrome Canary**. Run it on the Messages Mac in the logged-in user's GUI session; OpenCode remains in its existing Docker deployment.
 
@@ -10,7 +10,7 @@ Native macOS executor for autonomous X activity. Uses **agent-browser → CDP �
 4. Copy [the LaunchAgent example](ops/im.renai.social.plist.example), replace its absolute paths, and install it in the logged-in user's `~/Library/LaunchAgents/im.renai.social.plist`. Create its private log directory first. Validate it with `plutil -lint`, then load it with `launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/im.renai.social.plist"`.
 5. Configure a Cloudflare Tunnel route for `social.renai.im` to `http://127.0.0.1:5407` on the Mac. Set api-app's `SOCIAL_EXECUTOR_URL=https://social.renai.im`. The HTTP API retains Bearer management authentication. **Do not route or expose the CDP ports.**
 6. Deploy api-app/Admin and the matching OpenCode plugins using the existing coordinated plugin release procedure. Leave accounts disabled until the executor is installed and verified.
-7. In Admin → **소셜 활동**, choose the Persona, connect its dedicated X account, save, then select **Mac에서 Canary 열기**. Log in directly on the Mac. Set the account's public profile to identify it as a Ren AI AI Persona, then enable activity.
+7. In Admin → **소셜 활동**, choose the Persona, connect its dedicated X account, save, then select **Mac에서 Canary 열기**. Log in directly on the Mac. Set the account's public profile to identify it as a RenAI AI Persona, then enable activity.
 
 `SOCIAL_PORT` defaults to **5407**, an auxiliary-service port, and remains configurable. The listener binds loopback. Local development: copy `.env.example` to `.env`, set local upstreams, then `bun run --cwd apps/social dev`; api-app's example already points to the loopback executor. Port `0` is supported for listener tests.
 

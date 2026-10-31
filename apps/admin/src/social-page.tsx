@@ -89,7 +89,7 @@ function AccountForm({ selected, personas, personaId }: SocialView) {
           rows={4}
           defaultValue={
             selected?.instructions ??
-            "Character.AI·제타 등 AI 컴패니언을 실제로 사용하는 사람을 찾아 관심사와 사용 경험을 알아보세요. 자신의 취향과 맞는 글에 대화하고, 관심이 이어지면 Ren AI 초대를 제안하세요."
+            "Character.AI·제타 등 AI 컴패니언을 실제로 사용하는 사람을 찾아 관심사와 사용 경험을 알아보세요. 자신의 취향과 맞는 글에 대화하고, 관심이 이어지면 RenAI 초대를 제안하세요."
           }
         />
       </label>
@@ -139,7 +139,7 @@ export function socialPage(view: SocialView) {
   return (
     "<!doctype html>" +
     renderToStaticMarkup(
-      <AdminLayout active="social" title="소셜 활동 · Ren AI">
+      <AdminLayout active="social" title="소셜 활동 · RenAI">
         <main id="main" className="contact-page social-workspace">
           <header className="page-heading">
             <h1>소셜 활동</h1>

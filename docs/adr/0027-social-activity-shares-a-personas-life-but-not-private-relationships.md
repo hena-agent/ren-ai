@@ -4,7 +4,7 @@ status: accepted
 
 # Social activity shares a Persona's life, not private relationships
 
-Ren AI's initial recruitment needs the Persona to discover relevant people and interact on X. The Operator chooses which Persona represents each account in Admin. X runs through agent-browser, CDP and a visible Chrome Canary on the Messages Mac.
+RenAI's initial recruitment needs the Persona to discover relevant people and interact on X. The Operator chooses which Persona represents each account in Admin. X runs through agent-browser, CDP and a visible Chrome Canary on the Messages Mac.
 
 ## Decision
 

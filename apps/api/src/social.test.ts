@@ -52,8 +52,8 @@ test("public discovery and private DM actions are scoped, persisted and replayed
   expect((await f.action(1, { kind: "contact", handle: "reader" })).status).toBe(200);
   expect((await f.action(2, search)).status).toBe(409);
   expect((await f.action(2, { kind: "messages" })).status).toBe(200);
-  expect((await f.action(3, { kind: "dm", text: "Want to try Ren AI?" })).status).toBe(200);
-  expect((await f.action(4, { kind: "dm", text: "Want to try Ren AI?" })).status).toBe(409);
+  expect((await f.action(3, { kind: "dm", text: "Want to try RenAI?" })).status).toBe(200);
+  expect((await f.action(4, { kind: "dm", text: "Want to try RenAI?" })).status).toBe(409);
   expect((await f.action(4, { kind: "contact", handle: null })).status).toBe(200);
   expect((await f.action(5, { kind: "post", text: "A public thought" })).status).toBe(200);
   expect(

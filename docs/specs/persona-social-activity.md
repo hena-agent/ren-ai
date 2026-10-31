@@ -32,7 +32,7 @@ Completed action replays return their receipts. In-flight duplicate submissions 
 
 ## Invitations and privacy
 
-The Operator selects an existing invitation code. Exact availability checks use the existing authoritative invitation ledger, independently of recent-code listings. The Persona explains that it invites someone to Ren AI; the recipient chooses through the existing flow. No same-Persona assignment, instant first message, or cross-channel recognition is promised.
+The Operator selects an existing invitation code. Exact availability checks use the existing authoritative invitation ledger, independently of recent-code listings. The Persona explains that it invites someone to RenAI; the recipient chooses through the existing flow. No same-Persona assignment, instant first message, or cross-channel recognition is promised.
 
 Admin's authenticated history may show social content and discovery observations. Diagnostic logs contain request/operation IDs, stages, outcomes, safe cause codes and stack frames, never prompts, message bodies, invitation codes, cookies or authorization headers.
 

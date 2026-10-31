@@ -59,7 +59,7 @@ Every persona the service can play. Only published personas appear in Discovery;
 _Avoid_: roster, lineup, persona list
 
 **Ground rules**:
-The instructions every persona follows regardless of who she is: Ren AI's service context, truthful identity and capability boundaries, how to read events on her phone, and how to use State and Memory.
+The instructions every persona follows regardless of who she is: RenAI's service context, truthful identity and capability boundaries, how to read events on her phone, and how to use State and Memory.
 _Avoid_: system prompt, guidelines, policy
 
 **User**:
@@ -206,7 +206,7 @@ A Persona's private interaction with one contact on one Social account. It is di
 ### Operations
 
 **Metrics**:
-Anonymous totals for Ren AI's traffic, onboarding, ongoing Conversations and AI cost. Test handles are excluded, and removing a person leaves historical totals intact.
+Anonymous totals for RenAI's traffic, onboarding, ongoing Conversations and AI cost. Test handles are excluded, and removing a person leaves historical totals intact.
 _Avoid_: analytics events, tracking history
 
 **Visit**:
