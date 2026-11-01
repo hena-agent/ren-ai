@@ -4,7 +4,7 @@
 
 1. Open **소셜 활동** in Admin, or **이 페르소나에 소셜 계정 연결** in a Persona's editor.
 2. Enter the X handle and select the Persona that account represents. Supply an existing invitation code, activity instructions, timezone, active hours, interval, per-run duration and daily judgment/write limits.
-3. Save while activity is disabled. Open Canary from Admin; on the Messages Mac, log into the dedicated X account and complete any login challenges.
+3. Save while activity is disabled. Supply the login ID and password through Admin; the Mac saves them in agent-browser's encrypted vault and drives X's multi-step login. Submit a one-time code through Admin when requested. Open Canary on the Mac for manual challenges.
 4. Enable activity. Within the configured window it autonomously discovers people, publishes text posts, replies, reads private conversations and sends DMs or invitations. **지금 실행** brings the next eligible check forward; it does not override the activity window or daily limits.
 5. Inspect bounded, paginated activity history and follow confirmed post URLs. Stop activity or change the connected Persona from Admin.
 
@@ -26,7 +26,7 @@ State and Life memory are shared with iMessage. Social private memory belongs on
 
 Daily limits use the account's local date. Judgment reservations are idempotent for a run/step, and write attempts consume the write allowance before I/O, including uncertain attempts. The judgment limit counts host decisions, not every internal memory-tool model step. Per-run wall-clock deadlines also bound model work. Exhausted judgment budgets schedule the next local day's activity window.
 
-Runs are durably recorded before dispatch; the Mac acknowledges promptly. A persisted deadline recovers interrupted execution. Completion schedules the next window. Login problems show `login_required`; the Operator can open the managed Canary profile and resolve them.
+Runs are durably recorded before dispatch; the Mac acknowledges promptly. A persisted deadline recovers interrupted execution. Completion schedules the next window. An expired session attempts automatic re-login before continuing its original navigation. Login problems pause the schedule until current-account authentication is verified. Login callbacks have persisted, bounded recovery probes; code/manual attention and failed credentials stop retries. See [ADR-0028](../adr/0028-social-authentication-keeps-credentials-on-the-mac.md).
 
 Completed action replays return their receipts. In-flight duplicate submissions do not call the browser again. Posts require a new matching status owned by the account; DMs require new visible message content. A timeout or missing evidence becomes uncertain rather than success. Uncertain write targets remain deduplicated across actor/executor replacement. Inspect X directly before taking manual action; no automatic resend or receipt reset is offered.
 
