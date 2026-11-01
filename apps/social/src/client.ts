@@ -2,6 +2,9 @@ import { Schema } from "effect";
 import { SocialControl, SocialResult, type SocialDecision } from "@ren-ai/onboarding/social";
 
 export interface SocialApplication {
+  authenticated: (
+    account: import("@ren-ai/onboarding/social-auth").SocialAuthAccount,
+  ) => Promise<void>;
   control: (id: string, turn?: boolean) => Promise<typeof SocialControl.Type>;
   action: (runId: string, step: number, decision: SocialDecision) => Promise<SocialResult>;
   complete: (runId: string, state: "completed" | "failed" | "login_required") => Promise<void>;
@@ -27,6 +30,9 @@ export function socialApplication(
     return response;
   };
   return {
+    authenticated: async (account) => {
+      await request("authenticated", account);
+    },
     control: async (id, turn = false) =>
       Schema.decodeUnknownSync(SocialControl)(
         await (await request(turn ? "turn" : "control", { runId: id })).json(),

@@ -7,6 +7,9 @@ import {
   type SocialRun,
 } from "@ren-ai/onboarding/social";
 import { commandResult, type BrowserCommands } from "./commands.ts";
+import type { SocialAuthentication } from "./authentication.ts";
+import { AuthenticationError } from "./auth-store.ts";
+import type { AccountQueue } from "./account-queue.ts";
 import {
   identityScript,
   publicScript,
@@ -118,8 +121,11 @@ async function privateMessages(
   return { text: after };
 }
 
-export function xBrowser(commands: BrowserCommands) {
-  const tails = new Map<string, Promise<void>>();
+export function xBrowser(
+  commands: BrowserCommands,
+  authentication: Pick<SocialAuthentication, "ensure">,
+  exclusive: AccountQueue,
+) {
   const execute = async (
     run: SocialRun,
     account: SocialAccount,
@@ -128,6 +134,7 @@ export function xBrowser(commands: BrowserCommands) {
     guard: () => Promise<void>,
   ): Promise<SocialResult> => {
     const port = await commands.open(account.id);
+    let submitted = false;
     const command = async (...args: string[]) => {
       signal.throwIfAborted();
       const output = await commands.command(account.id, port, args, signal);
@@ -141,7 +148,22 @@ export function xBrowser(commands: BrowserCommands) {
         "wait",
         '[data-testid="AppTabBar_Profile_Link"],[data-testid="loginButton"],input[autocomplete="username"]',
       );
-      const identity = Schema.decodeUnknownSync(Identity)(await read(identityScript));
+      let identity = Schema.decodeUnknownSync(Identity)(await read(identityScript));
+      if (identity.handle?.toLowerCase() !== account.handle.toLowerCase()) {
+        await authentication.ensure(
+          {
+            id: account.id,
+            handle: account.handle,
+            personaId: account.personaId,
+            generation: run.generation,
+          },
+          port,
+          signal,
+        );
+        await command("open", url);
+        await command("wait", '[data-testid="AppTabBar_Profile_Link"]');
+        identity = Schema.decodeUnknownSync(Identity)(await read(identityScript));
+      }
       if (identity.handle?.toLowerCase() !== account.handle.toLowerCase())
         throw new LoginRequired("X account login does not match");
     };
@@ -149,6 +171,7 @@ export function xBrowser(commands: BrowserCommands) {
       await command("fill", selector, text);
       await guard();
       signal.throwIfAborted();
+      submitted = true;
       await command("click", button);
       await command("wait", "300");
       if (!Schema.decodeUnknownSync(Sent)(await read(script)).empty)
@@ -156,32 +179,40 @@ export function xBrowser(commands: BrowserCommands) {
     };
     const page = { navigate, read, command, send };
     if (socialWrite(action)) await guard();
-    switch (action.kind) {
-      case "search":
-        await navigate(
-          `https://x.com/search?${new URLSearchParams({ q: action.query, f: "live" }).toString()}`,
-        );
-        return { text: await read(publicScript) };
-      case "profile":
-        await navigate(`https://x.com/${action.handle}`);
-        return { text: await read(publicScript) };
-      case "notifications":
-        await navigate("https://x.com/notifications");
-        return { text: await read(publicScript) };
-      case "inbox":
-        await navigate("https://x.com/messages");
-        return { text: await read(inboxScript) };
-      case "read_post":
-        await navigate(action.url);
-        return { text: await read(publicScript), url: action.url };
-      case "post":
-      case "reply":
-        return publish(account, action, page);
-      case "messages":
-      case "dm":
-        return privateMessages(run, action, page);
-      default:
-        throw new Error("Unsupported browser action");
+    try {
+      switch (action.kind) {
+        case "search":
+          await navigate(
+            `https://x.com/search?${new URLSearchParams({ q: action.query, f: "live" }).toString()}`,
+          );
+          return { text: await read(publicScript) };
+        case "profile":
+          await navigate(`https://x.com/${action.handle}`);
+          return { text: await read(publicScript) };
+        case "notifications":
+          await navigate("https://x.com/notifications");
+          return { text: await read(publicScript) };
+        case "inbox":
+          await navigate("https://x.com/messages");
+          return { text: await read(inboxScript) };
+        case "read_post":
+          await navigate(action.url);
+          return { text: await read(publicScript), url: action.url };
+        case "post":
+        case "reply":
+          return await publish(account, action, page);
+        case "messages":
+        case "dm":
+          return await privateMessages(run, action, page);
+        default:
+          throw new Error("Unsupported browser action");
+      }
+    } catch (cause) {
+      if (submitted && cause instanceof AuthenticationError)
+        throw new Error("X write outcome is uncertain after authentication interruption", {
+          cause,
+        });
+      throw cause;
     }
   };
   return {
@@ -193,18 +224,7 @@ export function xBrowser(commands: BrowserCommands) {
       signal: AbortSignal,
       guard: () => Promise<void>,
     ) => {
-      const previous = tails.get(account.id) ?? Promise.resolve();
-      const result = previous.then(() => execute(run, account, action, signal, guard));
-      const tail = result.then(
-        () => undefined,
-        () => undefined,
-      );
-      tails.set(account.id, tail);
-      void tail.then(() => {
-        if (tails.get(account.id) === tail) tails.delete(account.id);
-        return undefined;
-      });
-      return result;
+      return exclusive(account.id, () => execute(run, account, action, signal, guard));
     },
   };
 }

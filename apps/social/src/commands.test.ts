@@ -76,3 +76,26 @@ test("a launched browser without CDP readiness is terminated rather than attachi
     "did not become ready",
   );
 }, 15000);
+
+test("vault commands omit CDP and private stdin failures cannot leak credentials in process diagnostics", async () => {
+  const f = await fixture();
+  const adapter = browserCommands(f.root, f.executable, "/bin/echo");
+  for (const args of [["auth", "show", "profile"], ["--version"]]) {
+    const output = await adapter.command("first", 1234, args, new AbortController().signal);
+    expect(output).not.toContain("--cdp");
+    expect(output).toContain(args.join(" "));
+  }
+  const failure = browserCommands(f.root, f.executable, "/usr/bin/false");
+  await expect(
+    failure.command(
+      "first",
+      1234,
+      ["batch", "--omit-command"],
+      new AbortController().signal,
+      "PRIVATE_PASSWORD".repeat(100000),
+    ),
+  ).rejects.toMatchObject({
+    code: "SOCIAL_BROWSER_COMMAND",
+    cause: { message: "Private browser command failed" },
+  });
+});
