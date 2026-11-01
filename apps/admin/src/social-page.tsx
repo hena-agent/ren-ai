@@ -2,8 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { PersonaRecord } from "@ren-ai/personas";
 import type { SocialAccount, SocialSnapshot } from "@ren-ai/onboarding/social";
 import { AdminLayout } from "./admin-layout.tsx";
+import { SocialAuthentication } from "./social-auth.tsx";
+import type { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
 
 export interface SocialView {
+  authentication?: SocialAuthStatus;
   snapshot?: SocialSnapshot;
   personas: readonly PersonaRecord[];
   selected?: SocialAccount;
@@ -37,100 +40,130 @@ const kinds: Record<string, string> = {
 const date = (at: number, timeZone = "Asia/Seoul") =>
   new Date(at).toLocaleString("ko-KR", { timeZone });
 
-function AccountForm({ selected, personas, personaId }: SocialView) {
+function AccountForm({ selected, personas, personaId, authentication }: SocialView) {
   return (
-    <form action="/social" method="post" className="contact-panel">
+    <form action="/social" method="post" className="contact-panel" autoComplete="off">
       <input type="hidden" name="action" value="save" />
       <input type="hidden" name="id" value={selected?.id ?? ""} />
       <h2>{selected ? `@${selected.handle} 연결 설정` : "X 계정 연결"}</h2>
       <p className="hint">
-        먼저 페르소나를 선택하고 저장한 뒤, Messages Mac에서 전용 Chrome Canary 창을 열어 X에
-        로그인하세요.
+        페르소나와 X 로그인 정보를 함께 입력하면 계정을 연결하고 Mac에서 로그인을 시작합니다.
       </p>
-      <div className="social-fields">
-        <label>
-          X 계정명
-          <input
-            name="handle"
-            required
-            pattern="[A-Za-z0-9_]{1,15}"
-            maxLength={15}
-            defaultValue={selected?.handle}
-            placeholder="@ 없이 입력"
-          />
-        </label>
-        <label>
-          연결할 페르소나
-          <select name="personaId" required defaultValue={selected?.personaId ?? personaId ?? ""}>
-            <option value="" disabled>
-              페르소나 선택
-            </option>
-            {personas.map((persona) => (
-              <option key={persona.id} value={persona.id}>
-                {persona.name} · {persona.id}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          기존 초대 코드
-          <input name="invitation" required maxLength={64} defaultValue={selected?.invitation} />
-        </label>
-        <label>
-          시간대
-          <input name="timeZone" required defaultValue={selected?.timeZone ?? "Asia/Seoul"} />
-        </label>
-      </div>
-      <label>
-        활동 지침
-        <textarea
-          name="instructions"
-          maxLength={6000}
-          rows={4}
-          defaultValue={
-            selected?.instructions ??
-            "Character.AI·제타 등 AI 컴패니언을 실제로 사용하는 사람을 찾아 관심사와 사용 경험을 알아보세요. 자신의 취향과 맞는 글에 대화하고, 관심이 이어지면 RenAI 초대를 제안하세요."
-          }
-        />
-      </label>
-      <div className="social-fields social-limits">
-        {(
-          [
-            ["startHour", "활동 시작 시 (0–23)", 0, 23, 9],
-            ["endHour", "활동 종료 시 (1–24)", 1, 24, 22],
-            ["intervalMinutes", "실행 간격 (분)", 15, 1440, 30],
-            ["runMinutes", "한 번의 활동 시간 (분)", 1, 30, 5],
-            ["dailyTurns", "일일 모델 판단 횟수", 1, 200, 20],
-            ["dailyWrites", "일일 게시·댓글·DM 합계", 1, 100, 5],
-          ] as const
-        ).map(([name, label, min, max, initial]) => (
-          <label key={name}>
-            {label}
+      <fieldset disabled={authentication?.state === "logging_in"}>
+        <div className="social-fields">
+          <label>
+            X 계정명
             <input
-              type="number"
-              name={name}
-              min={min}
-              max={max}
+              name="handle"
               required
-              defaultValue={selected?.[name] ?? initial}
+              pattern="[A-Za-z0-9_]{1,15}"
+              maxLength={15}
+              defaultValue={selected?.handle}
+              placeholder="@ 없이 입력"
             />
           </label>
-        ))}
-      </div>
-      <label>
-        <input
-          type="checkbox"
-          name="enabled"
-          value="1"
-          defaultChecked={selected?.enabled ?? false}
-        />{" "}
-        소셜 활동 허용 · 시간대 안에서 자동 실행
-      </label>
-      <p className="hint">
-        페르소나 또는 계정명을 변경하면 진행 중 활동을 중단하고 새 연결의 세션을 사용합니다. 기존 X
-        게시물과 DM은 해당 X 계정에 남습니다.
-      </p>
-      <button type="submit">계정 연결 저장</button>
+          <label>
+            연결할 페르소나
+            <select name="personaId" required defaultValue={selected?.personaId ?? personaId ?? ""}>
+              <option value="" disabled>
+                페르소나 선택
+              </option>
+              {personas.map((persona) => (
+                <option key={persona.id} value={persona.id}>
+                  {persona.name} · {persona.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            기존 초대 코드
+            <input name="invitation" required maxLength={64} defaultValue={selected?.invitation} />
+          </label>
+          <label>
+            시간대
+            <input name="timeZone" required defaultValue={selected?.timeZone ?? "Asia/Seoul"} />
+          </label>
+        </div>
+        <div className="social-fields">
+          <label>
+            로그인 ID
+            <input
+              name="username"
+              required={!selected}
+              maxLength={320}
+              autoComplete="off"
+              placeholder="이메일·전화번호·사용자명"
+            />
+          </label>
+          <label>
+            비밀번호
+            <input
+              type="password"
+              name="password"
+              required={!selected}
+              maxLength={4096}
+              autoComplete="new-password"
+            />
+          </label>
+        </div>
+        <p className="hint">
+          로그인 정보는 Messages Mac에만 암호화해 보관합니다. 저장된 비밀번호는 표시하지 않습니다.
+          {selected &&
+            " 로그인 정보를 변경하려면 두 항목을 모두 입력하세요. 비워두면 기존 정보를 유지하고 설정만 저장합니다."}
+        </p>
+        <label>
+          활동 지침
+          <textarea
+            name="instructions"
+            maxLength={6000}
+            rows={4}
+            defaultValue={
+              selected?.instructions ??
+              "Character.AI·제타 등 AI 컴패니언을 실제로 사용하는 사람을 찾아 관심사와 사용 경험을 알아보세요. 자신의 취향과 맞는 글에 대화하고, 관심이 이어지면 RenAI 초대를 제안하세요."
+            }
+          />
+        </label>
+        <div className="social-fields social-limits">
+          {(
+            [
+              ["startHour", "활동 시작 시 (0–23)", 0, 23, 9],
+              ["endHour", "활동 종료 시 (1–24)", 1, 24, 22],
+              ["intervalMinutes", "실행 간격 (분)", 15, 1440, 30],
+              ["runMinutes", "한 번의 활동 시간 (분)", 1, 30, 5],
+              ["dailyTurns", "일일 모델 판단 횟수", 1, 200, 20],
+              ["dailyWrites", "일일 게시·댓글·DM 합계", 1, 100, 5],
+            ] as const
+          ).map(([name, label, min, max, initial]) => (
+            <label key={name}>
+              {label}
+              <input
+                type="number"
+                name={name}
+                min={min}
+                max={max}
+                required
+                defaultValue={selected?.[name] ?? initial}
+              />
+            </label>
+          ))}
+        </div>
+        <label>
+          <input
+            type="checkbox"
+            name="enabled"
+            value="1"
+            defaultChecked={selected?.enabled ?? false}
+          />{" "}
+          소셜 활동 허용 · 시간대 안에서 자동 실행
+        </label>
+        <p className="hint">
+          페르소나 또는 계정명을 변경하면 진행 중 활동을 중단하고 새 연결의 세션을 사용합니다. 기존
+          X 게시물과 DM은 해당 X 계정에 남습니다.
+        </p>
+        <button type="submit">
+          {selected ? "설정 저장 · 입력한 정보로 로그인" : "연결하고 로그인"}
+        </button>
+      </fieldset>
     </form>
   );
 }
@@ -184,7 +217,7 @@ export function socialPage(view: SocialView) {
                   <button
                     name="action"
                     value="now"
-                    disabled={!account.enabled || state === "running"}
+                    disabled={!account.enabled || ["running", "login_required"].includes(state)}
                   >
                     지금 실행
                   </button>
@@ -193,6 +226,9 @@ export function socialPage(view: SocialView) {
             ))}
           </section>
           <AccountForm {...view} />
+          {view.selected && (
+            <SocialAuthentication accountId={view.selected.id} status={view.authentication} />
+          )}
           <section className="contact-panel" aria-label="소셜 활동 내역">
             <h2>활동 내역</h2>
             {!view.snapshot?.events.length && <p>아직 활동 내역이 없습니다.</p>}
