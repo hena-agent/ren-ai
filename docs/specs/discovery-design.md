@@ -297,6 +297,12 @@ retryable 503s rather than masquerading as missing profiles.
 
 ## Review
 
+Text wraps at Korean word boundaries by default, with emergency breaks for a word
+or URL wider than its container. Japanese and Chinese text use normal character
+wrapping. Apply this through inherited typography, including dialogs and social
+artwork. Public profile text uses the Persona's primary language independently of
+the display language; translated controls retain the display language.
+
 Check 360px and 390px phones, tablet and desktop; Korean, English and Japanese;
 keyboard focus, touch targets, reduced motion and image failures. Keep navigation,
 profile details, Like/Pass and waitlist registration working. Favicon, touch icon,

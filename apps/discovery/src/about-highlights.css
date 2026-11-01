@@ -21,7 +21,6 @@
   color: var(--muted);
   font-size: 17px;
   line-height: 1.8;
-  word-break: keep-all;
 }
 .about-channel {
   display: flex;
@@ -95,7 +94,6 @@
   margin: 8px 0 0;
   font-size: 16px;
   line-height: 1.6;
-  word-break: keep-all;
 }
 .about-start {
   margin-top: 48px;
@@ -132,7 +130,6 @@
   color: var(--muted);
   font-size: 14px;
   line-height: 1.7;
-  word-break: keep-all;
 }
 .about-selection-note {
   margin: 28px 0 0;
@@ -166,7 +163,6 @@
   color: #ffffffc7;
   font-size: 16px;
   line-height: 1.8;
-  word-break: keep-all;
 }
 .about-closing-photo {
   position: relative;

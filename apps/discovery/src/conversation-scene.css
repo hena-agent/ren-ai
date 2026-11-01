@@ -106,7 +106,6 @@
   font-size: clamp(18px, 1.5vw, 23px);
   font-weight: 500;
   line-height: 1.5;
-  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 .conversation-message[data-direction="outgoing"] .conversation-bubble {

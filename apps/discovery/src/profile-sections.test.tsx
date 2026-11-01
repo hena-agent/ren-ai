@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ProfileDetails } from "./profile-details.tsx";
+import { LocaleProvider } from "./locale.tsx";
 afterEach(cleanup);
 const persona = {
   id: "harin",
@@ -15,6 +16,30 @@ const fields = {
   onClose: vi.fn<() => void>(),
   disabled: false,
 };
+
+test.each(["ko", "en", "ja"] as const)(
+  "authored profile language stays separate from %s controls",
+  (locale) => {
+    for (const primary of ["ko", "en", "ja"]) {
+      const view = render(
+        <LocaleProvider initialLocale={locale}>
+          <ProfileDetails
+            {...fields}
+            persona={{ ...persona, languages: { primary, proficiency: { [primary]: "fluent" } } }}
+          />
+        </LocaleProvider>,
+      );
+      expect(screen.getByText(persona.bio).closest("[lang]")?.getAttribute("lang")).toBe(primary);
+      expect(view.container.querySelector(".details-toolbar-name")?.getAttribute("lang")).toBe(
+        primary,
+      );
+      expect(
+        view.container.querySelector(".profile-languages")?.closest("[lang]")?.getAttribute("lang"),
+      ).toBe(locale);
+      view.unmount();
+    }
+  },
+);
 
 test("JSON sections render as semantic facts, interest chips and question cards in authored order", () => {
   const view = render(

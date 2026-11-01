@@ -372,13 +372,11 @@ button:disabled {
   line-height: 1.45;
   font-weight: 700;
   letter-spacing: -0.6px;
-  word-break: keep-all;
 }
 .empty-card p {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
-  word-break: keep-all;
 }
 .storage-warning,
 .form-error,

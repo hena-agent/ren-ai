@@ -1,3 +1,13 @@
+:root,
+[lang] {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+:lang(ja),
+:lang(zh) {
+  word-break: normal;
+}
+
 :root:lang(ja),
 [lang="ja"] {
   font-family:
