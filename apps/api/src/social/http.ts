@@ -6,6 +6,8 @@ import { contactCause, contactLog } from "../discovery/diagnostics.ts";
 import { socialStore, type SocialStorage } from "./store.ts";
 import { socialService, SocialError, type SocialOptions } from "./service.ts";
 import { socialActions } from "./actions.ts";
+import { SocialAuthInput, SocialAuthAccount } from "@ren-ai/onboarding/social-auth";
+import { socialAuthentication } from "./authentication.ts";
 
 const RunID = Schema.Struct({ runId: SocialID });
 const Completion = Schema.Struct({
@@ -32,13 +34,14 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
   const store = socialStore(storage);
   const service = socialService(store, options);
   const actions = socialActions(store, service, options);
+  const authentication = socialAuthentication(store, service, options);
   const operate = async (body: string, open: boolean) => {
     const id = decode(AccountID, body).accountId;
     const row = store.account(id);
     if (!row) throw new SocialError(404, "SOCIAL_ACCOUNT_NOT_FOUND");
     if (open) await options.open(id);
     else {
-      if (row.state === "running" || !store.config(row).enabled)
+      if (["running", "login_required"].includes(row.state) || !store.config(row).enabled)
         throw new SocialError(409, "SOCIAL_NOT_RUNNABLE");
       store.exec("UPDATE social_account SET next_at=? WHERE id=?", options.now(), id);
     }
@@ -63,7 +66,16 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     });
     return Response.json(controlled);
   };
-  const endpoints: Record<string, (body: string) => Response | Promise<Response>> = {
+  const endpoints: Record<
+    string,
+    (body: string, requestId: string) => Response | Promise<Response>
+  > = {
+    auth: async (body, requestId) =>
+      Response.json(await authentication.request(decode(SocialAuthInput, body), requestId)),
+    authenticated: async (body) => {
+      await authentication.resume(decode(SocialAuthAccount, body));
+      return new Response(null, { status: 204 });
+    },
     accounts: async (body) => {
       await service.configure(decode(SocialAccount, body));
       return Response.json(store.snapshot(Number.MAX_SAFE_INTEGER));
@@ -87,7 +99,9 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     const body = await request.text();
     if (body.length > 32000) throw new SocialError(413, "SOCIAL_INPUT_SIZE");
     const endpoint = endpoints[path.slice("/management/social/".length)];
-    return endpoint ? endpoint(body) : new Response(null, { status: 404 });
+    return endpoint
+      ? endpoint(body, request.headers.get("X-Operation-ID")!)
+      : new Response(null, { status: 404 });
   };
   const fetch = (request: Request) =>
     applicationRequest(request, (incoming) =>

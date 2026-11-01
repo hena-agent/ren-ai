@@ -74,6 +74,7 @@ export function socialActions(store: SocialStore, service: SocialService, option
     const { action, reason } = input.decision;
     const write = socialWrite(action);
     const target = checkAction(store, run, account, action, options.now());
+    const claimedDay = store.account(account.id)!.day;
     if (
       target &&
       store.exec<{ at: number }>(
@@ -120,6 +121,30 @@ export function socialActions(store: SocialStore, service: SocialService, option
       if (action.kind === "finish") service.complete(run.id, "completed");
       return result;
     } catch (cause) {
+      if (cause instanceof SocialError && cause.code === "SOCIAL_AUTH_REQUIRED") {
+        store.transaction(() => {
+          store.exec(
+            "UPDATE social_event SET state='failed',result=? WHERE run_id=? AND step=?",
+            JSON.stringify({ text: "not sent: X authentication required" }),
+            run.id,
+            input.step,
+          );
+          if (write)
+            store.exec(
+              "UPDATE social_account SET writes=MAX(writes-1,0) WHERE id=? AND day=?",
+              account.id,
+              claimedDay,
+            );
+          if (target)
+            store.exec(
+              "DELETE FROM social_target WHERE account_id=? AND target=?",
+              account.id,
+              target,
+            );
+        });
+        service.complete(run.id, "login_required");
+        throw cause;
+      }
       store.exec(
         "UPDATE social_event SET state=? WHERE run_id=? AND step=?",
         write ? "uncertain" : "failed",

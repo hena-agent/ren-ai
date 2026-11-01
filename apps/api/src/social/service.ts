@@ -17,6 +17,11 @@ export class SocialError extends Error {
   }
 }
 export interface SocialOptions {
+  authenticate: (
+    account: import("@ren-ai/onboarding/social-auth").SocialAuthAccount,
+    command: import("@ren-ai/onboarding/social-auth").SocialAuthCommand,
+    requestId?: string,
+  ) => Promise<import("@ren-ai/onboarding/social-auth").SocialAuthStatus>;
   token: string;
   now: () => number;
   personas: () => Promise<ReadonlySet<string>>;
@@ -49,12 +54,16 @@ async function validateConfiguration(
 }
 
 export function socialService(store: SocialStore, options: SocialOptions) {
-  const finishConfiguration = (account: SocialAccount) => {
+  const finishConfiguration = (account: SocialAccount, awaitingLogin: boolean) => {
     if (store.account(account.id)?.config !== JSON.stringify(account)) return;
     store.exec(
       "UPDATE social_account SET next_at=?, state=? WHERE id=?",
-      account.enabled ? nextSocialTime(account, options.now()) : null,
-      account.enabled ? "scheduled" : "paused",
+      account.enabled && !awaitingLogin ? nextSocialTime(account, options.now()) : null,
+      account.enabled && awaitingLogin
+        ? "login_required"
+        : account.enabled
+          ? "scheduled"
+          : "paused",
       account.id,
     );
   };
@@ -90,6 +99,7 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     );
     if (duplicate.length) throw new SocialError(409, "SOCIAL_ACCOUNT_ALREADY_CONNECTED");
     if (prior?.config === JSON.stringify(account)) return;
+    const awaitingLogin = store.account(account.id)?.state === "login_required";
     // Persist the fence before any remote cancellation; old work cannot publish while reassigning.
     const reassigned =
       prior &&
@@ -113,7 +123,7 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     try {
       if (prior) await stop(prior);
     } finally {
-      finishConfiguration(account);
+      finishConfiguration(account, awaitingLogin);
     }
   };
   const control = (id: string) => {
@@ -154,11 +164,56 @@ export function socialService(store: SocialStore, options: SocialOptions) {
       store.exec(
         "UPDATE social_account SET state = ?, next_at = ? WHERE id = ?",
         state,
-        account.enabled
+        account.enabled && state !== "login_required"
           ? nextSocialTime(account, options.now() + account.intervalMinutes * 60_000)
           : null,
         account.id,
       );
+  };
+  const probeAuthentication = async (row: AccountRow) => {
+    const account = store.config(row);
+    store.exec("UPDATE social_account SET next_at=? WHERE id=?", options.now() + 60000, row.id);
+    await store.arm();
+    const auth = await options.authenticate(
+      {
+        id: row.id,
+        handle: account.handle,
+        personaId: account.personaId,
+        generation: row.generation,
+      },
+      { kind: "status" },
+    );
+    const current = store.account(row.id)!;
+    if (
+      current.state !== "login_required" ||
+      current.config !== row.config ||
+      current.generation !== row.generation
+    )
+      return;
+    const ready = auth.state === "authenticated";
+    store.exec(
+      "UPDATE social_account SET state=?,next_at=? WHERE id=?",
+      ready ? (account.enabled ? "scheduled" : "paused") : "login_required",
+      ready && account.enabled
+        ? nextSocialTime(account, options.now())
+        : auth.state === "logging_in"
+          ? options.now() + 30000
+          : null,
+      row.id,
+    );
+  };
+  const dispatch = async (run: SocialRun, account: SocialAccount) => {
+    await store.arm();
+    try {
+      if (!(await options.personas()).has(account.personaId))
+        throw new SocialError(409, "SOCIAL_PERSONA_NOT_FOUND");
+      if (!(await options.invitation(account.invitation)))
+        throw new SocialError(409, "SOCIAL_INVITATION_UNAVAILABLE");
+      await options.start(run, account);
+    } catch (cause) {
+      complete(run.id, "failed");
+      throw cause;
+    }
   };
   const alarm = async () => {
     const now = options.now();
@@ -168,6 +223,10 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     );
     for (const row of rows) {
       const account = store.config(row);
+      if (row.state === "login_required") {
+        await probeAuthentication(row);
+        continue;
+      }
       const running = store.exec<{ id: string; data: string; state: string }>(
         "SELECT id,data,state FROM social_run WHERE state = 'running' AND account_id = ? LIMIT 1",
         row.id,
@@ -213,19 +272,13 @@ export function socialService(store: SocialStore, options: SocialOptions) {
         );
       });
       // Save recovery wake before crossing the Mac boundary.
-      await store.arm();
-      try {
-        if (!(await options.personas()).has(account.personaId))
-          throw new SocialError(409, "SOCIAL_PERSONA_NOT_FOUND");
-        if (!(await options.invitation(account.invitation)))
-          throw new SocialError(409, "SOCIAL_INVITATION_UNAVAILABLE");
-        await options.start(run, account);
-      } catch (cause) {
-        complete(run.id, "failed");
-        throw cause;
-      }
+      await dispatch(run, account);
     }
   };
-  return { configure, control, complete, alarm };
+  const awaitAuthentication = async (row: AccountRow) => {
+    store.exec("UPDATE social_account SET state='login_required',next_at=NULL WHERE id=?", row.id);
+    await stop(row);
+  };
+  return { configure, control, complete, alarm, awaitAuthentication };
 }
 export type SocialService = ReturnType<typeof socialService>;

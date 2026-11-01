@@ -1,27 +1,13 @@
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { createSocial } from "./social/http.ts";
 import { Schema } from "effect";
 import { SocialControl, SocialSnapshot } from "@ren-ai/onboarding/social";
-import { socialFixture, socialGate, socialAccount as account } from "../test/social.test-helper.ts";
-const fixtures: ReturnType<typeof socialFixture>[] = [];
-const logs: string[] = [];
-const fixture = () => {
-  const f = socialFixture();
-  fixtures.push(f);
-  return f;
-};
-beforeEach(() => {
-  for (const stream of [process.stdout, process.stderr])
-    vi.spyOn(stream, "write").mockImplementation((text) => {
-      logs.push(String(text));
-      return true;
-    });
-});
-afterEach(() => {
-  fixtures.splice(0).forEach((f) => f.close());
-  logs.length = 0;
-  vi.restoreAllMocks();
-});
+import {
+  socialTestContext,
+  socialGate,
+  socialAccount as account,
+} from "../test/social.test-helper.ts";
+const { fixture, logs } = socialTestContext();
 
 test("Admin assigns an X account to a chosen Persona and a replacement actor keeps its schedule", async () => {
   const f = fixture();

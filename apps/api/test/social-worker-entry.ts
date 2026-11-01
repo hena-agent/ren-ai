@@ -9,6 +9,7 @@ interface Namespace {
 }
 export class SocialProof extends DurableObject<{ SOCIAL: Namespace }> {
   private social = createSocial(this.ctx.storage, {
+    authenticate: async () => ({ state: "not_configured", hasCredentials: false }),
     token: "secret",
     now: Date.now,
     personas: async () => new Set(["alice", "bob"]),
