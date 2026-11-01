@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fromPartial } from "@total-typescript/shoehorn";
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import { Schema } from "effect";
+import { afterEach, beforeEach, vi } from "vitest";
 import {
   SocialSnapshot,
   type SocialAccount,
@@ -12,6 +13,30 @@ import { createSocial } from "../src/social/http.ts";
 import type { SocialOptions } from "../src/social/service.ts";
 import { socialAccount } from "../../../packages/onboarding/src/social.test-helper.ts";
 export { socialAccount };
+export function socialTestContext() {
+  const fixtures: ReturnType<typeof socialFixture>[] = [];
+  const logs: string[] = [];
+  beforeEach(() => {
+    for (const stream of [process.stdout, process.stderr])
+      vi.spyOn(stream, "write").mockImplementation((text) => {
+        logs.push(String(text));
+        return true;
+      });
+  });
+  afterEach(() => {
+    fixtures.splice(0).forEach((f) => f.close());
+    logs.length = 0;
+    vi.restoreAllMocks();
+  });
+  return {
+    logs,
+    fixture: () => {
+      const f = socialFixture();
+      fixtures.push(f);
+      return f;
+    },
+  };
+}
 export function socialGate<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
@@ -19,7 +44,7 @@ export function socialGate<T>() {
   });
   return { promise, resolve };
 }
-export function socialFixture() {
+function socialFixture() {
   const db = new DatabaseSync(":memory:");
   let alarm: number | null = null;
   const queries: string[] = [];
@@ -55,6 +80,7 @@ export function socialFixture() {
   const runs: SocialRun[] = [];
   const writes: SocialAction[] = [];
   const options: SocialOptions = {
+    authenticate: async () => ({ state: "not_configured", hasCredentials: false }),
     token: "secret",
     now: () => now,
     personas: async () => new Set(["alice", "bob"]),

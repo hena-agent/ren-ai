@@ -3,7 +3,11 @@ import { SqlClient } from "effect/sql";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { expect, test, vi } from "vitest";
 import { parsePersona } from "@ren-ai/personas";
-import { socialAccount, socialTask } from "../../../packages/onboarding/src/social.test-helper.ts";
+import {
+  socialAccount,
+  socialTask,
+  socialAuthAccount,
+} from "../../../packages/onboarding/src/social.test-helper.ts";
 import { socialBindings } from "./social/bindings.ts";
 import { invitationAvailability } from "./social/invitation.ts";
 import { invitations } from "./discovery/invitations.ts";
@@ -134,3 +138,46 @@ test("exact invitation checks use the existing durable ledger, including codes o
       );
     }).pipe(Effect.scoped),
   ));
+
+test("authentication transport validates status and only classifies proven pre-submit failures as blocked", async () => {
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    Response.json({ state: "logging_in", hasCredentials: true }),
+  );
+  const binding = socialBindings(
+    { ...executionBindings, SOCIAL_EXECUTOR_URL: "https://social.test" },
+    "rules",
+    async () => new Response(),
+    fetcher,
+  );
+  expect(await binding.authenticate(socialAuthAccount, { kind: "login" }, "auth-request")).toEqual({
+    state: "logging_in",
+    hasCredentials: true,
+  });
+  expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-Operation-ID")).toBe(
+    "auth-request",
+  );
+  fetcher.mockResolvedValue(Response.json({ private: "DO_NOT_ECHO" }));
+  await expect(binding.authenticate(socialAuthAccount, { kind: "status" })).rejects.toMatchObject({
+    status: 503,
+    code: "SOCIAL_AUTH_RESPONSE_INVALID",
+  });
+  fetcher.mockResolvedValue(new Response(null, { status: 409 }));
+  await expect(binding.authenticate(socialAuthAccount, { kind: "login" })).rejects.toMatchObject({
+    status: 409,
+    code: "SOCIAL_AUTH_CONFLICT",
+  });
+  const task = socialTask();
+  fetcher.mockResolvedValue(
+    Response.json(
+      { error: "SOCIAL_AUTH_REQUIRED", status: { state: "code_required", hasCredentials: true } },
+      { status: 423 },
+    ),
+  );
+  await expect(
+    binding.browser(task.run, task.account, { kind: "post", text: "Hello" }, "write"),
+  ).rejects.toMatchObject({ status: 423, code: "SOCIAL_AUTH_REQUIRED" });
+  fetcher.mockResolvedValue(Response.json({ error: "OTHER" }, { status: 423 }));
+  await expect(
+    binding.browser(task.run, task.account, { kind: "post", text: "Hello" }, "write"),
+  ).rejects.toMatchObject({ status: 503, code: "SOCIAL_AUTH_RESPONSE_INVALID" });
+});

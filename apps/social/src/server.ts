@@ -6,49 +6,12 @@ import type { SocialApplication } from "./client.ts";
 import type { SocialModel } from "./model.ts";
 import { socialRunner } from "./runner.ts";
 import { LoginRequired, type xBrowser } from "./browser.ts";
+import { SocialAuthRequest } from "@ren-ai/onboarding/social-auth";
+import { AuthenticationError, AuthenticationConflict } from "./auth-store.ts";
+import type { SocialAuthentication } from "./authentication.ts";
+import { socialLog, socialDiagnostic as diagnostic, type SocialLogEvent } from "./logging.ts";
 
-type Event = {
-  requestId: string;
-  operationId?: string;
-  operation: string;
-  stage: string;
-  outcome: string;
-  durationMs: number;
-  level: "info" | "warn" | "error";
-  code?: string;
-  causeName?: string;
-  causeCode?: string;
-  upstreamStatus?: number;
-  stack?: string;
-  personaId?: string;
-  model?: string;
-  status?: number;
-  port?: number;
-};
-type Trace = Pick<Event, "requestId" | "operationId" | "personaId" | "model">;
-export const socialLog = (event: Event) => {
-  (event.level === "info" ? process.stdout : process.stderr).write(`${JSON.stringify(event)}\n`);
-};
-// oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow provider, browser and transport failures without copying private payloads
-function diagnostic(cause: unknown) {
-  const error = cause instanceof Error ? cause : new Error("Non-Error failure");
-  const root = error.cause instanceof Error ? error.cause : error;
-  const code =
-    "code" in root && typeof root.code === "string" && /^[A-Z0-9_]{1,80}$/.test(root.code)
-      ? root.code
-      : undefined;
-  return {
-    causeName: root.constructor.name,
-    ...(code && { causeCode: code }),
-    ...("upstreamStatus" in root &&
-      typeof root.upstreamStatus === "number" && { upstreamStatus: root.upstreamStatus }),
-    stack: (root.stack ?? "")
-      .split("\n")
-      .filter((line) => /^\s+at .*\.(?:ts|js|mjs):\d+:\d+/.test(line))
-      .join("\n")
-      .slice(0, 4000),
-  };
-}
+type Trace = Pick<SocialLogEvent, "requestId" | "operationId" | "personaId" | "model">;
 const parse = async <T>(request: Request, schema: Schema.Codec<T>) => {
   const body = await request.text();
   if (body.length > 140000) throw new Error("Social input exceeds limit");
@@ -65,6 +28,7 @@ export function socialExecutor(options: {
   application: SocialApplication;
   model: SocialModel;
   browser: ReturnType<typeof xBrowser>;
+  authentication: SocialAuthentication;
   readiness: () => Promise<{ chromeCanary: boolean; agentBrowser: boolean; openCode: boolean }>;
   log?: typeof socialLog;
 }) {
@@ -89,6 +53,22 @@ export function socialExecutor(options: {
         await options.browser.execute(input.run, input.account, input.action, signal, guard),
       );
     } catch (cause) {
+      if (cause instanceof AuthenticationError) {
+        log({
+          ...trace,
+          operation: "social.auth",
+          stage: "login.required",
+          outcome: "failed",
+          durationMs: 0,
+          level: "warn",
+          code: cause.code,
+          causeCode: cause.status.reason ?? cause.status.state,
+        });
+        return Response.json(
+          { error: "SOCIAL_AUTH_REQUIRED", status: cause.status },
+          { status: 423 },
+        );
+      }
       if (cause instanceof LoginRequired)
         await options.application.complete(input.run.id, "login_required");
       throw cause;
@@ -156,6 +136,16 @@ export function socialExecutor(options: {
       );
     }
     if (request.method !== "POST") return new Response(null, { status: 405 });
+    if (path === "/auth") {
+      const input = await parse(request, SocialAuthRequest);
+      trace.personaId = input.account.personaId;
+      const result = await options.authentication.submit(
+        input.account,
+        input.command,
+        trace.requestId,
+      );
+      return Response.json(result, { status: result.state === "logging_in" ? 202 : 200 });
+    }
     if (path === "/runs") {
       const task = await parse(request, SocialTask);
       trace.personaId = task.account.personaId;
@@ -209,11 +199,17 @@ export function socialExecutor(options: {
           stage: "request.handle",
           outcome: "failed",
           durationMs: performance.now() - started,
-          level: "error",
+          level: cause instanceof AuthenticationConflict ? "warn" : "error",
           ...diagnostic(cause),
-          code: "SOCIAL_EXECUTOR_FAILED",
+          code: cause instanceof AuthenticationConflict ? cause.code : "SOCIAL_EXECUTOR_FAILED",
         });
-        response = Response.json({ error: "SOCIAL_EXECUTOR_FAILED", requestId }, { status: 503 });
+        response = Response.json(
+          {
+            error: cause instanceof AuthenticationConflict ? cause.code : "SOCIAL_EXECUTOR_FAILED",
+            requestId,
+          },
+          { status: cause instanceof AuthenticationConflict ? 409 : 503 },
+        );
       }
       return response;
     }, options.token)(request).then((response) => {

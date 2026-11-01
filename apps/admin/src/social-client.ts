@@ -1,8 +1,10 @@
 import { Schema } from "effect";
 import { SocialSnapshot, type SocialAccount } from "@ren-ai/onboarding/social";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
+import { SocialAuthStatus, type SocialAuthCommand } from "@ren-ai/onboarding/social-auth";
 
 export interface SocialClient {
+  authenticate: (accountId: string, command: SocialAuthCommand) => Promise<SocialAuthStatus>;
   list: (before?: number) => Promise<SocialSnapshot>;
   configure: (account: SocialAccount) => Promise<SocialSnapshot>;
   operate: (action: "open" | "now", accountId: string) => Promise<void>;
@@ -63,6 +65,18 @@ export function socialClient(origin: string, token: string, fetcher: typeof fetc
     return response;
   };
   return {
+    authenticate: async (accountId, command) => {
+      if (command.kind === "save") protect(command.username, command.password);
+      if (command.kind === "code") protect(command.code);
+      const response = await request("/auth", { accountId, command });
+      try {
+        return Schema.decodeUnknownSync(SocialAuthStatus)(await response.json());
+      } catch {
+        throw new GenerationError("로그인 상태 응답 형식이 올바르지 않습니다.", {
+          code: "social_auth_schema",
+        });
+      }
+    },
     list: async (before) =>
       snapshot(await request(before === undefined ? "" : `?before=${before}`)),
     configure: async (account) => snapshot(await request("/accounts", account)),

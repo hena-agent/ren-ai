@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./social": "./src/social.ts",
+    "./social-auth": "./src/social-auth.ts",
     "./turnstile": "./src/turnstile.tsx"
   },
   "scripts": {

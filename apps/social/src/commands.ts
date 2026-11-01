@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 
@@ -10,7 +11,20 @@ export interface BrowserCommands {
     port: number,
     args: readonly string[],
     signal: AbortSignal,
+    input?: string,
   ) => Promise<string>;
+}
+/** Auth vault and stdin-batch behavior are verified against this CLI release. */
+export async function requireAuthenticationVersion(
+  commands: BrowserCommands,
+  account: string,
+  port: number,
+  signal: AbortSignal,
+) {
+  if (
+    (await commands.command(account, port, ["--version"], signal)).trim() !== "agent-browser 0.41.0"
+  )
+    throw new Error("agent-browser 0.41.0 is required for encrypted authentication");
 }
 const Envelope = Schema.Struct({
   success: Schema.Boolean,
@@ -53,6 +67,8 @@ export function browserCommands(
   agentBrowser: string,
 ): BrowserCommands {
   const browsers = new Map<string, Promise<number>>();
+  // macOS Unix sockets have a 103-byte path limit; SOCIAL_HOME may contain long GUI paths.
+  const socketDirectory = `/tmp/renai-social-${process.getuid!()}-${createHash("sha256").update(home).digest("hex").slice(0, 12)}`;
   const open = (account: string): Promise<number> => {
     const directory = join(home, "profiles", account);
     const previous = browsers.get(account);
@@ -108,24 +124,50 @@ export function browserCommands(
   };
   return {
     open,
-    command: (account, port, args, signal) =>
-      new Promise<string>((resolve, reject) => {
-        execFile(
+    command: async (account, port, args, signal, input) => {
+      await mkdir(socketDirectory, { recursive: true, mode: 0o700 });
+      await chmod(socketDirectory, 0o700);
+      return new Promise<string>((resolve, reject) => {
+        const child = execFile(
           agentBrowser,
-          ["--session", `ren-ai-${account}`, "--cdp", String(port), "--json", ...args],
-          { signal, timeout: 30000, maxBuffer: 1024 * 1024 },
+          [
+            "--session",
+            `renai-${createHash("sha256").update(account).digest("hex").slice(0, 32)}`,
+            ...(args[0] === "auth" || args[0] === "--version" ? [] : ["--cdp", String(port)]),
+            "--json",
+            ...args,
+          ],
+          {
+            signal,
+            timeout: 30000,
+            maxBuffer: 1024 * 1024,
+            env: {
+              ...process.env,
+              HOME: join(home, "agent-browser"),
+              AGENT_BROWSER_SOCKET_DIR: socketDirectory,
+            },
+          },
           (error, stdout) => {
             if (error) {
               browsers.delete(account);
               return reject(
-                Object.assign(new Error("agent-browser execution failed", { cause: error }), {
-                  code: "SOCIAL_BROWSER_COMMAND",
-                }),
+                Object.assign(
+                  new Error("agent-browser execution failed", {
+                    cause:
+                      input === undefined ? error : new Error("Private browser command failed"),
+                  }),
+                  {
+                    code: "SOCIAL_BROWSER_COMMAND",
+                  },
+                ),
               );
             }
             resolve(stdout);
           },
         );
-      }),
+        child.stdin!.on("error", () => undefined);
+        child.stdin!.end(input);
+      });
+    },
   };
 }

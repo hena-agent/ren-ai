@@ -3,6 +3,9 @@ import { socialTask } from "../../../packages/onboarding/src/social.test-helper.
 import { xBrowser, LoginRequired } from "./browser.ts";
 import type { BrowserCommands } from "./commands.ts";
 import { commandResult } from "./commands.ts";
+import { accountQueue } from "./account-queue.ts";
+import type { SocialAuthentication } from "./authentication.ts";
+import { AuthenticationError } from "./auth-store.ts";
 import {
   identityScript,
   publicScript,
@@ -39,7 +42,8 @@ function fixture() {
       return JSON.stringify({ success: true });
     },
   };
-  const browser = xBrowser(adapter);
+  const authentication = { ensure: async () => {} } satisfies Pick<SocialAuthentication, "ensure">;
+  const browser = xBrowser(adapter, authentication, accountQueue());
   let guards = 0;
   const execute = (
     action: Parameters<typeof browser.execute>[2],
@@ -49,7 +53,16 @@ function fixture() {
     browser.execute({ ...task.run, contact }, task.account, action, signal, async () => {
       guards++;
     });
-  return { task, browser, adapter, observations, commands, execute, guards: () => guards };
+  return {
+    task,
+    browser,
+    adapter,
+    authentication,
+    observations,
+    commands,
+    execute,
+    guards: () => guards,
+  };
 }
 
 test("public discovery navigates only fixed X routes and checks the logged-in account", async () => {
@@ -130,6 +143,45 @@ test("existing DM threads open directly without entering a new-recipient compose
   expect(f.commands.some(([, selector]) => selector === '[data-testid="searchPeople"]')).toBe(
     false,
   );
+});
+
+test("expired sessions restore login before the original navigation without repeating the social action", async () => {
+  const f = fixture();
+  f.observations.set(identityScript, '{"handle":null}');
+  let logins = 0;
+  f.authentication.ensure = async () => {
+    logins++;
+    f.observations.set(identityScript, JSON.stringify({ handle: f.task.account.handle }));
+  };
+  expect(await f.execute({ kind: "read_post", url: "https://x.com/reader/status/123" })).toEqual({
+    text: "[]",
+    url: "https://x.com/reader/status/123",
+  });
+  expect(logins).toBe(1);
+  expect(f.commands.filter(([kind]) => kind === "click")).toEqual([]);
+});
+
+test("authentication blockers are classified as unsent only before a submit command", async () => {
+  const f = fixture();
+  f.observations.set(identityScript, '{"handle":null}');
+  f.authentication.ensure = async () => {
+    throw new AuthenticationError({ state: "code_required", hasCredentials: true });
+  };
+  await expect(f.execute({ kind: "post", text: "Hello X" })).rejects.toBeInstanceOf(
+    AuthenticationError,
+  );
+  expect(f.commands.filter(([kind]) => kind === "click")).toEqual([]);
+  f.observations.set(identityScript, JSON.stringify({ handle: f.task.account.handle }));
+  const original = f.adapter.command;
+  f.adapter.command = async (...args) => {
+    const output = await original(...args);
+    if (args[2][0] === "click" && args[2][1] === '[data-testid="tweetButton"]')
+      f.observations.set(identityScript, '{"handle":null}');
+    return output;
+  };
+  const pending = f.execute({ kind: "post", text: "Hello X" });
+  await expect(pending).rejects.toThrow("uncertain");
+  await expect(pending).rejects.not.toBeInstanceOf(AuthenticationError);
 });
 
 test("failed composer submissions and aborted work never silently report success", async () => {

@@ -4,6 +4,8 @@ import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { catalogClient } from "../personas/catalog.ts";
 import type { CloudflareBindings } from "../cloudflare-config.ts";
 import type { SocialOptions } from "./service.ts";
+import { SocialError } from "./service.ts";
+import { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
 
 export function socialBindings(
   env: CloudflareBindings,
@@ -40,6 +42,21 @@ export function socialBindings(
       redirect: "manual",
       signal: AbortSignal.timeout(path === "/browser" ? 55000 : 15000),
     });
+    if (response.status === 423 && path === "/browser") {
+      try {
+        Schema.decodeUnknownSync(
+          Schema.Struct({
+            error: Schema.Literal("SOCIAL_AUTH_REQUIRED"),
+            status: SocialAuthStatus,
+          }),
+        )(await response.json());
+      } catch {
+        throw new SocialError(503, "SOCIAL_AUTH_RESPONSE_INVALID");
+      }
+      throw new SocialError(423, "SOCIAL_AUTH_REQUIRED");
+    }
+    if (response.status === 409 && path === "/auth")
+      throw new SocialError(409, "SOCIAL_AUTH_CONFLICT");
     if (!response.ok)
       throw Object.assign(new Error("Social executor request failed"), {
         code: "SOCIAL_EXECUTOR_REQUEST",
@@ -48,6 +65,14 @@ export function socialBindings(
     return response;
   };
   return {
+    authenticate: async (account, command, requestId) => {
+      const response = await native("/auth", { account, command }, requestId);
+      try {
+        return Schema.decodeUnknownSync(SocialAuthStatus)(await response.json());
+      } catch {
+        throw new SocialError(503, "SOCIAL_AUTH_RESPONSE_INVALID");
+      }
+    },
     token,
     now: Date.now,
     personas: async () => new Set((await catalog.load()).personas.keys()),

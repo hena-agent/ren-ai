@@ -26,4 +26,6 @@ RenAI's initial recruitment needs the Persona to discover relevant people and in
 
 ## Consequences
 
+[ADR-0028](0028-social-authentication-keeps-credentials-on-the-mac.md) extends the initial manual-login decision with Admin credential entry and Mac-owned automatic re-login.
+
 The Mac needs agent-browser and Chrome Canary plus a logged-in desktop session. Platform DOM changes can interrupt a run; uncertain results remain visible for inspection rather than being retried blindly. Social account reassignment creates fresh private scopes, but does not rewrite X history. A social relationship is keyed by its X handle, not an inferred iMessage identity.

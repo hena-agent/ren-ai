@@ -1,4 +1,5 @@
 import type { SocialAccount, SocialTask } from "./social.ts";
+import type { SocialAuthAccount } from "./social-auth.ts";
 
 export const socialAccount: SocialAccount = {
   id: "first",
@@ -14,6 +15,12 @@ export const socialAccount: SocialAccount = {
   runMinutes: 5,
   dailyTurns: 20,
   dailyWrites: 5,
+};
+export const socialAuthAccount: SocialAuthAccount = {
+  id: socialAccount.id,
+  handle: socialAccount.handle,
+  personaId: socialAccount.personaId,
+  generation: 1,
 };
 export const socialTask = (): SocialTask => ({
   account: { ...socialAccount, enabled: true },

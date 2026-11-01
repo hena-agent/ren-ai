@@ -1,12 +1,14 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { socialTask } from "../../../packages/onboarding/src/social.test-helper.ts";
 import type { SocialDecision } from "@ren-ai/onboarding/social";
-import { socialExecutor, socialLog } from "./server.ts";
+import { socialExecutor } from "./server.ts";
+import { socialLog } from "./logging.ts";
 import { socialApplication, type SocialApplication } from "./client.ts";
 import { socialRunner } from "./runner.ts";
 import type { SocialModel } from "./model.ts";
 import { LoginRequired, type xBrowser } from "./browser.ts";
 import { socialConfiguration } from "./config.ts";
+import type { SocialAuthentication } from "./authentication.ts";
 
 afterEach(() => vi.restoreAllMocks());
 function fixture() {
@@ -16,6 +18,7 @@ function fixture() {
   const completions: string[] = [];
   const logs: Parameters<typeof socialLog>[0][] = [];
   const application: SocialApplication = {
+    authenticated: async () => {},
     control: async () => ({ run, account: task.account }),
     action: async (_id, _step, decision) => {
       decisions.push(decision);
@@ -39,6 +42,11 @@ function fixture() {
     open: vi.fn<ReturnType<typeof xBrowser>["open"]>(async () => 1234),
     execute: vi.fn<ReturnType<typeof xBrowser>["execute"]>(async () => ({ text: "observed" })),
   };
+  const authentication: SocialAuthentication = {
+    ensure: async () => {},
+    status: async () => ({ state: "not_configured", hasCredentials: false }),
+    submit: async () => ({ state: "not_configured", hasCredentials: false }),
+  };
   const readiness = vi.fn<Parameters<typeof socialExecutor>[0]["readiness"]>(async () => ({
     chromeCanary: true,
     agentBrowser: true,
@@ -49,6 +57,7 @@ function fixture() {
     application,
     model,
     browser,
+    authentication,
     readiness,
     log: (event) => logs.push(event),
   });
@@ -71,6 +80,7 @@ function fixture() {
     application,
     model,
     browser,
+    authentication,
     readiness,
     logs,
     completions,
@@ -259,6 +269,7 @@ test("default diagnostics retain safe root causes and correlation while excludin
     application: f.application,
     model: f.model,
     browser: f.browser,
+    authentication: f.authentication,
     readiness: f.readiness,
   });
   const root = Object.assign(new Error("PRIVATE_ROOT"), {
@@ -343,6 +354,10 @@ test("the native application client validates responses and never follows creden
     await client.action(task.run.id, 0, { action: { kind: "finish" }, reason: "Done" }),
   ).toEqual({ text: "result" });
   await client.complete(task.run.id, "completed");
+  await client.authenticated({ ...task.account, generation: task.run.generation });
+  expect(new Request(fetcher.mock.calls.at(-1)![0]).url).toBe(
+    "https://app.test/management/social/authenticated",
+  );
   expect(fetcher.mock.calls[0]?.[1]?.redirect).toBe("manual");
   expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Authorization")).toBe(
     "Bearer secret",

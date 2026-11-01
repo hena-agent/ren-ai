@@ -5,6 +5,12 @@
 .social-workspace .page-heading p {
   flex: 1 1 300px;
 }
+.social-workspace fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 .social-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
