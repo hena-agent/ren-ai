@@ -48,12 +48,16 @@ function ProfileCaption({
     .join(" · ");
   return (
     <div className="profile-caption">
-      <h2 ref={nameRef}>
+      <h2 ref={nameRef} lang={persona.languages?.primary}>
         {persona.name}
         {age !== undefined && `, ${age}`}
       </h2>
-      {metadata && <p className="profile-meta">{metadata}</p>}
-      <p>{persona.bio}</p>
+      {metadata && (
+        <p className="profile-meta" lang={persona.languages?.primary}>
+          {metadata}
+        </p>
+      )}
+      <p lang={persona.languages?.primary}>{persona.bio}</p>
       <ProfileLanguages persona={persona} compact />
     </div>
   );

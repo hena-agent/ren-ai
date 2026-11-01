@@ -105,7 +105,7 @@ export function ProfileDetails({
   return (
     <section className="profile-details" aria-labelledby="details-title">
       <div className="details-toolbar">
-        <span className="details-toolbar-name" aria-hidden="true">
+        <span className="details-toolbar-name" lang={persona.languages?.primary} aria-hidden="true">
           {persona.name}
           {persona.age !== undefined && `, ${persona.age}`}
         </span>
@@ -127,7 +127,7 @@ export function ProfileDetails({
           onImageChange={onImageChange}
           disabled={disabled}
         />
-        <div className="details-content">
+        <div className="details-content" lang={persona.languages?.primary}>
           <h2 id="details-title" className="details-name">
             {persona.name}
             {persona.age !== undefined && `, ${persona.age}`}

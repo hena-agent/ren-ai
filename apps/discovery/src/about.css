@@ -47,7 +47,6 @@
   font-weight: 750;
   line-height: 1.08;
   letter-spacing: -0.065em;
-  word-break: keep-all;
 }
 .about h1 > span {
   display: block;
@@ -65,7 +64,6 @@
   margin: 0;
   font-size: 16px;
   line-height: 1.7;
-  word-break: keep-all;
 }
 .about-cta {
   display: inline-flex;
@@ -147,7 +145,6 @@
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.055em;
-  word-break: keep-all;
   text-wrap: balance;
 }
 .about h2 > span {
@@ -174,7 +171,6 @@
   color: var(--muted);
   font-size: 17px;
   line-height: 1.9;
-  word-break: keep-all;
 }
 .about-conversation-note {
   max-width: 380px;
@@ -182,7 +178,6 @@
   color: var(--muted);
   font-size: 14px;
   line-height: 1.8;
-  word-break: keep-all;
 }
 .about-how,
 .about-faq,
@@ -195,7 +190,6 @@
   color: var(--muted);
   font-size: 14px;
   line-height: 1.9;
-  word-break: keep-all;
 }
 .about-faq {
   display: grid;
@@ -255,7 +249,4 @@
 }
 .about-footer > .privacy-disclosure {
   margin-top: 24px;
-}
-.about:lang(ja) :is(h1, h2, h3, p) {
-  word-break: normal;
 }

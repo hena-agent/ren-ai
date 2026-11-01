@@ -35,6 +35,7 @@ test("the swipe caption uses only explicitly disclosed basic keys, never inferri
       persona={{
         ...profile,
         age: 27,
+        languages: { primary: "ko", proficiency: { ko: "fluent" } },
         profile: {
           introduction: profile.bio,
           sections: [
@@ -56,6 +57,8 @@ test("the swipe caption uses only explicitly disclosed basic keys, never inferri
   );
   expect(screen.getByRole("heading", { name: "예린, 27" })).toBeTruthy();
   expect(screen.getByText("도예가 · 서울")).toBeTruthy();
+  expect(screen.getByText(profile.bio).lang).toBe("ko");
+  expect(screen.getByText("도예가 · 서울").lang).toBe("ko");
   expect(screen.queryByText("27세")).toBeNull();
   view.rerender(
     <Card

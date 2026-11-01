@@ -30,7 +30,6 @@
   margin: 12px 0 24px;
   color: var(--muted);
   font-size: 14px;
-  word-break: keep-all;
 }
 .liked-list {
   display: flex;
@@ -141,7 +140,6 @@ input:not([type="checkbox"]):not([type="radio"]) {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-  word-break: keep-all;
 }
 /* An error takes the hint's place, so leaving the field never moves what the visitor taps next. */
 .field-note {
@@ -224,7 +222,6 @@ input[type="checkbox"] {
 .receipt p {
   margin: 16px 0 0;
   font-size: 14px;
-  word-break: keep-all;
 }
 .receipt .receipt-hint {
   margin-top: 24px;

@@ -49,6 +49,7 @@ export function markdownEditor(
         {
           "&": { color: "var(--ink)", backgroundColor: "var(--field)", fontSize: "14px" },
           ".cm-content": {
+            wordBreak: "inherit",
             fontFamily: 'ui-monospace, "SFMono-Regular", Menlo, "Apple SD Gothic Neo", monospace',
             padding: "16px 0",
             minHeight: "240px",
