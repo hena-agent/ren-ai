@@ -41,7 +41,7 @@ This repo enforces seven gates. They are not advisory. `bun run ci` runs all of 
 
 Before running checks, activate the Node version in `.nvmrc` (`nvm use`) and verify it with `node --version`. Vitest uses Node from `PATH`, even when launched through Bun; Node 22 cannot parse OpenCode's `await using` syntax.
 
-Use focused checks during development. Run `bun run ci` once after implementation and final review; batch any fixes, rerun only affected checks, and report unresolved failures.
+Use focused local checks only as needed for the change. GitHub Actions runs the full test suite, OpenCode integration tests, per-file coverage and native checks after branch pushes and provides the final quality-gate verdict. Run full local CI or OpenCode integration tests only when explicitly requested or needed to reproduce a specific failure. Git pushes have no pre-push checks. Report which checks ran locally and which CI results are still pending or failing.
 
 Serialize coverage and `verify-gates` runs within one checkout. Wait for other runs to finish: Vitest shares its report directory, and `verify-gates` temporarily plants and deletes source fixtures.
 

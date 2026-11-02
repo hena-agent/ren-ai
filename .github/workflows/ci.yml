@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
   schedule:
     # Proves the quality gates still pass when nobody has touched the repo.
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: checks-${{ github.ref }}
+      group: checks-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: verify-${{ github.ref }}
+      group: verify-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
@@ -61,6 +61,9 @@ jobs:
     name: Rustpush checks and build
     runs-on: macos-15
     timeout-minutes: 45
+    concurrency:
+      group: native-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:

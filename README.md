@@ -16,7 +16,7 @@ Add `GEMINI_API_KEY` and `AI_GATEWAY_API_KEY` to `apps/persona-lab/.env` (see `.
 bun run --cwd apps/persona-lab dev
 ```
 
-Open http://127.0.0.1:3617. Each conversation gets a shareable `/personas/<persona>/sessions/<session>` URL; Vite proxies `/api/` to the lab backend on port 4617. Override them with `FRONTEND_PORT` and `BACKEND_PORT` in the lab's `.env`. During development, Vite updates the UI automatically and Bun restarts the API when its source changes. Run the quality gates with:
+Open http://127.0.0.1:3617. Each conversation gets a shareable `/personas/<persona>/sessions/<session>` URL; Vite proxies `/api/` to the lab backend on port 4617. Override them with `FRONTEND_PORT` and `BACKEND_PORT` in the lab's `.env`. During development, Vite updates the UI automatically and Bun restarts the API when its source changes. GitHub Actions runs the quality gates after each branch push. Full local verification is optional:
 
 ```sh
 bun run ci
@@ -73,7 +73,10 @@ global installation, prefix commands with `bunx --package bun@1.4.4`, for exampl
 
 ```sh
 nvm use
-bun run ci:checks
+node --version
+# Optional local checks; select what the change needs.
+bun run typecheck
+bunx vitest run path/to/changed.test.ts
 ```
 
 `bun run test` launches Vitest with Node from `PATH`, not Bun. Node 22 cannot parse
@@ -121,8 +124,12 @@ For the messaging services, use the [application deployment and relocation runbo
 
 `bun run ci:checks` runs formatting, lint, types, dead-code and duplication checks,
 the exceptions report and the build before the full coverage suite, so cheap
-failures surface first. GitHub Actions runs `ci:checks` and `verify-gates` in parallel;
-deployment waits for both. On `main` it deploys admin.renai.im and renai.im, and
+failures surface first. Every branch push runs the full suite, including tests
+that start OpenCode, in GitHub Actions. PRs and the weekly schedule also run CI.
+`ci:checks`, `verify-gates` and Rustpush native checks run in separate jobs;
+deployment waits for all three. New pushes cancel superseded validation jobs,
+and same-repository push/PR runs share branch-level concurrency groups.
+On `main` it deploys admin.renai.im and renai.im, and
 publishes an attested Messages Mac bundle, which the Messages Mac pulls itself
 ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants
 deliberate violations and confirms that each gate rejects them. Its coverage
@@ -131,13 +138,16 @@ and requiring a threshold failure naming each planted file.
 
 ### Local feedback
 
-- Pre-commit lints and formats staged files. Pre-push runs cached typechecks and
-  `bun run test:changed`, skipping both for documentation-only pushes.
+- Pre-commit lints and formats staged files. There is no pre-push hook: pushing
+  starts remote validation without waiting for local tests or typechecks.
+- Local checks are optional and selected for the change. Run full local CI or
+  tests that start OpenCode when explicitly requested or reproducing a specific
+  failure; Actions provides the final quality-gate verdict.
 - `bun run test:changed` uses Vitest's dependency graph against `origin/main`,
   including uncommitted edits, and enforces 100% coverage on changed source files.
   Keep that ref current with `git fetch origin`. This is local feedback: removed
   tests and dependencies loaded through filesystem/subprocess operations still
-  need the full `bun run ci`, which CI always runs.
+  need the full suite, which Actions always runs.
 - Tests share half the available CPUs and keep process isolation. Passing tests'
   console output is hidden; failures retain their logs.
 - Run concurrent agents' coverage suites in separate worktrees (with approval),
