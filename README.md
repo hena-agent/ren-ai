@@ -125,10 +125,11 @@ For the messaging services, use the [application deployment and relocation runbo
 `bun run ci:checks` runs formatting, lint, types, dead-code and duplication checks,
 the exceptions report and the build before the full coverage suite, so cheap
 failures surface first. Every branch push runs the full suite, including tests
-that start OpenCode, in GitHub Actions. PRs and the weekly schedule also run CI.
+that start OpenCode, in GitHub Actions. PRs use the checks attached to their head
+commit instead of starting a duplicate run. The weekly schedule also runs CI.
 `ci:checks`, `verify-gates` and Rustpush native checks run in separate jobs;
-deployment waits for all three. New pushes cancel superseded validation jobs,
-and same-repository push/PR runs share branch-level concurrency groups.
+deployment waits for all three. Validation jobs run to completion; new pushes do
+not cancel earlier validation jobs.
 On `main` it deploys admin.renai.im and renai.im, and
 publishes an attested Messages Mac bundle, which the Messages Mac pulls itself
 ([runbook](apps/imsg/ops/README.md#automatic-deployment)). `verify-gates` plants

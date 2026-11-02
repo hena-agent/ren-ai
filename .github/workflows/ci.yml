@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: ["**"]
-  pull_request:
   schedule:
     # Proves the quality gates still pass when nobody has touched the repo.
     - cron: "0 6 * * 1"
@@ -15,9 +14,6 @@ jobs:
     name: Checks and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: checks-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,9 +36,6 @@ jobs:
     name: Gate self-checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: verify-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -61,9 +54,6 @@ jobs:
     name: Rustpush checks and build
     runs-on: macos-15
     timeout-minutes: 45
-    concurrency:
-      group: native-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -92,7 +82,7 @@ jobs:
   gates:
     name: Quality gates
     needs: [checks, verify, native]
-    if: always() && !cancelled()
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
