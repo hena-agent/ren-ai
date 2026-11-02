@@ -62,7 +62,8 @@ const nextReport = () =>
 
 test("idle actors keep no wake, store work never starts execution, and execution backoff keeps its work", async () => {
   const root = await mkdtemp(join(tmpdir(), "alarm-lifecycle-"));
-  vi.useFakeTimers({ toFake: ["Date"], now: Date.now() });
+  // Keep the retry sequence away from the daily Report's Korea-midnight deadline.
+  vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-01-01T00:00:00Z") });
   let catalogFails = false;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -110,6 +111,12 @@ test("idle actors keep no wake, store work never starts execution, and execution
   }
   const open = () => new FixtureApplication();
   let app = open();
+  const watch = () =>
+    app.fetch(
+      new Request("https://app/management/intake/watch", {
+        headers: { authorization: "Bearer management-secret" },
+      }),
+    );
   const wake = () =>
     app.fetch(
       new Request("https://app/management/intake/wake", {
@@ -123,16 +130,18 @@ test("idle actors keep no wake, store work never starts execution, and execution
     return true;
   });
   try {
+    await watch();
+    // SQLite migrations use their own wall clock; align the persisted Report with the fixture.
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const due = Date.parse("2025-12-31T15:00:00Z");
+        yield* sql`UPDATE metrics_report SET due = ${due} WHERE id = 1`;
+        yield* sql`UPDATE application_work SET due = ${due} WHERE name = 'metrics-report'`;
+      }).pipe(Effect.scoped, Effect.provide(SqliteClient.layer({ filename: state.filename }))),
+    );
     const before = Date.now();
-    expect(
-      (
-        await app.fetch(
-          new Request("https://app/management/intake/watch", {
-            headers: { authorization: "Bearer management-secret" },
-          }),
-        )
-      ).status,
-    ).toBe(200);
+    expect((await watch()).status).toBe(200);
     // The persisted overdue daily Report is store work: it wakes the actor, never execution.
     expect(alarm).toBeLessThan(before + 1000);
     await app.alarm();
