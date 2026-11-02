@@ -92,7 +92,7 @@ jobs:
   gates:
     name: Quality gates
     needs: [checks, verify, native]
-    if: always()
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
