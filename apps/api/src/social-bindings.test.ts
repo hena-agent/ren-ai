@@ -29,7 +29,7 @@ test("social execution loads the selected private Persona, uses existing invitat
         revision: "one",
         personas: records.map((entry) => ({ persona: entry, state: "", memory: "" })),
       });
-    if (new URL(request.url).pathname === "/browser")
+    if (new URL(request.url).pathname === "/social/browser")
       return Response.json({ text: "public result" });
     return new Response(null, { status: 202 });
   });
@@ -39,7 +39,6 @@ test("social execution loads the selected private Persona, uses existing invitat
   const env = {
     ...executionBindings,
     TOKEN_MANAGEMENT: "secret",
-    SOCIAL_EXECUTOR_URL: "https://social.test",
   };
   const binding = socialBindings(env, "rules", application, fetcher);
   expect(
@@ -54,14 +53,15 @@ test("social execution loads the selected private Persona, uses existing invitat
   expect(await binding.invitation("SOCIAL20")).toBe(true);
   const task = socialTask();
   await binding.start(task.run, task.account);
-  const submitted = requests.find((request) => new URL(request.url).pathname === "/runs")!;
+  const submitted = requests.find((request) => new URL(request.url).pathname === "/social/runs")!;
+  expect(new URL(submitted.url).origin).toBe(env.API_MSG_URL);
   const body = Schema.decodeUnknownSync(Schema.Struct({ snapshot: Schema.String }))(
     await submitted.json(),
   );
   expect(body.snapshot).toContain('"id":"alice"');
   expect(submitted.headers.get("authorization")).toBe("Bearer secret");
   await binding.cancel("first", "run-1");
-  await binding.open("first");
+  await binding.open("first", "x");
   expect(
     await binding.browser(task.run, socialAccount, { kind: "notifications" }, "action-1"),
   ).toEqual({ text: "public result" });
@@ -70,31 +70,23 @@ test("social execution loads the selected private Persona, uses existing invitat
   records = [];
   await expect(binding.start(task.run, task.account)).rejects.toThrow("no longer exists");
   for (const origin of [
-    undefined,
     "http://remote.test",
     "https://user:secret@social.test",
     "https://social.test/path",
     "https://social.test?token=bad",
   ]) {
-    const options = socialBindings(
-      { ...env, ...(origin ? { SOCIAL_EXECUTOR_URL: origin } : { SOCIAL_EXECUTOR_URL: "" }) },
-      "rules",
-      application,
-      fetcher,
-    );
-    await expect(options.open("first")).rejects.toThrow(
-      origin ? "Invalid social executor" : "is required",
-    );
+    const options = socialBindings({ ...env, API_MSG_URL: origin }, "rules", application, fetcher);
+    await expect(options.open("first", "x")).rejects.toThrow("API_MSG_URL must be");
   }
   const local = socialBindings(
-    { ...env, SOCIAL_EXECUTOR_URL: "http://localhost:5407" },
+    { ...env, API_MSG_URL: "http://localhost:4700" },
     "rules",
     application,
     fetcher,
   );
-  await local.open("first");
+  await local.open("first", "x");
   fetcher.mockResolvedValue(new Response(null, { status: 503 }));
-  await expect(local.open("first")).rejects.toMatchObject({
+  await expect(local.open("first", "x")).rejects.toMatchObject({
     code: "SOCIAL_EXECUTOR_REQUEST",
     upstreamStatus: 503,
   });
@@ -143,12 +135,7 @@ test("authentication transport validates status and only classifies proven pre-s
   const fetcher = vi.fn<typeof fetch>(async () =>
     Response.json({ state: "logging_in", hasCredentials: true }),
   );
-  const binding = socialBindings(
-    { ...executionBindings, SOCIAL_EXECUTOR_URL: "https://social.test" },
-    "rules",
-    async () => new Response(),
-    fetcher,
-  );
+  const binding = socialBindings(executionBindings, "rules", async () => new Response(), fetcher);
   expect(await binding.authenticate(socialAuthAccount, { kind: "login" }, "auth-request")).toEqual({
     state: "logging_in",
     hasCredentials: true,

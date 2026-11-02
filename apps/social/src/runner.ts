@@ -22,7 +22,9 @@ export function socialRunner(application: SocialApplication, model: SocialModel)
     running.set(task.account.id, state);
     state.done = (async () => {
       let observation =
-        "Begin by checking notifications or discovering relevant users. Use inbox to find private conversations to resume.";
+        task.account.platform === "threads"
+          ? "Begin by searching Threads for relevant public conversations. Private messages and notifications are not available."
+          : "Begin by checking notifications or discovering relevant users. Use inbox to find private conversations to resume.";
       while (!signal.aborted) {
         const controlled = await application.control(task.run.id, true);
         signal.throwIfAborted();

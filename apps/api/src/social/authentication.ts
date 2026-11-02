@@ -7,6 +7,7 @@ function identity(store: SocialStore, row: AccountRow): SocialAuthAccount {
   const account = store.config(row);
   return {
     id: account.id,
+    platform: account.platform,
     handle: account.handle,
     personaId: account.personaId,
     generation: row.generation,
@@ -22,7 +23,7 @@ export function socialAuthentication(
       const row = store.account(input.accountId);
       if (!row) throw new SocialError(404, "SOCIAL_ACCOUNT_NOT_FOUND");
       const account = identity(store, row);
-      if (input.command.kind !== "status") {
+      if (input.command.kind !== "status" && input.command.kind !== "check") {
         await service.awaitAuthentication(row);
         const current = store.account(row.id)!;
         if (current.config !== row.config || current.generation !== row.generation)
@@ -37,7 +38,7 @@ export function socialAuthentication(
         throw new SocialError(409, "SOCIAL_CONFIGURATION_CHANGED");
       if (
         input.command.kind !== "status" &&
-        result.state === "logging_in" &&
+        ["checking", "logging_in"].includes(result.state) &&
         current.state === "login_required" &&
         current.generation === account.generation
       )

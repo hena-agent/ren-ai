@@ -1,9 +1,10 @@
 import { Schema } from "effect";
-import { SocialID, XHandle } from "./social.ts";
+import { SocialAccount, SocialID } from "./social.ts";
 
 export const SocialAuthAccount = Schema.Struct({
   id: SocialID,
-  handle: XHandle,
+  platform: SocialAccount.fields.platform,
+  handle: SocialAccount.fields.handle,
   personaId: SocialID,
   generation: Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
 });
@@ -17,7 +18,7 @@ export const SocialAuthCommand = Schema.Union([
     username: privateText(320),
     password: privateText(4096),
   }),
-  Schema.Struct({ kind: Schema.Literals(["status", "login", "forget"]) }),
+  Schema.Struct({ kind: Schema.Literals(["status", "check", "login", "forget"]) }),
   Schema.Struct({
     kind: Schema.Literal("code"),
     code: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9 -]{4,64}$/)),
@@ -34,6 +35,7 @@ export const SocialAuthStatus = Schema.Struct({
     "not_configured",
     "login_required",
     "logging_in",
+    "checking",
     "authenticated",
     "code_required",
     "manual_required",
@@ -41,7 +43,13 @@ export const SocialAuthStatus = Schema.Struct({
   ]),
   hasCredentials: Schema.Boolean,
   reason: Schema.optionalKey(
-    Schema.Literals(["account_mismatch", "credentials_rejected", "unavailable", "interrupted"]),
+    Schema.Literals([
+      "account_mismatch",
+      "credentials_rejected",
+      "unavailable",
+      "check_unavailable",
+      "interrupted",
+    ]),
   ),
 });
 export type SocialAuthStatus = typeof SocialAuthStatus.Type;

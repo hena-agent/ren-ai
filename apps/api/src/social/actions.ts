@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import {
   SocialResult,
   socialWrite,
+  supportsSocialAction,
   type SocialStep,
   type SocialAction,
   type SocialAccount,
@@ -23,6 +24,8 @@ function checkAction(
   action: SocialAction,
   now: number,
 ) {
+  if (!supportsSocialAction(account.platform, action))
+    throw new SocialError(400, "SOCIAL_PLATFORM_ACTION");
   if ((action.kind === "dm" || action.kind === "messages") && !run.contact)
     throw new SocialError(409, "SOCIAL_CONTACT_REQUIRED");
   if (run.contact && !["dm", "messages", "contact", "finish"].includes(action.kind))
@@ -125,7 +128,7 @@ export function socialActions(store: SocialStore, service: SocialService, option
         store.transaction(() => {
           store.exec(
             "UPDATE social_event SET state='failed',result=? WHERE run_id=? AND step=?",
-            JSON.stringify({ text: "not sent: X authentication required" }),
+            JSON.stringify({ text: "not sent: social authentication required" }),
             run.id,
             input.step,
           );

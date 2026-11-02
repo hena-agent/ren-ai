@@ -6,7 +6,6 @@ import { afterEach, expect, test } from "vitest";
 import { socialAuthAccount as account } from "../../../packages/onboarding/src/social.test-helper.ts";
 import { privateLogin } from "../test/auth.test-helper.ts";
 import { authStore, AuthenticationError } from "./auth-store.ts";
-import type { BrowserCommands } from "./commands.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -20,7 +19,6 @@ async function fixture() {
   const key = "ab".repeat(32);
   await writeFile(join(directory, ".encryption-key"), key, { mode: 0o600 });
   const profile = join(directory, "auth", "renai-x-first.json");
-  const calls: { args: readonly string[]; input: string | undefined }[] = [];
   const encrypt = (value: object) => {
     const iv = Buffer.alloc(12, 7);
     const cipher = createCipheriv("aes-256-gcm", Buffer.from(key, "hex"), iv);
@@ -39,48 +37,36 @@ async function fixture() {
     username: privateLogin.username,
     password: privateLogin.password,
   };
-  const commands: BrowserCommands = {
-    open: async () => 1234,
-    command: async (_account, _port, args, _signal, input) => {
-      calls.push({ args, input });
-      return "agent-browser 0.41.0";
-    },
-  };
   return {
     home,
     directory,
     profile,
     key,
-    calls,
     encrypt,
     credentials,
-    commands,
-    store: authStore(home, commands),
+    store: authStore(home),
   };
 }
 
 test("agent-browser's encrypted vault survives replacement while password input stays out of argv and metadata", async () => {
   const f = await fixture();
   expect(await f.store.state(account)).toEqual({ state: "not_configured", hasCredentials: false });
-  await f.store.save(account, privateLogin, 1234, new AbortController().signal);
-  expect(f.calls).toEqual([{ args: ["--version"], input: undefined }]);
-  expect(JSON.stringify(f.calls)).not.toContain(privateLogin.username);
-  expect(JSON.stringify(f.calls)).not.toContain(privateLogin.password);
+  await f.store.save(account, privateLogin);
   const encrypted = await readFile(f.profile, "utf8");
   expect(encrypted).not.toContain(privateLogin.password);
   expect(encrypted).not.toContain(privateLogin.username);
   expect((await stat(f.profile)).mode & 0o777).toBe(0o600);
-  expect(await authStore(f.home, f.commands).load(account)).toEqual({
+  expect(await authStore(f.home).load(account)).toEqual({
     username: privateLogin.username,
     password: privateLogin.password,
   });
-  expect(await authStore(f.home, f.commands, f.key).load(account)).toEqual({
+  expect(await authStore(f.home, f.key).load(account)).toEqual({
     username: privateLogin.username,
     password: privateLogin.password,
   });
   expect(await f.store.state(account)).toEqual({ state: "login_required", hasCredentials: true });
   await f.store.update(account, { state: "authenticated", hasCredentials: true });
-  expect((await authStore(f.home, f.commands).state(account)).state).toBe("authenticated");
+  expect((await authStore(f.home).state(account)).state).toBe("authenticated");
   const metadata = await readFile(join(f.home, "auth-state", "first.json"), "utf8");
   expect(metadata).not.toContain(privateLogin.password);
   expect(metadata).not.toContain(privateLogin.username);
@@ -95,10 +81,7 @@ test("concurrent account saves publish one encryption key and retain both readab
   const f = await fixture();
   await rm(join(f.directory, ".encryption-key"));
   const second = { ...account, id: "second", handle: "other" };
-  await Promise.all([
-    f.store.save(account, privateLogin, 1234, new AbortController().signal),
-    f.store.save(second, privateLogin, 1234, new AbortController().signal),
-  ]);
+  await Promise.all([f.store.save(account, privateLogin), f.store.save(second, privateLogin)]);
   expect(await f.store.load(account)).toEqual({
     username: privateLogin.username,
     password: privateLogin.password,
@@ -126,10 +109,10 @@ test("plaintext, corrupted encryption, wrong account bindings and malformed keys
     });
   }
   await writeFile(f.profile, f.encrypt(f.credentials));
-  await expect(authStore(f.home, f.commands, "bad-key").load(account)).rejects.toBeInstanceOf(
+  await expect(authStore(f.home, "bad-key").load(account)).rejects.toBeInstanceOf(
     AuthenticationError,
   );
-  await expect(authStore(f.home, f.commands, "cd".repeat(32)).load(account)).rejects.toBeInstanceOf(
+  await expect(authStore(f.home, "cd".repeat(32)).load(account)).rejects.toBeInstanceOf(
     AuthenticationError,
   );
   await rm(f.profile);
@@ -146,16 +129,31 @@ test("failed atomic state writes remove staging files", async () => {
   await f.store.forget({ ...account, id: "missing" });
 });
 
-test("an unsupported CLI never receives credentials or creates a plaintext profile", async () => {
+test("credentials persist without requiring a browser or CLI to be installed", async () => {
   const f = await fixture();
-  const inputs: (string | undefined)[] = [];
-  f.commands.command = async (_account, _port, _args, _signal, input) => {
-    inputs.push(input);
-    return "agent-browser 0.40.0";
-  };
-  await expect(
-    f.store.save(account, privateLogin, 1234, new AbortController().signal),
-  ).rejects.toThrow("0.41.0 is required");
-  expect(inputs).toEqual([undefined]);
-  expect(await f.store.has(account)).toBe(false);
+  await f.store.save(account, privateLogin);
+  expect(await f.store.load(account)).toMatchObject({
+    username: privateLogin.username,
+    password: privateLogin.password,
+  });
+  expect(await f.store.has(account)).toBe(true);
+});
+
+test("X and Threads with the same account ID keep independent vault profiles and saved login states", async () => {
+  const f = await fixture();
+  const threads = { ...account, platform: "threads" as const };
+  await f.store.save(account, privateLogin);
+  await f.store.save(threads, { username: "threads.login", password: "THREADS_PRIVATE" });
+  await f.store.update(account, { state: "authenticated", hasCredentials: true });
+  await f.store.update(threads, {
+    state: "failed",
+    reason: "credentials_rejected",
+    hasCredentials: true,
+  });
+  expect((await f.store.load(account)).password).toBe(privateLogin.password);
+  expect((await f.store.load(threads)).password).toBe("THREADS_PRIVATE");
+  expect((await f.store.state(threads)).state).toBe("failed");
+  await f.store.forget(threads);
+  expect(await f.store.state(threads)).toEqual({ state: "not_configured", hasCredentials: false });
+  expect((await f.store.state(account)).state).toBe("authenticated");
 });

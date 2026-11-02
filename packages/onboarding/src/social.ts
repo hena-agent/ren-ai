@@ -1,15 +1,22 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { InvitationCode } from "./invitation-code.ts";
 
 const bounded = (maximum: number) => Schema.String.check(Schema.isMaxLength(maximum));
 export const SocialID = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/));
-export const XHandle = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_]{1,15}$/));
+export const SocialPlatform = Schema.Literals(["x", "threads"]).pipe(
+  Schema.withDecodingDefaultKey(Effect.succeed("x")),
+);
+export type SocialPlatform = typeof SocialPlatform.Type;
+const handle = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_][A-Za-z0-9_.]{0,29}$/));
+export const socialPlatformName = (platform: SocialPlatform) =>
+  platform === "threads" ? "Threads" : "X";
 const integer = (minimum: number, maximum: number) =>
   Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum, maximum }));
 
 export const SocialAccount = Schema.Struct({
   id: SocialID,
-  handle: XHandle,
+  platform: SocialPlatform,
+  handle,
   personaId: SocialID,
   enabled: Schema.Boolean,
   instructions: bounded(6000),
@@ -21,17 +28,23 @@ export const SocialAccount = Schema.Struct({
   runMinutes: integer(1, 30),
   dailyTurns: integer(1, 200),
   dailyWrites: integer(1, 100),
-});
+}).check(
+  Schema.makeFilter(
+    (account) => account.platform === "threads" || /^[A-Za-z0-9_]{1,15}$/.test(account.handle),
+  ),
+);
 export type SocialAccount = typeof SocialAccount.Type;
 
 const text = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4000));
 const postText = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(280));
 const status = Schema.String.check(
-  Schema.isPattern(/^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d+$/),
+  Schema.isPattern(
+    /^https:\/\/(?:x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d+|www\.threads\.com\/@[A-Za-z0-9_.]{1,30}\/post\/[A-Za-z0-9_-]+)$/,
+  ),
 );
 export const SocialAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("search"), query: bounded(200) }),
-  Schema.Struct({ kind: Schema.Literal("profile"), handle: XHandle }),
+  Schema.Struct({ kind: Schema.Literal("profile"), handle }),
   Schema.Struct({ kind: Schema.Literal("read_post"), url: status }),
   Schema.Struct({ kind: Schema.Literals(["notifications", "inbox", "messages"]) }),
   Schema.Struct({ kind: Schema.Literal("post"), text: postText }),
@@ -39,7 +52,7 @@ export const SocialAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("dm"), text }),
   Schema.Struct({
     kind: Schema.Literal("contact"),
-    handle: Schema.NullOr(XHandle),
+    handle: Schema.NullOr(handle),
     publicContext: Schema.optionalKey(bounded(1200)),
   }),
   Schema.Struct({ kind: Schema.Literal("finish") }),
@@ -47,6 +60,23 @@ export const SocialAction = Schema.Union([
 export type SocialAction = typeof SocialAction.Type;
 export const SocialDecision = Schema.Struct({ action: SocialAction, reason: bounded(600) });
 export type SocialDecision = typeof SocialDecision.Type;
+export function supportsSocialAction(platform: SocialPlatform, action: SocialAction) {
+  if (
+    platform === "threads" &&
+    ["notifications", "inbox", "messages", "dm", "contact"].includes(action.kind)
+  )
+    return false;
+  if ("url" in action)
+    return action.url.startsWith(
+      platform === "threads" ? "https://www.threads.com/" : "https://x.com/",
+    );
+  return (
+    platform === "threads" ||
+    !("handle" in action) ||
+    action.handle === null ||
+    /^[A-Za-z0-9_]{1,15}$/.test(action.handle)
+  );
+}
 export const SocialResult = Schema.Struct({
   text: bounded(24000),
   url: Schema.optionalKey(status),
@@ -58,7 +88,7 @@ export const SocialRun = Schema.Struct({
   generation: integer(1, Number.MAX_SAFE_INTEGER),
   requestId: Schema.String,
   deadline: Schema.Number,
-  contact: Schema.NullOr(XHandle),
+  contact: Schema.NullOr(handle),
   step: integer(0, 200),
 });
 export type SocialRun = typeof SocialRun.Type;

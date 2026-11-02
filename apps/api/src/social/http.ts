@@ -15,7 +15,7 @@ const Completion = Schema.Struct({
   state: Schema.Literals(["completed", "failed", "login_required"]),
 });
 const AccountID = Schema.Struct({ accountId: SocialID });
-function decode<T>(schema: Schema.Codec<T>, body: string) {
+function decode<T, E>(schema: Schema.Codec<T, E>, body: string) {
   try {
     return Schema.decodeUnknownSync(Schema.fromJsonString(schema), { onExcessProperty: "error" })(
       body,
@@ -39,7 +39,7 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     const id = decode(AccountID, body).accountId;
     const row = store.account(id);
     if (!row) throw new SocialError(404, "SOCIAL_ACCOUNT_NOT_FOUND");
-    if (open) await options.open(id);
+    if (open) await options.open(id, store.config(row).platform);
     else {
       if (["running", "login_required"].includes(row.state) || !store.config(row).enabled)
         throw new SocialError(409, "SOCIAL_NOT_RUNNABLE");

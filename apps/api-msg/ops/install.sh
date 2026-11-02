@@ -14,10 +14,11 @@ fi
 bash "$ops/verify-artifact.sh" "$artifact"
 umask 077
 mkdir -p "$root"
-cp "$artifact/api-msg.js" "$artifact/api-msg-verify.js" "$artifact/api-msg.graph.json" "$artifact/api-msg-verify.graph.json" "$artifact/artifact.info" "$artifact/SHA256SUMS" "$root/"
+cp "$artifact/api-msg.js" "$artifact/api-msg-verify.js" "$artifact/social.js" "$artifact/api-msg.graph.json" "$artifact/api-msg-verify.graph.json" "$artifact/social.graph.json" "$artifact/artifact.info" "$artifact/SHA256SUMS" "$root/"
 cp "$config" "$root/api-msg.env"
 cp "$ops/Dockerfile" "$ops/Dockerfile.dockerignore" "$ops/compose.yml" "$root/"
 chmod 700 "$root"
 chmod 600 "$root/api-msg.env"
+bash "$ops/install-social.sh" "$root"
 docker compose -f "$root/compose.yml" build api-msg
 echo 'Built api-msg WITHOUT STARTING. Configure api-msg.renai.im -> http://api-msg:4700 on its Docker tunnel.'

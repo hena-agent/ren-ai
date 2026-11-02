@@ -14,11 +14,13 @@ const handler = createGateway({
     opencodeAuthorization: required("OPENCODE_AUTHORIZATION"),
     imsgUrl: process.env.IMSG_URL ?? "https://imsg.renai.im/rpc",
     imsgToken: required("IMSG_TOKEN"),
+    socialUrl: process.env.SOCIAL_URL ?? "http://127.0.0.1:5407",
   },
 });
 const server = Bun.serve({
   hostname: process.env.LISTEN_HOST ?? "127.0.0.1",
   port: Number(process.env.PORT ?? 4700),
+  idleTimeout: 120,
   fetch: handler,
 });
 Effect.runFork(

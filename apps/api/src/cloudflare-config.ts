@@ -14,7 +14,6 @@ export interface CloudflareBindings {
   readonly TURNSTILE_SECRET?: string;
   readonly TOKEN_MANAGEMENT?: string;
   readonly API_MSG_URL: string;
-  readonly SOCIAL_EXECUTOR_URL?: string;
   readonly PERSONA_MODEL?: string;
   readonly OPENCODE_DIRECTORY?: string;
   readonly BOOTSTRAP_ONLY?: string;
@@ -42,7 +41,7 @@ const required = (value: string, name: string) => {
   return value;
 };
 
-const serviceBase = (value: string) => {
+export const serviceBase = (value: string) => {
   const url = new URL(value);
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if (

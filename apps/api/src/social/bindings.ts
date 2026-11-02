@@ -3,6 +3,7 @@ import { SocialResult } from "@ren-ai/onboarding/social";
 import { renderSnapshot } from "@ren-ai/plugin-session-folder/files";
 import { catalogClient } from "../personas/catalog.ts";
 import type { CloudflareBindings } from "../cloudflare-config.ts";
+import { serviceBase } from "../cloudflare-config.ts";
 import type { SocialOptions } from "./service.ts";
 import { SocialError } from "./service.ts";
 import { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
@@ -19,19 +20,8 @@ export function socialBindings(
   );
   const token = env.TOKEN_MANAGEMENT ?? "";
   const native = async (path: string, body: object, operationId?: string) => {
-    if (!env.SOCIAL_EXECUTOR_URL) throw new Error("SOCIAL_EXECUTOR_URL is required");
-    const base = new URL(env.SOCIAL_EXECUTOR_URL);
-    if (
-      base.username ||
-      base.password ||
-      base.search ||
-      base.hash ||
-      base.pathname !== "/" ||
-      (base.protocol !== "https:" &&
-        !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname)))
-    )
-      throw new Error("Invalid social executor origin");
-    const response = await fetcher(new URL(path, base), {
+    const base = serviceBase(env.API_MSG_URL);
+    const response = await fetcher(new URL(`/social${path}`, base), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -104,8 +94,8 @@ export function socialBindings(
     cancel: async (accountId, runId) => {
       await native("/cancel", { accountId, runId });
     },
-    open: async (accountId) => {
-      await native("/open", { accountId });
+    open: async (accountId, platform) => {
+      await native("/open", { accountId, platform });
     },
     browser: async (run, account, action, id) =>
       Schema.decodeUnknownSync(SocialResult)(

@@ -16,8 +16,8 @@ case "$profile" in
     ;;
   api-msg)
     artifact=api-msg-bundle
-    payload=(api-msg.js api-msg-verify.js api-msg.graph.json api-msg-verify.graph.json artifact.info)
-    runtime=(api-msg.js api-msg-verify.js)
+    payload=(api-msg.js api-msg-verify.js social.js api-msg.graph.json api-msg-verify.graph.json social.graph.json artifact.info)
+    runtime=(api-msg.js api-msg-verify.js social.js)
     probe_command=(docker compose -f "$root/compose.yml" exec -T api-msg bun /app/api-msg-verify.js)
     ;;
   *) echo 'Unknown deploy profile' >&2; exit 2 ;;
@@ -107,7 +107,8 @@ rehash() {
 
 restart() {
   if [[ "$profile" == api-msg ]]; then
-    docker compose -f "$root/compose.yml" build api-msg &&
+    launchctl kickstart -k "gui/$(id -u)/im.renai.social" &&
+      docker compose -f "$root/compose.yml" build api-msg &&
       docker compose -f "$root/compose.yml" up -d --no-deps --wait api-msg
   else
     launchctl kickstart -k "$gateway" || true

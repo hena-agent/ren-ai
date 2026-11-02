@@ -1,22 +1,23 @@
 import { Schema } from "effect";
 import {
   socialWrite,
+  supportsSocialAction,
+  type SocialPlatform,
   type SocialAccount,
   type SocialAction,
   type SocialResult,
   type SocialRun,
 } from "@ren-ai/onboarding/social";
-import { commandResult, type BrowserCommands } from "./commands.ts";
+import { browserAccount, commandResult, type BrowserCommands } from "./commands.ts";
+import { browserSite } from "./browser-site.ts";
 import type { SocialAuthentication } from "./authentication.ts";
 import { AuthenticationError } from "./auth-store.ts";
 import type { AccountQueue } from "./account-queue.ts";
 import {
-  identityScript,
   publicScript,
   inboxScript,
   messagesScript,
   candidatesScript,
-  sentScript,
   dmSentScript,
 } from "./x-scripts.ts";
 
@@ -30,6 +31,7 @@ const Posts = Schema.fromJsonString(
 );
 const normalized = (value: string) => value.replace(/\s+/g, " ").trim();
 interface Page {
+  site: ReturnType<typeof browserSite>;
   navigate: (url: string) => Promise<void>;
   read: (script: string) => Promise<string>;
   command: (...args: string[]) => Promise<string>;
@@ -74,26 +76,25 @@ async function publish(
   action: Extract<SocialAction, { kind: "post" | "reply" }>,
   page: Page,
 ): Promise<SocialResult> {
-  await page.navigate(`https://x.com/${account.handle}/with_replies`);
-  const before = Schema.decodeUnknownSync(Posts)(await page.read(publicScript));
-  await page.navigate(action.kind === "reply" ? action.url : "https://x.com/compose/post");
-  if (action.kind === "reply") await page.command("click", '[data-testid="reply"] >> nth=0');
-  await page.send(
-    '[data-testid="tweetTextarea_0"]',
-    action.text,
-    '[data-testid="tweetButton"]',
-    sentScript,
-  );
-  await page.navigate(`https://x.com/${account.handle}/with_replies`);
-  const after = Schema.decodeUnknownSync(Posts)(await page.read(publicScript));
+  const site = page.site;
+  const profile = site.profile(account.handle, action.kind === "reply");
+  await page.navigate(profile);
+  const before = Schema.decodeUnknownSync(Posts)(await page.read(site.posts));
+  await page.navigate(action.kind === "reply" ? action.url : site.compose);
+  if (action.kind === "reply") await page.command("click", site.reply);
+  else if (site.create) await page.command("click", site.create);
+  await page.command("wait", site.input);
+  await page.send(site.input, action.text, site.submit, site.sent);
+  await page.navigate(profile);
+  const after = Schema.decodeUnknownSync(Posts)(await page.read(site.posts));
   const posted = after.find(
     (post) =>
-      post.url?.toLowerCase().startsWith(`/${account.handle.toLowerCase()}/status/`) &&
+      post.url?.toLowerCase().startsWith(site.prefix(account.handle)) &&
       normalized(post.body) === normalized(action.text) &&
       !before.some((prior) => prior.url === post.url),
   );
   if (!posted?.url) throw new Error("Published X post could not be verified");
-  return { text: "Published", url: `https://x.com${posted.url}` };
+  return { text: "Published", url: `${new URL(site.home).origin}${posted.url}` };
 }
 async function privateMessages(
   run: SocialRun,
@@ -121,7 +122,7 @@ async function privateMessages(
   return { text: after };
 }
 
-export function xBrowser(
+export function socialBrowser(
   commands: BrowserCommands,
   authentication: Pick<SocialAuthentication, "ensure">,
   exclusive: AccountQueue,
@@ -133,26 +134,28 @@ export function xBrowser(
     signal: AbortSignal,
     guard: () => Promise<void>,
   ): Promise<SocialResult> => {
-    const port = await commands.open(account.id);
+    if (!supportsSocialAction(account.platform, action))
+      throw new Error("Unsupported platform action");
+    const site = browserSite(account.platform);
+    const key = browserAccount(account);
+    const port = await commands.open(key, site.home);
     let submitted = false;
     const command = async (...args: string[]) => {
       signal.throwIfAborted();
-      const output = await commands.command(account.id, port, args, signal);
+      const output = await commands.command(key, port, args, signal);
       commandResult(output);
       return output;
     };
     const read = async (script: string) => commandResult(await command("eval", script));
     const navigate = async (url: string) => {
       await command("open", url);
-      await command(
-        "wait",
-        '[data-testid="AppTabBar_Profile_Link"],[data-testid="loginButton"],input[autocomplete="username"]',
-      );
-      let identity = Schema.decodeUnknownSync(Identity)(await read(identityScript));
+      await command("wait", site.ready);
+      let identity = Schema.decodeUnknownSync(Identity)(await read(site.identity));
       if (identity.handle?.toLowerCase() !== account.handle.toLowerCase()) {
         await authentication.ensure(
           {
             id: account.id,
+            platform: account.platform,
             handle: account.handle,
             personaId: account.personaId,
             generation: run.generation,
@@ -161,8 +164,8 @@ export function xBrowser(
           signal,
         );
         await command("open", url);
-        await command("wait", '[data-testid="AppTabBar_Profile_Link"]');
-        identity = Schema.decodeUnknownSync(Identity)(await read(identityScript));
+        await command("wait", site.ready);
+        identity = Schema.decodeUnknownSync(Identity)(await read(site.identity));
       }
       if (identity.handle?.toLowerCase() !== account.handle.toLowerCase())
         throw new LoginRequired("X account login does not match");
@@ -177,18 +180,20 @@ export function xBrowser(
       if (!Schema.decodeUnknownSync(Sent)(await read(script)).empty)
         throw new Error("X submission result is uncertain");
     };
-    const page = { navigate, read, command, send };
+    const page = { site, navigate, read, command, send };
     if (socialWrite(action)) await guard();
     try {
       switch (action.kind) {
         case "search":
-          await navigate(
-            `https://x.com/search?${new URLSearchParams({ q: action.query, f: "live" }).toString()}`,
-          );
-          return { text: await read(publicScript) };
+          await navigate(site.search(action.query));
+          return { text: await read(site.posts) };
         case "profile":
-          await navigate(`https://x.com/${action.handle}`);
-          return { text: await read(publicScript) };
+          await navigate(
+            account.platform === "threads"
+              ? site.profile(action.handle, false)
+              : `https://x.com/${action.handle}`,
+          );
+          return { text: await read(site.posts) };
         case "notifications":
           await navigate("https://x.com/notifications");
           return { text: await read(publicScript) };
@@ -197,7 +202,7 @@ export function xBrowser(
           return { text: await read(inboxScript) };
         case "read_post":
           await navigate(action.url);
-          return { text: await read(publicScript), url: action.url };
+          return { text: await read(site.posts), url: action.url };
         case "post":
         case "reply":
           return await publish(account, action, page);
@@ -216,7 +221,8 @@ export function xBrowser(
     }
   };
   return {
-    open: commands.open,
+    open: (id: string, platform: SocialPlatform = "x") =>
+      commands.open(browserAccount({ id, platform }), browserSite(platform).home),
     execute: (
       run: SocialRun,
       account: SocialAccount,

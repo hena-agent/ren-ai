@@ -8,9 +8,10 @@ trap 'docker image rm "$image" >/dev/null' EXIT
 docker build -f "$ops/Dockerfile" -t "$image" "$bundle"
 docker run --rm --network none --read-only --tmpfs /tmp \
   --env TOKEN_MANAGEMENT=isolated --env OPENCODE_AUTHORIZATION=isolated \
-  --env IMSG_TOKEN=isolated --env PORT=0 --entrypoint /bin/sh "$image" -c '
+  --env IMSG_TOKEN=isolated --env PORT=0 --env EXPECTED_REVISION="${GITHUB_SHA:-development}" --entrypoint /bin/sh "$image" -c '
     # Port zero is allocated by the OS; read the actual address from the listener event.
-    bun /app/api-msg.js > /tmp/listener.log 2>&1 &
+    # Isolate native dependency health too; Mac installation is verified by the updater.
+    bun -e '\''const social = Bun.serve({hostname:"127.0.0.1",port:0,fetch:()=>Response.json({service:"social",revision:process.env.EXPECTED_REVISION,status:"ready"})}); process.env.SOCIAL_URL = social.url.origin; await import("/app/api-msg.js")'\'' > /tmp/listener.log 2>&1 &
     server=$!
     trap "kill $server 2>/dev/null || true" EXIT
     for attempt in 1 2 3 4 5 6 7 8 9 10; do

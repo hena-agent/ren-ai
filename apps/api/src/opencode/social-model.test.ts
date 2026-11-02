@@ -134,6 +134,35 @@ test("real OpenCode social sessions share the Persona's life but isolate public,
             expect(request.tools.map((tool) => tool.name)).not.toContain("bash");
           }
           yield* Effect.promise(() => model.interrupt(selected, privateRun));
+          const threads = {
+            ...selected,
+            account: { ...selected.account, id: "threads-first", platform: "threads" as const },
+            run: { ...task.run, id: "threads-run", accountId: "threads-first" },
+          };
+          expect(
+            yield* Effect.promise(() =>
+              model.decide(
+                threads,
+                threads.run,
+                "Threads public observation",
+                new AbortController().signal,
+              ),
+            ),
+          ).toMatchObject({ action: { kind: "finish" } });
+          output = JSON.stringify({
+            action: { kind: "inbox" },
+            reason: "Unsupported private discovery",
+          });
+          yield* Effect.promise(async () => {
+            await expect(
+              model.decide(
+                threads,
+                { ...threads.run, step: 1 },
+                "Threads inbox attempt",
+                new AbortController().signal,
+              ),
+            ).rejects.toThrow("Invalid structured");
+          });
           expect(publicSnapshot.binding?.social).toEqual({
             accountID: task.account.id,
             contact: null,

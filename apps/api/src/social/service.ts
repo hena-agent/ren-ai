@@ -5,6 +5,7 @@ import {
   type SocialAccount,
   type SocialRun,
   type SocialResult,
+  type SocialPlatform,
 } from "@ren-ai/onboarding/social";
 import type { SocialStore, AccountRow } from "./store.ts";
 
@@ -28,7 +29,7 @@ export interface SocialOptions {
   invitation: (code: string) => Promise<boolean>;
   start: (run: SocialRun, account: SocialAccount) => Promise<void>;
   cancel: (accountId: string, runId: string) => Promise<void>;
-  open: (accountId: string) => Promise<void>;
+  open: (accountId: string, platform: SocialPlatform) => Promise<void>;
   browser: (
     run: SocialRun,
     account: SocialAccount,
@@ -93,8 +94,9 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     )
       throw new SocialError(409, "SOCIAL_ACCOUNT_LIMIT");
     const duplicate = store.exec<{ id: string }>(
-      "SELECT id FROM social_account WHERE lower(json_extract(config, '$.handle')) = lower(?) AND id != ? LIMIT 1",
+      "SELECT id FROM social_account WHERE lower(json_extract(config, '$.handle')) = lower(?) AND COALESCE(json_extract(config, '$.platform'),'x')=? AND id != ? LIMIT 1",
       account.handle,
+      account.platform,
       account.id,
     );
     if (duplicate.length) throw new SocialError(409, "SOCIAL_ACCOUNT_ALREADY_CONNECTED");
@@ -103,7 +105,8 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     // Persist the fence before any remote cancellation; old work cannot publish while reassigning.
     const reassigned =
       prior &&
-      (store.config(prior).personaId !== account.personaId ||
+      (store.config(prior).platform !== account.platform ||
+        store.config(prior).personaId !== account.personaId ||
         store.config(prior).handle !== account.handle);
     const generation = (prior?.generation ?? 1) + (reassigned ? 1 : 0);
     store.exec(
@@ -177,6 +180,7 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     const auth = await options.authenticate(
       {
         id: row.id,
+        platform: account.platform,
         handle: account.handle,
         personaId: account.personaId,
         generation: row.generation,
@@ -196,7 +200,7 @@ export function socialService(store: SocialStore, options: SocialOptions) {
       ready ? (account.enabled ? "scheduled" : "paused") : "login_required",
       ready && account.enabled
         ? nextSocialTime(account, options.now())
-        : auth.state === "logging_in"
+        : ["checking", "logging_in"].includes(auth.state)
           ? options.now() + 30000
           : null,
       row.id,

@@ -3,9 +3,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
+import type { SocialAuthAccount } from "@ren-ai/onboarding/social-auth";
+
+export const browserAccount = (account: Pick<SocialAuthAccount, "platform" | "id">) =>
+  account.platform === "threads" ? `threads:${account.id}` : account.id;
 
 export interface BrowserCommands {
-  open: (account: string) => Promise<number>;
+  open: (account: string, url?: string) => Promise<number>;
   command: (
     account: string,
     port: number,
@@ -69,7 +73,7 @@ export function browserCommands(
   const browsers = new Map<string, Promise<number>>();
   // macOS Unix sockets have a 103-byte path limit; SOCIAL_HOME may contain long GUI paths.
   const socketDirectory = `/tmp/renai-social-${process.getuid!()}-${createHash("sha256").update(home).digest("hex").slice(0, 12)}`;
-  const open = (account: string): Promise<number> => {
+  const open = (account: string, url = "https://x.com/home"): Promise<number> => {
     const directory = join(home, "profiles", account);
     const previous = browsers.get(account);
     if (previous)
@@ -78,7 +82,7 @@ export function browserCommands(
           return await debuggingPort(directory);
         } catch {
           browsers.delete(account);
-          return open(account);
+          return open(account, url);
         }
       });
     const launched = (async () => {
@@ -96,7 +100,7 @@ export function browserCommands(
           "--remote-debugging-address=127.0.0.1",
           "--no-first-run",
           "--lang=en-US",
-          "https://x.com/home",
+          url,
         ],
         { stdio: "ignore" },
       );

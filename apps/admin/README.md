@@ -63,6 +63,7 @@ starting development. Production secrets are managed separately by Wrangler.
 
 ```sh
 bun run --cwd apps/admin db:local
+bun run --cwd apps/admin projections
 bun run --cwd apps/admin dev
 ```
 
@@ -70,6 +71,12 @@ Open `http://127.0.0.1:3729` using Basic authentication (`admin` and
 `ADMIN_PASSWORD`). Wrangler persists local D1, R2 and Durable Object state under
 `.wrangler/`. Browser and edge SSR bundles are built before Wrangler starts.
 Worker builds use `workerd` export conditions, avoiding browser DOM helpers.
+
+After updating an existing local Catalog, apply its D1 migrations and rebuild
+projections before using Admin. The projection-column migration supplies empty
+defaults; `projections` derives the required JSON from saved Markdown without
+generation calls. Missing or empty projections can break Persona dropdowns and
+Catalog reads even while the database health probe is ready.
 
 The browser script and stylesheet are built into `public/assets/` with
 content-hashed names. Workers Static Assets serves them and `/brand.svg` before

@@ -3,14 +3,14 @@
 `https://api-msg.renai.im` serves the DB-free executor in Docker on the Messages
 Mac. The stateful application is the Cloudflare Worker at `https://api.renai.im`.
 The executor forwards authenticated requests to the existing `https://oc.renai.im`
-and `https://imsg.renai.im/rpc` upstreams. It has no application database or
+and `https://imsg.renai.im/rpc` upstreams, plus the native social executor on the same Mac. It has no application database or
 Turnstile credentials.
 
 The executor also watches imsg's existing stream and recent-message edits, coalesces wake hints to `APPLICATION_API_URL`, and retries failed delivery. Cloudflare owns the bookmark, edit baselines, admission and all business decisions. Idle observation does not poll the Worker. See [ADR-0019](../../../docs/adr/0019-the-mac-observes-and-waits-cloudflare-decides-and-stores.md) and the [coordinated plugin/Worker release](../../api/ops/README.md#event-driven-execution-release-adr-0019).
 
 ## One-time provisioning
 
-Docker must be running for the logged-in Mac user. The default installation is
+Docker must be running for the logged-in Mac user. Install native Bun **1.4.4** and Google Chrome Canary first. The default installation is
 `$HOME/Library/Application Support/ren-ai-api-msg`; set `API_MSG_HOME` to use
 another new absolute directory.
 
@@ -29,13 +29,18 @@ another new absolute directory.
    ```
 
    The installer checks GitHub provenance and checksums and builds the pinned
-   Bun Docker image. Neither installer starts a service. Private environment and
+   Bun Docker image. It also installs agent-browser **0.41.0** as a native binary,
+   copies native Bun, and writes `im.renai.social` as a GUI LaunchAgent. Both
+   executors use the same protected environment; browser profiles, the encrypted
+   vault and logs stay in the host's private `social-state` and `social-logs`
+   directories. Neither installer starts a service. Private environment and
    tunnel files are excluded from the image build context.
 
 4. Start and verify:
 
    ```sh
-   ROOT="${API_MSG_HOME:-$HOME/Library/Application Support/ren-ai-api-msg}"
+    ROOT="${API_MSG_HOME:-$HOME/Library/Application Support/ren-ai-api-msg}"
+    launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/im.renai.social.plist"
    docker compose -f "$ROOT/compose.yml" --profile ingress up -d --wait
    docker compose -f "$ROOT/compose.yml" exec -T api-msg bun /app/api-msg-verify.js
    ```
@@ -44,7 +49,13 @@ another new absolute directory.
    it. Disk usage describes the executor's filesystem. `screenLocked` is `null`
    in Docker: Linux cannot inspect the Mac GUI, so the Worker neither raises nor
    clears a screen-lock alert from that missing observation. Local native macOS
-   development can still observe it. Health does not prove upstream access;
+   development can still observe it. The `social` dependency must be ready and
+   match the gateway's exact source revision. `/social/health` relays the native
+   executor's authenticated dependency health through this same gateway.
+   Docker reaches the loopback-bound native listener through
+   `host.docker.internal:5407`; verify this connection with the installed Docker
+   runtime before rollout. No separate social tunnel or Worker URL is needed.
+   Health does not prove messaging upstream access;
    also verify OpenCode's authenticated `/opencode/api/info` and imsg's
    non-sending `probe` RPC through `/imsg/rpc`. Unauthorized requests must return 401.
 
@@ -56,7 +67,7 @@ and its tunnel after engine restarts.
 
 `GET /health` requires no authentication and reports `service: "api-msg"`, the
 full source `revision` embedded by CI, and `status`. A locked screen, nearly-full
-disk or failed Mac health check returns `degraded` with HTTP 503; ready returns 200. Local source runs use revision `development`. Responses are never cached.
+disk, failed Mac health check, or unavailable/unready/mismatched native social executor returns `degraded` with HTTP 503; ready returns 200. Local source runs use revision `development`. Responses are never cached.
 The bundled probe requires this identity, its own artifact revision and readiness.
 All other paths retain Bearer authentication with `TOKEN_MANAGEMENT`.
 
@@ -70,14 +81,26 @@ bash ops/install-deploy-agent.sh /opt/homebrew/bin/gh /absolute/private/raw-gith
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/im.renai.api-msg-deploy.plist"
 ```
 
-This LaunchAgent is only the updater; the executor and tunnel run in Docker.
+This LaunchAgent is the updater; the gateway and tunnel run in Docker, while
+`im.renai.social` runs natively in the logged-in user's GUI session.
 Every two minutes it checks `main` provenance, probes the current container,
-installs changed JavaScript, rebuilds the image and replaces only the `api-msg`
-Compose service. Metadata-only changes do not restart it. Failed builds or probes
-restore the previous payload and container; rejected commits wait for a newer
+installs the gateway and native social JavaScript, restarts `im.renai.social`,
+rebuilds the image and replaces only the `api-msg` Compose service. The same attested
+`api-msg-bundle` contains both executors. Metadata-only changes do not restart them. Failed builds or probes
+restore both previous payloads and restart the previous executors; rejected commits wait for a newer
 artifact, while a previously unhealthy executor is retried after recovery.
 The updater keeps its installed Compose/Dockerfile and private environment;
 changes to those deployment files require an explicit operator update.
+
+Existing installations need a one-time operator update before enabling this
+combined release: verify/download the new attested bundle as in
+`install-from-ci.sh`, copy its complete checksummed payload (including `social.js`
+and `social.graph.json`) into the existing installation, refresh `compose.yml`
+and the updater's `deploy-helper.sh` from this checkout, and run
+`bash ops/install-social.sh "$ROOT"`. Bootstrap the new native LaunchAgent, then
+replace the gateway container and run its bundled probe. Preserve `api-msg.env`,
+tunnel credentials and all existing private state. The installed updater never
+edits its own scripts or Compose configuration.
 
 For a reviewed local rollout before a CI artifact exists, build with
 `bash ops/build-bundle.sh NEW-DIRECTORY`, then run
