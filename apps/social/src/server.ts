@@ -1,18 +1,23 @@
 import { Schema } from "effect";
-import { SocialTask, SocialBrowserRequest, SocialID } from "@ren-ai/onboarding/social";
+import {
+  SocialTask,
+  SocialBrowserRequest,
+  SocialID,
+  SocialPlatform,
+} from "@ren-ai/onboarding/social";
 import { authorize } from "@ren-ai/transport/authorization";
 import { healthResponse } from "@ren-ai/transport/health";
 import type { SocialApplication } from "./client.ts";
 import type { SocialModel } from "./model.ts";
 import { socialRunner } from "./runner.ts";
-import { LoginRequired, type xBrowser } from "./browser.ts";
+import { LoginRequired, type socialBrowser } from "./browser.ts";
 import { SocialAuthRequest } from "@ren-ai/onboarding/social-auth";
 import { AuthenticationError, AuthenticationConflict } from "./auth-store.ts";
 import type { SocialAuthentication } from "./authentication.ts";
 import { socialLog, socialDiagnostic as diagnostic, type SocialLogEvent } from "./logging.ts";
 
 type Trace = Pick<SocialLogEvent, "requestId" | "operationId" | "personaId" | "model">;
-const parse = async <T>(request: Request, schema: Schema.Codec<T>) => {
+const parse = async <T, E>(request: Request, schema: Schema.Codec<T, E>) => {
   const body = await request.text();
   if (body.length > 140000) throw new Error("Social input exceeds limit");
   try {
@@ -27,7 +32,7 @@ export function socialExecutor(options: {
   token: string;
   application: SocialApplication;
   model: SocialModel;
-  browser: ReturnType<typeof xBrowser>;
+  browser: ReturnType<typeof socialBrowser>;
   authentication: SocialAuthentication;
   readiness: () => Promise<{ chromeCanary: boolean; agentBrowser: boolean; openCode: boolean }>;
   log?: typeof socialLog;
@@ -144,7 +149,9 @@ export function socialExecutor(options: {
         input.command,
         trace.requestId,
       );
-      return Response.json(result, { status: result.state === "logging_in" ? 202 : 200 });
+      return Response.json(result, {
+        status: ["checking", "logging_in"].includes(result.state) ? 202 : 200,
+      });
     }
     if (path === "/runs") {
       const task = await parse(request, SocialTask);
@@ -162,9 +169,11 @@ export function socialExecutor(options: {
       return new Response(null, { status: 204 });
     }
     if (path === "/open") {
-      await options.browser.open(
-        (await parse(request, Schema.Struct({ accountId: SocialID }))).accountId,
+      const input = await parse(
+        request,
+        Schema.Struct({ accountId: SocialID, platform: SocialPlatform }),
       );
+      await options.browser.open(input.accountId, input.platform);
       return new Response(null, { status: 204 });
     }
     if (path === "/browser") {

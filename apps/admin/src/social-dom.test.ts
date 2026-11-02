@@ -5,6 +5,7 @@ import { loginPage } from "../../social/src/login-page.ts";
 import type { BrowserCommands } from "../../social/src/commands.ts";
 import { socialPage } from "./social-page.tsx";
 import { socialAccount } from "../../../packages/onboarding/src/social.test-helper.ts";
+import { threadsIdentityScript, threadsPostsScript } from "../../social/src/threads-scripts.ts";
 import {
   identityScript,
   publicScript,
@@ -23,15 +24,157 @@ test("connection fields and credentials share one visible form before an account
   const form = window.document.querySelector('input[name="handle"]')!.closest("form")!;
   for (const name of ["username", "password"]) {
     const input = form.querySelector(`input[name="${name}"]`)!;
-    expect(input.hasAttribute("required")).toBe(true);
+    expect(input.hasAttribute("required")).toBe(false);
     expect(input.closest("form")).toBe(form);
   }
   expect(form.textContent).toContain("연결하고 로그인");
+  expect(form.querySelector('button[value="save-check"]')).not.toBeNull();
+  expect(form.querySelector('select[name="platform"]')).toBeNull();
+  expect(form.querySelector('input[name="platform"]')!.getAttribute("value")).toBe("threads");
+  expect(
+    window.document.querySelector('nav[aria-label="소셜 플랫폼"] a[aria-current="page"]')!
+      .textContent,
+  ).toBe("Threads");
   expect(window.document.querySelectorAll('input[name="password"]')).toHaveLength(1);
   window.document.body.innerHTML = socialPage({ personas: [], selected: socialAccount });
   expect(window.document.querySelector('input[name="password"]')!.hasAttribute("required")).toBe(
     false,
   );
+});
+
+test("platform tabs isolate accounts, activity and form behavior while keeping platform-scoped links", () => {
+  const window = new Window();
+  const threads = {
+    ...socialAccount,
+    id: "threads-account",
+    platform: "threads" as const,
+    handle: "threads_persona",
+  };
+  const accounts = [socialAccount, threads].map((account) => ({
+    account,
+    generation: 1,
+    nextAt: null,
+    state: "paused",
+    turns: 0,
+    writes: 0,
+  }));
+  const events = [socialAccount, threads].map((account, id) => ({
+    id,
+    runId: "run",
+    accountId: account.id,
+    personaId: account.personaId,
+    at: 1000,
+    kind: "post",
+    state: "completed" as const,
+    reason: `${account.platform}-only-history`,
+    text: "Public text",
+    url: null,
+  }));
+  for (const platform of ["threads", "x"] as const) {
+    window.document.body.innerHTML = socialPage({
+      platform,
+      personas: [],
+      snapshot: { accounts, events, before: 50 },
+    });
+    const active = window.document.querySelector(
+      'nav[aria-label="소셜 플랫폼"] a[aria-current="page"]',
+    )!;
+    expect(active.textContent).toBe(platform === "x" ? "X" : "Threads");
+    expect(window.document.body.textContent).toContain(`${platform}-only-history`);
+    expect(window.document.body.textContent).not.toContain(
+      `${platform === "x" ? "threads" : "x"}-only-history`,
+    );
+    const form = window.document.querySelector('input[name="handle"]')!.closest("form")!;
+    expect(form.getAttribute("action")).toBe(`/social?platform=${platform}`);
+    expect(form.querySelector('input[name="platform"]')!.getAttribute("value")).toBe(platform);
+    expect(form.querySelector('input[name="handle"]')!.getAttribute("maxlength")).toBe(
+      platform === "x" ? "15" : "30",
+    );
+    expect(form.querySelector('input[name="username"]')!.getAttribute("placeholder")).not.toContain(
+      "/",
+    );
+    expect(window.document.querySelector('a[href*="before="]')!.getAttribute("href")).toBe(
+      `/social?platform=${platform}&before=50`,
+    );
+  }
+});
+
+test("live-check controls distinguish checking and check failure, including accounts with no stored credentials", () => {
+  const window = new Window();
+  for (const state of ["checking", "failed"] as const) {
+    window.document.body.innerHTML = socialPage({
+      personas: [],
+      selected: socialAccount,
+      authentication: {
+        state,
+        hasCredentials: false,
+        ...(state === "failed" && { reason: "check_unavailable" as const }),
+      },
+    });
+    expect(window.document.body.textContent).toContain(
+      state === "checking" ? "로그인 상태 확인 중" : "로그인 상태 확인 실패",
+    );
+    expect(
+      window.document.querySelector('button[value="auth-check"]')!.hasAttribute("disabled"),
+    ).toBe(state === "checking");
+  }
+});
+
+test("Threads login detects its simultaneous Instagram fields and sends both only through origin-bound stdin", async () => {
+  const window = new Window({ url: "https://www.threads.com/login" });
+  window.HTMLElement.prototype.getBoundingClientRect = () => new window.DOMRect(0, 0, 100, 20);
+  window.document.body.innerHTML =
+    '<input autocomplete="username" placeholder="Username, phone or email"><input type="password" autocomplete="current-password"><div role="button">Log in</div>';
+  const args: string[][] = [];
+  const commands: BrowserCommands = {
+    open: async () => 1234,
+    command: async (_id, _port, command, _signal, input) => {
+      args.push([...command]);
+      if (input) {
+        const batch = Schema.decodeUnknownSync(
+          Schema.fromJsonString(Schema.Array(Schema.Array(Schema.String))),
+        )(input);
+        try {
+          return JSON.stringify([{ success: window.eval(batch[0]![1]!) === "filled" }]);
+        } catch {
+          return '[{"success":false}]';
+        }
+      }
+      if (command[0] === "eval")
+        return JSON.stringify({
+          success: true,
+          data: { result: Schema.decodeUnknownSync(Schema.String)(window.eval(command[1]!)) },
+        });
+      return '{"success":true}';
+    },
+  };
+  const page = loginPage(commands, "threads:first", 1234, new AbortController().signal, "threads");
+  expect((await page.screen()).stage).toBe("credentials");
+  await page.enter("PRIVATE_ID", "PRIVATE_PASSWORD");
+  expect(Array.from(window.document.querySelectorAll("input"), (input) => input.value)).toEqual([
+    "PRIVATE_ID",
+    "PRIVATE_PASSWORD",
+  ]);
+  expect(JSON.stringify(args)).not.toContain("PRIVATE");
+  window.happyDOM.setURL("https://www.instagram.com/accounts/login/");
+  await expect(page.enter("DO_NOT_FILL", "DO_NOT_FILL")).rejects.toThrow(
+    "Private login input failed",
+  );
+  window.happyDOM.setURL("https://www.threads.com/");
+  window.document.body.innerHTML =
+    '<div role="navigation"><a href="/login?show_choice_screen=false">Log in</a></div>';
+  expect((await page.screen()).stage).toBe("logged_out");
+});
+
+test("Threads readers verify navigation ownership and extract public post text from semantic markup", () => {
+  const window = new Window();
+  window.document.body.innerHTML =
+    '<div role="navigation"><a href="/@persona.name"><svg title="Profile"></svg></a></div><article><a href="/@reader/post/ABC123"><time>2d</time></a><span dir="auto"><span>Public thought</span></span><div role="button"><svg title="Comment"></svg></div></article>';
+  expect(window.eval(threadsIdentityScript)).toBe('{"handle":"persona.name"}');
+  expect(window.eval(threadsPostsScript)).toContain('"body":"Public thought"');
+  expect(window.eval(threadsPostsScript)).toContain('"url":"/@reader/post/ABC123"');
+  window.document.body.innerHTML = '<a href="/@someone/post/ABC">Other profile</a>';
+  expect(window.eval(threadsIdentityScript)).toBe('{"handle":null}');
 });
 
 test("fixed X readers extract post/message text and stable links without copying private inbox previews", () => {
@@ -99,6 +242,7 @@ test("login stage probes expose no field values and distinguish username, identi
     '"stage":"authenticated"',
   );
   expect(probe("")).toContain('"stage":"loading"');
+  expect(probe('<a data-testid="loginButton">Log in</a>')).toContain('"stage":"logged_out"');
 });
 
 test("private stdin fills a connected X login input atomically and refuses origin changes without echoing the password", async () => {

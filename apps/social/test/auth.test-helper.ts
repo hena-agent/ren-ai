@@ -1,4 +1,5 @@
 import type { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
+import type { SocialPlatform } from "@ren-ai/onboarding/social";
 import { socialAuthAccount } from "../../../packages/onboarding/src/social.test-helper.ts";
 import { accountQueue } from "../src/account-queue.ts";
 import { socialAuthentication } from "../src/authentication.ts";
@@ -10,14 +11,17 @@ export const privateLogin = {
   password: "PRIVATE_PASSWORD_!",
   code: "123456",
 };
-export function authFixture() {
-  const account = socialAuthAccount;
+export function authFixture(platform: SocialPlatform = "x") {
+  const account = { ...socialAuthAccount, platform };
   let state: SocialAuthStatus = { state: "login_required", hasCredentials: true };
   let credentials = true;
-  const sequence = ["username", "password", "authenticated"];
+  const sequence =
+    platform === "threads"
+      ? ["credentials", "authenticated"]
+      : ["username", "password", "authenticated"];
   let index = 0;
   let handle = account.handle;
-  let origin = "https://x.com";
+  let origin = platform === "threads" ? "https://www.threads.com" : "https://x.com";
   let advance = true;
   let submit = true;
   const commandArgs: string[][] = [];

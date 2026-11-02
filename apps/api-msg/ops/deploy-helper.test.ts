@@ -8,8 +8,10 @@ import { expect, test } from "vitest";
 const payload = [
   "api-msg.js",
   "api-msg-verify.js",
+  "social.js",
   "api-msg.graph.json",
   "api-msg-verify.graph.json",
+  "social.graph.json",
   "artifact.info",
 ];
 
@@ -89,16 +91,19 @@ const runUpdater = (testCase: Awaited<ReturnType<typeof fixture>>) =>
     encoding: "utf8",
   });
 
-test("api-msg updater verifies main provenance, installs payload and replaces only its Docker service", async () => {
+test("api-msg updater verifies main provenance and replaces its gateway and native social executor", async () => {
   const state = await fixture("healthy");
   try {
     runUpdater(state);
     expect(await readFile(join(state.root, "api-msg.js"), "utf8")).toBe("new-api-msg.js");
+    expect(await readFile(join(state.root, "social.js"), "utf8")).toBe("new-social.js");
     expect(await readFile(join(state.root, "deploy/deployed"), "utf8")).toBe("cafef00d\n");
     expect(await readFile(state.calls, "utf8")).toContain(
       "--source-ref refs/heads/main --source-digest cafef00d --deny-self-hosted-runners",
     );
     expect(await readFile(state.launches, "utf8")).toContain("up -d --no-deps --wait api-msg");
+    expect(await readFile(state.launches, "utf8")).toContain("kickstart -k gui/");
+    expect(await readFile(state.launches, "utf8")).toContain("/im.renai.social");
     expect(await readFile(state.launches, "utf8")).not.toContain("cloudflared");
   } finally {
     await rm(state.base, { recursive: true, force: true });
@@ -108,7 +113,7 @@ test("api-msg updater verifies main provenance, installs payload and replaces on
 test("metadata-only bundle updates do not restart the executor", async () => {
   const state = await fixture("healthy");
   try {
-    for (const name of ["api-msg.js", "api-msg-verify.js"]) {
+    for (const name of ["api-msg.js", "api-msg-verify.js", "social.js"]) {
       await writeFile(join(state.root, name), `new-${name}`);
     }
     await checksums(state.root);
@@ -125,8 +130,9 @@ test("failed replacement rolls back and marks a rejected artifact when the prior
   try {
     expect(() => runUpdater(state)).toThrow("Command failed");
     expect(await readFile(join(state.root, "api-msg.js"), "utf8")).toBe("old-api-msg.js");
+    expect(await readFile(join(state.root, "social.js"), "utf8")).toBe("old-social.js");
     expect(await readFile(join(state.root, "deploy/rejected"), "utf8")).toBe("cafef00d\n");
-    expect((await readFile(state.launches, "utf8")).trim().split("\n")).toHaveLength(2);
+    expect((await readFile(state.launches, "utf8")).trim().split("\n")).toHaveLength(4);
   } finally {
     await rm(state.base, { recursive: true, force: true });
   }
@@ -138,9 +144,9 @@ test("failed old and replacement probes defer the commit until the executor reco
     expect(() => runUpdater(state)).toThrow("Command failed");
     expect(await readFile(join(state.root, "api-msg.js"), "utf8")).toBe("old-api-msg.js");
     expect(await readFile(join(state.root, "deploy/deferred"), "utf8")).toBe("cafef00d\n");
-    expect((await readFile(state.launches, "utf8")).trim().split("\n")).toHaveLength(2);
+    expect((await readFile(state.launches, "utf8")).trim().split("\n")).toHaveLength(4);
     expect(runUpdater(state)).toBe("");
-    expect((await readFile(state.launches, "utf8")).trim().split("\n")).toHaveLength(2);
+    expect((await readFile(state.launches, "utf8")).trim().split("\n")).toHaveLength(4);
   } finally {
     await rm(state.base, { recursive: true, force: true });
   }

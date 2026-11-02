@@ -146,8 +146,20 @@ test.each(["sent", "uncertain"] as const)(
                 opencodeAuthorization: "Basic native-secret",
                 imsgUrl: `${listenerUrl(imsg)}/rpc`,
                 imsgToken: "imsg-secret",
+                socialUrl: "http://127.0.0.1:5407",
               },
               health: async () => ({ diskNearlyFull: false, screenLocked: false }),
+              fetcher: (input, init) =>
+                (input instanceof Request ? input.url : String(input)) ===
+                "http://127.0.0.1:5407/health"
+                  ? Promise.resolve(
+                      Response.json({
+                        service: "social",
+                        revision: "development",
+                        status: "ready",
+                      }),
+                    )
+                  : fetch(input, init),
               log: () => {},
             });
             const mac = yield* servePublic(

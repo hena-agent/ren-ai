@@ -2,6 +2,11 @@ import { expect, test, vi } from "vitest";
 import { authFixture, privateLogin } from "../test/auth.test-helper.ts";
 import { AuthenticationError } from "./auth-store.ts";
 import { loginPage } from "./login-page.ts";
+import { authStore } from "./auth-store.ts";
+import { socialAuthentication } from "./authentication.ts";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 test("stored credentials automatically restore a session through X's separate login screens", async () => {
   const f = authFixture();
@@ -15,6 +20,80 @@ test("stored credentials automatically restore a session through X's separate lo
   expect(JSON.stringify(f.commandArgs)).not.toContain(privateLogin.password);
   expect(JSON.stringify(f.notifications)).not.toContain(privateLogin.password);
   expect(f.notifications).toEqual(["authenticated"]);
+});
+
+test.each(["x", "threads"] as const)(
+  "%s credentials survive browser launch failure and executor replacement, then retry without new secrets",
+  async (platform) => {
+    const f = authFixture(platform);
+    const home = await mkdtemp(join(tmpdir(), "social-save-first-"));
+    try {
+      f.options.store = authStore(home);
+      f.commands.open = async () => {
+        expect(await f.options.store.load(f.account)).toMatchObject({
+          username: privateLogin.username,
+          password: privateLogin.password,
+        });
+        throw new Error("Canary unavailable");
+      };
+      await f.auth.submit(f.account, { kind: "save", ...privateLogin }, "save-first");
+      await vi.waitFor(async () =>
+        expect(await f.auth.status(f.account)).toMatchObject({
+          state: "failed",
+          hasCredentials: true,
+        }),
+      );
+      expect(await authStore(home).load(f.account)).toMatchObject({
+        username: privateLogin.username,
+        password: privateLogin.password,
+      });
+      f.commands.open = async () => 1234;
+      const restarted = socialAuthentication({ ...f.options, store: authStore(home) });
+      await restarted.submit(f.account, { kind: "login" }, "retry-saved");
+      await vi.waitFor(async () =>
+        expect((await restarted.status(f.account)).state).toBe("authenticated"),
+      );
+      expect(JSON.stringify(f.commandArgs)).not.toContain(privateLogin.password);
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  },
+);
+
+test("Threads fills both Instagram credential fields in one private batch and pauses for a verification code", async () => {
+  const f = authFixture("threads");
+  f.screens("credentials", "code", "authenticated");
+  await expect(f.auth.ensure(f.account, 1234, new AbortController().signal)).rejects.toBeInstanceOf(
+    AuthenticationError,
+  );
+  expect(f.inputs).toHaveLength(1);
+  expect(f.inputs[0]).toContain(privateLogin.username);
+  expect(f.inputs[0]).toContain(privateLogin.password);
+  expect(await f.auth.status(f.account)).toMatchObject({
+    state: "code_required",
+    hasCredentials: true,
+  });
+  await f.auth.submit(f.account, { kind: "code", code: privateLogin.code }, "threads-code");
+  await vi.waitFor(async () =>
+    expect((await f.auth.status(f.account)).state).toBe("authenticated"),
+  );
+});
+
+test("an unsupported browser CLI blocks login after saving credentials and keeps an explicit retry available", async () => {
+  const f = authFixture("threads");
+  f.setCredentials(false);
+  f.commands.command = async () => "agent-browser 0.40.0";
+  await f.auth.submit(f.account, { kind: "save", ...privateLogin }, "old-cli");
+  await vi.waitFor(async () =>
+    expect(await f.auth.status(f.account)).toMatchObject({ state: "failed", hasCredentials: true }),
+  );
+  expect(f.inputs).toEqual([]);
+  const working = authFixture("threads");
+  f.commands.command = working.commands.command;
+  await f.auth.submit(f.account, { kind: "login" }, "updated-cli");
+  await vi.waitFor(async () =>
+    expect((await f.auth.status(f.account)).state).toBe("authenticated"),
+  );
 });
 
 test("verification codes pause automatic login, persist attention state and continue only after operator input", async () => {
@@ -42,7 +121,7 @@ test("verification codes pause automatic login, persist attention state and cont
 test.each([
   ["manual", "manual_required"],
   ["rejected", "failed"],
-  ["loading", "manual_required"],
+  ["loading", "failed"],
 ])("%s requires attention and does not repeatedly submit passwords", async (screen, state) => {
   const f = authFixture();
   f.screens(screen);
@@ -95,9 +174,8 @@ test("credential changes are queued once, and deletion shares the browser's acco
     state: "not_configured",
     hasCredentials: false,
   });
-  await expect(f.auth.ensure(f.account, 1234, new AbortController().signal)).rejects.toBeInstanceOf(
-    AuthenticationError,
-  );
+  await f.auth.ensure(f.account, 1234, new AbortController().signal);
+  expect(await f.auth.status(f.account)).toEqual({ state: "authenticated", hasCredentials: false });
   await expect(f.auth.submit(f.account, { kind: "code", code: "1234" }, "request")).rejects.toThrow(
     "No verification",
   );

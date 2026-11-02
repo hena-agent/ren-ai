@@ -6,7 +6,7 @@ import { socialLog } from "./logging.ts";
 import { socialApplication, type SocialApplication } from "./client.ts";
 import { socialRunner } from "./runner.ts";
 import type { SocialModel } from "./model.ts";
-import { LoginRequired, type xBrowser } from "./browser.ts";
+import { LoginRequired, type socialBrowser } from "./browser.ts";
 import { socialConfiguration } from "./config.ts";
 import type { SocialAuthentication } from "./authentication.ts";
 
@@ -39,8 +39,8 @@ function fixture() {
     interrupt: async () => {},
   };
   const browser = {
-    open: vi.fn<ReturnType<typeof xBrowser>["open"]>(async () => 1234),
-    execute: vi.fn<ReturnType<typeof xBrowser>["execute"]>(async () => ({ text: "observed" })),
+    open: vi.fn<ReturnType<typeof socialBrowser>["open"]>(async () => 1234),
+    execute: vi.fn<ReturnType<typeof socialBrowser>["execute"]>(async () => ({ text: "observed" })),
   };
   const authentication: SocialAuthentication = {
     ensure: async () => {},
@@ -108,7 +108,7 @@ test("the authenticated Mac executor acknowledges queued runs, executes scope ch
   await vi.waitFor(() => expect(f.decisions).toHaveLength(2));
   expect(scopes).toEqual([null, "reader"]);
   expect((await f.request("/open", { accountId: "first" })).status).toBe(204);
-  expect(f.browser.open).toHaveBeenCalledWith("first");
+  expect(f.browser.open).toHaveBeenCalledWith("first", "x");
   expect((await f.request("/cancel", { accountId: "first" })).status).toBe(204);
 });
 
@@ -367,6 +367,18 @@ test("the native application client validates responses and never follows creden
     code: "SOCIAL_APPLICATION_REQUEST",
     upstreamStatus: 302,
   });
+});
+
+test("Threads executions start with public discovery instead of asking for unavailable inbox actions", async () => {
+  const f = fixture();
+  f.model.decide = async (_task, _run, observation) => {
+    expect(observation).toContain("searching Threads");
+    return { action: { kind: "finish" }, reason: "Done" };
+  };
+  await f.request("/runs", { ...f.task, account: { ...f.task.account, platform: "threads" } });
+  await vi.waitFor(() =>
+    expect(f.decisions).toEqual([{ action: { kind: "finish" }, reason: "Done" }]),
+  );
 });
 
 test("Mac configuration requires protected credentials, absolute profile storage and a valid port", () => {

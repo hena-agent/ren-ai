@@ -1,6 +1,14 @@
 import { expect, test } from "vitest";
 import { Schema } from "effect";
-import { nextSocialTime, socialTime, SocialAccount, SocialAction, socialWrite } from "./social.ts";
+import {
+  nextSocialTime,
+  socialTime,
+  SocialAccount,
+  SocialAction,
+  socialWrite,
+  supportsSocialAction,
+  socialPlatformName,
+} from "./social.ts";
 import { socialAccount } from "./social.test-helper.ts";
 
 test("social windows use account-local dates and move sleeping work to the next active hour", () => {
@@ -28,4 +36,36 @@ test("social input rejects arbitrary navigation, code and invalid account bounda
   expect(socialWrite({ kind: "reply", url: "https://x.com/a/status/1", text: "b" })).toBe(true);
   expect(socialWrite({ kind: "dm", text: "c" })).toBe(true);
   expect(socialWrite({ kind: "messages" })).toBe(false);
+});
+
+test("platform contracts preserve existing X accounts and validate Threads handles and platform-bound actions", () => {
+  const { platform: _platform, ...storedX } = socialAccount;
+  expect(Schema.decodeUnknownSync(SocialAccount)(storedX).platform).toBe("x");
+  expect(
+    Schema.decodeUnknownSync(SocialAccount)({
+      ...socialAccount,
+      platform: "threads",
+      handle: "persona.name",
+    }).handle,
+  ).toBe("persona.name");
+  expect(() =>
+    Schema.decodeUnknownSync(SocialAccount)({ ...socialAccount, handle: "persona.name" }),
+  ).toThrow(Error);
+  expect(socialPlatformName("threads")).toBe("Threads");
+  expect(socialPlatformName("x")).toBe("X");
+  expect(supportsSocialAction("x", { kind: "contact", handle: null })).toBe(true);
+  expect(supportsSocialAction("x", { kind: "profile", handle: "invalid.dot" })).toBe(false);
+  expect(
+    supportsSocialAction("threads", {
+      kind: "reply",
+      url: "https://www.threads.com/@reader/post/ABC",
+      text: "Hello",
+    }),
+  ).toBe(true);
+  expect(
+    supportsSocialAction("x", {
+      kind: "read_post",
+      url: "https://www.threads.com/@reader/post/ABC",
+    }),
+  ).toBe(false);
 });

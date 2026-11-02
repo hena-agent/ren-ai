@@ -7,6 +7,13 @@ import { expect, test } from "vitest";
 // oxlint-disable-next-line typescript/no-restricted-types -- trust boundary: narrow the bundled process listener event
 function listenerUrl(input: unknown) {
   if (
+    typeof input === "object" &&
+    input !== null &&
+    "port" in input &&
+    typeof input.port === "number"
+  )
+    return `http://127.0.0.1:${input.port}`;
+  if (
     typeof input !== "object" ||
     input === null ||
     !("url" in input) ||
@@ -36,34 +43,44 @@ test("CI api-msg artifact is checksummed, Bun-runnable and contains no SQL datab
     for (const file of [
       "api-msg.js",
       "api-msg-verify.js",
+      "social.js",
       "api-msg.graph.json",
       "api-msg-verify.graph.json",
+      "social.graph.json",
     ])
       expect((await readFile(join(output, file), "utf8")).length).toBeGreaterThan(0);
-    const service = spawn("bun", [join(output, "api-msg.js")], {
-      env: {
-        ...process.env,
-        PORT: "0",
-        TOKEN_MANAGEMENT: "artifact-secret",
-        OPENCODE_URL: "http://127.0.0.1:4096",
-        OPENCODE_AUTHORIZATION: "Basic test",
-        IMSG_URL: "http://127.0.0.1:4702/rpc",
-        IMSG_TOKEN: "imsg-secret",
-        BUILD_REVISION: "runtime-must-not-override-artifact",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    try {
-      const line = await new Promise<string>((resolve, reject) => {
-        service.stdout.once("data", (data: Buffer) => resolve(data.toString()));
-        service.once("error", reject);
+    for (const name of ["api-msg", "social"]) {
+      const service = spawn("bun", [join(output, `${name}.js`)], {
+        env: {
+          ...process.env,
+          PORT: "0",
+          TOKEN_MANAGEMENT: "artifact-secret",
+          OPENCODE_URL: "http://127.0.0.1:1",
+          OPENCODE_AUTHORIZATION: "Basic test",
+          IMSG_URL: "http://127.0.0.1:4702/rpc",
+          IMSG_TOKEN: "imsg-secret",
+          APPLICATION_API_URL: "http://127.0.0.1:4879",
+          SOCIAL_HOME: join(base, "private"),
+          SOCIAL_PORT: "0",
+          SOCIAL_AGENT_BROWSER: "/missing-test-browser",
+          SOCIAL_CHROME: "/missing-test-canary",
+          BUILD_REVISION: "runtime-must-not-override-artifact",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
       });
-      const response = await fetch(new URL("/health", listenerUrl(JSON.parse(line))), {
-        headers: { Authorization: "Bearer artifact-secret" },
-      });
-      expect(await response.json()).toMatchObject({ service: "api-msg", revision });
-    } finally {
-      service.kill();
+      try {
+        const line = await new Promise<string>((resolve, reject) => {
+          service.stdout.once("data", (data: Buffer) => resolve(data.toString()));
+          service.once("error", reject);
+        });
+        const response = await fetch(new URL("/health", listenerUrl(JSON.parse(line))), {
+          headers: { Authorization: "Bearer artifact-secret" },
+        });
+        expect(await response.json()).toMatchObject({ service: name, revision });
+        expect(response.status).toBe(503);
+      } finally {
+        service.kill();
+      }
     }
   } finally {
     await rm(base, { recursive: true, force: true });

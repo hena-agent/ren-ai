@@ -1,11 +1,17 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PersonaRecord } from "@ren-ai/personas";
-import type { SocialAccount, SocialSnapshot } from "@ren-ai/onboarding/social";
+import {
+  socialPlatformName,
+  type SocialPlatform,
+  type SocialAccount,
+  type SocialSnapshot,
+} from "@ren-ai/onboarding/social";
 import { AdminLayout } from "./admin-layout.tsx";
 import { SocialAuthentication } from "./social-auth.tsx";
 import type { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
 
 export interface SocialView {
+  platform?: SocialPlatform;
   authentication?: SocialAuthStatus;
   snapshot?: SocialSnapshot;
   personas: readonly PersonaRecord[];
@@ -39,25 +45,56 @@ const kinds: Record<string, string> = {
 };
 const date = (at: number, timeZone = "Asia/Seoul") =>
   new Date(at).toLocaleString("ko-KR", { timeZone });
+const platformFields = {
+  threads: {
+    handlePattern: "[A-Za-z0-9_][A-Za-z0-9_.]{0,29}",
+    handleLength: 30,
+    loginLabel: "Instagram 로그인 ID",
+    loginPlaceholder: "Instagram 사용자명·이메일·전화번호",
+    writesLabel: "일일 게시·댓글 합계",
+  },
+  x: {
+    handlePattern: "[A-Za-z0-9_]{1,15}",
+    handleLength: 15,
+    loginLabel: "로그인 ID",
+    loginPlaceholder: "이메일·전화번호·사용자명",
+    writesLabel: "일일 게시·댓글·DM 합계",
+  },
+};
 
-function AccountForm({ selected, personas, personaId, authentication }: SocialView) {
+function AccountForm({
+  selected,
+  personas,
+  personaId,
+  authentication,
+  platform,
+}: SocialView & { platform: SocialPlatform }) {
+  const fields = platformFields[platform];
   return (
-    <form action="/social" method="post" className="contact-panel" autoComplete="off">
-      <input type="hidden" name="action" value="save" />
+    <form
+      action={`/social?platform=${platform}`}
+      method="post"
+      className="contact-panel"
+      autoComplete="off"
+    >
       <input type="hidden" name="id" value={selected?.id ?? ""} />
-      <h2>{selected ? `@${selected.handle} 연결 설정` : "X 계정 연결"}</h2>
+      <input type="hidden" name="platform" value={platform} />
+      <h2>
+        {selected ? `@${selected.handle} 연결 설정` : `${socialPlatformName(platform)} 계정 연결`}
+      </h2>
       <p className="hint">
-        페르소나와 X 로그인 정보를 함께 입력하면 계정을 연결하고 Mac에서 로그인을 시작합니다.
+        페르소나와 로그인 정보를 함께 입력하세요. ID·비밀번호를 Mac에 먼저 저장하고 로그인을
+        시도합니다.
       </p>
-      <fieldset disabled={authentication?.state === "logging_in"}>
+      <fieldset disabled={["logging_in", "checking"].includes(authentication?.state ?? "")}>
         <div className="social-fields">
           <label>
-            X 계정명
+            계정명
             <input
               name="handle"
               required
-              pattern="[A-Za-z0-9_]{1,15}"
-              maxLength={15}
+              pattern={fields.handlePattern}
+              maxLength={fields.handleLength}
               defaultValue={selected?.handle}
               placeholder="@ 없이 입력"
             />
@@ -76,7 +113,7 @@ function AccountForm({ selected, personas, personaId, authentication }: SocialVi
             </select>
           </label>
           <label>
-            기존 초대 코드
+            가입 초대 코드
             <input name="invitation" required maxLength={64} defaultValue={selected?.invitation} />
           </label>
           <label>
@@ -86,31 +123,31 @@ function AccountForm({ selected, personas, personaId, authentication }: SocialVi
         </div>
         <div className="social-fields">
           <label>
-            로그인 ID
+            {fields.loginLabel}
             <input
               name="username"
-              required={!selected}
               maxLength={320}
               autoComplete="off"
-              placeholder="이메일·전화번호·사용자명"
+              placeholder={fields.loginPlaceholder}
             />
           </label>
           <label>
             비밀번호
-            <input
-              type="password"
-              name="password"
-              required={!selected}
-              maxLength={4096}
-              autoComplete="new-password"
-            />
+            <input type="password" name="password" maxLength={4096} autoComplete="new-password" />
           </label>
         </div>
         <p className="hint">
-          로그인 정보는 Messages Mac에만 암호화해 보관합니다. 저장된 비밀번호는 표시하지 않습니다.
+          이미 로그인했다면 ID·비밀번호 없이 로그인 상태를 확인할 수 있습니다. 로그인을 시도하려면
+          두 항목을 모두 입력하세요. 로그인 정보는 Messages Mac에만 암호화해 보관합니다. 로그인에
+          실패해도 저장된 정보로 재시도할 수 있습니다. 저장된 비밀번호는 표시하지 않습니다.
           {selected &&
             " 로그인 정보를 변경하려면 두 항목을 모두 입력하세요. 비워두면 기존 정보를 유지하고 설정만 저장합니다."}
         </p>
+        {platform === "threads" && (
+          <p className="hint">
+            Threads는 공개 글 탐색·게시·댓글을 지원하며 DM·알림은 지원하지 않습니다.
+          </p>
+        )}
         <label>
           활동 지침
           <textarea
@@ -131,7 +168,7 @@ function AccountForm({ selected, personas, personaId, authentication }: SocialVi
               ["intervalMinutes", "실행 간격 (분)", 15, 1440, 30],
               ["runMinutes", "한 번의 활동 시간 (분)", 1, 30, 5],
               ["dailyTurns", "일일 모델 판단 횟수", 1, 200, 20],
-              ["dailyWrites", "일일 게시·댓글·DM 합계", 1, 100, 5],
+              ["dailyWrites", fields.writesLabel, 1, 100, 5],
             ] as const
           ).map(([name, label, min, max, initial]) => (
             <label key={name}>
@@ -158,9 +195,14 @@ function AccountForm({ selected, personas, personaId, authentication }: SocialVi
         </label>
         <p className="hint">
           페르소나 또는 계정명을 변경하면 진행 중 활동을 중단하고 새 연결의 세션을 사용합니다. 기존
-          X 게시물과 DM은 해당 X 계정에 남습니다.
+          게시물과 DM은 해당 플랫폼 계정에 남습니다.
         </p>
-        <button type="submit">
+        {!selected && (
+          <button type="submit" name="action" value="save-check">
+            연결하고 로그인 상태 확인
+          </button>
+        )}
+        <button type="submit" name="action" value="save" className="secondary">
           {selected ? "설정 저장 · 입력한 정보로 로그인" : "연결하고 로그인"}
         </button>
       </fieldset>
@@ -169,6 +211,11 @@ function AccountForm({ selected, personas, personaId, authentication }: SocialVi
 }
 
 export function socialPage(view: SocialView) {
+  const platform = view.platform ?? view.selected?.platform ?? "threads";
+  const base = `/social?platform=${platform}`;
+  const accounts = view.snapshot?.accounts.filter((row) => row.account.platform === platform) ?? [];
+  const accountIds = new Set(accounts.map((row) => row.account.id));
+  const events = view.snapshot?.events.filter((event) => accountIds.has(event.accountId)) ?? [];
   return (
     "<!doctype html>" +
     renderToStaticMarkup(
@@ -176,20 +223,36 @@ export function socialPage(view: SocialView) {
         <main id="main" className="contact-page social-workspace">
           <header className="page-heading">
             <h1>소셜 활동</h1>
-            <p>X 계정과 페르소나를 연결하고, 자율 탐색·대화·초대를 운영합니다.</p>
-            <a href="/social">새로고침 · 새 계정 연결</a>
+            <p>Threads·X 계정과 페르소나를 연결하고, 자율 탐색·대화·초대를 운영합니다.</p>
+            <a href={base}>새로고침 · 새 계정 연결</a>
           </header>
+          <nav className="contact-tabs social-platform-tabs" aria-label="소셜 플랫폼">
+            {(["threads", "x"] as const).map((value) => (
+              <a
+                key={value}
+                href={`/social?platform=${value}${view.personaId ? `&persona=${encodeURIComponent(view.personaId)}` : ""}`}
+                aria-current={platform === value ? "page" : undefined}
+              >
+                {socialPlatformName(value)}
+              </a>
+            ))}
+          </nav>
           {view.error && <p role="alert">{view.error}</p>}
-          <section aria-label="연결된 X 계정" className="contact-panel">
+          <section aria-label="연결된 소셜 계정" className="contact-panel">
             <h2>계정과 페르소나</h2>
-            {!view.snapshot?.accounts.length && (
+            {!view.snapshot && (
+              <p>
+                <output>계정 목록을 불러오지 못했습니다. 새로고침해 주세요.</output>
+              </p>
+            )}
+            {view.snapshot && !accounts.length && (
               <p>연결된 계정이 없습니다. 아래에서 활동할 페르소나를 선택하세요.</p>
             )}
-            {view.snapshot?.accounts.map(({ account, state, nextAt, turns, writes }) => (
+            {accounts.map(({ account, state, nextAt, turns, writes }) => (
               <article key={account.id}>
                 <h3>
-                  <a href={`/social?account=${encodeURIComponent(account.id)}`}>
-                    @{account.handle}
+                  <a href={`${base}&account=${encodeURIComponent(account.id)}`}>
+                    {socialPlatformName(account.platform)} · @{account.handle}
                   </a>{" "}
                   →{" "}
                   <a href={`/personas/${account.personaId}`}>
@@ -198,15 +261,16 @@ export function socialPage(view: SocialView) {
                   </a>
                 </h3>
                 <p>
-                  {states[state] ?? state} · 판단 {turns}/{account.dailyTurns} · 게시·댓글·DM{" "}
-                  {writes}/{account.dailyWrites}
+                  {states[state] ?? state} · 판단 {turns}/{account.dailyTurns} ·{" "}
+                  {platform === "threads" ? "게시·댓글" : "게시·댓글·DM"} {writes}/
+                  {account.dailyWrites}
                 </p>
                 {nextAt !== null && (
                   <p className="hint">
                     다음 확인: {date(nextAt, account.timeZone)} ({account.timeZone})
                   </p>
                 )}
-                <form action="/social" method="post" className="contact-selection">
+                <form action={base} method="post" className="contact-selection">
                   <input type="hidden" name="id" value={account.id} />
                   <button name="action" value="open" className="secondary">
                     Mac에서 Canary 열기
@@ -225,14 +289,23 @@ export function socialPage(view: SocialView) {
               </article>
             ))}
           </section>
-          <AccountForm {...view} />
+          <AccountForm {...view} platform={platform} />
           {view.selected && (
-            <SocialAuthentication accountId={view.selected.id} status={view.authentication} />
+            <SocialAuthentication
+              accountId={view.selected.id}
+              platform={view.selected.platform}
+              status={view.authentication}
+            />
           )}
           <section className="contact-panel" aria-label="소셜 활동 내역">
             <h2>활동 내역</h2>
-            {!view.snapshot?.events.length && <p>아직 활동 내역이 없습니다.</p>}
-            {view.snapshot?.events.map((event) => (
+            {!view.snapshot && (
+              <p>
+                <output>활동 내역을 불러오지 못했습니다.</output>
+              </p>
+            )}
+            {view.snapshot && !events.length && <p>이 페이지에 표시할 활동 내역이 없습니다.</p>}
+            {events.map((event) => (
               <article key={event.id}>
                 <h3>
                   {kinds[event.kind] ?? event.kind} · {states[event.state]}
@@ -244,13 +317,13 @@ export function socialPage(view: SocialView) {
                 <pre className="conversation-text">{event.text}</pre>
                 {event.url && (
                   <a href={event.url} target="_blank" rel="noreferrer">
-                    X에서 결과 보기
+                    게시물 보기
                   </a>
                 )}
               </article>
             ))}
             {view.snapshot?.before != null && (
-              <a href={`/social?before=${view.snapshot.before}`}>이전 활동</a>
+              <a href={`${base}&before=${view.snapshot.before}`}>이전 활동</a>
             )}
           </section>
         </main>

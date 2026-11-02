@@ -1,6 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { healthResponse as serviceHealth } from "@ren-ai/transport/health";
 import { checkExecutorHealth, type ExecutorHealth } from "./health.ts";
+import { checkSocialHealth } from "./social-health.ts";
 
 export type GatewayConfig = {
   managementToken: string;
@@ -8,6 +9,7 @@ export type GatewayConfig = {
   opencodeAuthorization: string;
   imsgUrl: string;
   imsgToken: string;
+  socialUrl: string;
 };
 type Level = "info" | "warn" | "error";
 type LogFields = Record<string, string | number | string[]>;
@@ -114,6 +116,17 @@ export const createGateway = (options: GatewayOptions) => {
   }
   const opencodeUrl = configuredUrl(config.opencodeUrl);
   const imsgUrl = configuredUrl(config.imsgUrl);
+  const socialUrl = new URL(config.socialUrl);
+  if (
+    socialUrl.protocol !== "http:" ||
+    !["localhost", "127.0.0.1", "[::1]", "host.docker.internal"].includes(socialUrl.hostname) ||
+    socialUrl.username ||
+    socialUrl.password ||
+    socialUrl.search ||
+    socialUrl.hash ||
+    socialUrl.pathname !== "/"
+  )
+    throw new Error("Social upstream must be a local Mac origin");
   const fetcher = options.fetcher ?? fetch;
   const health = options.health ?? checkExecutorHealth;
   const now = options.now ?? Date.now;
@@ -181,50 +194,94 @@ export const createGateway = (options: GatewayOptions) => {
           "method_not_allowed",
           "warn",
         );
-      return healthResponse(health, requestId, complete);
+      return healthResponse(health, requestId, complete, () =>
+        checkSocialHealth(socialUrl, config.managementToken, fetcher, (error, upstreamStatus) =>
+          emit("error", {
+            ...common,
+            event: "dependency_failure",
+            stage: "social.health",
+            outcome: "failed",
+            durationMs: now() - started,
+            upstreamStatus,
+            ...safeError(error, upstreamStatus ? "SOCIAL_HEALTH_INVALID" : "SOCIAL_HEALTH_NETWORK"),
+          }),
+        ),
+      );
     }
     if (!authorized(request.headers.get("authorization"), config.managementToken)) {
       return complete(new Response("Unauthorized", { status: 401 }), "auth", "rejected", "warn");
     }
-    const isOpenCode = url.pathname.startsWith("/opencode/");
-    const isImsg = op === "imsg";
-    if (isImsg && request.method !== "POST") {
-      return complete(
-        new Response("Method not allowed", { status: 405 }),
-        "routing",
-        "method_not_allowed",
-        "warn",
-      );
-    }
-    if (!isOpenCode && !isImsg) {
-      return complete(new Response("Not found", { status: 404 }), "routing", "not_found", "warn");
-    }
-    const destination = isOpenCode
-      ? target(opencodeUrl, url.pathname.slice("/opencode".length), url.search)
-      : imsgUrl;
-    if (destination === null) {
-      return complete(
-        new Response("Invalid path", { status: 400 }),
-        "routing",
-        "invalid_path",
-        "warn",
-      );
-    }
-    const headers = new Headers(request.headers);
-    stripHopByHop(headers);
-    for (const name of ["host", "authorization", "cookie", "x-request-id"]) headers.delete(name);
-    headers.set(
-      "authorization",
-      isOpenCode ? config.opencodeAuthorization : `Bearer ${config.imsgToken}`,
-    );
-    return forward(fetcher, request, destination, headers, complete);
+    return proxy(request, config, { opencodeUrl, imsgUrl, socialUrl }, fetcher, complete);
   };
+};
+
+const proxy = (
+  request: Request,
+  config: GatewayConfig,
+  upstreams: { opencodeUrl: URL; imsgUrl: URL; socialUrl: URL },
+  fetcher: typeof fetch,
+  complete: Complete,
+) => {
+  const { opencodeUrl, imsgUrl, socialUrl } = upstreams;
+  const url = new URL(request.url);
+  const op = operation(url.pathname);
+  const isOpenCode = url.pathname.startsWith("/opencode/");
+  const isImsg = op === "imsg";
+  const isSocial = op === "social";
+  if (
+    (isImsg && request.method !== "POST") ||
+    (isSocial && request.method !== (url.pathname === "/social/health" ? "GET" : "POST"))
+  ) {
+    return complete(
+      new Response("Method not allowed", { status: 405 }),
+      "routing",
+      "method_not_allowed",
+      "warn",
+    );
+  }
+  if ((!isOpenCode && !isImsg && !isSocial) || (isSocial && url.search)) {
+    return complete(new Response("Not found", { status: 404 }), "routing", "not_found", "warn");
+  }
+  const destination = isOpenCode
+    ? target(opencodeUrl, url.pathname.slice("/opencode".length), url.search)
+    : isSocial
+      ? new URL(url.pathname.slice("/social".length), socialUrl)
+      : imsgUrl;
+  if (destination === null) {
+    return complete(
+      new Response("Invalid path", { status: 400 }),
+      "routing",
+      "invalid_path",
+      "warn",
+    );
+  }
+  const headers = new Headers(request.headers);
+  stripHopByHop(headers);
+  for (const name of ["host", "authorization", "cookie", "x-request-id"]) headers.delete(name);
+  headers.set(
+    "authorization",
+    isOpenCode
+      ? config.opencodeAuthorization
+      : `Bearer ${isSocial ? config.managementToken : config.imsgToken}`,
+  );
+  return forward(fetcher, request, destination, headers, complete);
 };
 
 const operation = (path: string) => {
   if (path.startsWith("/opencode/")) return "opencode";
   if (path === "/imsg/rpc" || path === "/imsg/rpc/") return "imsg";
   if (path === "/health") return "health";
+  if (
+    [
+      "/social/auth",
+      "/social/runs",
+      "/social/cancel",
+      "/social/open",
+      "/social/browser",
+      "/social/health",
+    ].includes(path)
+  )
+    return "social";
   return "routing";
 };
 
@@ -240,12 +297,17 @@ const healthResponse = async (
   health: () => Promise<ExecutorHealth>,
   requestId: string,
   complete: Complete,
+  socialHealth: () => Promise<boolean>,
 ) => {
   try {
     const facts = await health();
-    const ready = !facts.diskNearlyFull && !facts.screenLocked;
+    const socialReady = await socialHealth();
+    const ready = !facts.diskNearlyFull && !facts.screenLocked && socialReady;
     return complete(
-      serviceHealth("api-msg", ready ? "ready" : "degraded", facts),
+      serviceHealth("api-msg", ready ? "ready" : "degraded", {
+        ...facts,
+        social: { status: socialReady ? "ready" : "degraded" },
+      }),
       "health",
       ready ? "success" : "degraded",
       ready ? "info" : "warn",

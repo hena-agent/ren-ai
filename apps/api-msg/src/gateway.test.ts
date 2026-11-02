@@ -11,6 +11,7 @@ const config: GatewayConfig = {
   opencodeAuthorization: "Basic server-auth",
   imsgUrl: "https://imsg.test/rpc",
   imsgToken: "imsg-secret",
+  socialUrl: "http://127.0.0.1:5407",
 };
 const request = (path: string, init: RequestInit = {}) =>
   new Request(`https://gateway.test${path}`, init);
@@ -373,9 +374,13 @@ describe("authenticated execution gateway", () => {
 
   it("returns only health facts and records check failures in the response", async () => {
     const facts = { diskNearlyFull: false, screenLocked: true };
-    const success = createGateway({ config, health: async () => facts });
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ service: "social", revision: "development", status: "ready" }),
+    );
+    const success = createGateway({ config, health: async () => facts, fetcher });
     expect(await (await success(request("/health"))).json()).toEqual({
       ...facts,
+      social: { status: "ready" },
       service: "api-msg",
       revision: "development",
       status: "degraded",
@@ -400,6 +405,7 @@ describe("authenticated execution gateway", () => {
     expect((await errorFailure(request("/health"))).status).toBe(503);
     const ready = createGateway({
       config,
+      fetcher,
       health: async () => ({ diskNearlyFull: false, screenLocked: null }),
     });
     const response = await ready(request("/health"));

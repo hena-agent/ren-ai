@@ -1,11 +1,14 @@
 import { expect, test } from "vitest";
 import { socialTask } from "../../../packages/onboarding/src/social.test-helper.ts";
-import { xBrowser, LoginRequired } from "./browser.ts";
+import { socialBrowser, LoginRequired } from "./browser.ts";
 import type { BrowserCommands } from "./commands.ts";
 import { commandResult } from "./commands.ts";
 import { accountQueue } from "./account-queue.ts";
 import type { SocialAuthentication } from "./authentication.ts";
 import { AuthenticationError } from "./auth-store.ts";
+import type { SocialPlatform } from "@ren-ai/onboarding/social";
+import { browserSite } from "./browser-site.ts";
+import { threadsIdentityScript, threadsPostsScript, threadsSentScript } from "./threads-scripts.ts";
 import {
   identityScript,
   publicScript,
@@ -16,8 +19,9 @@ import {
   dmSentScript,
 } from "./x-scripts.ts";
 
-function fixture() {
-  const task = socialTask();
+function fixture(platform: SocialPlatform = "x") {
+  const original = socialTask();
+  const task = { ...original, account: { ...original.account, platform } };
   const commands: string[][] = [];
   const observations = new Map<string, string>([
     [identityScript, JSON.stringify({ handle: task.account.handle })],
@@ -27,6 +31,9 @@ function fixture() {
     [candidatesScript, '["Someone @another", "Reader @reader"]'],
     [sentScript, '{"empty":true}'],
     [dmSentScript, '{"empty":true}'],
+    [threadsIdentityScript, JSON.stringify({ handle: task.account.handle })],
+    [threadsPostsScript, "[]"],
+    [threadsSentScript, '{"empty":true}'],
   ]);
   const adapter: BrowserCommands = {
     open: async () => 1234,
@@ -39,11 +46,16 @@ function fixture() {
       }
       if (args[0] === "click" && args[1] === '[data-testid="dmComposerSendButton"]')
         observations.set(messagesScript, '["previous","Hello DM"]');
+      if (args[0] === "click" && args[1] === browserSite("threads").submit)
+        observations.set(
+          threadsPostsScript,
+          '[{"body":"Hello Threads","url":"/@persona_x/post/ABC123"}]',
+        );
       return JSON.stringify({ success: true });
     },
   };
   const authentication = { ensure: async () => {} } satisfies Pick<SocialAuthentication, "ensure">;
-  const browser = xBrowser(adapter, authentication, accountQueue());
+  const browser = socialBrowser(adapter, authentication, accountQueue());
   let guards = 0;
   const execute = (
     action: Parameters<typeof browser.execute>[2],
@@ -80,6 +92,43 @@ test("public discovery navigates only fixed X routes and checks the logged-in ac
   f.observations.set(identityScript, '{"handle":"wrong"}');
   await expect(f.execute({ kind: "notifications" })).rejects.toBeInstanceOf(LoginRequired);
 });
+
+test("Threads uses isolated browser ownership, public discovery routes and same-platform links", async () => {
+  const f = fixture("threads");
+  const opened: string[] = [];
+  f.adapter.open = async (account, url) => {
+    opened.push(`${account} ${url}`);
+    return 1234;
+  };
+  await f.browser.open(f.task.account.id, "threads");
+  expect(await f.execute({ kind: "search", query: "AI friends" })).toEqual({ text: "[]" });
+  await f.execute({ kind: "profile", handle: "reader.name" });
+  await f.execute({ kind: "read_post", url: "https://www.threads.com/@reader.name/post/AB12" });
+  expect(opened.every((value) => value === "threads:first https://www.threads.com/")).toBe(true);
+  expect(f.commands).toContainEqual(["open", "https://www.threads.com/search?q=AI+friends"]);
+  expect(f.commands).toContainEqual(["open", "https://www.threads.com/@reader.name"]);
+  await expect(f.execute({ kind: "inbox" })).rejects.toThrow("Unsupported platform action");
+  await expect(
+    f.execute({ kind: "read_post", url: "https://x.com/reader/status/123" }),
+  ).rejects.toThrow("Unsupported platform action");
+});
+
+test.each(["post", "reply"] as const)(
+  "Threads %s requires a new owned post receipt and never confirms an old post",
+  async (kind) => {
+    const f = fixture("threads");
+    const action =
+      kind === "post"
+        ? { kind, text: "Hello Threads" }
+        : { kind, text: "Hello Threads", url: "https://www.threads.com/@reader/post/DEF" };
+    expect(await f.execute(action)).toEqual({
+      text: "Published",
+      url: "https://www.threads.com/@persona_x/post/ABC123",
+    });
+    expect(f.guards()).toBe(2);
+    await expect(f.execute(action)).rejects.toThrow("could not be verified");
+  },
+);
 
 test.each(["post", "reply"] as const)(
   "%s verifies a newly published status and guards immediately before clicking send",

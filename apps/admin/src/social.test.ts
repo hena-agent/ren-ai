@@ -130,7 +130,7 @@ test("operators submit ID/password and verification codes without credentials re
   };
   const response = await f.admin(request("/social", login));
   expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("/social?account=x_persona_x");
+  expect(response.headers.get("location")).toBe("/social?platform=x&account=x_persona_x");
   const submission = Schema.decodeUnknownSync(Schema.fromJsonString(SocialAuthInput))(
     f.submissions.at(-1)!.body,
   );
@@ -173,6 +173,81 @@ test("operators submit ID/password and verification codes without credentials re
 function logsContainPrivate(logs: readonly LogEntry[]) {
   return /PRIVATE_ID|PRIVATE_PASSWORD|123456/.test(JSON.stringify(logs));
 }
+
+test("a new connection can check an existing browser login without supplying or saving a password", async () => {
+  const f = await setup();
+  const fields = { ...f.fields, action: "save-check", username: "", password: "" };
+  const response = await f.admin(request("/social?platform=x", fields));
+  expect(response.status).toBe(303);
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(SocialAuthInput))(f.submissions.at(-1)!.body),
+  ).toEqual({ accountId: "x_persona_x", command: { kind: "check" } });
+  const ordinary = f.fetcher.getMockImplementation()!;
+  f.fetcher.mockImplementation(async (input, init) =>
+    new URL(new Request(input, init).url).pathname.endsWith("/auth")
+      ? new Response(null, { status: 503 })
+      : ordinary(input, init),
+  );
+  const failed = await f.admin(request("/social?platform=x", { ...fields, id: "x_persona_x" }));
+  expect(failed.status).toBe(503);
+  expect(await failed.text()).toContain("계정 연결은 저장됐지만 로그인 상태를 확인하지 못했습니다");
+});
+
+test("platform tabs preserve navigation context and reject cross-platform form submissions", async () => {
+  const f = await setup();
+  await f.admin(request("/social", f.fields));
+  const threads = await (
+    await f.admin(request("/social?platform=threads&account=x_persona_x"))
+  ).text();
+  expect(threads).toContain("Threads 계정 연결");
+  expect(threads).not.toContain("@persona_x 연결 설정");
+  expect(threads).not.toContain("X 로그인 · 자동 재로그인");
+  const before = f.submissions.length;
+  for (const fields of [
+    { action: "auth-login", id: "x_persona_x" },
+    { ...f.fields, platform: "threads", id: "x_persona_x" },
+    f.fields,
+  ])
+    expect((await f.admin(request("/social?platform=threads", fields))).status).toBe(400);
+  expect(f.submissions).toHaveLength(before);
+  const x = await (await f.admin(request("/social?platform=x&persona=bob"))).text();
+  expect(x).toContain("/social?platform=threads&amp;persona=bob");
+  expect((await f.admin(request("/social?platform=other"))).status).toBe(400);
+  const pause = await f.admin(
+    request("/social?platform=x", { action: "toggle", id: "x_persona_x" }),
+  );
+  expect(pause.headers.get("location")).toBe("/social?platform=x&account=x_persona_x");
+});
+
+test("Threads connects from the initial form, keeps saved credentials on failed login and retries without credential input", async () => {
+  const f = await setup();
+  const response = await f.admin(
+    request("/social", { ...f.fields, platform: "threads", handle: "persona.name" }),
+  );
+  expect(response.status).toBe(303);
+  expect(response.headers.get("location")).toBe(
+    "/social?platform=threads&account=threads_persona-name",
+  );
+  expect(JSON.parse(f.submissions[0]!.body)).toMatchObject({
+    id: "threads_persona-name",
+    platform: "threads",
+    handle: "persona.name",
+  });
+  f.setAuthentication({ state: "failed", hasCredentials: true, reason: "credentials_rejected" });
+  const page = await (await f.admin(request("/social?account=threads_persona-name"))).text();
+  expect(page).toContain("Threads 로그인 · 자동 재로그인");
+  expect(page).toContain("ID·비밀번호 저장됨");
+  expect(page).toContain("저장된 정보로 로그인 재시도");
+  expect(page).not.toContain(f.fields.password);
+  const retry = await f.admin(
+    request("/social", { id: "threads_persona-name", action: "auth-login" }),
+  );
+  expect(retry.status).toBe(303);
+  expect(JSON.parse(f.submissions.at(-1)!.body)).toEqual({
+    accountId: "threads_persona-name",
+    command: { kind: "login" },
+  });
+});
 
 test("new connections validate both login fields before saving anything", async () => {
   const f = await setup();
@@ -337,7 +412,7 @@ test("social history shows account bindings, uncertainty, result links and pagin
     error: "Example error",
   });
   expect(page).toContain("결과 미확인");
-  expect(page).toContain("/social?before=50");
+  expect(page).toContain("/social?platform=x&amp;before=50");
   expect(page).toContain("https://x.com/reader/status/123");
   expect(page).toContain("custom-state");
   expect(page).toContain("future-kind");

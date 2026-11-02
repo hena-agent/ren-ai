@@ -137,6 +137,7 @@ test("running native execution prevents any cutover writes or movement", () =>
       yield* Effect.promise(async () => {
         await mkdir(join(root, ".opencode", "agents"), { recursive: true });
         await writeFile(join(root, ".opencode", "agents", "persona1.md"), snapshot.agent);
+        await Effect.runPromise(remote.client.location.reload());
         await expect
           .poll(async () =>
             (

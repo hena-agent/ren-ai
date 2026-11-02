@@ -3,7 +3,6 @@ import { mkdir, chmod, readFile, writeFile, rename, rm, access } from "node:fs/p
 import { join } from "node:path";
 import { Schema } from "effect";
 import { SocialAuthAccount, SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
-import { requireAuthenticationVersion, type BrowserCommands } from "./commands.ts";
 import { vaultKey } from "./vault-key.ts";
 
 export class AuthenticationError extends Error {
@@ -33,31 +32,30 @@ type Credentials = Pick<typeof Credentials.Type, "username" | "password">;
 export interface AuthStore {
   has: (account: SocialAuthAccount) => Promise<boolean>;
   load: (account: SocialAuthAccount) => Promise<Credentials>;
-  save: (
-    account: SocialAuthAccount,
-    credentials: Credentials,
-    port: number,
-    signal: AbortSignal,
-  ) => Promise<void>;
+  save: (account: SocialAuthAccount, credentials: Credentials) => Promise<void>;
   forget: (account: SocialAuthAccount) => Promise<void>;
   state: (account: SocialAuthAccount) => Promise<SocialAuthStatus>;
   update: (account: SocialAuthAccount, status: SocialAuthStatus) => Promise<void>;
 }
 const unavailable = () =>
   new AuthenticationError({ state: "failed", hasCredentials: true, reason: "unavailable" });
-const name = (account: SocialAuthAccount) => `renai-x-${account.id}`;
+const name = (account: SocialAuthAccount) => `renai-${account.platform}-${account.id}`;
 const address = (account: SocialAuthAccount) =>
-  `https://x.com/i/flow/login#renai-account=${account.handle.toLowerCase()}`;
+  `${account.platform === "threads" ? "https://www.threads.com/login" : "https://x.com/i/flow/login"}#renai-account=${account.handle.toLowerCase()}`;
 
 /** Reuse agent-browser's encrypted v1 auth vault; never accept legacy plaintext profiles. */
 export function authStore(
   home: string,
-  commands: BrowserCommands,
   encryptionKey = process.env["AGENT_BROWSER_ENCRYPTION_KEY"],
 ): AuthStore {
   const vault = join(home, "agent-browser", ".agent-browser");
   const profile = (account: SocialAuthAccount) => join(vault, "auth", `${name(account)}.json`);
-  const statePath = (account: SocialAuthAccount) => join(home, "auth-state", `${account.id}.json`);
+  const statePath = (account: SocialAuthAccount) =>
+    join(
+      home,
+      "auth-state",
+      `${account.platform === "threads" ? "threads:" : ""}${account.id}.json`,
+    );
   const has = (account: SocialAuthAccount) =>
     access(profile(account)).then(
       () => true,
@@ -94,8 +92,7 @@ export function authStore(
         throw error;
       }
     },
-    save: async (account, credentials, port, signal) => {
-      await requireAuthenticationVersion(commands, account.id, port, signal);
+    save: async (account, credentials) => {
       const key = await vaultKey(vault, encryptionKey, true);
       const directory = join(vault, "auth");
       await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -146,6 +143,7 @@ export function authStore(
         return { state: hasCredentials ? "login_required" : "not_configured", hasCredentials };
       }
       if (
+        saved.account.platform !== account.platform ||
         saved.account.generation !== account.generation ||
         saved.account.handle.toLowerCase() !== account.handle.toLowerCase()
       )

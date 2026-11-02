@@ -3,6 +3,7 @@ import type { SocialAuthAccount } from "./social-auth.ts";
 
 export const socialAccount: SocialAccount = {
   id: "first",
+  platform: "x",
   handle: "persona_x",
   personaId: "alice",
   enabled: false,
@@ -18,6 +19,7 @@ export const socialAccount: SocialAccount = {
 };
 export const socialAuthAccount: SocialAuthAccount = {
   id: socialAccount.id,
+  platform: socialAccount.platform,
   handle: socialAccount.handle,
   personaId: socialAccount.personaId,
   generation: 1,

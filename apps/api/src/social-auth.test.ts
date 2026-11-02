@@ -16,6 +16,68 @@ const credentials = {
   password: "PRIVATE_PASSWORD",
 } as const;
 
+test("live session checks do not cancel or fence a running social execution", async () => {
+  const f = fixture();
+  await f.enable();
+  f.options.cancel = vi.fn<typeof f.options.cancel>(async () => {});
+  f.options.authenticate = async () => ({ state: "checking", hasCredentials: false });
+  expect(
+    (await f.request("/auth", { accountId: "first", command: { kind: "check" } })).status,
+  ).toBe(200);
+  expect((await f.request("/control", { runId: f.started[0] })).status).toBe(200);
+  expect((await f.snapshot()).accounts[0]?.state).toBe("running");
+  expect(f.options.cancel).not.toHaveBeenCalled();
+});
+
+test("a manual-login check recovers a paused schedule through persisted probes even without saved credentials", async () => {
+  const f = fixture();
+  await f.enable();
+  await beginLogin(f);
+  f.options.authenticate = async () => ({ state: "checking", hasCredentials: false });
+  await f.request("/auth", { accountId: "first", command: { kind: "check" } });
+  f.advance(31000);
+  await f.app.alarm();
+  expect(f.alarm()).toBeGreaterThan(f.options.now());
+  f.options.authenticate = async () => ({ state: "authenticated", hasCredentials: false });
+  f.advance(31000);
+  await f.app.alarm();
+  await f.app.alarm();
+  expect(f.started).toHaveLength(2);
+});
+
+test("X and Threads keep same-name accounts distinct and unsupported Threads actions never reserve sends", async () => {
+  const f = fixture();
+  await f.enable();
+  const x = (await f.snapshot()).accounts[0]!.account;
+  expect(
+    (await f.request("/accounts", { ...x, id: "threads-account", platform: "threads" })).status,
+  ).toBe(200);
+  await f.app.alarm();
+  const runId = f.started[1]!;
+  const action = (kind: "inbox" | "read_post" | "post", step: number) =>
+    f.request("/actions", {
+      runId,
+      step,
+      decision: {
+        action:
+          kind === "post"
+            ? { kind, text: "Hello Threads" }
+            : kind === "read_post"
+              ? { kind, url: "https://x.com/reader/status/123" }
+              : { kind },
+        reason: "Public discovery",
+      },
+    });
+  expect((await action("inbox", 0)).status).toBe(400);
+  expect((await action("read_post", 0)).status).toBe(400);
+  expect(f.writes).toEqual([]);
+  expect((await action("post", 0)).status).toBe(200);
+  expect((await f.snapshot()).accounts).toHaveLength(2);
+  f.options.open = vi.fn<typeof f.options.open>(async () => {});
+  await f.request("/open", { accountId: "threads-account" });
+  expect(f.options.open).toHaveBeenCalledWith("threads-account", "threads");
+});
+
 test("credentials travel transiently to the Mac, fencing activity without entering durable accounts or action history", async () => {
   const f = fixture();
   await f.enable();

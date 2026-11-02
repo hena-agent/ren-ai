@@ -9,9 +9,10 @@ mkdir -p "$output"
 # RPC uses JSON; omit optional native MessagePack loading from the portable bundle.
 bun build --target=bun --define 'process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED="true"' --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/api-msg.js" --metafile="$output/api-msg.graph.json" "$ops/api-msg-entry.mjs"
 bun build --target=bun --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/api-msg-verify.js" --metafile="$output/api-msg-verify.graph.json" "$ops/probe-entry.mjs"
+bun build --target=bun --define "BUILD_REVISION=\"${GITHUB_SHA:-development}\"" --outfile="$output/social.js" --metafile="$output/social.graph.json" "$ops/../../social/ops/entry.mjs"
 if grep -Eiq '(@effect/sql|sqlite|better-sqlite3)' "$output"/*.graph.json; then
   echo 'The production api-msg artifact must not contain a SQL or SQLite dependency' >&2
   exit 1
 fi
 printf 'format=api-msg-v1\n' > "$output/artifact.info"
-(cd "$output" && shasum -a 256 api-msg.js api-msg-verify.js api-msg.graph.json api-msg-verify.graph.json artifact.info > SHA256SUMS)
+(cd "$output" && shasum -a 256 api-msg.js api-msg-verify.js social.js api-msg.graph.json api-msg-verify.graph.json social.graph.json artifact.info > SHA256SUMS)

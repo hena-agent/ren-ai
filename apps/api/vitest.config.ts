@@ -38,6 +38,8 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     setupFiles: ["./test/offline.setup.ts"],
     pool: "forks",
+    // Each integration file boots real OpenCode runtimes; avoid competing native hosts.
+    fileParallelism: false,
     testTimeout: 20_000,
   },
 });

@@ -4,7 +4,7 @@ import type {
   SocialAuthStatus,
 } from "@ren-ai/onboarding/social-auth";
 import type { AccountQueue } from "./account-queue.ts";
-import { requireAuthenticationVersion, type BrowserCommands } from "./commands.ts";
+import { browserAccount, requireAuthenticationVersion, type BrowserCommands } from "./commands.ts";
 import { AuthenticationError, AuthenticationConflict, type AuthStore } from "./auth-store.ts";
 import { loginPage } from "./login-page.ts";
 import { socialDiagnostic } from "./logging.ts";
@@ -27,13 +27,16 @@ type AuthFailure = {
   durationMs: number;
 };
 type LoginScreen = Awaited<ReturnType<ReturnType<typeof loginPage>["screen"]>>;
+type LoginMode = { code?: string; check?: boolean };
 function screenOutcome(
   screen: LoginScreen,
   account: SocialAuthAccount,
   hasCredentials: boolean,
   code?: string,
 ): SocialAuthStatus | undefined {
-  if (screen.origin !== "https://x.com")
+  if (
+    screen.origin !== (account.platform === "threads" ? "https://www.threads.com" : "https://x.com")
+  )
     throw new AuthenticationError({ state: "failed", hasCredentials, reason: "unavailable" });
   if (screen.stage === "authenticated")
     return screen.handle?.toLowerCase() === account.handle.toLowerCase()
@@ -59,26 +62,61 @@ async function loginValue(
   return (await store.load(account))[stage === "password" ? "password" : "username"];
 }
 
+async function inspectSession(
+  page: ReturnType<typeof loginPage>,
+  account: SocialAuthAccount,
+  hasCredentials: boolean,
+): Promise<SocialAuthStatus> {
+  const current = await page.screen();
+  const origin = account.platform === "threads" ? "https://www.threads.com" : "https://x.com";
+  if (current.origin === origin && ["authenticated", "code", "manual"].includes(current.stage))
+    return screenOutcome(current, account, hasCredentials)!;
+  // Refresh the platform home so an old login form cannot hide cookies from a manual login.
+  await page.home();
+  for (let step = 0; step < 24; step++) {
+    const screen = await page.screen();
+    const outcome = screenOutcome(screen, account, hasCredentials);
+    if (outcome) return outcome;
+    if (screen.stage !== "loading") return { state: "login_required", hasCredentials };
+    await page.wait();
+  }
+  return { state: "failed", hasCredentials, reason: "check_unavailable" };
+}
+
 async function login(
   commands: BrowserCommands,
   store: AuthStore,
   account: SocialAuthAccount,
   port: number,
   signal: AbortSignal,
-  code?: string,
+  mode: LoginMode = {},
 ): Promise<SocialAuthStatus> {
-  const page = loginPage(commands, account.id, port, signal);
-  await requireAuthenticationVersion(commands, account.id, port, signal);
-  if (code === undefined) await page.open();
+  const { code, check } = mode;
+  const page = loginPage(commands, browserAccount(account), port, signal, account.platform);
+  await requireAuthenticationVersion(commands, browserAccount(account), port, signal);
   const hasCredentials = await store.has(account);
+  if (code === undefined) {
+    const current = await inspectSession(page, account, hasCredentials);
+    if (check || current.state !== "login_required") return current;
+    if (!hasCredentials) return { state: "not_configured", hasCredentials };
+    await page.open();
+  }
   const submitted = new Set<string>();
   for (let step = 0; step < 24; step++) {
     const screen = await page.screen();
     const outcome = screenOutcome(screen, account, hasCredentials, code);
     if (outcome) return outcome;
-    if (screen.submit && !submitted.has(screen.stage) && screen.stage !== "loading") {
+    if (
+      screen.submit &&
+      !submitted.has(screen.stage) &&
+      screen.stage !== "loading" &&
+      screen.stage !== "logged_out"
+    ) {
       const value = await loginValue(screen.stage, store, account, code);
-      await page.enter(value);
+      await page.enter(
+        value,
+        screen.stage === "credentials" ? (await store.load(account)).password : undefined,
+      );
       submitted.add(screen.stage);
     }
     await page.wait();
@@ -97,8 +135,8 @@ export function socialAuthentication(options: {
   const status = async (account: SocialAuthAccount): Promise<SocialAuthStatus> => {
     const current = await options.store.state(account);
     if (jobs.has(account.id) && current.state !== "authenticated")
-      return { ...current, state: "logging_in" };
-    return current.state === "logging_in" && !jobs.has(account.id)
+      return { ...current, state: current.state === "checking" ? "checking" : "logging_in" };
+    return ["checking", "logging_in"].includes(current.state) && !jobs.has(account.id)
       ? { ...current, state: "login_required", reason: "interrupted" }
       : current;
   };
@@ -107,19 +145,19 @@ export function socialAuthentication(options: {
     port: number,
     signal: AbortSignal,
     requestId: string,
-    code?: string,
+    mode: LoginMode = {},
   ) => {
     const started = performance.now();
     let result: SocialAuthStatus;
     let diagnostic: ReturnType<typeof socialDiagnostic> | undefined;
     try {
-      result = await login(options.commands, options.store, account, port, signal, code);
+      result = await login(options.commands, options.store, account, port, signal, mode);
     } catch (cause) {
       diagnostic = socialDiagnostic(cause);
       result = {
         state: "failed",
         hasCredentials: await options.store.has(account),
-        reason: "unavailable",
+        reason: mode.check ? "check_unavailable" : "unavailable",
       };
     }
     await options.store.update(account, result);
@@ -163,26 +201,29 @@ export function socialAuthentication(options: {
         if (command.kind === "code" && current.state !== "code_required")
           throw new AuthenticationConflict("No verification code is expected");
         await options.store.update(account, {
-          state: "logging_in",
+          state: command.kind === "check" ? "checking" : "logging_in",
           hasCredentials: current.hasCredentials,
         });
         const job = options
           .exclusive(account.id, async () => {
             const signal = AbortSignal.timeout(90000);
-            const port = await options.commands.open(account.id);
             if (command.kind === "save")
-              await options.store.save(
-                account,
-                { username: command.username, password: command.password },
-                port,
-                signal,
-              );
+              await options.store.save(account, {
+                username: command.username,
+                password: command.password,
+              });
+            const port = await options.commands.open(
+              browserAccount(account),
+              account.platform === "threads" ? "https://www.threads.com/" : "https://x.com/home",
+            );
             await attempt(
               account,
               port,
               signal,
               requestId,
-              command.kind === "code" ? command.code : undefined,
+              command.kind === "code"
+                ? { code: command.code }
+                : { check: command.kind === "check" },
             );
           })
           .catch(async (cause) => {
@@ -197,7 +238,7 @@ export function socialAuthentication(options: {
             await options.store.update(account, {
               state: "failed",
               hasCredentials: await options.store.has(account),
-              reason: "unavailable",
+              reason: command.kind === "check" ? "check_unavailable" : "unavailable",
             });
           })
           .finally(() => {
@@ -213,7 +254,10 @@ export function socialAuthentication(options: {
             durationMs: performance.now() - started,
           }),
         );
-        return { state: "logging_in", hasCredentials: current.hasCredentials };
+        return {
+          state: command.kind === "check" ? "checking" : "logging_in",
+          hasCredentials: current.hasCredentials,
+        };
       } catch (cause) {
         jobs.delete(account.id);
         throw cause;
@@ -221,19 +265,19 @@ export function socialAuthentication(options: {
     },
     ensure: async (account, port, signal) => {
       const current = await status(account);
-      if (!current.hasCredentials) {
-        const required: SocialAuthStatus = { state: "not_configured", hasCredentials: false };
-        await options.store.update(account, required);
-        throw new AuthenticationError(required);
-      }
       if (
         current.reason === "interrupted" ||
-        ["failed", "code_required", "manual_required", "logging_in"].includes(current.state)
+        ["failed", "code_required", "manual_required", "checking", "logging_in"].includes(
+          current.state,
+        )
       )
         throw new AuthenticationError(current);
       jobs.add(account.id);
       try {
-        await options.store.update(account, { state: "logging_in", hasCredentials: true });
+        await options.store.update(account, {
+          state: "logging_in",
+          hasCredentials: current.hasCredentials,
+        });
         const result = await attempt(account, port, signal, crypto.randomUUID());
         if (result.state !== "authenticated") throw new AuthenticationError(result);
       } finally {

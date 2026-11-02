@@ -1,7 +1,7 @@
 import { access, constants } from "node:fs/promises";
 import { socialConfiguration } from "../src/config.ts";
 import { browserCommands, requireAuthenticationVersion } from "../src/commands.ts";
-import { xBrowser } from "../src/browser.ts";
+import { socialBrowser } from "../src/browser.ts";
 import { socialApplication } from "../src/client.ts";
 import { socialModel } from "../src/model.ts";
 import { socialExecutor } from "../src/server.ts";
@@ -17,7 +17,7 @@ const application = socialApplication(config.application, config.token);
 const authentication = socialAuthentication({
   commands,
   exclusive,
-  store: authStore(config.home, commands),
+  store: authStore(config.home),
   authenticated: application.authenticated,
   failure: (event) =>
     socialLog({
@@ -36,7 +36,7 @@ const fetch = socialExecutor({
   token: config.token,
   application,
   model: socialModel(config.opencode),
-  browser: xBrowser(commands, authentication, exclusive),
+  browser: socialBrowser(commands, authentication, exclusive),
   authentication,
   readiness: async () => ({
     chromeCanary: await access(config.chrome, constants.X_OK).then(
