@@ -1,4 +1,5 @@
 import { chmod, mkdir, readFile, utimes } from "node:fs/promises";
+import * as filesystem from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 import type { MacDeploymentStatus } from "@ren-ai/transport/deployment";
@@ -8,6 +9,9 @@ import { DeploymentFailure } from "./deployment-command.ts";
 import { deploymentTestContext } from "./deployment.test-helper.ts";
 
 const temporary = deploymentTestContext();
+vi.mock("node:fs/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:fs/promises")>()),
+}));
 const revision = "a".repeat(40);
 async function fixture(state: MacDeploymentStatus["state"] = "queued") {
   const { location } = await temporary();
@@ -192,7 +196,26 @@ test("live locks and newborn lock directories prevent concurrent work; abandoned
 
 test("simultaneous launch requests elect only one installer", async () => {
   const f = await fixture();
-  await Promise.all(Array.from({ length: 8 }, () => runDeploymentAgent(f.options)));
+  const original = filesystem.mkdir;
+  let arrivals = 0;
+  let release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const acquisition = vi.spyOn(filesystem, "mkdir").mockImplementation(async (path, options) => {
+    if (path === join(f.options.home, "active") && options === undefined) {
+      arrivals++;
+      if (arrivals === 2) release();
+      await barrier;
+    }
+    return original(path, options);
+  });
+  await Promise.all([runDeploymentAgent(f.options), runDeploymentAgent(f.options)]);
+  expect(
+    acquisition.mock.calls.filter(
+      ([path, options]) => path === join(f.options.home, "active") && options === undefined,
+    ),
+  ).toHaveLength(2);
   expect(f.options.apply).toHaveBeenCalledOnce();
 });
 
