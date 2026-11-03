@@ -20,6 +20,16 @@ const snapshot = async (response: Response) => {
     );
   }
 };
+async function executorUnavailable(response: Response) {
+  if (response.status !== 503) return false;
+  try {
+    return Schema.is(Schema.Struct({ error: Schema.Literal("SOCIAL_EXECUTOR_UNAVAILABLE") }))(
+      await response.json(),
+    );
+  } catch {
+    return false;
+  }
+}
 export function socialClient(origin: string, token: string, fetcher: typeof fetch): SocialClient {
   const request = async (path: string, input?: object) => {
     protect(token);
@@ -55,6 +65,11 @@ export function socialClient(origin: string, token: string, fetcher: typeof fetc
         cause,
       );
     }
+    if (!response.ok && (await executorUnavailable(response)))
+      throw new GenerationError(
+        "Mac 소셜 실행기에 연결하지 못했습니다. 운영 Mac의 게이트웨이·실행기 설치 상태를 확인해 주세요. 저장된 계정 설정은 유지됩니다.",
+        { code: "social_executor_unavailable", status: 503 },
+      );
     if (!response.ok)
       throw new GenerationError(
         response.status === 409

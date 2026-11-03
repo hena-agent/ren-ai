@@ -87,7 +87,7 @@ test("platform tabs isolate accounts, activity and form behavior while keeping p
       `${platform === "x" ? "threads" : "x"}-only-history`,
     );
     const form = window.document.querySelector('input[name="username"]')!.closest("form")!;
-    expect(form.getAttribute("action")).toBe(`/social?platform=${platform}`);
+    expect(form.getAttribute("action")).toBe(`/social?platform=${platform}&new=1`);
     expect(form.querySelector('input[name="platform"]')!.getAttribute("value")).toBe(platform);
     expect(form.querySelector('input[name="handle"]')).toBeNull();
     expect(form.querySelector('input[name="username"]')!.getAttribute("placeholder")).not.toContain(

@@ -76,7 +76,11 @@ function AccountForm({
   const fields = platformFields[platform];
   return (
     <form
-      action={`/social?platform=${platform}`}
+      action={
+        selected
+          ? `/social?platform=${platform}&account=${encodeURIComponent(selected.id)}`
+          : `/social?platform=${platform}&new=1`
+      }
       method="post"
       className="contact-panel"
       autoComplete="off"
@@ -185,7 +189,7 @@ function AccountForm({
             type="checkbox"
             name="enabled"
             value="1"
-            defaultChecked={selected?.enabled ?? false}
+            defaultChecked={Boolean(selected?.enabled)}
           />{" "}
           소셜 활동 허용 · 시간대 안에서 자동 실행
         </label>
@@ -220,7 +224,14 @@ export function socialPage(view: SocialView) {
           <header className="page-heading">
             <h1>소셜 활동</h1>
             <p>Threads·X 계정과 페르소나를 연결하고, 자율 탐색·대화·초대를 운영합니다.</p>
-            <a href={base}>새로고침 · 새 계정 연결</a>
+            <a
+              href={
+                view.selected ? `${base}&account=${encodeURIComponent(view.selected.id)}` : base
+              }
+            >
+              새로고침
+            </a>
+            <a href={`${base}&new=1`}>새 계정 연결</a>
           </header>
           <nav className="contact-tabs social-platform-tabs" aria-label="소셜 플랫폼">
             {(["threads", "x"] as const).map((value) => (
@@ -267,7 +278,11 @@ export function socialPage(view: SocialView) {
                     다음 확인: {date(nextAt, account.timeZone)} ({account.timeZone})
                   </p>
                 )}
-                <form action={base} method="post" className="contact-selection">
+                <form
+                  action={`${base}&account=${encodeURIComponent(account.id)}`}
+                  method="post"
+                  className="contact-selection"
+                >
                   <input type="hidden" name="id" value={account.id} />
                   <button name="action" value="open" className="secondary">
                     Mac에서 Canary 열기

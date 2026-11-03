@@ -1,11 +1,124 @@
 import { expect, test, vi } from "vitest";
-import { fixture, request } from "../test/fixtures.ts";
+import { fixture, request, legacy, initialDocuments } from "../test/fixtures.ts";
 import { createAdmin } from "./admin.ts";
 import { managementClient } from "./contact-client.ts";
 import { socialAccount } from "../../../packages/onboarding/src/social.test-helper.ts";
 import { Schema } from "effect";
 import { SocialAuthInput } from "@ren-ai/onboarding/social-auth";
 import { Window } from "happy-dom";
+import { socialRoutes } from "./social-routes.ts";
+import { loggedRequest } from "./logging.ts";
+
+async function savedConnection() {
+  const f = await fixture();
+  await f.store.save({ ...legacy, id: "alice", name: "앨리스" }, initialDocuments, { persona: "" });
+  const account = { ...socialAccount, platform: "threads" as const, handle: "" };
+  const fetcher = vi.fn<typeof fetch>(async (input) =>
+    new URL(new Request(input).url).pathname.endsWith("/social")
+      ? Response.json({
+          accounts: [
+            { account, generation: 1, nextAt: null, state: "paused", turns: 0, writes: 0 },
+          ],
+          events: [],
+          before: null,
+        })
+      : Response.json({ error: "SOCIAL_EXECUTOR_UNAVAILABLE" }, { status: 503 }),
+  );
+  const management = managementClient("https://api.test", "secret", fetcher);
+  const admin = createAdmin(f.store, "test-password", {
+    management,
+    log: () => {},
+  });
+  return { ...f, admin, account, client: management.social! };
+}
+
+test("unexpected authentication reader errors keep the saved connection and show a safe lookup failure", async () => {
+  const f = await savedConnection();
+  f.client.authenticate = async () => {
+    throw new Error("reader unavailable");
+  };
+  const incoming = request("/social?platform=threads&account=first");
+  const response = await loggedRequest(
+    incoming,
+    () => socialRoutes(incoming, f.store, f.client),
+    () => {},
+  );
+  const text = await response.text();
+  expect(text).toContain("로그인 상태 조회에 실패했습니다");
+  expect(text).toContain(f.account.invitation);
+  expect(text).not.toContain("reader unavailable");
+});
+
+function storedForm(text: string, account: typeof socialAccount) {
+  const window = new Window();
+  window.document.write(text);
+  const form = window.document.querySelector('input[name="username"]')!.closest("form")!;
+  expect(form.querySelector('input[name="id"]')!.getAttribute("value")).toBe(account.id);
+  expect(form.querySelector('input[name="invitation"]')!.getAttribute("value")).toBe(
+    account.invitation,
+  );
+  return form;
+}
+
+test.each(["auth-check", "open"])(
+  "failed %s preserves the existing connection and identifies the Mac executor error",
+  async (action) => {
+    const f = await savedConnection();
+    const response = await f.admin(
+      request("/social?platform=threads", {
+        id: f.account.id,
+        action,
+        username: "PRIVATE_LOGIN",
+        password: "PRIVATE_PASSWORD",
+      }),
+    );
+    expect(response.status).toBe(503);
+    const text = await response.text();
+    const form = storedForm(text, f.account);
+    expect(form.querySelector("select")!.value).toBe("alice");
+    expect(text).toContain("Mac 소셜 실행기");
+    expect(text).not.toContain("PRIVATE_");
+  },
+);
+
+test("opening a sole existing connection keeps refresh separate from explicit new connection", async () => {
+  const f = await savedConnection();
+  const text = await (await f.admin(request("/social?platform=threads"))).text();
+  const window = new Window();
+  window.document.write(text);
+  expect(
+    window.document
+      .querySelector('input[name="username"]')!
+      .closest("form")!
+      .querySelector('input[name="id"]')!
+      .getAttribute("value"),
+  ).toBe(f.account.id);
+  expect(window.document.querySelector('a[href="/social?platform=threads&new=1"]')).not.toBeNull();
+  expect(
+    window.document.querySelector(`a[href="/social?platform=threads&account=${f.account.id}"]`),
+  ).not.toBeNull();
+  const fresh = new Window();
+  fresh.document.write(await (await f.admin(request("/social?platform=threads&new=1"))).text());
+  expect(
+    fresh.document
+      .querySelector('input[name="username"]')!
+      .closest("form")!
+      .querySelector('input[name="id"]')!
+      .getAttribute("value"),
+  ).toBe("");
+});
+
+test("invalid edits retain the stored connection instead of falling back to a new connection", async () => {
+  const f = await savedConnection();
+  const response = await f.admin(
+    request("/social?platform=threads", { id: f.account.id, action: "save" }),
+  );
+  expect(response.status).toBe(400);
+  storedForm(await response.text(), f.account);
+  expect((await f.admin(request("/social?platform=threads", { id: f.account.id }))).status).toBe(
+    400,
+  );
+});
 
 test.each(["threads", "x"] as const)(
   "%s tab and connection form survive failed API reads without claiming the account list is empty",
