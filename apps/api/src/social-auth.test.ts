@@ -6,6 +6,23 @@ import { createSocial } from "./social/http.ts";
 import { SocialError } from "./social/service.ts";
 
 const { fixture, logs } = socialTestContext();
+
+test("Mac executor transport failures keep saved configuration and return a typed operational error", async () => {
+  const f = fixture();
+  await f.enable({ enabled: false });
+  const before = (await f.snapshot()).accounts[0]!.account;
+  f.options.authenticate = async () => {
+    throw Object.assign(new SocialError(503, "SOCIAL_EXECUTOR_UNAVAILABLE"), {
+      upstreamStatus: 404,
+    });
+  };
+  const response = await f.request("/auth", { accountId: "first", command: { kind: "check" } });
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ error: "SOCIAL_EXECUTOR_UNAVAILABLE" });
+  expect((await f.snapshot()).accounts[0]!.account).toEqual(before);
+  expect(logs.join("")).toContain('"upstreamStatus":404');
+  expect(logs.join("")).toContain('"level":"error"');
+});
 async function beginLogin(f: ReturnType<typeof fixture>) {
   f.options.authenticate = async () => ({ state: "logging_in", hasCredentials: true });
   await f.request("/auth", { accountId: "first", command: { kind: "login" } });

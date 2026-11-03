@@ -22,6 +22,7 @@ export function SocialAuthentication({
 }) {
   const busy = status?.state === "logging_in" || status?.state === "checking";
   const name = socialPlatformName(platform);
+  const url = `/social?platform=${platform}&account=${encodeURIComponent(accountId)}`;
   return (
     <section className="contact-panel" aria-label={`${name} 로그인 관리`}>
       <h2>{name} 로그인 · 자동 재로그인</h2>
@@ -60,7 +61,7 @@ export function SocialAuthentication({
         </p>
       )}
       {status?.state === "code_required" && (
-        <form action={`/social?platform=${platform}`} method="post">
+        <form action={url} method="post">
           <input type="hidden" name="action" value="auth-code" />
           <input type="hidden" name="id" value={accountId} />
           <label>
@@ -70,7 +71,7 @@ export function SocialAuthentication({
           <button type="submit">인증코드 제출</button>
         </form>
       )}
-      <form action={`/social?platform=${platform}`} method="post" className="contact-selection">
+      <form action={url} method="post" className="contact-selection">
         <input type="hidden" name="id" value={accountId} />
         <button name="action" value="auth-check" className="secondary" disabled={busy}>
           로그인 상태 확인
@@ -96,9 +97,7 @@ export function SocialAuthentication({
         로그인 상태 확인은 현재 브라우저의 계정만 확인하며 ID·비밀번호를 입력하지 않습니다. 이미
         로그인돼 있으면 기존 세션을 그대로 사용합니다.
       </p>
-      <a href={`/social?platform=${platform}&account=${encodeURIComponent(accountId)}`}>
-        로그인 상태 새로고침
-      </a>
+      <a href={url}>로그인 상태 새로고침</a>
     </section>
   );
 }

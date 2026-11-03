@@ -21,17 +21,24 @@ export function socialBindings(
   const token = env.TOKEN_MANAGEMENT ?? "";
   const native = async (path: string, body: object, operationId?: string) => {
     const base = serviceBase(env.API_MSG_URL);
-    const response = await fetcher(new URL(`/social${path}`, base), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        ...(operationId && { "X-Operation-ID": operationId }),
-      },
-      body: JSON.stringify(body),
-      redirect: "manual",
-      signal: AbortSignal.timeout(path === "/browser" ? 55000 : 15000),
-    });
+    let response: Response;
+    try {
+      response = await fetcher(new URL(`/social${path}`, base), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          ...(operationId && { "X-Operation-ID": operationId }),
+        },
+        body: JSON.stringify(body),
+        redirect: "manual",
+        signal: AbortSignal.timeout(path === "/browser" ? 55000 : 15000),
+      });
+    } catch (cause) {
+      const error = new SocialError(503, "SOCIAL_EXECUTOR_UNAVAILABLE");
+      error.cause = cause;
+      throw error;
+    }
     if (response.status === 423 && path === "/browser") {
       try {
         Schema.decodeUnknownSync(
@@ -48,8 +55,7 @@ export function socialBindings(
     if (response.status === 409 && path === "/auth")
       throw new SocialError(409, "SOCIAL_AUTH_CONFLICT");
     if (!response.ok)
-      throw Object.assign(new Error("Social executor request failed"), {
-        code: "SOCIAL_EXECUTOR_REQUEST",
+      throw Object.assign(new SocialError(503, "SOCIAL_EXECUTOR_UNAVAILABLE"), {
         upstreamStatus: response.status,
       });
     return response;

@@ -4,7 +4,7 @@ import { SocialAccount, type SocialPlatform } from "@ren-ai/onboarding/social";
 import type { SocialClient } from "./social-client.ts";
 import { socialPage, type SocialView } from "./social-page.tsx";
 import { html } from "./html-response.ts";
-import { operation, protect, reportFailure, requestId } from "./logging.ts";
+import { GenerationError, operation, protect, reportFailure, requestId } from "./logging.ts";
 import { SocialAuthCommand } from "@ren-ai/onboarding/social-auth";
 
 const numberFields = [
@@ -22,12 +22,26 @@ function readPlatform(value: FormDataEntryValue | null, initial: SocialPlatform 
     throw new PersonaError("invalid", "소셜 플랫폼을 확인해 주세요.");
   }
 }
+function formAction(form: FormData) {
+  const value = form.get("action");
+  return typeof value === "string" ? value : "";
+}
 function selectAccount(view: SocialView, url: URL) {
   const selected = view.snapshot!.accounts.find(
     ({ account }) => account.id === url.searchParams.get("account"),
   )?.account;
   view.platform = readPlatform(url.searchParams.get("platform"), selected?.platform);
   if (selected && selected.platform === view.platform) view.selected = selected;
+  const candidates = view.snapshot!.accounts.filter(
+    ({ account }) => account.platform === view.platform,
+  );
+  if (
+    !url.searchParams.has("account") &&
+    !url.searchParams.has("new") &&
+    !view.personaId &&
+    candidates.length === 1
+  )
+    view.selected = candidates[0]!.account;
 }
 function submittedAccount(view: SocialView, form: FormData, url: URL) {
   const existing = view.snapshot!.accounts.find(
@@ -40,6 +54,7 @@ function submittedAccount(view: SocialView, form: FormData, url: URL) {
   )
     throw new PersonaError("invalid", "선택한 플랫폼의 계정만 변경할 수 있습니다.");
   view.platform = platform;
+  if (existing) view.selected = existing;
   return existing;
 }
 function readAccount(form: FormData, existing: SocialAccount | undefined) {
@@ -80,6 +95,7 @@ async function loadAuthentication(view: SocialView, client: SocialClient) {
     }
   } catch (cause) {
     reportFailure(cause, { stage: "social.auth.read" });
+    view.error = `${cause instanceof GenerationError ? cause.message : "로그인 상태 조회에 실패했습니다."} 요청 ID: ${requestId()}`;
   }
 }
 function readAuthentication(form: FormData, kind: string) {
@@ -160,9 +176,9 @@ export async function socialRoutes(request: Request, store: PersonaStore, client
         return typeof value === "string" ? [value] : [];
       }),
     );
-    const action = form.get("action");
+    const action = formAction(form);
     const existing = submittedAccount(view, form, url);
-    if (action === "save" || action === "save-check")
+    if (["save", "save-check"].includes(action))
       return await saveConnection(form, existing, view, client, action === "save-check");
     if (!existing) throw new PersonaError("not_found", "연결된 계정을 찾을 수 없습니다.");
     if (
@@ -190,7 +206,9 @@ export async function socialRoutes(request: Request, store: PersonaStore, client
   } catch (cause) {
     reportFailure(cause, { stage: "social.request" });
     view.error = `${
-      view.error ??
+      (cause instanceof GenerationError && cause.fields.code === "social_executor_unavailable"
+        ? cause.message
+        : view.error) ??
       (request.method === "GET"
         ? "소셜 데이터를 불러오지 못했습니다. API 연결을 확인한 뒤 다시 시도해 주세요."
         : "소셜 요청을 완료하지 못했습니다. 계정·초대 코드·로그인 정보·API 연결을 확인해 주세요.")

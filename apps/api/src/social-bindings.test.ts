@@ -87,8 +87,15 @@ test("social execution loads the selected private Persona, uses existing invitat
   await local.open("first", "x");
   fetcher.mockResolvedValue(new Response(null, { status: 503 }));
   await expect(local.open("first", "x")).rejects.toMatchObject({
-    code: "SOCIAL_EXECUTOR_REQUEST",
+    code: "SOCIAL_EXECUTOR_UNAVAILABLE",
     upstreamStatus: 503,
+  });
+  fetcher.mockRejectedValue(
+    Object.assign(new Error("PRIVATE_NETWORK_FAILURE"), { code: "ECONNREFUSED" }),
+  );
+  await expect(local.open("first", "x")).rejects.toMatchObject({
+    code: "SOCIAL_EXECUTOR_UNAVAILABLE",
+    cause: { code: "ECONNREFUSED" },
   });
 });
 

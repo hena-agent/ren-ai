@@ -115,7 +115,7 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
             stage: "social.handle",
             outcome: "failed",
             durationMs: 0,
-            level: cause instanceof SocialError ? "warn" : "error",
+            level: cause instanceof SocialError && cause.status < 500 ? "warn" : "error",
             ...contactCause(cause),
           });
           return Response.json(
