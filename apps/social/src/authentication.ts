@@ -8,6 +8,8 @@ import { browserAccount, requireAuthenticationVersion, type BrowserCommands } fr
 import { AuthenticationError, AuthenticationConflict, type AuthStore } from "./auth-store.ts";
 import { loginPage } from "./login-page.ts";
 import { socialDiagnostic } from "./logging.ts";
+import { Schema } from "effect";
+import { SocialHandle, supportsSocialAction } from "@ren-ai/onboarding/social";
 
 export interface SocialAuthentication {
   status: (account: SocialAuthAccount) => Promise<SocialAuthStatus>;
@@ -38,11 +40,23 @@ function screenOutcome(
     screen.origin !== (account.platform === "threads" ? "https://www.threads.com" : "https://x.com")
   )
     throw new AuthenticationError({ state: "failed", hasCredentials, reason: "unavailable" });
-  if (screen.stage === "authenticated")
-    return screen.handle?.toLowerCase() === account.handle.toLowerCase()
-      ? { state: "authenticated", hasCredentials }
+  if (screen.stage === "authenticated") {
+    if (
+      !Schema.is(SocialHandle)(screen.handle) ||
+      !supportsSocialAction(account.platform, { kind: "profile", handle: screen.handle })
+    )
+      return { state: "failed", hasCredentials, reason: "unavailable" };
+    return !account.handle || screen.handle.toLowerCase() === account.handle.toLowerCase()
+      ? {
+          state: "authenticated",
+          hasCredentials,
+          ...(!account.handle && { handle: screen.handle }),
+        }
       : { state: "failed", hasCredentials, reason: "account_mismatch" };
+  }
   if (screen.stage === "manual") return { state: "manual_required", hasCredentials };
+  if (screen.stage === "identity" && !account.handle)
+    return { state: "manual_required", hasCredentials };
   if (screen.stage === "rejected")
     return { state: "failed", hasCredentials, reason: "credentials_rejected" };
   if (code !== undefined && screen.stage !== "code")
@@ -92,6 +106,8 @@ async function login(
   mode: LoginMode = {},
 ): Promise<SocialAuthStatus> {
   const { code, check } = mode;
+  const bound = (await store.state(account)).handle;
+  if (!account.handle && bound) account = { ...account, handle: bound };
   const page = loginPage(commands, browserAccount(account), port, signal, account.platform);
   await requireAuthenticationVersion(commands, browserAccount(account), port, signal);
   const hasCredentials = await store.has(account);
@@ -152,6 +168,22 @@ export function socialAuthentication(options: {
     let diagnostic: ReturnType<typeof socialDiagnostic> | undefined;
     try {
       result = await login(options.commands, options.store, account, port, signal, mode);
+      if (
+        !account.handle &&
+        result.state === "authenticated" &&
+        result.handle &&
+        result.hasCredentials
+      ) {
+        await options.store.update(account, {
+          state: "logging_in",
+          hasCredentials: true,
+          handle: result.handle,
+        });
+        await options.store.save(
+          { ...account, handle: result.handle },
+          await options.store.load(account),
+        );
+      }
     } catch (cause) {
       diagnostic = socialDiagnostic(cause);
       result = {

@@ -1,4 +1,4 @@
-import { expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { SocialAccount, type SocialSnapshot } from "@ren-ai/onboarding/social";
 import { Schema } from "effect";
 import { socialAccount } from "../../../packages/onboarding/src/social.test-helper.ts";
@@ -11,7 +11,10 @@ import { loggedRequest, type LogEntry } from "./logging.ts";
 import { SocialAuthInput, type SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
 
 const initial = (): SocialSnapshot => ({ accounts: [], events: [], before: null });
+const newId = "10000000-0000-4000-8000-000000000001";
+afterEach(() => vi.restoreAllMocks());
 async function setup() {
+  vi.spyOn(crypto, "randomUUID").mockReturnValue(newId);
   const f = await fixture();
   await f.store.save({ ...legacy, id: "alice", name: "앨리스" }, initialDocuments, { persona: "" });
   await f.store.save({ ...legacy, id: "bob", name: "보라" }, initialDocuments, { persona: "" });
@@ -53,7 +56,9 @@ async function setup() {
   });
   const fields = {
     ...Object.fromEntries(
-      Object.entries(socialAccount).map(([key, value]) => [key, String(value)]),
+      Object.entries(socialAccount)
+        .filter(([key]) => key !== "handle")
+        .map(([key, value]) => [key, String(value)]),
     ),
     action: "save",
     username: "PRIVATE_ID@example.test",
@@ -70,6 +75,18 @@ async function setup() {
     submissions,
     setAuthentication: (value: SocialAuthStatus) => {
       authentication = value;
+    },
+    addSibling: () => {
+      snapshot = {
+        ...snapshot,
+        accounts: [
+          ...snapshot.accounts,
+          {
+            ...snapshot.accounts[0]!,
+            account: { ...socialAccount, id: "sibling", handle: "sibling" },
+          },
+        ],
+      };
     },
   };
 }
@@ -89,14 +106,15 @@ test("Admin selects which Persona owns an X account, then can edit, pause, open 
   expect((await f.admin(request("/social", { ...f.fields, personaId: "bob" }))).status).toBe(303);
   expect(f.submissions[0]).toMatchObject({ path: "/management/social/accounts" });
   expect(JSON.parse(f.submissions[0]!.body)).toMatchObject({
-    id: "x_persona_x",
+    id: newId,
+    handle: "",
     personaId: "bob",
     enabled: true,
   });
-  const selected = await (await f.admin(request("/social?account=x_persona_x"))).text();
-  expect(selected).toContain("@persona_x 연결 설정");
+  const selected = await (await f.admin(request(`/social?account=${newId}`))).text();
+  expect(selected).toContain("로그인 후 자동 확인");
   for (const action of ["open", "now", "toggle"])
-    expect((await f.admin(request("/social", { id: "x_persona_x", action }))).status).toBe(303);
+    expect((await f.admin(request("/social", { id: newId, action }))).status).toBe(303);
   expect(JSON.parse(f.submissions.at(-1)!.body)).toMatchObject({
     personaId: "bob",
     enabled: false,
@@ -106,7 +124,7 @@ test("Admin selects which Persona owns an X account, then can edit, pause, open 
       await f.admin(
         request("/social", {
           ...f.fields,
-          id: "x_persona_x",
+          id: newId,
           personaId: "alice",
           username: "",
           password: "",
@@ -115,7 +133,7 @@ test("Admin selects which Persona owns an X account, then can edit, pause, open 
     ).status,
   ).toBe(303);
   expect(JSON.parse(f.submissions.at(-1)!.body)).toMatchObject({
-    id: "x_persona_x",
+    id: newId,
     personaId: "alice",
   });
   expect(await (await f.admin(request("/personas/alice"))).text()).toContain(
@@ -130,12 +148,12 @@ test("operators submit ID/password and verification codes without credentials re
   };
   const response = await f.admin(request("/social", login));
   expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("/social?platform=x&account=x_persona_x");
+  expect(response.headers.get("location")).toBe(`/social?platform=x&account=${newId}`);
   const submission = Schema.decodeUnknownSync(Schema.fromJsonString(SocialAuthInput))(
     f.submissions.at(-1)!.body,
   );
   expect(submission).toEqual({
-    accountId: "x_persona_x",
+    accountId: newId,
     command: { kind: "save", username: login.username, password: login.password },
   });
   expect(f.submissions.map((row) => row.path)).toEqual([
@@ -143,28 +161,25 @@ test("operators submit ID/password and verification codes without credentials re
     "/management/social/auth",
   ]);
   expect(f.submissions[0]!.body).not.toContain("PRIVATE");
-  expect((await f.admin(request("/social", { ...login, id: "x_persona_x" }))).status).toBe(303);
+  expect((await f.admin(request("/social", { ...login, id: newId }))).status).toBe(303);
   expect(f.submissions.at(-1)?.path).toBe("/management/social/auth");
-  const pending = await (await f.admin(request("/social?account=x_persona_x"))).text();
+  const pending = await (await f.admin(request(`/social?account=${newId}`))).text();
   expect(pending).toContain("로그인 진행 중");
   expect(pending).toContain("<fieldset disabled");
   expect(pending).not.toContain(login.username);
   expect(pending).not.toContain(login.password);
   f.setAuthentication({ state: "code_required", hasCredentials: true });
-  expect(await (await f.admin(request("/social?account=x_persona_x"))).text()).toContain(
+  expect(await (await f.admin(request(`/social?account=${newId}`))).text()).toContain(
     'name="code"',
   );
   expect(
-    (await f.admin(request("/social", { action: "auth-code", id: "x_persona_x", code: "123456" })))
-      .status,
+    (await f.admin(request("/social", { action: "auth-code", id: newId, code: "123456" }))).status,
   ).toBe(303);
-  expect(
-    (await f.admin(request("/social", { action: "auth-login", id: "x_persona_x" }))).status,
-  ).toBe(303);
-  expect(
-    (await f.admin(request("/social", { action: "auth-forget", id: "x_persona_x" }))).status,
-  ).toBe(303);
-  expect(await (await f.admin(request("/social?account=x_persona_x"))).text()).toContain(
+  expect((await f.admin(request("/social", { action: "auth-login", id: newId }))).status).toBe(303);
+  expect((await f.admin(request("/social", { action: "auth-forget", id: newId }))).status).toBe(
+    303,
+  );
+  expect(await (await f.admin(request(`/social?account=${newId}`))).text()).toContain(
     "로그인 정보 없음",
   );
   expect(logsContainPrivate(f.logs)).toBe(false);
@@ -181,14 +196,14 @@ test("a new connection can check an existing browser login without supplying or 
   expect(response.status).toBe(303);
   expect(
     Schema.decodeUnknownSync(Schema.fromJsonString(SocialAuthInput))(f.submissions.at(-1)!.body),
-  ).toEqual({ accountId: "x_persona_x", command: { kind: "check" } });
+  ).toEqual({ accountId: newId, command: { kind: "check" } });
   const ordinary = f.fetcher.getMockImplementation()!;
   f.fetcher.mockImplementation(async (input, init) =>
     new URL(new Request(input, init).url).pathname.endsWith("/auth")
       ? new Response(null, { status: 503 })
       : ordinary(input, init),
   );
-  const failed = await f.admin(request("/social?platform=x", { ...fields, id: "x_persona_x" }));
+  const failed = await f.admin(request("/social?platform=x", { ...fields, id: newId }));
   expect(failed.status).toBe(503);
   expect(await failed.text()).toContain("계정 연결은 저장됐지만 로그인 상태를 확인하지 못했습니다");
 });
@@ -197,15 +212,15 @@ test("platform tabs preserve navigation context and reject cross-platform form s
   const f = await setup();
   await f.admin(request("/social", f.fields));
   const threads = await (
-    await f.admin(request("/social?platform=threads&account=x_persona_x"))
+    await f.admin(request(`/social?platform=threads&account=${newId}`))
   ).text();
   expect(threads).toContain("Threads 계정 연결");
   expect(threads).not.toContain("@persona_x 연결 설정");
   expect(threads).not.toContain("X 로그인 · 자동 재로그인");
   const before = f.submissions.length;
   for (const fields of [
-    { action: "auth-login", id: "x_persona_x" },
-    { ...f.fields, platform: "threads", id: "x_persona_x" },
+    { action: "auth-login", id: newId },
+    { ...f.fields, platform: "threads", id: newId },
     f.fields,
   ])
     expect((await f.admin(request("/social?platform=threads", fields))).status).toBe(400);
@@ -213,10 +228,8 @@ test("platform tabs preserve navigation context and reject cross-platform form s
   const x = await (await f.admin(request("/social?platform=x&persona=bob"))).text();
   expect(x).toContain("/social?platform=threads&amp;persona=bob");
   expect((await f.admin(request("/social?platform=other"))).status).toBe(400);
-  const pause = await f.admin(
-    request("/social?platform=x", { action: "toggle", id: "x_persona_x" }),
-  );
-  expect(pause.headers.get("location")).toBe("/social?platform=x&account=x_persona_x");
+  const pause = await f.admin(request("/social?platform=x", { action: "toggle", id: newId }));
+  expect(pause.headers.get("location")).toBe(`/social?platform=x&account=${newId}`);
 });
 
 test("Threads connects from the initial form, keeps saved credentials on failed login and retries without credential input", async () => {
@@ -225,26 +238,22 @@ test("Threads connects from the initial form, keeps saved credentials on failed 
     request("/social", { ...f.fields, platform: "threads", handle: "persona.name" }),
   );
   expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe(
-    "/social?platform=threads&account=threads_persona-name",
-  );
+  expect(response.headers.get("location")).toBe(`/social?platform=threads&account=${newId}`);
   expect(JSON.parse(f.submissions[0]!.body)).toMatchObject({
-    id: "threads_persona-name",
+    id: newId,
     platform: "threads",
-    handle: "persona.name",
+    handle: "",
   });
   f.setAuthentication({ state: "failed", hasCredentials: true, reason: "credentials_rejected" });
-  const page = await (await f.admin(request("/social?account=threads_persona-name"))).text();
+  const page = await (await f.admin(request(`/social?account=${newId}`))).text();
   expect(page).toContain("Threads 로그인 · 자동 재로그인");
   expect(page).toContain("ID·비밀번호 저장됨");
   expect(page).toContain("저장된 정보로 로그인 재시도");
   expect(page).not.toContain(f.fields.password);
-  const retry = await f.admin(
-    request("/social", { id: "threads_persona-name", action: "auth-login" }),
-  );
+  const retry = await f.admin(request("/social", { id: newId, action: "auth-login" }));
   expect(retry.status).toBe(303);
   expect(JSON.parse(f.submissions.at(-1)!.body)).toEqual({
-    accountId: "threads_persona-name",
+    accountId: newId,
     command: { kind: "login" },
   });
 });
@@ -260,6 +269,17 @@ test("new connections validate both login fields before saving anything", async 
   }
   expect(f.submissions).toEqual([]);
   expect(logsContainPrivate(f.logs)).toBe(false);
+});
+
+test("the first verified handle appears immediately as read-only connection information", async () => {
+  const f = await setup();
+  await f.admin(request("/social", f.fields));
+  f.addSibling();
+  f.setAuthentication({ state: "authenticated", hasCredentials: true, handle: "actual_account" });
+  const page = await (await f.admin(request(`/social?account=${newId}`))).text();
+  expect(page).toContain("@actual_account 연결 설정");
+  expect(page).toContain("@sibling");
+  expect(page).not.toContain('name="handle"');
 });
 
 test("connection and login failures identify the failed step, keep saved settings and never replay credentials into HTML", async () => {
@@ -283,15 +303,15 @@ test("connection and login failures identify the failed step, keep saved setting
   expect(loginFailure.status).toBe(503);
   const page = await loginFailure.text();
   expect(page).toContain("계정 연결은 저장됐지만 로그인 요청을 시작하지 못했습니다");
-  expect(page).toContain("@persona_x 연결 설정");
-  expect(page).toContain('value="x_persona_x"');
+  expect(page).toContain("로그인 후 자동 확인");
+  expect(page).toContain(`value="${newId}"`);
   expect(page).not.toContain(f.fields.username);
   expect(page).not.toContain(f.fields.password);
   expect(f.submissions).toHaveLength(1);
   expect(f.submissions[0]!.body).not.toContain("PRIVATE");
   expect(logsContainPrivate(f.logs)).toBe(false);
   f.fetcher.mockImplementation(ordinary);
-  expect((await f.admin(request("/social", { ...f.fields, id: "x_persona_x" }))).status).toBe(303);
+  expect((await f.admin(request("/social", { ...f.fields, id: newId }))).status).toBe(303);
   expect(f.submissions.at(-1)?.path).toBe("/management/social/auth");
 });
 
@@ -304,7 +324,7 @@ test("login forms retain no submitted secrets on errors and expose actionable au
     { state: "manual_required", hasCredentials: true },
   ] as const) {
     f.setAuthentication(state);
-    expect(await (await f.admin(request("/social?account=x_persona_x"))).text()).toContain(
+    expect(await (await f.admin(request(`/social?account=${newId}`))).text()).toContain(
       'role="alert"',
     );
   }
@@ -320,9 +340,9 @@ test("login forms retain no submitted secrets on errors and expose actionable au
       )
     ).status,
   ).toBe(400);
-  expect(
-    (await f.admin(request("/social", { ...f.fields, id: "x_persona_x", password: "" }))).status,
-  ).toBe(400);
+  expect((await f.admin(request("/social", { ...f.fields, id: newId, password: "" }))).status).toBe(
+    400,
+  );
   const ordinary = f.fetcher.getMockImplementation()!;
   f.fetcher.mockImplementation(async (input, init) => {
     if (new URL(new Request(input, init).url).pathname.endsWith("/auth"))
@@ -330,12 +350,12 @@ test("login forms retain no submitted secrets on errors and expose actionable au
     return ordinary(input, init);
   });
   const failed = await f.admin(
-    request("/social", { action: "auth-code", id: "x_persona_x", code: "123456" }),
+    request("/social", { action: "auth-code", id: newId, code: "123456" }),
   );
   expect(failed.status).toBe(503);
   expect(await failed.text()).not.toContain("123456");
   expect(logsContainPrivate(f.logs)).toBe(false);
-  const unavailable = await f.admin(request("/social?account=x_persona_x"));
+  const unavailable = await f.admin(request(`/social?account=${newId}`));
   expect(unavailable.status).toBe(200);
   expect(await unavailable.text()).toContain("로그인 상태를 확인할 수 없습니다");
 });
@@ -351,9 +371,7 @@ test("social forms retain the workspace on failure and reject foreign origins, b
     400,
   );
   await f.admin(request("/social", f.fields));
-  expect((await f.admin(request("/social", { action: "unknown", id: "x_persona_x" }))).status).toBe(
-    400,
-  );
+  expect((await f.admin(request("/social", { action: "unknown", id: newId }))).status).toBe(400);
   f.fetcher.mockRejectedValue(new Error("secret private prompt"));
   const failed = await f.admin(request("/social"));
   expect(failed.status).toBe(503);

@@ -61,6 +61,31 @@ export function authStore(
       () => true,
       () => false,
     );
+  const state = async (account: SocialAuthAccount): Promise<SocialAuthStatus> => {
+    const hasCredentials = await has(account);
+    let saved: typeof Saved.Type;
+    try {
+      saved = Schema.decodeUnknownSync(Schema.fromJsonString(Saved))(
+        await readFile(statePath(account), "utf8"),
+      );
+    } catch {
+      return { state: hasCredentials ? "login_required" : "not_configured", hasCredentials };
+    }
+    if (
+      saved.account.platform !== account.platform ||
+      saved.account.generation !== account.generation ||
+      (account.handle &&
+        (saved.status.handle ?? saved.account.handle).toLowerCase() !==
+          account.handle.toLowerCase())
+    )
+      return { state: hasCredentials ? "login_required" : "not_configured", hasCredentials };
+    return { ...saved.status, hasCredentials };
+  };
+  const credentialAddress = async (account: SocialAuthAccount) =>
+    address({
+      ...account,
+      handle: account.handle || (await state(account)).handle || "",
+    });
   return {
     has,
     load: async (account) => {
@@ -77,7 +102,14 @@ export function authStore(
             decipher.final(),
           ]).toString("utf8"),
         );
-        if (value.name !== name(account) || value.url !== address(account)) throw unavailable();
+        const discovered = (await state(account)).handle;
+        // A verified identity receipt recovers a crash between the two atomic binding writes.
+        const interruptedBinding = discovered && value.url === address({ ...account, handle: "" });
+        if (
+          value.name !== name(account) ||
+          (value.url !== (await credentialAddress(account)) && !interruptedBinding)
+        )
+          throw unavailable();
         return { username: value.username, password: value.password };
       } catch (cause) {
         const error = unavailable();
@@ -93,6 +125,7 @@ export function authStore(
       }
     },
     save: async (account, credentials) => {
+      const url = await credentialAddress(account);
       const key = await vaultKey(vault, encryptionKey, true);
       const directory = join(vault, "auth");
       await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -103,7 +136,7 @@ export function authStore(
         cipher.update(
           JSON.stringify({
             name: name(account),
-            url: address(account),
+            url,
             username: credentials.username,
             password: credentials.password,
           }),
@@ -132,30 +165,16 @@ export function authStore(
       await rm(profile(account), { force: true });
       await rm(statePath(account), { force: true });
     },
-    state: async (account) => {
-      const hasCredentials = await has(account);
-      let saved: typeof Saved.Type;
-      try {
-        saved = Schema.decodeUnknownSync(Schema.fromJsonString(Saved))(
-          await readFile(statePath(account), "utf8"),
-        );
-      } catch {
-        return { state: hasCredentials ? "login_required" : "not_configured", hasCredentials };
-      }
-      if (
-        saved.account.platform !== account.platform ||
-        saved.account.generation !== account.generation ||
-        saved.account.handle.toLowerCase() !== account.handle.toLowerCase()
-      )
-        return { state: hasCredentials ? "login_required" : "not_configured", hasCredentials };
-      return { ...saved.status, hasCredentials };
-    },
+    state,
     update: async (account, status) => {
+      const previous = await state(account);
+      const resolved =
+        previous.handle && !status.handle ? { ...status, handle: previous.handle } : status;
       const path = statePath(account);
       await mkdir(join(home, "auth-state"), { recursive: true, mode: 0o700 });
       const temporary = `${path}.${crypto.randomUUID()}.tmp`;
       try {
-        await writeFile(temporary, JSON.stringify({ account, status }), {
+        await writeFile(temporary, JSON.stringify({ account, status: resolved }), {
           mode: 0o600,
           flag: "wx",
         });

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { SocialAccount, SocialID } from "./social.ts";
+import { SocialAccount, SocialID, SocialHandle } from "./social.ts";
 
 export const SocialAuthAccount = Schema.Struct({
   id: SocialID,
@@ -42,6 +42,7 @@ export const SocialAuthStatus = Schema.Struct({
     "failed",
   ]),
   hasCredentials: Schema.Boolean,
+  handle: Schema.optionalKey(SocialHandle),
   reason: Schema.optionalKey(
     Schema.Literals([
       "account_mismatch",

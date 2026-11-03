@@ -21,7 +21,9 @@ test("connection fields and credentials share one visible form before an account
   window.document.write(
     socialPage({ personas: [], snapshot: { accounts: [], events: [], before: null } }),
   );
-  const form = window.document.querySelector('input[name="handle"]')!.closest("form")!;
+  const form = window.document.querySelector('input[name="username"]')!.closest("form")!;
+  expect(form.querySelector('input[name="handle"]')).toBeNull();
+  expect(form.textContent).toContain("로그인 후 자동 확인");
   for (const name of ["username", "password"]) {
     const input = form.querySelector(`input[name="${name}"]`)!;
     expect(input.hasAttribute("required")).toBe(false);
@@ -84,12 +86,10 @@ test("platform tabs isolate accounts, activity and form behavior while keeping p
     expect(window.document.body.textContent).not.toContain(
       `${platform === "x" ? "threads" : "x"}-only-history`,
     );
-    const form = window.document.querySelector('input[name="handle"]')!.closest("form")!;
+    const form = window.document.querySelector('input[name="username"]')!.closest("form")!;
     expect(form.getAttribute("action")).toBe(`/social?platform=${platform}`);
     expect(form.querySelector('input[name="platform"]')!.getAttribute("value")).toBe(platform);
-    expect(form.querySelector('input[name="handle"]')!.getAttribute("maxlength")).toBe(
-      platform === "x" ? "15" : "30",
-    );
+    expect(form.querySelector('input[name="handle"]')).toBeNull();
     expect(form.querySelector('input[name="username"]')!.getAttribute("placeholder")).not.toContain(
       "/",
     );

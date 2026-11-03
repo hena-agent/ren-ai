@@ -7,7 +7,9 @@ export const SocialPlatform = Schema.Literals(["x", "threads"]).pipe(
   Schema.withDecodingDefaultKey(Effect.succeed("x")),
 );
 export type SocialPlatform = typeof SocialPlatform.Type;
-const handle = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_][A-Za-z0-9_.]{0,29}$/));
+export const SocialHandle = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9_][A-Za-z0-9_.]{0,29}$/),
+);
 export const socialPlatformName = (platform: SocialPlatform) =>
   platform === "threads" ? "Threads" : "X";
 const integer = (minimum: number, maximum: number) =>
@@ -16,7 +18,7 @@ const integer = (minimum: number, maximum: number) =>
 export const SocialAccount = Schema.Struct({
   id: SocialID,
   platform: SocialPlatform,
-  handle,
+  handle: Schema.Union([SocialHandle, Schema.Literal("")]),
   personaId: SocialID,
   enabled: Schema.Boolean,
   instructions: bounded(6000),
@@ -30,7 +32,10 @@ export const SocialAccount = Schema.Struct({
   dailyWrites: integer(1, 100),
 }).check(
   Schema.makeFilter(
-    (account) => account.platform === "threads" || /^[A-Za-z0-9_]{1,15}$/.test(account.handle),
+    (account) =>
+      !account.handle ||
+      account.platform === "threads" ||
+      /^[A-Za-z0-9_]{1,15}$/.test(account.handle),
   ),
 );
 export type SocialAccount = typeof SocialAccount.Type;
@@ -44,7 +49,7 @@ const status = Schema.String.check(
 );
 export const SocialAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("search"), query: bounded(200) }),
-  Schema.Struct({ kind: Schema.Literal("profile"), handle }),
+  Schema.Struct({ kind: Schema.Literal("profile"), handle: SocialHandle }),
   Schema.Struct({ kind: Schema.Literal("read_post"), url: status }),
   Schema.Struct({ kind: Schema.Literals(["notifications", "inbox", "messages"]) }),
   Schema.Struct({ kind: Schema.Literal("post"), text: postText }),
@@ -52,7 +57,7 @@ export const SocialAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("dm"), text }),
   Schema.Struct({
     kind: Schema.Literal("contact"),
-    handle: Schema.NullOr(handle),
+    handle: Schema.NullOr(SocialHandle),
     publicContext: Schema.optionalKey(bounded(1200)),
   }),
   Schema.Struct({ kind: Schema.Literal("finish") }),
@@ -88,7 +93,7 @@ export const SocialRun = Schema.Struct({
   generation: integer(1, Number.MAX_SAFE_INTEGER),
   requestId: Schema.String,
   deadline: Schema.Number,
-  contact: Schema.NullOr(handle),
+  contact: Schema.NullOr(SocialHandle),
   step: integer(0, 200),
 });
 export type SocialRun = typeof SocialRun.Type;
