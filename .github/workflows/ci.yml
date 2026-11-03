@@ -2,8 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ["**"]
   schedule:
     # Proves the quality gates still pass when nobody has touched the repo.
     - cron: "0 6 * * 1"
@@ -14,10 +13,7 @@ jobs:
   checks:
     name: Checks and build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency:
-      group: checks-${{ github.ref }}
-      cancel-in-progress: true
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,9 +36,6 @@ jobs:
     name: Gate self-checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: verify-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -59,7 +52,7 @@ jobs:
 
   native:
     name: Rustpush checks and build
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -74,7 +67,7 @@ jobs:
             ~/.cargo/git
             ~/.cargo/build/ren-ai-rustpush
             apps/rustpush/target
-          key: rustpush-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/rustpush/Cargo.toml', 'apps/rustpush/Cargo.lock', 'apps/rustpush/.cargo/config.toml', 'apps/rustpush/native.patch', 'apps/rustpush/rust-toolchain.toml') }}
+          key: rustpush-macos-26-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/rustpush/Cargo.toml', 'apps/rustpush/Cargo.lock', 'apps/rustpush/.cargo/config.toml', 'apps/rustpush/native.patch', 'apps/rustpush/rust-toolchain.toml') }}
       - run: cargo install cargo-llvm-cov --version 0.8.5 --locked
       - run: cargo install rust-code-analysis-cli --version 0.0.25 --locked
       - run: bash apps/rustpush/check.sh
@@ -109,7 +102,7 @@ jobs:
     name: Build imsg bundle
     needs: gates
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 10
     permissions:
       contents: read
