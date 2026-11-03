@@ -1,13 +1,26 @@
 import { randomUUID } from "node:crypto";
+import { Schema } from "effect";
 import {
   nextSocialTime,
   socialTime,
-  type SocialAccount,
+  SocialAccount,
   type SocialRun,
   type SocialResult,
   type SocialPlatform,
 } from "@ren-ai/onboarding/social";
 import type { SocialStore, AccountRow } from "./store.ts";
+import type { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
+
+function assertUniqueHandle(store: SocialStore, account: SocialAccount) {
+  if (!account.handle) return;
+  const duplicate = store.exec<{ id: string }>(
+    "SELECT id FROM social_account WHERE lower(json_extract(config, '$.handle')) = lower(?) AND COALESCE(json_extract(config, '$.platform'),'x')=? AND id != ? LIMIT 1",
+    account.handle,
+    account.platform,
+    account.id,
+  );
+  if (duplicate.length) throw new SocialError(409, "SOCIAL_ACCOUNT_ALREADY_CONNECTED");
+}
 
 export class SocialError extends Error {
   constructor(
@@ -93,15 +106,9 @@ export function socialService(store: SocialStore, options: SocialOptions) {
       store.exec<{ id: string }>("SELECT id FROM social_account LIMIT 100").length >= 100
     )
       throw new SocialError(409, "SOCIAL_ACCOUNT_LIMIT");
-    const duplicate = store.exec<{ id: string }>(
-      "SELECT id FROM social_account WHERE lower(json_extract(config, '$.handle')) = lower(?) AND COALESCE(json_extract(config, '$.platform'),'x')=? AND id != ? LIMIT 1",
-      account.handle,
-      account.platform,
-      account.id,
-    );
-    if (duplicate.length) throw new SocialError(409, "SOCIAL_ACCOUNT_ALREADY_CONNECTED");
+    assertUniqueHandle(store, account);
     if (prior?.config === JSON.stringify(account)) return;
-    const awaitingLogin = store.account(account.id)?.state === "login_required";
+    const awaitingLogin = !account.handle || store.account(account.id)?.state === "login_required";
     // Persist the fence before any remote cancellation; old work cannot publish while reassigning.
     const reassigned =
       prior &&
@@ -137,6 +144,7 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     const account = store.config(record);
     if (
       !account.enabled ||
+      !account.handle ||
       record.generation !== run.generation ||
       run.deadline <= options.now() ||
       !socialTime(account, options.now()).active
@@ -194,15 +202,11 @@ export function socialService(store: SocialStore, options: SocialOptions) {
       current.generation !== row.generation
     )
       return;
-    const ready = auth.state === "authenticated";
+    if (confirmAuthentication(current, auth)) return;
     store.exec(
       "UPDATE social_account SET state=?,next_at=? WHERE id=?",
-      ready ? (account.enabled ? "scheduled" : "paused") : "login_required",
-      ready && account.enabled
-        ? nextSocialTime(account, options.now())
-        : ["checking", "logging_in"].includes(auth.state)
-          ? options.now() + 30000
-          : null,
+      "login_required",
+      ["checking", "logging_in"].includes(auth.state) ? options.now() + 30000 : null,
       row.id,
     );
   };
@@ -283,6 +287,32 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     store.exec("UPDATE social_account SET state='login_required',next_at=NULL WHERE id=?", row.id);
     await stop(row);
   };
-  return { configure, control, complete, alarm, awaitAuthentication };
+  const confirmAuthentication = (row: AccountRow, status: SocialAuthStatus) => {
+    if (status.state !== "authenticated") return false;
+    const prior = store.config(row);
+    if (prior.handle && status.handle && prior.handle.toLowerCase() !== status.handle.toLowerCase())
+      return false;
+    if (!prior.handle && !status.handle) return false;
+    let account: SocialAccount;
+    try {
+      account = Schema.decodeUnknownSync(SocialAccount)({
+        ...prior,
+        handle: prior.handle || status.handle,
+      });
+    } catch {
+      throw new SocialError(503, "SOCIAL_AUTH_RESPONSE_INVALID");
+    }
+    assertUniqueHandle(store, account);
+    if (!prior.handle || row.state === "login_required")
+      store.exec(
+        "UPDATE social_account SET config=?,state=?,next_at=? WHERE id=?",
+        JSON.stringify(account),
+        account.enabled ? "scheduled" : "paused",
+        account.enabled ? nextSocialTime(account, options.now()) : null,
+        row.id,
+      );
+    return true;
+  };
+  return { configure, control, complete, alarm, awaitAuthentication, confirmAuthentication };
 }
 export type SocialService = ReturnType<typeof socialService>;

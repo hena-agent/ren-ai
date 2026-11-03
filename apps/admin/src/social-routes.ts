@@ -43,8 +43,7 @@ function submittedAccount(view: SocialView, form: FormData, url: URL) {
   return existing;
 }
 function readAccount(form: FormData, existing: SocialAccount | undefined) {
-  const handle = form.get("handle");
-  if (typeof handle !== "string") throw new PersonaError("invalid", "계정명을 입력해 주세요.");
+  const handle = existing?.handle ?? "";
   const fields = Object.fromEntries(form);
   for (const name of ["action", "username", "password", "code"]) delete fields[name];
   try {
@@ -53,18 +52,32 @@ function readAccount(form: FormData, existing: SocialAccount | undefined) {
       ...fields,
       platform,
       ...Object.fromEntries(numberFields.map((field) => [field, Number(form.get(field))])),
-      id: existing?.id ?? `${platform}_${handle.toLowerCase().replaceAll(".", "-")}`,
+      id: existing?.id ?? crypto.randomUUID(),
       handle,
       enabled: form.get("enabled") === "1",
     });
   } catch {
-    throw new PersonaError("invalid", "계정명·페르소나·활동 설정을 확인해 주세요.");
+    throw new PersonaError("invalid", "페르소나·활동 설정을 확인해 주세요.");
   }
 }
 async function loadAuthentication(view: SocialView, client: SocialClient) {
   if (!view.selected) return;
   try {
     view.authentication = await client.authenticate(view.selected.id, { kind: "status" });
+    if (
+      !view.selected.handle &&
+      view.authentication.state === "authenticated" &&
+      view.authentication.handle
+    ) {
+      view.selected = { ...view.selected, handle: view.authentication.handle };
+      const selected = view.selected;
+      view.snapshot = {
+        ...view.snapshot!,
+        accounts: view.snapshot!.accounts.map((row) =>
+          row.account.id === selected.id ? { ...row, account: selected } : row,
+        ),
+      };
+    }
   } catch (cause) {
     reportFailure(cause, { stage: "social.auth.read" });
   }

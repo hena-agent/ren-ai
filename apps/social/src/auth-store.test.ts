@@ -139,6 +139,43 @@ test("credentials persist without requiring a browser or CLI to be installed", a
   expect(await f.store.has(account)).toBe(true);
 });
 
+test("first discovery retains a readable bound vault and identity across restarts and subsequent login failures", async () => {
+  const f = await fixture();
+  const pending = { ...account, handle: "" };
+  await f.store.save(pending, privateLogin);
+  await f.store.update(pending, {
+    state: "logging_in",
+    hasCredentials: true,
+    handle: account.handle,
+  });
+  expect((await authStore(f.home).load(account)).password).toBe(privateLogin.password);
+  await expect(f.store.load({ ...account, handle: "different" })).rejects.toBeInstanceOf(
+    AuthenticationError,
+  );
+  await f.store.save(account, await f.store.load(pending));
+  await f.store.update(pending, {
+    state: "authenticated",
+    hasCredentials: true,
+    handle: account.handle,
+  });
+  const restarted = authStore(f.home);
+  expect((await restarted.state(account)).state).toBe("authenticated");
+  expect((await restarted.load(account)).password).toBe(privateLogin.password);
+  expect((await restarted.load(pending)).password).toBe(privateLogin.password);
+  await restarted.update(pending, { state: "logging_in", hasCredentials: true });
+  await restarted.update(pending, {
+    state: "failed",
+    hasCredentials: true,
+    reason: "credentials_rejected",
+  });
+  expect((await restarted.state(pending)).handle).toBe(account.handle);
+  await restarted.save(pending, privateLogin);
+  expect((await restarted.load(account)).password).toBe(privateLogin.password);
+  await expect(restarted.load({ ...account, handle: "different" })).rejects.toBeInstanceOf(
+    AuthenticationError,
+  );
+});
+
 test("X and Threads with the same account ID keep independent vault profiles and saved login states", async () => {
   const f = await fixture();
   const threads = { ...account, platform: "threads" as const };

@@ -47,20 +47,24 @@ const date = (at: number, timeZone = "Asia/Seoul") =>
   new Date(at).toLocaleString("ko-KR", { timeZone });
 const platformFields = {
   threads: {
-    handlePattern: "[A-Za-z0-9_][A-Za-z0-9_.]{0,29}",
-    handleLength: 30,
     loginLabel: "Instagram 로그인 ID",
     loginPlaceholder: "Instagram 사용자명·이메일·전화번호",
     writesLabel: "일일 게시·댓글 합계",
   },
   x: {
-    handlePattern: "[A-Za-z0-9_]{1,15}",
-    handleLength: 15,
     loginLabel: "로그인 ID",
     loginPlaceholder: "이메일·전화번호·사용자명",
     writesLabel: "일일 게시·댓글·DM 합계",
   },
 };
+
+function AccountName({ account }: { account: SocialAccount | undefined }) {
+  return (
+    <p>
+      계정명: <output>{account?.handle ? `@${account.handle}` : "로그인 후 자동 확인"}</output>
+    </p>
+  );
+}
 
 function AccountForm({
   selected,
@@ -80,7 +84,9 @@ function AccountForm({
       <input type="hidden" name="id" value={selected?.id ?? ""} />
       <input type="hidden" name="platform" value={platform} />
       <h2>
-        {selected ? `@${selected.handle} 연결 설정` : `${socialPlatformName(platform)} 계정 연결`}
+        {selected?.handle
+          ? `@${selected.handle} 연결 설정`
+          : `${socialPlatformName(platform)} 계정 연결`}
       </h2>
       <p className="hint">
         페르소나와 로그인 정보를 함께 입력하세요. ID·비밀번호를 Mac에 먼저 저장하고 로그인을
@@ -88,17 +94,7 @@ function AccountForm({
       </p>
       <fieldset disabled={["logging_in", "checking"].includes(authentication?.state ?? "")}>
         <div className="social-fields">
-          <label>
-            계정명
-            <input
-              name="handle"
-              required
-              pattern={fields.handlePattern}
-              maxLength={fields.handleLength}
-              defaultValue={selected?.handle}
-              placeholder="@ 없이 입력"
-            />
-          </label>
+          <AccountName account={selected} />
           <label>
             연결할 페르소나
             <select name="personaId" required defaultValue={selected?.personaId ?? personaId ?? ""}>
@@ -194,8 +190,8 @@ function AccountForm({
           소셜 활동 허용 · 시간대 안에서 자동 실행
         </label>
         <p className="hint">
-          페르소나 또는 계정명을 변경하면 진행 중 활동을 중단하고 새 연결의 세션을 사용합니다. 기존
-          게시물과 DM은 해당 플랫폼 계정에 남습니다.
+          계정명은 로그인 후 자동으로 확인합니다. 페르소나를 변경하면 진행 중 활동을 중단하고 새
+          연결의 세션을 사용합니다. 기존 게시물과 DM은 해당 플랫폼 계정에 남습니다.
         </p>
         {!selected && (
           <button type="submit" name="action" value="save-check">
@@ -252,7 +248,8 @@ export function socialPage(view: SocialView) {
               <article key={account.id}>
                 <h3>
                   <a href={`${base}&account=${encodeURIComponent(account.id)}`}>
-                    {socialPlatformName(account.platform)} · @{account.handle}
+                    {socialPlatformName(account.platform)} ·{" "}
+                    {account.handle ? `@${account.handle}` : "계정 확인 대기"}
                   </a>{" "}
                   →{" "}
                   <a href={`/personas/${account.personaId}`}>
@@ -281,7 +278,11 @@ export function socialPage(view: SocialView) {
                   <button
                     name="action"
                     value="now"
-                    disabled={!account.enabled || ["running", "login_required"].includes(state)}
+                    disabled={
+                      !account.enabled ||
+                      !account.handle ||
+                      ["running", "login_required"].includes(state)
+                    }
                   >
                     지금 실행
                   </button>
