@@ -22,7 +22,7 @@ cp "$ops/install-deploy-agent.sh" "$ops/write-deploy-plist.sh" "$ops/update.sh" 
 chmod 700 "$output/bin/bun" "$output/ren-rustpush"
 (
   cd "$output"
-  printf 'architecture=%s\nbun=1.4.4\ntransport=rustpush\n' "$(uname -m)" > artifact.info
+  printf 'architecture=%s\nbun=1.4.4\ntransport=rustpush\nrevision=%s\n' "$(uname -m)" "${GITHUB_SHA:-development}" > artifact.info
   find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} \; > SHA256SUMS
 )
 echo "Built $output. No OpenCode packages/credentials; installer does not start services."

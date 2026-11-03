@@ -61,6 +61,7 @@ export function socialBindings(
     return response;
   };
   return {
+    gatewayUrl: env.API_MSG_URL,
     authenticate: async (account, command, requestId) => {
       const response = await native("/auth", { account, command }, requestId);
       try {

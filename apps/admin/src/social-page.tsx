@@ -9,6 +9,7 @@ import {
 import { AdminLayout } from "./admin-layout.tsx";
 import { SocialAuthentication } from "./social-auth.tsx";
 import type { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
+import { SocialDeployment } from "./social-deployment.tsx";
 
 export interface SocialView {
   platform?: SocialPlatform;
@@ -245,6 +246,11 @@ export function socialPage(view: SocialView) {
             ))}
           </nav>
           {view.error && <p role="alert">{view.error}</p>}
+          <SocialDeployment
+            status={view.snapshot?.deployment}
+            platform={platform}
+            accountId={view.selected?.id}
+          />
           <section aria-label="연결된 소셜 계정" className="contact-panel">
             <h2>계정과 페르소나</h2>
             {!view.snapshot && (

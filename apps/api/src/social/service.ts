@@ -31,6 +31,7 @@ export class SocialError extends Error {
   }
 }
 export interface SocialOptions {
+  gatewayUrl?: string;
   authenticate: (
     account: import("@ren-ai/onboarding/social-auth").SocialAuthAccount,
     command: import("@ren-ai/onboarding/social-auth").SocialAuthCommand,

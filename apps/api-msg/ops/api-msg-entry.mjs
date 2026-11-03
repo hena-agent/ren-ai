@@ -14,7 +14,9 @@ const handler = createGateway({
     opencodeAuthorization: required("OPENCODE_AUTHORIZATION"),
     imsgUrl: process.env.IMSG_URL ?? "https://imsg.renai.im/rpc",
     imsgToken: required("IMSG_TOKEN"),
-    socialUrl: process.env.SOCIAL_URL ?? "http://127.0.0.1:5407",
+    socialUrl:
+      process.env.SOCIAL_URL ??
+      `http://${process.env.SOCIAL_HOST ?? "127.0.0.1"}:${process.env.SOCIAL_PORT ?? "5407"}`,
   },
 });
 const server = Bun.serve({

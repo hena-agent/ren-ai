@@ -3,8 +3,8 @@ set -euo pipefail
 artifact="${1:?Usage: verify-artifact.sh ATTESTED-ARTIFACT-DIRECTORY}"
 (
   cd "$artifact"
-  grep -qx 'format=api-msg-v1' artifact.info
-  for name in api-msg.js api-msg-verify.js social.js api-msg.graph.json api-msg-verify.graph.json social.graph.json; do
+  grep -qx 'format=api-msg-v2' artifact.info
+  for name in api-msg.js api-msg-verify.js social.js api-msg.graph.json api-msg-verify.graph.json social.graph.json compose.yml Dockerfile Dockerfile.dockerignore verify-artifact.sh; do
     [[ -s "$name" ]] || { echo "Artifact lacks $name" >&2; exit 1; }
   done
   shasum -a 256 -c SHA256SUMS

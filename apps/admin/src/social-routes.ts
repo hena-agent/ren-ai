@@ -116,6 +116,16 @@ const redirectAccount = (account: SocialAccount) =>
       Location: `/social?platform=${account.platform}&account=${encodeURIComponent(account.id)}`,
     },
   });
+async function repairRuntime(
+  client: SocialClient,
+  existing: SocialAccount | undefined,
+  platform: SocialPlatform,
+) {
+  await operation("social.runtime.repair", {}, client.repair);
+  return existing
+    ? redirectAccount(existing)
+    : new Response(null, { status: 303, headers: { Location: `/social?platform=${platform}` } });
+}
 async function saveConnection(
   form: FormData,
   existing: SocialAccount | undefined,
@@ -178,15 +188,13 @@ export async function socialRoutes(request: Request, store: PersonaStore, client
     );
     const action = formAction(form);
     const existing = submittedAccount(view, form, url);
+    if (action === "repair-runtime") {
+      return await repairRuntime(client, existing, view.platform);
+    }
     if (["save", "save-check"].includes(action))
       return await saveConnection(form, existing, view, client, action === "save-check");
     if (!existing) throw new PersonaError("not_found", "연결된 계정을 찾을 수 없습니다.");
-    if (
-      action === "auth-code" ||
-      action === "auth-check" ||
-      action === "auth-login" ||
-      action === "auth-forget"
-    ) {
+    if (["auth-code", "auth-check", "auth-login", "auth-forget"].includes(action)) {
       const command = readAuthentication(form, action.slice(5));
       await operation("social.auth", { personaId: existing.personaId }, () =>
         client.authenticate(existing.id, command),
