@@ -16,7 +16,7 @@ umask 077
 mkdir -p "$root"
 cp "$artifact/api-msg.js" "$artifact/api-msg-verify.js" "$artifact/social.js" "$artifact/api-msg.graph.json" "$artifact/api-msg-verify.graph.json" "$artifact/social.graph.json" "$artifact/artifact.info" "$artifact/SHA256SUMS" "$root/"
 cp "$config" "$root/api-msg.env"
-cp "$ops/Dockerfile" "$ops/Dockerfile.dockerignore" "$ops/compose.yml" "$root/"
+cp "$artifact/Dockerfile" "$artifact/Dockerfile.dockerignore" "$artifact/compose.yml" "$artifact/verify-artifact.sh" "$root/"
 chmod 700 "$root"
 chmod 600 "$root/api-msg.env"
 bash "$ops/install-social.sh" "$root"

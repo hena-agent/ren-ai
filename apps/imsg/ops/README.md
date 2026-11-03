@@ -126,6 +126,13 @@ is rejected when the old payload recovers; a host failing both probes defers upd
 until recovery. Metadata-only updates avoid a restart. Bun, Apple state, SQLite
 history, tokens and tunnel are preserved.
 
+The gateway also enrolls `im.renai.mac-deployment` from its attested JavaScript
+payload. This separate GUI LaunchAgent manages api-msg and its native social
+executor, including automatic installation and Admin-requested repair. It reuses
+the messaging updater's read-only GitHub credential and the existing api-msg
+environment; messaging startup does not wait for enrollment. See the
+[runtime repair runbook](../../api-msg/ops/README.md#automatic-updates).
+
 Install the deploy agent with `install-deploy-agent.sh REVIEWED_GH PRIVATE_TOKEN`.
 Its fine-grained GitHub token needs only Actions/Attestations read access to
 `hena-agent/ren-ai`. It writes the plist without loading it. Bootstrap the deploy

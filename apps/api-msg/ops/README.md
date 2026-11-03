@@ -71,36 +71,46 @@ disk, failed Mac health check, or unavailable/unready/mismatched native social e
 The bundled probe requires this identity, its own artifact revision and readiness.
 All other paths retain Bearer authentication with `TOKEN_MANAGEMENT`.
 
-The Mac pulls the attested `api-msg-bundle` published by CI after the quality
-gates. Provision the deploy LaunchAgent using a fine-grained GitHub token for
-`hena-agent/ren-ai` with read-only Actions and Attestations permissions:
+The existing messaging updater delivers the Mac deployment agent automatically
+inside its attested `imsg.js` payload. No new Mac login or terminal command is
+required for an installation that already has the messaging updater, Docker and
+the protected `api-msg.env`. The new `im.renai.mac-deployment` GUI LaunchAgent runs
+once a minute and reads the desired source revision from the authenticated Worker.
+It disables future runs of `im.renai.api-msg-deploy` and waits for an already-running
+legacy installer to finish before changing runtime files. The messaging updater
+continues delivering messaging and deployment-agent updates.
 
-```sh
-cd apps/api-msg
-bash ops/install-deploy-agent.sh /opt/homebrew/bin/gh /absolute/private/raw-github-token
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/im.renai.api-msg-deploy.plist"
-```
+Admin's **소셜 → Mac 실행기 자동 설치·복구** queues a persistent repair operation
+in the existing social Durable Object. Refresh the page to see the operation's
+stage, exact requested/installed revisions, and safe failure code/job ID. An
+expired lease can be reclaimed after a process restart; stale reports cannot
+overwrite a replacement operation. Requests for the same pending revision
+coalesce. Failed automatic attempts have persisted backoff and a three-attempt
+budget; an explicit new Admin request resets that budget. Artifact publication or
+a busy legacy updater can defer a pending operation up to six attempts.
 
-This LaunchAgent is the updater; the gateway and tunnel run in Docker, while
-`im.renai.social` runs natively in the logged-in user's GUI session.
-Every two minutes it checks `main` provenance, probes the current container,
-installs the gateway and native social JavaScript, restarts `im.renai.social`,
-rebuilds the image and replaces only the `api-msg` Compose service. The same attested
-`api-msg-bundle` contains both executors. Metadata-only changes do not restart them. Failed builds or probes
-restore both previous payloads and restart the previous executors; rejected commits wait for a newer
-artifact, while a previously unhealthy executor is retried after recovery.
-The updater keeps its installed Compose/Dockerfile and private environment;
-changes to those deployment files require an explicit operator update.
+Before extraction or execution, the agent verifies `api-msg-bundle` provenance
+against the exact main commit and verifies its checksums. The v2 artifact includes
+the Docker build files and verifier as well as both JavaScript executors. The
+agent installs agent-browser 0.41.0 without package scripts and reuses Canary;
+if missing, it installs Google's signature-verified Canary in the user's
+Applications directory. A managed Compose overlay updates only `api-msg`, keeping
+the existing ingress service, Compose file, environment and tunnel credentials.
 
-Existing installations need a one-time operator update before enabling this
-combined release: verify/download the new attested bundle as in
-`install-from-ci.sh`, copy its complete checksummed payload (including `social.js`
-and `social.graph.json`) into the existing installation, refresh `compose.yml`
-and the updater's `deploy-helper.sh` from this checkout, and run
-`bash ops/install-social.sh "$ROOT"`. Bootstrap the new native LaunchAgent, then
-replace the gateway container and run its bundled probe. Preserve `api-msg.env`,
-tunnel credentials and all existing private state. The installed updater never
-edits its own scripts or Compose configuration.
+An existing native service's `SOCIAL_HOME`, Canary, port, model and OpenCode
+directory are retained. Unknown existing profile locations fail closed. Profiles,
+cookies and the encrypted credential vault are never copied into an image,
+deleted or reset. Before replacing code or a native plist, the agent persists a
+rollback journal. A failed installation restores the prior runtime and plist;
+an interrupted installation is reconciled on the next attempt. The final ready
+report requires both local readiness and public gateway health at the exact
+artifact revision, including its same-revision native social dependency.
+
+Agent configuration, retry state, rollback journal and private logs live in
+`~/Library/Application Support/ren-ai-mac-deployment`. Logs contain bounded stage,
+operation ID, duration and error/exit codes, excluding credentials, profiles and
+command output. Successful runtime installation does not prove an account is
+logged in: use that existing connection's **로그인 상태 확인** in Admin afterward.
 
 For a reviewed local rollout before a CI artifact exists, build with
 `bash ops/build-bundle.sh NEW-DIRECTORY`, then run

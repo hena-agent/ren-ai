@@ -35,7 +35,7 @@ test("CI api-msg artifact is checksummed, Bun-runnable and contains no SQL datab
     const info = await readFile(join(output, "artifact.info"), "utf8");
     const graph = await readFile(join(output, "api-msg.graph.json"), "utf8");
     const verifyGraph = await readFile(join(output, "api-msg-verify.graph.json"), "utf8");
-    expect(info).toBe("format=api-msg-v1\n");
+    expect(info).toBe("format=api-msg-v2\n");
     expect(graph + verifyGraph).not.toMatch(/@effect\/sql|sqlite|better-sqlite3/i);
     expect(() =>
       execFileSync("bash", ["apps/api-msg/ops/verify-artifact.sh", output], { cwd: process.cwd() }),

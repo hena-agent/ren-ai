@@ -2,8 +2,10 @@ import { Schema } from "effect";
 import { SocialSnapshot, type SocialAccount } from "@ren-ai/onboarding/social";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
 import { SocialAuthStatus, type SocialAuthCommand } from "@ren-ai/onboarding/social-auth";
+import { MacDeploymentStatus } from "@ren-ai/transport/deployment";
 
 export interface SocialClient {
+  repair: () => Promise<typeof MacDeploymentStatus.Type>;
   authenticate: (accountId: string, command: SocialAuthCommand) => Promise<SocialAuthStatus>;
   list: (before?: number) => Promise<SocialSnapshot>;
   configure: (account: SocialAccount) => Promise<SocialSnapshot>;
@@ -80,6 +82,18 @@ export function socialClient(origin: string, token: string, fetcher: typeof fetc
     return response;
   };
   return {
+    repair: async () => {
+      const response = await request("/deployment/request", {});
+      try {
+        return Schema.decodeUnknownSync(MacDeploymentStatus)(await response.json());
+      } catch (cause) {
+        throw validationFailure(
+          "Mac 복구 상태 응답 형식이 올바르지 않습니다.",
+          { code: "social_deployment_schema" },
+          cause,
+        );
+      }
+    },
     authenticate: async (accountId, command) => {
       if (command.kind === "save") protect(command.username, command.password);
       if (command.kind === "code") protect(command.code);

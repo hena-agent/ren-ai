@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect";
 import { InvitationCode } from "./invitation-code.ts";
+import { MacDeploymentStatus } from "@ren-ai/transport/deployment";
 
 const bounded = (maximum: number) => Schema.String.check(Schema.isMaxLength(maximum));
 export const SocialID = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/));
@@ -135,6 +136,7 @@ export const SocialAccountStatus = Schema.Struct({
   writes: Schema.Number,
 });
 export const SocialSnapshot = Schema.Struct({
+  deployment: Schema.optionalKey(MacDeploymentStatus),
   accounts: Schema.Array(SocialAccountStatus),
   events: Schema.Array(SocialEvent),
   before: Schema.NullOr(Schema.Number),

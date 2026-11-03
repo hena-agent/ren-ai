@@ -13,6 +13,10 @@ const payload = [
   "api-msg-verify.graph.json",
   "social.graph.json",
   "artifact.info",
+  "compose.yml",
+  "Dockerfile",
+  "Dockerfile.dockerignore",
+  "verify-artifact.sh",
 ];
 
 const checksums = async (directory: string) => {
@@ -51,7 +55,7 @@ const fixture = async (mode: string) => {
     const body = name.endsWith(".js") ? `new-${name}` : `new-meta-${name}`;
     await writeFile(join(bundle, name), body);
   }
-  await writeFile(join(bundle, "artifact.info"), "format=api-msg-v1\n");
+  await writeFile(join(bundle, "artifact.info"), "format=api-msg-v2\n");
   await checksums(bundle);
   const archive = join(base, "api-msg-bundle.tar.gz");
   execFileSync("tar", ["-czf", archive, "-C", bundle, "."]);

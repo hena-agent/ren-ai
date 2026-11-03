@@ -14,5 +14,6 @@ if grep -Eiq '(@effect/sql|sqlite|better-sqlite3)' "$output"/*.graph.json; then
   echo 'The production api-msg artifact must not contain a SQL or SQLite dependency' >&2
   exit 1
 fi
-printf 'format=api-msg-v1\n' > "$output/artifact.info"
-(cd "$output" && shasum -a 256 api-msg.js api-msg-verify.js social.js api-msg.graph.json api-msg-verify.graph.json social.graph.json artifact.info > SHA256SUMS)
+cp "$ops/compose.yml" "$ops/Dockerfile" "$ops/Dockerfile.dockerignore" "$ops/verify-artifact.sh" "$output/"
+printf 'format=api-msg-v2\n' > "$output/artifact.info"
+(cd "$output" && shasum -a 256 api-msg.js api-msg-verify.js social.js api-msg.graph.json api-msg-verify.graph.json social.graph.json artifact.info compose.yml Dockerfile Dockerfile.dockerignore verify-artifact.sh > SHA256SUMS)

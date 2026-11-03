@@ -7,7 +7,7 @@ services:
     environment:
       LISTEN_HOST: 0.0.0.0
       PORT: "4700"
-      SOCIAL_URL: http://host.docker.internal:5407
+      SOCIAL_HOST: host.docker.internal
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp]

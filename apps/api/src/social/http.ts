@@ -8,6 +8,8 @@ import { socialService, SocialError, type SocialOptions } from "./service.ts";
 import { socialActions } from "./actions.ts";
 import { SocialAuthInput, SocialAuthAccount } from "@ren-ai/onboarding/social-auth";
 import { socialAuthentication } from "./authentication.ts";
+import { macDeployment } from "./deployment.ts";
+import { DeploymentClaim, DeploymentReport } from "@ren-ai/transport/deployment";
 
 const RunID = Schema.Struct({ runId: SocialID });
 const Completion = Schema.Struct({
@@ -35,6 +37,15 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
   const service = socialService(store, options);
   const actions = socialActions(store, service, options);
   const authentication = socialAuthentication(store, service, options);
+  const deployment = macDeployment(
+    store,
+    options.now,
+    options.gatewayUrl ?? "https://api-msg.renai.im",
+  );
+  const snapshot = (before: number) => ({
+    ...store.snapshot(before),
+    deployment: deployment.status(),
+  });
   const operate = async (body: string, open: boolean) => {
     const id = decode(AccountID, body).accountId;
     const row = store.account(id);
@@ -70,6 +81,9 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     string,
     (body: string, requestId: string) => Response | Promise<Response>
   > = {
+    "deployment/request": () => Response.json(deployment.request(), { status: 202 }),
+    "deployment/claim": (body) => Response.json(deployment.claim(decode(DeploymentClaim, body))),
+    "deployment/report": (body) => Response.json(deployment.report(decode(DeploymentReport, body))),
     auth: async (body, requestId) =>
       Response.json(await authentication.request(decode(SocialAuthInput, body), requestId)),
     authenticated: async (body) => {
@@ -78,7 +92,7 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     },
     accounts: async (body) => {
       await service.configure(decode(SocialAccount, body));
-      return Response.json(store.snapshot(Number.MAX_SAFE_INTEGER));
+      return Response.json(snapshot(Number.MAX_SAFE_INTEGER));
     },
     control: (body) => Response.json(service.control(decode(RunID, body).runId)),
     open: (body) => operate(body, true),
@@ -94,7 +108,9 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
   const handle = async (request: Request) => {
     const path = new URL(request.url).pathname;
     if (request.method === "GET" && path === "/management/social")
-      return Response.json(store.snapshot(cursor(request)));
+      return Response.json(snapshot(cursor(request)));
+    if (request.method === "GET" && path === "/management/social/deployment")
+      return Response.json(deployment.snapshot());
     if (request.method !== "POST") return new Response(null, { status: 405 });
     const body = await request.text();
     if (body.length > 32000) throw new SocialError(413, "SOCIAL_INPUT_SIZE");
