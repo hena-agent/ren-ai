@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <div id="splash" style="position: fixed; inset: 0; z-index: 999; background: white"></div>
+    <!-- Threads renders its hidden mobile navigation before the desktop sidebar. -->
+    <div role="navigation" style="display: none"><a href="/@persona_x">Profile</a></div>
+    <div role="navigation">
+      <a href="/@persona_x"><svg aria-label="Profile" width="20" height="20"></svg></a>
+      <button id="create"><svg aria-label="New thread" width="20" height="20"></svg></button>
+    </div>
+    <a data-testid="AppTabBar_Profile_Link" href="/persona_x">Profile</a>
+    <main>
+      <article>
+        <a href="/@reader/post/ABC123"><time>1h</time></a>
+        <div dir="auto">A public conversation</div>
+        <button class="reply"><svg aria-label="Reply" width="20" height="20"></svg></button>
+      </article>
+    </main>
+    <script>
+      setTimeout(() => document.querySelector("#splash").remove(), 500);
+      for (const [index, post] of JSON.parse(sessionStorage.getItem("posts") || "[]").entries()) {
+        if (post.reply !== location.pathname.endsWith("/replies")) continue;
+        const article = document.createElement("article");
+        const url = post.x ? `/persona_x/status/${index + 1}` : `/@persona_x/post/TEST${index}`;
+        article.innerHTML = `<a href="${url}"><time>now</time></a><div dir="auto" data-testid="tweetText"></div><button><svg aria-label="Reply"></svg></button>`;
+        const body = article.querySelector('[dir="auto"]');
+        body.textContent = post.text;
+        const translate = document.createElement("span");
+        translate.setAttribute("role", "button");
+        translate.textContent = "Translate";
+        if (!post.x) body.append(translate);
+        document.querySelector("main").append(article);
+      }
+      const composePost = (reply) => {
+        const dialog = document.createElement("div");
+        dialog.setAttribute("role", "dialog");
+        dialog.innerHTML = '<div contenteditable="true" role="textbox"></div><button>Post</button>';
+        dialog.querySelector("button").onclick = () => {
+          const posts = JSON.parse(sessionStorage.getItem("posts") || "[]");
+          if (!sessionStorage.getItem("noPublication"))
+            posts.push({ text: dialog.querySelector('[role="textbox"]').textContent, reply });
+          sessionStorage.setItem("posts", JSON.stringify(posts));
+          dialog.remove();
+        };
+        document.body.append(dialog);
+        if (sessionStorage.getItem("ambiguousSubmit"))
+          dialog.append(dialog.querySelector("button").cloneNode(true));
+      };
+      document.querySelector("#create").onclick = () => composePost(false);
+      document.querySelector(".reply").onclick = () => composePost(true);
+      if (["/compose/post", "/messages/compose"].includes(location.pathname)) {
+        const backdrop = document.createElement("div");
+        backdrop.style = "position:fixed;inset:0;background:white;z-index:1";
+        document.body.append(backdrop);
+      }
+      if (location.pathname === "/compose/post") {
+        const dialog = document.createElement("div");
+        dialog.style = "position:fixed;top:100px;left:100px;z-index:2";
+        dialog.innerHTML =
+          '<div data-testid="tweetTextarea_0" contenteditable="true" style="min-width:200px;min-height:24px"></div><button data-testid="tweetButton">Post</button>';
+        dialog.querySelector("button").onclick = () => {
+          const input = dialog.querySelector('[contenteditable="true"]');
+          sessionStorage.setItem(
+            "posts",
+            JSON.stringify([{ text: input.textContent, reply: false, x: true }]),
+          );
+          input.textContent = "";
+        };
+        document.body.append(dialog);
+      }
+      if (location.pathname === "/messages/compose") {
+        const compose = document.createElement("section");
+        compose.style = "position:fixed;top:100px;left:100px;z-index:2";
+        compose.innerHTML =
+          '<input data-testid="searchPeople"><button data-testid="TypeaheadUser">Someone @another</button><button data-testid="TypeaheadUser">Reader @reader</button><button data-testid="nextButton">Next</button><input data-testid="dmComposerTextInput">';
+        let selected;
+        compose.querySelectorAll('[data-testid="TypeaheadUser"]').forEach((button) => {
+          button.onclick = () => {
+            selected = button.textContent;
+          };
+        });
+        compose.querySelector('[data-testid="nextButton"]').onclick = () => {
+          const message = document.createElement("div");
+          message.setAttribute("data-testid", "messageEntry");
+          message.innerHTML = '<span data-testid="tweetText"></span>';
+          message.firstChild.textContent = selected;
+          compose.append(message);
+        };
+        document.body.append(compose);
+      }
+    </script>
+  </body>
+</html>

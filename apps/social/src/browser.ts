@@ -68,7 +68,7 @@ async function openContact(contact: string, page: Page) {
     candidate.split(/\s+/).some((word) => word.toLowerCase() === `@${contact.toLowerCase()}`),
   );
   if (index < 0) throw new Error("X contact could not be verified");
-  await page.command("click", `[data-testid="TypeaheadUser"] >> nth=${index}`);
+  await page.command("find", "nth", String(index), '[data-testid="TypeaheadUser"]', "click");
   await page.command("click", '[data-testid="nextButton"]');
 }
 async function publish(
@@ -93,7 +93,7 @@ async function publish(
       normalized(post.body) === normalized(action.text) &&
       !before.some((prior) => prior.url === post.url),
   );
-  if (!posted?.url) throw new Error("Published X post could not be verified");
+  if (!posted?.url) throw new Error("Published social post could not be verified");
   return { text: "Published", url: `${new URL(site.home).origin}${posted.url}` };
 }
 async function privateMessages(
@@ -147,9 +147,15 @@ export function socialBrowser(
       return output;
     };
     const read = async (script: string) => commandResult(await command("eval", script));
+    const ready = () =>
+      command(
+        "wait",
+        "--fn",
+        `Array.from(document.querySelectorAll(${JSON.stringify(site.ready)})).some(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'&&e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})?'ready':''`,
+      );
     const navigate = async (url: string) => {
       await command("open", url);
-      await command("wait", site.ready);
+      await ready();
       let identity = Schema.decodeUnknownSync(Identity)(await read(site.identity));
       if (identity.handle?.toLowerCase() !== account.handle.toLowerCase()) {
         await authentication.ensure(
@@ -164,7 +170,7 @@ export function socialBrowser(
           signal,
         );
         await command("open", url);
-        await command("wait", site.ready);
+        await ready();
         identity = Schema.decodeUnknownSync(Identity)(await read(site.identity));
       }
       if (identity.handle?.toLowerCase() !== account.handle.toLowerCase())
@@ -172,10 +178,13 @@ export function socialBrowser(
     };
     const send = async (selector: string, text: string, button: string, script: string) => {
       await command("fill", selector, text);
+      const submit = site.submitIndex
+        ? ["find", "nth", await read(site.submitIndex), button, "click"]
+        : ["click", button];
       await guard();
       signal.throwIfAborted();
       submitted = true;
-      await command("click", button);
+      await command(...submit);
       await command("wait", "300");
       if (!Schema.decodeUnknownSync(Sent)(await read(script)).empty)
         throw new Error("X submission result is uncertain");

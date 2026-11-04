@@ -30,6 +30,15 @@ jobs:
       # pruned incrementally, so a stale local node_modules can hide a removed
       # dependency that fails here.
       - run: bun install --frozen-lockfile
+      - name: Install the pinned social browser CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/social-browser"
+          bun add --cwd "$RUNNER_TEMP/social-browser" --ignore-scripts --exact agent-browser@0.41.0
+      - name: Verify social actions in real Chrome
+        run: bun run --cwd apps/social test:browser
+        env:
+          SOCIAL_TEST_AGENT_BROWSER: ${{ runner.temp }}/social-browser/node_modules/agent-browser/bin/agent-browser-linux-x64
+          SOCIAL_TEST_CHROME: /usr/bin/google-chrome
       - run: bun run ci:checks
 
   verify:

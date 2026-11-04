@@ -46,7 +46,7 @@ function fixture(platform: SocialPlatform = "x") {
       }
       if (args[0] === "click" && args[1] === '[data-testid="dmComposerSendButton"]')
         observations.set(messagesScript, '["previous","Hello DM"]');
-      if (args[0] === "click" && args[1] === browserSite("threads").submit)
+      if (args[0] === "find" && args[3] === browserSite("threads").submit)
         observations.set(
           threadsPostsScript,
           '[{"body":"Hello Threads","url":"/@persona_x/post/ABC123"}]',
@@ -151,7 +151,7 @@ test.each(["post", "reply"] as const)(
 test("private reads verify the exact recipient and DM writes require visible delivery evidence", async () => {
   const f = fixture();
   expect(await f.execute({ kind: "messages" }, "reader")).toEqual({ text: '["previous"]' });
-  expect(f.commands).toContainEqual(["click", '[data-testid="TypeaheadUser"] >> nth=1']);
+  expect(f.commands).toContainEqual(["find", "nth", "1", '[data-testid="TypeaheadUser"]', "click"]);
   expect(await f.execute({ kind: "dm", text: "Hello DM" }, "reader")).toEqual({
     text: '["previous","Hello DM"]',
   });

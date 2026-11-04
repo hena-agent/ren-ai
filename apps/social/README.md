@@ -40,6 +40,14 @@ The worker persists finite login-recovery probes while a submitted login is in p
 
 ## Health and rollout
 
+`bun run --cwd apps/social test:browser` exercises the production browser actions
+through real agent-browser **0.41.0** and isolated headless Chrome. Set
+`SOCIAL_TEST_AGENT_BROWSER` and `SOCIAL_TEST_CHROME` to their executable paths.
+CI runs this check against local HTML fixtures: hidden mobile navigation,
+loading overlays, the current Threads composer, translation controls and X
+recipient selection. It uses temporary profiles and a loopback server on port 0;
+no platform login or external publication is involved.
+
 Authenticated `GET /health` reports `service: "social"`, the embedded revision, `status`, and separate `chromeCanary`, `agentBrowser` and `openCode` readiness. Ready is HTTP 200; a missing required dependency is HTTP 503. Responses are `no-store`.
 
 Verify **the expected full artifact revision**, all three dependencies, and the authenticated gateway path before declaring deployment complete. Then open the selected account from Admin and verify its handle. Installed binaries and healthy OpenCode do not establish platform login or current DOM compatibility. Test a read-only discovery run, followed by a text post/reply (and X-only DM) to dedicated test accounts, and inspect their recorded results before normal recruitment.

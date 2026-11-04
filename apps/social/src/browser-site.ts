@@ -5,6 +5,8 @@ import {
   threadsPostsScript,
   threadsComposer,
   threadsSentScript,
+  threadsSubmitButtons,
+  threadsSubmitIndex,
 } from "./threads-scripts.ts";
 
 export function browserSite(platform: SocialPlatform) {
@@ -19,12 +21,12 @@ export function browserSite(platform: SocialPlatform) {
       posts: threadsPostsScript,
       ready: '[role="navigation"],input[autocomplete="username"]',
       compose: "https://www.threads.com/",
-      create:
-        '[role="navigation"] :is(button,[role="button"]):has(svg[aria-label="Create"],svg[title="Create"]),[role="navigation"] a[href="/create"]',
+      create: ':is(button,[role="button"]):has(svg[aria-label="New thread"])',
       reply:
-        ':is(button,[role="button"]):has(svg[title="Comment"],svg[aria-label="Reply"],svg[aria-label="Comment"]) >> nth=0',
+        ':is(button,[role="button"]):has(svg[title="Comment"],svg[aria-label="Reply"],svg[aria-label="Comment"])',
       input: threadsComposer,
-      submit: '[role="dialog"] :is(button,[role="button"]):text-is("Post")',
+      submitIndex: threadsSubmitIndex,
+      submit: threadsSubmitButtons,
       sent: threadsSentScript,
       prefix: (handle: string) => `/@${handle.toLowerCase()}/post/`,
     };
@@ -36,11 +38,12 @@ export function browserSite(platform: SocialPlatform) {
     identity: identityScript,
     posts: publicScript,
     ready:
-      '[data-testid="AppTabBar_Profile_Link"],[data-testid="loginButton"],input[autocomplete="username"]',
+      '[data-testid="AppTabBar_Profile_Link"],[data-testid="loginButton"],input[autocomplete="username"],[data-testid="tweetTextarea_0"],[data-testid="searchPeople"],[data-testid="dmComposerTextInput"]',
     compose: "https://x.com/compose/post",
     create: undefined,
-    reply: '[data-testid="reply"] >> nth=0',
+    reply: '[data-testid="reply"]',
     input: '[data-testid="tweetTextarea_0"]',
+    submitIndex: undefined,
     submit: '[data-testid="tweetButton"]',
     sent: sentScript,
     prefix: (handle: string) => `/${handle.toLowerCase()}/status/`,
