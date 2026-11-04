@@ -79,6 +79,9 @@ async function publish(
   const site = page.site;
   const profile = site.profile(account.handle, action.kind === "reply");
   await page.navigate(profile);
+  // Profile data must finish loading before an old permalink can be ruled out.
+  // A busy/unavailable profile fails before submission, rather than assuming it is empty.
+  await page.command("wait", "--load", "networkidle");
   const before = Schema.decodeUnknownSync(Posts)(await page.read(site.posts));
   await page.navigate(action.kind === "reply" ? action.url : site.compose);
   if (action.kind === "reply") await page.command("click", site.reply);
@@ -86,15 +89,20 @@ async function publish(
   await page.command("wait", site.input);
   await page.send(site.input, action.text, site.submit, site.sent);
   await page.navigate(profile);
-  const after = Schema.decodeUnknownSync(Posts)(await page.read(site.posts));
-  const posted = after.find(
-    (post) =>
-      post.url?.toLowerCase().startsWith(site.prefix(account.handle)) &&
-      normalized(post.body) === normalized(action.text) &&
-      !before.some((prior) => prior.url === post.url),
-  );
-  if (!posted?.url) throw new Error("Published social post could not be verified");
-  return { text: "Published", url: `${new URL(site.home).origin}${posted.url}` };
+  // Navigation can finish before the profile's post list arrives. Only re-read;
+  // never resubmit an external write while waiting for its receipt.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const after = Schema.decodeUnknownSync(Posts)(await page.read(site.posts));
+    const posted = after.find(
+      (post) =>
+        post.url?.toLowerCase().startsWith(site.prefix(account.handle)) &&
+        normalized(post.body) === normalized(action.text) &&
+        !before.some((prior) => prior.url === post.url),
+    );
+    if (posted?.url) return { text: "Published", url: `${new URL(site.home).origin}${posted.url}` };
+    await page.command("wait", "250");
+  }
+  throw new Error("Published social post could not be verified");
 }
 async function privateMessages(
   run: SocialRun,

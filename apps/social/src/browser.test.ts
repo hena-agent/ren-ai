@@ -130,6 +130,27 @@ test.each(["post", "reply"] as const)(
   },
 );
 
+test("a delayed Threads receipt is observed without submitting the post again", async () => {
+  const f = fixture("threads");
+  const command = f.adapter.command;
+  let reads = 0;
+  f.adapter.command = async (...args) => {
+    const result = await command(...args);
+    if (args[2][0] === "eval" && args[2][1] === threadsPostsScript && ++reads < 4)
+      return JSON.stringify({ success: true, data: { result: "[]" } });
+    return result;
+  };
+  expect(await f.execute({ kind: "post", text: "Hello Threads" })).toEqual({
+    text: "Published",
+    url: "https://www.threads.com/@persona_x/post/ABC123",
+  });
+  expect(
+    f.commands.filter(
+      ([kind, , , selector]) => kind === "find" && selector === browserSite("threads").submit,
+    ),
+  ).toHaveLength(1);
+});
+
 test.each(["post", "reply"] as const)(
   "%s verifies a newly published status and guards immediately before clicking send",
   async (kind) => {

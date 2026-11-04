@@ -17,7 +17,11 @@ const home = await mkdtemp(join(tmpdir(), "social-browser-test-"));
 // The macOS Unix socket limit is 103 bytes, shorter than the usual temporary directory.
 const sockets = await mkdtemp("/tmp/renai-browser-test-");
 const html = await readFile(new URL("./browser-fixture.html", import.meta.url), "utf8");
-const server = createServer((_request, response) => {
+const server = createServer((request, response) => {
+  if (request.url === "/history") {
+    setTimeout(() => response.end("ready"), 900);
+    return;
+  }
   response.setHeader("Content-Type", "text/html");
   response.end(html);
 });
@@ -135,10 +139,10 @@ test("X can publish while the composer modal covers the profile navigation", asy
   ).toEqual({ text: "Published", url: "https://x.com/persona_x/status/1" });
 });
 
-test("an old matching Threads post cannot confirm an unverified submission", async () => {
+test("delayed old Threads history cannot confirm an unverified submission", async () => {
   await command([
     "eval",
-    `sessionStorage.setItem('posts', '[{"text":"Old post","reply":false}]');sessionStorage.setItem('noPublication','true')`,
+    `sessionStorage.setItem('posts', '[{"text":"Old post","reply":false}]');sessionStorage.setItem('noPublication','true');sessionStorage.setItem('delayHistory','true')`,
   ]);
   await expect(execute({ kind: "post", text: "Old post" })).rejects.toThrow(
     "could not be verified",

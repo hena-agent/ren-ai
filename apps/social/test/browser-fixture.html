@@ -18,19 +18,24 @@
     </main>
     <script>
       setTimeout(() => document.querySelector("#splash").remove(), 500);
-      for (const [index, post] of JSON.parse(sessionStorage.getItem("posts") || "[]").entries()) {
-        if (post.reply !== location.pathname.endsWith("/replies")) continue;
-        const article = document.createElement("article");
-        const url = post.x ? `/persona_x/status/${index + 1}` : `/@persona_x/post/TEST${index}`;
-        article.innerHTML = `<a href="${url}"><time>now</time></a><div dir="auto" data-testid="tweetText"></div><button><svg aria-label="Reply"></svg></button>`;
-        const body = article.querySelector('[dir="auto"]');
-        body.textContent = post.text;
-        const translate = document.createElement("span");
-        translate.setAttribute("role", "button");
-        translate.textContent = "Translate";
-        if (!post.x) body.append(translate);
-        document.querySelector("main").append(article);
-      }
+      const renderPosts = async () => {
+        if (sessionStorage.getItem("awaitReceipt") || sessionStorage.getItem("delayHistory"))
+          await fetch("/history");
+        for (const [index, post] of JSON.parse(sessionStorage.getItem("posts") || "[]").entries()) {
+          if (post.reply !== location.pathname.endsWith("/replies")) continue;
+          const article = document.createElement("article");
+          const url = post.x ? `/persona_x/status/${index + 1}` : `/@persona_x/post/TEST${index}`;
+          article.innerHTML = `<a href="${url}"><time>now</time></a><div dir="auto" data-testid="tweetText"></div><button><svg aria-label="Reply"></svg></button>`;
+          const body = article.querySelector('[dir="auto"]');
+          body.textContent = post.text;
+          const translate = document.createElement("span");
+          translate.setAttribute("role", "button");
+          translate.textContent = "Translate";
+          if (!post.x) body.append(translate);
+          document.querySelector("main").append(article);
+        }
+      };
+      void renderPosts();
       const composePost = (reply) => {
         const dialog = document.createElement("div");
         dialog.setAttribute("role", "dialog");
@@ -40,6 +45,7 @@
           if (!sessionStorage.getItem("noPublication"))
             posts.push({ text: dialog.querySelector('[role="textbox"]').textContent, reply });
           sessionStorage.setItem("posts", JSON.stringify(posts));
+          sessionStorage.setItem("awaitReceipt", "true");
           dialog.remove();
         };
         document.body.append(dialog);
