@@ -21,6 +21,11 @@
       const renderPosts = async () => {
         if (sessionStorage.getItem("awaitReceipt") || sessionStorage.getItem("delayHistory"))
           await fetch("/history");
+        // Threads can serve the pre-publication profile snapshot until a fresh navigation.
+        if (location.pathname.startsWith("/@persona_x") && sessionStorage.getItem("staleProfile")) {
+          sessionStorage.removeItem("staleProfile");
+          return;
+        }
         for (const [index, post] of JSON.parse(sessionStorage.getItem("posts") || "[]").entries()) {
           if (post.reply !== location.pathname.endsWith("/replies")) continue;
           const article = document.createElement("article");
@@ -46,6 +51,7 @@
             posts.push({ text: dialog.querySelector('[role="textbox"]').textContent, reply });
           sessionStorage.setItem("posts", JSON.stringify(posts));
           sessionStorage.setItem("awaitReceipt", "true");
+          sessionStorage.setItem("staleProfile", "true");
           dialog.remove();
         };
         document.body.append(dialog);

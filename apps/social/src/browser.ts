@@ -89,9 +89,10 @@ async function publish(
   await page.command("wait", site.input);
   await page.send(site.input, action.text, site.submit, site.sent);
   await page.navigate(profile);
-  // Navigation can finish before the profile's post list arrives. Only re-read;
-  // never resubmit an external write while waiting for its receipt.
+  // The list can arrive late or remain cached before publication. Only re-read
+  // and refresh the profile; never resubmit while waiting for its receipt.
   for (let attempt = 0; attempt < 40; attempt++) {
+    if (attempt > 0 && attempt % 8 === 0) await page.navigate(profile);
     const after = Schema.decodeUnknownSync(Posts)(await page.read(site.posts));
     const posted = after.find(
       (post) =>
