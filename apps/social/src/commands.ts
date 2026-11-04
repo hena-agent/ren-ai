@@ -4,11 +4,14 @@ import { mkdir, readFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 import type { SocialAuthAccount } from "@ren-ai/onboarding/social-auth";
+import type { SocialImageData } from "@ren-ai/onboarding/social-images";
+import { withImageUpload } from "./image-upload.ts";
 
 export const browserAccount = (account: Pick<SocialAuthAccount, "platform" | "id">) =>
   account.platform === "threads" ? `threads:${account.id}` : account.id;
 
 export interface BrowserCommands {
+  withImage?: <T>(image: SocialImageData, operation: (path: string) => Promise<T>) => Promise<T>;
   open: (account: string, url?: string) => Promise<number>;
   command: (
     account: string,
@@ -126,52 +129,54 @@ export function browserCommands(
     void launched.catch(() => browsers.delete(account));
     return launched;
   };
+  const command: BrowserCommands["command"] = async (account, port, args, signal, input) => {
+    await mkdir(socketDirectory, { recursive: true, mode: 0o700 });
+    await chmod(socketDirectory, 0o700);
+    return new Promise<string>((resolve, reject) => {
+      const child = execFile(
+        agentBrowser,
+        [
+          "--session",
+          `renai-${createHash("sha256").update(account).digest("hex").slice(0, 32)}`,
+          ...(args[0] === "auth" || args[0] === "--version" ? [] : ["--cdp", String(port)]),
+          "--json",
+          ...args,
+        ],
+        {
+          signal,
+          timeout: 30000,
+          maxBuffer: 1024 * 1024,
+          env: {
+            ...process.env,
+            HOME: join(home, "agent-browser"),
+            AGENT_BROWSER_SOCKET_DIR: socketDirectory,
+          },
+        },
+        (error, stdout) => {
+          if (error) {
+            browsers.delete(account);
+            return reject(
+              Object.assign(
+                new Error("agent-browser execution failed", {
+                  cause: input === undefined ? error : new Error("Private browser command failed"),
+                }),
+                {
+                  code: "SOCIAL_BROWSER_COMMAND",
+                },
+              ),
+            );
+          }
+          resolve(stdout);
+        },
+      );
+      child.stdin!.on("error", () => undefined);
+      child.stdin!.end(input);
+    });
+  };
   return {
     open,
-    command: async (account, port, args, signal, input) => {
-      await mkdir(socketDirectory, { recursive: true, mode: 0o700 });
-      await chmod(socketDirectory, 0o700);
-      return new Promise<string>((resolve, reject) => {
-        const child = execFile(
-          agentBrowser,
-          [
-            "--session",
-            `renai-${createHash("sha256").update(account).digest("hex").slice(0, 32)}`,
-            ...(args[0] === "auth" || args[0] === "--version" ? [] : ["--cdp", String(port)]),
-            "--json",
-            ...args,
-          ],
-          {
-            signal,
-            timeout: 30000,
-            maxBuffer: 1024 * 1024,
-            env: {
-              ...process.env,
-              HOME: join(home, "agent-browser"),
-              AGENT_BROWSER_SOCKET_DIR: socketDirectory,
-            },
-          },
-          (error, stdout) => {
-            if (error) {
-              browsers.delete(account);
-              return reject(
-                Object.assign(
-                  new Error("agent-browser execution failed", {
-                    cause:
-                      input === undefined ? error : new Error("Private browser command failed"),
-                  }),
-                  {
-                    code: "SOCIAL_BROWSER_COMMAND",
-                  },
-                ),
-              );
-            }
-            resolve(stdout);
-          },
-        );
-        child.stdin!.on("error", () => undefined);
-        child.stdin!.end(input);
-      });
-    },
+    command,
+    withImage: <T>(image: SocialImageData, operation: (path: string) => Promise<T>) =>
+      withImageUpload(home, image, operation),
   };
 }

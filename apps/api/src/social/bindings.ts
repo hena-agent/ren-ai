@@ -7,6 +7,8 @@ import { serviceBase } from "../cloudflare-config.ts";
 import type { SocialOptions } from "./service.ts";
 import { SocialError } from "./service.ts";
 import { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
+import { SocialFailure } from "@ren-ai/onboarding/social-diagnostics";
+import { socialImageBackend } from "./image-backend.ts";
 
 export function socialBindings(
   env: CloudflareBindings,
@@ -54,13 +56,20 @@ export function socialBindings(
     }
     if (response.status === 409 && path === "/auth")
       throw new SocialError(409, "SOCIAL_AUTH_CONFLICT");
+    if (response.status === 422 && path === "/browser") {
+      const failure = Schema.decodeUnknownSync(SocialFailure)(await response.json());
+      throw Object.assign(new SocialError(422, failure.error), { diagnostic: failure.diagnostic });
+    }
     if (!response.ok)
       throw Object.assign(new SocialError(503, "SOCIAL_EXECUTOR_UNAVAILABLE"), {
         upstreamStatus: response.status,
+        requestId: response.headers.get("X-Request-ID"),
       });
     return response;
   };
+  const images = socialImageBackend(env, catalog, fetcher);
   return {
+    ...(images && { images }),
     gatewayUrl: env.API_MSG_URL,
     authenticate: async (account, command, requestId) => {
       const response = await native("/auth", { account, command }, requestId);
@@ -104,9 +113,15 @@ export function socialBindings(
     open: async (accountId, platform) => {
       await native("/open", { accountId, platform });
     },
-    browser: async (run, account, action, id) =>
+    browser: async (run, account, action, id, image) =>
       Schema.decodeUnknownSync(SocialResult)(
-        await (await native("/browser", { run, account, action, id }, run.requestId)).json(),
+        await (
+          await native(
+            "/browser",
+            { run, account, action, id, ...(image && { image }) },
+            run.requestId,
+          )
+        ).json(),
       ),
   };
 }

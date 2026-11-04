@@ -35,7 +35,7 @@ const authentication = socialAuthentication({
 const fetch = socialExecutor({
   token: config.token,
   application,
-  model: socialModel(config.opencode),
+  model: socialModel({ ...config.opencode, image: application.image }),
   browser: socialBrowser(commands, authentication, exclusive),
   authentication,
   readiness: async () => ({

@@ -5,7 +5,7 @@ export const threadsPostsScript = String.raw`JSON.stringify((()=>{
  const seen=new Set();return Array.from(document.querySelectorAll('a[href*="/post/"]')).filter(a=>{const href=a.getAttribute('href');if(!/^\/@[A-Za-z0-9_.]{1,30}\/post\/[A-Za-z0-9_-]+$/.test(href??'')||seen.has(href))return false;seen.add(href);return true}).slice(0,10).map(a=>{
  let row=a;for(let i=0;i<12&&row.parentElement;i++){if(row.querySelector('svg[title="Comment"],svg[aria-label="Reply"],svg[aria-label="Comment"]'))break;row=row.parentElement;}
   const body=Array.from(row.querySelectorAll('[dir="auto"]')).filter(e=>!e.querySelector('time,svg')&&!e.closest('a,time,[role="button"]')&&e.textContent.trim()).map(e=>{const copy=e.cloneNode(true);copy.querySelectorAll('button,[role="button"]').forEach(button=>button.remove());return copy.textContent.trim()}).filter((text,index,all)=>text&&all.indexOf(text)===index).join(' ').slice(0,1800);
- return {text:body,body,url:a.getAttribute('href')};});})())`;
+  return {text:body,body,url:a.getAttribute('href'),hasImage:Array.from(row.querySelectorAll('img')).some(image=>{const r=image.getBoundingClientRect();return image.complete&&image.naturalWidth>0&&r.width>160&&r.height>160})};});})())`;
 export const threadsComposer = '[role="dialog"] [contenteditable="true"][role="textbox"]';
 export const threadsSubmitButtons = '[role="dialog"] :is(button,[role="button"])';
 export const threadsSubmitIndex = `(()=>{

@@ -10,6 +10,12 @@ import {
 } from "@ren-ai/onboarding/social";
 import { SocialError, type SocialOptions, type SocialService } from "./service.ts";
 import type { SocialStore, EventRow } from "./store.ts";
+import { actionDiagnostic, recordActionFailure, settleActionFailure } from "./diagnostics.ts";
+import type { SocialImages } from "./images.ts";
+import type { SocialDiagnostic } from "@ren-ai/onboarding/social-diagnostics";
+type PublicWrite = Extract<SocialAction, { kind: "post" | "reply" }>;
+const isPublicWrite = (action: SocialAction): action is PublicWrite =>
+  action.kind === "post" || action.kind === "reply";
 
 function replay(prior: EventRow, serialized: string) {
   if (prior.input !== serialized) throw new SocialError(409, "SOCIAL_ACTION_CONFLICT");
@@ -37,7 +43,8 @@ function checkAction(
     throw new SocialError(409, "SOCIAL_WRITE_LIMIT");
   if (action.kind === "reply") return `reply:${action.url}`;
   if (action.kind === "dm") return `dm:${run.contact}:${action.text}`;
-  if (action.kind === "post") return `post:${action.text}`;
+  if (action.kind === "post")
+    return action.imageId ? `post-image:${action.imageId}:${action.text}` : `post:${action.text}`;
   return null;
 }
 async function perform(
@@ -46,6 +53,7 @@ async function perform(
   account: SocialAccount,
   action: SocialAction,
   id: string,
+  images: SocialImages,
 ): Promise<SocialResult> {
   if (action.kind === "contact") {
     const publicContext =
@@ -58,10 +66,144 @@ async function perform(
     };
   }
   if (action.kind === "finish") return { text: "Finished" };
-  return options.browser(run, account, action, id);
+  if (action.kind === "image_idea") {
+    const image = await images.idea(
+      run,
+      account,
+      action.scene,
+      action.probability,
+      action.creativeScene,
+    );
+    return {
+      text: `Image decision: ${image.kind}; ${image.state}. The recorded dice choice is final. Review a ready image before publishing.`,
+      image,
+    };
+  }
+  if (action.kind === "review_image") {
+    const image = images.review(run, account, action.imageId, action.accept);
+    return {
+      text: action.accept
+        ? "Image approved for a separate publish decision."
+        : "Image rejected; not published.",
+      image,
+    };
+  }
+  if (action.kind !== "post" || !action.imageId) return options.browser(run, account, action, id);
+  const image = await images.prepare(run, account, action.imageId);
+  images.claim(run, image.id);
+  const result = await options.browser(run, account, action, id, image);
+  if (!result.url) throw new SocialError(503, "SOCIAL_IMAGE_RECEIPT_REQUIRED");
+  images.settle(run, image.id, "posted");
+  return result;
+}
+function recoverVerifiedPublication(
+  store: SocialStore,
+  run: SocialRun,
+  step: number,
+  account: SocialAccount,
+  action: PublicWrite,
+  postId: string,
+  images: SocialImages,
+): SocialResult {
+  const url =
+    account.platform === "threads"
+      ? `https://www.threads.com/@${account.handle}/post/${postId}`
+      : `https://x.com/${account.handle}/status/${postId}`;
+  const result = { text: "Published", url };
+  const recoveredRun = { ...run, step: step + 1 };
+  store.transaction(() => {
+    store.exec("UPDATE social_run SET data=? WHERE id=?", JSON.stringify(recoveredRun), run.id);
+    store.exec(
+      "UPDATE social_event SET state='completed',result=?,url=?,text=? WHERE run_id=? AND step=? AND state='pending'",
+      JSON.stringify(result),
+      url,
+      action.text,
+      run.id,
+      step,
+    );
+  });
+  if (action.kind === "post" && action.imageId)
+    images.settle(recoveredRun, action.imageId, "posted");
+  return result;
+}
+function recoverVerifiedPublicWrite(
+  store: SocialStore,
+  run: SocialRun,
+  step: number,
+  account: SocialAccount,
+  action: SocialAction,
+  diagnostic: SocialDiagnostic,
+  images: SocialImages,
+) {
+  if (!isPublicWrite(action) || diagnostic.submission !== "verified" || !diagnostic.postId)
+    return undefined;
+  return recoverVerifiedPublication(store, run, step, account, action, diagnostic.postId, images);
+}
+type FailedAction = {
+  run: SocialRun;
+  step: number;
+  account: SocialAccount;
+  action: SocialAction;
+  day: string;
+  target: string | null;
+  write: boolean;
+};
+function failAction(
+  store: SocialStore,
+  service: SocialService,
+  options: SocialOptions,
+  images: SocialImages,
+  failed: FailedAction,
+  cause: Error,
+): SocialResult {
+  const { run, step, account, action, day, target, write } = failed;
+  const authRequired = cause instanceof SocialError && cause.code === "SOCIAL_AUTH_REQUIRED";
+  const failure = {
+    ...actionDiagnostic(cause, run, options.now()),
+    ...(authRequired && { submission: "not_attempted" as const }),
+  };
+  const diagnostic = recordActionFailure(store, { ...run, step }, failure, {
+    personaId: account.personaId,
+  });
+  const recovered = recoverVerifiedPublicWrite(
+    store,
+    run,
+    step,
+    account,
+    action,
+    diagnostic,
+    images,
+  );
+  if (recovered) return recovered;
+  settleActionFailure(
+    store,
+    service,
+    {
+      run: { ...run, step },
+      accountId: account.id,
+      personaId: account.personaId,
+      day,
+      target,
+      write,
+      authRequired,
+    },
+    diagnostic,
+  );
+  if (action.kind === "post" && action.imageId)
+    images.settle(
+      run,
+      action.imageId,
+      diagnostic.submission === "not_attempted" ? "approved" : "uncertain",
+    );
+  throw cause;
 }
 
-export function socialActions(store: SocialStore, service: SocialService, options: SocialOptions) {
+export function socialActions(
+  store: SocialStore,
+  service: SocialService,
+  options: SocialOptions,
+  images: SocialImages,
+) {
   return async (input: typeof SocialStep.Type) => {
     const prior = store.exec<EventRow>(
       "SELECT * FROM social_event WHERE run_id=? AND step=?",
@@ -108,7 +250,14 @@ export function socialActions(store: SocialStore, service: SocialService, option
         store.exec("INSERT INTO social_target VALUES (?,?,?)", account.id, target, options.now());
     });
     try {
-      const result = await perform(options, run, account, action, `${run.id}-${input.step}`);
+      const result = await perform(
+        options,
+        run,
+        account,
+        action,
+        `${run.id}-${input.step}`,
+        images,
+      );
       store.transaction(() => {
         run.step++;
         store.exec("UPDATE social_run SET data=? WHERE id=?", JSON.stringify(run), run.id);
@@ -124,38 +273,14 @@ export function socialActions(store: SocialStore, service: SocialService, option
       if (action.kind === "finish") service.complete(run.id, "completed");
       return result;
     } catch (cause) {
-      if (cause instanceof SocialError && cause.code === "SOCIAL_AUTH_REQUIRED") {
-        store.transaction(() => {
-          store.exec(
-            "UPDATE social_event SET state='failed',result=? WHERE run_id=? AND step=?",
-            JSON.stringify({ text: "not sent: social authentication required" }),
-            run.id,
-            input.step,
-          );
-          if (write)
-            store.exec(
-              "UPDATE social_account SET writes=MAX(writes-1,0) WHERE id=? AND day=?",
-              account.id,
-              claimedDay,
-            );
-          if (target)
-            store.exec(
-              "DELETE FROM social_target WHERE account_id=? AND target=?",
-              account.id,
-              target,
-            );
-        });
-        service.complete(run.id, "login_required");
-        throw cause;
-      }
-      store.exec(
-        "UPDATE social_event SET state=? WHERE run_id=? AND step=?",
-        write ? "uncertain" : "failed",
-        run.id,
-        input.step,
+      return failAction(
+        store,
+        service,
+        options,
+        images,
+        { run, step: input.step, account, action, day: claimedDay, target, write },
+        cause instanceof Error ? cause : new Error("Social action failed"),
       );
-      service.complete(run.id, "failed");
-      throw cause;
     }
   };
 }

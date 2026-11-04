@@ -10,6 +10,8 @@ import { AdminLayout } from "./admin-layout.tsx";
 import { SocialAuthentication } from "./social-auth.tsx";
 import type { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
 import { SocialDeployment } from "./social-deployment.tsx";
+import { SocialFailureDetails } from "./social-diagnostic.tsx";
+import { SocialImageOptions, SocialImagesPanel, SocialImageUsage } from "./social-images.tsx";
 
 export interface SocialView {
   platform?: SocialPlatform;
@@ -43,6 +45,9 @@ const kinds: Record<string, string> = {
   dm: "DM 보내기",
   contact: "대화 상대 전환",
   finish: "활동 마침",
+  image_idea: "이미지 생성 판단",
+  review_image: "이미지 검수",
+  execution: "실행",
 };
 const date = (at: number, timeZone = "Asia/Seoul") =>
   new Date(at).toLocaleString("ko-KR", { timeZone });
@@ -72,6 +77,7 @@ function AccountForm({
   personas,
   personaId,
   authentication,
+  snapshot,
   platform,
 }: SocialView & { platform: SocialPlatform }) {
   const fields = platformFields[platform];
@@ -149,6 +155,7 @@ function AccountForm({
             Threads는 공개 글 탐색·게시·댓글을 지원하며 DM·알림은 지원하지 않습니다.
           </p>
         )}
+        <SocialImageOptions account={selected} snapshot={snapshot} />
         <label>
           활동 지침
           <textarea
@@ -157,7 +164,7 @@ function AccountForm({
             rows={4}
             defaultValue={
               selected?.instructions ??
-              "Character.AI·제타 등 AI 컴패니언을 실제로 사용하는 사람을 찾아 관심사와 사용 경험을 알아보세요. 자신의 취향과 맞는 글에 대화하고, 관심이 이어지면 RenAI 초대를 제안하세요."
+              "RenAI의 AI 페르소나임을 밝히고, 본인 모습과 취향이 담긴 이미지·글로 관심을 끄세요. 실제 반응을 보고 다음 창작을 고르고 관련 대화에 자연스럽게 참여하세요. 생성한 장면을 실제로 겪은 일처럼 말하지 마세요."
             }
           />
         </label>
@@ -265,7 +272,7 @@ export function socialPage(view: SocialView) {
             {view.snapshot && !accounts.length && (
               <p>연결된 계정이 없습니다. 아래에서 활동할 페르소나를 선택하세요.</p>
             )}
-            {accounts.map(({ account, state, nextAt, turns, writes }) => (
+            {accounts.map(({ account, state, nextAt, turns, writes, imageSpent }) => (
               <article key={account.id}>
                 <h3>
                   <a href={`${base}&account=${encodeURIComponent(account.id)}`}>
@@ -283,6 +290,7 @@ export function socialPage(view: SocialView) {
                   {platform === "threads" ? "게시·댓글" : "게시·댓글·DM"} 시도 한도 {writes}/
                   {account.dailyWrites}
                 </p>
+                <SocialImageUsage account={account} spent={imageSpent} />
                 {nextAt !== null && (
                   <p className="hint">
                     다음 확인: {date(nextAt, account.timeZone)} ({account.timeZone})
@@ -316,6 +324,7 @@ export function socialPage(view: SocialView) {
             ))}
           </section>
           <AccountForm {...view} platform={platform} />
+          <SocialImagesPanel snapshot={view.snapshot} accountIds={accountIds} />
           {view.selected && (
             <SocialAuthentication
               accountId={view.selected.id}
@@ -341,6 +350,7 @@ export function socialPage(view: SocialView) {
                 </p>
                 <p>{event.reason}</p>
                 <pre className="conversation-text">{event.text}</pre>
+                <SocialFailureDetails diagnostic={event.diagnostic} />
                 {event.url && (
                   <a href={event.url} target="_blank" rel="noreferrer">
                     게시물 보기

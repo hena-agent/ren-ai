@@ -15,11 +15,49 @@ import { SocialAuthRequest } from "@ren-ai/onboarding/social-auth";
 import { AuthenticationError, AuthenticationConflict } from "./auth-store.ts";
 import type { SocialAuthentication } from "./authentication.ts";
 import { socialLog, socialDiagnostic as diagnostic, type SocialLogEvent } from "./logging.ts";
+import { SocialDiagnostic, socialFailureCause } from "@ren-ai/onboarding/social-diagnostics";
+import { buildRevision } from "@ren-ai/transport/health";
+const WithDiagnostic = Schema.Struct({ diagnostic: SocialDiagnostic });
 
 type Trace = Pick<SocialLogEvent, "requestId" | "operationId" | "personaId" | "model">;
+async function boundedBody(request: Request, maximum: number) {
+  const length = request.headers.get("content-length");
+  if (length && /^\d+$/.test(length) && Number(length) > maximum) {
+    await request.body?.cancel().catch(() => {});
+    throw new Error("Social input exceeds limit");
+  }
+  if (!request.body) return "";
+  const source: ReadableStream<Uint8Array> = request.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>(),
+  );
+  const reader = source.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximum) {
+        await reader.cancel().catch(() => {});
+        throw new Error("Social input exceeds limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
 const parse = async <T, E>(request: Request, schema: Schema.Codec<T, E>) => {
-  const body = await request.text();
-  if (body.length > 140000) throw new Error("Social input exceeds limit");
+  const maximum = new URL(request.url).pathname === "/browser" ? 14200000 : 140000;
+  const body = await boundedBody(request, maximum);
   try {
     return Schema.decodeUnknownSync(Schema.fromJsonString(schema), { onExcessProperty: "error" })(
       body,
@@ -55,9 +93,40 @@ export function socialExecutor(options: {
     await guard();
     try {
       return Response.json(
-        await options.browser.execute(input.run, input.account, input.action, signal, guard),
+        await options.browser.execute(
+          input.run,
+          input.account,
+          input.action,
+          signal,
+          guard,
+          {
+            requestId: trace.requestId,
+            progress: (value) => options.application.progress(input.run.id, input.run.step, value),
+          },
+          input.image,
+        ),
       );
     } catch (cause) {
+      if (
+        Schema.is(WithDiagnostic)(cause) &&
+        !(cause instanceof AuthenticationError) &&
+        !(cause instanceof LoginRequired)
+      ) {
+        log({
+          ...trace,
+          operation: "social.browser",
+          stage: cause.diagnostic.stage,
+          outcome: "failed",
+          durationMs: cause.diagnostic.durationMs,
+          level: "error",
+          ...diagnostic(cause),
+          code: cause.diagnostic.code,
+        });
+        return Response.json(
+          { error: "SOCIAL_BROWSER_FAILED", diagnostic: cause.diagnostic },
+          { status: 422 },
+        );
+      }
       if (cause instanceof AuthenticationError) {
         log({
           ...trace,
@@ -114,6 +183,16 @@ export function socialExecutor(options: {
           await options.application.complete(
             task.run.id,
             cause instanceof LoginRequired ? "login_required" : "failed",
+            {
+              requestId: task.run.requestId,
+              stage: "model",
+              submission: "not_attempted",
+              code: "SOCIAL_RUN_FAILED",
+              at: Date.now(),
+              durationMs: performance.now() - started,
+              revision: buildRevision(),
+              ...socialFailureCause(cause),
+            },
           );
         } catch (completionCause) {
           log({

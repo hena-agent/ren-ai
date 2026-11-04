@@ -23,14 +23,14 @@ export function socialRunner(application: SocialApplication, model: SocialModel)
     state.done = (async () => {
       let observation =
         task.account.platform === "threads"
-          ? "Begin by searching Threads for relevant public conversations. Private messages and notifications are not available."
+          ? "Review existing public image drafts and recent engagement; choose relevant visual self-expression or public conversation. Private messages and notifications are not available."
           : "Begin by checking notifications or discovering relevant users. Use inbox to find private conversations to resume.";
       while (!signal.aborted) {
         const controlled = await application.control(task.run.id, true);
         signal.throwIfAborted();
         state.run = controlled.run;
         const decision = await model.decide(
-          task,
+          { ...task, ...(controlled.images && { images: controlled.images }) },
           controlled.run,
           `Recent activity in this scope: ${controlled.history ?? "[]"}\n${observation}`,
           signal,

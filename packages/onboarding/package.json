@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./social": "./src/social.ts",
     "./social-auth": "./src/social-auth.ts",
+    "./social-diagnostics": "./src/social-diagnostics.ts",
+    "./social-images": "./src/social-images.ts",
     "./turnstile": "./src/turnstile.tsx"
   },
   "scripts": {

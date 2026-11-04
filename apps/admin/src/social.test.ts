@@ -58,7 +58,7 @@ async function setup() {
     ...Object.fromEntries(
       Object.entries(socialAccount)
         .filter(([key]) => key !== "handle")
-        .map(([key, value]) => [key, String(value)]),
+        .flatMap(([key, value]) => (typeof value === "object" ? [] : [[key, String(value)]])),
     ),
     action: "save",
     username: "PRIVATE_ID@example.test",

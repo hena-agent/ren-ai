@@ -23,6 +23,7 @@ function fixture(platform: SocialPlatform = "x") {
   const original = socialTask();
   const task = { ...original, account: { ...original.account, platform } };
   const commands: string[][] = [];
+  let currentUrl = browserSite(platform).home;
   const observations = new Map<string, string>([
     [identityScript, JSON.stringify({ handle: task.account.handle })],
     [publicScript, "[]"],
@@ -39,6 +40,12 @@ function fixture(platform: SocialPlatform = "x") {
     open: async () => 1234,
     command: async (_account, _port, args) => {
       commands.push([...args]);
+      if (args[0] === "open") currentUrl = args[1]!;
+      if (args[0] === "eval" && args[1] === browserSite(platform).location)
+        return JSON.stringify({
+          success: true,
+          data: { result: JSON.stringify({ url: currentUrl }) },
+        });
       if (args[0] === "eval")
         return JSON.stringify({ success: true, data: { result: observations.get(args[1]!) } });
       if (args[0] === "click" && args[1] === '[data-testid="tweetButton"]') {
@@ -92,6 +99,63 @@ test("public discovery navigates only fixed X routes and checks the logged-in ac
   f.observations.set(identityScript, '{"handle":"wrong"}');
   await expect(f.execute({ kind: "notifications" })).rejects.toBeInstanceOf(LoginRequired);
 });
+
+test.each(["fill", "find"])(
+  "a failure at %s records the exact phase and conservative submission certainty",
+  async (point) => {
+    const f = fixture("threads");
+    const command = f.adapter.command;
+    f.adapter.command = async (...args) => {
+      if (args[2][0] === point)
+        throw Object.assign(new Error("PRIVATE_INPUT"), { code: "CLI_FAILED" });
+      return command(...args);
+    };
+    await expect(f.execute({ kind: "post", text: "Hello Threads" })).rejects.toMatchObject({
+      diagnostic: {
+        stage: point === "fill" ? "input" : "submit",
+        submission: point === "fill" ? "not_attempted" : "attempted",
+        causeCode: "CLI_FAILED",
+      },
+    });
+  },
+);
+
+test.each([true, false])(
+  "image publication requires uploaded media as well as a new text receipt (%s)",
+  async (hasImage) => {
+    const f = fixture("threads");
+    const command = f.adapter.command;
+    let uploaded = 0;
+    f.adapter.withImage = async (_image, operation) => {
+      uploaded++;
+      return operation("/private/draft.jpg");
+    };
+    f.adapter.command = async (...args) => {
+      const result = await command(...args);
+      if (args[2][0] === "find")
+        f.observations.set(
+          threadsPostsScript,
+          JSON.stringify([{ body: "Hello Threads", url: "/@persona_x/post/ABC123", hasImage }]),
+        );
+      return result;
+    };
+    const operation = f.browser.execute(
+      f.task.run,
+      f.task.account,
+      { kind: "post", text: "Hello Threads", imageId: "draft" },
+      new AbortController().signal,
+      async () => {},
+      undefined,
+      { id: "draft", data: "private image bytes", mime: "image/jpeg" },
+    );
+    const result = await operation.catch((cause: Error) => ({ text: cause.message }));
+    expect(result.text).toBe(
+      hasImage ? "Published" : "Published social post could not be verified",
+    );
+    expect(uploaded).toBe(1);
+    expect(f.commands).toContainEqual(["wait", browserSite("threads").attachmentReady]);
+  },
+);
 
 test("Threads uses isolated browser ownership, public discovery routes and same-platform links", async () => {
   const f = fixture("threads");
@@ -149,6 +213,68 @@ test("a delayed Threads receipt is observed without submitting the post again", 
       ([kind, , , selector]) => kind === "find" && selector === browserSite("threads").submit,
     ),
   ).toHaveLength(1);
+});
+
+test("an optimistic profile entry cannot confirm a post whose actual permalink is unavailable", async () => {
+  const f = fixture("threads");
+  const command = f.adapter.command;
+  f.adapter.command = async (...args) => {
+    const result = await command(...args);
+    if (args[2][0] === "open" && args[2][1]?.includes("/post/ABC123"))
+      f.observations.set(threadsPostsScript, "[]");
+    return result;
+  };
+  await expect(f.execute({ kind: "post", text: "Hello Threads" })).rejects.toMatchObject({
+    diagnostic: { stage: "receipt", submission: "attempted" },
+  });
+  expect(f.commands.filter(([kind]) => kind === "find")).toHaveLength(1);
+});
+
+test("a permalink redirect is distinguished from a successful own-post receipt", async () => {
+  const f = fixture("threads"),
+    command = f.adapter.command;
+  f.adapter.command = async (...args) =>
+    args[2][0] === "eval" && args[2][1] === browserSite("threads").location
+      ? JSON.stringify({
+          success: true,
+          data: { result: JSON.stringify({ url: "https://www.threads.com/?error=invalid_post" }) },
+        })
+      : command(...args);
+  await expect(f.execute({ kind: "post", text: "Hello Threads" })).rejects.toMatchObject({
+    diagnostic: {
+      stage: "receipt",
+      submission: "attempted",
+      causeCode: "SOCIAL_PERMALINK_REDIRECT",
+    },
+  });
+  expect(f.commands.filter(([kind]) => kind === "find")).toHaveLength(1);
+});
+
+test("missing image payloads, upload capability or staged files never reach the submit button", async () => {
+  const f = fixture(),
+    action = { kind: "post" as const, text: "Hello X", imageId: "draft" };
+  await expect(f.execute(action)).rejects.toThrow("attachment does not match");
+  const image = { id: "draft", mime: "image/jpeg" as const, data: "fixture" };
+  const execute = () =>
+    f.browser.execute(
+      f.task.run,
+      f.task.account,
+      action,
+      new AbortController().signal,
+      async () => {},
+      undefined,
+      image,
+    );
+  await expect(execute()).rejects.toMatchObject({
+    diagnostic: { stage: "attachment", submission: "not_attempted" },
+  });
+  f.adapter.withImage = async (_image, operation) => operation("");
+  await expect(execute()).rejects.toThrow("upload is unavailable");
+  expect(
+    f.commands.some(
+      ([kind, selector]) => kind === "click" && selector === '[data-testid="tweetButton"]',
+    ),
+  ).toBe(false);
 });
 
 test.each(["post", "reply"] as const)(
