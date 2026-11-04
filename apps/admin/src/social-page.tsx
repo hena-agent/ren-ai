@@ -50,12 +50,12 @@ const platformFields = {
   threads: {
     loginLabel: "Instagram 로그인 ID",
     loginPlaceholder: "Instagram 사용자명·이메일·전화번호",
-    writesLabel: "일일 게시·댓글 합계",
+    writesLabel: "일일 게시·댓글 시도 한도",
   },
   x: {
     loginLabel: "로그인 ID",
     loginPlaceholder: "이메일·전화번호·사용자명",
-    writesLabel: "일일 게시·댓글·DM 합계",
+    writesLabel: "일일 게시·댓글·DM 시도 한도",
   },
 };
 
@@ -253,6 +253,10 @@ export function socialPage(view: SocialView) {
           />
           <section aria-label="연결된 소셜 계정" className="contact-panel">
             <h2>계정과 페르소나</h2>
+            <p className="hint">
+              시도 한도는 게시 완료 건수가 아닙니다. 결과 미확인 시도도 중복 게시를 막기 위해 한도에
+              포함됩니다. 게시·댓글 완료 여부는 활동 내역의 완료 상태와 게시물 링크로 확인하세요.
+            </p>
             {!view.snapshot && (
               <p>
                 <output>계정 목록을 불러오지 못했습니다. 새로고침해 주세요.</output>
@@ -276,7 +280,7 @@ export function socialPage(view: SocialView) {
                 </h3>
                 <p>
                   {states[state] ?? state} · 판단 {turns}/{account.dailyTurns} ·{" "}
-                  {platform === "threads" ? "게시·댓글" : "게시·댓글·DM"} {writes}/
+                  {platform === "threads" ? "게시·댓글" : "게시·댓글·DM"} 시도 한도 {writes}/
                   {account.dailyWrites}
                 </p>
                 {nextAt !== null && (
