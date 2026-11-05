@@ -8,7 +8,8 @@ import { socialRunner } from "./runner.ts";
 import type { SocialModel } from "./model.ts";
 import { LoginRequired, type socialBrowser } from "./browser.ts";
 import { socialConfiguration } from "./config.ts";
-import type { SocialAuthentication } from "./authentication.ts";
+import { applicationFixture } from "../test/application.test-helper.ts";
+import { serverAuthStub } from "../test/server.test-helper.ts";
 
 afterEach(() => vi.restoreAllMocks());
 function fixture() {
@@ -18,7 +19,7 @@ function fixture() {
   const completions: string[] = [];
   const logs: Parameters<typeof socialLog>[0][] = [];
   const application: SocialApplication = {
-    authenticated: async () => {},
+    ...applicationFixture(task),
     control: async () => ({ run, account: task.account }),
     action: async (_id, _step, decision) => {
       decisions.push(decision);
@@ -42,11 +43,6 @@ function fixture() {
     open: vi.fn<ReturnType<typeof socialBrowser>["open"]>(async () => 1234),
     execute: vi.fn<ReturnType<typeof socialBrowser>["execute"]>(async () => ({ text: "observed" })),
   };
-  const authentication: SocialAuthentication = {
-    ensure: async () => {},
-    status: async () => ({ state: "not_configured", hasCredentials: false }),
-    submit: async () => ({ state: "not_configured", hasCredentials: false }),
-  };
   const readiness = vi.fn<Parameters<typeof socialExecutor>[0]["readiness"]>(async () => ({
     chromeCanary: true,
     agentBrowser: true,
@@ -57,7 +53,7 @@ function fixture() {
     application,
     model,
     browser,
-    authentication,
+    authentication: serverAuthStub,
     readiness,
     log: (event) => logs.push(event),
   });
@@ -80,7 +76,7 @@ function fixture() {
     application,
     model,
     browser,
-    authentication,
+    authentication: serverAuthStub,
     readiness,
     logs,
     completions,
@@ -369,16 +365,60 @@ test("the native application client validates responses and never follows creden
   });
 });
 
-test("Threads executions start with public discovery instead of asking for unavailable inbox actions", async () => {
+test("Threads executions start with public visual activity instead of asking for unavailable inbox actions", async () => {
   const f = fixture();
+  const control = f.application.control;
+  f.application.control = async (...args) => ({ ...(await control(...args)), images: [] });
   f.model.decide = async (_task, _run, observation) => {
-    expect(observation).toContain("searching Threads");
+    expect(_task.images).toEqual([]);
+    expect(observation).toContain("public image drafts");
+    expect(observation).toContain("Private messages and notifications are not available");
     return { action: { kind: "finish" }, reason: "Done" };
   };
   await f.request("/runs", { ...f.task, account: { ...f.task.account, platform: "threads" } });
   await vi.waitFor(() =>
     expect(f.decisions).toEqual([{ action: { kind: "finish" }, reason: "Done" }]),
   );
+});
+
+test("browser failure responses carry durable phase checkpoints without private error text", async () => {
+  const f = fixture();
+  f.hold();
+  await f.request("/runs", f.task);
+  const progress = vi.fn<SocialApplication["progress"]>(async () => {});
+  f.application.progress = progress;
+  f.browser.execute.mockImplementation(
+    async (_run, _account, _action, _signal, _guard, observer) => {
+      if (!observer) throw new Error("Missing browser observer");
+      const diagnostic = {
+        requestId: observer.requestId,
+        stage: "composer" as const,
+        submission: "not_attempted" as const,
+        code: "SOCIAL_BROWSER_FAILED",
+        at: 1,
+        durationMs: 20,
+      };
+      await observer.progress(diagnostic);
+      throw Object.assign(new Error("PRIVATE_BROWSER_TEXT"), { diagnostic });
+    },
+  );
+  const response = await f.request("/browser", {
+    run: f.task.run,
+    account: f.task.account,
+    action: { kind: "post", text: "draft" },
+    id: "action",
+  });
+  expect(response.status).toBe(422);
+  expect(progress).toHaveBeenCalledOnce();
+  expect(await response.text()).not.toContain("PRIVATE_BROWSER_TEXT");
+  expect(f.logs).toContainEqual(
+    expect.objectContaining({
+      operation: "social.browser",
+      stage: "composer",
+      code: "SOCIAL_BROWSER_FAILED",
+    }),
+  );
+  await f.request("/cancel", { accountId: f.task.account.id });
 });
 
 test("Mac configuration requires protected credentials, absolute profile storage and a valid port", () => {

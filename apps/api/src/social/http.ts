@@ -10,9 +10,18 @@ import { SocialAuthInput, SocialAuthAccount } from "@ren-ai/onboarding/social-au
 import { socialAuthentication } from "./authentication.ts";
 import { macDeployment } from "./deployment.ts";
 import { DeploymentClaim, DeploymentReport } from "@ren-ai/transport/deployment";
+import { SocialDiagnostic } from "@ren-ai/onboarding/social-diagnostics";
+import { saveSocialDiagnostic } from "./diagnostics.ts";
+import { socialImages } from "./images.ts";
+const Progress = Schema.Struct({
+  runId: SocialID,
+  step: Schema.Number,
+  diagnostic: SocialDiagnostic,
+});
 
 const RunID = Schema.Struct({ runId: SocialID });
 const Completion = Schema.Struct({
+  diagnostic: Schema.optionalKey(SocialDiagnostic),
   runId: SocialID,
   state: Schema.Literals(["completed", "failed", "login_required"]),
 });
@@ -31,11 +40,59 @@ function cursor(request: Request) {
   if (!Number.isSafeInteger(before) || before < 1) throw new SocialError(400, "SOCIAL_CURSOR");
   return before;
 }
+async function readBody(request: Request, maximum: number) {
+  const length = request.headers.get("content-length");
+  if (length && /^\d+$/.test(length) && Number(length) > maximum) {
+    await request.body?.cancel().catch(() => {});
+    throw new SocialError(413, "SOCIAL_INPUT_SIZE");
+  }
+  if (!request.body) return "";
+  const source: ReadableStream<Uint8Array> = request.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>(),
+  );
+  const reader = source.getReader(),
+    chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maximum) {
+        await reader.cancel().catch(() => {});
+        throw new SocialError(413, "SOCIAL_INPUT_SIZE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new SocialError(400, "SOCIAL_INPUT_INVALID");
+  }
+}
 
 export function createSocial(storage: SocialStorage, options: SocialOptions) {
   const store = socialStore(storage);
   const service = socialService(store, options);
-  const actions = socialActions(store, service, options);
+  const images = socialImages(store, options.now, options.images);
+  const actions = socialActions(store, service, options, images);
+  const control = (id: string) => {
+    const value = service.control(id);
+    return {
+      ...value,
+      images:
+        value.run.contact === null ? images.latest(value.account.id, value.run.generation) : [],
+    };
+  };
   const authentication = socialAuthentication(store, service, options);
   const deployment = macDeployment(
     store,
@@ -45,6 +102,8 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
   const snapshot = (before: number) => ({
     ...store.snapshot(before),
     deployment: deployment.status(),
+    images: images.snapshot(),
+    imageSupport: Boolean(options.images),
   });
   const operate = async (body: string, open: boolean) => {
     const id = decode(AccountID, body).accountId;
@@ -59,7 +118,7 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     return new Response(null, { status: 204 });
   };
   const turn = (body: string) => {
-    const controlled = service.control(decode(RunID, body).runId);
+    const controlled = control(decode(RunID, body).runId);
     const { run, account } = controlled;
     const row = store.usage(store.account(account.id)!, options.now());
     if (
@@ -81,6 +140,53 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     string,
     (body: string, requestId: string) => Response | Promise<Response>
   > = {
+    "image-preview": async (body) => {
+      const input = decode(Schema.Struct({ accountId: SocialID, imageId: SocialID }), body);
+      const row = store.account(input.accountId);
+      if (!row) throw new SocialError(404, "SOCIAL_ACCOUNT_NOT_FOUND");
+      return Response.json(
+        await images.operatorPreview(store.config(row), row.generation, input.imageId),
+      );
+    },
+    image: async (body) => {
+      const input = decode(Schema.Struct({ runId: SocialID, imageId: SocialID }), body);
+      const value = service.control(input.runId);
+      return Response.json(await images.preview(value.run, value.account, input.imageId));
+    },
+    progress: (body) => {
+      const input = decode(Progress, body);
+      const { run, account } = service.control(input.runId);
+      const event = store.exec<{ kind: string }>(
+        "SELECT kind FROM social_event WHERE run_id=? AND step=? AND state='pending'",
+        run.id,
+        input.step,
+      )[0];
+      if (run.step !== input.step || !event) throw new SocialError(409, "SOCIAL_PROGRESS_STALE");
+      store.transaction(() => {
+        saveSocialDiagnostic(store, run.id, input.step, input.diagnostic);
+        if (
+          input.diagnostic.submission === "verified" &&
+          input.diagnostic.postId &&
+          ["post", "reply"].includes(event.kind) &&
+          run.contact === null
+        ) {
+          const postId = input.diagnostic.postId;
+          if (account.platform === "x" && !/^\d+$/.test(postId))
+            throw new SocialError(400, "SOCIAL_RECEIPT_ID_INVALID");
+          const url =
+            account.platform === "threads"
+              ? `https://www.threads.com/@${account.handle}/post/${postId}`
+              : `https://x.com/${account.handle}/status/${postId}`;
+          store.exec(
+            "UPDATE social_event SET url=? WHERE run_id=? AND step=? AND state='pending'",
+            url,
+            run.id,
+            input.step,
+          );
+        }
+      });
+      return new Response(null, { status: 204 });
+    },
     "deployment/request": () => Response.json(deployment.request(), { status: 202 }),
     "deployment/claim": (body) => Response.json(deployment.claim(decode(DeploymentClaim, body))),
     "deployment/report": (body) => Response.json(deployment.report(decode(DeploymentReport, body))),
@@ -94,14 +200,14 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
       await service.configure(decode(SocialAccount, body));
       return Response.json(snapshot(Number.MAX_SAFE_INTEGER));
     },
-    control: (body) => Response.json(service.control(decode(RunID, body).runId)),
+    control: (body) => Response.json(control(decode(RunID, body).runId)),
     open: (body) => operate(body, true),
     now: (body) => operate(body, false),
     turn,
     actions: async (body) => Response.json(await actions(decode(SocialStep, body))),
     complete: (body) => {
       const input = decode(Completion, body);
-      service.complete(input.runId, input.state);
+      service.complete(input.runId, input.state, input.diagnostic);
       return new Response(null, { status: 204 });
     },
   };
@@ -112,8 +218,7 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     if (request.method === "GET" && path === "/management/social/deployment")
       return Response.json(deployment.snapshot());
     if (request.method !== "POST") return new Response(null, { status: 405 });
-    const body = await request.text();
-    if (body.length > 32000) throw new SocialError(413, "SOCIAL_INPUT_SIZE");
+    const body = await readBody(request, 32000);
     const endpoint = endpoints[path.slice("/management/social/".length)];
     return endpoint
       ? endpoint(body, request.headers.get("X-Operation-ID")!)
@@ -150,6 +255,7 @@ export function createSocial(storage: SocialStorage, options: SocialOptions) {
     alarm: async () => {
       try {
         await service.alarm();
+        await images.process();
       } catch (cause) {
         contactLog({
           requestId: crypto.randomUUID(),

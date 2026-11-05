@@ -8,6 +8,11 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { socialTask } from "../../../packages/onboarding/src/social.test-helper.ts";
 import { socialBrowser } from "../src/browser.ts";
 import { accountQueue } from "../src/account-queue.ts";
+import { withImageUpload } from "../src/image-upload.ts";
+import { generatedImage } from "./image.test-helper.ts";
+import { commandResult } from "../src/commands.ts";
+import { browserSite } from "../src/browser-site.ts";
+import { Schema } from "effect";
 
 const exec = promisify(execFile);
 const executable = process.env["SOCIAL_TEST_AGENT_BROWSER"]!;
@@ -58,14 +63,38 @@ beforeEach(async () => {
   await command(["open", origin]);
   await command(["eval", "sessionStorage.clear()"]);
 });
+let requestedOrigin = "https://www.threads.com";
 const browser = socialBrowser(
   {
     open: async () => 0,
+    withImage: (image, operation) => withImageUpload(home, image, operation),
     command: async (_account, _port, args) => {
       // Only platform navigation is substituted; every selector and DOM reader runs in Chrome.
       if (args[0] === "open") {
         const url = new URL(args[1]!);
+        requestedOrigin = url.origin;
         return command(["open", `${origin}${url.pathname}${url.search}`]);
+      }
+      if (args[0] === "eval" && args[1] === browserSite("threads").location) {
+        const observed = new URL(
+          Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ url: Schema.String })))(
+            commandResult(await command(args)),
+          ).url,
+        );
+        return JSON.stringify({
+          success: true,
+          data: {
+            result: JSON.stringify({
+              url:
+                observed.origin === origin
+                  ? new URL(
+                      `${observed.pathname}${observed.search}${observed.hash}`,
+                      requestedOrigin,
+                    ).href
+                  : observed.href,
+            }),
+          },
+        });
       }
       return command(args);
     },
@@ -90,6 +119,7 @@ const execute = (action: Parameters<typeof browser.execute>[2]) =>
 test("Threads discovers public posts when hidden mobile navigation precedes the desktop sidebar", async () => {
   const result = await execute({ kind: "search", query: "AI friends" });
   expect(JSON.parse(result.text)).toContainEqual({
+    hasImage: false,
     text: "A public conversation",
     body: "A public conversation",
     url: "/@reader/post/ABC123",
@@ -101,6 +131,29 @@ test("Threads publishes through New thread and returns a new owned permalink", a
     text: "Published",
     url: "https://www.threads.com/@persona_x/post/TEST0",
   });
+});
+
+test("a generated JPEG is attached through the real CLI before its owned image permalink is confirmed", async () => {
+  const result = await browser.execute(
+    task.run,
+    { ...task.account, platform: "threads" },
+    { kind: "post", text: "AI-created scene", imageId: "draft" },
+    AbortSignal.timeout(20000),
+    async () => {},
+    undefined,
+    generatedImage,
+  );
+  expect(result).toEqual({
+    text: "Published",
+    url: "https://www.threads.com/@persona_x/post/TEST0",
+  });
+});
+
+test("a profile-only optimistic entry with an unavailable permalink is never declared published", async () => {
+  await command(["eval", "sessionStorage.setItem('invalidPermalink','true')"]);
+  await expect(execute({ kind: "post", text: "Optimistic receipt" })).rejects.toThrow(
+    "permalink could not be verified",
+  );
 });
 
 test("Threads replies to a public post and verifies its owned permalink in Replies", async () => {

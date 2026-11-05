@@ -3,7 +3,7 @@ import { authFixture, privateLogin } from "../test/auth.test-helper.ts";
 import { socialTask } from "../../../packages/onboarding/src/social.test-helper.ts";
 import { socialExecutor } from "./server.ts";
 import type { socialLog } from "./logging.ts";
-import type { SocialApplication } from "./client.ts";
+import { applicationFixture } from "../test/application.test-helper.ts";
 import type { SocialModel } from "./model.ts";
 import { AuthenticationError } from "./auth-store.ts";
 
@@ -11,12 +11,7 @@ function fixture() {
   const f = authFixture();
   const task = socialTask();
   const logs: Parameters<typeof socialLog>[0][] = [];
-  const application: SocialApplication = {
-    control: async () => ({ run: task.run, account: task.account }),
-    action: async () => ({ text: "not used" }),
-    complete: async () => {},
-    authenticated: async () => {},
-  };
+  const application = applicationFixture(task);
   const model: SocialModel = {
     model: "test/auth",
     decide: (_task, _run, _observation, signal) =>

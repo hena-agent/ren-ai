@@ -8,11 +8,13 @@ import {
   threadsSubmitButtons,
   threadsSubmitIndex,
 } from "./threads-scripts.ts";
+const locationScript = "JSON.stringify({url:location.href})";
 
 export function browserSite(platform: SocialPlatform) {
   if (platform === "threads")
     return {
       home: "https://www.threads.com/",
+      location: locationScript,
       profile: (handle: string, replies: boolean) =>
         `https://www.threads.com/@${handle}${replies ? "/replies" : ""}`,
       search: (query: string) =>
@@ -25,6 +27,8 @@ export function browserSite(platform: SocialPlatform) {
       reply:
         ':is(button,[role="button"]):has(svg[title="Comment"],svg[aria-label="Reply"],svg[aria-label="Comment"])',
       input: threadsComposer,
+      fileInput: '[role="dialog"] input[type="file"][accept*="image"]',
+      attachmentReady: '[role="dialog"] img[src^="blob:"]',
       submitIndex: threadsSubmitIndex,
       submit: threadsSubmitButtons,
       sent: threadsSentScript,
@@ -32,6 +36,7 @@ export function browserSite(platform: SocialPlatform) {
     };
   return {
     home: "https://x.com/home",
+    location: locationScript,
     profile: (handle: string, _replies: boolean) => `https://x.com/${handle}/with_replies`,
     search: (query: string) =>
       `https://x.com/search?${new URLSearchParams({ q: query, f: "live" }).toString()}`,
@@ -43,6 +48,8 @@ export function browserSite(platform: SocialPlatform) {
     create: undefined,
     reply: '[data-testid="reply"]',
     input: '[data-testid="tweetTextarea_0"]',
+    fileInput: 'input[data-testid="fileInput"]',
+    attachmentReady: '[data-testid="attachments"] img',
     submitIndex: undefined,
     submit: '[data-testid="tweetButton"]',
     sent: sentScript,

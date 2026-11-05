@@ -10,6 +10,8 @@ import {
 } from "@ren-ai/onboarding/social";
 import type { SocialStore, AccountRow } from "./store.ts";
 import type { SocialAuthStatus } from "@ren-ai/onboarding/social-auth";
+import type { SocialDiagnostic } from "@ren-ai/onboarding/social-diagnostics";
+import { actionDiagnostic, recordRunFailure } from "./diagnostics.ts";
 
 function assertUniqueHandle(store: SocialStore, account: SocialAccount) {
   if (!account.handle) return;
@@ -31,6 +33,7 @@ export class SocialError extends Error {
   }
 }
 export interface SocialOptions {
+  images?: import("./images.ts").SocialImagesBackend;
   gatewayUrl?: string;
   authenticate: (
     account: import("@ren-ai/onboarding/social-auth").SocialAuthAccount,
@@ -49,6 +52,7 @@ export interface SocialOptions {
     account: SocialAccount,
     action: import("@ren-ai/onboarding/social").SocialAction,
     id: string,
+    image?: import("@ren-ai/onboarding/social-images").SocialImageData,
   ) => Promise<SocialResult>;
 }
 async function validateConfiguration(
@@ -130,6 +134,7 @@ export function socialService(store: SocialStore, options: SocialOptions) {
       0,
       0,
     );
+    store.refreshImageAllowance();
     await store.arm();
     try {
       if (prior) await stop(prior);
@@ -161,12 +166,13 @@ export function socialService(store: SocialStore, options: SocialOptions) {
     );
     return { run, account, history };
   };
-  const complete = (id: string, state: string) => {
+  const complete = (id: string, state: string, diagnostic?: SocialDiagnostic) => {
     const row = store.run(id);
     if (!row || row.state !== "running") return;
     const run = store.decodeRun(row);
     const accountRow = store.account(run.accountId)!;
     const account = store.config(accountRow);
+    if (state !== "completed") recordRunFailure(store, run, state, options.now(), diagnostic);
     store.exec("UPDATE social_run SET state = ? WHERE id = ?", state, id);
     store.exec(
       "UPDATE social_event SET state = 'uncertain' WHERE run_id = ? AND state = 'pending'",
@@ -220,7 +226,10 @@ export function socialService(store: SocialStore, options: SocialOptions) {
         throw new SocialError(409, "SOCIAL_INVITATION_UNAVAILABLE");
       await options.start(run, account);
     } catch (cause) {
-      complete(run.id, "failed");
+      complete(run.id, "failed", {
+        ...actionDiagnostic(cause, run, options.now()),
+        submission: "not_attempted",
+      });
       throw cause;
     }
   };

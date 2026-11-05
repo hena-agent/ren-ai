@@ -30,8 +30,8 @@ export function socialTestContext() {
   });
   return {
     logs,
-    fixture: () => {
-      const f = socialFixture();
+    fixture: (overrides: Partial<SocialOptions> = {}) => {
+      const f = socialFixture(overrides);
       fixtures.push(f);
       return f;
     },
@@ -44,7 +44,7 @@ export function socialGate<T>() {
   });
   return { promise, resolve };
 }
-function socialFixture() {
+function socialFixture(serviceOverrides: Partial<SocialOptions>) {
   const db = new DatabaseSync(":memory:");
   let alarm: number | null = null;
   const queries: string[] = [];
@@ -95,6 +95,7 @@ function socialFixture() {
       writes.push(action);
       return { text: "observed" };
     },
+    ...serviceOverrides,
   };
   const app = createSocial(storage, options);
   const request = (path = "", body?: object, method = body ? "POST" : "GET") =>

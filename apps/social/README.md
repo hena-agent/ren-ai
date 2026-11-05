@@ -38,6 +38,48 @@ Expired sessions trigger one automatic login attempt before the original social 
 
 The worker persists finite login-recovery probes while a submitted login is in progress; callback loss and actor replacement do not lose its wake. Codes/manual attention stop those probes. An interrupted Mac login is surfaced for explicit retry. Only definitely pre-submit authentication failures release an unsent write reservation; any authentication interruption after clicking submit remains uncertain and deduplicated.
 
+## Visual activity and diagnostics
+
+Social sessions openly represent RenAI AI Personas. Generated appearances and
+imagined scenes are creative expression, not claims of a real body or human
+experiences. Image generation is disabled until the operator enables it and grants
+a cumulative paid-call allowance in Admin. That allowance is a spending boundary,
+not a daily production target; ordinary daily posting limits still apply.
+Before enabling activity, establish the account's public AI disclosure in its
+platform profile. Personas must not pose as human writers or claim generated scenes
+as real-life photographs. The model prompt maintains that boundary without forcing
+a repeated boilerplate disclaimer into every post.
+
+`image_idea` proposes a context-based probability plus separate self-image and
+creative-scene directions. SocialActivity persists two dice draws before paid work:
+one selects generation, the other selects self-images versus original creative work
+with 75:25 weights. Identical ideas reuse the decision across later steps and runs.
+All social accounts share a persisted single-image FIFO. Self-images require the
+selected style's readable identity sheet. Provider execution and previews reuse
+existing infrastructure but use private `social-images/` objects, never private
+Conversation photos or public gallery storage.
+
+A ready image is delivered as an actual image attachment to the model before
+`review_image` can approve or reject it. Approval does not post it; a later `post`
+action can select the approved `imageId`. The Mac retains its private upload file
+through submission and receipt verification. Confirmation requires new owned text
+and media evidence and a matching, directly opened permalink, not merely a cached
+profile entry. Pending or uncertain publications cannot reuse the attachment.
+Unpublished previews expire; interrupted paid calls are never automatically repeated.
+
+Admin shows separate generation/review/publication states and durable diagnostics.
+The Mac checkpoints the stage and conservative submission certainty before browser
+side effects. Failures retain safe cause/status/stack metadata, request correlation,
+artifact revision and observed post IDs. A verified permalink checkpoint survives a
+lost response. Logs exclude prompts, credentials, cookie data, handles and image bytes.
+Model sessions do not receive operational failure stacks. The authenticated Worker
+management routes `progress`, `image` and `image-preview` expose no public image URL.
+
+Roll out the Worker contract before the Mac executor, then Admin, and verify exact
+artifact readiness before enabling image activity. Implementation tests use fake
+providers, real local Durable Object storage, and isolated loopback browser fixtures;
+paid generation and real platform publication require separate operator approval.
+
 ## Health and rollout
 
 `bun run --cwd apps/social test:browser` exercises the production browser actions
@@ -52,6 +94,6 @@ Authenticated `GET /health` reports `service: "social"`, the embedded revision, 
 
 Verify **the expected full artifact revision**, all three dependencies, and the authenticated gateway path before declaring deployment complete. Then open the selected account from Admin and verify its handle. Installed binaries and healthy OpenCode do not establish platform login or current DOM compatibility. Test a read-only discovery run, followed by a text post/reply (and X-only DM) to dedicated test accounts, and inspect their recorded results before normal recruitment.
 
-The worker keeps the authoritative schedule and run deadline. Restarting the LaunchAgent loses only in-process execution; the worker fences and recovers that run. Existing Canary windows can be reattached. A failed/uncertain external write is never blindly replayed. Open the account on the Mac to inspect uncertain results or resolve login challenges.
+The worker keeps the authoritative schedule and run deadline. Restarting the LaunchAgent loses only in-process execution; the worker fences and recovers that run. Existing Canary windows can be reattached. A failed/uncertain external write is never blindly replayed. Inspect the recorded phase, error code and receipt evidence in Admin; manual login challenges remain separate from failure diagnosis.
 
 The native API provides `/auth`, `/open`, `/runs`, `/cancel` and `/browser` behind management authentication. Login inputs are a separate transient contract, never SocialAccount or model-task fields. Browser callers supply a persisted run lease; account generation and private-contact scope are checked again against api-app before browser actions. Model output cannot select an executable, CDP endpoint, arbitrary URL, script, shell command or credential action.

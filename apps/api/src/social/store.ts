@@ -7,6 +7,7 @@ import {
   socialTime,
   type SocialSnapshot,
 } from "@ren-ai/onboarding/social";
+import { SocialDiagnostic } from "@ren-ai/onboarding/social-diagnostics";
 
 export type SocialStorage = Pick<
   DurableObjectStorage,
@@ -69,6 +70,27 @@ export function socialStore(storage: SocialStorage) {
   exec("CREATE INDEX IF NOT EXISTS social_account_events ON social_event(account_id, id)");
   exec("CREATE INDEX IF NOT EXISTS social_pending ON social_event(account_id, state)");
   exec(
+    "CREATE TABLE IF NOT EXISTS social_diagnostic (run_id TEXT NOT NULL, step INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(run_id,step))",
+  );
+  exec(
+    "CREATE TABLE IF NOT EXISTS social_image (id TEXT PRIMARY KEY,account_id TEXT NOT NULL,persona_id TEXT NOT NULL,generation INTEGER NOT NULL,run_id TEXT NOT NULL,step INTEGER NOT NULL,data TEXT NOT NULL,scene TEXT NOT NULL,fingerprint TEXT NOT NULL,state TEXT NOT NULL,due INTEGER,seen_run TEXT,paid INTEGER NOT NULL DEFAULT 0,UNIQUE(run_id,step),UNIQUE(account_id,generation,fingerprint))",
+  );
+  exec("CREATE INDEX IF NOT EXISTS social_image_owner ON social_image(account_id,generation)");
+  exec("CREATE INDEX IF NOT EXISTS social_image_due ON social_image(due)");
+  exec("CREATE INDEX IF NOT EXISTS social_image_state ON social_image(state)");
+  exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS social_image_active ON social_image(account_id) WHERE state IN ('queued','generating','ready','approved','publishing')",
+  );
+  exec(
+    "CREATE TABLE IF NOT EXISTS social_image_budget (account_id TEXT PRIMARY KEY,spent INTEGER NOT NULL)",
+  );
+  exec(
+    "CREATE TABLE IF NOT EXISTS social_image_global_budget (id INTEGER PRIMARY KEY CHECK(id=1),spent INTEGER NOT NULL,approved INTEGER NOT NULL DEFAULT 0)",
+  );
+  exec(
+    "INSERT INTO social_image_global_budget(id,spent,approved) VALUES(1,0,0) ON CONFLICT(id) DO NOTHING",
+  );
+  exec(
     "CREATE INDEX IF NOT EXISTS social_scope_events ON social_event(account_id, generation, contact, id)",
   );
   exec(
@@ -79,6 +101,13 @@ export function socialStore(storage: SocialStorage) {
   const run = (id: string) => exec<RunRow>("SELECT * FROM social_run WHERE id = ?", id)[0];
   return {
     exec,
+    refreshImageAllowance: () =>
+      storage.transactionSync(() => {
+        const approved = exec<{ approved: number }>(
+          "SELECT COALESCE(SUM(json_extract(config,'$.images.credits')),0) AS approved FROM social_account WHERE json_type(config,'$.images')='object'",
+        )[0]!.approved;
+        exec("UPDATE social_image_global_budget SET approved=MAX(spent,?) WHERE id=1", approved);
+      }),
     account,
     config,
     run,
@@ -93,18 +122,27 @@ export function socialStore(storage: SocialStorage) {
       return row;
     },
     snapshot: (before: number): SocialSnapshot => ({
-      accounts: exec<AccountRow>("SELECT * FROM social_account ORDER BY id LIMIT 100").map(
-        (row) => ({
-          account: config(row),
-          generation: row.generation,
-          nextAt: row.next_at,
-          state: row.state,
-          turns: row.turns,
-          writes: row.writes,
-        }),
-      ),
-      events: exec<EventRow>(
-        "SELECT * FROM social_event WHERE id < ? ORDER BY id DESC LIMIT 50",
+      imageAllowance: {
+        spent: exec<{ spent: number }>(
+          "SELECT spent FROM social_image_global_budget WHERE id=1",
+        )[0]!.spent,
+        approved: exec<{ approved: number }>(
+          "SELECT approved FROM social_image_global_budget WHERE id=1",
+        )[0]!.approved,
+      },
+      accounts: exec<AccountRow & { image_spent: number }>(
+        "SELECT a.*,COALESCE(b.spent,0) AS image_spent FROM social_account a LEFT JOIN social_image_budget b ON b.account_id=a.id ORDER BY a.id LIMIT 100",
+      ).map((row) => ({
+        account: config(row),
+        generation: row.generation,
+        nextAt: row.next_at,
+        state: row.state,
+        turns: row.turns,
+        writes: row.writes,
+        imageSpent: row.image_spent,
+      })),
+      events: exec<EventRow & { diagnostic: string | null }>(
+        "SELECT e.*,d.data AS diagnostic FROM social_event e LEFT JOIN social_diagnostic d ON d.run_id=e.run_id AND d.step=e.step WHERE e.id < ? ORDER BY e.id DESC LIMIT 50",
         before,
       ).map((row) =>
         Schema.decodeUnknownSync(SocialEvent)({
@@ -118,6 +156,11 @@ export function socialStore(storage: SocialStorage) {
           reason: row.reason,
           text: row.text,
           url: row.url,
+          ...(row.diagnostic && {
+            diagnostic: Schema.decodeUnknownSync(Schema.fromJsonString(SocialDiagnostic))(
+              row.diagnostic,
+            ),
+          }),
         }),
       ),
       before:
@@ -127,8 +170,9 @@ export function socialStore(storage: SocialStorage) {
         )[0]?.id ?? null,
     }),
     arm: async () => {
-      const due = exec<{ due: number | null }>("SELECT MIN(next_at) AS due FROM social_account")[0]!
-        .due;
+      const due = exec<{ due: number | null }>(
+        `SELECT MIN(due) AS due FROM (SELECT MIN(next_at) AS due FROM social_account UNION ALL SELECT MIN(due) AS due FROM social_image WHERE due IS NOT NULL AND (state<>'queued' OR NOT EXISTS(SELECT 1 FROM social_image WHERE state='generating'))) `,
+      )[0]!.due;
       if (due === null) {
         if ((await storage.getAlarm()) !== null) await storage.deleteAlarm();
       } else if ((await storage.getAlarm()) !== due) await storage.setAlarm(due);

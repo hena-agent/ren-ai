@@ -19,6 +19,23 @@ export class SocialProof extends DurableObject<{ SOCIAL: Namespace }> {
     },
     cancel: async () => {},
     open: async () => {},
+    images: {
+      generate: async (input) => {
+        await input.beforeDispatch();
+        await this.ctx.storage.put(
+          "image-calls",
+          ((await this.ctx.storage.get<number>("image-calls")) ?? 0) + 1,
+        );
+        return new Uint8Array([255, 216, 255, 254, 0, 2, 255, 217]);
+      },
+      get: async (id) => this.ctx.storage.get<Uint8Array>(`image:${id}`),
+      put: async (id, bytes) => {
+        await this.ctx.storage.put(`image:${id}`, bytes);
+      },
+      remove: async (id) => {
+        await this.ctx.storage.delete(`image:${id}`);
+      },
+    },
     browser: async (_run, _account, action) => {
       if (action.kind === "post") {
         const count = (await this.ctx.storage.get<number>("writes")) ?? 0;
@@ -36,6 +53,12 @@ export class SocialProof extends DurableObject<{ SOCIAL: Namespace }> {
     if (new URL(request.url).pathname === "/__proof")
       return Response.json({
         writes: await this.ctx.storage.get<number>("writes"),
+        imageCalls: (await this.ctx.storage.get<number>("image-calls")) ?? 0,
+        imagePlans: this.ctx.storage.sql
+          .exec(
+            "EXPLAIN QUERY PLAN SELECT * FROM social_image WHERE due<=1 AND (state<>'queued' OR NOT EXISTS(SELECT 1 FROM social_image WHERE state='generating')) ORDER BY due,rowid LIMIT 1",
+          )
+          .toArray(),
         plans: this.ctx.storage.sql
           .exec(
             "EXPLAIN QUERY PLAN SELECT kind FROM social_event WHERE account_id='first' AND generation=1 AND contact IS NULL ORDER BY id DESC LIMIT 10",

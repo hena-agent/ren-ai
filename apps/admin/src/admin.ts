@@ -62,6 +62,7 @@ import { imageJobPages } from "./image-job-page.ts";
 import { personaQuery } from "./persona-query.ts";
 import { readEditor, editorDraft, type EditorRecord } from "./editor-record.ts";
 import { socialRoutes } from "./social-routes.ts";
+import { socialImageResponse } from "./social-image-response.ts";
 const authorized = (request: Request, expected: Buffer) =>
   timingSafeEqual(
     createHash("sha256")
@@ -77,6 +78,8 @@ const managementResponse = (
   store: PersonaStore,
 ) => {
   if (url.pathname === "/social") return socialRoutes(request, store, management?.social);
+  if (url.pathname.startsWith("/social/images/"))
+    return socialImageResponse(request, management?.social);
   if (["/waitlist", "/first-contacts", "/invitations"].includes(url.pathname))
     return contactRoutes(request, management);
   if (url.pathname === "/metrics") return metricsRoutes(request, management);

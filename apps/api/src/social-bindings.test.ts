@@ -16,6 +16,48 @@ import { notificationFixture } from "./discovery/notifications.test-helper.ts";
 import type { ApplicationStore } from "./application-store.ts";
 import { valid } from "../test/host.test-helper.ts";
 import { executionBindings } from "../test/execution-bindings.ts";
+import type { CloudflareBindings } from "./cloudflare-config.ts";
+test("typed Mac diagnostics cross the executor boundary without losing send certainty", async () => {
+  const task = socialTask();
+  const diagnostic = {
+    requestId: "mac-request",
+    stage: "composer",
+    submission: "not_attempted",
+    code: "SOCIAL_BROWSER_FAILED",
+    at: 1,
+    durationMs: 20,
+  };
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    Response.json({ error: "SOCIAL_BROWSER_FAILED", diagnostic }, { status: 422 }),
+  );
+  const binding = socialBindings(executionBindings, "rules", async () => new Response(), fetcher);
+  await expect(
+    binding.browser(task.run, task.account, { kind: "post", text: "draft" }, "action"),
+  ).rejects.toMatchObject({ code: "SOCIAL_BROWSER_FAILED", diagnostic });
+  await expect(
+    binding.browser(
+      task.run,
+      task.account,
+      { kind: "post", text: "draft", imageId: "draft" },
+      "action",
+      { id: "draft", mime: "image/jpeg", data: "fixture" },
+    ),
+  ).rejects.toMatchObject({ diagnostic });
+  expect(
+    socialBindings(
+      {
+        ...executionBindings,
+        CODEX_IMAGE_API_KEY: "fixture-key",
+        CONVERSATION_PHOTOS: fromPartial<NonNullable<CloudflareBindings["CONVERSATION_PHOTOS"]>>(
+          {},
+        ),
+      },
+      "rules",
+      async () => new Response(),
+      fetcher,
+    ).images,
+  ).toBeDefined();
+});
 
 test("social execution loads the selected private Persona, uses existing invitation availability and forwards authenticated Mac commands", async () => {
   const persona = parsePersona("alice", valid);

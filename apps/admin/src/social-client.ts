@@ -3,8 +3,10 @@ import { SocialSnapshot, type SocialAccount } from "@ren-ai/onboarding/social";
 import { GenerationError, protect, requestId, validationFailure } from "./logging.ts";
 import { SocialAuthStatus, type SocialAuthCommand } from "@ren-ai/onboarding/social-auth";
 import { MacDeploymentStatus } from "@ren-ai/transport/deployment";
+import { SocialImageData } from "@ren-ai/onboarding/social-images";
 
 export interface SocialClient {
+  image: (accountId: string, imageId: string) => Promise<SocialImageData>;
   repair: () => Promise<typeof MacDeploymentStatus.Type>;
   authenticate: (accountId: string, command: SocialAuthCommand) => Promise<SocialAuthStatus>;
   list: (before?: number) => Promise<SocialSnapshot>;
@@ -82,6 +84,18 @@ export function socialClient(origin: string, token: string, fetcher: typeof fetc
     return response;
   };
   return {
+    image: async (accountId, imageId) => {
+      const response = await request("/image-preview", { accountId, imageId });
+      try {
+        return Schema.decodeUnknownSync(SocialImageData)(await response.json());
+      } catch (cause) {
+        throw validationFailure(
+          "이미지 응답 형식이 올바르지 않습니다.",
+          { code: "social_image_schema" },
+          cause,
+        );
+      }
+    },
     repair: async () => {
       const response = await request("/deployment/request", {});
       try {

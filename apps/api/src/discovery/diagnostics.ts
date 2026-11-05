@@ -13,6 +13,7 @@ export interface ContactDiagnostic {
   personaVersion?: number;
   sessionId?: string;
   model?: string;
+  style?: "anime" | "photo";
   causeName?: string;
   causeCode?: string;
   stack?: string;

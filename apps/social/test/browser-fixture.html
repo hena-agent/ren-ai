@@ -19,6 +19,8 @@
     <script>
       setTimeout(() => document.querySelector("#splash").remove(), 500);
       const renderPosts = async () => {
+        const ownPost = location.pathname.match(/^\/@persona_x\/post\/TEST(\d+)$/);
+        if (ownPost && sessionStorage.getItem("invalidPermalink")) return;
         if (sessionStorage.getItem("awaitReceipt") || sessionStorage.getItem("delayHistory"))
           await fetch("/history");
         // Threads can serve the pre-publication profile snapshot until a fresh navigation.
@@ -27,12 +29,20 @@
           return;
         }
         for (const [index, post] of JSON.parse(sessionStorage.getItem("posts") || "[]").entries()) {
-          if (post.reply !== location.pathname.endsWith("/replies")) continue;
+          if (ownPost && index !== Number(ownPost[1])) continue;
+          if (!ownPost && post.reply !== location.pathname.endsWith("/replies")) continue;
           const article = document.createElement("article");
           const url = post.x ? `/persona_x/status/${index + 1}` : `/@persona_x/post/TEST${index}`;
           article.innerHTML = `<a href="${url}"><time>now</time></a><div dir="auto" data-testid="tweetText"></div><button><svg aria-label="Reply"></svg></button>`;
           const body = article.querySelector('[dir="auto"]');
           body.textContent = post.text;
+          if (post.image) {
+            const image = document.createElement("img");
+            image.src = post.image;
+            image.width = 240;
+            image.height = 240;
+            article.append(image);
+          }
           const translate = document.createElement("span");
           translate.setAttribute("role", "button");
           translate.textContent = "Translate";
@@ -44,11 +54,31 @@
       const composePost = (reply) => {
         const dialog = document.createElement("div");
         dialog.setAttribute("role", "dialog");
-        dialog.innerHTML = '<div contenteditable="true" role="textbox"></div><button>Post</button>';
-        dialog.querySelector("button").onclick = () => {
+        dialog.innerHTML =
+          '<div contenteditable="true" role="textbox"></div><input type="file" accept="image/jpeg" hidden><button>Post</button>';
+        const files = dialog.querySelector('input[type="file"]');
+        files.onchange = () => {
+          const image = document.createElement("img");
+          image.src = URL.createObjectURL(files.files[0]);
+          image.width = 240;
+          image.height = 240;
+          dialog.append(image);
+        };
+        dialog.querySelector("button").onclick = async () => {
           const posts = JSON.parse(sessionStorage.getItem("posts") || "[]");
+          const image = files.files[0]
+            ? await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(files.files[0]);
+              })
+            : null;
           if (!sessionStorage.getItem("noPublication"))
-            posts.push({ text: dialog.querySelector('[role="textbox"]').textContent, reply });
+            posts.push({
+              text: dialog.querySelector('[role="textbox"]').textContent,
+              reply,
+              image,
+            });
           sessionStorage.setItem("posts", JSON.stringify(posts));
           sessionStorage.setItem("awaitReceipt", "true");
           sessionStorage.setItem("staleProfile", "true");

@@ -1,6 +1,8 @@
 import { Effect, Schema } from "effect";
 import { InvitationCode } from "./invitation-code.ts";
 import { MacDeploymentStatus } from "@ren-ai/transport/deployment";
+import { SocialDiagnostic } from "./social-diagnostics.ts";
+import { SocialImagePolicy, SocialImage, SocialImageData } from "./social-images.ts";
 
 const bounded = (maximum: number) => Schema.String.check(Schema.isMaxLength(maximum));
 export const SocialID = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/));
@@ -31,6 +33,7 @@ export const SocialAccount = Schema.Struct({
   runMinutes: integer(1, 30),
   dailyTurns: integer(1, 200),
   dailyWrites: integer(1, 100),
+  images: Schema.optionalKey(SocialImagePolicy),
 }).check(
   Schema.makeFilter(
     (account) =>
@@ -53,7 +56,22 @@ export const SocialAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("profile"), handle: SocialHandle }),
   Schema.Struct({ kind: Schema.Literal("read_post"), url: status }),
   Schema.Struct({ kind: Schema.Literals(["notifications", "inbox", "messages"]) }),
-  Schema.Struct({ kind: Schema.Literal("post"), text: postText }),
+  Schema.Struct({
+    kind: Schema.Literal("post"),
+    text: postText,
+    imageId: Schema.optionalKey(SocialID),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("image_idea"),
+    scene: bounded(3000),
+    creativeScene: bounded(3000),
+    probability: integer(0, 10000),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("review_image"),
+    imageId: SocialID,
+    accept: Schema.Boolean,
+  }),
   Schema.Struct({ kind: Schema.Literal("reply"), url: status, text: postText }),
   Schema.Struct({ kind: Schema.Literal("dm"), text }),
   Schema.Struct({
@@ -84,6 +102,7 @@ export function supportsSocialAction(platform: SocialPlatform, action: SocialAct
   );
 }
 export const SocialResult = Schema.Struct({
+  image: Schema.optionalKey(SocialImage),
   text: bounded(24000),
   url: Schema.optionalKey(status),
 });
@@ -99,6 +118,7 @@ export const SocialRun = Schema.Struct({
 });
 export type SocialRun = typeof SocialRun.Type;
 export const SocialControl = Schema.Struct({
+  images: Schema.optionalKey(Schema.Array(SocialImage)),
   run: SocialRun,
   account: SocialAccount,
   history: Schema.optionalKey(bounded(12000)),
@@ -106,6 +126,7 @@ export const SocialControl = Schema.Struct({
 export const SocialTask = Schema.Struct({ ...SocialControl.fields, snapshot: bounded(100000) });
 export type SocialTask = typeof SocialTask.Type;
 export const SocialBrowserRequest = Schema.Struct({
+  image: Schema.optionalKey(SocialImageData),
   ...SocialControl.fields,
   action: SocialAction,
   id: SocialID,
@@ -116,6 +137,7 @@ export const SocialStep = Schema.Struct({
   decision: SocialDecision,
 });
 export const SocialEvent = Schema.Struct({
+  diagnostic: Schema.optionalKey(SocialDiagnostic),
   id: Schema.Number,
   runId: Schema.String,
   accountId: Schema.String,
@@ -128,6 +150,7 @@ export const SocialEvent = Schema.Struct({
   url: Schema.NullOr(Schema.String),
 });
 export const SocialAccountStatus = Schema.Struct({
+  imageSpent: Schema.optionalKey(Schema.Number),
   account: SocialAccount,
   generation: Schema.Number,
   nextAt: Schema.NullOr(Schema.Number),
@@ -136,6 +159,11 @@ export const SocialAccountStatus = Schema.Struct({
   writes: Schema.Number,
 });
 export const SocialSnapshot = Schema.Struct({
+  images: Schema.optionalKey(Schema.Array(SocialImage)),
+  imageSupport: Schema.optionalKey(Schema.Boolean),
+  imageAllowance: Schema.optionalKey(
+    Schema.Struct({ spent: Schema.Number, approved: Schema.Number }),
+  ),
   deployment: Schema.optionalKey(MacDeploymentStatus),
   accounts: Schema.Array(SocialAccountStatus),
   events: Schema.Array(SocialEvent),

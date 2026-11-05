@@ -1,8 +1,9 @@
-import { mkdtemp, copyFile, chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, copyFile, chmod, mkdir, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { browserCommands } from "./commands.ts";
+import { generatedImage } from "../test/image.test-helper.ts";
 
 const roots: string[] = [];
 const ports: number[] = [];
@@ -24,6 +25,12 @@ async function fixture() {
 test("native browser ownership persists in the dedicated profile and is reattached after executor replacement", async () => {
   const f = await fixture();
   const adapter = browserCommands(f.root, f.executable, "/bin/echo");
+  expect(
+    await adapter.withImage!(generatedImage, async (path) => {
+      expect((await readFile(path)).toString("base64")).toBe(generatedImage.data);
+      return "complete";
+    }),
+  ).toBe("complete");
   const port = await adapter.open("first");
   ports.push(port);
   expect(await adapter.open("first")).toBe(port);

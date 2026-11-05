@@ -60,11 +60,20 @@ function submittedAccount(view: SocialView, form: FormData, url: URL) {
 function readAccount(form: FormData, existing: SocialAccount | undefined) {
   const handle = existing?.handle ?? "";
   const fields = Object.fromEntries(form);
+  const images = form.has("imageCredits")
+    ? {
+        enabled: form.get("imagesEnabled") === "1",
+        credits: Number(form.get("imageCredits")),
+        style: form.get("imageStyle"),
+      }
+    : existing?.images;
+  for (const name of ["imagesEnabled", "imageCredits", "imageStyle"]) delete fields[name];
   for (const name of ["action", "username", "password", "code"]) delete fields[name];
   try {
     const platform = Schema.decodeUnknownSync(SocialAccount.fields.platform)(form.get("platform"));
     return Schema.decodeUnknownSync(SocialAccount)({
       ...fields,
+      ...(images && { images }),
       platform,
       ...Object.fromEntries(numberFields.map((field) => [field, Number(form.get(field))])),
       id: existing?.id ?? crypto.randomUUID(),
