@@ -16,3 +16,4 @@ apps/api/data/
 lefthook-local.yml
 .opencode/
 .DS_Store
+.playwright-mcp/
