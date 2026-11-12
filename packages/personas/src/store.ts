@@ -27,6 +27,7 @@ import { historyFor, readVersions, writeVersionFiles } from "./version-files.ts"
 import { identitySheetFiles } from "./identity-sheets.ts";
 import { fileListing } from "./file-listing.ts";
 import type { PersonaQuery } from "./listing.ts";
+import { rigArtworkFiles } from "./rig-artwork.ts";
 
 async function rollbackWrites(
   failure: AggregateError,
@@ -135,6 +136,7 @@ export async function createPersonaStore(directory: string) {
   };
   return {
     ...identitySheetFiles(directory),
+    ...rigArtworkFiles(directory),
     list,
     browse: async (query: PersonaQuery) => fileListing(directory, await list(), query),
     inspect: () => inspectPersonaFiles(directory),

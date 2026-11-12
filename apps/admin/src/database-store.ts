@@ -26,6 +26,7 @@ import { readPublicCatalog } from "@ren-ai/personas/catalog";
 import { personaImageBase } from "@ren-ai/personas/image-url";
 import { databaseSheets } from "./database-sheets.ts";
 import { databaseListing } from "./database-listing.ts";
+import { databaseArtwork } from "./database-artwork.ts";
 
 function requirePublication(record: PersonaRecord, documents: Parameters<PersonaStore["save"]>[1]) {
   if (!record.published) return;
@@ -104,6 +105,7 @@ export function databaseStore(
   const source = async (id: string) => serializePersona(await get(id));
   return {
     ...databaseSheets(binding, imageBase),
+    ...databaseArtwork(binding, imageBase),
     catalog: async () => {
       const [rows, photos, sheets] = await readCatalog();
       return {

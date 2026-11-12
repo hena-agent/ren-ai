@@ -20,4 +20,8 @@ export type PersonaStore = Pick<
   | "saveSheet"
   | "sheetResult"
   | "clearSheets"
+  | "rigArtwork"
+  | "saveRigArtwork"
+  | "saveRigArtworkOutfit"
+  | "saveRigArtworkLayers"
 >;
