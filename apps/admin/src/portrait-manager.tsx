@@ -3,8 +3,10 @@ import type { PersonaRecord, IdentitySheets } from "@ren-ai/personas";
 import { IdentitySheetPanel } from "./identity-sheet-panel.tsx";
 import { PublicPersonaPreview } from "./public-persona-preview.tsx";
 import { Comparison } from "./profile-preview.tsx";
-import { isSheetIntent } from "./image-slots.ts";
+import { isExclusiveImageIntent } from "./image-slots.ts";
 import type { ImageJob } from "./image-queue.ts";
+import type { Draft } from "./draft.ts";
+import { RigArtworkPanel } from "./rig-artwork-panel.tsx";
 
 export function PortraitManager({
   persona,
@@ -13,6 +15,7 @@ export function PortraitManager({
   sheets = {},
   reservations,
   jobs,
+  artwork,
 }: {
   persona: PersonaRecord;
   action: string;
@@ -20,13 +23,23 @@ export function PortraitManager({
   sheets?: IdentitySheets | undefined;
   reservations?: { anime: number; photo: number } | undefined;
   jobs: readonly { job: ImageJob | undefined }[];
+  artwork?: Draft["rigArtwork"];
 }) {
   const sheetBusy = jobs.some(
     ({ job }) =>
-      job && (job.state === "queued" || job.state === "running") && isSheetIntent(job.batch.intent),
+      job &&
+      (job.state === "queued" || job.state === "running") &&
+      isExclusiveImageIntent(job.batch.intent),
   );
   return (
     <aside className="portrait-manager" aria-labelledby="preview-title">
+      <RigArtworkPanel
+        persona={persona}
+        artwork={artwork}
+        action={action}
+        locked={locked}
+        sheet={sheets.anime}
+      />
       <IdentitySheetPanel sheets={sheets} action={action} locked={locked} />
       <div
         data-public-preview

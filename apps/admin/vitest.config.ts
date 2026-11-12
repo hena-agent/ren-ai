@@ -6,10 +6,14 @@ export default defineConfig({
     ADMIN_ASSETS: JSON.stringify({
       script: "/assets/admin-test.js",
       stylesheet: "/assets/admin-test.css",
+      rigScript: "/assets/rig-test.js",
     }),
   },
   resolve: {
     alias: {
+      "@ren-ai/personas/rig-artwork": fileURLToPath(
+        new URL("../../packages/personas/src/rig-artwork-model.ts", import.meta.url),
+      ),
       "@ren-ai/personas/image-url": fileURLToPath(
         new URL("../../packages/personas/src/image-url.ts", import.meta.url),
       ),

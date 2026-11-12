@@ -32,11 +32,13 @@ export function AdminLayout({
   active,
   title = copy.title,
   recoveryAvailable,
+  script = ADMIN_ASSETS.script,
   children,
 }: {
   active: Section;
   title?: string;
   recoveryAvailable?: boolean;
+  script?: string;
   children: ReactNode;
 }) {
   return (
@@ -47,7 +49,7 @@ export function AdminLayout({
         <title>{title}</title>
         <link rel="icon" type="image/svg+xml" href="/brand.svg" />
         <link rel="stylesheet" href={ADMIN_ASSETS.stylesheet} />
-        <script src={ADMIN_ASSETS.script} type="module" />
+        <script src={script} type="module" />
       </head>
       <body className="admin-layout">
         <a className="skip-link" href="#main">

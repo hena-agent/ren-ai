@@ -4,7 +4,7 @@ import type { Draft } from "./draft.ts";
 import type { ImageBatch } from "./image-batch.ts";
 import type { ImageBatchSnapshot } from "./image-batch.ts";
 import type { ImageSlot } from "./image-slots.ts";
-import { isSheetIntent } from "./image-slots.ts";
+import { isSheetIntent, isExclusiveImageIntent, isArtworkIntent } from "./image-slots.ts";
 import {
   captureLogging,
   operation,
@@ -14,6 +14,15 @@ import {
   GenerationError,
 } from "./logging.ts";
 import copy from "./copy.json";
+import {
+  beginAttempt,
+  queueAttempt,
+  finishAttempt,
+  interruptAttempt,
+  imageFailure,
+  type ImageAttempt,
+  type ImageFailure,
+} from "./image-attempt.ts";
 
 type ImageTaskState = "waiting" | "generating" | "saving" | "completed" | "failed" | "blocked";
 interface ImageTask extends ImageSlot {
@@ -24,6 +33,7 @@ interface ImageTask extends ImageSlot {
   durationMs?: number;
   requestId?: string;
   recoveryPending?: boolean;
+  attempts?: ImageAttempt[];
 }
 export interface ImageJob {
   readonly seedingRunId?: string;
@@ -33,6 +43,7 @@ export interface ImageJob {
   state: "queued" | "running" | "completed" | "failed";
   requestId: string;
   failure?: Error;
+  diagnostic?: ImageFailure;
   queuedAt: number;
   finishedAt?: number;
 }
@@ -47,16 +58,34 @@ const completionStatus = (failed: boolean, failure: Error | undefined) =>
       ? { invalid: 400, not_found: 404, conflict: 409 }[failure.kind]
       : 503;
 
+function blockTasks(job: ImageJob, ordinals: readonly number[], diagnostic: ImageFailure) {
+  for (const ordinal of ordinals) {
+    const task = job.tasks[ordinal]!;
+    if (task.state !== "completed") {
+      task.state = "blocked";
+      finishAttempt(task, "blocked", diagnostic);
+    }
+  }
+}
+
+function startTask(job: ImageJob, ordinal: number | undefined) {
+  if (ordinal === undefined) return;
+  const task = job.tasks[ordinal]!;
+  beginAttempt(task, job.queuedAt, job.requestId, Boolean(job.batch.snapshot().layerize));
+  task.state = "generating";
+}
+
 function restoreJob(
   saved: QueueSnapshot["jobs"][number],
   restoreBatch: DurableQueue["restoreBatch"],
 ): QueuedJob {
-  const tasks = saved.tasks.map((task) => ({ ...task }));
+  const tasks = structuredClone(saved.tasks);
   const interrupted = tasks.some((task) => task.state === "generating" || task.state === "saving");
   for (const task of tasks)
     if (task.state === "generating" || task.state === "saving") {
       task.state = "failed";
       task.recoveryPending = true;
+      interruptAttempt(task);
     }
   const { failure: detail, ...previous } = saved;
   let failure: Error | undefined;
@@ -146,17 +175,21 @@ export function createImageQueue(
   const reservations = (personaId: string) => {
     const counts = { anime: 0, photo: 0 };
     for (const job of active(personaId))
-      if (job.batch.intent !== "regenerate" && !isSheetIntent(job.batch.intent))
+      if (
+        !isArtworkIntent(job.batch.intent) &&
+        job.batch.intent !== "regenerate" &&
+        !isSheetIntent(job.batch.intent)
+      )
         for (const task of job.tasks)
           if (["waiting", "generating", "saving"].includes(task.state)) counts[task.style]++;
     return counts;
   };
   const reserve = (batch: ImageBatch, ordinals: readonly number[]) => {
-    if (isSheetIntent(batch.intent)) {
+    if (isExclusiveImageIntent(batch.intent)) {
       if (active(batch.personaId).length) throw new PersonaError("conflict", copy.busy);
       return;
     }
-    if (active(batch.personaId).some((job) => isSheetIntent(job.batch.intent)))
+    if (active(batch.personaId).some((job) => isExclusiveImageIntent(job.batch.intent)))
       throw new PersonaError("conflict", copy.busy);
     if (batch.intent === "regenerate") return;
     const counts = reservations(batch.personaId);
@@ -193,45 +226,52 @@ export function createImageQueue(
           const start = performance.now();
           let prepared = false;
           job.state = "running";
+          startTask(job, ordinals[0]);
           await operation("image.queue.batch", { jobId: job.id }, async () => {
             if (rebase) adopt(job.batch, ordinals);
             if (durable) {
-              job.tasks[ordinals[0]!]!.state = "generating";
               await durable.checkpoint();
             }
             await job.batch.prepare();
             prepared = true;
             for (const ordinal of ordinals) {
               const task = job.tasks[ordinal]!;
-              task.startedAt = Date.now();
-              task.requestId = job.requestId;
+              startTask(job, ordinal);
               const imageUrl = await operation(
                 "image.queue.task",
                 { jobId: job.id, imageOrdinal: ordinal, style: task.style, poseIndex: task.index },
                 () =>
                   job.batch.run(ordinal, async (state) => {
                     task.state = state;
+                    task.attempts!.at(-1)!.stage = `image.queue.${state}`;
                     await durable?.checkpoint();
                   }),
               ).catch((error) => {
                 task.state = "failed";
                 job.failure = error instanceof Error ? error : new Error();
+                job.diagnostic = imageFailure(job.failure, task.attempts!.at(-1)!.stage);
+                finishAttempt(task, "failed", job.diagnostic);
                 return undefined;
               });
-              task.durationMs = Date.now() - task.startedAt;
               if (imageUrl) {
                 task.imageUrl = imageUrl;
                 task.state = "completed";
+                finishAttempt(task, "completed");
               }
               publish(job, job.batch.draft());
               await durable?.checkpoint();
             }
           }).catch((error) => {
             job.failure = error instanceof Error ? error : new Error();
-            for (const ordinal of prepared ? ordinals : job.tasks.map((task) => task.ordinal)) {
-              const task = job.tasks[ordinal]!;
-              if (task.state !== "completed") task.state = "blocked";
-            }
+            job.diagnostic = imageFailure(
+              job.failure,
+              prepared ? "image.queue.finalize" : "image.queue.prepare",
+            );
+            blockTasks(
+              job,
+              prepared ? ordinals : job.tasks.map((task) => task.ordinal),
+              job.diagnostic,
+            );
           });
           const failed = job.tasks.some((task) => task.state !== "completed");
           if (durable && job.tasks.some((task) => task.state === "waiting")) {
@@ -260,6 +300,8 @@ export function createImageQueue(
             reportFailure(error, { stage: "image.queue.finalize", jobId: job.id });
           } finally {
             job.failure = error instanceof Error ? error : new Error("Image completion failed");
+            job.diagnostic = imageFailure(job.failure, "image.queue.finalize");
+            for (const task of job.tasks) finishAttempt(task, "failed", job.diagnostic);
             job.state = "failed";
             job.finishedAt = Date.now();
             pending.delete(job.id);
@@ -278,6 +320,14 @@ export function createImageQueue(
       delete task.requestId;
     }
     job.state = "queued";
+    delete job.diagnostic;
+    for (const ordinal of ordinals)
+      queueAttempt(
+        job.tasks[ordinal]!,
+        Date.now(),
+        requestId(),
+        Boolean(job.batch.snapshot().layerize),
+      );
     schedule(job, ordinals, true);
   };
   const get = (id: string) => {
@@ -315,7 +365,7 @@ export function createImageQueue(
           await durable?.checkpoint();
           return;
         }
-        schedule(job, [ordinal], !isSheetIntent(job.batch.intent), true);
+        schedule(job, [ordinal], !isExclusiveImageIntent(job.batch.intent), true);
         await job.completion;
       } catch (cause) {
         const waiting = [...pending];
@@ -329,7 +379,7 @@ export function createImageQueue(
       const known = keys.get(key);
       if (known) return get(known);
       const ordinals = batch.slots.map((_, ordinal) => ordinal);
-      if (!isSheetIntent(batch.intent)) adopt(batch, ordinals);
+      if (!isExclusiveImageIntent(batch.intent)) adopt(batch, ordinals);
       reserve(batch, ordinals);
       const reserved = reservations(batch.personaId);
       const job: QueuedJob = {
@@ -348,8 +398,9 @@ export function createImageQueue(
         })),
       };
       jobs.set(job.id, job);
+      for (const task of job.tasks) queueAttempt(task, job.queuedAt, job.requestId, false);
       keys.set(key, job.id);
-      schedule(job, ordinals, !isSheetIntent(batch.intent));
+      schedule(job, ordinals, !isExclusiveImageIntent(batch.intent));
       return job;
     },
     get,

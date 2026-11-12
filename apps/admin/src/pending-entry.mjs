@@ -3,6 +3,7 @@ import { submitImageForm, watchImageQueue, installPage } from "./image-queue-bro
 import { bindDocumentEditor } from "./document-editor-browser.ts";
 import { bindUploads } from "./upload-browser.ts";
 import { bindContactManagement } from "./contact-browser.ts";
+import { bindArtworkLayerViewer } from "./artwork-layer-viewer.ts";
 for (const form of document.querySelectorAll("form")) {
   bindPending(form, submitImageForm);
   bindDocumentEditor(form);
@@ -10,3 +11,4 @@ for (const form of document.querySelectorAll("form")) {
 }
 watchImageQueue();
 bindContactManagement(document);
+bindArtworkLayerViewer(document);

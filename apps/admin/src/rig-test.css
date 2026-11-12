@@ -1,0 +1,219 @@
+.rig-test-link {
+  display: inline-block;
+  margin-top: 12px;
+  font-weight: 600;
+}
+.rig-face-panel {
+  margin-block: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.rig-face-panel details {
+  margin-top: 16px;
+}
+.rig-face-panel summary {
+  cursor: pointer;
+  padding-block: 12px;
+}
+.rig-face-parts {
+  display: grid;
+  gap: 8px;
+}
+.rig-face-parts form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rig-test-header {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+.rig-test-header h1 {
+  margin: 12px 0 8px;
+  font-size: 26px;
+}
+.rig-test-header p {
+  max-width: 76ch;
+}
+.rig-test-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 24px 0 16px;
+}
+.rig-face-controls {
+  border: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+.rig-face-controls:disabled {
+  opacity: 0.5;
+}
+.rig-test-controls label {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.rig-test-controls input[type="range"] {
+  min-height: 44px;
+  padding: 0;
+  accent-color: var(--signal);
+}
+[data-rig-status] {
+  display: block;
+  min-height: 32px;
+  color: var(--signal);
+}
+[data-rig-state="failed"] [data-rig-status] {
+  color: var(--warning);
+}
+.rig-test-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.rig-test-columns h2 {
+  margin: 12px 0 8px;
+  font-size: 17px;
+}
+.rig-test-source {
+  position: relative;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rig-test-source > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+[data-rig-joints],
+[data-rig-joints] svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+[data-rig-joints] svg {
+  pointer-events: none;
+}
+[data-rig-joints] line {
+  stroke: #147a60;
+  stroke-width: 0.5;
+  opacity: 0.7;
+}
+[data-rig-joints] button {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #14634e;
+  color: white;
+  font-size: 11px;
+  cursor: grab;
+  touch-action: none;
+}
+[data-rig-joints] button:active {
+  cursor: grabbing;
+}
+[data-rig-joints] button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+[data-rig-joint-status] {
+  display: block;
+  min-height: 32px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.rig-test-stage {
+  margin: 0 auto;
+  width: min(100%, 520px);
+  position: relative;
+  height: auto;
+  aspect-ratio: 0.66;
+  max-height: min(76dvh, 820px);
+  min-height: min(320px, 76dvh);
+  overflow: hidden;
+  background: white;
+  border-radius: 8px;
+}
+.rig-preview h2 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+.rig-source-editor {
+  max-width: 720px;
+  margin: 20px auto;
+}
+.rig-inspector > summary {
+  padding: 16px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+.rig-test-render-root > img {
+  max-width: none;
+}
+.rig-test-render-root {
+  position: absolute;
+  transform-origin: 0 0;
+}
+.rig-joint-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 24px;
+  padding-left: 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.rig-layer-bindings {
+  margin: 24px 0;
+  padding-block: 16px;
+  border-top: 1px solid var(--line);
+}
+.rig-layer-binding-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.rig-layer-binding-list label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.rig-layer-binding-list select {
+  font-size: 13px;
+}
+.rig-layer-binding-list > div {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.rig-layer-binding-list label:has([data-rig-layer-enabled]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-rig-layer-enabled] {
+  width: auto;
+  min-height: auto;
+}
+@media (max-width: 760px) {
+  .rig-test-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rig-test-controls label {
+    flex: 1 1 140px;
+  }
+}

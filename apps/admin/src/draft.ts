@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { Schema } from "effect";
 import {
   IdentitySheets,
@@ -10,12 +9,15 @@ import {
 import type { PersonaRecord } from "@ren-ai/personas";
 import copy from "./copy.json";
 import { captureImprovement } from "./persona-improvement.ts";
+import { RigArtwork } from "./rig-artwork-models.ts";
+import { privateTokens } from "./private-token.ts";
 const Draft = Schema.Struct({
   id: Schema.String,
   // The original saved snapshot for stale-edit checks; empty for a new character.
   base: Schema.String,
   legacySource: Schema.optionalKey(Schema.String),
   preview: Schema.String,
+  rigArtwork: Schema.optionalKey(RigArtwork),
   sheets: Schema.optionalKey(IdentitySheets),
   initial: Schema.optionalKey(
     Schema.Struct({
@@ -58,6 +60,7 @@ export const documentsOf = (draft: Draft) =>
   draft.initial?.preview ?? draft.initial?.base ?? { state: "", memory: "" };
 
 export const draftFields = (draft: Draft) => ({
+  rigArtwork: draft.rigArtwork,
   sheets: draft.sheets,
   documents: documentsOf(draft),
   tab: draft.tab,
@@ -96,7 +99,8 @@ export function restoreDraft(
   cached: Draft | undefined,
 ): Draft {
   const saved = draftFor(persona, editing);
-  return cached?.base === saved.base && cached.imageEditing ? cached : saved;
+  const restored = cached?.base === saved.base && cached.imageEditing ? cached : saved;
+  return cached?.rigArtwork ? { ...restored, rigArtwork: cached.rigArtwork } : restored;
 }
 
 export function completedImageDraft(draft: Draft): Draft {
@@ -111,25 +115,11 @@ export function completedImageDraft(draft: Draft): Draft {
 }
 
 export function draftTokens(password: string) {
-  const digest = (value: string) => createHmac("sha256", password).update(value).digest();
+  const tokens = privateTokens(password);
   return {
-    encode: (draft: Draft) => {
-      const content = Buffer.from(JSON.stringify(draft)).toString("base64url");
-      return `${content}.${digest(content).toString("base64url")}`;
-    },
+    encode: (draft: Draft) => tokens.encode(JSON.stringify(draft)),
     decode: (value: FormDataEntryValue | null): Draft => {
-      if (typeof value !== "string") throw new PersonaError("invalid", copy.formError);
-      const parts = value.split(".");
-      const [content, signature] = parts;
-      if (parts.length !== 2 || !content || !signature)
-        throw new PersonaError("invalid", copy.formError);
-      const actual = Buffer.from(signature, "base64url");
-      const expected = digest(content);
-      if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
-        throw new PersonaError("invalid", copy.formError);
-      return Schema.decodeUnknownSync(Draft)(
-        JSON.parse(Buffer.from(content, "base64url").toString()),
-      );
+      return Schema.decodeUnknownSync(Draft)(JSON.parse(tokens.decode(value)));
     },
   };
 }

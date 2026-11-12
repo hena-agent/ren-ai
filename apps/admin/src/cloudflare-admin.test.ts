@@ -2,7 +2,17 @@ import { expect, test, vi } from "vitest";
 import { cloudflareAdmin } from "./cloudflare-admin.ts";
 import { memoryStorage } from "../test/memory-storage.ts";
 import { cloudflareFixture, databasePersona, adminBindings } from "../test/cloudflare-fixture.ts";
-import { character, initialDocuments, portraitImage, request, tokenOf } from "../test/fixtures.ts";
+import {
+  character,
+  initialDocuments,
+  introduction,
+  png,
+  portraitImage,
+  request,
+  seedSheets,
+  tokenOf,
+} from "../test/fixtures.ts";
+import { draftTokens } from "./draft.ts";
 import type { AdminEnv } from "./cloudflare-admin.ts";
 import { captureWorkerLogs } from "../test/worker-logs.ts";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -10,6 +20,11 @@ import { adminRequest } from "./admin-request.ts";
 import { databaseStore } from "./database-store.ts";
 import { catalogHandler } from "./catalog-handler.ts";
 import { thumbnailKey, thumbnailUrl } from "@ren-ai/personas/image-url";
+import { fluxModel } from "../test/image-models.ts";
+
+async function loggedWorkerFixture() {
+  return { ...(await cloudflareFixture()), ...memoryStorage(), ...captureWorkerLogs() };
+}
 
 test.each([false, true])(
   "image delivery is direct R2 in production and local R2 in development (local: %s)",
@@ -150,9 +165,7 @@ test("alarms execute one photo, re-arm remaining work and restore safe failed di
 });
 
 test("the Worker connects authenticated management pages without exposing its service token", async () => {
-  const { db, bucket } = await cloudflareFixture();
-  const { storage } = memoryStorage();
-  const { stdout, stderr } = captureWorkerLogs();
+  const { db, bucket, storage, stdout, stderr } = await loggedWorkerFixture();
   const fetcher = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(Response.json({ entries: [], eligibleCount: 0 }))
@@ -180,6 +193,66 @@ test("the Worker connects authenticated management pages without exposing its se
       .join("");
     expect(output).not.toContain("messaging-secret");
     expect(output).not.toContain("private@example.net");
+  } finally {
+    vi.unstubAllGlobals();
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
+});
+
+test("FAL artwork configuration survives Worker recovery, uses the shared alarm and saves only private R2 draft results", async () => {
+  const { db, bucket, storage, stdout, stderr } = await loggedWorkerFixture();
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
+    Response.json({
+      images: [{ url: `data:image/png;base64,${png.toString("base64")}` }],
+    }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const env = { ...adminBindings(db, bucket), FAL_KEY: "private-fal-key" };
+    const store = databaseStore(db, bucket);
+    await store.save(databasePersona, initialDocuments, { persona: "" });
+    await seedSheets(store, databasePersona.id);
+    let admin = await cloudflareAdmin(env, storage);
+    const path = `/personas/${databasePersona.id}`;
+    const fresh = tokenOf(await (await admin.fetch(request(path))).text());
+    expect(fetcher).not.toHaveBeenCalled();
+    const submission = request(path, {
+      ...character,
+      draft: fresh,
+      intent: "rig-artwork",
+      rigArtworkModel: fluxModel.id,
+      imageCount: "1",
+      portraitInstructions: "private rig request",
+    });
+    expect((await admin.fetch(submission.clone())).status).toBe(303);
+    expect(await storage.getAlarm()).not.toBeNull();
+    admin = await cloudflareAdmin(env, storage);
+    await admin.alarm();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const provider = new Request(...fetcher.mock.calls[0]!);
+    expect(provider.url).toBe("https://fal.run/fal-ai/flux-2/klein/9b/edit");
+    expect(await provider.clone().text()).toContain(
+      `data:image/png;base64,${png.toString("base64")}`,
+    );
+    expect(await provider.clone().text()).toContain(character.name);
+    expect(await provider.clone().text()).not.toContain(introduction);
+    expect(provider.headers.get("authorization")).toBe("Key private-fal-key");
+    admin = await cloudflareAdmin(env, storage);
+    const completed = await (await admin.fetch(request(path))).text();
+    expect(completed).toContain("기본 몸 원본 열기");
+    expect((await admin.fetch(submission.clone())).status).toBe(303);
+    await admin.alarm();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const image = draftTokens("test-password").decode(tokenOf(completed)).rigArtwork!.image!;
+    expect(image.model).toBe(fluxModel.id);
+    expect((await store.list()).map((persona) => persona.id)).toEqual([databasePersona.id]);
+    expect(JSON.stringify(await store.get(databasePersona.id))).not.toContain(image.imageUrl);
+    const output = [...stdout.mock.calls, ...stderr.mock.calls]
+      .map(([line]) => String(line))
+      .join("");
+    for (const secret of ["private-fal-key", "private rig request", png.toString("base64")])
+      expect(output).not.toContain(secret);
   } finally {
     vi.unstubAllGlobals();
     stdout.mockRestore();

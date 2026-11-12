@@ -49,6 +49,7 @@ export async function imageJobRoute(
         draft: tokens.encode(latest),
         documents: documentsOf(latest),
         sheets: latest.sheets,
+        rigArtwork: latest.rigArtwork,
         tab: latest.tab,
         imageJobs: queue
           .list(token.id, "")

@@ -88,7 +88,7 @@ function updatePage(next: Document) {
   const updated = next.querySelector("[data-image-progress]")!;
   if (progress.innerHTML !== updated.innerHTML) progress.innerHTML = updated.innerHTML;
   for (const region of document.querySelectorAll(
-    "[data-image-preview], [data-add-images], [data-identity-sheet]",
+    "[data-image-preview], [data-add-images], [data-identity-sheet], [data-rig-artwork]",
   )) {
     if (editingPrompt && region.hasAttribute("data-add-images")) continue;
     const available = next.getElementById(region.id);

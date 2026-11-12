@@ -15,6 +15,7 @@ import { withPublicProfile } from "@ren-ai/personas/profile";
 import { sheet } from "./sheet.ts";
 import type { PersonaStore } from "@ren-ai/personas";
 import { draftTokens } from "../src/draft.ts";
+import { testImageModels, testModels } from "./image-models.ts";
 
 export const authorization = `Basic ${Buffer.from("admin:test-password").toString("base64")}`;
 export const character = {
@@ -59,6 +60,7 @@ export const portraitReply = async () =>
     ],
   });
 export const generator: ProfileGenerator = {
+  imageModels: testImageModels,
   sheet: async () => ({ bytes: png, mimeType: "image/png" }),
   character: async () => authoredCharacter,
   introduction: async () => introduction,
@@ -133,6 +135,12 @@ export const request = (path: string, fields?: Record<string, string>) => {
     ...(fields
       ? {
           body: new URLSearchParams({
+            ...(fields["intent"] === "rig-artwork" &&
+              testModels.find((model) => model.id === fields["rigArtworkModel"]) && {
+                rigArtworkQuote: testImageModels.quote(
+                  testModels.find((model) => model.id === fields["rigArtworkModel"])!,
+                ),
+              }),
             ...(fields["published"] === "on" && {
               stateSource: initialDocuments.state,
               memorySource: initialDocuments.memory,

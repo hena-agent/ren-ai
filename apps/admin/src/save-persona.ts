@@ -27,5 +27,6 @@ export async function savePersonaDraft(
     preview: source,
     initial: { base: documents, preview: documents },
     ...(draft.sheets && { sheets: draft.sheets }),
+    ...(draft.rigArtwork && { rigArtwork: draft.rigArtwork }),
   };
 }

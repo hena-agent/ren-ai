@@ -35,7 +35,9 @@ export function bindPending(
     if (improvement && intent === "improve") improvement.textContent = "초안을 개선하고 있습니다…";
     if (
       submitImage &&
-      ["generate", "regenerate", "retry-image", "sheet", "sheets"].includes(String(intent))
+      ["generate", "regenerate", "retry-image", "sheet", "sheets", "rig-artwork"].includes(
+        String(intent),
+      )
     ) {
       event.preventDefault();
       submitImage(form, event.submitter);

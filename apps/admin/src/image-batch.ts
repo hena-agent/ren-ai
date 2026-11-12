@@ -22,6 +22,9 @@ import copy from "./copy.json";
 import { assertSnapshot } from "./snapshot.ts";
 import { operation } from "./logging.ts";
 import { randomUUID } from "node:crypto";
+import { rigArtworkBatch } from "./rig-artwork-batch.ts";
+import { artworkLayerBatch } from "./artwork-layer-batch.ts";
+import type { ArtworkLayerCheckpoint } from "./artwork-layer-model.ts";
 import {
   assertSheets,
   generateSheet,
@@ -41,6 +44,7 @@ export interface ImageBatchSnapshot {
   latest: Draft;
   prompts: readonly string[];
   expectedBase: string;
+  layerize?: ArtworkLayerCheckpoint;
 }
 export interface ImageBatch {
   readonly intent: ImageIntent;
@@ -96,6 +100,23 @@ export function createImageBatch(
   restored?: ImageBatchSnapshot,
 ): ImageBatch {
   persona = decodePersona(persona);
+  if (intent === "rig-artwork" || intent === "rig-layers") {
+    const snapshot = restored ?? {
+      operationId: randomUUID(),
+      source: persona,
+      original: draft,
+      intent,
+      params: params.toString(),
+      key,
+      current: persona,
+      latest: { ...draft, preview: serializePersona(persona), imageEditing: true },
+      prompts: [draft.imagePrompts?.[0] ?? draft.portraitInstructions ?? ""],
+      expectedBase: draft.base,
+    };
+    return intent === "rig-layers"
+      ? artworkLayerBatch(snapshot, generator.layerize, store)
+      : rigArtworkBatch(snapshot, generator.rigArtwork, store);
+  }
   const sheets = isSheetIntent(intent);
   const operationId = restored ? restored.operationId : randomUUID();
   const slots = slotsOf(persona, draft, intent, params, key);
@@ -258,6 +279,10 @@ export function restoreImageBatch(
 ) {
   if (typeof snapshot.operationId !== "string")
     throw new PersonaError("invalid", "이미지 작업의 생성 식별자가 없습니다.");
+  if (snapshot.intent === "rig-artwork")
+    return rigArtworkBatch(snapshot, generator?.rigArtwork, store);
+  if (snapshot.intent === "rig-layers")
+    return artworkLayerBatch(snapshot, generator?.layerize, store);
   if (!["generate", "regenerate", "sheet", "sheets"].includes(snapshot.intent))
     throw new PersonaError("invalid", "지원하지 않는 이미지 작업입니다.");
   return createImageBatch(

@@ -42,6 +42,7 @@
       "entry": [
         "worker/entry.mjs!",
         "src/pending-entry.mjs!",
+        "src/rig-test-entry.mjs!",
         "scripts/build.mjs!",
         "scripts/import-local.mjs!",
         "scripts/seed.mjs!",

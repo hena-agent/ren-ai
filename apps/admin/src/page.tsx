@@ -19,6 +19,7 @@ import { MetricsPage } from "./metrics-page.tsx";
 import { AdminLayout } from "./admin-layout.tsx";
 
 interface EditorFields {
+  rigArtwork?: Draft["rigArtwork"];
   sheets?: IdentitySheets | undefined;
   documents?: InitialDocuments | undefined;
   tab?: Draft["tab"];
@@ -45,6 +46,7 @@ function needsCreation(persona: PersonaRecord, editing: boolean, retry: boolean)
 }
 
 function Editor({
+  rigArtwork,
   sheets,
   persona,
   editing,
@@ -147,6 +149,7 @@ function Editor({
           {copy.save}
         </button>
         <ImageOptions
+          artworkModel={rigArtwork?.model}
           prompt={portraitInstructions}
           operation={portraitOperation}
           count={imageCount}
@@ -208,6 +211,7 @@ function Editor({
             />
           </div>
           <PortraitManager
+            artwork={rigArtwork}
             persona={persona}
             action={action}
             locked={locked}
@@ -297,6 +301,7 @@ function pageSection(
 }
 
 export function renderPage({
+  rigArtwork,
   sheets,
   personas,
   record,
@@ -389,6 +394,7 @@ export function renderPage({
             <ContactPage view={contactView} />
           ) : record ? (
             <Editor
+              rigArtwork={rigArtwork}
               sheets={sheets}
               persona={record}
               editing={editing}

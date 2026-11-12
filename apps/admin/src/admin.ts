@@ -47,9 +47,6 @@ import {
 import { createResources } from "./resources.ts";
 import { assertSnapshot } from "./snapshot.ts";
 import type { AdminOptions } from "./admin-options.ts";
-import { contactRoutes } from "./contact-routes.ts";
-import { metricsRoutes } from "./metrics-routes.ts";
-import { conversationRoutes } from "./conversation-routes.ts";
 import { html } from "./html-response.ts";
 import { generationFailureMessage } from "./generation-failure.ts";
 import { imageJobRoute } from "./image-job-routes.ts";
@@ -61,8 +58,8 @@ import { seedingEngine } from "./seeding-engine.ts";
 import { imageJobPages } from "./image-job-page.ts";
 import { personaQuery } from "./persona-query.ts";
 import { readEditor, editorDraft, type EditorRecord } from "./editor-record.ts";
-import { socialRoutes } from "./social-routes.ts";
-import { socialImageResponse } from "./social-image-response.ts";
+import { managementResponse } from "./management-response.ts";
+import { captureArtworkLayers } from "./artwork-layer-options.ts";
 const authorized = (request: Request, expected: Buffer) =>
   timingSafeEqual(
     createHash("sha256")
@@ -70,23 +67,6 @@ const authorized = (request: Request, expected: Buffer) =>
       .digest(),
     expected,
   );
-
-const managementResponse = (
-  request: Request,
-  url: URL,
-  management: AdminOptions["management"],
-  store: PersonaStore,
-) => {
-  if (url.pathname === "/social") return socialRoutes(request, store, management?.social);
-  if (url.pathname.startsWith("/social/images/"))
-    return socialImageResponse(request, management?.social);
-  if (["/waitlist", "/first-contacts", "/invitations"].includes(url.pathname))
-    return contactRoutes(request, management);
-  if (url.pathname === "/metrics") return metricsRoutes(request, management);
-  if (url.pathname.startsWith("/conversations"))
-    return conversationRoutes(request, management?.conversations);
-  return undefined;
-};
 
 export function createAdmin(
   store: PersonaStore,
@@ -345,7 +325,16 @@ export function createAdmin(
         if (!record.name || !record.description)
           throw new PersonaError("invalid", copy.characterRequired);
       }
-      if (isImageIntent(intent)) draft = capturePortraitInput(draft, form, intent, submittedKey);
+      const selection =
+        intent === "rig-artwork"
+          ? generator?.imageModels?.selected(
+              form.get("rigArtworkQuote"),
+              form.get("rigArtworkModel"),
+            )
+          : undefined;
+      draft = captureArtworkLayers(draft, form, intent, generator?.layerize);
+      if (isImageIntent(intent))
+        draft = capturePortraitInput(draft, form, intent, submittedKey, selection);
       const paidKey = imageRequestKey(request, draft.id, intent, form, url.search);
       if (isImageIntent(intent))
         return await enqueueImages(
@@ -408,7 +397,15 @@ export function createAdmin(
   const privateRoute = async (request: Request, url: URL): Promise<Response> => {
     const seeded = await seedRoute(request);
     if (seeded) return seeded;
-    const managed = await managementResponse(request, url, management, store);
+    const managed = await managementResponse(
+      request,
+      url,
+      management,
+      store,
+      generator?.imageModels,
+      generator?.layerize,
+      (id) => busy.has(id) || Boolean(queue.pending(id)),
+    );
     if (managed) return managed;
     if (url.pathname === "/upload-image")
       return await uploadRoute(request, url, store, tokens, subDrafts, busy, queue.pending);

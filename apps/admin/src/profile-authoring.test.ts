@@ -42,7 +42,10 @@ test("the designer has one source input and a safe paragraph preview without blo
   expect(globalThis.document.querySelector('[name="profileEditor"]')).toBeNull();
   expect(globalThis.document.querySelector('[name="profile:basics:age"]')).toBeNull();
   expect(globalThis.document.querySelectorAll('[name="description"]')).toHaveLength(1);
-  expect(globalThis.document.querySelector("main details")).toBeNull();
+  expect(globalThis.document.querySelector(".persona-document-editor details")).toBeNull();
+  expect(
+    globalThis.document.querySelector(".model-details")!.closest("[data-rig-model-options]"),
+  ).not.toBeNull();
   expect(globalThis.document.querySelector('[name="publicBlock"]')).toBeNull();
   expect(globalThis.document.querySelector('[name="publicAddition"]')).toBeNull();
   expect(globalThis.document.querySelector("[data-public-preview]")?.textContent).not.toContain(

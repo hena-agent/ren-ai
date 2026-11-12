@@ -8,8 +8,43 @@ import type { ImageJob } from "./image-queue.ts";
 import { serializePersona } from "@ren-ai/personas";
 import copy from "./copy.json";
 import { renderPage } from "./page.tsx";
+import { seedreamModel } from "../test/image-models.ts";
 
 useBrowser();
+
+test("face generation history and retries identify the facial action rather than a replacement body", async () => {
+  const job = await jobFixture();
+  const snapshot = job.batch.snapshot();
+  const faceJob: ImageJob = {
+    ...job,
+    state: "failed",
+    batch: {
+      ...job.batch,
+      intent: "rig-artwork",
+      snapshot: () => ({
+        ...snapshot,
+        original: {
+          ...snapshot.original,
+          rigArtwork: {
+            model: seedreamModel.id,
+            selection: seedreamModel,
+            target: "body",
+            face: { kind: "closed", sourceLayerImageUrl: "/images/face.png" },
+          },
+        },
+      }),
+    },
+  };
+  document.body.innerHTML = renderToStaticMarkup(
+    <ImageJobPanel job={faceJob} position={0} now={7500} />,
+  );
+  expect(document.querySelector(".queue-item-content > strong")!.textContent).toContain(
+    "얼굴 · 감긴 눈·미소",
+  );
+  expect(
+    document.querySelector<HTMLButtonElement>('[value="retry-image"]')!.dataset["rigFaceAction"],
+  ).toBe("closed");
+});
 
 async function jobFixture() {
   const { original, store } = await savedPreview();
@@ -61,6 +96,33 @@ async function jobFixture() {
   return job;
 }
 
+test("outfit layer failures identify the asset and retain the existing-result recovery action", async () => {
+  const job = await jobFixture();
+  const snapshot = job.batch.snapshot();
+  const failed: ImageJob = {
+    ...job,
+    state: "failed",
+    batch: {
+      ...job.batch,
+      intent: "rig-layers",
+      snapshot: () => ({
+        ...snapshot,
+        layerize: { requestId: "known-provider-request", saved: [] },
+        original: { ...snapshot.original, rigArtwork: { model: "fal:test", target: "outfit" } },
+      }),
+    },
+  };
+  document.body.innerHTML = renderToStaticMarkup(
+    <ImageJobPanel job={failed} position={0} now={7500} />,
+  );
+  expect(document.querySelector(".queue-item-content > strong")!.textContent).toContain(
+    "의상 레이어 분리",
+  );
+  const retry = document.querySelector<HTMLButtonElement>('[value="retry-image"]')!;
+  expect(retry.dataset["artworkTarget"]).toBe("outfit");
+  expect(retry.dataset["layerizeCached"]).toBe("true");
+});
+
 test("progress reports each real state, counter, elapsed seconds, accessible labels and original diagnostic correlation", async () => {
   const job = await jobFixture();
   document.body.innerHTML = renderToStaticMarkup(
@@ -76,7 +138,7 @@ test("progress reports each real state, counter, elapsed seconds, accessible lab
     "https://example.net/discovery/images/external.jpg",
   );
   expect(rows[0]!.querySelector("img")!.getAttribute("alt")).toBe("실사 사진 2");
-  expect(rows[0]!.querySelector("small")).toBeNull();
+  expect(rows[0]!.querySelector(".queue-request-id")).toBeNull();
   expect(rows[1]!.querySelector(".queue-thumbnail span")!.textContent).toBe("2");
   expect(rows[1]!.querySelector(".queue-item-content span")!.textContent).toBe(
     "이미지 생성 중 · 4초",
