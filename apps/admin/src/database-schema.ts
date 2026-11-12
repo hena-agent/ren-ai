@@ -6,6 +6,7 @@ import {
   primaryKey,
   index,
 } from "drizzle-orm/sqlite-core";
+import type { RigArtworkLayers, RigArtworkOutfit } from "@ren-ai/personas";
 
 export const personas = sqliteTable(
   "personas",
@@ -77,6 +78,17 @@ export const identitySheets = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.personaId, table.style] })],
 );
+
+// Artwork can be generated for an authoring draft before the first Persona save.
+export const rigArtworks = sqliteTable("persona_rig_artworks", {
+  personaId: text().primaryKey(),
+  objectKey: text().notNull(),
+  model: text().notNull(),
+  operationId: text().notNull(),
+  layersJson: text("layers_json", { mode: "json" }).$type<RigArtworkLayers>(),
+  kind: text({ enum: ["body"] }),
+  outfitJson: text("outfit_json", { mode: "json" }).$type<RigArtworkOutfit>(),
+});
 
 export const seedingRuns = sqliteTable("seeding_runs", {
   id: text().primaryKey(),

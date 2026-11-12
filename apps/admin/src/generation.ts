@@ -12,6 +12,9 @@ import { setTimeout } from "node:timers/promises";
 import { networkError } from "./generation-network.ts";
 import { codexImageModel } from "@ren-ai/image-generation";
 import { codexImage } from "./codex-image.ts";
+import type { RigArtworkGenerator } from "./rig-artwork-generation.ts";
+import type { ImageModels } from "./image-model.ts";
+import type { ArtworkLayerizer } from "./artwork-layer-generation.ts";
 
 type Character = {
   readonly name: string;
@@ -22,6 +25,9 @@ const characterText = (character: Character) =>
   `${character.name}\n${character.description}${character.gender ? `\n\nSELECTED GENDER: ${character.gender}` : ""}`;
 type PortraitStyle = keyof typeof policy.portraits;
 export interface ProfileGenerator {
+  layerize?: ArtworkLayerizer;
+  imageModels?: ImageModels;
+  rigArtwork?: RigArtworkGenerator;
   sheet: (
     character: Character,
     style: PortraitStyle,

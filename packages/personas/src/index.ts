@@ -14,6 +14,14 @@ export type { PersonaStore } from "./store-contract.ts";
 export { personaPage, personaPageSize } from "./listing.ts";
 export type { PersonaQuery, PersonaPage } from "./listing.ts";
 export { IdentitySheets } from "./identity-sheets.ts";
+export {
+  RigArtworkImage,
+  RigArtworkOutfit,
+  RigArtworkModel,
+  RigArtworkLayer,
+  RigArtworkLayers,
+} from "./rig-artwork-model.ts";
+export { assertOwnedRigLayers } from "./rig-artwork.ts";
 export { personaImages, withPersonaImages } from "./portraits.ts";
 export type { PersonaImage } from "./portraits.ts";
 export { CharacterSheet, Stat, renderCharacterSheet } from "./character-sheet.ts";

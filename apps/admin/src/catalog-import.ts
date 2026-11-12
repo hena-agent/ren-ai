@@ -5,11 +5,13 @@ import { personaImages } from "@ren-ai/personas";
 import { personas, personaImages as photos, personaVersions } from "./database-schema.ts";
 import { currentPersonaRows } from "./database-record.ts";
 import { personaContent, personaValues, photoValues } from "./catalog-values.ts";
-import { imageKey } from "./r2-images.ts";
+import { imageKey, putImmutable } from "./r2-images.ts";
 import type { ImageBucket } from "./r2-images.ts";
 import { imageHash, importImageBytes } from "./import-source.ts";
 import type { ImportImage, ImportPersona, ImportSource } from "./import-source.ts";
 import { operation, validationFailure } from "./logging.ts";
+import { thumbnailKey } from "@ren-ai/personas/image-url";
+import { thumbnail } from "./thumbnail.ts";
 
 const ordered = (rows: readonly (typeof photos.$inferSelect)[]) =>
   rows.toSorted((a, b) => a.style.localeCompare(b.style) || a.position - b.position);
@@ -70,6 +72,7 @@ export async function importCatalog(
   try {
     const additions: ImportPersona[] = [];
     const uploads: (typeof source.images)[number][] = [];
+    const missingThumbnails = new Set<string>();
     await operation("catalog.import.preflight", { operationId }, async () => {
       for (const input of source.personas)
         if (!(await currentMatches(binding, input, source))) additions.push(input);
@@ -77,21 +80,22 @@ export async function importCatalog(
         const existing = await bucket.get(image.key);
         if (!existing) {
           uploads.push(image);
-          continue;
-        }
-        if (!(await imageMatches(image, existing)))
+        } else if (!(await imageMatches(image, existing)))
           throw new Error(`Import image key conflicts: ${image.key}`);
+        if (!(await bucket.head(thumbnailKey(image.key)))) missingThumbnails.add(image.key);
       }
     });
     if (!check) {
       await operation("catalog.import.upload", { operationId }, async () => {
-        for (const image of uploads)
-          await bucket.put(image.key, await importImageBytes(image), {
-            httpMetadata: {
-              contentType: image.mimeType,
-              cacheControl: "public, max-age=31536000, immutable",
-            },
-          });
+        const originals = new Set(uploads.map((image) => image.key));
+        for (const image of source.images) {
+          if (!originals.has(image.key) && !missingThumbnails.has(image.key)) continue;
+          const bytes = await importImageBytes(image);
+          if (missingThumbnails.has(image.key))
+            await putImmutable(bucket, thumbnailKey(image.key), thumbnail(bytes), "image/jpeg");
+          if (originals.has(image.key))
+            await putImmutable(bucket, image.key, bytes, image.mimeType);
+        }
       });
       await operation("catalog.import.verify-images", { operationId }, async () => {
         for (const image of source.images)

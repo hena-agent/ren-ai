@@ -6,6 +6,8 @@ import { cloudflareFixture } from "../test/cloudflare-fixture.ts";
 import { fixture, legacy, portraitImage } from "../test/fixtures.ts";
 import { captureWorkerLogs } from "../test/worker-logs.ts";
 import type { ImageBucket } from "./r2-images.ts";
+import { thumbnailKey } from "@ren-ai/personas/image-url";
+import { localImageRequest } from "./local-image.ts";
 
 async function importFixture() {
   const local = await fixture();
@@ -14,6 +16,54 @@ async function importFixture() {
   await local.store.create({ ...legacy, published: true, imageUrl });
   return { local, source: await readImportSource(local.root), target: await cloudflareFixture() };
 }
+
+test("imported originals have loadable Admin thumbnails and repeat repairs only a missing thumbnail", async () => {
+  const { source, target } = await importFixture();
+  const { stdout, stderr } = captureWorkerLogs();
+  try {
+    await importCatalog(target.db, target.bucket, source, false, "thumbnail-import");
+    for (const image of source.images) {
+      const response = await localImageRequest(
+        new Request(`http://localhost:3729/images/${thumbnailKey(image.key)}`),
+        target.bucket,
+        () => {},
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/jpeg");
+      expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);
+    }
+    const missing = thumbnailKey(source.images[0]!.key);
+    await target.bucket.delete(missing);
+    const writes: string[] = [];
+    const bucket: ImageBucket = {
+      get: (key) => target.bucket.get(key),
+      head: (key) => target.bucket.head(key),
+      put: (key, bytes, options) => {
+        writes.push(key);
+        return target.bucket.put(key, bytes, options);
+      },
+    };
+    await importCatalog(target.db, bucket, source, true, "thumbnail-check");
+    expect(writes).toEqual([]);
+    await importCatalog(target.db, bucket, source, false, "thumbnail-repair");
+    expect(writes).toEqual([missing]);
+    const missingOriginal = source.images[1]!.key;
+    await target.bucket.delete(missingOriginal);
+    writes.length = 0;
+    await importCatalog(target.db, bucket, source, false, "original-repair");
+    expect(writes).toEqual([missingOriginal]);
+    for (const image of source.images)
+      expect(new Uint8Array(await (await target.bucket.get(image.key))!.arrayBuffer())).toEqual(
+        new Uint8Array(portraitImage.bytes),
+      );
+    writes.length = 0;
+    await importCatalog(target.db, bucket, source, false, "thumbnail-repeat");
+    expect(writes).toEqual([]);
+  } finally {
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
+});
 
 test("check is read-only; import preserves legacy publication and orphan originals; repeat is idempotent", async () => {
   const { source, target } = await importFixture();
@@ -38,7 +88,9 @@ test("check is read-only; import preserves legacy publication and orphan origina
     description: legacy.description,
   });
   expect(await target.store.initial(record.id)).toEqual({ state: "", memory: "" });
-  expect((await target.bucket.list()).objects).toHaveLength(2);
+  expect((await target.bucket.list()).objects.map((object) => object.key).toSorted()).toEqual(
+    source.images.flatMap((image) => [image.key, thumbnailKey(image.key)]).toSorted(),
+  );
   expect(record.imageUrl).toBe(
     `https://persona-images.renai.im/${record.imageUrl.split("/").at(-1)}`,
   );
@@ -99,7 +151,7 @@ test("a late D1 constraint error rolls back the complete multi-persona import", 
     importCatalog(target.db, target.bucket, expanded, false, "atomic-import"),
   ).rejects.toThrow("Local Catalog import failed");
   expect(await target.store.list()).toEqual([]);
-  expect((await target.bucket.list()).objects).toHaveLength(source.images.length);
+  expect((await target.bucket.list()).objects).toHaveLength(source.images.length * 2);
   const logs = stderr.mock.calls.map(([line]) => String(line)).join("");
   expect(logs).not.toContain(legacy.description);
   stdout.mockRestore();

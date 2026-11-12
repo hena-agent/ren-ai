@@ -3,6 +3,10 @@ function updateTotal(select: HTMLSelectElement) {
   if (!total) return;
   const count = Number(select.value);
   const intent = select.dataset["imageIntent"]!;
+  if (intent === "rig-artwork") {
+    total.textContent = "이 페르소나의 rig-c 원화 1장 생성 · 성공하면 기존 원화를 교체합니다";
+    return;
+  }
   if (isSheetIntent(intent)) {
     total.textContent =
       intent === "sheets"
@@ -26,7 +30,7 @@ export function configureImageCount(
   const select = dialog.querySelector<HTMLSelectElement>('[name="imageCount"]');
   if (!select) return;
   const maximum =
-    intent === "regenerate" || intent === "retry-image" || isSheetIntent(intent)
+    intent === "regenerate" || intent === "retry-image" || isExclusiveImageIntent(intent)
       ? 1
       : Number(submitter.dataset["imageMaximum"] ?? 6);
   if (Number(select.value) > maximum) select.value = "1";
@@ -40,4 +44,4 @@ export function configureImageCount(
   updatePromptFields(dialog);
 }
 import { updatePromptFields } from "./image-prompt-fields.ts";
-import { isSheetIntent } from "./image-slots.ts";
+import { isSheetIntent, isExclusiveImageIntent } from "./image-slots.ts";

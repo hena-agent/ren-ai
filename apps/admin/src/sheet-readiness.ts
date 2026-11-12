@@ -3,7 +3,7 @@ function unavailable(image: HTMLImageElement, form: HTMLFormElement) {
   const style = region?.dataset["identitySheet"];
   if (style !== "anime" && style !== "photo") return;
   for (const button of form.querySelectorAll<HTMLButtonElement>(
-    `button[data-portrait-style="${style}"][value="generate"], button[data-portrait-style="${style}"][value="regenerate"]`,
+    `button[data-portrait-style="${style}"][value="generate"], button[data-portrait-style="${style}"][value="regenerate"], button[data-portrait-style="${style}"][value="rig-artwork"]:not([data-artwork-target="outfit"])`,
   ))
     button.disabled = true;
   region!.querySelector<HTMLElement>("[data-sheet-unavailable]")!.hidden = false;

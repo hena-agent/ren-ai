@@ -2,6 +2,29 @@ import { thumbnailUrl } from "@ren-ai/personas/image-url";
 import type { ImageJob } from "./image-queue.ts";
 import copy from "./copy.json";
 import { isSheetIntent } from "./image-slots.ts";
+import { ImageAttemptHistory } from "./image-attempt-history.tsx";
+import { faceGenerationLabels } from "./rig-face.ts";
+
+function elapsed(task: ImageJob["tasks"][number], now: number) {
+  if (task.startedAt === undefined) return "";
+  const duration =
+    task.durationMs ??
+    (task.state === "generating" || task.state === "saving" ? now - task.startedAt : undefined);
+  return duration === undefined ? "" : ` · ${Math.floor(duration / 1000)}초`;
+}
+
+function jobStatus(job: ImageJob, active: boolean, position: number) {
+  if (job.state === "queued") return `${copy.queueWaiting} · ${position + 1}번째`;
+  if (active) return copy.queueRunning;
+  if (job.state !== "failed") return copy.queueFinished;
+  if (
+    job.tasks.some((task) => task.attempts?.at(-1)?.state === "interrupted" || task.recoveryPending)
+  )
+    return "실행이 중단되어 최종 결과가 불확실합니다. 기존 접수 결과를 확인하세요. 새 유료 생성을 자동으로 반복하지 않습니다.";
+  if (job.batch.intent === "rig-layers")
+    return "레이어 분리 또는 저장에 실패했습니다. 원화·이전 레이어는 유지됩니다.";
+  return "이미지 생성이 끝났지만 실패한 사진이 있습니다. 재시도하거나 기록을 삭제하세요.";
+}
 
 export function ImageJobPanel({
   job,
@@ -16,8 +39,22 @@ export function ImageJobPanel({
 }) {
   const active = job.state === "queued" || job.state === "running";
   const completed = job.tasks.filter((task) => task.state === "completed").length;
+  const snapshot = job.batch.snapshot();
+  const assetTarget = snapshot.original.rigArtwork?.target;
+  const face = snapshot.original.rigArtwork?.face;
+  const asset = face
+    ? `얼굴 · ${faceGenerationLabels[face.kind]}`
+    : assetTarget
+      ? { body: "기본 몸", outfit: "의상" }[assetTarget]
+      : "원화";
   const target = (index: number) =>
-    isSheetIntent(job.batch.intent) ? "인물 시트" : `사진 ${index + 1}`;
+    job.batch.intent === "rig-layers"
+      ? `${asset} 레이어 분리 · Seedream 5 Pro`
+      : job.batch.intent === "rig-artwork"
+        ? `rig-c ${asset} · ${snapshot.original.rigArtwork!.selection!.providerName} / ${snapshot.original.rigArtwork!.selection!.name}`
+        : isSheetIntent(job.batch.intent)
+          ? "인물 시트"
+          : `사진 ${index + 1}`;
   return (
     <section
       className="image-queue"
@@ -41,13 +78,7 @@ export function ImageJobPanel({
           </div>
         </div>
         <output className="hint" data-queue-status aria-live="polite">
-          {job.state === "queued"
-            ? `${copy.queueWaiting} · ${position + 1}번째`
-            : active
-              ? copy.queueRunning
-              : job.state === "failed"
-                ? "이미지 생성이 끝났지만 실패한 사진이 있습니다. 재시도하거나 기록을 삭제하세요."
-                : copy.queueFinished}
+          {jobStatus(job, active, position)}
         </output>
         {!active && (
           <div className="form-actions">
@@ -91,12 +122,14 @@ export function ImageJobPanel({
                 </strong>
                 <span>
                   {copy.queueStates[task.state]}
-                  {task.startedAt !== undefined &&
-                    ` · ${Math.floor((task.durationMs ?? now - task.startedAt) / 1000)}초`}
+                  {elapsed(task, now)}
                 </span>
                 {(task.state === "failed" || task.state === "blocked") && (
-                  <small>요청 ID: {task.requestId ?? job.requestId}</small>
+                  <small className="queue-request-id">
+                    요청 ID: {task.requestId ?? job.requestId}
+                  </small>
                 )}
+                <ImageAttemptHistory task={task} job={job} now={now} />
               </div>
               {!active && (task.state === "failed" || task.state === "blocked") && (
                 <button
@@ -111,8 +144,15 @@ export function ImageJobPanel({
                   data-portrait-style={task.style}
                   data-image-index={task.index}
                   data-portrait-prompt={job.batch.prompts[task.ordinal]}
+                  data-rig-artwork-target={job.batch.intent === "rig-artwork" ? "true" : undefined}
+                  data-artwork-target={snapshot.original.rigArtwork?.target}
+                  data-rig-face-action={face?.kind}
+                  data-layerize-target={job.batch.intent === "rig-layers" ? "true" : undefined}
+                  data-layerize-retry={job.batch.intent === "rig-layers" ? "true" : undefined}
+                  data-layerize-cached={snapshot.layerize ? "true" : undefined}
+                  data-layerize-price={snapshot.original.rigArtwork?.layerize?.price}
                 >
-                  {copy.retryImage}
+                  {job.batch.intent === "rig-layers" ? "분리/저장 재시도" : copy.retryImage}
                 </button>
               )}
             </li>

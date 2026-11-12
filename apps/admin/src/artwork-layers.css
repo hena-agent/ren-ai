@@ -1,0 +1,151 @@
+.rig-layer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+[data-layerize-options] h3 {
+  font-size: 16px;
+  margin: 8px 0;
+}
+.layer-viewer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+.layer-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: repeating-conic-gradient(#b8bdc1 0% 25%, #e2e5e7 0% 50%) 0 0 / 20px 20px;
+}
+.layer-stage {
+  position: relative;
+}
+.layer-inspection-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.layer-inspection-overlay[hidden] {
+  display: none;
+}
+.layer-quality-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.layer-quality-panel label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.layer-quality-panel output,
+.layer-quality-panel p {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+}
+.layer-layout-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+[data-layer-layout-form] {
+  margin: 20px 0;
+  padding-block: 16px;
+  border-block: 1px solid var(--line);
+}
+[data-layer-layout-form] h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+[data-layer-layout-form] input,
+[data-layer-layout-form] select {
+  font-size: 13px;
+}
+[data-layer-layout-form] button {
+  margin-top: 12px;
+}
+.layer-viewer-controls {
+  min-width: 0;
+}
+.layer-viewer-controls h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.layer-viewer-controls .form-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.layer-viewer-controls button {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+[data-layer-count] {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.layer-viewer-controls input[type="range"] {
+  min-height: 44px;
+  padding: 0;
+  accent-color: var(--signal);
+}
+.layer-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+  max-height: 60dvh;
+  overflow: auto;
+  border-block: 1px solid var(--line);
+}
+.layer-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.layer-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  min-width: 0;
+}
+.layer-list input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--signal);
+}
+.layer-list small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.layer-list a {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .layer-viewer-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -75,7 +75,8 @@ test("the authoring form asks for name and a long description, with no internal 
     ).toEqual(expect.arrayContaining(["성별 선택", "간단한 설명", "프로필 공개"]));
     expect(window.document.querySelector('[name="bio"]')).toBeNull();
     expect(window.document.querySelector(".persona-document-editor")?.tagName).toBe("SECTION");
-    expect(window.document.querySelector("main details")).toBeNull();
+    for (const details of window.document.querySelectorAll("main details"))
+      expect(details.closest("[data-rig-model-options]")).not.toBeNull();
     for (const label of window.document.querySelectorAll("label"))
       expect(window.document.getElementById(label.getAttribute("for")!)).not.toBeNull();
     expect(window.document.querySelector<HTMLInputElement>("#published")?.checked).toBe(false);
@@ -95,7 +96,7 @@ test("the authoring form asks for name and a long description, with no internal 
     ).toEqual(["아직 실사 사진이 없습니다.", "아직 애니풍 사진이 없습니다."]);
     expect(window.document.querySelectorAll(".portrait-count")).toHaveLength(2);
     expect(window.document.querySelector('[value="subportrait"]')).toBeNull();
-    expect(window.document.querySelector('[role="alert"]')).toBeNull();
+    expect(window.document.querySelector('[role="alert"]:not([hidden])')).toBeNull();
     expect(window.document.querySelector(".notice.success")).toBeNull();
     expect(tokenOf(page)).not.toBe("");
     for (const route of ["/style.css", "/pending.js"])

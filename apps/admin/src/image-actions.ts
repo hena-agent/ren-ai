@@ -9,8 +9,12 @@ import { readImageCount } from "./image-count.ts";
 import { readImagePrompts } from "./image-prompts.ts";
 import { protect } from "./logging.ts";
 import { createHash } from "node:crypto";
-import { isSheetIntent } from "./image-slots.ts";
+import { isSheetIntent, isArtworkIntent, isExclusiveImageIntent } from "./image-slots.ts";
 import { imageStyle } from "./portrait-images.ts";
+import type { ImageModelSelection } from "./image-model.ts";
+import { artworkTarget, requireRigBody } from "./rig-artwork-target.ts";
+import { RigFaceGenerationKind } from "@ren-ai/personas/rig-artwork";
+import { Schema, Option } from "effect";
 
 function adoptPhotos(original: Draft, latest: Draft | undefined) {
   if (!latest || latest.base !== original.base) return original;
@@ -41,6 +45,11 @@ export function imageRequestKey(
         form.get("imageCount"),
         form.getAll("imagePrompts"),
         form.get("separateImagePrompts"),
+        form.get("rigArtworkModel"),
+        form.get("rigArtworkQuote"),
+        form.get("layerizeQuote"),
+        form.get("rigArtworkTarget"),
+        form.get("rigFaceAction"),
       ];
   return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
@@ -60,6 +69,8 @@ export function protectEditingForm(form: FormData) {
       "stateSource",
       "memorySource",
       "improvementInstructions",
+      "rigArtworkQuote",
+      "layerizeQuote",
     ].flatMap((key) =>
       form.getAll(key).filter((value): value is string => typeof value === "string"),
     ),
@@ -72,6 +83,8 @@ export function imageSubmission(
   intent: ReturnType<typeof readIntent>,
   params: URLSearchParams,
 ) {
+  if (latest?.base === draft.base && latest.rigArtwork)
+    draft = { ...draft, rigArtwork: latest.rigArtwork };
   if (intent === "delete-image")
     return {
       key: regenerationKey(previewOf(draft, emptyPersona), params),
@@ -82,10 +95,11 @@ export function imageSubmission(
       key: regenerationKey(previewOf(draft, emptyPersona), params),
       draft: latestImageDraft(draft, latest, params),
     };
-  if (intent === "generate" || isSheetIntent(intent))
+  if (intent === "generate" || isSheetIntent(intent) || isArtworkIntent(intent))
     return {
-      key:
-        intent === "sheets"
+      key: isArtworkIntent(intent)
+        ? intent
+        : intent === "sheets"
           ? "sheets"
           : intent === "sheet"
             ? `sheet:${imageStyle(params)}:${params.get("image") ?? draft.sheets?.[imageStyle(params)] ?? "new"}`
@@ -95,15 +109,57 @@ export function imageSubmission(
   return { key: intent, draft };
 }
 
+function captureFaceAction(draft: Draft, form: FormData, target: "body" | "outfit") {
+  const value = form.get("rigFaceAction");
+  if (value === null || value === "") return {};
+  const kind = Schema.decodeUnknownOption(RigFaceGenerationKind)(value);
+  if (Option.isNone(kind)) throw new PersonaError("invalid", "얼굴 제작 대상을 확인하세요.");
+  const layer = draft.rigArtwork?.image?.layers?.layers.find(
+    (part) => part.plane === "face" || /face and neck/i.test(part.name),
+  );
+  if (!layer || target !== "body")
+    throw new PersonaError("invalid", "얼굴·목 레이어가 있는 기본 몸을 먼저 준비하세요.");
+  return { face: { kind: kind.value, sourceLayerImageUrl: layer.imageUrl } };
+}
+
 export function capturePortraitInput(
   draft: Draft,
   form: FormData,
   intent: ReturnType<typeof readIntent>,
   key: string,
+  selection?: ImageModelSelection,
 ) {
-  const count = readImageCount(form, intent === "regenerate" || isSheetIntent(intent) ? 1 : 6);
+  const count = readImageCount(
+    form,
+    intent === "regenerate" || isExclusiveImageIntent(intent) ? 1 : 6,
+  );
   const prompts = readImagePrompts(form, count * (intent === "sheets" ? 2 : 1));
   const current = { ...draft, imagePrompts: prompts };
+  if (intent === "rig-artwork") {
+    const target = artworkTarget(form.get("rigArtworkTarget"));
+    if (target === "outfit") requireRigBody(draft.rigArtwork?.image);
+    if (!selection || selection.id !== form.get("rigArtworkModel"))
+      throw new PersonaError(
+        "invalid",
+        "모델 카탈로그에서 원화 모델을 선택하고 정보를 확인하세요.",
+      );
+    const artwork = { ...draft.rigArtwork };
+    delete artwork.face;
+    return {
+      ...current,
+      rigArtwork: {
+        ...artwork,
+        model: selection.id,
+        selection,
+        target,
+        ...captureFaceAction(draft, form, target),
+      },
+      imageCount: 1,
+      portraitInstructions: readPortraitInstructions(form),
+      portraitOperation: key,
+      imageEditing: true,
+    };
+  }
   if (intent === "regenerate" || intent === "generate")
     return {
       ...current,

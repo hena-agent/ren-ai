@@ -241,6 +241,36 @@
   font-size: 12px;
   flex: 0 0 auto;
 }
+.queue-attempt-history {
+  font-size: 12px;
+  color: var(--muted);
+}
+.queue-attempt-history summary {
+  cursor: pointer;
+  padding-block: 10px;
+}
+.queue-attempt-history ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+.queue-attempt-history li + li {
+  margin-top: 16px;
+}
+.queue-attempt-times {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin-block: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.queue-attempt-times dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.queue-failure p {
+  margin: 8px 0 4px;
+  color: var(--warning);
+}
 [data-image-prompt-field] {
   margin-bottom: 20px;
 }

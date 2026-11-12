@@ -1,0 +1,206 @@
+.rig-artwork-panel {
+  padding-block: 16px 24px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.rig-artwork-panel figure {
+  margin: 0 0 16px;
+}
+.rig-artwork-panel img {
+  display: block;
+  max-height: 400px;
+  max-width: 100%;
+  margin-inline: auto;
+  background: white;
+  border-radius: 6px;
+}
+.rig-artwork-panel figcaption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+[data-rig-model-options] input:not([type="radio"]),
+[data-rig-model-options] select {
+  width: 100%;
+  min-width: 0;
+}
+[data-model-status] {
+  display: block;
+}
+[data-model-errors] {
+  color: var(--warning);
+}
+.portrait-dialog[data-rig-artwork="true"][open] {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100% - 24px));
+  padding: 24px;
+  overflow: hidden;
+}
+[data-rig-artwork="true"] .portrait-dialog-content {
+  min-height: 0;
+  overflow-y: auto;
+  padding-inline: 2px;
+  scrollbar-gutter: stable;
+}
+[data-rig-artwork="true"] .dialog-actions {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+[data-rig-artwork="true"] [data-portrait-target] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+[data-portrait-target] img {
+  width: 44px;
+  height: 52px;
+  object-fit: contain;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.model-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 44px;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.model-search-row label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.model-search-row select,
+.model-search-row input {
+  min-height: 44px;
+  font-size: 14px;
+}
+.model-refresh {
+  padding: 8px;
+  font-size: 22px;
+}
+.model-choices {
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.model-choices legend {
+  margin-left: 4px;
+}
+.model-list {
+  min-height: 112px;
+  max-height: clamp(160px, 28dvh, 260px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--field);
+}
+.model-list[aria-busy="true"] {
+  opacity: 0.65;
+}
+.model-choice {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.model-choice:last-child {
+  border-bottom: 0;
+}
+.model-choice:hover,
+.model-choice:has(input:checked) {
+  background: color-mix(in srgb, var(--signal) 8%, var(--field));
+}
+.model-choice:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.model-choice:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.model-choice input {
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--signal);
+}
+.model-choice-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.model-choice strong {
+  font-size: 14px;
+}
+.model-choice code,
+.model-choice small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.model-empty {
+  padding: 20px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.model-list-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+.model-list-footer .hint {
+  margin: 0;
+}
+.model-list-footer button {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.model-price {
+  padding: 10px 12px;
+  border-left: 2px solid var(--signal);
+  background: var(--field);
+  margin: 4px 0 8px;
+  font-size: 13px;
+}
+.model-details {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.model-details summary {
+  cursor: pointer;
+}
+[data-rig-artwork="true"] #portrait-instructions-hint {
+  margin: 0 0 8px;
+}
+[data-rig-artwork="true"] textarea {
+  min-height: 80px;
+  height: 88px;
+  font-size: 14px;
+}
+@media (max-width: 480px) {
+  .portrait-dialog[data-rig-artwork="true"][open] {
+    padding: 16px;
+  }
+  .model-search-row {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+  .model-search-field {
+    grid-column: 1 / -1;
+  }
+}

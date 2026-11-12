@@ -12,6 +12,9 @@ import { restoreImageBatch } from "./image-batch.ts";
 import { seedingStore } from "./seeding-store.ts";
 import { pricedSeedingModels } from "./seeding-budget.ts";
 import { codexImageModel } from "@ren-ai/image-generation";
+import { createRigArtworkGenerator } from "./rig-artwork-generation.ts";
+import { createImageModelCatalog } from "./image-model-catalog.ts";
+import { createArtworkLayerizer } from "./artwork-layer-generation.ts";
 
 export interface AdminEnv {
   ADMIN_JURISDICTION?: "us" | "local";
@@ -25,6 +28,9 @@ export interface AdminEnv {
   ADMIN_IMAGE_MODEL?: string;
   ADMIN_IMAGE_PROVIDER?: string;
   CODEX_IMAGE_API_KEY?: string;
+  FAL_KEY?: string;
+  OPENAI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
   APPLICATION_API_URL?: string;
   TOKEN_MANAGEMENT?: string;
 }
@@ -51,6 +57,15 @@ export async function cloudflareAdmin(env: AdminEnv, storage: DurableObjectStora
     ...(env.ADMIN_IMAGE_PROVIDER && { imageProvider: env.ADMIN_IMAGE_PROVIDER }),
     ...(env.CODEX_IMAGE_API_KEY && { codexKey: env.CODEX_IMAGE_API_KEY }),
   });
+  const connections = {
+    fal: env.FAL_KEY ?? "",
+    google: env.GEMINI_API_KEY ?? "",
+    openai: env.OPENAI_API_KEY ?? "",
+    openrouter: env.OPENROUTER_API_KEY ?? "",
+  };
+  generator.imageModels = createImageModelCatalog(connections, env.ADMIN_PASSWORD);
+  generator.rigArtwork = createRigArtworkGenerator(connections);
+  generator.layerize = createArtworkLayerizer(connections.fal, env.ADMIN_PASSWORD);
   const saved = await loggedJob(
     crypto.randomUUID(),
     {},

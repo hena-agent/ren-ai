@@ -57,6 +57,8 @@ const scope = new AsyncLocalStorage<{
   reported: Map<Error | string, Set<string | undefined>>;
   log: Log;
 }>();
+const failureStages = new WeakMap<Error, string>();
+export const failureStage = (error: Error) => failureStages.get(error);
 
 export class GenerationError extends Error {
   constructor(
@@ -175,6 +177,7 @@ export async function operation<T>(stage: string, fields: LogFields, run: () => 
     });
     return result;
   } catch (error) {
+    if (error instanceof Error && !failureStages.has(error)) failureStages.set(error, stage);
     reportFailure(
       error,
       { ...fields, stage, durationMs: performance.now() - start },

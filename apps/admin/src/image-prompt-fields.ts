@@ -1,5 +1,13 @@
 import { imageSlots, isSheetIntent } from "./image-slots.ts";
 import copy from "./copy.json";
+import type { ImageSlot } from "./image-slots.ts";
+
+function targetLabel(dialog: HTMLDialogElement, intent: string, slot: ImageSlot) {
+  const asset = dialog.dataset["artworkTarget"] === "outfit" ? "의상" : "기본 몸";
+  if (dialog.dataset["layerize"] === "true") return `${asset} 레이어 분리`;
+  if (dialog.dataset["rigArtwork"] === "true") return asset;
+  return `${copy.portraitLabels[slot.style]} ${isSheetIntent(intent) ? "인물 시트" : `사진 ${slot.index + 1}`}`;
+}
 
 export function updatePromptFields(dialog: HTMLDialogElement) {
   const list = dialog.querySelector<HTMLElement>("[data-image-prompt-list]");
@@ -30,7 +38,7 @@ export function updatePromptFields(dialog: HTMLDialogElement) {
     field.toggleAttribute("hidden", !slot);
     if (slot)
       field.querySelector("label")!.textContent =
-        `${copy.portraitLabels[slot.style]} ${isSheetIntent(intent) ? "인물 시트" : `사진 ${slot.index + 1}`} · ${copy.portraitInstructionsLabel}`;
+        `${targetLabel(dialog, intent, slot)} · ${copy.portraitInstructionsLabel}`;
   }
   dialog.querySelector<HTMLInputElement>("[data-separate-image-prompts]")!.value = "1";
 }

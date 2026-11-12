@@ -30,8 +30,12 @@ test("two added photos have two independent prompts; count changes preserve each
     expect(input.id).not.toBe("");
     expect(field.hasAttribute("hidden")).toBe(false);
   }
-  expect(dialog.querySelectorAll("label")[1]?.textContent).toContain("실사 사진 1");
-  expect(dialog.querySelectorAll("label")[2]?.textContent).toContain("실사 사진 2");
+  expect(dialog.querySelectorAll("[data-image-prompt-field] label")[0]?.textContent).toContain(
+    "실사 사진 1",
+  );
+  expect(dialog.querySelectorAll("[data-image-prompt-field] label")[1]?.textContent).toContain(
+    "실사 사진 2",
+  );
   prompts[0]!.value = "phone selfie";
   prompts[1]!.value = "friend-taken full-body travel";
   expect(new FormData(form).get("portraitInstructions")).toBe("phone selfie");

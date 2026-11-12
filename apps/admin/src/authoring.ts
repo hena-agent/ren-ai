@@ -46,6 +46,8 @@ export function readIntent(form: FormData) {
     intent === "sheet" ||
     intent === "sheets" ||
     intent === "generate" ||
+    intent === "rig-artwork" ||
+    intent === "rig-layers" ||
     intent === "character" ||
     intent === "regenerate" ||
     intent === "delete-image" ||

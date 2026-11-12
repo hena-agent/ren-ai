@@ -16,6 +16,14 @@ const bundle = await build({
   minify: true,
 });
 if (!bundle.success) throw new AggregateError(bundle.logs, "Admin browser build failed");
+const rigBundle = await build({
+  entrypoints: ["src/rig-test-entry.mjs"],
+  target: "browser",
+  outdir: "public/assets",
+  naming: "rig-test-[hash].[ext]",
+  minify: true,
+});
+if (!rigBundle.success) throw new AggregateError(rigBundle.logs, "rig-c browser build failed");
 const css = (
   await Promise.all(
     [
@@ -24,6 +32,9 @@ const css = (
       "src/contact.css",
       "src/admin-layout.css",
       "src/social.css",
+      "src/rig-artwork.css",
+      "src/rig-test.css",
+      "src/artwork-layers.css",
     ].map((file) => readFile(file, "utf8")),
   )
 ).join("\n");
@@ -32,6 +43,7 @@ await writeFile(`public/assets/${stylesheet}`, css);
 const assets = {
   script: `/assets/${basename(bundle.outputs[0].path)}`,
   stylesheet: `/assets/${stylesheet}`,
+  rigScript: `/assets/${basename(rigBundle.outputs[0].path)}`,
 };
 
 // Workers export conditions select edge SSR and DOM-free Markdown dependencies.

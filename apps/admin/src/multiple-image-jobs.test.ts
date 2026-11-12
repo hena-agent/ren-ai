@@ -73,7 +73,7 @@ test("one persona accepts multiple FIFO batches, reserves capacity, and merges e
     expect(headings.every(Boolean)).toBe(true);
     expect(new Set(headings).size).toBe(3);
     expect(
-      [...window.document.querySelectorAll(".queue-items strong")].map(
+      [...window.document.querySelectorAll(".queue-item-content > strong")].map(
         (label) => label.textContent,
       ),
     ).toEqual([
