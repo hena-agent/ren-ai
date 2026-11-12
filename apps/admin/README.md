@@ -213,6 +213,241 @@ Gemini reservations and the immutable run budget. This is not OpenAI's retail
 pricing. If the endpoint's charging arrangement changes, update the reservation
 before confirming new runs.
 
+### One rig-c source artwork per Persona
+
+Each Persona editor has a **rig-c 원화** panel. It requires that Persona's **anime
+identity-sheet original** and sends it together with the current edited name and
+private character-description text, with no separate character-description form or
+independent artwork workspace. Search the **shared image-model catalog**, filter
+by provider or connected providers, select a verified model, optionally add a
+prompt, and confirm one image. Model names are not a code enum. This choice does
+not change `ADMIN_IMAGE_PROVIDER` or seeding.
+
+The dialog starts with connected providers and presents a bounded, scrollable radio
+list instead of a native model dropdown. Every row shows the model's display name
+and actual endpoint ID; generic fal names such as `Seedream` include their endpoint's
+version and tier so Lite and Flash remain distinguishable. Specialized utility,
+layer-separation, upscaling and virtual-fitting endpoints are excluded from artwork
+candidates. The selected sheet preview, verified price and one-image confirmation
+stay together; detailed billing guidance is collapsible and the footer remains visible
+on small screens.
+
+Configure only the server-side keys for providers you want to use:
+
+| Provider   | Runtime secret            | Reference-image request                     |
+| ---------- | ------------------------- | ------------------------------------------- |
+| OpenAI     | `OPENAI_API_KEY`          | Native multipart `/images/edits`            |
+| Google     | existing `GEMINI_API_KEY` | GenerateContent `inlineData`                |
+| OpenRouter | `OPENROUTER_API_KEY`      | Dedicated `/images` API `input_references`  |
+| fal        | `FAL_KEY`                 | Schema-verified `image_urls` or `image_url` |
+
+Use local `.env` or `bunx wrangler secret put <KEY_NAME>` from `apps/admin` for
+deployment. Keys never reach the browser or signed drafts. Catalog entries for
+other providers, disconnected providers, deprecated models and unsupported
+reference protocols are visible under **모든 공급자** with a disabled reason. Missing credentials fail
+before paid dispatch. No local GPU installation is required.
+
+The common source is models.dev's
+`https://models.dev/experimental/v2.0/api.json?type=image`: names, release dates,
+image modalities, provider API declarations and modality-specific prices. fal's
+official model registry supplements its absent models.dev entries, with recent
+ordering, search and pagination. Selected fal endpoints are checked against their
+OpenAPI input/output schema and account pricing API before selection is enabled.
+Unrecognized required fields, multi-reference requirements, inability to request
+one image or unsupported inline output block selection, not paid generation.
+
+Authenticated `GET /image-models` serves this metadata to the dialog. Metadata is
+cached for five minutes with bounded caches and can be refreshed explicitly;
+partial source failures stay visible. Searching, filtering, paging, pricing
+checks and canceling never generate an image. Late metadata responses cannot
+replace a newer selection or clear an editing prompt.
+
+The flow is **Persona editor → 기본 몸 생성 → body separation and motion review →
+의상 생성 → outfit separation → combined motion review**. Each generation or
+separation has its own optional prompt, price and confirmation. Canceling does not
+call a paid provider. The base body wears plain opaque undecorated underwear;
+outer clothing, shoes and ornaments are authored separately.
+Requests ask for one front-facing full-body A-pose with separated limbs, empty
+hands and a plain white background. Dimensions follow the provider protocol:
+OpenAI requests 1024×1536; Google and OpenRouter request 2:3 at their native
+default resolution; fal requests 1664×2432 only when its schema supports explicit
+dimensions, otherwise a supported 2:3 ratio or native default. The server reads
+the owned anime sheet original and embeds it in the provider's reference input;
+it never forwards a localhost URL or a thumbnail. Text-only generation is not used.
+The sheet fixes identity and drawing style; private character text supplements
+physique and unseen details. Costume instructions apply to the later outfit action.
+Public profile text, State and Memory are
+not inputs. No OCR or extra text-model call is needed. The multi-view sheet is
+reinterpreted as exactly one full-body figure, not copied as multiple panels.
+
+Prices and billing units come from the catalog rather than hardcoded labels.
+Image, megapixel and token units remain distinct; text-only price information is
+not presented as an image price, and missing prices are explicitly unknown, not
+free. Conditional/quality/resolution charges and provider rules still determine
+the final charge. The displayed reference prices exclude layer separation,
+rigging and retries. A server-signed selection captures provider, actual model ID,
+display name, request contract and observed price; client substitutions or forged
+quotes are rejected before queue registration.
+
+Each Persona has **one current base body and one optional outfit**. Only confirmed
+body generations are tagged `kind: body`; existing dressed originals stay clearly
+identified as previous dressed artwork. Outfits require a stored body with separated
+layers, use that body's original image as their sole visual reference and request
+only aligned garments/accessories, omitting skin, hair, face and underwear. Each
+asset retains its own model, image, operation receipt and layer manifest. Replacing
+the body clears the current outfit association; replacing an outfit preserves the
+body and its parts. Failed actions preserve the current assets.
+
+Artwork shares the global Durable Object FIFO and existing R2 save boundary.
+It locks competing work for the same Persona until completion; other Personas
+can queue work. The complete verified model selection, confirmed anime sheet and
+current description are fixed in each confirmed batch. Catalog refresh or actor
+replacement never changes the queued provider/model. Current artwork metadata
+stores the actual `provider:model` identifier; there is no model-name allowlist.
+Outfit queue starts, retries and dispatch check the exact stored body and outfit
+receipts; an unreadable or replaced body blocks paid dispatch. Completed outfit
+receipts recover without generating a sibling or paying again.
+Missing or unreadable anime sheets block paid dispatch. The UI disables artwork
+creation without a sheet or when its preview fails; the server independently
+validates ownership, stored-sheet equality and readable image bytes. Queue starts
+and row retries reject a changed sheet rather than substituting another image or
+silently switching to text-only generation. An already saved operation receipt
+can recover its completed artwork without a new provider call.
+Signed submission receipts deduplicate transport retries across actor replacement.
+Interrupted paid work requires explicit row-retry confirmation. The original model
+is retained for that retry, and completed results are not regenerated automatically.
+
+Each image task now keeps a durable **attempt history**: registration time, actual
+execution start, completion/failure time, queue wait and processing duration. The
+Admin displays absolute timestamps with an explicit KST timezone alongside elapsed
+seconds. Retries append attempts rather than replacing the previous timing or cause.
+An attempt that resumes a saved Layerize receipt is labelled as an existing-result
+lookup/save, separately from a generation attempt.
+
+Failures retain a safe explanation, deepest observed operation stage, error code,
+upstream HTTP status, cause name/code and correlated request ID. Secrets, signed
+drafts, private descriptions/prompts, image bytes and provider payloads are excluded.
+Interrupted work records when recovery detected it, not an invented failure time;
+its elapsed duration stops being guessed and it is marked result-uncertain. Old
+records show their known timestamps and explicitly identify missing diagnostics.
+
+The current link and its operation receipt are stored outside Persona documents
+and editing drafts: D1 `persona_rig_artworks` in deployment, `rig-artworks/<id>.json`
+in filesystem stores. Apply `drizzle/0006_smart_nicolaos.sql` before deploying the
+Worker, plus `0007_steady_cammi.sql` for layers and `0008_free_scarlet_spider.sql`
+for body classification and separate outfit JSON (`bun run db:local` locally,
+`bun run db:remote` for an approved deployment).
+The Persona ID is the primary key; compare-and-swap protects replacements.
+Losing an editing draft or restoring a Persona document version does not remove
+the current artwork. A saved operation receipt also recovers a completed link
+after interruption without repeating the paid call.
+
+These source images are not Catalog entries, identity sheets or gallery photos.
+Optional prompts stay in private editing/task storage; image URLs have the
+same direct-access policy as other R2 drafts. Opening an original PNG does not
+run See-through or rig-c. Layer separation and animation verification are the
+next workflow, not part of this generation action.
+
+### Test the current artwork with rig-c
+
+The current body is held fixed while testing facial expression authoring. In the
+Persona editor, **얼굴 바탕 복원**, **감긴 눈·미소** and **놀란 눈·벌린 입** open the
+existing model/price/optional-prompt confirmation. Each edits a close-up cropped
+from the current body, runs through the shared durable image FIFO and stores its
+result and receipt privately in `faceSources`; it does not replace the body.
+Saved receipts recover without submitting another paid generation. Alignment and
+part extraction still require visual review; the Chloe result includes manual,
+source-specific cleanup rather than a generally verified automatic separator.
+
+The rig test page compares **원본 / PNG 재합성 / 정지 리그 / 동작 리그** in the same
+source-coordinate upper-body frame; switch to **전신·제작 검수** for the complete
+joint editor. The preview envelope includes hair, shoulders and head-turn margin,
+fits the available screen without cropping the head, and pins the CanvasRenderer
+viewport to the displayed rect. Compare A→B to find source-layer loss and B→C for
+renderer/resampling loss before judging motion.
+
+The page saves body-relative hair composition planes and accepts facial parts. Eight
+neutral base/eye/pupil/brow/mouth parts replace the original face only when complete.
+Closed eyes, smile and surprised parts enable expression controls only when the
+complete expression parts exist. Eyes and brows can be layered per emotion; missing
+expressions stay disabled rather than mixing an unintended neutral feature. Gaze
+requires full iris art, both eye-aperture masks and expression-specific movement
+bounds. The iris moves beneath a head-fixed clipping polygon and the eyelid overlay;
+if any mask/art is missing the gaze slider stays disabled. Cropped parts carry
+source-canvas `bounds`, keeping small textures proportional to the original canvas.
+Hair roots follow the head, while hanging lengths use a subtle source-weighted
+follow-through. This is a hand-authored 2D deformation, not physical hair simulation.
+
+Before rigging, the layer review page provides **원본 대비 누락·색차 검사**,
+single-layer isolation and X/Y/width/height placement editing. Pink marks source
+non-white pixels not covered by foreground alpha; blue marks source color drift.
+These measurements include alignment and shadows and are not automatic rigging
+approval. Position saves use source/result CAS, retain the original paid receipt
+and are blocked while image work is active. `sourceRepair` explicitly distinguishes
+operator source-pixel cleanup from the model's raw decomposition.
+
+Layer separation now requests rounded hidden extensions past each joint pivot,
+overlap in both rotation directions and no dark internal cut edge or white fringe.
+It must reconstruct missing content rather than round off existing cuts. Backgrounds
+must contain no character pixels. Body separation preserves underwear; outfit
+separation returns only joint-specific garments/accessories, never a body silhouette.
+These are provider instructions, not a guarantee that generated overlaps pass review.
+
+Layerize inputs use a whole-canvas JPEG copy bounded to 1536px on the long edge,
+uploaded through the official fal SDK with a one-day lifetime. Queue submissions
+persist their request ID before waiting; status/result reads use fal's owner/app
+queue path and never submit another paid operation on recovery. Raw artwork files
+and public Persona data remain separate from layer preparation.
+
+After layer separation, open **분리 레이어로 움직임 테스트** under the current
+artwork, **이 레이어로 움직임 테스트** in layer review, or
+`/personas/<id>/rig-test`. The authenticated page requires the current artwork's
+stored layer manifest and loads its actual PNGs, with no image generation or
+changes to saved Persona data. The original remains visible for joint placement.
+The image direction now requests continuous natural human anatomy and clothing,
+without skeletal-rig terminology, exposed hinges, doll joints or cut-away sleeves.
+It affects future confirmed generations, not existing artwork.
+
+The test page uses the actual `@rig-c/play@1.22.1` bundled core and CanvasRenderer
+with a browser-authored `rigc-compiled/3` model: each PNG has its own slot and texture
+page. Arm and leg parts use a shared source-coordinate mesh grid and continuous
+weights across elbows/wrists and knees/ankles, so adjacent pieces do not expose rigid
+cut faces when bent. Fifteen draggable joints form parent chains so hands
+follow forearms and feet follow shins. Layer names and source bounds suggest
+bindings; operators can change each binding. The sparse source-completion layer
+uses the same global grid, attached to nearby bone segments instead of leaving
+seam pixels fixed behind moving limbs.
+
+Choose **몸만 / 의상만 / 전체** and toggle each part to inspect it independently.
+Body and outfit textures have separate IDs even when their provider z-indices match;
+outfit canvas coordinates are normalized onto the body canvas. Background and sparse
+completion layers start hidden so leftover silhouettes are not rendered behind limbs.
+An empty selection clears the old player rather than leaving stale parts visible.
+
+Idle, head, elbows and knees have isolated motions, plus a rest pose. Elbows default
+to 75% of a ±60° motion. Compare **원래 자세로 고정** and **굽힌 자세로 고정** to
+inspect seams. Arrow keys move a focused joint; Shift moves it farther. Adjust
+strength, pause, restart or reset joints. Joint/binding edits last for the page
+session only; stale asynchronous players are disposed and hidden tabs stop stepping.
+**고개 왼쪽 고정 / 고개 오른쪽 고정** hold the two head-motion extrema for repeatable
+hair/neck review. Face/neck and torso share continuous neck weights. Front/back
+hair roots follow the head while their hanging lengths use source-weighted follow-through;
+hair plane metadata controls whether strands layer behind the body or in front. Back
+hair belongs behind shoulders, with its shoulder-occluded ends reconstructed before rotation.
+An operator-repaired manifest can retain normalized `jointPositions` for its actual
+source image. The page starts from those positions and reset restores them, rather
+than replacing them with generic pivots. Resize also redraws a held pose at the new
+backing-store resolution after synchronizing the pixel ratio.
+
+This tests actual separated parts, but is not a finished See-through/parts build:
+generated parts still require anatomical/overlap cleanup, and the small authored hair
+follow-through is not a physical hair simulation. Source-specific manual repairs are
+marked `sourceRepair`; they do not establish that future paid decompositions are
+automatically correct.
+Source-completion binding is a geometric
+approximation, not automatic skinning validation. The player ships in its own
+content-hashed browser bundle; it is not loaded by the regular editor.
+
 ### English-speaking US previews
 
 Admin accepts pinned `nvidia/Nemotron-Personas-USA` manifests as well as Korea.
@@ -488,6 +723,10 @@ covering saves the previous version served in between. `--remote` connects only 
 D1 binding through your Wrangler login; run it with Node 24 activated (`nvm use`).
 
 ### Thumbnail backfill
+
+`import:local` creates missing thumbnails before committing imported Persona links,
+including when rerunning against originals already in R2. `--check` does not write
+thumbnails or originals. Existing originals and thumbnails are never overwritten.
 
 Originals stored before thumbnails existed need theirs created once. The
 command lists every original in the bucket, including draft-only images, and
